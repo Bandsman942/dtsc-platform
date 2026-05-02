@@ -1,29 +1,45 @@
-A simple [Next.js](https://nextjs.org) chatbot app to demonstrate the use of the Vercel AI Gateway with the [AI SDK](https://sdk.vercel.ai).
+A simple [Next.js](https://nextjs.org) chatbot app using OpenAI models with the [AI SDK](https://sdk.vercel.ai).
 
 ## Getting Started
 
 ### One-time setup
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fai-sdk-gateway-demo)
-
-1. Clone this repository with the Deploy button above
-1. Install the [Vercel CLI](https://vercel.com/docs/cli) if you don't already have it
-1. Clone the repository you created above: `git clone <repo-url>`
-1. Link it to a Vercel project: `vc link` or `vc deploy`
+1. Clone this repository.
+1. Create an OpenAI API key from your OpenAI dashboard.
 
 ### Usage
-1. Install packages with `pnpm i` (or `npm i` or `yarn i`) and run the development server with `vc dev`
+1. Create a `.env.local` file at the project root and add your OpenAI API key:
+
+   ```bash
+   OPENAI_API_KEY=sk-proj-replace_with_your_key
+   OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
+   NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
+   ```
+
+   `OPENAI_MODEL_IDS` is a comma-separated list. You can add any OpenAI model id your account can access, including fine-tuned model ids.
+
+1. Install packages with `pnpm i` (or `npm i` or `yarn i`) and run the development server with `pnpm dev`
 1. Open http://localhost:3000 to try the chatbot
 
-### FAQ
+### CI/CD
 
-1. If you prefer running your local development server directly rather than using `vc dev`, you'll need to run `vc env pull` to fetch the project's OIDC authentication token locally
-   1. the token expires every 12h, so you'll need to re-run this command periodically.
-   1. if you use `vc dev` it will auto-refresh the token for you, so you don't need to fetch it manually
-1. If you're linking to an existing, older project, you may need to enable the OIDC token feature in your project settings.
-   1. visit the project settings page (rightmost tab in your project's dashboard)
-   1. search for 'OIDC' in settings
-   1. toggle the button under "Secure Backend Access with OIDC Federation" to Enabled and click the "Save" button
+Every push to `main` runs `.github/workflows/vercel-production.yml` and deploys the production build to Vercel.
+
+Add these GitHub repository secrets:
+
+```bash
+VERCEL_TOKEN=...
+VERCEL_ORG_ID=...
+VERCEL_PROJECT_ID=...
+```
+
+Add these Vercel project environment variables for Production:
+
+```bash
+OPENAI_API_KEY=...
+OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
+NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
+```
 
 ## Authors
 

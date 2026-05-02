@@ -12,7 +12,6 @@ import { DEFAULT_MODEL } from "@/lib/constants";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 import { Streamdown } from "streamdown";
 
 function ModelSelectorHandler({
@@ -34,7 +33,7 @@ function ModelSelectorHandler({
   return <ModelSelector modelId={modelId} onModelChange={handleSelectChange} />;
 }
 
-export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
+export function Chat({ modelId = DEFAULT_MODEL }: { modelId?: string }) {
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState(modelId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -92,7 +91,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
               >
                 <div className="flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
                   <ModelSelectorHandler
-                    modelId={modelId}
+                    modelId={currentModelId}
                     onModelIdChange={handleModelIdChange}
                   />
                   <div className="flex flex-1 items-center">
@@ -170,7 +169,14 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
             <div className="flex flex-row gap-2">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <AlertDescription className="dark:text-red-400 text-red-600">
-                {error.message.startsWith("AI Gateway requires a valid credit card") ? <div>AI Gateway requires a valid credit card on file to service requests. Please visit your <Link className="underline underline-offset-4" href="https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card" target="_noblank">dashboard</Link> to add a card and unlock your free credits.</div> : "An error occurred while generating the response."}
+                {error.message.includes("OPENAI_API_KEY") ? (
+                  <div>
+                    Missing OpenAI API key. Add OPENAI_API_KEY to .env.local and
+                    restart the dev server.
+                  </div>
+                ) : (
+                  "An error occurred while generating the response."
+                )}
               </AlertDescription>
             </div>
             <Button
@@ -197,7 +203,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
           >
             <div className="flex items-center gap-3 p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
               <ModelSelectorHandler
-                modelId={modelId}
+                modelId={currentModelId}
                 onModelIdChange={handleModelIdChange}
               />
               <div className="flex flex-1 items-center">
@@ -234,8 +240,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
 
       <footer className="pb-8 text-center animate-fade-in" style={{ animationDelay: '200ms' }}>
         <p className="text-xs md:text-sm text-muted-foreground">
-          The models in the list are a small subset of those available in the
-          Vercel AI Gateway.
+          The models in the list are configured with OPENAI_MODEL_IDS.
           <br />
           See the{" "}
           <Button
@@ -244,14 +249,14 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
             className="p-0 h-auto text-xs md:text-sm font-normal"
           >
             <a
-              href="https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fmodel-list&title="
+              href="https://platform.openai.com/docs/models"
               target="_blank"
               rel="noopener noreferrer"
             >
-              model library
+              OpenAI model docs
             </a>
           </Button>{" "}
-          for the full set.
+          for available model ids.
         </p>
       </footer>
     </div>

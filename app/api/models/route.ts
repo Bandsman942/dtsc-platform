@@ -1,12 +1,16 @@
-import { gateway } from "@/lib/gateway";
 import { NextResponse } from "next/server";
-import { SUPPORTED_MODELS } from "@/lib/constants";
+import {
+  getConfiguredOpenAIModels,
+  getDefaultOpenAIModel,
+  getDisplayName,
+} from "@/lib/openai-config";
 
 export async function GET() {
-  const allModels = await gateway.getAvailableModels();
   return NextResponse.json({
-    models: allModels.models.filter((model) =>
-      SUPPORTED_MODELS.includes(model.id)
-    ),
+    defaultModel: getDefaultOpenAIModel(),
+    models: getConfiguredOpenAIModels().map((modelId) => ({
+      id: modelId,
+      name: getDisplayName(modelId),
+    })),
   });
 }
