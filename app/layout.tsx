@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OpenAI Chat Demo",
-  description: "A demo chatbot using OpenAI models with the AI SDK",
+  title: "DTSC Chatbot",
+  description:
+    "Plateforme SaaS de chatbot client pour Data and Tech Solutions Consulting",
 };
 
 export default function RootLayout({

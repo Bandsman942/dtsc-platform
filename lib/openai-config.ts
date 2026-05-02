@@ -1,4 +1,3 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import { DEFAULT_MODEL, DEFAULT_OPENAI_MODELS } from "@/lib/constants";
 
 function parseModelIds(value: string | undefined): string[] {
@@ -38,9 +37,3 @@ export function getDisplayName(modelId: string) {
 export function hasOpenAIKey() {
   return Boolean(process.env.OPENAI_API_KEY);
 }
-
-export const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  organization: process.env.OPENAI_ORGANIZATION,
-  project: process.env.OPENAI_PROJECT,
-});
