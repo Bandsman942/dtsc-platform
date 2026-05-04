@@ -3,7 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
-  AUTH_SECRET: z.string().min(32).optional(),
+  AUTH_SECRET: z.string().optional(),
   APP_URL: z.string().url().optional(),
   OPENAI_MODEL: z.string().min(1).default("gpt-5-nano"),
   OPENAI_MODEL_IDS: z.string().optional(),
@@ -18,5 +18,10 @@ export function requireEnv(name: keyof typeof env) {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
+
+  if (name === "AUTH_SECRET" && String(value).length < 32) {
+    throw new Error("AUTH_SECRET must be at least 32 characters long");
+  }
+
   return String(value);
 }

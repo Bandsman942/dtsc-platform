@@ -60,6 +60,12 @@ Notes:
 - `ADMIN_EMAIL` donne automatiquement le rôle `ADMIN` au premier compte créé avec cet email.
 - Sur Vercel, configurer ces variables dans Project Settings → Environment Variables.
 
+Générer un `AUTH_SECRET` localement avec PowerShell:
+
+```powershell
+[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
 ## Installation Locale
 
 ```bash
