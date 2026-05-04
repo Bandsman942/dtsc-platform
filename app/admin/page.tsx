@@ -1,8 +1,10 @@
 import { BarChart3, Bot, MessageSquare, ShieldCheck, Users } from "lucide-react";
 import { UserRole } from "@prisma/client";
 import Link from "next/link";
+import { CreateUserForm } from "@/components/admin/create-user-form";
 import { UserRoleSelect } from "@/components/admin/user-role-select";
 import { UserStatusSelect } from "@/components/admin/user-status-select";
+import { UserLimitsForm } from "@/components/admin/user-limits-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { requireRole } from "@/lib/auth";
@@ -12,16 +14,20 @@ import { formatDate } from "@/lib/format";
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string }>;
+  searchParams: Promise<{ role?: string; period?: string }>;
 }) {
   const user = await requireRole([UserRole.ADMIN]);
-  const { role } = await searchParams;
+  const { role, period } = await searchParams;
+  const parsedPeriod = Number(period || 30);
+  const selectedPeriod = Number.isFinite(parsedPeriod) ? parsedPeriod : 30;
+  const visitStart = new Date();
+  visitStart.setDate(visitStart.getDate() - Math.min(Math.max(selectedPeriod, 7), 200));
   const roleFilter =
     role && Object.values(UserRole).includes(role as UserRole)
       ? (role as UserRole)
       : undefined;
 
-  const [users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets] =
+  const [users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits] =
     await Promise.all([
       prisma.user.findMany({
         where: roleFilter ? { role: roleFilter } : undefined,
@@ -43,6 +49,11 @@ export default async function AdminPage({
         include: { user: true },
         take: 20,
       }),
+      prisma.siteVisit.findMany({
+        where: { createdAt: { gte: visitStart } },
+        orderBy: { createdAt: "desc" },
+        take: 500,
+      }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
@@ -63,6 +74,14 @@ export default async function AdminPage({
           <StatCard label="Conversations" value={conversationCount} helper="Total plateforme" icon={Bot} />
           <StatCard label="Messages" value={messageCount} helper="Total messages" icon={MessageSquare} />
           <StatCard label="Tokens" value={totalTokens} helper="Usage estimé" icon={BarChart3} />
+        </section>
+
+        <section className="dtsc-card p-6">
+          <div className="mb-5">
+            <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
+            <p className="text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
+          </div>
+          <CreateUserForm />
         </section>
 
         <section className="dtsc-card p-6">
@@ -94,6 +113,7 @@ export default async function AdminPage({
                   <th>Email</th>
                   <th>Rôle</th>
                   <th>Statut</th>
+                  <th>Limites / jour</th>
                   <th>Conversations</th>
                   <th>Créé le</th>
                 </tr>
@@ -109,12 +129,48 @@ export default async function AdminPage({
                     <td>
                       <UserStatusSelect userId={managedUser.id} status={managedUser.status} />
                     </td>
+                    <td>
+                      <UserLimitsForm
+                        userId={managedUser.id}
+                        dailyMessageLimit={managedUser.dailyMessageLimit}
+                        dailyTokenLimit={managedUser.dailyTokenLimit}
+                      />
+                    </td>
                     <td>{managedUser._count.conversations}</td>
                     <td>{formatDate(managedUser.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className="dtsc-card p-6">
+          <h2 className="font-black text-dtsc-ink">Visites du site</h2>
+          <p className="text-sm text-dtsc-muted">Dernières visites publiques capturées par la landing page et les pages d&apos;information.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {["7", "30", "90", "200"].map((days) => (
+              <Link key={days} href={`/admin?period=${days}`} className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink hover:border-cyan-300">
+                {days} jours
+              </Link>
+            ))}
+          </div>
+          <div className="mt-5 h-40 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <div className="flex h-full items-end gap-1">
+              {Array.from({ length: Math.min(selectedPeriod, 60) }).map((_, index, list) => {
+                const count = visits.filter((visit) => {
+                  const date = new Date(visit.createdAt);
+                  const day = new Date();
+                  day.setDate(day.getDate() - (list.length - 1 - index));
+                  return date.toDateString() === day.toDateString();
+                }).length;
+                return (
+                  <div key={index} title={`${count} visites`} className="flex flex-1 items-end">
+                    <div className="w-full rounded-t bg-cyan-400" style={{ height: `${Math.max(6, count * 12)}px` }} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
 

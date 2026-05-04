@@ -37,6 +37,12 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Dashboard admin
 - Suivi utilisateurs, conversations, messages, usage IA et tickets
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
+- Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
+- Limites journalières configurables par utilisateur: messages et tokens
+- Indicateurs de limites visibles dans le chatbot
+- Gestion support pour `ADMIN` et `SUPPORT`: traitement, résolution et clôture de tickets
+- Pages publiques d'information: Data en Afrique, BI & KPI, IA en entreprise, secteurs accompagnés
+- Analytics simples des visites publiques avec filtre par période dans `/admin`
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système et préférences de notifications
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
 - Rate limiting basique sur l'API chat
@@ -157,6 +163,10 @@ OPENAI_MODEL=gpt-5-nano
 - `/settings` paramètres
 - `/support` tickets support
 - `/admin` administration
+- `/data-afrique` ressource publique
+- `/bi-kpi` ressource publique
+- `/ia-entreprise` ressource publique
+- `/secteurs` ressource publique
 
 ## Structure
 
@@ -250,6 +260,7 @@ Mesures présentes:
 - Validation Zod sur auth, chat, conversations, tickets et admin
 - API OpenAI uniquement côté serveur
 - Rate limiting mémoire sur `/api/chat`
+- Limites applicatives par utilisateur sur messages/tokens journaliers
 - Erreurs publiques génériques côté client
 
 À renforcer avant forte charge:

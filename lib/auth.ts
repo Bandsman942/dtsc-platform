@@ -34,6 +34,8 @@ export async function getCurrentUser() {
       companyName: true,
       phone: true,
       status: true,
+      dailyMessageLimit: true,
+      dailyTokenLimit: true,
       createdAt: true,
       updatedAt: true,
     },

@@ -15,12 +15,27 @@ export default async function ChatPage({
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { messages: true } } },
   });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [messagesToday, tokensToday] = await Promise.all([
+    prisma.message.count({ where: { userId: user.id, role: "user", createdAt: { gte: today } } }),
+    prisma.usageLog.aggregate({
+      where: { userId: user.id, createdAt: { gte: today } },
+      _sum: { totalTokens: true },
+    }),
+  ]);
 
   return (
     <AppShell user={user}>
       <ChatWorkspace
         initialConversations={JSON.parse(JSON.stringify(conversations))}
         initialConversationId={conversationId}
+        usage={{
+          messagesToday,
+          dailyMessageLimit: user.dailyMessageLimit,
+          tokensToday: tokensToday._sum.totalTokens ?? 0,
+          dailyTokenLimit: user.dailyTokenLimit,
+        }}
       />
     </AppShell>
   );

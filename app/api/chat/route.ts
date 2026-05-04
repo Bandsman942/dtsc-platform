@@ -58,11 +58,40 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, dailyMessageLimit: true, dailyTokenLimit: true },
   });
 
   if (!user || user.status !== "ACTIVE") {
     return NextResponse.json({ error: "Account unavailable" }, { status: 403 });
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [messagesToday, tokensToday] = await Promise.all([
+    prisma.message.count({
+      where: { userId: session.userId, role: "user", createdAt: { gte: today } },
+    }),
+    prisma.usageLog.aggregate({
+      where: { userId: session.userId, createdAt: { gte: today } },
+      _sum: { totalTokens: true },
+    }),
+  ]);
+
+  const totalTokensToday = tokensToday._sum.totalTokens ?? 0;
+  if (messagesToday >= user.dailyMessageLimit || totalTokensToday >= user.dailyTokenLimit) {
+    return NextResponse.json(
+      {
+        error: "Daily usage limit reached",
+        code: "DAILY_LIMIT_REACHED",
+        usage: {
+          messagesToday,
+          dailyMessageLimit: user.dailyMessageLimit,
+          tokensToday: totalTokensToday,
+          dailyTokenLimit: user.dailyTokenLimit,
+        },
+      },
+      { status: 429 }
+    );
   }
 
   const model = getOpenAIModel(body.data.model);

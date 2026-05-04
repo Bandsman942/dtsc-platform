@@ -24,9 +24,16 @@ type ChatMessage = {
 export function ChatWorkspace({
   initialConversations,
   initialConversationId,
+  usage,
 }: {
   initialConversations: ConversationSummary[];
   initialConversationId?: string;
+  usage: {
+    messagesToday: number;
+    dailyMessageLimit: number;
+    tokensToday: number;
+    dailyTokenLimit: number;
+  };
 }) {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState(
@@ -36,6 +43,7 @@ export function ChatWorkspace({
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
+  const [dailyUsage, setDailyUsage] = useState(usage);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = useMemo(
@@ -133,7 +141,11 @@ export function ChatWorkspace({
     });
 
     if (!response.ok || !response.body) {
-      setError("Le chatbot DTSC est momentanément indisponible.");
+      const body = await response.json().catch(() => null);
+      if (body?.usage) {
+        setDailyUsage(body.usage);
+      }
+      setError(body?.code === "DAILY_LIMIT_REACHED" ? "Limite journalière atteinte. Contactez DTSC ou attendez demain." : "Le chatbot DTSC est momentanément indisponible.");
       setIsStreaming(false);
       return;
     }
@@ -163,8 +175,16 @@ export function ChatWorkspace({
     }
 
     setIsStreaming(false);
+    setDailyUsage((current) => ({
+      ...current,
+      messagesToday: Math.min(current.dailyMessageLimit, current.messagesToday + 1),
+    }));
     await refreshConversations(createdConversationId || activeConversationId);
   }
+
+  const messagePercent = Math.min(100, Math.round((dailyUsage.messagesToday / dailyUsage.dailyMessageLimit) * 100));
+  const tokenPercent = Math.min(100, Math.round((dailyUsage.tokensToday / dailyUsage.dailyTokenLimit) * 100));
+  const limitReached = dailyUsage.messagesToday >= dailyUsage.dailyMessageLimit || dailyUsage.tokensToday >= dailyUsage.dailyTokenLimit;
 
   return (
     <div className="grid min-h-[calc(100vh-7rem)] gap-4 lg:grid-cols-[320px_1fr]">
@@ -191,6 +211,18 @@ export function ChatWorkspace({
               </span>
             </button>
           ))}
+        </div>
+        <div className="mt-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
+          <p className="font-black text-dtsc-ink">Usage journalier</p>
+          <div className="mt-3 space-y-3">
+            <UsageBar label="Messages" value={dailyUsage.messagesToday} limit={dailyUsage.dailyMessageLimit} percent={messagePercent} />
+            <UsageBar label="Tokens" value={dailyUsage.tokensToday} limit={dailyUsage.dailyTokenLimit} percent={tokenPercent} />
+          </div>
+          {limitReached && (
+            <div className="mt-3 rounded-xl bg-red-50 p-3 font-bold text-red-700">
+              Limite atteinte: l&apos;envoi est bloqué jusqu&apos;à demain.
+            </div>
+          )}
         </div>
       </aside>
 
@@ -282,8 +314,9 @@ export function ChatWorkspace({
               onChange={(event) => setInput(event.target.value)}
               placeholder="Écrivez votre demande..."
               className="h-11 border-0 bg-transparent text-slate-900 focus-visible:ring-0"
+              disabled={limitReached}
             />
-            <Button type="submit" size="icon" className="h-11 w-11 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={!input.trim() || isStreaming}>
+            <Button type="submit" size="icon" className="h-11 w-11 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={!input.trim() || isStreaming || limitReached}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -295,4 +328,28 @@ export function ChatWorkspace({
 
 function BotIcon() {
   return <span className="text-sm font-black">AI</span>;
+}
+
+function UsageBar({
+  label,
+  value,
+  limit,
+  percent,
+}: {
+  label: string;
+  value: number;
+  limit: number;
+  percent: number;
+}) {
+  return (
+    <div>
+      <div className="flex justify-between">
+        <span>{label}</span>
+        <span className="font-bold">{value}/{limit}</span>
+      </div>
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-dtsc-soft">
+        <div className="h-full rounded-full bg-cyan-400" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
 }

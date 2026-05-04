@@ -49,6 +49,8 @@ model User {
   companyName   String?
   phone         String?
   status        UserStatus      @default(ACTIVE)
+  dailyMessageLimit Int         @default(30)
+  dailyTokenLimit   Int         @default(100000)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   conversations Conversation[]
@@ -124,10 +126,23 @@ model SupportTicket {
   description String
   status      TicketStatus   @default(OPEN)
   priority    TicketPriority @default(MEDIUM)
+  resolution  String?
+  resolvedAt  DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([priority, createdAt])
+}
+
+model SiteVisit {
+  id        String   @id @default(cuid())
+  path      String
+  referrer  String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([createdAt])
 }

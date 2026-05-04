@@ -1,20 +1,13 @@
 import Link from "next/link";
-import { Bot, Headphones, LayoutDashboard, Settings, Shield, Sparkles, User } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
+import { NavLinks } from "@/components/layout/nav-links";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chatbot", icon: Bot },
-  { href: "/support", label: "Support", icon: Headphones },
-  { href: "/profile", label: "Profil", icon: User },
-  { href: "/settings", label: "Paramètres", icon: Settings },
-];
 
 export function AppShell({
   children,
@@ -42,25 +35,7 @@ export function AppShell({
         </Link>
 
         <nav className="mt-10 space-y-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-ink"
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          ))}
-          {user.role === "ADMIN" && (
-            <Link
-              href="/admin"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-dtsc-blue transition hover:bg-dtsc-soft"
-            >
-              <Shield className="h-4 w-4" />
-              Administration
-            </Link>
-          )}
+          <NavLinks role={user.role} />
         </nav>
       </aside>
 
@@ -86,25 +61,7 @@ export function AppShell({
             </div>
           </div>
           <nav className="flex gap-2 overflow-x-auto border-t border-dtsc-border px-4 py-2 lg:hidden">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"
-              >
-                <item.icon className="h-3.5 w-3.5" />
-                {item.label}
-              </Link>
-            ))}
-            {user.role === "ADMIN" && (
-              <Link
-                href="/admin"
-                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-dtsc-blue hover:bg-dtsc-soft"
-              >
-                <Shield className="h-3.5 w-3.5" />
-                Admin
-              </Link>
-            )}
+            <NavLinks role={user.role} mobile />
           </nav>
         </header>
         <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>

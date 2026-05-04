@@ -1,9 +1,18 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SupportForm } from "@/components/support/support-form";
+import { TicketBoard } from "@/components/support/ticket-board";
 import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export default async function SupportPage() {
   const user = await requireUser();
+  const canManageTickets = user.role === "ADMIN" || user.role === "SUPPORT";
+  const tickets = await prisma.supportTicket.findMany({
+    where: canManageTickets ? undefined : { userId: user.id },
+    orderBy: { updatedAt: "desc" },
+    include: { user: { select: { name: true, email: true } } },
+    take: canManageTickets ? 50 : 20,
+  });
 
   return (
     <AppShell user={user}>
@@ -28,6 +37,15 @@ export default async function SupportPage() {
           </ul>
         </aside>
       </div>
+      <section className="mt-6">
+        <div className="mb-4">
+          <p className="text-sm font-bold text-cyan-600">{canManageTickets ? "Traitement support" : "Suivi de vos demandes"}</p>
+          <h2 className="mt-1 text-2xl font-black text-dtsc-ink">
+            {canManageTickets ? "Tickets utilisateurs" : "Mes tickets"}
+          </h2>
+        </div>
+        <TicketBoard tickets={JSON.parse(JSON.stringify(tickets))} canManage={canManageTickets} />
+      </section>
     </AppShell>
   );
 }

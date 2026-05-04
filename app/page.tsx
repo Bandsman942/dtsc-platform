@@ -14,8 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { DtscLogo } from "@/components/brand/dtsc-logo";
-import { DtscFooter } from "@/components/layout/dtsc-footer";
+import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
 
@@ -24,19 +23,7 @@ const serviceIcons = [Database, BrainCircuit, ShieldCheck, Network, Bot, Megapho
 export default function Page() {
   return (
     <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
-      <header className="sticky top-0 z-50 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <DtscLogo />
-          <nav className="flex items-center gap-2 sm:gap-3">
-            <Button asChild variant="ghost" className="text-dtsc-ink hover:bg-dtsc-soft">
-              <Link href="/auth/sign-in">Connexion</Link>
-            </Button>
-            <Button asChild className="rounded-xl bg-[#002b5b] text-white shadow-[0_16px_40px_rgba(0,43,91,0.18)] hover:bg-[#001736]">
-              <Link href="/auth/sign-up">Essayer le chatbot</Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader />
 
       <section className="relative overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(circle_at_20%_20%,rgba(0,194,255,0.18),transparent_34%),linear-gradient(135deg,rgba(0,23,54,0.08),transparent_55%)]" />
@@ -168,7 +155,7 @@ export default function Page() {
         </div>
       </section>
 
-      <DtscFooter />
+      <PublicFooter />
     </main>
   );
 }
