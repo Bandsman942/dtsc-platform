@@ -8,9 +8,13 @@ type Params = {
   params: Promise<{ id: string }>;
 };
 
+function canManageSupport(role: UserRole) {
+  return role === UserRole.ADMIN || role === UserRole.SUPPORT;
+}
+
 export async function PATCH(req: Request, { params }: Params) {
   const session = await getSession();
-  if (!session || ![UserRole.ADMIN, UserRole.SUPPORT].includes(session.role)) {
+  if (!session || !canManageSupport(session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -274,7 +274,9 @@ export function ChatWorkspace({
                 >
                   {message.role === "assistant" ? (
                     <div className="relative">
-                      <Streamdown>{message.content || "..."}</Streamdown>
+                      <div className="dtsc-assistant-markdown">
+                        <Streamdown>{message.content || "..."}</Streamdown>
+                      </div>
                       {message.content && (
                         <button
                           className="absolute -right-2 -top-2 hidden rounded-lg bg-white p-1 text-slate-500 shadow-md group-hover:block"
