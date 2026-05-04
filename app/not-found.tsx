@@ -8,7 +8,7 @@ export default function NotFound() {
         <p className="text-sm text-cyan-200">404</p>
         <h1 className="mt-3 text-4xl font-semibold">Page introuvable</h1>
         <p className="mt-4 text-slate-400">
-          La ressource demandée n'existe pas ou n'est plus disponible.
+          La ressource demandée n&apos;existe pas ou n&apos;est plus disponible.
         </p>
         <Button asChild className="mt-6 bg-cyan-400 text-slate-950 hover:bg-cyan-300">
           <Link href="/dashboard">Retour au dashboard</Link>

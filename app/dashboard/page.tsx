@@ -29,7 +29,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-cyan-200">Bienvenue, {user.name}</p>
           <h1 className="mt-2 text-3xl font-semibold text-white">Espace client DTSC</h1>
           <p className="mt-3 max-w-3xl text-slate-400">
-            Pilotez vos échanges IA, retrouvez l'historique de vos conversations et contactez l'équipe DTSC pour les sujets nécessitant un accompagnement humain.
+            Pilotez vos échanges IA, retrouvez l&apos;historique de vos conversations et contactez l&apos;équipe DTSC pour les sujets nécessitant un accompagnement humain.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
@@ -39,7 +39,7 @@ export default async function DashboardPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" className="border-white/15 bg-transparent text-white hover:bg-white/10">
-              <Link href="/support">Contacter l'équipe DTSC</Link>
+              <Link href="/support">Contacter l&apos;équipe DTSC</Link>
             </Button>
           </div>
         </section>
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
           </div>
           <div className="rounded-lg border border-white/10 bg-cyan-400 p-6 text-slate-950">
             <Ticket className="h-6 w-6" />
-            <h2 className="mt-4 font-semibold">Besoin d'un cadrage humain ?</h2>
+            <h2 className="mt-4 font-semibold">Besoin d&apos;un cadrage humain ?</h2>
             <p className="mt-2 text-sm text-slate-800">
               Créez un ticket pour une demande commerciale, technique ou stratégique.
             </p>

@@ -10,7 +10,7 @@ export default function SignInPage() {
         <div>
           <p className="text-4xl font-semibold">Accédez à votre espace client.</p>
           <p className="mt-4 max-w-md text-slate-400">
-            Retrouvez vos conversations, suivez vos demandes et échangez avec l'assistant DTSC.
+            Retrouvez vos conversations, suivez vos demandes et échangez avec l&apos;assistant DTSC.
           </p>
         </div>
         <p className="text-sm text-slate-500">Le numérique au service de votre performance</p>

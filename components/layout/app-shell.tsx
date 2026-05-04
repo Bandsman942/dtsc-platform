@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Bot, Headphones, LayoutDashboard, Settings, Shield, User } from "lucide-react";
+import { Bot, Headphones, LayoutDashboard, Settings, Shield, User } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";

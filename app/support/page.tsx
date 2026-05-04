@@ -11,7 +11,7 @@ export default async function SupportPage() {
         <section>
           <h1 className="text-3xl font-semibold text-white">Support DTSC</h1>
           <p className="mt-3 max-w-2xl text-slate-400">
-            Créez une demande lorsqu'un sujet nécessite une validation humaine, un cadrage commercial, une étude technique ou un accompagnement stratégique.
+            Créez une demande lorsqu&apos;un sujet nécessite une validation humaine, un cadrage commercial, une étude technique ou un accompagnement stratégique.
           </p>
           <div className="mt-6">
             <SupportForm />
