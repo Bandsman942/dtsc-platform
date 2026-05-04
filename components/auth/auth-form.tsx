@@ -57,14 +57,14 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         autoComplete={isSignUp ? "new-password" : "current-password"}
         required
       />
-      {error && <p className="text-sm text-red-300">{error}</p>}
-      <Button type="submit" className="h-11 w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300" disabled={isPending}>
+      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      <Button type="submit" className="h-11 w-full rounded-xl bg-[#002b5b] text-white shadow-[0_12px_32px_rgba(0,43,91,0.12)] hover:bg-[#001736]" disabled={isPending}>
         {isPending ? "Traitement..." : isSignUp ? "Créer mon compte" : "Se connecter"}
         <ArrowRight className="h-4 w-4" />
       </Button>
-      <p className="text-center text-sm text-slate-400">
+      <p className="text-center text-sm text-slate-500">
         {isSignUp ? "Déjà un compte ?" : "Pas encore de compte ?"}{" "}
-        <Link href={isSignUp ? "/auth/sign-in" : "/auth/sign-up"} className="text-cyan-300 hover:text-cyan-200">
+        <Link href={isSignUp ? "/auth/sign-in" : "/auth/sign-up"} className="font-semibold text-[#002b5b] hover:text-cyan-600">
           {isSignUp ? "Connexion" : "Inscription"}
         </Link>
       </p>

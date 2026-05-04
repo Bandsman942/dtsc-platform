@@ -34,7 +34,7 @@ export function UserStatusSelect({
     <select
       value={value}
       onChange={(event) => updateStatus(event.target.value)}
-      className="h-8 rounded-md border border-white/10 bg-slate-950 px-2 text-xs text-slate-100"
+      className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
     >
       <option value="ACTIVE">ACTIVE</option>
       <option value="SUSPENDED">SUSPENDED</option>

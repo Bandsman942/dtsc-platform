@@ -168,8 +168,8 @@ export function ChatWorkspace({
 
   return (
     <div className="grid min-h-[calc(100vh-7rem)] gap-4 lg:grid-cols-[320px_1fr]">
-      <aside className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-        <Button onClick={createConversation} className="h-10 w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300">
+      <aside className="dtsc-card flex flex-col p-4">
+        <Button onClick={createConversation} className="h-11 w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <Plus className="h-4 w-4" />
           Nouvelle conversation
         </Button>
@@ -179,10 +179,10 @@ export function ChatWorkspace({
               key={conversation.id}
               onClick={() => setActiveConversationId(conversation.id)}
               className={cn(
-                "w-full rounded-lg px-3 py-3 text-left text-sm transition",
+                "w-full rounded-xl px-3 py-3 text-left text-sm transition",
                 activeConversationId === conversation.id
-                  ? "bg-cyan-400/15 text-cyan-100"
-                  : "text-slate-300 hover:bg-white/10"
+                  ? "border-l-4 border-cyan-400 bg-slate-100 text-[#001736]"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-[#001736]"
               )}
             >
               <span className="block truncate font-medium">{conversation.title}</span>
@@ -194,13 +194,16 @@ export function ChatWorkspace({
         </div>
       </aside>
 
-      <section className="flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-900/70">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <section className="flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
           <div>
-            <h1 className="font-semibold text-white">
+            <h1 className="text-xl font-bold text-[#001736]">
               {activeConversation?.title || "Assistant DTSC"}
             </h1>
-            <p className="text-xs text-slate-400">Conseil numérique, data, IA et automatisation</p>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-[#d5e3fd] px-2.5 py-1 text-xs font-bold text-[#002b5b]">Assistant IA DTSC</span>
+              <span className="text-xs font-medium text-slate-500">En ligne</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={renameConversation} disabled={!activeConversation}>
@@ -212,46 +215,57 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-5">
+        <div className="flex-1 overflow-y-auto bg-[#faf9fe] px-4 py-6 lg:px-8">
           {!messages.length && (
             <div className="mx-auto flex h-full max-w-2xl flex-col justify-center text-center">
-              <p className="text-2xl font-semibold text-white">Comment DTSC peut vous aider ?</p>
-              <p className="mt-3 text-slate-400">
+              <p className="text-3xl font-bold text-[#001736]">Comment DTSC peut vous aider ?</p>
+              <p className="mt-3 leading-7 text-slate-600">
                 Décrivez votre besoin en transformation numérique, automatisation, data, application métier ou IA.
               </p>
             </div>
           )}
           <div className="space-y-5">
             {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "group max-w-[90%] rounded-lg px-4 py-3 text-sm leading-6",
-                  message.role === "user"
-                    ? "ml-auto bg-cyan-400 text-slate-950"
-                    : "bg-white/[0.06] text-slate-100"
-                )}
-              >
-                {message.role === "assistant" ? (
-                  <div className="relative">
-                    <Streamdown>{message.content || "..."}</Streamdown>
-                    {message.content && (
-                      <button
-                        className="absolute -right-2 -top-2 hidden rounded-md bg-slate-800 p-1 text-slate-300 group-hover:block"
-                        onClick={() => navigator.clipboard.writeText(message.content)}
-                        aria-label="Copier"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+              <div key={message.id} className={cn("flex gap-3", message.role === "user" && "justify-end")}>
+                {message.role === "assistant" && (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d5e3fd] text-[#002b5b]">
+                    <BotIcon />
                   </div>
-                ) : (
-                  message.content
+                )}
+                <div
+                  className={cn(
+                    "group max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-[0_4px_20px_rgba(0,43,91,0.05)]",
+                    message.role === "user"
+                      ? "rounded-tr-sm bg-[#002b5b] text-white"
+                      : "rounded-tl-sm bg-white text-slate-800"
+                  )}
+                >
+                  {message.role === "assistant" ? (
+                    <div className="relative">
+                      <Streamdown>{message.content || "..."}</Streamdown>
+                      {message.content && (
+                        <button
+                          className="absolute -right-2 -top-2 hidden rounded-lg bg-white p-1 text-slate-500 shadow-md group-hover:block"
+                          onClick={() => navigator.clipboard.writeText(message.content)}
+                          aria-label="Copier"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    message.content
+                  )}
+                </div>
+                {message.role === "user" && (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[#002b5b] text-xs font-bold">
+                    VO
+                  </div>
                 )}
               </div>
             ))}
             {isStreaming && (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 DTSC Assistant rédige une réponse...
               </div>
@@ -260,16 +274,16 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        {error && <p className="px-4 pb-2 text-sm text-red-300">{error}</p>}
-        <form onSubmit={sendMessage} className="border-t border-white/10 p-4">
-          <div className="flex items-center gap-3 rounded-lg bg-white/[0.06] p-2">
+        {error && <p className="px-4 pb-2 text-sm font-medium text-red-600">{error}</p>}
+        <form onSubmit={sendMessage} className="border-t border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
             <Input
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Écrivez votre demande..."
-              className="h-11 border-0 bg-transparent text-white focus-visible:ring-0"
+              className="h-11 border-0 bg-transparent text-slate-900 focus-visible:ring-0"
             />
-            <Button type="submit" size="icon" className="h-11 w-11 bg-cyan-400 text-slate-950 hover:bg-cyan-300" disabled={!input.trim() || isStreaming}>
+            <Button type="submit" size="icon" className="h-11 w-11 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={!input.trim() || isStreaming}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -277,4 +291,8 @@ export function ChatWorkspace({
       </section>
     </div>
   );
+}
+
+function BotIcon() {
+  return <span className="text-sm font-black">AI</span>;
 }

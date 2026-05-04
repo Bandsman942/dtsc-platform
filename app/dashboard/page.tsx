@@ -25,20 +25,20 @@ export default async function DashboardPage() {
   return (
     <AppShell user={user}>
       <div className="flex flex-col gap-6">
-        <section className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-          <p className="text-sm text-cyan-200">Bienvenue, {user.name}</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Espace client DTSC</h1>
-          <p className="mt-3 max-w-3xl text-slate-400">
+        <section className="dtsc-panel p-6">
+          <p className="text-sm font-semibold text-cyan-600">Bienvenue, {user.name}</p>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight text-[#001736]">Espace client DTSC</h1>
+          <p className="mt-3 max-w-3xl leading-7 text-slate-600">
             Pilotez vos échanges IA, retrouvez l&apos;historique de vos conversations et contactez l&apos;équipe DTSC pour les sujets nécessitant un accompagnement humain.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
+            <Button asChild className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <Link href="/chat">
                 <Plus className="h-4 w-4" />
                 Nouvelle conversation
               </Link>
             </Button>
-            <Button asChild variant="outline" className="border-white/15 bg-transparent text-white hover:bg-white/10">
+            <Button asChild variant="outline" className="rounded-xl border-slate-300 bg-white text-[#002b5b] hover:bg-slate-50">
               <Link href="/support">Contacter l&apos;équipe DTSC</Link>
             </Button>
           </div>
@@ -51,13 +51,13 @@ export default async function DashboardPage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="font-semibold text-white">Conversations récentes</h2>
-            <div className="mt-4 divide-y divide-white/10">
+          <div className="dtsc-card p-6">
+            <h2 className="font-bold text-[#001736]">Conversations récentes</h2>
+            <div className="mt-4 divide-y divide-slate-200">
               {recentConversations.length ? (
                 recentConversations.map((conversation) => (
-                  <Link key={conversation.id} href={`/chat?conversationId=${conversation.id}`} className="flex items-center justify-between py-4 text-sm hover:text-cyan-200">
-                    <span>{conversation.title}</span>
+                  <Link key={conversation.id} href={`/chat?conversationId=${conversation.id}`} className="flex items-center justify-between py-4 text-sm text-slate-700 hover:text-[#002b5b]">
+                    <span className="font-medium">{conversation.title}</span>
                     <span className="text-slate-500">{conversation._count.messages} messages</span>
                   </Link>
                 ))
@@ -66,13 +66,13 @@ export default async function DashboardPage() {
               )}
             </div>
           </div>
-          <div className="rounded-lg border border-white/10 bg-cyan-400 p-6 text-slate-950">
+          <div className="rounded-2xl border border-[#a9c7ff] bg-[#d5e3fd] p-6 text-[#001736] shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
             <Ticket className="h-6 w-6" />
-            <h2 className="mt-4 font-semibold">Besoin d&apos;un cadrage humain ?</h2>
-            <p className="mt-2 text-sm text-slate-800">
+            <h2 className="mt-4 font-bold">Besoin d&apos;un cadrage humain ?</h2>
+            <p className="mt-2 text-sm text-slate-700">
               Créez un ticket pour une demande commerciale, technique ou stratégique.
             </p>
-            <Button asChild className="mt-5 bg-slate-950 text-white hover:bg-slate-800">
+            <Button asChild className="mt-5 rounded-xl bg-[#001736] text-white hover:bg-[#002b5b]">
               <Link href="/support">Créer une demande</Link>
             </Button>
           </div>

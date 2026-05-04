@@ -42,8 +42,8 @@ export default async function AdminPage({
     <AppShell user={user}>
       <div className="space-y-6">
         <section>
-          <p className="text-sm text-cyan-200">Administration</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Pilotage DTSC Chatbot</h1>
+          <p className="text-sm font-semibold text-cyan-600">Administration</p>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight text-[#001736]">Pilotage DTSC Chatbot</h1>
         </section>
 
         <section className="grid gap-4 md:grid-cols-4">
@@ -53,18 +53,18 @@ export default async function AdminPage({
           <StatCard label="Tokens" value={totalTokens} helper="Usage estimé" icon={BarChart3} />
         </section>
 
-        <section className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
+        <section className="dtsc-card p-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <h2 className="font-semibold text-white">Utilisateurs</h2>
+            <h2 className="font-bold text-[#001736]">Utilisateurs</h2>
             <div className="flex flex-wrap gap-2 text-xs">
-              <Link href="/admin" className="rounded-md border border-white/10 px-3 py-1.5 text-slate-300 hover:bg-white/10">
+              <Link href="/admin" className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-100">
                 Tous
               </Link>
               {Object.values(UserRole).map((userRole) => (
                 <Link
                   key={userRole}
                   href={`/admin?role=${userRole}`}
-                  className="rounded-md border border-white/10 px-3 py-1.5 text-slate-300 hover:bg-white/10"
+                  className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-100"
                 >
                   {userRole}
                 </Link>
@@ -73,7 +73,7 @@ export default async function AdminPage({
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-slate-400">
+              <thead className="text-slate-500">
                 <tr>
                   <th className="py-3">Nom</th>
                   <th>Email</th>
@@ -83,10 +83,10 @@ export default async function AdminPage({
                   <th>Créé le</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-slate-200 text-slate-700">
                 {users.map((managedUser) => (
                   <tr key={managedUser.id}>
-                    <td className="py-3 text-white">{managedUser.name}</td>
+                    <td className="py-3 font-semibold text-[#001736]">{managedUser.name}</td>
                     <td>{managedUser.email}</td>
                     <td>{managedUser.role}</td>
                     <td>
@@ -102,12 +102,12 @@ export default async function AdminPage({
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="font-semibold text-white">Conversations récentes</h2>
-            <div className="mt-4 divide-y divide-white/10 text-sm">
+          <div className="dtsc-card p-6">
+            <h2 className="font-bold text-[#001736]">Conversations récentes</h2>
+            <div className="mt-4 divide-y divide-slate-200 text-sm">
               {conversations.map((conversation) => (
                 <div key={conversation.id} className="py-3">
-                  <p className="text-white">{conversation.title}</p>
+                  <p className="font-semibold text-[#001736]">{conversation.title}</p>
                   <p className="text-slate-500">
                     {conversation.user.email} · {conversation._count.messages} messages
                   </p>
@@ -115,12 +115,12 @@ export default async function AdminPage({
               ))}
             </div>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="font-semibold text-white">Tickets support</h2>
-            <div className="mt-4 divide-y divide-white/10 text-sm">
+          <div className="dtsc-card p-6">
+            <h2 className="font-bold text-[#001736]">Tickets support</h2>
+            <div className="mt-4 divide-y divide-slate-200 text-sm">
               {tickets.map((ticket) => (
                 <div key={ticket.id} className="py-3">
-                  <p className="text-white">{ticket.subject}</p>
+                  <p className="font-semibold text-[#001736]">{ticket.subject}</p>
                   <p className="text-slate-500">
                     {ticket.user.email} · {ticket.status} · {ticket.priority}
                   </p>

@@ -19,7 +19,7 @@ export function SignOutButton() {
       variant="ghost"
       size="icon"
       onClick={signOut}
-      className="text-slate-300 hover:bg-white/10 hover:text-white"
+      className="text-slate-500 hover:bg-slate-100 hover:text-[#001736]"
       aria-label="Déconnexion"
     >
       <LogOut className="h-4 w-4" />

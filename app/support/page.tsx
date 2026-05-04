@@ -9,17 +9,18 @@ export default async function SupportPage() {
     <AppShell user={user}>
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <section>
-          <h1 className="text-3xl font-semibold text-white">Support DTSC</h1>
-          <p className="mt-3 max-w-2xl text-slate-400">
+          <p className="text-sm font-semibold text-cyan-600">Assistance</p>
+          <h1 className="mt-2 text-4xl font-bold text-[#001736]">Support DTSC</h1>
+          <p className="mt-3 max-w-2xl leading-7 text-slate-600">
             Créez une demande lorsqu&apos;un sujet nécessite une validation humaine, un cadrage commercial, une étude technique ou un accompagnement stratégique.
           </p>
           <div className="mt-6">
             <SupportForm />
           </div>
         </section>
-        <aside className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-          <h2 className="font-semibold text-white">Bonnes pratiques</h2>
-          <ul className="mt-4 space-y-3 text-sm text-slate-400">
+        <aside className="dtsc-card p-6">
+          <h2 className="font-bold text-[#001736]">Bonnes pratiques</h2>
+          <ul className="mt-4 space-y-3 text-sm text-slate-600">
             <li>Décrivez le contexte métier.</li>
             <li>Indiquez les outils ou sources de données concernés.</li>
             <li>Précisez les délais et personnes impliquées.</li>
