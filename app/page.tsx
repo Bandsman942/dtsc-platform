@@ -1,152 +1,149 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BarChart3, Bot, BrainCircuit, CheckCircle2, Database, Network, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  Bot,
+  BrainCircuit,
+  Building2,
+  CheckCircle2,
+  Database,
+  Megaphone,
+  Network,
+  Printer,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { DtscLogo } from "@/components/brand/dtsc-logo";
+import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { Button } from "@/components/ui/button";
+import { dtsc } from "@/lib/dtsc";
 
-const services = [
-  "Conseil numérique",
-  "Développement d'applications web",
-  "Automatisation des processus",
-  "Analyse de données",
-  "Tableaux de bord Power BI / reporting",
-  "Intelligence artificielle pour entreprises",
-  "Chatbots professionnels",
-];
-
-const benefits = [
-  "Gain de temps opérationnel",
-  "Meilleure prise de décision",
-  "Automatisation des tâches répétitives",
-  "Centralisation des données",
-  "Support intelligent pour vos clients",
-];
+const serviceIcons = [Database, BrainCircuit, ShieldCheck, Network, Bot, Megaphone, Printer];
 
 export default function Page() {
   return (
-    <main className="min-h-screen bg-[#faf9fe] text-[#1a1c1f]">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/80 shadow-sm backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#001736] text-white">
-              <Bot className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="font-extrabold tracking-tight text-[#001736]">DTSC</p>
-              <p className="text-xs font-medium text-slate-500">Data and Tech Solutions Consulting</p>
-            </div>
-          </Link>
-          <nav className="flex items-center gap-3">
-            <Button asChild variant="ghost" className="text-[#001736] hover:bg-slate-100">
+    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+      <header className="sticky top-0 z-50 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <DtscLogo />
+          <nav className="flex items-center gap-2 sm:gap-3">
+            <Button asChild variant="ghost" className="text-dtsc-ink hover:bg-dtsc-soft">
               <Link href="/auth/sign-in">Connexion</Link>
             </Button>
-            <Button asChild className="bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Button asChild className="rounded-xl bg-[#002b5b] text-white shadow-[0_16px_40px_rgba(0,43,91,0.18)] hover:bg-[#001736]">
               <Link href="/auth/sign-up">Essayer le chatbot</Link>
             </Button>
           </nav>
         </div>
       </header>
 
-      <section className="relative mx-auto grid max-w-7xl items-center gap-12 overflow-hidden px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-28">
-        <div className="absolute right-0 top-0 -z-10 h-96 w-1/2 rounded-l-full bg-[#d5e3fd]/60 blur-3xl" />
-        <div>
-          <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#a9c7ff] bg-[#d5e3fd]/60 px-3 py-1.5 text-sm font-semibold text-[#002b5b]">
-            <Sparkles className="h-4 w-4" />
-            Le numérique au service de votre performance
-          </p>
-          <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-tight text-[#001736] sm:text-6xl">
-            Votre assistant IA pour accélérer la transformation numérique de votre entreprise.
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-            DTSC Chatbot aide vos équipes à automatiser les tâches complexes, analyser les données et prendre des décisions plus intelligentes avec un accompagnement conseil fiable.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg" className="rounded-xl bg-[#002b5b] text-white shadow-[0_12px_32px_rgba(0,43,91,0.16)] hover:bg-[#001736]">
-              <Link href="/auth/sign-up">
-                Essayer le chatbot
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="rounded-xl border-slate-300 bg-white text-[#002b5b] hover:bg-slate-50">
-              <Link href="/support">Demander une démo</Link>
-            </Button>
-            <Button asChild size="lg" variant="ghost" className="rounded-xl text-[#002b5b] hover:bg-slate-100">
-              <Link href="/support">Contacter DTSC</Link>
-            </Button>
-          </div>
-          <div className="mt-10 flex items-center gap-4 border-t border-slate-200 pt-8 text-sm text-slate-600">
-            <div className="flex -space-x-3">
-              {["IA", "BI", "DX"].map((label) => (
-                <div key={label} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-[#d5e3fd] text-xs font-bold text-[#002b5b]">
-                  {label}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(circle_at_20%_20%,rgba(0,194,255,0.18),transparent_34%),linear-gradient(135deg,rgba(0,23,54,0.08),transparent_55%)]" />
+        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
+          <div>
+            <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-dtsc-border bg-dtsc-surface px-3 py-1.5 text-sm font-bold text-dtsc-blue shadow-[0_10px_30px_rgba(0,43,91,0.08)]">
+              <Sparkles className="h-4 w-4 text-cyan-500" />
+              {dtsc.slogan}
+            </p>
+            <h1 className="max-w-4xl text-4xl font-black leading-tight tracking-tight text-dtsc-ink sm:text-6xl">
+              Performance digitale, data et IA pour les entreprises africaines.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-dtsc-muted">
+              {dtsc.summary} Notre assistant IA qualifie les besoins, structure les échanges et oriente les clients vers un cadrage DTSC lorsque la demande devient stratégique.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="rounded-xl bg-[#002b5b] text-white shadow-[0_16px_40px_rgba(0,43,91,0.2)] hover:bg-[#001736]">
+                <Link href="/auth/sign-up">
+                  Démarrer avec DTSC
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+                <Link href="/support">Demander une démo</Link>
+              </Button>
+            </div>
+            <div className="mt-10 grid gap-3 border-t border-dtsc-border pt-8 text-sm text-dtsc-muted sm:grid-cols-3">
+              {dtsc.targets.map((target) => (
+                <div key={target} className="flex items-center gap-2 rounded-xl bg-dtsc-surface px-3 py-2 shadow-[0_8px_24px_rgba(0,43,91,0.05)]">
+                  <Building2 className="h-4 w-4 text-cyan-500" />
+                  {target}
                 </div>
               ))}
             </div>
-            <p><span className="font-bold text-[#001736]">500+</span> cas d&apos;usage data, automatisation et IA cadrés.</p>
           </div>
-        </div>
 
-        <div className="relative">
-          <div className="absolute inset-0 -z-10 rotate-3 scale-105 rounded-3xl bg-[#d5e3fd]" />
-          <div className="dtsc-card overflow-hidden p-5">
-            <div className="rounded-2xl bg-white p-5">
-              <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-                <div className="rounded-xl bg-[#d5e3fd] p-2 text-[#002b5b]"><Bot className="h-5 w-5" /></div>
-                <p className="font-semibold text-[#001736]">Assistant DTSC</p>
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-cyan-300/30 via-blue-500/10 to-emerald-300/20 blur-2xl" />
+            <div className="relative overflow-hidden rounded-[1.5rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.16)]">
+              <Image src="/dtsc-logo.png" alt="Identité DTSC" width={1536} height={864} className="h-56 w-full object-cover sm:h-72" priority />
+              <div className="grid gap-4 p-5 sm:grid-cols-3">
+                {[
+                  ["Vision", dtsc.vision],
+                  ["Mission", dtsc.mission],
+                  ["Marché", "Assurances, cliniques, pharmacies et PME à fort besoin de digitalisation."],
+                ].map(([title, text]) => (
+                  <div key={title} className="rounded-2xl border border-dtsc-border bg-dtsc-soft p-4">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-blue">{title}</p>
+                    <p className="mt-2 text-sm leading-6 text-dtsc-muted">{text}</p>
+                  </div>
+                ))}
               </div>
-              <div className="mt-5 space-y-4 text-sm">
-                <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-100 p-4 text-slate-700">
-                  Bonjour, décrivez votre besoin en data, automatisation, application métier ou IA.
-                </div>
-                <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-[#002b5b] p-4 text-white">
-                  Nous voulons automatiser notre reporting commercial.
-                </div>
-                <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-slate-100 p-4 text-slate-700">
-                  DTSC peut vous aider à centraliser vos données, définir les indicateurs clés et construire un tableau de bord fiable. Je recommande de créer un ticket pour cadrer les sources et les utilisateurs.
-                </div>
-              </div>
-            </div>
-            <div className="absolute -left-6 top-20 hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(0,43,91,0.1)] lg:flex lg:items-center lg:gap-3">
-              <BarChart3 className="h-5 w-5 text-cyan-500" />
-              <div><p className="text-xs text-slate-500">Analyse en cours</p><p className="text-sm font-bold text-[#001736]">+24% efficacité</p></div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border-y border-slate-200 bg-white">
+      <section className="border-y border-dtsc-border bg-dtsc-surface">
         <div className="mx-auto grid max-w-7xl gap-4 px-4 py-12 sm:px-6 md:grid-cols-3 lg:px-8">
           {[
-            { icon: BrainCircuit, title: "IA utile", text: "Un assistant cadré pour répondre avec rigueur et orienter vers l'équipe DTSC." },
-            { icon: Database, title: "Data-driven", text: "Pensé pour évoluer vers une base documentaire et des workflows métiers." },
-            { icon: Network, title: "SaaS sécurisé", text: "Authentification, rôles, historique et contrôle d'usage intégrés." },
+            { icon: BrainCircuit, title: "Conseil IA responsable", text: "Le chatbot qualifie, explique et recommande une validation humaine pour les décisions commerciales ou stratégiques." },
+            { icon: Database, title: "Culture data & BI", text: "DTSC structure les KPI, les dashboards et le reporting pour transformer les données en décisions." },
+            { icon: Network, title: "Plateforme SaaS évolutive", text: "Architecture prête pour RAG, base documentaire, tickets avancés, CRM et analytics." },
           ].map((item) => (
             <div key={item.title} className="dtsc-card dtsc-card-hover p-6">
-              <item.icon className="h-6 w-6 text-[#002b5b]" />
-              <h2 className="mt-5 text-lg font-semibold text-[#001736]">{item.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+              <item.icon className="h-6 w-6 text-dtsc-blue" />
+              <h2 className="mt-5 text-lg font-bold text-dtsc-ink">{item.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-dtsc-muted">{item.text}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-2">
+        <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr]">
           <div>
-            <h2 className="text-3xl font-bold text-[#001736]">Services principaux</h2>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {services.map((service) => (
-                <div key={service} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-700 shadow-[0_4px_20px_rgba(0,43,91,0.04)]">
-                  <CheckCircle2 className="h-4 w-4 text-cyan-500" />
+            <p className="text-sm font-bold text-cyan-600">Offre DTSC</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Services principaux</h2>
+            <p className="mt-3 leading-7 text-dtsc-muted">
+              Une offre hybride combinant consulting, abonnements, développement, marketing, formation et produits digitaux.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {dtsc.services.map((service, index) => {
+              const Icon = serviceIcons[index] || CheckCircle2;
+              return (
+                <div key={service} className="dtsc-card dtsc-card-hover flex items-start gap-3 p-4 text-sm font-semibold text-dtsc-ink">
+                  <Icon className="mt-0.5 h-5 w-5 shrink-0 text-cyan-500" />
                   {service}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          <div>
-            <h2 className="text-3xl font-bold text-[#001736]">Avantages</h2>
-            <div className="mt-6 space-y-3">
-              {benefits.map((benefit) => (
-                <div key={benefit} className="flex items-center gap-3 text-slate-700">
-                  <BarChart3 className="h-4 w-4 text-cyan-500" />
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+        <div className="rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.22)] sm:p-8">
+          <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+            <div>
+              <p className="text-sm font-bold text-cyan-300">Impact attendu</p>
+              <h2 className="mt-2 text-3xl font-black">Un cockpit de performance pour vos équipes.</h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {dtsc.advantages.map((benefit) => (
+                <div key={benefit} className="flex items-center gap-3 rounded-2xl bg-white/10 p-4 text-sm font-semibold">
+                  <BarChart3 className="h-4 w-4 text-cyan-300" />
                   {benefit}
                 </div>
               ))}
@@ -156,24 +153,22 @@ export default function Page() {
       </section>
 
       <section className="mx-auto max-w-4xl px-4 pb-16 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-[#001736]">FAQ</h2>
-        <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+        <h2 className="text-3xl font-black text-dtsc-ink">FAQ</h2>
+        <div className="mt-6 divide-y divide-dtsc-border rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-[0_12px_40px_rgba(0,43,91,0.06)]">
           {[
             ["Le chatbot remplace-t-il l'équipe DTSC ?", "Non. Il accélère la qualification et recommande une validation humaine pour les demandes commerciales, stratégiques ou complexes."],
-            ["Mes conversations sont-elles conservées ?", "Oui, après connexion, les conversations sont sauvegardées pour assurer le suivi client."],
-            ["Puis-je demander une démo ?", "Oui, via le bouton de contact ou la page support."],
+            ["Quels secteurs DTSC cible-t-il ?", "Les assurances, cliniques, pharmacies et PME, avec une approche adaptée à la réalité de Kinshasa et du marché africain."],
+            ["Comment contacter DTSC ?", `WhatsApp: ${dtsc.whatsapp}. Réseaux sociaux: ${dtsc.socialHandle}.`],
           ].map(([question, answer]) => (
             <div key={question} className="p-5">
-              <h3 className="font-semibold text-[#001736]">{question}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{answer}</p>
+              <h3 className="font-bold text-dtsc-ink">{question}</h3>
+              <p className="mt-2 text-sm leading-6 text-dtsc-muted">{answer}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-        DTSC — Data and Tech Solutions Consulting. Le numérique au service de votre performance.
-      </footer>
+      <DtscFooter />
     </main>
   );
 }

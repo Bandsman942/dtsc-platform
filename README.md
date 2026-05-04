@@ -1,10 +1,12 @@
 # DTSC Chatbot
 
-Plateforme SaaS de chatbot client pour **DTSC — Data and Tech Solutions Consulting**.
+Plateforme SaaS de chatbot client pour **DTSC — Data and Tech Solutions Consulting**, cabinet basé à Kinshasa.
 
 Slogan: **Le numérique au service de votre performance**.
 
-L'application fournit un assistant IA professionnel pour aider les clients à clarifier leurs besoins en transformation numérique, data, automatisation, reporting, IA, applications métier et accompagnement technologique.
+L'application fournit un assistant IA professionnel pour aider les clients à clarifier leurs besoins en transformation digitale, data & BI, IA, marketing digital, applications métier, optimisation des coûts, fraude et accompagnement technologique.
+
+DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une offre hybride combinant consulting, abonnements, développement, marketing, formation et produits digitaux.
 
 ## Stack Technique
 
@@ -34,6 +36,9 @@ L'application fournit un assistant IA professionnel pour aider les clients à cl
 - Tickets support
 - Dashboard admin
 - Suivi utilisateurs, conversations, messages, usage IA et tickets
+- Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
+- Paramètres complets: profil, mot de passe, mode clair/sombre/système et préférences de notifications
+- Logo officiel DTSC et copyright 2026 sur les footers essentiels
 - Rate limiting basique sur l'API chat
 - Validation des inputs avec Zod
 
@@ -51,6 +56,8 @@ OPENAI_MODEL=gpt-5-nano
 OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
 NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
 ADMIN_EMAIL=
+DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
+DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!
 ```
 
 Notes:
@@ -58,7 +65,20 @@ Notes:
 - `OPENAI_API_KEY` ne doit jamais être exposé côté client.
 - `AUTH_SECRET` doit être une chaîne aléatoire longue, au minimum 32 caractères.
 - `ADMIN_EMAIL` donne automatiquement le rôle `ADMIN` au premier compte créé avec cet email.
+- `DEFAULT_ADMIN_EMAIL` et `DEFAULT_ADMIN_PASSWORD` permettent le bootstrap du compte admin par défaut lors de la première connexion avec ces identifiants.
+- Changer immédiatement `DEFAULT_ADMIN_PASSWORD` en production, puis modifier le mot de passe depuis `/settings`.
 - Sur Vercel, configurer ces variables dans Project Settings → Environment Variables.
+
+## Compte Admin Par Défaut
+
+Identifiants temporaires prévus pour la première connexion:
+
+```txt
+Email: admin@dtsc-platform.com
+Mot de passe: DtscAdmin2026!
+```
+
+Au premier login avec ces valeurs, l'application crée automatiquement un utilisateur `ADMIN` actif si aucun compte avec cet email n'existe encore. Après connexion, changer le mot de passe dans `/settings`, puis remplacer `DEFAULT_ADMIN_PASSWORD` dans Vercel.
 
 Générer un `AUTH_SECRET` localement avec PowerShell:
 
@@ -122,9 +142,9 @@ OPENAI_MODEL=gpt-5-nano
 ## Rôles Utilisateurs
 
 - `ADMIN`: accès à `/admin`, supervision utilisateurs, conversations, tickets et usage IA.
-- `MANAGER`: rôle prévu pour supervision métier future.
+- `MANAGER`: supervision métier et suivi opérationnel futur.
 - `CLIENT`: rôle standard pour les clients DTSC.
-- `SUPPORT`: rôle prévu pour traitement des tickets.
+- `SUPPORT`: traitement des tickets et accompagnement client.
 
 ## Routes Principales
 
@@ -162,6 +182,8 @@ components/
   dashboard/
   layout/
   support/
+  settings/
+  brand/
   ui/
 lib/
   auth.ts
@@ -173,6 +195,8 @@ lib/
   security.ts
   session.ts
   validators.ts
+  dtsc.ts
+  default-admin.ts
 prisma/
   schema.prisma
   migrations/
@@ -201,6 +225,8 @@ OPENAI_MODEL
 OPENAI_MODEL_IDS
 NEXT_PUBLIC_DEFAULT_MODEL
 ADMIN_EMAIL
+DEFAULT_ADMIN_EMAIL
+DEFAULT_ADMIN_PASSWORD
 ```
 
 Le pipeline exécute:
@@ -234,6 +260,7 @@ Mesures présentes:
 - Journalisation d'audit
 - Détection d'abus
 - Politiques CSP strictes
+- Remplacer le mot de passe admin par défaut dès la mise en production
 
 ## Roadmap
 

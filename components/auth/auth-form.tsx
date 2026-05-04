@@ -62,9 +62,9 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         {isPending ? "Traitement..." : isSignUp ? "Créer mon compte" : "Se connecter"}
         <ArrowRight className="h-4 w-4" />
       </Button>
-      <p className="text-center text-sm text-slate-500">
+      <p className="text-center text-sm text-dtsc-muted">
         {isSignUp ? "Déjà un compte ?" : "Pas encore de compte ?"}{" "}
-        <Link href={isSignUp ? "/auth/sign-in" : "/auth/sign-up"} className="font-semibold text-[#002b5b] hover:text-cyan-600">
+        <Link href={isSignUp ? "/auth/sign-in" : "/auth/sign-up"} className="font-semibold text-dtsc-blue hover:text-cyan-600">
           {isSignUp ? "Connexion" : "Inscription"}
         </Link>
       </p>

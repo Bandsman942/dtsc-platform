@@ -3,6 +3,9 @@ import { Bot, Headphones, LayoutDashboard, Settings, Shield, Sparkles, User } fr
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
+import { DtscLogo } from "@/components/brand/dtsc-logo";
+import { DtscFooter } from "@/components/layout/dtsc-footer";
+import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 
 const navItems = [
@@ -26,17 +29,9 @@ export function AppShell({
   };
 }) {
   return (
-    <div className="min-h-screen bg-[#faf9fe] text-slate-950">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white px-5 py-6 shadow-[0_4px_20px_rgba(0,43,91,0.05)] lg:block">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#001736] text-white">
-            <Bot className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-lg font-extrabold tracking-tight text-[#001736]">DTSC Chatbot</p>
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">SaaS Platform</p>
-          </div>
-        </Link>
+    <div className="min-h-screen bg-dtsc-page text-dtsc-ink">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:block">
+        <DtscLogo href="/dashboard" />
 
         <Link
           href="/chat"
@@ -51,7 +46,7 @@ export function AppShell({
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-[#001736]"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-ink"
             >
               <item.icon className="h-4 w-4" />
               {item.label}
@@ -60,7 +55,7 @@ export function AppShell({
           {user.role === "ADMIN" && (
             <Link
               href="/admin"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#002b5b] transition hover:bg-cyan-50"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-dtsc-blue transition hover:bg-dtsc-soft"
             >
               <Shield className="h-4 w-4" />
               Administration
@@ -70,32 +65,32 @@ export function AppShell({
       </aside>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-            <Link href="/dashboard" className="font-extrabold text-[#001736] lg:hidden">
+            <Link href="/dashboard" className="font-extrabold text-dtsc-ink lg:hidden">
               DTSC
             </Link>
-            <div className="hidden text-sm font-medium text-slate-500 md:block">
-              Le numérique au service de votre performance
+            <div className="hidden text-sm font-medium text-dtsc-muted md:block">
+              {dtsc.slogan}
             </div>
             <div className="flex items-center gap-3">
               <ThemeToggle />
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-semibold text-[#001736]">{user.name}</p>
-                <p className="text-xs font-medium text-slate-500">{user.role}</p>
+                <p className="text-sm font-semibold text-dtsc-ink">{user.name}</p>
+                <p className="text-xs font-medium text-dtsc-muted">{user.role}</p>
               </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#d5e3fd] text-sm font-bold text-[#002b5b]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-dtsc-soft text-sm font-bold text-dtsc-blue">
                 {initials(user.name)}
               </div>
               <SignOutButton />
             </div>
           </div>
-          <nav className="flex gap-2 overflow-x-auto border-t border-slate-200 px-4 py-2 lg:hidden">
+          <nav className="flex gap-2 overflow-x-auto border-t border-dtsc-border px-4 py-2 lg:hidden">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-[#001736]"
+                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"
               >
                 <item.icon className="h-3.5 w-3.5" />
                 {item.label}
@@ -104,7 +99,7 @@ export function AppShell({
             {user.role === "ADMIN" && (
               <Link
                 href="/admin"
-                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-[#002b5b] hover:bg-cyan-50"
+                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-dtsc-blue hover:bg-dtsc-soft"
               >
                 <Shield className="h-3.5 w-3.5" />
                 Admin
@@ -113,6 +108,7 @@ export function AppShell({
           </nav>
         </header>
         <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <DtscFooter />
       </div>
     </div>
   );

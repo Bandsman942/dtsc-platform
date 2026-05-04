@@ -32,3 +32,18 @@ export const supportTicketSchema = z.object({
 export const userStatusSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED", "PENDING"]),
 });
+
+export const userRoleSchema = z.object({
+  role: z.enum(["ADMIN", "MANAGER", "CLIENT", "SUPPORT"]),
+});
+
+export const profileUpdateSchema = z.object({
+  name: z.string().min(2).max(120),
+  companyName: z.string().max(160).optional().or(z.literal("")),
+  phone: z.string().max(40).optional().or(z.literal("")),
+});
+
+export const passwordUpdateSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(10).max(128),
+});

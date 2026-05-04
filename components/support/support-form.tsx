@@ -33,16 +33,16 @@ export function SupportForm() {
       <textarea
         name="description"
         placeholder="Décrivez votre besoin, contexte ou urgence."
-        className="min-h-36 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+        className="min-h-36 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         required
       />
-      <select name="priority" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900">
+      <select name="priority" className="h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
         <option value="MEDIUM">Priorité normale</option>
         <option value="HIGH">Priorité haute</option>
         <option value="URGENT">Urgent</option>
         <option value="LOW">Faible</option>
       </select>
-      {message && <p className="text-sm font-medium text-[#002b5b]">{message}</p>}
+      {message && <p className="text-sm font-bold text-dtsc-blue">{message}</p>}
       <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={isPending}>
         {isPending ? "Envoi..." : "Créer un ticket"}
       </Button>

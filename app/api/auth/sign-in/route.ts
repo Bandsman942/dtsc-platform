@@ -3,12 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { signInSchema } from "@/lib/validators";
 import { verifyPassword } from "@/lib/security";
 import { setSessionCookie } from "@/lib/auth";
+import { ensureDefaultAdmin } from "@/lib/default-admin";
 
 export async function POST(req: Request) {
   const body = signInSchema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
   }
+
+  await ensureDefaultAdmin(body.data.email, body.data.password);
 
   const user = await prisma.user.findUnique({
     where: { email: body.data.email },
