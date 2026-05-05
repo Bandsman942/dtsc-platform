@@ -10,7 +10,13 @@ export default async function SupportPage() {
   const tickets = await prisma.supportTicket.findMany({
     where: canManageTickets ? undefined : { userId: user.id },
     orderBy: { updatedAt: "desc" },
-    include: { user: { select: { name: true, email: true } } },
+    include: {
+      user: { select: { name: true, email: true, role: true } },
+      messages: {
+        orderBy: { createdAt: "asc" },
+        include: { user: { select: { name: true, role: true } } },
+      },
+    },
     take: canManageTickets ? 50 : 20,
   });
 

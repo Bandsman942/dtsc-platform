@@ -57,6 +57,11 @@ model User {
   messages      Message[]
   usageLogs     UsageLog[]
   supportTickets SupportTicket[]
+  ticketMessages TicketMessage[]
+  notifications Notification[]
+  announcements Announcement[]
+  announcementComments AnnouncementComment[]
+  announcementReactions AnnouncementReaction[]
 
   @@index([role])
   @@index([status])
@@ -131,9 +136,23 @@ model SupportTicket {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    TicketMessage[]
 
   @@index([userId, status])
   @@index([priority, createdAt])
+}
+
+model TicketMessage {
+  id        String        @id @default(cuid())
+  ticketId  String
+  userId    String
+  content   String
+  createdAt DateTime      @default(now())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@index([userId])
 }
 
 model SiteVisit {
@@ -145,4 +164,69 @@ model SiteVisit {
 
   @@index([path, createdAt])
   @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String    @default("INFO")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model Announcement {
+  id        String                 @id @default(cuid())
+  authorId  String
+  title     String
+  content   String
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  author    User                   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  AnnouncementComment[]
+  reactions AnnouncementReaction[]
+
+  @@index([createdAt])
+  @@index([authorId])
+}
+
+model AnnouncementComment {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  content        String
+  createdAt      DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId, createdAt])
+  @@index([userId])
+}
+
+model AnnouncementReaction {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  value          Int
+  createdAt      DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId])
+}
+
+model AppSetting {
+  id                       String   @id @default("global")
+  defaultDailyMessageLimit Int      @default(30)
+  defaultDailyTokenLimit   Int      @default(100000)
+  chatbotEnabled           Boolean  @default(true)
+  maintenanceMode          Boolean  @default(false)
+  supportAutoCloseDays     Int      @default(7)
+  allowClientAnnouncements Boolean  @default(false)
+  updatedAt                DateTime @updatedAt
 }

@@ -10,6 +10,7 @@ import {
   type OpenAIInputMessage,
 } from "@/lib/openai";
 import { truncate } from "@/lib/format";
+import { getAppSettings } from "@/lib/settings";
 
 export const maxDuration = 60;
 
@@ -63,6 +64,11 @@ export async function POST(req: Request) {
 
   if (!user || user.status !== "ACTIVE") {
     return NextResponse.json({ error: "Account unavailable" }, { status: 403 });
+  }
+
+  const settings = await getAppSettings();
+  if (!settings.chatbotEnabled || settings.maintenanceMode) {
+    return NextResponse.json({ error: "Chatbot temporarily disabled" }, { status: 503 });
   }
 
   const today = new Date();

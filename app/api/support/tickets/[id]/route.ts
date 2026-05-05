@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyUser } from "@/lib/notifications";
 import { supportTicketUpdateSchema } from "@/lib/validators";
 
 type Params = {
@@ -10,6 +11,10 @@ type Params = {
 
 function canManageSupport(role: UserRole) {
   return role === UserRole.ADMIN || role === UserRole.SUPPORT;
+}
+
+function closesTicket(status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED") {
+  return status === "RESOLVED" || status === "CLOSED";
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -30,8 +35,15 @@ export async function PATCH(req: Request, { params }: Params) {
       status: body.data.status,
       priority: body.data.priority,
       resolution: body.data.resolution || null,
-      resolvedAt: ["RESOLVED", "CLOSED"].includes(body.data.status) ? new Date() : null,
+      resolvedAt: closesTicket(body.data.status) ? new Date() : null,
     },
+  });
+
+  await notifyUser({
+    userId: ticket.userId,
+    title: "Ticket support mis à jour",
+    body: `${ticket.subject} · ${ticket.status}`,
+    type: "SUPPORT",
   });
 
   return NextResponse.json({ ok: true, ticket });

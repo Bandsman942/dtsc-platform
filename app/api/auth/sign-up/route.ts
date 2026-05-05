@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { signUpSchema } from "@/lib/validators";
 import { hashPassword } from "@/lib/security";
 import { setSessionCookie } from "@/lib/auth";
+import { getAppSettings } from "@/lib/settings";
 
 export async function POST(req: Request) {
   const body = signUpSchema.safeParse(await req.json());
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
       ? UserRole.ADMIN
       : UserRole.CLIENT;
 
+  const settings = await getAppSettings();
   const user = await prisma.user.create({
     data: {
       name: body.data.name,
@@ -33,6 +35,8 @@ export async function POST(req: Request) {
       companyName: body.data.companyName || null,
       phone: body.data.phone || null,
       role,
+      dailyMessageLimit: settings.defaultDailyMessageLimit,
+      dailyTokenLimit: settings.defaultDailyTokenLimit,
     },
   });
 

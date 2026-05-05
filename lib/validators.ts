@@ -74,3 +74,36 @@ export const siteVisitSchema = z.object({
   path: z.string().min(1).max(300),
   referrer: z.string().max(500).optional().or(z.literal("")),
 });
+
+export const ticketMessageSchema = z.object({
+  content: z.string().min(1).max(2_000),
+});
+
+export const announcementSchema = z.object({
+  title: z.string().min(3).max(160),
+  content: z.string().min(3).max(5_000),
+});
+
+export const announcementCommentSchema = z.object({
+  content: z.string().min(1).max(1_000),
+});
+
+export const announcementReactionSchema = z.object({
+  value: z.union([z.literal(1), z.literal(-1)]),
+});
+
+export const adminSettingsSchema = z.object({
+  defaultDailyMessageLimit: z.coerce.number().int().min(1).max(1000),
+  defaultDailyTokenLimit: z.coerce.number().int().min(1000).max(2_000_000),
+  chatbotEnabled: z.coerce.boolean(),
+  maintenanceMode: z.coerce.boolean(),
+  supportAutoCloseDays: z.coerce.number().int().min(1).max(90),
+  allowClientAnnouncements: z.coerce.boolean(),
+  applyLimitsToExistingUsers: z.coerce.boolean().default(false),
+});
+
+export const broadcastSchema = z.object({
+  title: z.string().min(3).max(160),
+  body: z.string().min(3).max(2_000),
+  type: z.string().min(2).max(40).default("BROADCAST"),
+});

@@ -2,10 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { SupportTicket, User } from "@prisma/client";
+import type { SupportTicket, User, UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 
-type TicketWithUser = SupportTicket & { user?: Pick<User, "name" | "email"> };
+type TicketWithUser = SupportTicket & {
+  user?: Pick<User, "name" | "email" | "role">;
+  messages?: Array<{
+    id: string;
+    content: string;
+    createdAt: string;
+    user: { name: string; role: UserRole };
+  }>;
+};
 
 export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWithUser[]; canManage?: boolean }) {
   const router = useRouter();
@@ -22,6 +30,23 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
     });
     setActiveId("");
     if (response.ok) {
+      router.refresh();
+    }
+  }
+
+  async function sendMessage(event: React.FormEvent<HTMLFormElement>, ticketId: string) {
+    event.preventDefault();
+    setActiveId(ticketId);
+    const form = event.currentTarget;
+    const payload = Object.fromEntries(new FormData(form).entries());
+    const response = await fetch(`/api/support/tickets/${ticketId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setActiveId("");
+    if (response.ok) {
+      form.reset();
       router.refresh();
     }
   }
@@ -44,6 +69,26 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
               )}
             </div>
             <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{ticket.status}</span>
+          </div>
+          <div className="mt-5 space-y-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">Discussion</p>
+            {(ticket.messages || []).map((message) => (
+              <div key={message.id} className="rounded-2xl bg-dtsc-surface p-3">
+                <p className="text-xs font-black text-dtsc-blue">
+                  {message.user.name} · {message.user.role} · {new Date(message.createdAt).toLocaleString("fr-FR")}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{message.content}</p>
+              </div>
+            ))}
+            {!(ticket.messages || []).length && (
+              <p className="text-sm text-dtsc-muted">Aucun échange pour le moment. Lancez la discussion pour clarifier le besoin.</p>
+            )}
+            <form onSubmit={(event) => sendMessage(event, ticket.id)} className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <input name="content" placeholder="Répondre dans la discussion du ticket..." className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" required />
+              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={activeId === ticket.id}>
+                Envoyer
+              </Button>
+            </form>
           </div>
           {canManage && (
             <form onSubmit={(event) => resolveTicket(event, ticket.id)} className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">

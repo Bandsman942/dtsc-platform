@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/profile", "/settings", "/support"];
+const privateRoutes = ["/dashboard", "/chat", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 
 function isPathMatch(pathname: string, routes: string[]) {
@@ -38,6 +38,8 @@ export const config = {
     "/profile/:path*",
     "/settings/:path*",
     "/support/:path*",
+    "/notifications/:path*",
+    "/announcements/:path*",
     "/admin/:path*",
     "/auth/sign-in",
     "/auth/sign-up",

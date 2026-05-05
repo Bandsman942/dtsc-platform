@@ -5,30 +5,39 @@ import { CreateUserForm } from "@/components/admin/create-user-form";
 import { UserRoleSelect } from "@/components/admin/user-role-select";
 import { UserStatusSelect } from "@/components/admin/user-status-select";
 import { UserLimitsForm } from "@/components/admin/user-limits-form";
+import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
+import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
+import { getAppSettings } from "@/lib/settings";
+
+function isUserRole(value: string | undefined): value is UserRole {
+  return value === UserRole.ADMIN || value === UserRole.MANAGER || value === UserRole.CLIENT || value === UserRole.SUPPORT;
+}
 
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string; period?: string }>;
+  searchParams: Promise<{ role?: string; period?: string; date?: string }>;
 }) {
   const user = await requireRole([UserRole.ADMIN]);
-  const { role, period } = await searchParams;
+  const { role, period, date } = await searchParams;
   const parsedPeriod = Number(period || 30);
   const selectedPeriod = Number.isFinite(parsedPeriod) ? parsedPeriod : 30;
-  const visitStart = new Date();
-  visitStart.setDate(visitStart.getDate() - Math.min(Math.max(selectedPeriod, 7), 200));
-  const roleFilter =
-    role && Object.values(UserRole).includes(role as UserRole)
-      ? (role as UserRole)
-      : undefined;
+  const selectedDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
+  const visitStart = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+  const visitEnd = selectedDate ? new Date(`${selectedDate}T23:59:59`) : new Date();
+  if (!selectedDate) {
+    visitStart.setDate(visitStart.getDate() - Math.min(Math.max(selectedPeriod, 7), 200));
+  }
+  const roleFilter = isUserRole(role) ? role : undefined;
 
-  const [users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits] =
+  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits] =
     await Promise.all([
+      getAppSettings(),
       prisma.user.findMany({
         where: roleFilter ? { role: roleFilter } : undefined,
         orderBy: { createdAt: "desc" },
@@ -50,13 +59,27 @@ export default async function AdminPage({
         take: 20,
       }),
       prisma.siteVisit.findMany({
-        where: { createdAt: { gte: visitStart } },
+        where: { createdAt: { gte: visitStart, lte: visitEnd } },
         orderBy: { createdAt: "desc" },
         take: 500,
       }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
+  const chartLength = selectedDate ? 1 : Math.min(selectedPeriod, 60);
+  const visitPoints: VisitPoint[] = Array.from({ length: chartLength }).map((_, index) => {
+    const day = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+    if (!selectedDate) {
+      day.setDate(day.getDate() - (chartLength - 1 - index));
+    }
+    const dateKey = day.toISOString().slice(0, 10);
+    const count = visits.filter((visit) => new Date(visit.createdAt).toISOString().slice(0, 10) === dateKey).length;
+    return {
+      date: dateKey,
+      label: day.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+      count,
+    };
+  });
 
   return (
     <AppShell user={user}>
@@ -75,6 +98,18 @@ export default async function AdminPage({
           <StatCard label="Messages" value={messageCount} helper="Total messages" icon={MessageSquare} />
           <StatCard label="Tokens" value={totalTokens} helper="Usage estimé" icon={BarChart3} />
         </section>
+
+        <AdminSettingsPanel
+          settings={{
+            defaultDailyMessageLimit: settings.defaultDailyMessageLimit,
+            defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
+            chatbotEnabled: settings.chatbotEnabled,
+            maintenanceMode: settings.maintenanceMode,
+            supportAutoCloseDays: settings.supportAutoCloseDays,
+            allowClientAnnouncements: settings.allowClientAnnouncements,
+          }}
+          emails={users.map((managedUser) => managedUser.email)}
+        />
 
         <section className="dtsc-card p-6">
           <div className="mb-5">
@@ -145,34 +180,7 @@ export default async function AdminPage({
           </div>
         </section>
 
-        <section className="dtsc-card p-6">
-          <h2 className="font-black text-dtsc-ink">Visites du site</h2>
-          <p className="text-sm text-dtsc-muted">Dernières visites publiques capturées par la landing page et les pages d&apos;information.</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {["7", "30", "90", "200"].map((days) => (
-              <Link key={days} href={`/admin?period=${days}`} className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink hover:border-cyan-300">
-                {days} jours
-              </Link>
-            ))}
-          </div>
-          <div className="mt-5 h-40 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-            <div className="flex h-full items-end gap-1">
-              {Array.from({ length: Math.min(selectedPeriod, 60) }).map((_, index, list) => {
-                const count = visits.filter((visit) => {
-                  const date = new Date(visit.createdAt);
-                  const day = new Date();
-                  day.setDate(day.getDate() - (list.length - 1 - index));
-                  return date.toDateString() === day.toDateString();
-                }).length;
-                return (
-                  <div key={index} title={`${count} visites`} className="flex flex-1 items-end">
-                    <div className="w-full rounded-t bg-cyan-400" style={{ height: `${Math.max(6, count * 12)}px` }} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+        <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} />
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="dtsc-card p-6">

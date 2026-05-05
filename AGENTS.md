@@ -18,6 +18,10 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.
 - Les actions admin doivent toujours vérifier la session côté serveur et le rôle `ADMIN`.
 - Les actions support de résolution de tickets doivent autoriser uniquement `ADMIN` et `SUPPORT`.
+- Les nouveaux modules privés doivent être ajoutés dans `middleware.ts` pour éviter l'accès sans session.
+- Pour les enums Prisma (`UserRole`, `UserStatus`), utiliser les valeurs importées depuis `@prisma/client` dans les requêtes Prisma plutôt que des chaînes libres.
+- Les graphiques admin doivent rester bornés dans leur conteneur: utiliser `overflow-hidden`/`overflow-x-auto`, une hauteur fixe et calculer les barres sur un maximum relatif.
+- Les composants serveur qui passent des données Prisma à un composant client doivent transmettre des objets JSON simples, pas des objets `Date` bruts.
 - Les limites d'usage chat doivent être validées côté API, pas uniquement côté UI.
 - Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs.
 - Les contenus publics sourcés doivent garder des liens vérifiables.

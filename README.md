@@ -43,6 +43,12 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Gestion support pour `ADMIN` et `SUPPORT`: traitement, résolution et clôture de tickets
 - Pages publiques d'information: Data en Afrique, BI & KPI, IA en entreprise, secteurs accompagnés
 - Analytics simples des visites publiques avec filtre par période dans `/admin`
+- Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
+- Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
+- Diffusion globale: notifications internes + email groupé via adresses utilisateurs
+- Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin
+- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires et réactions
+- Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système et préférences de notifications
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
 - Rate limiting basique sur l'API chat
@@ -162,6 +168,8 @@ OPENAI_MODEL=gpt-5-nano
 - `/profile` profil utilisateur
 - `/settings` paramètres
 - `/support` tickets support
+- `/notifications` centre de notifications
+- `/announcements` fil d'annonces
 - `/admin` administration
 - `/data-afrique` ressource publique
 - `/bi-kpi` ressource publique
