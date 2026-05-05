@@ -19,6 +19,8 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
   DTSC_CONTACT_EMAIL: optionalEmailWithDefault("contact@dtsc-platform.com"),
   ZOHO_MAIL_WEBHOOK_URL: optionalUrl,
+  ZOHO_OUTBOUND_MAIL_WEBHOOK_URL: optionalUrl,
+  ZOHO_OUTGOING_WEBHOOK_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(24).optional()),
 });
 
 export const env = envSchema.parse(process.env);

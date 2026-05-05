@@ -49,6 +49,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`
 - Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
 - Inscription newsletter publique avec stockage en base et notification Zoho
+- Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin
@@ -77,6 +78,8 @@ DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
 DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!
 DTSC_CONTACT_EMAIL=contact@dtsc-platform.com
 ZOHO_MAIL_WEBHOOK_URL=
+ZOHO_OUTBOUND_MAIL_WEBHOOK_URL=
+ZOHO_OUTGOING_WEBHOOK_SECRET=
 ```
 
 Notes:
@@ -88,6 +91,8 @@ Notes:
 - Changer immédiatement `DEFAULT_ADMIN_PASSWORD` en production, puis modifier le mot de passe depuis `/settings`.
 - Sur Vercel, configurer ces variables dans Project Settings → Environment Variables.
 - `ZOHO_MAIL_WEBHOOK_URL` doit contenir l'URL complète du webhook entrant Zoho Mail. Ne jamais la commiter dans le dépôt.
+- `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL` doit pointer vers le webhook Zoho/Zoho Flow chargé d'envoyer les emails directs aux destinataires.
+- `ZOHO_OUTGOING_WEBHOOK_SECRET` protège l'URL applicative à configurer côté Zoho: `APP_URL/api/webhooks/zoho/outgoing-mail?secret=VOTRE_SECRET`.
 - `DTSC_CONTACT_EMAIL` est l'adresse professionnelle affichée sur le site et utilisée dans les messages serveur.
 
 ## Compte Admin Par Défaut
@@ -256,6 +261,8 @@ DEFAULT_ADMIN_EMAIL
 DEFAULT_ADMIN_PASSWORD
 DTSC_CONTACT_EMAIL
 ZOHO_MAIL_WEBHOOK_URL
+ZOHO_OUTBOUND_MAIL_WEBHOOK_URL
+ZOHO_OUTGOING_WEBHOOK_SECRET
 ```
 
 Le pipeline exécute:

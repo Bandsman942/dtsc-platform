@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { newsletterSubscriptionSchema } from "@/lib/validators";
 import { sendZohoMailWebhook } from "@/lib/zoho-mail";
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
 
   const zoho = await sendZohoMailWebhook({
     subject: "Nouvelle inscription newsletter DTSC",
+    to: [env.DTSC_CONTACT_EMAIL],
     fromName: body.data.name,
     fromEmail: body.data.email,
     replyTo: body.data.email,

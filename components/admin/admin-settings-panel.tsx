@@ -26,6 +26,7 @@ export function AdminSettingsPanel({
   const router = useRouter();
   const [settingsMessage, setSettingsMessage] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [newsletterBroadcastMessage, setNewsletterBroadcastMessage] = useState("");
 
   async function saveSettings(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,12 +68,35 @@ export function AdminSettingsPanel({
     if (response.ok) {
       setBroadcastMessage(
         body?.zoho?.sent
-          ? "Notification créée et message transmis au flux Zoho Mail DTSC."
-          : "Notification créée. Configurez ZOHO_MAIL_WEBHOOK_URL pour activer la transmission Zoho."
+          ? "Notification créée et diffusion email transmise aux utilisateurs actifs."
+          : "Notification créée. Configurez le webhook mail sortant pour l'envoi direct aux destinataires."
       );
       form.reset();
     } else {
       setBroadcastMessage("Impossible d'envoyer la diffusion.");
+    }
+  }
+
+  async function newsletterBroadcast(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNewsletterBroadcastMessage("");
+    const form = event.currentTarget;
+    const payload = Object.fromEntries(new FormData(form).entries());
+    const response = await fetch("/api/admin/newsletter-broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => null);
+    if (response.ok) {
+      setNewsletterBroadcastMessage(
+        body?.zoho?.sent
+          ? `Email transmis à ${body.emails?.length || 0} abonné(s) newsletter.`
+          : "Diffusion préparée. Configurez le webhook mail sortant pour envoyer directement aux abonnés."
+      );
+      form.reset();
+    } else {
+      setNewsletterBroadcastMessage("Impossible d'envoyer la diffusion newsletter.");
     }
   }
 
@@ -120,12 +144,22 @@ export function AdminSettingsPanel({
       </div>
 
       <div className="dtsc-card p-6">
-        <h2 className="font-black text-dtsc-ink">Diffusion globale</h2>
-        <p className="mt-1 text-sm text-dtsc-muted">Crée une notification pour tous les utilisateurs actifs et transmet le message au flux Zoho Mail DTSC.</p>
+        <h2 className="font-black text-dtsc-ink">Diffusion utilisateurs</h2>
+        <p className="mt-1 text-sm text-dtsc-muted">Crée une notification interne et envoie un email aux utilisateurs actifs.</p>
         <form onSubmit={broadcast} className="mt-5 space-y-3">
           <Input name="title" placeholder="Objet / titre" required />
           <textarea name="body" placeholder="Message à diffuser" className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
-          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et ouvrir email</Button>
+          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et envoyer email</Button>
+        </form>
+      </div>
+
+      <div className="dtsc-card p-6 xl:col-span-2">
+        <h2 className="font-black text-dtsc-ink">Diffusion newsletter</h2>
+        <p className="mt-1 text-sm text-dtsc-muted">Envoie un email aux visiteurs inscrits via le formulaire public de la landing page.</p>
+        <form onSubmit={newsletterBroadcast} className="mt-5 grid gap-3 lg:grid-cols-[320px_1fr_auto]">
+          <Input name="subject" placeholder="Objet de l'email newsletter" required />
+          <textarea name="content" placeholder="Contenu professionnel à envoyer aux abonnés newsletter" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:min-h-12" required />
+          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
         </form>
       </div>
       <Dialog open={Boolean(settingsMessage)} title="Paramètres DTSC" onClose={() => setSettingsMessage("")}>
@@ -133,6 +167,9 @@ export function AdminSettingsPanel({
       </Dialog>
       <Dialog open={Boolean(broadcastMessage)} title="Diffusion DTSC" onClose={() => setBroadcastMessage("")}>
         <p className="text-sm leading-7 text-dtsc-muted">{broadcastMessage}</p>
+      </Dialog>
+      <Dialog open={Boolean(newsletterBroadcastMessage)} title="Diffusion newsletter" onClose={() => setNewsletterBroadcastMessage("")}>
+        <p className="text-sm leading-7 text-dtsc-muted">{newsletterBroadcastMessage}</p>
       </Dialog>
     </section>
   );

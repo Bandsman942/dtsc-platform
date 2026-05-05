@@ -114,6 +114,11 @@ export const broadcastSchema = z.object({
   type: z.string().min(2).max(40).default("BROADCAST"),
 });
 
+export const massMailSchema = z.object({
+  subject: z.string().min(3).max(160),
+  content: z.string().min(10).max(6_000),
+});
+
 export const newsletterSubscriptionSchema = z.object({
   name: z.string().min(2).max(120),
   email: z.string().email().max(180).transform((email) => email.toLowerCase()),

@@ -60,7 +60,7 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
           </p>
           <h2 className="mt-5 text-3xl font-black">Parlez-nous de votre besoin numérique, data ou IA.</h2>
           <p className="mt-4 max-w-2xl leading-7 text-slate-300">
-            Les demandes issues du site sont transmises à l&apos;adresse professionnelle DTSC via une intégration serveur Zoho Mail. Le chatbot peut aussi vous aider à structurer le contenu du message avant envoi.
+            Les demandes issues du site sont transmises à l&apos;équipe DTSC pour qualification. Le chatbot peut aussi vous aider à structurer le contenu du message avant envoi.
           </p>
           <a href={`mailto:${contactEmail}`} className="mt-5 inline-flex font-black text-cyan-200 underline underline-offset-4 hover:text-white">
             {contactEmail}
