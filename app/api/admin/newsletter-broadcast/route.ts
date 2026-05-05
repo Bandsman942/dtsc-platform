@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
-import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { massMailSchema } from "@/lib/validators";
-import { sendZohoMailWebhook, sendZohoOutboundMail } from "@/lib/zoho-mail";
+import { sendPersonalizedZohoOutboundMail, sendZohoMailWebhook, sendZohoOutboundMail } from "@/lib/zoho-mail";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -19,7 +18,7 @@ export async function POST(req: Request) {
 
   const subscribers = await prisma.newsletterSubscriber.findMany({
     where: { status: "ACTIVE", consent: true },
-    select: { email: true },
+    select: { email: true, name: true },
     take: 5000,
   });
   const emails = subscribers.map((subscriber) => subscriber.email);
@@ -28,10 +27,19 @@ export async function POST(req: Request) {
     subject: body.data.subject,
     message: body.data.content,
     to: emails,
-    cc: [env.DTSC_CONTACT_EMAIL],
+    heading: "Admin-DTSC",
     source: "admin-newsletter-broadcast",
   };
-  const outbound = await sendZohoOutboundMail(mailPayload).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Zoho outbound failed" }));
+  const hasUserPlaceholder = /\{user\}/i.test(body.data.content);
+  const outbound = hasUserPlaceholder
+    ? await sendPersonalizedZohoOutboundMail(subscribers, mailPayload).catch((error) => ({
+        sent: false,
+        reason: error instanceof Error ? error.message : "Zoho personalized outbound failed",
+      }))
+    : await sendZohoOutboundMail(mailPayload).catch((error) => ({
+        sent: false,
+        reason: error instanceof Error ? error.message : "Zoho outbound failed",
+      }));
   const zoho = outbound.sent
     ? outbound
     : await sendZohoMailWebhook(mailPayload).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Zoho webhook failed" }));

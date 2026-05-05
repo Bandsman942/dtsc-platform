@@ -4,8 +4,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyUsers } from "@/lib/notifications";
 import { broadcastSchema } from "@/lib/validators";
-import { env } from "@/lib/env";
-import { sendZohoMailWebhook, sendZohoOutboundMail } from "@/lib/zoho-mail";
+import { sendPersonalizedZohoOutboundMail, sendZohoMailWebhook, sendZohoOutboundMail } from "@/lib/zoho-mail";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -20,7 +19,7 @@ export async function POST(req: Request) {
 
   const users = await prisma.user.findMany({
     where: { status: UserStatus.ACTIVE },
-    select: { id: true, email: true },
+    select: { id: true, email: true, name: true },
   });
 
   await notifyUsers({
@@ -35,16 +34,20 @@ export async function POST(req: Request) {
   const mailPayload = {
     subject: body.data.title,
     to: emails,
-    cc: [env.DTSC_CONTACT_EMAIL],
-    message: [
-      body.data.body,
-      "",
-      `Diffusion admin DTSC vers ${users.length} utilisateur(s) actif(s).`,
-      `Adresses: ${emails.join(", ")}`,
-    ].join("\n"),
+    message: body.data.body,
+    heading: "Admin-DTSC",
     source: "admin-broadcast",
   };
-  const outbound = await sendZohoOutboundMail(mailPayload).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Zoho outbound failed" }));
+  const hasUserPlaceholder = /\{user\}/i.test(body.data.body);
+  const outbound = hasUserPlaceholder
+    ? await sendPersonalizedZohoOutboundMail(users, mailPayload).catch((error) => ({
+        sent: false,
+        reason: error instanceof Error ? error.message : "Zoho personalized outbound failed",
+      }))
+    : await sendZohoOutboundMail(mailPayload).catch((error) => ({
+        sent: false,
+        reason: error instanceof Error ? error.message : "Zoho outbound failed",
+      }));
   const zoho = outbound.sent
     ? outbound
     : await sendZohoMailWebhook(mailPayload).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Zoho webhook failed" }));

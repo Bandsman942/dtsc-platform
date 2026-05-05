@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode, RefObject } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,27 @@ export function AdminSettingsPanel({
   const [settingsMessage, setSettingsMessage] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [newsletterBroadcastMessage, setNewsletterBroadcastMessage] = useState("");
+  const broadcastBodyRef = useRef<HTMLTextAreaElement>(null);
+  const newsletterContentRef = useRef<HTMLTextAreaElement>(null);
 
-  async function saveSettings(event: React.FormEvent<HTMLFormElement>) {
+  function insertUserPlaceholder(target: RefObject<HTMLTextAreaElement | null>) {
+    const textarea = target.current;
+    if (!textarea) {
+      return;
+    }
+
+    const placeholder = "{user}";
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = textarea.value.slice(0, start);
+    const after = textarea.value.slice(end);
+    textarea.value = `${before}${placeholder}${after}`;
+    textarea.focus();
+    const nextPosition = start + placeholder.length;
+    textarea.setSelectionRange(nextPosition, nextPosition);
+  }
+
+  async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSettingsMessage("");
     const form = new FormData(event.currentTarget);
@@ -54,7 +73,7 @@ export function AdminSettingsPanel({
     }
   }
 
-  async function broadcast(event: React.FormEvent<HTMLFormElement>) {
+  async function broadcast(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBroadcastMessage("");
     const form = event.currentTarget;
@@ -68,7 +87,9 @@ export function AdminSettingsPanel({
     if (response.ok) {
       setBroadcastMessage(
         body?.zoho?.sent
-          ? "Notification créée et diffusion email transmise aux utilisateurs actifs."
+          ? body.zoho.personalized
+            ? "Notification créée et diffusion email personnalisée transmise aux utilisateurs actifs."
+            : "Notification créée et diffusion email transmise aux utilisateurs actifs en CCI."
           : "Notification créée. Configurez l'API Zoho Mail ou le webhook mail sortant pour l'envoi direct aux destinataires."
       );
       form.reset();
@@ -77,7 +98,7 @@ export function AdminSettingsPanel({
     }
   }
 
-  async function newsletterBroadcast(event: React.FormEvent<HTMLFormElement>) {
+  async function newsletterBroadcast(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNewsletterBroadcastMessage("");
     const form = event.currentTarget;
@@ -91,7 +112,9 @@ export function AdminSettingsPanel({
     if (response.ok) {
       setNewsletterBroadcastMessage(
         body?.zoho?.sent
-          ? `Email transmis à ${body.emails?.length || 0} abonné(s) newsletter.`
+          ? body.zoho.personalized
+            ? `Email personnalisé transmis à ${body.zoho.delivered || 0} abonné(s) newsletter.`
+            : `Email transmis à ${body.emails?.length || 0} abonné(s) newsletter en CCI.`
           : "Diffusion préparée. Configurez l'API Zoho Mail ou le webhook mail sortant pour envoyer directement aux abonnés."
       );
       form.reset();
@@ -145,21 +168,69 @@ export function AdminSettingsPanel({
 
       <div className="dtsc-card p-6">
         <h2 className="font-black text-dtsc-ink">Diffusion utilisateurs</h2>
-        <p className="mt-1 text-sm text-dtsc-muted">Crée une notification interne et envoie un email aux utilisateurs actifs.</p>
+        <p className="mt-1 text-sm text-dtsc-muted">
+          Crée une notification interne et envoie un email aux utilisateurs actifs. Ajoutez <span className="font-black text-cyan-300">{"{user}"}</span> pour remplacer automatiquement par le nom du destinataire.
+        </p>
         <form onSubmit={broadcast} className="mt-5 space-y-3">
           <Input name="title" placeholder="Objet / titre" required />
-          <textarea name="body" placeholder="Message à diffuser" className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs text-dtsc-muted">
+            <span>Variable disponible:</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-lg border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10"
+              onClick={() => insertUserPlaceholder(broadcastBodyRef)}
+            >
+              Insérer {"{user}"}
+            </Button>
+          </div>
+          <textarea
+            ref={broadcastBodyRef}
+            name="body"
+            placeholder="Bonjour {user},&#10;&#10;Message professionnel à diffuser..."
+            className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink"
+            required
+          />
+          <p className="text-xs leading-6 text-dtsc-muted">
+            Sans <span className="font-bold text-dtsc-ink">{"{user}"}</span>, l&apos;envoi est groupé en CCI. Avec <span className="font-bold text-dtsc-ink">{"{user}"}</span>, chaque destinataire reçoit une version personnalisée.
+          </p>
           <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et envoyer email</Button>
         </form>
       </div>
 
       <div className="dtsc-card p-6 xl:col-span-2">
         <h2 className="font-black text-dtsc-ink">Diffusion newsletter</h2>
-        <p className="mt-1 text-sm text-dtsc-muted">Envoie un email aux visiteurs inscrits via le formulaire public de la landing page.</p>
+        <p className="mt-1 text-sm text-dtsc-muted">
+          Envoie un email aux visiteurs inscrits via le formulaire public. La variable <span className="font-black text-cyan-300">{"{user}"}</span> reprend le nom saisi lors de l&apos;inscription newsletter.
+        </p>
         <form onSubmit={newsletterBroadcast} className="mt-5 grid gap-3 lg:grid-cols-[320px_1fr_auto]">
           <Input name="subject" placeholder="Objet de l'email newsletter" required />
-          <textarea name="content" placeholder="Contenu professionnel à envoyer aux abonnés newsletter" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:min-h-12" required />
-          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
+          <div className="grid gap-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs text-dtsc-muted">
+              <span>Variable disponible:</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-lg border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10"
+                onClick={() => insertUserPlaceholder(newsletterContentRef)}
+              >
+                Insérer {"{user}"}
+              </Button>
+            </div>
+            <textarea
+              ref={newsletterContentRef}
+              name="content"
+              placeholder="Bonjour {user},&#10;&#10;Contenu professionnel à envoyer aux abonnés newsletter..."
+              className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:min-h-20"
+              required
+            />
+          </div>
+          <div className="grid content-start gap-2">
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
+            <p className="text-xs leading-5 text-dtsc-muted">Les destinataires restent en CCI.</p>
+          </div>
         </form>
       </div>
       <Dialog open={Boolean(settingsMessage)} title="Paramètres DTSC" onClose={() => setSettingsMessage("")}>

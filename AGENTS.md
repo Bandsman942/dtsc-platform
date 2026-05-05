@@ -17,7 +17,8 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les migrations Vercel sont exécutées par `pnpm prisma migrate deploy && pnpm build`.
 - Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.
 - Ne jamais commiter une URL de webhook contenant une clé secrète: utiliser une variable d'environnement comme `ZOHO_MAIL_WEBHOOK_URL`.
-- Les envois email directs doivent cibler les destinataires dans `to` et mettre `DTSC_CONTACT_EMAIL` seulement en copie; ne pas envoyer les diffusions à l'adresse contact comme destinataire principal.
+- Les diffusions email doivent protéger les adresses: `to` doit cibler `DTSC_CONTACT_EMAIL`, les vrais destinataires doivent passer en `bcc`, et le contenu ne doit jamais afficher la liste des emails.
+- Si un modèle de diffusion contient `{user}`, envoyer des mails personnalisés individuellement avec un seul destinataire en CCI par envoi; un mail groupé ne peut pas personnaliser le nom par destinataire.
 - Le payload Zoho Flow doit fournir des champs string compatibles Send Mail: `fromAddress`, `replyTo`, `toText`, `ccText`, `bccText`, `subject`, `bodyHtml`.
 - Quand les variables `ZOHO_MAIL_*` API sont configurées, privilégier l'API Zoho Mail directe avant les fallbacks Zoho Flow/webhook.
 - Les actions admin doivent toujours vérifier la session côté serveur et le rôle `ADMIN`.
