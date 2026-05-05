@@ -4,20 +4,30 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { SupportTicket, User, UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { ListControls } from "@/components/ui/list-controls";
+import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 type TicketWithUser = SupportTicket & {
   user?: Pick<User, "name" | "email" | "role">;
-  messages?: Array<{
-    id: string;
-    content: string;
-    createdAt: string;
-    user: { name: string; role: UserRole };
-  }>;
+  messages?: TicketMessageItem[];
+};
+
+type TicketMessageItem = {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: { name: string; role: UserRole };
 };
 
 export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWithUser[]; canManage?: boolean }) {
   const router = useRouter();
   const [activeId, setActiveId] = useState("");
+  const ticketList = useSmartList({
+    items: tickets,
+    pageSize: 6,
+    getSearchText: (ticket) =>
+      `${ticket.subject} ${ticket.description} ${ticket.status} ${ticket.priority} ${ticket.resolution || ""} ${ticket.user?.name || ""} ${ticket.user?.email || ""} ${(ticket.messages || []).map((message) => `${message.content} ${message.user.name}`).join(" ")}`,
+  });
 
   async function resolveTicket(event: React.FormEvent<HTMLFormElement>, ticketId: string) {
     event.preventDefault();
@@ -53,7 +63,19 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
 
   return (
     <div className="space-y-4">
-      {tickets.map((ticket) => (
+      {tickets.length > 0 && (
+        <ListControls
+          query={ticketList.query}
+          onQueryChange={ticketList.setQuery}
+          page={ticketList.page}
+          pageCount={ticketList.pageCount}
+          totalCount={ticketList.totalCount}
+          filteredCount={ticketList.filteredCount}
+          placeholder="Rechercher par sujet, client, statut, priorité ou message..."
+          onPageChange={ticketList.setPage}
+        />
+      )}
+      {ticketList.paginatedItems.map((ticket) => (
         <article key={ticket.id} className="dtsc-card p-5">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div>
@@ -72,17 +94,7 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
           </div>
           <div className="mt-5 space-y-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">Discussion</p>
-            {(ticket.messages || []).map((message) => (
-              <div key={message.id} className="rounded-2xl bg-dtsc-surface p-3">
-                <p className="text-xs font-black text-dtsc-blue">
-                  {message.user.name} · {message.user.role} · {new Date(message.createdAt).toLocaleString("fr-FR")}
-                </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{message.content}</p>
-              </div>
-            ))}
-            {!(ticket.messages || []).length && (
-              <p className="text-sm text-dtsc-muted">Aucun échange pour le moment. Lancez la discussion pour clarifier le besoin.</p>
-            )}
+            <TicketMessages messages={ticket.messages || []} />
             <form onSubmit={(event) => sendMessage(event, ticket.id)} className="grid gap-3 md:grid-cols-[1fr_auto]">
               <input name="content" placeholder="Répondre dans la discussion du ticket..." className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" required />
               <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={activeId === ticket.id}>
@@ -106,7 +118,51 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
           )}
         </article>
       ))}
-      {!tickets.length && <p className="dtsc-card p-6 text-sm text-dtsc-muted">Aucun ticket à afficher.</p>}
+      {!ticketList.filteredCount && (
+        <p className="dtsc-card p-6 text-sm text-dtsc-muted">
+          {tickets.length ? "Aucun ticket ne correspond à votre recherche." : "Aucun ticket à afficher."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TicketMessages({ messages }: { messages: TicketMessageItem[] }) {
+  const messageList = useSmartList({
+    items: messages,
+    pageSize: 5,
+    getSearchText: (message) => `${message.content} ${message.user.name} ${message.user.role} ${message.createdAt}`,
+  });
+
+  if (!messages.length) {
+    return <p className="text-sm text-dtsc-muted">Aucun échange pour le moment. Lancez la discussion pour clarifier le besoin.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {messages.length > 5 && (
+        <ListControls
+          query={messageList.query}
+          onQueryChange={messageList.setQuery}
+          page={messageList.page}
+          pageCount={messageList.pageCount}
+          totalCount={messageList.totalCount}
+          filteredCount={messageList.filteredCount}
+          placeholder="Rechercher dans la discussion..."
+          onPageChange={messageList.setPage}
+        />
+      )}
+      {messageList.paginatedItems.map((message) => (
+        <div key={message.id} className="rounded-2xl bg-dtsc-surface p-3">
+          <p className="text-xs font-black text-dtsc-blue">
+            {message.user.name} · {message.user.role} · {new Date(message.createdAt).toLocaleString("fr-FR")}
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{message.content}</p>
+        </div>
+      ))}
+      {!messageList.filteredCount && (
+        <p className="rounded-xl bg-dtsc-surface p-3 text-sm text-dtsc-muted">Aucun message ne correspond à votre recherche.</p>
+      )}
     </div>
   );
 }

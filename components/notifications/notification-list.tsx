@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Bell, CheckCircle2, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { ListControls } from "@/components/ui/list-controls";
+import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 type NotificationItem = {
   id: string;
@@ -32,6 +34,11 @@ export function NotificationList({ notifications }: { notifications: Notificatio
   const [selected, setSelected] = useState<NotificationItem | null>(null);
   const [feedback, setFeedback] = useState("");
   const [clearOpen, setClearOpen] = useState(false);
+  const notificationList = useSmartList({
+    items: notifications,
+    pageSize: 8,
+    getSearchText: (notification) => `${notification.title} ${notification.body} ${notification.type} ${notification.createdAt}`,
+  });
 
   async function markRead(id: string) {
     const response = await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
@@ -84,7 +91,19 @@ export function NotificationList({ notifications }: { notifications: Notificatio
           </Button>
         </div>
       )}
-      {notifications.map((notification) => (
+      {notifications.length > 0 && (
+        <ListControls
+          query={notificationList.query}
+          onQueryChange={notificationList.setQuery}
+          page={notificationList.page}
+          pageCount={notificationList.pageCount}
+          totalCount={notificationList.totalCount}
+          filteredCount={notificationList.filteredCount}
+          placeholder="Rechercher par titre, type ou contenu..."
+          onPageChange={notificationList.setPage}
+        />
+      )}
+      {notificationList.paginatedItems.map((notification) => (
         <article key={notification.id} className="dtsc-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-cyan-500">
@@ -108,8 +127,10 @@ export function NotificationList({ notifications }: { notifications: Notificatio
           )}
         </article>
       ))}
-      {!notifications.length && (
-        <div className="dtsc-card p-8 text-center text-dtsc-muted">Aucune notification pour le moment.</div>
+      {!notificationList.filteredCount && (
+        <div className="dtsc-card p-8 text-center text-dtsc-muted">
+          {notifications.length ? "Aucune notification ne correspond à votre recherche." : "Aucune notification pour le moment."}
+        </div>
       )}
       <Dialog
         open={Boolean(selected)}

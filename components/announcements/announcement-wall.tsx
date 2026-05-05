@@ -7,6 +7,8 @@ import { MessageCircle, Megaphone, Pencil, ThumbsDown, ThumbsUp, Trash2 } from "
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ListControls } from "@/components/ui/list-controls";
+import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 type Announcement = {
   id: string;
@@ -17,6 +19,8 @@ type Announcement = {
   comments: Array<{ id: string; content: string; createdAt: string; user: { id: string; name: string; role: UserRole } }>;
   reactions: Array<{ value: number }>;
 };
+
+type AnnouncementCommentItem = Announcement["comments"][number];
 
 function canPublish(role: UserRole, allowClientAnnouncements: boolean) {
   return allowClientAnnouncements || role === "ADMIN" || role === "MANAGER" || role === "SUPPORT";
@@ -42,11 +46,17 @@ export function AnnouncementWall({
   const router = useRouter();
   const [feedback, setFeedback] = useState("");
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
-  const [editingComment, setEditingComment] = useState<Announcement["comments"][number] | null>(null);
+  const [editingComment, setEditingComment] = useState<AnnouncementCommentItem | null>(null);
   const [deletingAnnouncement, setDeletingAnnouncement] = useState<Announcement | null>(null);
-  const [deletingComment, setDeletingComment] = useState<Announcement["comments"][number] | null>(null);
+  const [deletingComment, setDeletingComment] = useState<AnnouncementCommentItem | null>(null);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
+  const announcementList = useSmartList({
+    items: announcements,
+    pageSize: 6,
+    getSearchText: (announcement) =>
+      `${announcement.title} ${announcement.content} ${announcement.author.name} ${announcement.author.role} ${announcement.comments.map((commentItem) => `${commentItem.content} ${commentItem.user.name}`).join(" ")}`,
+  });
 
   async function createAnnouncement(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -190,7 +200,19 @@ export function AnnouncementWall({
       </aside>
 
       <section className="space-y-5">
-        {announcements.map((announcement) => {
+        {announcements.length > 0 && (
+          <ListControls
+            query={announcementList.query}
+            onQueryChange={announcementList.setQuery}
+            page={announcementList.page}
+            pageCount={announcementList.pageCount}
+            totalCount={announcementList.totalCount}
+            filteredCount={announcementList.filteredCount}
+            placeholder="Rechercher dans les annonces, auteurs et commentaires..."
+            onPageChange={announcementList.setPage}
+          />
+        )}
+        {announcementList.paginatedItems.map((announcement) => {
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
           const dislikes = announcement.reactions.filter((reaction) => reaction.value === -1).length;
           return (
@@ -230,33 +252,14 @@ export function AnnouncementWall({
                   {announcement.comments.length} commentaires
                 </span>
               </div>
-              <div className="mt-5 space-y-3">
-                {announcement.comments.map((commentItem) => {
-                  const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
-                  return (
-                    <div key={commentItem.id} className="rounded-2xl bg-dtsc-page p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {commentItem.user.role}</p>
-                          <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
-                        </div>
-                        {canEditComment && (
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <button type="button" onClick={() => setEditingComment(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
-                              Modifier
-                            </button>
-                            {isAdmin && (
-                              <button type="button" onClick={() => setDeletingComment(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-red-600 underline underline-offset-4 hover:bg-red-50">
-                                Supprimer
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <AnnouncementComments
+                comments={announcement.comments}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                commentEditWindowMinutes={commentEditWindowMinutes}
+                onEdit={setEditingComment}
+                onDelete={setDeletingComment}
+              />
               <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 flex gap-2">
                 <Input name="content" placeholder="Ajouter un commentaire..." required />
                 <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
@@ -264,7 +267,11 @@ export function AnnouncementWall({
             </article>
           );
         })}
-        {!announcements.length && <div className="dtsc-card p-8 text-center text-dtsc-muted">Aucune annonce publiée.</div>}
+        {!announcementList.filteredCount && (
+          <div className="dtsc-card p-8 text-center text-dtsc-muted">
+            {announcements.length ? "Aucune annonce ne correspond à votre recherche." : "Aucune annonce publiée."}
+          </div>
+        )}
       </section>
       <Dialog open={Boolean(editingAnnouncement)} title="Modifier l'annonce" onClose={() => setEditingAnnouncement(null)}>
         {editingAnnouncement && (
@@ -322,6 +329,73 @@ export function AnnouncementWall({
       >
         <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression définitive de ce commentaire.</p>
       </Dialog>
+    </div>
+  );
+}
+
+function AnnouncementComments({
+  comments,
+  currentUserId,
+  isAdmin,
+  commentEditWindowMinutes,
+  onEdit,
+  onDelete,
+}: {
+  comments: AnnouncementCommentItem[];
+  currentUserId: string;
+  isAdmin: boolean;
+  commentEditWindowMinutes: number;
+  onEdit: (comment: AnnouncementCommentItem) => void;
+  onDelete: (comment: AnnouncementCommentItem) => void;
+}) {
+  const commentList = useSmartList({
+    items: comments,
+    pageSize: 5,
+    getSearchText: (commentItem) => `${commentItem.content} ${commentItem.user.name} ${commentItem.user.role} ${commentItem.createdAt}`,
+  });
+
+  return (
+    <div className="mt-5 space-y-3">
+      {comments.length > 5 && (
+        <ListControls
+          query={commentList.query}
+          onQueryChange={commentList.setQuery}
+          page={commentList.page}
+          pageCount={commentList.pageCount}
+          totalCount={commentList.totalCount}
+          filteredCount={commentList.filteredCount}
+          placeholder="Rechercher dans les commentaires..."
+          onPageChange={commentList.setPage}
+        />
+      )}
+      {commentList.paginatedItems.map((commentItem) => {
+        const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
+        return (
+          <div key={commentItem.id} className="rounded-2xl bg-dtsc-page p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {commentItem.user.role}</p>
+                <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
+              </div>
+              {canEditComment && (
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => onEdit(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
+                    Modifier
+                  </button>
+                  {isAdmin && (
+                    <button type="button" onClick={() => onDelete(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-red-600 underline underline-offset-4 hover:bg-red-50">
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {!commentList.filteredCount && comments.length > 0 && (
+        <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">Aucun commentaire ne correspond à votre recherche.</p>
+      )}
     </div>
   );
 }

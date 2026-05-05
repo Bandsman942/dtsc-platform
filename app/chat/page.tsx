@@ -14,6 +14,7 @@ export default async function ChatPage({
     where: { userId: user.id },
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { messages: true } } },
+    take: 200,
   });
   const today = new Date();
   today.setHours(0, 0, 0, 0);

@@ -14,6 +14,7 @@ export async function GET() {
     include: {
       _count: { select: { messages: true } },
     },
+    take: 200,
   });
 
   return NextResponse.json({ conversations });

@@ -6,6 +6,8 @@ import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ListControls } from "@/components/ui/list-controls";
+import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { cn } from "@/lib/utils";
 
 type ConversationSummary = {
@@ -54,6 +56,11 @@ export function ChatWorkspace({
     () => conversations.find((conversation) => conversation.id === activeConversationId),
     [activeConversationId, conversations]
   );
+  const conversationList = useSmartList({
+    items: conversations,
+    pageSize: 8,
+    getSearchText: (conversation) => `${conversation.title} ${conversation.updatedAt} ${conversation._count?.messages ?? 0}`,
+  });
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -202,7 +209,19 @@ export function ChatWorkspace({
           Nouvelle conversation
         </Button>
         <div className="mt-4 space-y-2">
-          {conversations.map((conversation) => (
+          {conversations.length > 0 && (
+            <ListControls
+              query={conversationList.query}
+              onQueryChange={conversationList.setQuery}
+              page={conversationList.page}
+              pageCount={conversationList.pageCount}
+              totalCount={conversationList.totalCount}
+              filteredCount={conversationList.filteredCount}
+              placeholder="Rechercher un chat..."
+              onPageChange={conversationList.setPage}
+            />
+          )}
+          {conversationList.paginatedItems.map((conversation) => (
             <button
               key={conversation.id}
               onClick={() => setActiveConversationId(conversation.id)}
@@ -219,6 +238,11 @@ export function ChatWorkspace({
               </span>
             </button>
           ))}
+          {!conversationList.filteredCount && conversations.length > 0 && (
+            <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
+              Aucune conversation ne correspond à votre recherche.
+            </p>
+          )}
         </div>
         <div className="mt-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
           <p className="font-black text-dtsc-ink">Usage journalier</p>

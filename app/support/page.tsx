@@ -17,7 +17,7 @@ export default async function SupportPage() {
         include: { user: { select: { name: true, role: true } } },
       },
     },
-    take: canManageTickets ? 50 : 20,
+    take: canManageTickets ? 200 : 100,
   });
 
   return (

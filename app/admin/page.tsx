@@ -1,17 +1,13 @@
 import { BarChart3, Bot, MessageSquare, ShieldCheck, Users } from "lucide-react";
 import { UserRole } from "@prisma/client";
-import Link from "next/link";
+import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { CreateUserForm } from "@/components/admin/create-user-form";
-import { UserRoleSelect } from "@/components/admin/user-role-select";
-import { UserStatusSelect } from "@/components/admin/user-status-select";
-import { UserLimitsForm } from "@/components/admin/user-limits-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatDate } from "@/lib/format";
 import { getAppSettings } from "@/lib/settings";
 
 function isUserRole(value: string | undefined): value is UserRole {
@@ -42,21 +38,21 @@ export default async function AdminPage({
         where: roleFilter ? { role: roleFilter } : undefined,
         orderBy: { createdAt: "desc" },
         include: { _count: { select: { conversations: true } } },
-        take: 50,
+        take: 200,
       }),
       prisma.user.count(),
       prisma.conversation.count(),
       prisma.conversation.findMany({
         orderBy: { updatedAt: "desc" },
         include: { user: true, _count: { select: { messages: true } } },
-        take: 25,
+        take: 200,
       }),
       prisma.message.count(),
       prisma.usageLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.supportTicket.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: true },
-        take: 20,
+        take: 200,
       }),
       prisma.siteVisit.findMany({
         where: { createdAt: { gte: visitStart, lte: visitEnd } },
@@ -121,97 +117,13 @@ export default async function AdminPage({
           <CreateUserForm />
         </section>
 
-        <section className="dtsc-card p-6">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="font-black text-dtsc-ink">Utilisateurs et RBAC</h2>
-              <p className="text-sm text-dtsc-muted">Modifiez les rôles et suspendez les accès sans intervention technique.</p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Link href="/admin" className="rounded-full border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-muted hover:bg-dtsc-soft">
-                Tous
-              </Link>
-              {Object.values(UserRole).map((userRole) => (
-                <Link
-                  key={userRole}
-                  href={`/admin?role=${userRole}`}
-                  className="rounded-full border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-muted hover:bg-dtsc-soft"
-                >
-                  {userRole}
-                </Link>
-              ))}
-            </div>
-          </div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-dtsc-muted">
-                <tr>
-                  <th className="py-3">Nom</th>
-                  <th>Email</th>
-                  <th>Rôle</th>
-                  <th>Statut</th>
-                  <th>Limites / jour</th>
-                  <th>Conversations</th>
-                  <th>Créé le</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-dtsc-border text-dtsc-muted">
-                {users.map((managedUser) => (
-                  <tr key={managedUser.id}>
-                    <td className="py-3 font-bold text-dtsc-ink">{managedUser.name}</td>
-                    <td>{managedUser.email}</td>
-                    <td>
-                      <UserRoleSelect userId={managedUser.id} role={managedUser.role} />
-                    </td>
-                    <td>
-                      <UserStatusSelect userId={managedUser.id} status={managedUser.status} />
-                    </td>
-                    <td>
-                      <UserLimitsForm
-                        userId={managedUser.id}
-                        dailyMessageLimit={managedUser.dailyMessageLimit}
-                        dailyTokenLimit={managedUser.dailyTokenLimit}
-                      />
-                    </td>
-                    <td>{managedUser._count.conversations}</td>
-                    <td>{formatDate(managedUser.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
         <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} />
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="dtsc-card p-6">
-            <h2 className="font-black text-dtsc-ink">Conversations récentes</h2>
-            <div className="mt-4 divide-y divide-dtsc-border text-sm">
-              {conversations.map((conversation) => (
-                <div key={conversation.id} className="py-3">
-                  <p className="font-bold text-dtsc-ink">{conversation.title}</p>
-                  <p className="text-dtsc-muted">
-                    {conversation.user.email} · {conversation._count.messages} messages
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="dtsc-card p-6">
-            <h2 className="font-black text-dtsc-ink">Tickets support</h2>
-            <div className="mt-4 divide-y divide-dtsc-border text-sm">
-              {tickets.map((ticket) => (
-                <div key={ticket.id} className="py-3">
-                  <p className="font-bold text-dtsc-ink">{ticket.subject}</p>
-                  <p className="text-dtsc-muted">
-                    {ticket.user.email} · {ticket.status} · {ticket.priority}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <AdminDataTables
+          users={JSON.parse(JSON.stringify(users))}
+          conversations={JSON.parse(JSON.stringify(conversations))}
+          tickets={JSON.parse(JSON.stringify(tickets))}
+        />
 
         <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
           <div className="flex items-start gap-3">

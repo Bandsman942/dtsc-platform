@@ -18,7 +18,7 @@ export default async function AnnouncementsPage() {
         },
         reactions: { select: { value: true } },
       },
-      take: 50,
+      take: 200,
     }),
   ]);
 
