@@ -95,6 +95,19 @@ Notes:
 - `ZOHO_OUTGOING_WEBHOOK_SECRET` protège l'URL applicative à configurer côté Zoho: `APP_URL/api/webhooks/zoho/outgoing-mail?secret=VOTRE_SECRET`.
 - `DTSC_CONTACT_EMAIL` est l'adresse professionnelle affichée sur le site et utilisée dans les messages serveur.
 
+Mapping conseillé dans Zoho Flow, action Send Mail:
+
+```txt
+From address -> fromAddress
+Reply to      -> replyTo
+To            -> toText
+CC            -> ccText
+BCC           -> bccText
+Subject       -> subject
+Body          -> bodyHtml
+Nicknames     -> laisser vide
+```
+
 ## Compte Admin Par Défaut
 
 Identifiants temporaires prévus pour la première connexion:

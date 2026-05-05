@@ -18,6 +18,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.
 - Ne jamais commiter une URL de webhook contenant une clé secrète: utiliser une variable d'environnement comme `ZOHO_MAIL_WEBHOOK_URL`.
 - Les envois email directs doivent cibler les destinataires dans `to` et mettre `DTSC_CONTACT_EMAIL` seulement en copie; ne pas envoyer les diffusions à l'adresse contact comme destinataire principal.
+- Le payload Zoho Flow doit fournir des champs string compatibles Send Mail: `fromAddress`, `replyTo`, `toText`, `ccText`, `bccText`, `subject`, `bodyHtml`.
 - Les actions admin doivent toujours vérifier la session côté serveur et le rôle `ADMIN`.
 - Les actions support de résolution de tickets doivent autoriser uniquement `ADMIN` et `SUPPORT`.
 - Les nouveaux modules privés doivent être ajoutés dans `middleware.ts` pour éviter l'accès sans session.

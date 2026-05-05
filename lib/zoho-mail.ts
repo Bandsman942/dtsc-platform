@@ -6,6 +6,7 @@ type ZohoMailPayload = {
   message: string;
   to?: string[];
   cc?: string[];
+  bcc?: string[];
   fromName?: string;
   fromEmail?: string;
   replyTo?: string;
@@ -29,6 +30,7 @@ export function buildProfessionalMailText({
   message,
   to = [],
   cc = [],
+  bcc = [],
   fromName,
   fromEmail,
   replyTo,
@@ -37,6 +39,7 @@ export function buildProfessionalMailText({
   const recipients = uniqueEmails(to);
   const contactEmail = (env.DTSC_CONTACT_EMAIL || dtsc.email).toLowerCase();
   const copy = uniqueEmails(cc.length ? cc : recipients.includes(contactEmail) ? [] : [contactEmail]);
+  const blindCopy = uniqueEmails(bcc);
 
   return [
     "DTSC - Data and Tech Solutions Consulting",
@@ -45,6 +48,7 @@ export function buildProfessionalMailText({
     `Objet : ${subject}`,
     recipients.length ? `À : ${recipients.join(", ")}` : null,
     copy.length ? `Copie : ${copy.join(", ")}` : null,
+    blindCopy.length ? `Copie cachée : ${blindCopy.join(", ")}` : null,
     fromName ? `Expéditeur : ${fromName}` : null,
     fromEmail ? `Email expéditeur : ${fromEmail}` : null,
     replyTo ? `Répondre à : ${replyTo}` : null,
@@ -68,6 +72,7 @@ export function buildProfessionalMailHtml({
   message,
   to = [],
   cc = [],
+  bcc = [],
   fromName,
   fromEmail,
   replyTo,
@@ -87,6 +92,7 @@ export function buildProfessionalMailHtml({
   const recipients = uniqueEmails(to);
   const contactEmail = (env.DTSC_CONTACT_EMAIL || dtsc.email).toLowerCase();
   const copy = uniqueEmails(cc.length ? cc : recipients.includes(contactEmail) ? [] : [contactEmail]);
+  const blindCopy = uniqueEmails(bcc);
 
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;background:#f8fafc;padding:24px;">
@@ -99,6 +105,7 @@ export function buildProfessionalMailHtml({
         <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:14px;">
           ${recipients.length ? `<tr><td style="padding:8px 0;color:#64748b;width:130px;font-weight:700;">À</td><td style="padding:8px 0;">${escapeHtml(recipients.join(", "))}</td></tr>` : ""}
           ${copy.length ? `<tr><td style="padding:8px 0;color:#64748b;font-weight:700;">Copie</td><td style="padding:8px 0;">${escapeHtml(copy.join(", "))}</td></tr>` : ""}
+          ${blindCopy.length ? `<tr><td style="padding:8px 0;color:#64748b;font-weight:700;">Copie cachée</td><td style="padding:8px 0;">${escapeHtml(blindCopy.join(", "))}</td></tr>` : ""}
           ${fromName ? `<tr><td style="padding:8px 0;color:#64748b;font-weight:700;">Expéditeur</td><td style="padding:8px 0;">${escapeHtml(fromName)}</td></tr>` : ""}
           ${fromEmail ? `<tr><td style="padding:8px 0;color:#64748b;font-weight:700;">Email</td><td style="padding:8px 0;">${escapeHtml(fromEmail)}</td></tr>` : ""}
           ${replyTo ? `<tr><td style="padding:8px 0;color:#64748b;font-weight:700;">Répondre à</td><td style="padding:8px 0;">${escapeHtml(replyTo)}</td></tr>` : ""}
@@ -146,17 +153,29 @@ export async function sendZohoOutboundMail(payload: ZohoMailPayload) {
   }
 
   const cc = uniqueEmails(payload.cc?.length ? payload.cc : [env.DTSC_CONTACT_EMAIL || dtsc.email]);
+  const bcc = uniqueEmails(payload.bcc);
+  const textContent = buildProfessionalMailText({ ...payload, to: recipients, cc, bcc });
+  const htmlContent = buildProfessionalMailHtml({ ...payload, to: recipients, cc, bcc });
+  const fromEmail = env.DTSC_CONTACT_EMAIL || dtsc.email;
+  const replyTo = payload.replyTo || fromEmail;
   const response = await fetch(env.ZOHO_OUTBOUND_MAIL_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       to: recipients,
+      toText: recipients.join(","),
       cc,
+      ccText: cc.join(","),
+      bcc,
+      bccText: bcc.join(","),
       subject: payload.subject,
-      content: buildProfessionalMailText({ ...payload, to: recipients, cc }),
-      html: buildProfessionalMailHtml({ ...payload, to: recipients, cc }),
-      fromEmail: env.DTSC_CONTACT_EMAIL || dtsc.email,
-      replyTo: payload.replyTo || env.DTSC_CONTACT_EMAIL || dtsc.email,
+      content: textContent,
+      body: textContent,
+      html: htmlContent,
+      bodyHtml: htmlContent,
+      fromEmail,
+      fromAddress: fromEmail,
+      replyTo,
       source: payload.source,
     }),
   });
