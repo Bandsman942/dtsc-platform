@@ -17,6 +17,7 @@ export function SiteVisitsChart({
 }) {
   const maxCount = Math.max(1, ...points.map((point) => point.count));
   const total = points.reduce((sum, point) => sum + point.count, 0);
+  const periodLabel = selectedDate ? `le ${selectedDate}` : `sur ${selectedPeriod} jours`;
 
   return (
     <section className="dtsc-card p-6">
@@ -24,7 +25,7 @@ export function SiteVisitsChart({
         <div>
           <h2 className="font-black text-dtsc-ink">Visites du site</h2>
           <p className="text-sm text-dtsc-muted">Suivez l&apos;évolution des visites publiques et filtrez une date précise.</p>
-          <p className="mt-2 text-sm font-black text-dtsc-blue">{total} visite(s) sur la période affichée</p>
+          <p className="mt-2 text-sm font-black text-dtsc-blue">{total} visite(s) {periodLabel}</p>
         </div>
         <form className="flex flex-wrap items-end gap-2" action="/admin">
           <label className="grid gap-1 text-xs font-bold text-dtsc-muted">
