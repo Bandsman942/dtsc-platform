@@ -17,6 +17,8 @@ export default async function ChatPage({
   });
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const resetAt = new Date(today);
+  resetAt.setDate(resetAt.getDate() + 1);
   const [messagesToday, tokensToday] = await Promise.all([
     prisma.message.count({ where: { userId: user.id, role: "user", createdAt: { gte: today } } }),
     prisma.usageLog.aggregate({
@@ -35,6 +37,7 @@ export default async function ChatPage({
           dailyMessageLimit: user.dailyMessageLimit,
           tokensToday: tokensToday._sum.totalTokens ?? 0,
           dailyTokenLimit: user.dailyTokenLimit,
+          resetAt: resetAt.toISOString(),
         }}
       />
     </AppShell>

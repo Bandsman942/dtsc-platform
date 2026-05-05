@@ -1,8 +1,10 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
 type Settings = {
@@ -12,6 +14,9 @@ type Settings = {
   maintenanceMode: boolean;
   supportAutoCloseDays: number;
   allowClientAnnouncements: boolean;
+  announcementEditWindowMinutes: number;
+  commentEditWindowMinutes: number;
+  notificationRetentionDays: number;
 };
 
 export function AdminSettingsPanel({
@@ -33,6 +38,9 @@ export function AdminSettingsPanel({
       defaultDailyMessageLimit: form.get("defaultDailyMessageLimit"),
       defaultDailyTokenLimit: form.get("defaultDailyTokenLimit"),
       supportAutoCloseDays: form.get("supportAutoCloseDays"),
+      announcementEditWindowMinutes: form.get("announcementEditWindowMinutes"),
+      commentEditWindowMinutes: form.get("commentEditWindowMinutes"),
+      notificationRetentionDays: form.get("notificationRetentionDays"),
       chatbotEnabled: form.get("chatbotEnabled") === "on",
       maintenanceMode: form.get("maintenanceMode") === "on",
       allowClientAnnouncements: form.get("allowClientAnnouncements") === "on",
@@ -78,9 +86,24 @@ export function AdminSettingsPanel({
         <h2 className="font-black text-dtsc-ink">Paramètres globaux</h2>
         <p className="mt-1 text-sm text-dtsc-muted">Réglages appliqués aux futurs comptes et, si demandé, aux comptes existants.</p>
         <form onSubmit={saveSettings} className="mt-5 grid gap-4 md:grid-cols-2">
-          <Input name="defaultDailyMessageLimit" type="number" defaultValue={settings.defaultDailyMessageLimit} min={1} max={1000} />
-          <Input name="defaultDailyTokenLimit" type="number" defaultValue={settings.defaultDailyTokenLimit} min={1000} max={2000000} />
-          <Input name="supportAutoCloseDays" type="number" defaultValue={settings.supportAutoCloseDays} min={1} max={90} />
+          <Field label="Messages / jour">
+            <Input name="defaultDailyMessageLimit" type="number" defaultValue={settings.defaultDailyMessageLimit} min={1} max={1000} />
+          </Field>
+          <Field label="Tokens / jour">
+            <Input name="defaultDailyTokenLimit" type="number" defaultValue={settings.defaultDailyTokenLimit} min={1000} max={2000000} />
+          </Field>
+          <Field label="Auto-clôture support (jours)">
+            <Input name="supportAutoCloseDays" type="number" defaultValue={settings.supportAutoCloseDays} min={1} max={90} />
+          </Field>
+          <Field label="Modification annonces (minutes)">
+            <Input name="announcementEditWindowMinutes" type="number" defaultValue={settings.announcementEditWindowMinutes} min={1} max={1440} />
+          </Field>
+          <Field label="Modification commentaires (minutes)">
+            <Input name="commentEditWindowMinutes" type="number" defaultValue={settings.commentEditWindowMinutes} min={1} max={1440} />
+          </Field>
+          <Field label="Rétention notifications (jours)">
+            <Input name="notificationRetentionDays" type="number" defaultValue={settings.notificationRetentionDays} min={7} max={365} />
+          </Field>
           <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Chatbot actif
             <input name="chatbotEnabled" type="checkbox" defaultChecked={settings.chatbotEnabled} className="h-4 w-4 accent-cyan-500" />
@@ -99,7 +122,6 @@ export function AdminSettingsPanel({
           </label>
           <div className="md:col-span-2 flex flex-wrap items-center gap-3">
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
-            {settingsMessage && <p className="text-sm font-bold text-dtsc-blue">{settingsMessage}</p>}
           </div>
         </form>
       </div>
@@ -111,9 +133,23 @@ export function AdminSettingsPanel({
           <Input name="title" placeholder="Objet / titre" required />
           <textarea name="body" placeholder="Message à diffuser" className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
           <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et ouvrir email</Button>
-          {broadcastMessage && <p className="text-sm font-bold text-dtsc-blue">{broadcastMessage}</p>}
         </form>
       </div>
+      <Dialog open={Boolean(settingsMessage)} title="Paramètres DTSC" onClose={() => setSettingsMessage("")}>
+        <p className="text-sm leading-7 text-dtsc-muted">{settingsMessage}</p>
+      </Dialog>
+      <Dialog open={Boolean(broadcastMessage)} title="Diffusion DTSC" onClose={() => setBroadcastMessage("")}>
+        <p className="text-sm leading-7 text-dtsc-muted">{broadcastMessage}</p>
+      </Dialog>
     </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
+      {label}
+      {children}
+    </label>
   );
 }

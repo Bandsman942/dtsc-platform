@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { UserRole } from "@prisma/client";
-import { MessageCircle, Megaphone, ThumbsDown, ThumbsUp } from "lucide-react";
+import { MessageCircle, Megaphone, Pencil, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
 type Announcement = {
@@ -12,8 +13,8 @@ type Announcement = {
   title: string;
   content: string;
   createdAt: string;
-  author: { name: string; role: UserRole };
-  comments: Array<{ id: string; content: string; createdAt: string; user: { name: string; role: UserRole } }>;
+  author: { id: string; name: string; role: UserRole };
+  comments: Array<{ id: string; content: string; createdAt: string; user: { id: string; name: string; role: UserRole } }>;
   reactions: Array<{ value: number }>;
 };
 
@@ -21,29 +22,42 @@ function canPublish(role: UserRole, allowClientAnnouncements: boolean) {
   return allowClientAnnouncements || role === "ADMIN" || role === "MANAGER" || role === "SUPPORT";
 }
 
+function isInsideEditWindow(createdAt: string, windowMinutes: number) {
+  return Date.now() <= new Date(createdAt).getTime() + windowMinutes * 60 * 1000;
+}
+
 export function AnnouncementWall({
   announcements,
+  currentUserId,
   role,
   allowClientAnnouncements,
+  announcementEditWindowMinutes,
+  commentEditWindowMinutes,
 }: {
   announcements: Announcement[];
+  currentUserId: string;
   role: UserRole;
   allowClientAnnouncements: boolean;
+  announcementEditWindowMinutes: number;
+  commentEditWindowMinutes: number;
 }) {
   const router = useRouter();
-  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [editingComment, setEditingComment] = useState<Announcement["comments"][number] | null>(null);
   const canPost = canPublish(role, allowClientAnnouncements);
+  const isAdmin = role === "ADMIN";
 
   async function createAnnouncement(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    setFeedback("");
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
     const response = await fetch("/api/announcements", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    setMessage(response.ok ? "Annonce publiée." : "Publication non autorisée ou invalide.");
+    setFeedback(response.ok ? "Annonce publiée." : "Publication non autorisée ou invalide.");
     if (response.ok) {
       event.currentTarget.reset();
       router.refresh();
@@ -62,6 +76,8 @@ export function AnnouncementWall({
     if (response.ok) {
       form.reset();
       router.refresh();
+    } else {
+      setFeedback("Impossible de publier ce commentaire.");
     }
   }
 
@@ -73,6 +89,48 @@ export function AnnouncementWall({
     });
     if (response.ok) {
       router.refresh();
+    } else {
+      setFeedback("Impossible d'enregistrer cette réaction.");
+    }
+  }
+
+  async function updateAnnouncement(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingAnnouncement) {
+      return;
+    }
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const response = await fetch(`/api/announcements/${editingAnnouncement.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      setFeedback("Annonce modifiée.");
+      setEditingAnnouncement(null);
+      router.refresh();
+    } else {
+      setFeedback("La période de modification de cette annonce est terminée.");
+    }
+  }
+
+  async function updateComment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingComment) {
+      return;
+    }
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const response = await fetch(`/api/announcements/comments/${editingComment.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      setFeedback("Commentaire modifié.");
+      setEditingComment(null);
+      router.refresh();
+    } else {
+      setFeedback("La période de modification de ce commentaire est terminée.");
     }
   }
 
@@ -94,7 +152,6 @@ export function AnnouncementWall({
               <Input name="title" placeholder="Titre de l'annonce" required />
               <textarea name="content" placeholder="Contenu de l'annonce" className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
               <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Publier</Button>
-              {message && <p className="text-sm font-bold text-dtsc-blue">{message}</p>}
             </form>
           )}
         </section>
@@ -104,6 +161,7 @@ export function AnnouncementWall({
         {announcements.map((announcement) => {
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
           const dislikes = announcement.reactions.filter((reaction) => reaction.value === -1).length;
+          const canEditAnnouncement = isAdmin || (announcement.author.id === currentUserId && isInsideEditWindow(announcement.createdAt, announcementEditWindowMinutes));
           return (
             <article key={announcement.id} className="dtsc-card p-6">
               <div className="flex items-start justify-between gap-4">
@@ -114,6 +172,12 @@ export function AnnouncementWall({
                   <h2 className="mt-2 text-2xl font-black text-dtsc-ink">{announcement.title}</h2>
                   <p className="mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted">{announcement.content}</p>
                 </div>
+                {canEditAnnouncement && (
+                  <Button type="button" variant="outline" onClick={() => setEditingAnnouncement(announcement)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+                    <Pencil className="h-4 w-4" />
+                    Modifier
+                  </Button>
+                )}
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button onClick={() => react(announcement.id, 1)} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
@@ -130,12 +194,24 @@ export function AnnouncementWall({
                 </span>
               </div>
               <div className="mt-5 space-y-3">
-                {announcement.comments.map((commentItem) => (
-                  <div key={commentItem.id} className="rounded-2xl bg-dtsc-page p-3">
-                    <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {commentItem.user.role}</p>
-                    <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
-                  </div>
-                ))}
+                {announcement.comments.map((commentItem) => {
+                  const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
+                  return (
+                    <div key={commentItem.id} className="rounded-2xl bg-dtsc-page p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {commentItem.user.role}</p>
+                          <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
+                        </div>
+                        {canEditComment && (
+                          <button type="button" onClick={() => setEditingComment(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
+                            Modifier
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 flex gap-2">
                 <Input name="content" placeholder="Ajouter un commentaire..." required />
@@ -146,6 +222,26 @@ export function AnnouncementWall({
         })}
         {!announcements.length && <div className="dtsc-card p-8 text-center text-dtsc-muted">Aucune annonce publiée.</div>}
       </section>
+      <Dialog open={Boolean(editingAnnouncement)} title="Modifier l'annonce" onClose={() => setEditingAnnouncement(null)}>
+        {editingAnnouncement && (
+          <form onSubmit={updateAnnouncement} className="space-y-3">
+            <Input name="title" defaultValue={editingAnnouncement.title} required />
+            <textarea name="content" defaultValue={editingAnnouncement.content} className="min-h-40 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" required />
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+          </form>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(editingComment)} title="Modifier le commentaire" onClose={() => setEditingComment(null)}>
+        {editingComment && (
+          <form onSubmit={updateComment} className="space-y-3">
+            <textarea name="content" defaultValue={editingComment.content} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" required />
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+          </form>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(feedback)} title="Message DTSC" onClose={() => setFeedback("")}>
+        <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
+      </Dialog>
     </div>
   );
 }

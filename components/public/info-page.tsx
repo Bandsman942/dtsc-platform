@@ -30,7 +30,7 @@ export function InfoPage({
           <h2 className="font-black">Sources vérifiables</h2>
           <div className="mt-4 grid gap-2">
             {sources.map((source) => (
-              <Link key={source.href} href={source.href} target="_blank" className="text-sm font-semibold text-dtsc-blue hover:text-cyan-500">
+              <Link key={source.href} href={source.href} target="_blank" className="text-sm font-black text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">
                 {source.label}
               </Link>
             ))}

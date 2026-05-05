@@ -1,15 +1,9 @@
 import Link from "next/link";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { VisitTracker } from "@/components/analytics/visit-tracker";
+import { publicLinks } from "@/components/public/public-links";
+import { PublicNav } from "@/components/public/public-nav";
 import { dtsc } from "@/lib/dtsc";
-
-const links = [
-  { href: "/", label: "Accueil" },
-  { href: "/data-afrique", label: "Data en Afrique" },
-  { href: "/bi-kpi", label: "BI & KPI" },
-  { href: "/ia-entreprise", label: "IA en entreprise" },
-  { href: "/secteurs", label: "Secteurs" },
-];
 
 export function PublicHeader() {
   return (
@@ -17,16 +11,7 @@ export function PublicHeader() {
       <VisitTracker />
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
         <DtscLogo />
-        <nav className="flex flex-wrap gap-2">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} className="rounded-xl px-3 py-2 text-sm font-bold text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink">
-              {link.label}
-            </Link>
-          ))}
-          <Link href="/auth/sign-in" className="rounded-xl bg-[#002b5b] px-3 py-2 text-sm font-bold text-white">
-            Espace client
-          </Link>
-        </nav>
+        <PublicNav />
       </div>
     </header>
   );
@@ -43,8 +28,8 @@ export function PublicFooter() {
         <div>
           <p className="font-black text-dtsc-ink">Ressources</p>
           <div className="mt-3 grid gap-2">
-            {links.slice(1).map((link) => (
-              <Link key={link.href} href={link.href} className="text-dtsc-muted hover:text-dtsc-blue">{link.label}</Link>
+            {publicLinks.slice(1).map((link) => (
+              <Link key={link.href} href={link.href} className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{link.label}</Link>
             ))}
           </div>
         </div>

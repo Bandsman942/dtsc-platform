@@ -24,6 +24,9 @@ export async function PATCH(req: Request) {
       maintenanceMode: body.data.maintenanceMode,
       supportAutoCloseDays: body.data.supportAutoCloseDays,
       allowClientAnnouncements: body.data.allowClientAnnouncements,
+      announcementEditWindowMinutes: body.data.announcementEditWindowMinutes,
+      commentEditWindowMinutes: body.data.commentEditWindowMinutes,
+      notificationRetentionDays: body.data.notificationRetentionDays,
     },
     create: {
       id: "global",
@@ -33,6 +36,9 @@ export async function PATCH(req: Request) {
       maintenanceMode: body.data.maintenanceMode,
       supportAutoCloseDays: body.data.supportAutoCloseDays,
       allowClientAnnouncements: body.data.allowClientAnnouncements,
+      announcementEditWindowMinutes: body.data.announcementEditWindowMinutes,
+      commentEditWindowMinutes: body.data.commentEditWindowMinutes,
+      notificationRetentionDays: body.data.notificationRetentionDays,
     },
   });
 

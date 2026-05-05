@@ -172,6 +172,7 @@ model Notification {
   title     String
   body      String
   type      String    @default("INFO")
+  targetUrl String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -228,5 +229,8 @@ model AppSetting {
   maintenanceMode          Boolean  @default(false)
   supportAutoCloseDays     Int      @default(7)
   allowClientAnnouncements Boolean  @default(false)
+  announcementEditWindowMinutes Int @default(30)
+  commentEditWindowMinutes      Int @default(15)
+  notificationRetentionDays     Int @default(60)
   updatedAt                DateTime @updatedAt
 }

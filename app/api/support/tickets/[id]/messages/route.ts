@@ -61,6 +61,7 @@ export async function POST(req: Request, { params }: Params) {
       title: "Nouveau message client sur ticket",
       body: ticket.subject,
       type: "SUPPORT",
+      targetUrl: "/support",
     });
   } else {
     await notifyUser({
@@ -68,6 +69,7 @@ export async function POST(req: Request, { params }: Params) {
       title: "Réponse DTSC sur votre ticket",
       body: ticket.subject,
       type: "SUPPORT",
+      targetUrl: "/support",
     });
   }
 

@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: Params) {
       title: "Nouveau commentaire sur votre annonce",
       body: announcement.title,
       type: "ANNOUNCEMENT",
+      targetUrl: "/announcements",
     });
   }
 

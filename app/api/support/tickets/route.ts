@@ -34,6 +34,7 @@ export async function POST(req: Request) {
     title: "Nouveau ticket support",
     body: body.data.subject,
     type: "SUPPORT",
+    targetUrl: "/support",
   });
 
   return NextResponse.json({ ticket });

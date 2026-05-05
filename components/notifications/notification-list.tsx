@@ -1,25 +1,93 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Bell, CheckCircle2, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 type NotificationItem = {
   id: string;
   title: string;
   body: string;
   type: string;
+  targetUrl: string | null;
   readAt: string | null;
   createdAt: string;
 };
 
+function fallbackTarget(type: string) {
+  if (type === "SUPPORT") {
+    return "/support";
+  }
+  if (type === "ANNOUNCEMENT") {
+    return "/announcements";
+  }
+  return "/notifications";
+}
+
 export function NotificationList({ notifications }: { notifications: NotificationItem[] }) {
   const router = useRouter();
+  const [selected, setSelected] = useState<NotificationItem | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
 
   async function markRead(id: string) {
     const response = await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
     if (response.ok) {
       router.refresh();
+    }
+  }
+
+  async function openNotification(notification: NotificationItem) {
+    setSelected(notification);
+    setEditing(false);
+    setFeedback("");
+    if (!notification.readAt) {
+      await fetch(`/api/notifications/${notification.id}/read`, { method: "PATCH" });
+      setSelected({ ...notification, readAt: new Date().toISOString() });
+      router.refresh();
+    }
+  }
+
+  async function updateNotification(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) {
+      return;
+    }
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const response = await fetch(`/api/notifications/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      setFeedback("Notification mise à jour.");
+      setEditing(false);
+      setSelected({
+        ...selected,
+        title: String(payload.title || selected.title),
+        body: String(payload.body || selected.body),
+        readAt: selected.readAt || new Date().toISOString(),
+      });
+      router.refresh();
+    } else {
+      setFeedback("Impossible de modifier cette notification.");
+    }
+  }
+
+  async function deleteNotification() {
+    if (!selected) {
+      return;
+    }
+    const response = await fetch(`/api/notifications/${selected.id}`, { method: "DELETE" });
+    if (response.ok) {
+      setSelected(null);
+      router.refresh();
+    } else {
+      setFeedback("Impossible de supprimer cette notification.");
     }
   }
 
@@ -31,7 +99,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-cyan-500">
               <Bell className="h-5 w-5" />
             </div>
-            <div>
+            <button type="button" onClick={() => openNotification(notification)} className="text-left">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-black text-dtsc-ink">{notification.title}</h2>
                 <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{notification.type}</span>
@@ -39,7 +107,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
               </div>
               <p className="mt-2 text-sm leading-6 text-dtsc-muted">{notification.body}</p>
               <p className="mt-2 text-xs text-dtsc-muted">{new Date(notification.createdAt).toLocaleString("fr-FR")}</p>
-            </div>
+            </button>
           </div>
           {!notification.readAt && (
             <Button onClick={() => markRead(notification.id)} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
@@ -52,6 +120,47 @@ export function NotificationList({ notifications }: { notifications: Notificatio
       {!notifications.length && (
         <div className="dtsc-card p-8 text-center text-dtsc-muted">Aucune notification pour le moment.</div>
       )}
+      <Dialog
+        open={Boolean(selected)}
+        title={selected?.title || "Notification"}
+        description={selected ? `${selected.type} · ${new Date(selected.createdAt).toLocaleString("fr-FR")}` : undefined}
+        onClose={() => setSelected(null)}
+        footer={
+          selected && (
+            <>
+              <Button type="button" variant="outline" onClick={() => setEditing((current) => !current)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+                <Pencil className="h-4 w-4" />
+                Modifier
+              </Button>
+              <Button type="button" variant="destructive" onClick={deleteNotification} className="rounded-xl">
+                <Trash2 className="h-4 w-4" />
+                Supprimer
+              </Button>
+              <Button asChild className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+                <Link href={selected.targetUrl || fallbackTarget(selected.type)}>
+                  <ExternalLink className="h-4 w-4" />
+                  Ouvrir le module
+                </Link>
+              </Button>
+            </>
+          )
+        }
+      >
+        {selected && (
+          <div className="space-y-4">
+            {editing ? (
+              <form onSubmit={updateNotification} className="space-y-3">
+                <Input name="title" defaultValue={selected.title} required />
+                <textarea name="body" defaultValue={selected.body} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" required />
+                <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+              </form>
+            ) : (
+              <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{selected.body}</p>
+            )}
+            {feedback && <div className="rounded-xl bg-dtsc-soft p-3 text-sm font-bold text-dtsc-blue">{feedback}</div>}
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

@@ -24,6 +24,9 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les composants serveur qui passent des données Prisma à un composant client doivent transmettre des objets JSON simples, pas des objets `Date` bruts.
 - Les props passées aux composants doivent être utilisées ou supprimées: `pnpm build` échoue sur `@typescript-eslint/no-unused-vars`.
 - Les limites d'usage chat doivent être validées côté API, pas uniquement côté UI.
+- Les réponses `429 DAILY_LIMIT_REACHED` de `/api/chat` doivent inclure un `usage.resetAt` ISO pour afficher l'heure exacte de réinitialisation côté UI.
+- Ne pas importer un module `"use client"` dans un composant serveur uniquement pour partager des constantes: extraire les constantes dans un fichier sans directive client.
+- Les confirmations, erreurs et messages importants doivent passer par une boîte de dialogue applicative, pas par `alert`, `confirm` ou `prompt`.
 - Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs.
 - Les contenus publics sourcés doivent garder des liens vérifiables.
 

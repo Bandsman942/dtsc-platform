@@ -84,9 +84,13 @@ export const announcementSchema = z.object({
   content: z.string().min(3).max(5_000),
 });
 
+export const announcementUpdateSchema = announcementSchema;
+
 export const announcementCommentSchema = z.object({
   content: z.string().min(1).max(1_000),
 });
+
+export const announcementCommentUpdateSchema = announcementCommentSchema;
 
 export const announcementReactionSchema = z.object({
   value: z.union([z.literal(1), z.literal(-1)]),
@@ -99,6 +103,9 @@ export const adminSettingsSchema = z.object({
   maintenanceMode: z.coerce.boolean(),
   supportAutoCloseDays: z.coerce.number().int().min(1).max(90),
   allowClientAnnouncements: z.coerce.boolean(),
+  announcementEditWindowMinutes: z.coerce.number().int().min(1).max(1440),
+  commentEditWindowMinutes: z.coerce.number().int().min(1).max(1440),
+  notificationRetentionDays: z.coerce.number().int().min(7).max(365),
   applyLimitsToExistingUsers: z.coerce.boolean().default(false),
 });
 
@@ -106,4 +113,9 @@ export const broadcastSchema = z.object({
   title: z.string().min(3).max(160),
   body: z.string().min(3).max(2_000),
   type: z.string().min(2).max(40).default("BROADCAST"),
+});
+
+export const notificationUpdateSchema = z.object({
+  title: z.string().min(3).max(160),
+  body: z.string().min(3).max(2_000),
 });

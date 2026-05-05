@@ -73,6 +73,8 @@ export async function POST(req: Request) {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const resetAt = new Date(today);
+  resetAt.setDate(resetAt.getDate() + 1);
   const [messagesToday, tokensToday] = await Promise.all([
     prisma.message.count({
       where: { userId: session.userId, role: "user", createdAt: { gte: today } },
@@ -94,6 +96,7 @@ export async function POST(req: Request) {
           dailyMessageLimit: user.dailyMessageLimit,
           tokensToday: totalTokensToday,
           dailyTokenLimit: user.dailyTokenLimit,
+          resetAt: resetAt.toISOString(),
         },
       },
       { status: 429 }

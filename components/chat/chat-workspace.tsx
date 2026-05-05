@@ -4,6 +4,7 @@ import { Copy, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ export function ChatWorkspace({
     dailyMessageLimit: number;
     tokensToday: number;
     dailyTokenLimit: number;
+    resetAt?: string;
   };
 }) {
   const [conversations, setConversations] = useState(initialConversations);
@@ -44,6 +46,8 @@ export function ChatWorkspace({
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
   const [dailyUsage, setDailyUsage] = useState(usage);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = useMemo(
@@ -82,11 +86,12 @@ export function ChatWorkspace({
     await refreshConversations(data.conversation.id);
   }
 
-  async function renameConversation() {
+  async function renameConversation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!activeConversation) {
       return;
     }
-    const title = window.prompt("Nouveau titre", activeConversation.title);
+    const title = String(new FormData(event.currentTarget).get("title") || "").trim();
     if (!title) {
       return;
     }
@@ -96,15 +101,17 @@ export function ChatWorkspace({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
+    setRenameOpen(false);
     await refreshConversations(activeConversation.id);
   }
 
   async function deleteConversation() {
-    if (!activeConversation || !window.confirm("Supprimer cette conversation ?")) {
+    if (!activeConversation) {
       return;
     }
 
     await fetch(`/api/conversations/${activeConversation.id}`, { method: "DELETE" });
+    setDeleteOpen(false);
     setMessages([]);
     await refreshConversations();
     setActiveConversationId("");
@@ -145,7 +152,7 @@ export function ChatWorkspace({
       if (body?.usage) {
         setDailyUsage(body.usage);
       }
-      setError(body?.code === "DAILY_LIMIT_REACHED" ? "Limite journalière atteinte. Contactez DTSC ou attendez demain." : "Le chatbot DTSC est momentanément indisponible.");
+      setError(body?.code === "DAILY_LIMIT_REACHED" ? `Limite journalière atteinte. Vos messages seront réinitialisés le ${formatResetAt(body.usage?.resetAt)}.` : "Le chatbot DTSC est momentanément indisponible.");
       setIsStreaming(false);
       return;
     }
@@ -185,6 +192,7 @@ export function ChatWorkspace({
   const messagePercent = Math.min(100, Math.round((dailyUsage.messagesToday / dailyUsage.dailyMessageLimit) * 100));
   const tokenPercent = Math.min(100, Math.round((dailyUsage.tokensToday / dailyUsage.dailyTokenLimit) * 100));
   const limitReached = dailyUsage.messagesToday >= dailyUsage.dailyMessageLimit || dailyUsage.tokensToday >= dailyUsage.dailyTokenLimit;
+  const resetLabel = formatResetAt(dailyUsage.resetAt);
 
   return (
     <div className="grid min-h-[calc(100vh-7rem)] gap-4 lg:grid-cols-[320px_1fr]">
@@ -220,7 +228,7 @@ export function ChatWorkspace({
           </div>
           {limitReached && (
             <div className="mt-3 rounded-xl bg-red-50 p-3 font-bold text-red-700">
-              Limite atteinte: l&apos;envoi est bloqué jusqu&apos;à demain.
+              Limite atteinte: l&apos;envoi est bloqué jusqu&apos;au {resetLabel}.
             </div>
           )}
         </div>
@@ -238,10 +246,10 @@ export function ChatWorkspace({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={renameConversation} disabled={!activeConversation}>
+            <Button variant="ghost" size="icon" onClick={() => setRenameOpen(true)} disabled={!activeConversation}>
               <Pencil className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={deleteConversation} disabled={!activeConversation}>
+            <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)} disabled={!activeConversation}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -308,7 +316,6 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        {error && <p className="px-4 pb-2 text-sm font-medium text-red-600">{error}</p>}
         <form onSubmit={sendMessage} className="border-t border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
             <Input
@@ -324,8 +331,50 @@ export function ChatWorkspace({
           </div>
         </form>
       </section>
+      <Dialog open={Boolean(error)} title="Message DTSC" onClose={() => setError("")}>
+        <p className="text-sm leading-7 text-dtsc-muted">{error}</p>
+      </Dialog>
+      <Dialog open={renameOpen} title="Renommer la conversation" onClose={() => setRenameOpen(false)}>
+        <form onSubmit={renameConversation} className="space-y-3">
+          <Input name="title" defaultValue={activeConversation?.title || ""} required />
+          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+        </form>
+      </Dialog>
+      <Dialog
+        open={deleteOpen}
+        title="Supprimer la conversation"
+        description="Cette action retire la conversation et ses messages de votre espace."
+        onClose={() => setDeleteOpen(false)}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              Annuler
+            </Button>
+            <Button type="button" variant="destructive" onClick={deleteConversation} className="rounded-xl">
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression de cette conversation.</p>
+      </Dialog>
     </div>
   );
+}
+
+function formatResetAt(resetAt?: string) {
+  const fallback = new Date();
+  fallback.setDate(fallback.getDate() + 1);
+  fallback.setHours(0, 0, 0, 0);
+  const date = resetAt ? new Date(resetAt) : fallback;
+  return date.toLocaleString("fr-FR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function BotIcon() {

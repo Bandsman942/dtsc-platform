@@ -44,6 +44,7 @@ export async function PATCH(req: Request, { params }: Params) {
     title: "Ticket support mis à jour",
     body: `${ticket.subject} · ${ticket.status}`,
     type: "SUPPORT",
+    targetUrl: "/support",
   });
 
   return NextResponse.json({ ok: true, ticket });

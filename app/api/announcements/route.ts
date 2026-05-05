@@ -43,6 +43,7 @@ export async function POST(req: Request) {
     title: "Nouvelle annonce DTSC",
     body: body.data.title,
     type: "ANNOUNCEMENT",
+    targetUrl: "/announcements",
   });
 
   return NextResponse.json({ ok: true, announcement }, { status: 201 });

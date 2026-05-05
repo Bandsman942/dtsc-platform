@@ -26,6 +26,7 @@ export async function POST(req: Request) {
     title: body.data.title,
     body: body.data.body,
     type: body.data.type,
+    targetUrl: "/notifications",
   });
 
   return NextResponse.json({ ok: true, emails: users.map((user) => user.email) });

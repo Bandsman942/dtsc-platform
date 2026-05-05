@@ -11,10 +11,10 @@ export default async function AnnouncementsPage() {
     prisma.announcement.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        author: { select: { name: true, role: true } },
+        author: { select: { id: true, name: true, role: true } },
         comments: {
           orderBy: { createdAt: "asc" },
-          include: { user: { select: { name: true, role: true } } },
+          include: { user: { select: { id: true, name: true, role: true } } },
         },
         reactions: { select: { value: true } },
       },
@@ -34,8 +34,11 @@ export default async function AnnouncementsPage() {
         </section>
         <AnnouncementWall
           announcements={JSON.parse(JSON.stringify(announcements))}
+          currentUserId={user.id}
           role={user.role}
           allowClientAnnouncements={settings.allowClientAnnouncements}
+          announcementEditWindowMinutes={settings.announcementEditWindowMinutes}
+          commentEditWindowMinutes={settings.commentEditWindowMinutes}
         />
       </div>
     </AppShell>

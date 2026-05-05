@@ -107,6 +107,9 @@ export default async function AdminPage({
             maintenanceMode: settings.maintenanceMode,
             supportAutoCloseDays: settings.supportAutoCloseDays,
             allowClientAnnouncements: settings.allowClientAnnouncements,
+            announcementEditWindowMinutes: settings.announcementEditWindowMinutes,
+            commentEditWindowMinutes: settings.commentEditWindowMinutes,
+            notificationRetentionDays: settings.notificationRetentionDays,
           }}
           emails={users.map((managedUser) => managedUser.email)}
         />
