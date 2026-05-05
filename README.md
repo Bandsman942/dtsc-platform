@@ -80,6 +80,13 @@ DTSC_CONTACT_EMAIL=contact@dtsc-platform.com
 ZOHO_MAIL_WEBHOOK_URL=
 ZOHO_OUTBOUND_MAIL_WEBHOOK_URL=
 ZOHO_OUTGOING_WEBHOOK_SECRET=
+ZOHO_MAIL_API_BASE_URL=https://mail.zoho.com
+ZOHO_ACCOUNTS_API_BASE_URL=https://accounts.zoho.com
+ZOHO_MAIL_ACCOUNT_ID=
+ZOHO_MAIL_FROM_ADDRESS=contact@dtsc-platform.com
+ZOHO_MAIL_CLIENT_ID=
+ZOHO_MAIL_CLIENT_SECRET=
+ZOHO_MAIL_REFRESH_TOKEN=
 ```
 
 Notes:
@@ -94,6 +101,8 @@ Notes:
 - `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL` doit pointer vers le webhook Zoho/Zoho Flow chargé d'envoyer les emails directs aux destinataires.
 - `ZOHO_OUTGOING_WEBHOOK_SECRET` protège l'URL applicative à configurer côté Zoho: `APP_URL/api/webhooks/zoho/outgoing-mail?secret=VOTRE_SECRET`.
 - `DTSC_CONTACT_EMAIL` est l'adresse professionnelle affichée sur le site et utilisée dans les messages serveur.
+- Si `ZOHO_MAIL_ACCOUNT_ID`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont configurés, l'application envoie les diffusions directement par l'API Zoho Mail avant de tenter les fallbacks webhook.
+- `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont des secrets: ne jamais les commiter et les régénérer s'ils ont été partagés.
 
 Mapping conseillé dans Zoho Flow, action Send Mail:
 
@@ -276,6 +285,13 @@ DTSC_CONTACT_EMAIL
 ZOHO_MAIL_WEBHOOK_URL
 ZOHO_OUTBOUND_MAIL_WEBHOOK_URL
 ZOHO_OUTGOING_WEBHOOK_SECRET
+ZOHO_MAIL_API_BASE_URL
+ZOHO_ACCOUNTS_API_BASE_URL
+ZOHO_MAIL_ACCOUNT_ID
+ZOHO_MAIL_FROM_ADDRESS
+ZOHO_MAIL_CLIENT_ID
+ZOHO_MAIL_CLIENT_SECRET
+ZOHO_MAIL_REFRESH_TOKEN
 ```
 
 Le pipeline exécute:

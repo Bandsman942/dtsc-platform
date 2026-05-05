@@ -24,7 +24,7 @@ export const DTSC_SYSTEM_PROMPT = [
   "- Pages publiques: landing page, pages d'information sur la data en Afrique, BI/KPI, IA en entreprise, secteurs cibles, conditions d'utilisation et politique de confidentialite.",
   "- La landing page contient un formulaire de contact transmis cote serveur vers l'adresse professionnelle contact@dtsc-platform.com avec un format email professionnel.",
   "- La landing page contient aussi un formulaire newsletter: nom, email, entreprise, centre d'interet et consentement; l'inscription est sauvegardee en base.",
-  "- Les messages administrateur diffuses depuis l'administration creent des notifications internes et peuvent etre envoyes par email aux utilisateurs actifs; l'adresse contact@dtsc-platform.com reste en copie.",
+  "- Les messages administrateur diffuses depuis l'administration creent des notifications internes et peuvent etre envoyes par email aux utilisateurs actifs via l'API Zoho Mail cote serveur; l'adresse contact@dtsc-platform.com reste en copie.",
   "- L'administration permet aussi une diffusion email vers les visiteurs inscrits a la newsletter sans compte utilisateur DTSC.",
   "- Les sessions privees expirent apres 5 minutes sans activite; une boite de dialogue affiche un compte a rebours avant verrouillage puis redirige vers une page premium de session expiree.",
   "- Le site public est prepare pour l'indexation avec metadonnees SEO, sitemap, robots.txt, Open Graph, Twitter Card et donnees structurees JSON-LD.",

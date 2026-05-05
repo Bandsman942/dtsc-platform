@@ -25,6 +25,125 @@ function normalizeMessage(message: string) {
     .trim();
 }
 
+function normalizeBaseUrl(value: string | undefined, fallback: string) {
+  if (!value) {
+    return fallback;
+  }
+
+  const withProtocol = value.startsWith("//") ? `https:${value}` : value;
+  return withProtocol.replace(/\/+$/, "");
+}
+
+function getZohoAccountsBaseUrl() {
+  if (env.ZOHO_ACCOUNTS_API_BASE_URL) {
+    return normalizeBaseUrl(env.ZOHO_ACCOUNTS_API_BASE_URL, "https://accounts.zoho.com");
+  }
+
+  const mailBaseUrl = normalizeBaseUrl(env.ZOHO_MAIL_API_BASE_URL, "https://mail.zoho.com");
+  const host = new URL(mailBaseUrl).host;
+  if (host.endsWith(".eu")) {
+    return "https://accounts.zoho.eu";
+  }
+  if (host.endsWith(".in")) {
+    return "https://accounts.zoho.in";
+  }
+  if (host.endsWith(".com.au")) {
+    return "https://accounts.zoho.com.au";
+  }
+  if (host.endsWith(".jp")) {
+    return "https://accounts.zoho.jp";
+  }
+
+  return "https://accounts.zoho.com";
+}
+
+function isZohoMailApiConfigured() {
+  return Boolean(
+    env.ZOHO_MAIL_ACCOUNT_ID &&
+      env.ZOHO_MAIL_CLIENT_ID &&
+      env.ZOHO_MAIL_CLIENT_SECRET &&
+      env.ZOHO_MAIL_REFRESH_TOKEN
+  );
+}
+
+async function getZohoAccessToken() {
+  if (!isZohoMailApiConfigured()) {
+    return null;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: env.ZOHO_MAIL_CLIENT_ID || "",
+    client_secret: env.ZOHO_MAIL_CLIENT_SECRET || "",
+    refresh_token: env.ZOHO_MAIL_REFRESH_TOKEN || "",
+  });
+  const response = await fetch(`${getZohoAccountsBaseUrl()}/oauth/v2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(`Zoho OAuth failed with status ${response.status}${details ? `: ${details.slice(0, 180)}` : ""}`);
+  }
+
+  const data = (await response.json()) as { access_token?: string };
+  if (!data.access_token) {
+    throw new Error("Zoho OAuth response did not include access_token");
+  }
+
+  return data.access_token;
+}
+
+async function sendZohoMailApi(payload: ZohoMailPayload) {
+  const recipients = uniqueEmails(payload.to);
+  if (!recipients.length) {
+    return { sent: false, reason: "No recipients" };
+  }
+
+  const accessToken = await getZohoAccessToken();
+  if (!accessToken) {
+    return { sent: false, reason: "Zoho Mail API is not configured" };
+  }
+
+  const mailBaseUrl = normalizeBaseUrl(env.ZOHO_MAIL_API_BASE_URL, "https://mail.zoho.com");
+  const accountId = env.ZOHO_MAIL_ACCOUNT_ID || "";
+  const fromAddress = env.ZOHO_MAIL_FROM_ADDRESS || env.DTSC_CONTACT_EMAIL || dtsc.email;
+  const ccAddress = uniqueEmails(payload.cc?.length ? payload.cc : [env.DTSC_CONTACT_EMAIL || dtsc.email]).join(",");
+  const content = buildProfessionalMailHtml(payload);
+  const endpoint = `${mailBaseUrl}/api/accounts/${accountId}/messages`;
+  let sent = 0;
+
+  for (const recipient of recipients) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+      },
+      body: JSON.stringify({
+        fromAddress,
+        toAddress: recipient,
+        ccAddress,
+        subject: payload.subject,
+        content,
+        mailFormat: "html",
+        askReceipt: "no",
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      throw new Error(`Zoho Mail API failed with status ${response.status}${details ? `: ${details.slice(0, 180)}` : ""}`);
+    }
+    sent += 1;
+  }
+
+  return { sent: true, provider: "zoho-mail-api", recipients: sent, cc: ccAddress };
+}
+
 export function buildProfessionalMailText({
   subject,
   message,
@@ -148,8 +267,19 @@ export async function sendZohoOutboundMail(payload: ZohoMailPayload) {
     return { sent: false, reason: "No recipients" };
   }
 
+  const apiResult = await sendZohoMailApi({ ...payload, to: recipients }).catch((error) => ({
+    sent: false,
+    reason: error instanceof Error ? error.message : "Zoho Mail API failed",
+  }));
+  if (apiResult.sent) {
+    return apiResult;
+  }
+  const apiReason = "reason" in apiResult ? apiResult.reason : undefined;
+
   if (!env.ZOHO_OUTBOUND_MAIL_WEBHOOK_URL) {
-    return { sent: false, reason: "ZOHO_OUTBOUND_MAIL_WEBHOOK_URL is not configured" };
+    return apiReason
+      ? { sent: false, reason: apiReason }
+      : { sent: false, reason: "ZOHO_OUTBOUND_MAIL_WEBHOOK_URL is not configured" };
   }
 
   const cc = uniqueEmails(payload.cc?.length ? payload.cc : [env.DTSC_CONTACT_EMAIL || dtsc.email]);

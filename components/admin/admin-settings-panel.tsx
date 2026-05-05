@@ -69,7 +69,7 @@ export function AdminSettingsPanel({
       setBroadcastMessage(
         body?.zoho?.sent
           ? "Notification créée et diffusion email transmise aux utilisateurs actifs."
-          : "Notification créée. Configurez le webhook mail sortant pour l'envoi direct aux destinataires."
+          : "Notification créée. Configurez l'API Zoho Mail ou le webhook mail sortant pour l'envoi direct aux destinataires."
       );
       form.reset();
     } else {
@@ -92,7 +92,7 @@ export function AdminSettingsPanel({
       setNewsletterBroadcastMessage(
         body?.zoho?.sent
           ? `Email transmis à ${body.emails?.length || 0} abonné(s) newsletter.`
-          : "Diffusion préparée. Configurez le webhook mail sortant pour envoyer directement aux abonnés."
+          : "Diffusion préparée. Configurez l'API Zoho Mail ou le webhook mail sortant pour envoyer directement aux abonnés."
       );
       form.reset();
     } else {

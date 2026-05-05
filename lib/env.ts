@@ -1,7 +1,15 @@
 import { z } from "zod";
 
 const optionalUrl = z.preprocess(
-  (value) => (value === "" ? undefined : value),
+  (value) => {
+    if (value === "") {
+      return undefined;
+    }
+    if (typeof value === "string" && value.startsWith("//")) {
+      return `https:${value}`;
+    }
+    return value;
+  },
   z.string().url().optional()
 );
 
@@ -21,6 +29,13 @@ const envSchema = z.object({
   ZOHO_MAIL_WEBHOOK_URL: optionalUrl,
   ZOHO_OUTBOUND_MAIL_WEBHOOK_URL: optionalUrl,
   ZOHO_OUTGOING_WEBHOOK_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(24).optional()),
+  ZOHO_MAIL_API_BASE_URL: optionalUrl,
+  ZOHO_ACCOUNTS_API_BASE_URL: optionalUrl,
+  ZOHO_MAIL_ACCOUNT_ID: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  ZOHO_MAIL_FROM_ADDRESS: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
+  ZOHO_MAIL_CLIENT_ID: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  ZOHO_MAIL_CLIENT_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  ZOHO_MAIL_REFRESH_TOKEN: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
 });
 
 export const env = envSchema.parse(process.env);
