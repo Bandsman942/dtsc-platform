@@ -120,6 +120,45 @@ export default function Page() {
         </div>
       </section>
 
+      <section className="border-y border-dtsc-border bg-dtsc-surface">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_1fr] lg:px-8">
+          <div className="relative overflow-hidden rounded-[1.5rem] border border-dtsc-border bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_25%,rgba(0,194,255,0.28),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.12),transparent_60%)]" />
+            <div className="relative">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">Méthode DTSC</p>
+              <h2 className="mt-3 text-3xl font-black">De la vision business au produit numérique mesurable.</h2>
+              <p className="mt-4 max-w-xl leading-7 text-slate-300">
+                DTSC combine diagnostic, priorisation, prototype, déploiement et accompagnement. Chaque chantier doit relier une technologie à un indicateur de performance: coût, délai, qualité de service, visibilité ou chiffre d&apos;affaires.
+              </p>
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                {["Diagnostic stratégique", "Architecture data", "Automatisation métier", "Formation et adoption"].map((item) => (
+                  <div key={item} className="rounded-2xl bg-white/10 p-4 text-sm font-bold text-white transition hover:bg-white/15">
+                    <CheckCircle2 className="mb-3 h-5 w-5 text-cyan-300" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            {[
+              ["01", "Cadrer", "Identifier les décisions critiques, les données disponibles, les irritants opérationnels et les gains rapides."],
+              ["02", "Construire", "Mettre en place des dashboards, applications, automatisations ou assistants IA avec une architecture évolutive."],
+              ["03", "Mesurer", "Suivre les KPI, les usages, les tickets, les limites IA et les retours utilisateurs pour améliorer la plateforme."],
+            ].map(([step, title, text]) => (
+              <div key={step} className="dtsc-card group flex gap-4 p-5 transition hover:-translate-y-1 hover:border-cyan-300 hover:shadow-[0_18px_50px_rgba(0,43,91,0.12)]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-lg font-black text-dtsc-blue">{step}</div>
+                <div>
+                  <h3 className="text-lg font-black text-dtsc-ink">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-dtsc-muted">{text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
         <div className="rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.22)] sm:p-8">
           <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Bell, Lock, Monitor, Moon, Save, Sun, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export function SettingsPanel({
   user,
@@ -91,8 +92,8 @@ export function SettingsPanel({
             </div>
           </div>
           <form onSubmit={updatePassword} className="mt-5 grid gap-4 md:grid-cols-2">
-            <Input name="currentPassword" type="password" placeholder="Mot de passe actuel" required />
-            <Input name="newPassword" type="password" placeholder="Nouveau mot de passe sécurisé" required />
+            <PasswordInput name="currentPassword" placeholder="Mot de passe actuel" autoComplete="current-password" required />
+            <PasswordInput name="newPassword" placeholder="Nouveau mot de passe sécurisé" autoComplete="new-password" required />
             <div className="md:col-span-2 flex flex-wrap items-center gap-3">
               <Button variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
                 Mettre à jour le mot de passe

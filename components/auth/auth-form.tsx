@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const router = useRouter();
@@ -50,9 +51,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         </>
       )}
       <Input name="email" type="email" placeholder="Email professionnel" autoComplete="email" required />
-      <Input
+      <PasswordInput
         name="password"
-        type="password"
         placeholder="Mot de passe"
         autoComplete={isSignUp ? "new-password" : "current-password"}
         required

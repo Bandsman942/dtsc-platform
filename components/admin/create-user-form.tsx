@@ -5,6 +5,7 @@ import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export function CreateUserForm() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export function CreateUserForm() {
     <form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
       <Input name="name" placeholder="Nom complet" required />
       <Input name="email" type="email" placeholder="Email" required />
-      <Input name="password" type="password" placeholder="Mot de passe temporaire" required />
+      <PasswordInput name="password" placeholder="Mot de passe temporaire" autoComplete="new-password" required />
       <select name="role" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
         <option value="CLIENT">CLIENT</option>
         <option value="SUPPORT">SUPPORT</option>

@@ -21,7 +21,7 @@ export function PublicFooter() {
   return (
     <footer className="border-t border-dtsc-border bg-dtsc-surface">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-4 lg:px-8">
-        <div className="md:col-span-2">
+        <div>
           <DtscLogo />
           <p className="mt-4 max-w-md leading-6 text-dtsc-muted">{dtsc.summary}</p>
         </div>
@@ -31,6 +31,13 @@ export function PublicFooter() {
             {publicLinks.slice(1).map((link) => (
               <Link key={link.href} href={link.href} className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{link.label}</Link>
             ))}
+          </div>
+        </div>
+        <div>
+          <p className="font-black text-dtsc-ink">Conditions et politiques</p>
+          <div className="mt-3 grid gap-2">
+            <Link href="/conditions-utilisation" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Conditions d&apos;utilisation</Link>
+            <Link href="/politique-confidentialite" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Politique de confidentialité</Link>
           </div>
         </div>
         <div>
