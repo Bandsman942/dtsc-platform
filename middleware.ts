@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
+import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 const privateRoutes = ["/dashboard", "/chat", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
@@ -28,7 +29,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (session && isPathMatch(pathname, [...privateRoutes, ...adminRoutes]) && secret) {
+    const tokenValue = await createSessionToken(
+      {
+        userId: session.userId,
+        email: session.email,
+        name: session.name,
+        role: session.role,
+      },
+      secret
+    );
+    response.cookies.set(SESSION_COOKIE, tokenValue, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+  }
+
+  return response;
 }
 
 export const config = {

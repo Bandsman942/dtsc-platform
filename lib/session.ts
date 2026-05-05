@@ -1,4 +1,5 @@
 import type { UserRole } from "@prisma/client";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 
 export const SESSION_COOKIE = "dtsc_session";
 
@@ -52,7 +53,7 @@ export async function createSessionToken(
 ) {
   const session: SessionPayload = {
     ...payload,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+    exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   };
   const encodedPayload = base64UrlEncode(JSON.stringify(session));
   const signature = await sign(encodedPayload, secret);

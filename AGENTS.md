@@ -16,6 +16,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Après modification de `prisma/schema.prisma`, ajouter une migration SQL dans `prisma/migrations/.../migration.sql`.
 - Les migrations Vercel sont exécutées par `pnpm prisma migrate deploy && pnpm build`.
 - Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.
+- Ne jamais commiter une URL de webhook contenant une clé secrète: utiliser une variable d'environnement comme `ZOHO_MAIL_WEBHOOK_URL`.
 - Les actions admin doivent toujours vérifier la session côté serveur et le rôle `ADMIN`.
 - Les actions support de résolution de tickets doivent autoriser uniquement `ADMIN` et `SUPPORT`.
 - Les nouveaux modules privés doivent être ajoutés dans `middleware.ts` pour éviter l'accès sans session.
@@ -30,6 +31,8 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - RBAC annonces/notifications: seul `ADMIN` modifie ou supprime les annonces; `ADMIN` modifie ou supprime tous les commentaires; un utilisateur peut seulement modifier son propre commentaire dans la fenêtre configurée; chaque utilisateur peut supprimer ou vider ses propres notifications.
 - Les blocs de données qui peuvent grandir doivent utiliser la barre réutilisable `ListControls` avec `useSmartList` pour recherche accent-insensible et pagination côté UI.
 - Toute évolution fonctionnelle importante doit être reflétée dans `DTSC_SYSTEM_PROMPT` dans `lib/openai.ts`, en distinguant clairement les fonctionnalités actives de la roadmap.
+- Les constantes partagées avec le client doivent rester dans un fichier neutre sans logique serveur, par exemple `lib/session-config.ts`.
+- Les pages publiques importantes doivent rester dans `app/sitemap.ts`, `app/robots.ts` et avoir des métadonnées SEO cohérentes.
 - Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs.
 - Les contenus publics sourcés doivent garder des liens vérifiables.
 

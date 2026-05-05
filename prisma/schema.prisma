@@ -124,6 +124,36 @@ model Organization {
   createdAt     DateTime @default(now())
 }
 
+model NewsletterSubscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  companyName String?
+  interest    String?
+  source      String   @default("landing")
+  consent     Boolean  @default(true)
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model ContactMessage {
+  id          String   @id @default(cuid())
+  name        String
+  email       String
+  phone       String?
+  companyName String?
+  subject     String
+  message     String
+  source      String   @default("landing")
+  createdAt   DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([source, createdAt])
+}
+
 model SupportTicket {
   id          String         @id @default(cuid())
   userId      String

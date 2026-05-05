@@ -1,0 +1,2 @@
+export const SESSION_MAX_AGE_SECONDS = 5 * 60;
+export const SESSION_WARNING_SECONDS = 60;

@@ -113,3 +113,21 @@ export const broadcastSchema = z.object({
   body: z.string().min(3).max(2_000),
   type: z.string().min(2).max(40).default("BROADCAST"),
 });
+
+export const newsletterSubscriptionSchema = z.object({
+  name: z.string().min(2).max(120),
+  email: z.string().email().max(180).transform((email) => email.toLowerCase()),
+  companyName: z.string().max(160).optional().or(z.literal("")),
+  interest: z.string().max(240).optional().or(z.literal("")),
+  consent: z.literal(true),
+});
+
+export const publicContactSchema = z.object({
+  name: z.string().min(2).max(120),
+  email: z.string().email().max(180).transform((email) => email.toLowerCase()),
+  phone: z.string().max(40).optional().or(z.literal("")),
+  companyName: z.string().max(160).optional().or(z.literal("")),
+  subject: z.string().min(3).max(160),
+  message: z.string().min(10).max(3_000),
+  source: z.string().max(80).default("landing"),
+});

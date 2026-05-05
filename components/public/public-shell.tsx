@@ -45,6 +45,9 @@ export function PublicFooter() {
         <div>
           <p className="font-black text-dtsc-ink">Contact</p>
           <p className="mt-3 text-dtsc-muted">WhatsApp: {dtsc.whatsapp}</p>
+          <a href={`mailto:${dtsc.email}`} className="mt-2 inline-flex font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">
+            {dtsc.email}
+          </a>
           <div className="mt-4">
             <p className="font-black text-dtsc-ink">Réseaux sociaux</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">

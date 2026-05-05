@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { ContactNewsletterSection } from "@/components/public/contact-newsletter-section";
 import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
 
@@ -47,7 +48,7 @@ export default function Page() {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
-                <Link href="/support">Demander une démo</Link>
+                <Link href="#contact">Demander une démo</Link>
               </Button>
             </div>
             <div className="mt-10 grid gap-3 border-t border-dtsc-border pt-8 text-sm text-dtsc-muted sm:grid-cols-3">
@@ -193,6 +194,8 @@ export default function Page() {
           ))}
         </div>
       </section>
+
+      <ContactNewsletterSection contactEmail={dtsc.email} />
 
       <PublicFooter />
     </main>

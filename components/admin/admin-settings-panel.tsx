@@ -20,10 +20,8 @@ type Settings = {
 
 export function AdminSettingsPanel({
   settings,
-  emails,
 }: {
   settings: Settings;
-  emails: string[];
 }) {
   const router = useRouter();
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -67,11 +65,11 @@ export function AdminSettingsPanel({
     });
     const body = await response.json().catch(() => null);
     if (response.ok) {
-      const subject = encodeURIComponent(String(payload.title || ""));
-      const mailBody = encodeURIComponent(String(payload.body || ""));
-      const bcc = encodeURIComponent((body?.emails || emails).join(","));
-      window.location.href = `mailto:?bcc=${bcc}&subject=${subject}&body=${mailBody}`;
-      setBroadcastMessage("Notification créée et client email ouvert.");
+      setBroadcastMessage(
+        body?.zoho?.sent
+          ? "Notification créée et message transmis au flux Zoho Mail DTSC."
+          : "Notification créée. Configurez ZOHO_MAIL_WEBHOOK_URL pour activer la transmission Zoho."
+      );
       form.reset();
     } else {
       setBroadcastMessage("Impossible d'envoyer la diffusion.");
@@ -123,7 +121,7 @@ export function AdminSettingsPanel({
 
       <div className="dtsc-card p-6">
         <h2 className="font-black text-dtsc-ink">Diffusion globale</h2>
-        <p className="mt-1 text-sm text-dtsc-muted">Crée une notification pour tous les utilisateurs actifs et ouvre un email groupé en CCI.</p>
+        <p className="mt-1 text-sm text-dtsc-muted">Crée une notification pour tous les utilisateurs actifs et transmet le message au flux Zoho Mail DTSC.</p>
         <form onSubmit={broadcast} className="mt-5 space-y-3">
           <Input name="title" placeholder="Objet / titre" required />
           <textarea name="body" placeholder="Message à diffuser" className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireEnv } from "@/lib/env";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import {
   createSessionToken,
   SESSION_COOKIE,
@@ -82,7 +83,7 @@ export async function setSessionCookie(user: {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: SESSION_MAX_AGE_SECONDS,
   });
 }
 

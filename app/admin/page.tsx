@@ -106,7 +106,6 @@ export default async function AdminPage({
             commentEditWindowMinutes: settings.commentEditWindowMinutes,
             notificationRetentionDays: settings.notificationRetentionDays,
           }}
-          emails={users.map((managedUser) => managedUser.email)}
         />
 
         <section className="dtsc-card p-6">

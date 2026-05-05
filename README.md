@@ -46,6 +46,11 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
 - Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
 - Diffusion globale: notifications internes + email groupé via adresses utilisateurs
+- Adresse professionnelle DTSC: `contact@dtsc-platform.com`
+- Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
+- Inscription newsletter publique avec stockage en base et notification Zoho
+- Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
+- SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires et réactions
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
@@ -70,6 +75,8 @@ NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
 ADMIN_EMAIL=
 DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
 DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!
+DTSC_CONTACT_EMAIL=contact@dtsc-platform.com
+ZOHO_MAIL_WEBHOOK_URL=
 ```
 
 Notes:
@@ -80,6 +87,8 @@ Notes:
 - `DEFAULT_ADMIN_EMAIL` et `DEFAULT_ADMIN_PASSWORD` permettent le bootstrap du compte admin par défaut lors de la première connexion avec ces identifiants.
 - Changer immédiatement `DEFAULT_ADMIN_PASSWORD` en production, puis modifier le mot de passe depuis `/settings`.
 - Sur Vercel, configurer ces variables dans Project Settings → Environment Variables.
+- `ZOHO_MAIL_WEBHOOK_URL` doit contenir l'URL complète du webhook entrant Zoho Mail. Ne jamais la commiter dans le dépôt.
+- `DTSC_CONTACT_EMAIL` est l'adresse professionnelle affichée sur le site et utilisée dans les messages serveur.
 
 ## Compte Admin Par Défaut
 
@@ -245,6 +254,8 @@ NEXT_PUBLIC_DEFAULT_MODEL
 ADMIN_EMAIL
 DEFAULT_ADMIN_EMAIL
 DEFAULT_ADMIN_PASSWORD
+DTSC_CONTACT_EMAIL
+ZOHO_MAIL_WEBHOOK_URL
 ```
 
 Le pipeline exécute:
@@ -263,6 +274,7 @@ Mesures présentes:
 
 - Routes privées protégées par `middleware.ts`
 - Cookie de session HTTP-only, `sameSite=lax`, `secure` en production
+- Expiration d'inactivité à 5 minutes avec renouvellement par heartbeat sur les pages privées
 - Signature HMAC du token de session
 - Hash de mot de passe PBKDF2 avec salt
 - Validation Zod sur auth, chat, conversations, tickets et admin

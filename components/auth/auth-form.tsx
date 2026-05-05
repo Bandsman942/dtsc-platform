@@ -14,6 +14,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
   const isSignUp = mode === "sign-up";
+  const sessionExpired = !isSignUp && searchParams.get("reason") === "session-expired";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,6 +44,11 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      {sessionExpired && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+          Votre session a expiré après 5 minutes sans activité. Reconnectez-vous pour continuer.
+        </p>
+      )}
       {isSignUp && (
         <>
           <Input name="name" placeholder="Nom complet" autoComplete="name" required />
