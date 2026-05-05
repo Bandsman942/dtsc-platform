@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   title: "DTSC Platform",
   description:
     "Plateforme SaaS DTSC pour transformation digitale, data, IA, marketing digital et support client.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({
