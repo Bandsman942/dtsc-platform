@@ -14,7 +14,6 @@ type Settings = {
   maintenanceMode: boolean;
   supportAutoCloseDays: number;
   allowClientAnnouncements: boolean;
-  announcementEditWindowMinutes: number;
   commentEditWindowMinutes: number;
   notificationRetentionDays: number;
 };
@@ -38,7 +37,6 @@ export function AdminSettingsPanel({
       defaultDailyMessageLimit: form.get("defaultDailyMessageLimit"),
       defaultDailyTokenLimit: form.get("defaultDailyTokenLimit"),
       supportAutoCloseDays: form.get("supportAutoCloseDays"),
-      announcementEditWindowMinutes: form.get("announcementEditWindowMinutes"),
       commentEditWindowMinutes: form.get("commentEditWindowMinutes"),
       notificationRetentionDays: form.get("notificationRetentionDays"),
       chatbotEnabled: form.get("chatbotEnabled") === "on",
@@ -94,9 +92,6 @@ export function AdminSettingsPanel({
           </Field>
           <Field label="Auto-clôture support (jours)">
             <Input name="supportAutoCloseDays" type="number" defaultValue={settings.supportAutoCloseDays} min={1} max={90} />
-          </Field>
-          <Field label="Modification annonces (minutes)">
-            <Input name="announcementEditWindowMinutes" type="number" defaultValue={settings.announcementEditWindowMinutes} min={1} max={1440} />
           </Field>
           <Field label="Modification commentaires (minutes)">
             <Input name="commentEditWindowMinutes" type="number" defaultValue={settings.commentEditWindowMinutes} min={1} max={1440} />

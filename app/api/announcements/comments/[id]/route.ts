@@ -53,3 +53,21 @@ export async function PATCH(req: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true, comment: updated });
 }
+
+export async function DELETE(_req: Request, { params }: Params) {
+  const session = await getSession();
+  if (!session || session.role !== UserRole.ADMIN) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const deleted = await prisma.announcementComment.deleteMany({
+    where: { id },
+  });
+
+  if (!deleted.count) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

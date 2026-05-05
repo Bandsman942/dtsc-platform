@@ -37,7 +37,6 @@ export default async function AnnouncementsPage() {
           currentUserId={user.id}
           role={user.role}
           allowClientAnnouncements={settings.allowClientAnnouncements}
-          announcementEditWindowMinutes={settings.announcementEditWindowMinutes}
           commentEditWindowMinutes={settings.commentEditWindowMinutes}
         />
       </div>

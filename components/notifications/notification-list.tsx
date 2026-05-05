@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Bell, CheckCircle2, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 
 type NotificationItem = {
   id: string;
@@ -31,8 +30,8 @@ function fallbackTarget(type: string) {
 export function NotificationList({ notifications }: { notifications: NotificationItem[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<NotificationItem | null>(null);
-  const [editing, setEditing] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [clearOpen, setClearOpen] = useState(false);
 
   async function markRead(id: string) {
     const response = await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
@@ -43,38 +42,11 @@ export function NotificationList({ notifications }: { notifications: Notificatio
 
   async function openNotification(notification: NotificationItem) {
     setSelected(notification);
-    setEditing(false);
     setFeedback("");
     if (!notification.readAt) {
       await fetch(`/api/notifications/${notification.id}/read`, { method: "PATCH" });
       setSelected({ ...notification, readAt: new Date().toISOString() });
       router.refresh();
-    }
-  }
-
-  async function updateNotification(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selected) {
-      return;
-    }
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const response = await fetch(`/api/notifications/${selected.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (response.ok) {
-      setFeedback("Notification mise à jour.");
-      setEditing(false);
-      setSelected({
-        ...selected,
-        title: String(payload.title || selected.title),
-        body: String(payload.body || selected.body),
-        readAt: selected.readAt || new Date().toISOString(),
-      });
-      router.refresh();
-    } else {
-      setFeedback("Impossible de modifier cette notification.");
     }
   }
 
@@ -91,8 +63,27 @@ export function NotificationList({ notifications }: { notifications: Notificatio
     }
   }
 
+  async function clearNotifications() {
+    const response = await fetch("/api/notifications", { method: "DELETE" });
+    if (response.ok) {
+      setClearOpen(false);
+      setSelected(null);
+      router.refresh();
+    } else {
+      setFeedback("Impossible de vider les notifications.");
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {notifications.length > 0 && (
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={() => setClearOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+            <Trash2 className="h-4 w-4" />
+            Vider les notifications
+          </Button>
+        </div>
+      )}
       {notifications.map((notification) => (
         <article key={notification.id} className="dtsc-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-4">
@@ -128,10 +119,6 @@ export function NotificationList({ notifications }: { notifications: Notificatio
         footer={
           selected && (
             <>
-              <Button type="button" variant="outline" onClick={() => setEditing((current) => !current)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
-                <Pencil className="h-4 w-4" />
-                Modifier
-              </Button>
               <Button type="button" variant="destructive" onClick={deleteNotification} className="rounded-xl">
                 <Trash2 className="h-4 w-4" />
                 Supprimer
@@ -148,18 +135,31 @@ export function NotificationList({ notifications }: { notifications: Notificatio
       >
         {selected && (
           <div className="space-y-4">
-            {editing ? (
-              <form onSubmit={updateNotification} className="space-y-3">
-                <Input name="title" defaultValue={selected.title} required />
-                <textarea name="body" defaultValue={selected.body} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" required />
-                <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
-              </form>
-            ) : (
-              <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{selected.body}</p>
-            )}
+            <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{selected.body}</p>
             {feedback && <div className="rounded-xl bg-dtsc-soft p-3 text-sm font-bold text-dtsc-blue">{feedback}</div>}
           </div>
         )}
+      </Dialog>
+      <Dialog
+        open={clearOpen}
+        title="Vider les notifications"
+        description="Cette action supprime uniquement vos notifications personnelles."
+        onClose={() => setClearOpen(false)}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setClearOpen(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              Annuler
+            </Button>
+            <Button type="button" variant="destructive" onClick={clearNotifications} className="rounded-xl">
+              Vider
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression de toutes vos notifications. Les annonces, tickets et messages liés ne seront pas supprimés.</p>
+      </Dialog>
+      <Dialog open={Boolean(feedback) && !selected} title="Notifications DTSC" onClose={() => setFeedback("")}>
+        <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
       </Dialog>
     </div>
   );
