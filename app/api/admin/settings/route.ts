@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { adminSettingsSchema } from "@/lib/validators";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function PATCH(req: Request) {
   const session = await getSession();
@@ -26,6 +27,8 @@ export async function PATCH(req: Request) {
       allowClientAnnouncements: body.data.allowClientAnnouncements,
       commentEditWindowMinutes: body.data.commentEditWindowMinutes,
       notificationRetentionDays: body.data.notificationRetentionDays,
+      signUpOtpEnabled: body.data.signUpOtpEnabled,
+      signUpOtpExpirationMinutes: body.data.signUpOtpExpirationMinutes,
     },
     create: {
       id: "global",
@@ -37,6 +40,8 @@ export async function PATCH(req: Request) {
       allowClientAnnouncements: body.data.allowClientAnnouncements,
       commentEditWindowMinutes: body.data.commentEditWindowMinutes,
       notificationRetentionDays: body.data.notificationRetentionDays,
+      signUpOtpEnabled: body.data.signUpOtpEnabled,
+      signUpOtpExpirationMinutes: body.data.signUpOtpExpirationMinutes,
     },
   });
 
@@ -48,6 +53,19 @@ export async function PATCH(req: Request) {
       },
     });
   }
+
+  await writeAuditLog({
+    userId: session.userId,
+    action: "ADMIN_SETTINGS_UPDATED",
+    entity: "AppSetting",
+    entityId: settings.id,
+    metadata: {
+      applyLimitsToExistingUsers: body.data.applyLimitsToExistingUsers,
+      signUpOtpEnabled: body.data.signUpOtpEnabled,
+      signUpOtpExpirationMinutes: body.data.signUpOtpExpirationMinutes,
+    },
+    request: req,
+  });
 
   return NextResponse.json({ ok: true, settings });
 }

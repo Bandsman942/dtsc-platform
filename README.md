@@ -20,10 +20,20 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Déploiement Vercel
 - GitHub Actions CI/CD
 
+## Documentation Technique
+
+La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md).
+
 ## Fonctionnalités
 
 - Landing page publique DTSC
 - Inscription, connexion, déconnexion
+- Inscription sécurisée par OTP email configurable par l'admin
+- Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
+- Paiement MaishaPay avec callback et activation automatique de l'abonnement
+- Factures envoyées par email après confirmation du paiement
+- Base documentaire privée avec upload TXT/Markdown/CSV/JSON/PDF, embeddings OpenAI et recherche pgvector pour RAG chatbot
+- Stockage optionnel des fichiers originaux dans Supabase Storage, tout en gardant Neon PostgreSQL comme base principale
 - Sessions sécurisées par cookie signé
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Middleware de protection des routes privées
@@ -45,11 +55,14 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Analytics simples des visites publiques avec filtre par période dans `/admin`
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
 - Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
+- Paramètres OTP: activation et durée d'expiration des codes d'inscription
 - Diffusion globale: notifications internes + email groupé protégé avec destinataires en CCI
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`
 - Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
 - Inscription newsletter publique avec stockage en base et notification Zoho
 - Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter, avec personnalisation `{user}`
+- Fondations audit log et historisation des webhooks entrants
+- Logs API, audit des paiements et exports CSV/HTML imprimable PDF
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin
@@ -71,6 +84,7 @@ AUTH_SECRET=
 APP_URL=http://localhost:3000
 NEXTAUTH_URL=http://localhost:3000
 OPENAI_MODEL=gpt-5-nano
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
 NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
 ADMIN_EMAIL=
@@ -87,6 +101,15 @@ ZOHO_MAIL_FROM_ADDRESS=contact@dtsc-platform.com
 ZOHO_MAIL_CLIENT_ID=
 ZOHO_MAIL_CLIENT_SECRET=
 ZOHO_MAIL_REFRESH_TOKEN=
+MAISHAPAY_API_URL=https://marchand.maishapay.online/api/payment/rest/vers1.0/merchant
+MAISHAPAY_GATEWAY_MODE=0
+MAISHAPAY_PUBLIC_API_KEY=
+MAISHAPAY_SECRET_API_KEY=
+MAISHAPAY_DEFAULT_PROVIDER=MPESA
+MAISHAPAY_CALLBACK_SECRET=
+SUPABASE_STORAGE_URL=
+SUPABASE_STORAGE_SERVICE_ROLE_KEY=
+SUPABASE_STORAGE_BUCKET=dtsc-documents
 ```
 
 Notes:
@@ -104,6 +127,10 @@ Notes:
 - Si `ZOHO_MAIL_ACCOUNT_ID`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont configurés, l'application envoie les diffusions directement par l'API Zoho Mail avant de tenter les fallbacks webhook. Les listes d'adresses ne sont jamais ajoutées dans le contenu du mail.
 - Dans les diffusions admin et newsletter, le placeholder `{user}` est remplacé par le nom de l'utilisateur ou de l'abonné. Lorsqu'il est présent, l'application envoie des mails personnalisés individuellement en CCI pour préserver la confidentialité.
 - `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont des secrets: ne jamais les commiter et les régénérer s'ils ont été partagés.
+- `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY` et `MAISHAPAY_CALLBACK_SECRET` doivent être configurés dans Vercel pour activer les paiements payants. Le callback à fournir côté MaishaPay est `APP_URL/api/billing/maishapay/callback?secret=VOTRE_SECRET`.
+- Tant que MaishaPay n'a pas fourni les clés, ne créez pas ces variables dans Vercel ou laissez-les vides. L'application affichera les plans payants en maintenance et gardera le plan gratuit opérationnel.
+- `OPENAI_EMBEDDING_MODEL` doit rester compatible avec la dimension pgvector configurée. Par défaut: `text-embedding-3-small` avec `vector(1536)`.
+- `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_SERVICE_ROLE_KEY` et `SUPABASE_STORAGE_BUCKET` activent uniquement le stockage des fichiers originaux dans Supabase Storage.
 
 Mapping conseillé dans Zoho Flow, action Send Mail:
 
@@ -188,6 +215,32 @@ Le modèle par défaut est configuré avec:
 OPENAI_MODEL=gpt-5-nano
 ```
 
+## Paiements MaishaPay
+
+Les plans payants utilisent MaishaPay côté serveur. Tant que les clés MaishaPay ne sont pas configurées, le module `/billing` affiche une maintenance professionnelle pour les paiements payants. Le plan gratuit Découverte reste activable sans numéro M-Pesa.
+
+Variables à ajouter seulement quand MaishaPay fournit les valeurs:
+
+```bash
+MAISHAPAY_PUBLIC_API_KEY
+MAISHAPAY_SECRET_API_KEY
+MAISHAPAY_CALLBACK_SECRET
+```
+
+Sur Vercel, il n'est pas nécessaire d'ajouter ces variables vides avant le push. Laissez-les absentes pour éviter toute confusion opérationnelle.
+
+## Documents et Supabase Storage
+
+La base documentaire accepte TXT, Markdown, CSV, JSON et PDF jusqu'à 2 Mo. Le texte est extrait côté serveur, vectorisé avec OpenAI Embeddings et stocké dans Neon PostgreSQL via pgvector.
+
+Supabase Storage est utilisé uniquement pour conserver les fichiers originaux si les variables Supabase sont configurées. Créer un bucket privé `dtsc-documents`, puis ajouter dans Vercel:
+
+```bash
+SUPABASE_STORAGE_URL
+SUPABASE_STORAGE_SERVICE_ROLE_KEY
+SUPABASE_STORAGE_BUCKET=dtsc-documents
+```
+
 ## Rôles Utilisateurs
 
 - `ADMIN`: accès à `/admin`, supervision utilisateurs, conversations, tickets et usage IA.
@@ -202,6 +255,8 @@ OPENAI_MODEL=gpt-5-nano
 - `/auth/sign-up` inscription
 - `/dashboard` dashboard client
 - `/chat` chatbot
+- `/billing` abonnements et factures
+- `/documents` base documentaire RAG
 - `/profile` profil utilisateur
 - `/settings` paramètres
 - `/support` tickets support
@@ -293,6 +348,12 @@ ZOHO_MAIL_FROM_ADDRESS
 ZOHO_MAIL_CLIENT_ID
 ZOHO_MAIL_CLIENT_SECRET
 ZOHO_MAIL_REFRESH_TOKEN
+MAISHAPAY_API_URL
+MAISHAPAY_GATEWAY_MODE
+MAISHAPAY_PUBLIC_API_KEY
+MAISHAPAY_SECRET_API_KEY
+MAISHAPAY_DEFAULT_PROVIDER
+MAISHAPAY_CALLBACK_SECRET
 ```
 
 Le pipeline exécute:
@@ -332,11 +393,9 @@ Mesures présentes:
 
 ## Roadmap
 
-- Intégration RAG avec documents DTSC
-- Upload de fichiers par client
-- Base de connaissances DTSC
+- Politique de rétention documentaire Supabase Storage
+- Rate limiting distribué Upstash Redis
 - Tickets support avancés
-- Facturation et abonnements
 - Analytics avancés
 - Export PDF des conversations
 - Multilingue français / anglais

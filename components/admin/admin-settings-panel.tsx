@@ -16,6 +16,8 @@ type Settings = {
   allowClientAnnouncements: boolean;
   commentEditWindowMinutes: number;
   notificationRetentionDays: number;
+  signUpOtpEnabled: boolean;
+  signUpOtpExpirationMinutes: number;
 };
 
 export function AdminSettingsPanel({
@@ -60,6 +62,8 @@ export function AdminSettingsPanel({
       chatbotEnabled: form.get("chatbotEnabled") === "on",
       maintenanceMode: form.get("maintenanceMode") === "on",
       allowClientAnnouncements: form.get("allowClientAnnouncements") === "on",
+      signUpOtpEnabled: form.get("signUpOtpEnabled") === "on",
+      signUpOtpExpirationMinutes: form.get("signUpOtpExpirationMinutes"),
       applyLimitsToExistingUsers: form.get("applyLimitsToExistingUsers") === "on",
     };
     const response = await fetch("/api/admin/settings", {
@@ -144,6 +148,9 @@ export function AdminSettingsPanel({
           <Field label="Rétention notifications (jours)">
             <Input name="notificationRetentionDays" type="number" defaultValue={settings.notificationRetentionDays} min={7} max={365} />
           </Field>
+          <Field label="Expiration OTP inscription (minutes)">
+            <Input name="signUpOtpExpirationMinutes" type="number" defaultValue={settings.signUpOtpExpirationMinutes} min={2} max={60} />
+          </Field>
           <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Chatbot actif
             <input name="chatbotEnabled" type="checkbox" defaultChecked={settings.chatbotEnabled} className="h-4 w-4 accent-cyan-500" />
@@ -155,6 +162,10 @@ export function AdminSettingsPanel({
           <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Clients peuvent publier annonces
             <input name="allowClientAnnouncements" type="checkbox" defaultChecked={settings.allowClientAnnouncements} className="h-4 w-4 accent-cyan-500" />
+          </label>
+          <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
+            OTP obligatoire à l&apos;inscription
+            <input name="signUpOtpEnabled" type="checkbox" defaultChecked={settings.signUpOtpEnabled} className="h-4 w-4 accent-cyan-500" />
           </label>
           <label className="md:col-span-2 flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Appliquer les limites à tous les utilisateurs existants

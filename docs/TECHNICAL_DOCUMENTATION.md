@@ -1,0 +1,1113 @@
+# Documentation technique DTSC Platform
+
+Derniere mise a jour: 06 mai 2026
+
+Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
+
+## 1. Vue d'ensemble
+
+DTSC Platform est une application SaaS Next.js App Router pour DTSC - Data and Tech Solutions Consulting.
+
+Objectifs couverts par le code actuel:
+
+- landing page publique DTSC avec pages d'information, formulaires contact et newsletter;
+- authentification maison avec sessions securisees par cookie HTTP-only et OTP email optionnel a l'inscription;
+- plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
+- base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
+- roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
+- tableau de bord client;
+- chatbot OpenAI avec historique des conversations, streaming et limites d'usage;
+- notifications internes;
+- annonces internes avec commentaires et reactions;
+- support sous forme de tickets conversationnels;
+- administration utilisateurs, limites d'usage, parametres globaux, visites publiques et diffusions;
+- fondations techniques pour audit log et historisation de webhooks;
+- logs API, audit des paiements et exports CSV/HTML imprimable PDF;
+- integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
+
+## 2. Stack technique
+
+- Framework: Next.js 15 App Router
+- Langage: TypeScript
+- UI: React 19, Tailwind CSS, lucide-react, composants locaux
+- Base de donnees: Neon PostgreSQL
+- ORM: Prisma
+- IA: OpenAI Responses API cote serveur
+- Email: Zoho Mail API directe + fallbacks webhook Zoho
+- Validation: Zod
+- Deploiement: Vercel
+- CI: GitHub Actions avec `pnpm type-check`
+
+Scripts importants:
+
+```bash
+pnpm dev
+pnpm build
+pnpm type-check
+pnpm prisma:generate
+pnpm prisma:migrate
+pnpm prisma:deploy
+pnpm prisma:studio
+```
+
+## 3. Structure du projet
+
+```txt
+app/
+  api/                         Routes API Next.js
+  admin/                       Dashboard admin
+  announcements/               Fil d'annonces interne
+  auth/sign-in/                Connexion
+  auth/sign-up/                Inscription
+  chat/                        Interface chatbot
+  dashboard/                   Dashboard client
+  notifications/               Centre de notifications
+  profile/                     Profil utilisateur
+  settings/                    Parametres compte/theme
+  support/                     Tickets support
+  page.tsx                     Landing page
+  sitemap.ts                   Sitemap SEO
+  robots.ts                    Robots SEO
+
+components/
+  admin/                       UI administration
+  announcements/               UI annonces
+  auth/                        Formulaires auth
+  chat/                        UI chatbot
+  dashboard/                   UI dashboard
+  layout/                      Shell prive, navigation
+  notifications/               UI notifications
+  public/                      Sections landing page
+  settings/                    Parametres utilisateur
+  support/                     UI tickets support
+  ui/                          Boutons, inputs, dialogues, etc.
+
+lib/
+  auth.ts                      Session serveur et helpers RBAC
+  session.ts                   Signature/verif token session HMAC
+  security.ts                  Hashage PBKDF2 des mots de passe
+  env.ts                       Validation des variables d'environnement
+  openai.ts                    Integration OpenAI Responses API
+  rag.ts                       Extraction texte, embeddings et recherche pgvector
+  zoho-mail.ts                 Integration Zoho Mail/webhooks
+  prisma.ts                    Client Prisma
+  validators.ts                Schemas Zod
+  rate-limit.ts                Rate limit memoire
+  settings.ts                  Parametres globaux
+  notifications.ts             Creation notifications
+
+prisma/
+  schema.prisma                Modele de donnees
+  migrations/                  Migrations SQL
+```
+
+## 4. Variables d'environnement
+
+Les variables sont documentees dans `env.example`.
+
+Variables critiques:
+
+```txt
+DATABASE_URL=
+OPENAI_API_KEY=
+AUTH_SECRET=
+APP_URL=
+OPENAI_MODEL=
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_MODEL_IDS=
+NEXT_PUBLIC_DEFAULT_MODEL=
+ADMIN_EMAIL=
+DEFAULT_ADMIN_EMAIL=
+DEFAULT_ADMIN_PASSWORD=
+DTSC_CONTACT_EMAIL=
+```
+
+Zoho:
+
+```txt
+ZOHO_MAIL_WEBHOOK_URL=
+ZOHO_OUTBOUND_MAIL_WEBHOOK_URL=
+ZOHO_OUTGOING_WEBHOOK_SECRET=
+ZOHO_MAIL_API_BASE_URL=https://mail.zoho.com
+ZOHO_ACCOUNTS_API_BASE_URL=https://accounts.zoho.com
+ZOHO_MAIL_ACCOUNT_ID=
+ZOHO_MAIL_FROM_ADDRESS=contact@dtsc-platform.com
+ZOHO_MAIL_CLIENT_ID=
+ZOHO_MAIL_CLIENT_SECRET=
+ZOHO_MAIL_REFRESH_TOKEN=
+MAISHAPAY_API_URL=https://marchand.maishapay.online/api/payment/rest/vers1.0/merchant
+MAISHAPAY_GATEWAY_MODE=0
+MAISHAPAY_PUBLIC_API_KEY=
+MAISHAPAY_SECRET_API_KEY=
+MAISHAPAY_DEFAULT_PROVIDER=MPESA
+MAISHAPAY_CALLBACK_SECRET=
+SUPABASE_STORAGE_URL=
+SUPABASE_STORAGE_SERVICE_ROLE_KEY=
+SUPABASE_STORAGE_BUCKET=dtsc-documents
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=
+CRM_API_URL=
+CRM_API_KEY=
+```
+
+Regles:
+
+- `OPENAI_API_KEY`, `DATABASE_URL`, `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_SECRET`, `ZOHO_MAIL_REFRESH_TOKEN` ne doivent jamais etre exposes cote client.
+- `AUTH_SECRET` doit faire au moins 32 caracteres.
+- Les webhooks contenant un secret doivent rester dans Vercel Environment Variables.
+
+## 5. Base de donnees Prisma / Neon PostgreSQL
+
+Le datasource Prisma utilise `DATABASE_URL`.
+
+Modeles actifs:
+
+| Modele | Role |
+| --- | --- |
+| `User` | Compte utilisateur, role, statut, limites journalieres |
+| `PendingRegistration` | Pre-inscriptions en attente de verification OTP |
+| `BillingPlan` | Plans d'abonnement chatbot |
+| `Subscription` | Abonnement actif ou en attente de paiement |
+| `Payment` | Paiement MaishaPay et audit paiement |
+| `Invoice` | Facture utilisateur envoyee par email |
+| `KnowledgeDocument` | Document prive indexe pour le RAG avec chemin Supabase Storage optionnel |
+| `KnowledgeChunk` | Segment documentaire et embedding pgvector |
+| `Conversation` | Conversation chatbot rattachee a un utilisateur |
+| `Message` | Message utilisateur/assistant/systeme |
+| `UsageLog` | Suivi tokens, modele et cout estime |
+| `Organization` | Base organisationnelle prevue |
+| `NewsletterSubscriber` | Abonnes newsletter publics |
+| `ContactMessage` | Messages publics de contact |
+| `SupportTicket` | Ticket support |
+| `TicketMessage` | Discussion dans un ticket |
+| `SiteVisit` | Visites publiques du site |
+| `Notification` | Notifications internes |
+| `Announcement` | Publication interne |
+| `AnnouncementComment` | Commentaire d'annonce |
+| `AnnouncementReaction` | Like/dislike d'annonce |
+| `AppSetting` | Parametres globaux admin |
+| `AuditLog` | Journalisation des actions sensibles |
+| `WebhookEvent` | Historisation des webhooks entrants |
+| `ApiLog` | Journalisation des appels API critiques |
+
+Enums:
+
+- `UserRole`: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
+- `UserStatus`: `ACTIVE`, `SUSPENDED`, `PENDING`
+- `MessageRole`: `user`, `assistant`, `system`
+- `TicketStatus`: `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`
+- `TicketPriority`: `LOW`, `MEDIUM`, `HIGH`, `URGENT`
+- `DocumentStatus`: `PROCESSING`, `READY`, `FAILED`
+
+Les migrations Vercel sont appliquees par:
+
+```bash
+pnpm prisma migrate deploy
+```
+
+## 6. Authentification et sessions
+
+L'application utilise une authentification maison.
+
+Fichiers principaux:
+
+- `lib/security.ts`: hashage PBKDF2 SHA-256 avec salt aleatoire.
+- `lib/session.ts`: creation et verification d'un token signe HMAC SHA-256.
+- `lib/auth.ts`: lecture/ecriture du cookie de session.
+- `middleware.ts`: protection des routes privees et admin.
+- `lib/otp.ts`: generation, stockage temporaire et verification des OTP d'inscription.
+
+Cookie:
+
+- nom: `dtsc_session`;
+- HTTP-only;
+- `sameSite: lax`;
+- `secure` en production;
+- expiration configuree via `SESSION_MAX_AGE_SECONDS`.
+
+Routes publiques d'auth:
+
+- `POST /api/auth/sign-up`
+- `POST /api/auth/sign-in`
+- `POST /api/auth/sign-out`
+- `POST /api/auth/heartbeat`
+
+Workflow OTP d'inscription:
+
+1. Le visiteur remplit le formulaire d'inscription.
+2. `POST /api/auth/sign-up` verifie si `signUpOtpEnabled` est active.
+3. Si aucun `otp` n'est fourni, l'application cree ou remplace une entree `PendingRegistration`, genere un code a 6 chiffres, stocke son hash et envoie le code par email.
+4. La reponse contient `otpRequired: true` et `expiresAt`.
+5. Le visiteur saisit le code; le frontend renvoie les donnees avec `otp`.
+6. La route verifie le hash, l'expiration et le nombre de tentatives.
+7. Si le code est valide, le compte `User` est cree, l'entree temporaire est supprimee et une session est ouverte.
+
+Parametres admin:
+
+- `signUpOtpEnabled`: active/desactive l'OTP a l'inscription.
+- `signUpOtpExpirationMinutes`: duree de validite du code, entre 2 et 60 minutes.
+
+Securite OTP:
+
+- le code brut n'est pas stocke;
+- le hash PBKDF2 est stocke dans `PendingRegistration.otpHash`;
+- apres 5 tentatives invalides, la pre-inscription est supprimee;
+- un code expire supprime aussi la pre-inscription.
+
+Routes protegees par middleware:
+
+- `/dashboard`
+- `/chat`
+- `/billing`
+- `/documents`
+- `/profile`
+- `/settings`
+- `/support`
+- `/notifications`
+- `/announcements`
+- `/admin`
+
+`/admin` exige le role `ADMIN`.
+
+## 7. RBAC
+
+Regles codees:
+
+- `ADMIN`: acces admin, gestion utilisateurs, parametres globaux, diffusions, moderation globale annonces/commentaires, resolution support.
+- `SUPPORT`: acces aux tickets et resolution support.
+- `MANAGER`: peut publier des annonces internes.
+- `CLIENT`: acces dashboard, chatbot, support, notifications, annonces en lecture/commentaire/reaction.
+
+Regles annonces:
+
+- `ADMIN`, `MANAGER`, `SUPPORT` peuvent publier.
+- `CLIENT` peut publier uniquement si `allowClientAnnouncements` est active dans `AppSetting`.
+- `ADMIN` peut modifier/supprimer toutes les annonces et commentaires.
+- Un utilisateur peut modifier son propre commentaire dans la fenetre configuree.
+
+## 8. Chatbot OpenAI
+
+Fichiers:
+
+- `app/api/chat/route.ts`
+- `lib/openai.ts`
+- `lib/openai-config.ts`
+
+Flux:
+
+1. Le client appelle `POST /api/chat`.
+2. La route verifie la session.
+3. Rate limit memoire: 30 requetes par heure et par utilisateur.
+4. Verification du statut utilisateur.
+5. Verification des parametres globaux: chatbot actif, maintenance inactive.
+6. Verification des limites journalieres:
+   - nombre de messages utilisateur;
+   - total tokens depuis `UsageLog`.
+7. Creation ou recuperation de la conversation.
+8. Sauvegarde du message utilisateur.
+9. Envoi des 24 derniers messages a OpenAI Responses API.
+10. Streaming du texte vers le client.
+11. Sauvegarde de la reponse assistant et du `UsageLog`.
+
+Si des documents utilisateur sont indexes:
+
+1. la question est vectorisee avec `OPENAI_EMBEDDING_MODEL`;
+2. `pgvector` recupere les chunks les plus proches du meme `userId`;
+3. le contexte documentaire est injecte uniquement dans la requete OpenAI en cours;
+4. les chunks d'un autre utilisateur ne sont jamais consultes.
+
+Endpoint OpenAI utilise:
+
+```txt
+POST https://api.openai.com/v1/responses
+```
+
+Payload principal:
+
+```json
+{
+  "model": "gpt-5-nano",
+  "instructions": "DTSC_SYSTEM_PROMPT",
+  "input": [
+    { "role": "user", "content": "..." }
+  ],
+  "stream": true,
+  "store": false
+}
+```
+
+Variables:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_MODEL_IDS`
+- `NEXT_PUBLIC_DEFAULT_MODEL`
+
+Endpoint modeles:
+
+- `GET /api/models`: renvoie le modele par defaut et la liste des modeles configurables.
+
+## 9. API internes
+
+Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un flux texte.
+
+### Authentification
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/sign-up` | public | Inscription client ou admin si email = `ADMIN_EMAIL` |
+| `POST` | `/api/auth/sign-in` | public | Connexion, creation cookie session |
+| `POST` | `/api/auth/sign-out` | session | Suppression cookie session |
+| `POST` | `/api/auth/heartbeat` | session | Maintien/verif session cote client |
+
+### Compte
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `PATCH` | `/api/account/profile` | session | Mise a jour nom, entreprise, telephone |
+| `PATCH` | `/api/account/password` | session | Changement mot de passe |
+
+### Chatbot et conversations
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/chat` | session | Generation OpenAI en streaming |
+| `GET` | `/api/documents` | session | Liste des documents indexes |
+| `POST` | `/api/documents` | session | Upload, extraction, embeddings et indexation |
+| `DELETE` | `/api/documents/[id]` | proprietaire | Suppression d'un document et de ses chunks |
+| `GET` | `/api/models` | public | Modeles OpenAI configures |
+| `GET` | `/api/conversations` | session | Liste conversations utilisateur |
+| `POST` | `/api/conversations` | session | Nouvelle conversation |
+| `GET` | `/api/conversations/[id]` | session proprietaire | Detail conversation/messages |
+| `PATCH` | `/api/conversations/[id]` | session proprietaire | Renommer conversation |
+| `DELETE` | `/api/conversations/[id]` | session proprietaire | Supprimer conversation |
+
+### Support
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/support/tickets` | session | Creation ticket |
+| `PATCH` | `/api/support/tickets/[id]` | `ADMIN` ou `SUPPORT` | Statut, priorite, resolution |
+| `POST` | `/api/support/tickets/[id]/messages` | participant ou equipe | Ajouter un message au ticket |
+
+### Notifications
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `DELETE` | `/api/notifications` | session | Vider ses notifications |
+| `PATCH` | `/api/notifications/[id]/read` | session proprietaire | Marquer comme lu |
+| `DELETE` | `/api/notifications/[id]` | session proprietaire | Supprimer une notification |
+
+### Annonces
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/announcements` | roles autorises | Creer annonce |
+| `PATCH` | `/api/announcements/[id]` | `ADMIN` | Modifier annonce |
+| `DELETE` | `/api/announcements/[id]` | `ADMIN` | Supprimer annonce |
+| `POST` | `/api/announcements/[id]/comments` | session | Commenter |
+| `PATCH` | `/api/announcements/comments/[id]` | auteur dans delai ou `ADMIN` | Modifier commentaire |
+| `DELETE` | `/api/announcements/comments/[id]` | `ADMIN` | Supprimer commentaire |
+| `POST` | `/api/announcements/[id]/reactions` | session | Like/dislike |
+
+### Administration
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/admin/users` | `ADMIN` | Creation utilisateur avec role |
+| `PATCH` | `/api/admin/users/[id]/role` | `ADMIN` | Modification role |
+| `PATCH` | `/api/admin/users/[id]/status` | `ADMIN` | Activation/suspension/statut |
+| `PATCH` | `/api/admin/users/[id]/limits` | `ADMIN` | Limites messages/tokens |
+| `PATCH` | `/api/admin/settings` | `ADMIN` | Parametres globaux |
+| `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs |
+| `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter |
+| `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
+
+### Billing et paiements
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/billing/plans` | public | Liste des plans actifs |
+| `POST` | `/api/billing/checkout` | session | Cree une souscription et initie MaishaPay |
+| `POST` | `/api/billing/maishapay/callback` | secret MaishaPay | Callback paiement et activation automatique |
+| `GET` | `/api/invoices/[id]/pdf` | proprietaire ou `ADMIN` | Facture HTML imprimable/exportable PDF |
+
+### Public
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/public/contact` | public | Formulaire contact, sauvegarde DB, webhook Zoho |
+| `POST` | `/api/public/newsletter` | public | Inscription newsletter, sauvegarde DB, webhook Zoho |
+| `POST` | `/api/analytics/visit` | public | Enregistrement visite publique |
+
+### Webhooks
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/webhooks/zoho/outgoing-mail?secret=...` | secret | Test webhook sortant Zoho |
+| `POST` | `/api/webhooks/zoho/outgoing-mail?secret=...` | secret | Reception payload Zoho sortant |
+
+## 10. Formats de payload principaux
+
+### Inscription
+
+```json
+{
+  "name": "Nom utilisateur",
+  "email": "client@example.com",
+  "password": "motdepassefort",
+  "companyName": "Entreprise",
+  "phone": "+243...",
+  "otp": "123456"
+}
+```
+
+Premier appel sans `otp`, si l'OTP est active:
+
+```json
+{
+  "ok": true,
+  "otpRequired": true,
+  "email": "client@example.com",
+  "expiresAt": "2026-05-06T10:20:00.000Z"
+}
+```
+
+Second appel avec `otp`: creation du compte et ouverture de session.
+
+### Connexion
+
+```json
+{
+  "email": "client@example.com",
+  "password": "motdepasse"
+}
+```
+
+### Chat
+
+```json
+{
+  "conversationId": "optionnel",
+  "content": "Votre question",
+  "model": "gpt-5-nano"
+}
+```
+
+Reponse:
+
+- `text/plain` stream;
+- header `X-Conversation-Id`.
+
+### Ticket support
+
+```json
+{
+  "subject": "Probleme de connexion",
+  "description": "Description detaillee du besoin",
+  "priority": "MEDIUM"
+}
+```
+
+### Annonce
+
+```json
+{
+  "title": "Titre annonce",
+  "content": "Contenu annonce"
+}
+```
+
+### Diffusion utilisateurs
+
+```json
+{
+  "title": "Objet",
+  "body": "Bonjour {user}, message personnalise.",
+  "type": "BROADCAST"
+}
+```
+
+`{user}` est remplace par le nom du destinataire. Si `{user}` est present, l'application envoie des messages personnalises individuellement.
+
+### Diffusion newsletter
+
+```json
+{
+  "subject": "Objet newsletter",
+  "content": "Bonjour {user}, contenu newsletter."
+}
+```
+
+### Checkout MaishaPay
+
+```json
+{
+  "planId": "starter",
+  "walletId": "2438XXXXXXXX",
+  "provider": "MPESA"
+}
+```
+
+Le plan gratuit `freemium` active directement l'abonnement. Les plans payants creent une souscription en attente et lancent MaishaPay.
+
+### Upload documentaire RAG
+
+Route:
+
+```txt
+POST /api/documents
+Content-Type: multipart/form-data
+```
+
+Champs:
+
+```txt
+file: fichier TXT, Markdown, CSV, JSON ou PDF
+title: titre optionnel
+```
+
+Regles:
+
+- session obligatoire;
+- limite du plan actif verifiee via `BillingPlan.maxDocuments`;
+- taille maximale actuelle: 2 Mo;
+- embeddings stockes dans `KnowledgeChunk.embedding` avec `pgvector vector(1536)`;
+- extraction PDF realisee cote serveur avec un parseur JavaScript gratuit;
+- les originaux sont stockes dans Supabase Storage si les variables Supabase sont configurees.
+
+### Callback MaishaPay
+
+URL a configurer cote MaishaPay:
+
+```txt
+https://votre-domaine.com/api/billing/maishapay/callback?secret=VOTRE_MAISHAPAY_CALLBACK_SECRET
+```
+
+Payload accepte, tolerant aux champs supplementaires:
+
+```json
+{
+  "transactionReference": "DTSC-STARTER-ABC123-1770000000000",
+  "transactionId": "REFERENCE_PROVIDER",
+  "status": "PAID",
+  "statusCode": "200",
+  "amount": "2",
+  "currency": "USD"
+}
+```
+
+## 11. Integration Zoho Mail
+
+Fichier principal: `lib/zoho-mail.ts`.
+
+### 11.1 Formulaires publics vers DTSC
+
+Routes:
+
+- `POST /api/public/contact`
+- `POST /api/public/newsletter`
+
+Ces routes:
+
+1. valident les donnees avec Zod;
+2. sauvegardent en base;
+3. appellent `sendZohoMailWebhook`;
+4. envoient un payload `{ message: "..." }` vers `ZOHO_MAIL_WEBHOOK_URL`.
+
+Usage prevu: webhook entrant Zoho qui publie ou transmet le message a `contact@dtsc-platform.com`.
+
+### 11.2 Diffusions admin par API Zoho Mail
+
+Routes:
+
+- `POST /api/admin/broadcast`
+- `POST /api/admin/newsletter-broadcast`
+
+Priorite d'envoi:
+
+1. API Zoho Mail directe si `ZOHO_MAIL_ACCOUNT_ID`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `ZOHO_MAIL_REFRESH_TOKEN` sont configures.
+2. Fallback `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL`.
+3. Fallback `ZOHO_MAIL_WEBHOOK_URL`.
+
+Regle de confidentialite codee:
+
+- `toAddress = contact@dtsc-platform.com`;
+- destinataires reels en `bccAddress`;
+- aucune liste d'emails n'est rendue dans le corps du message.
+
+Si le message contient `{user}`:
+
+- l'application envoie un mail personnalise par destinataire;
+- chaque destinataire est seul en CCI;
+- le contenu recoit le nom de l'utilisateur ou de l'abonne newsletter.
+
+### 11.3 OTP transactionnel
+
+L'OTP d'inscription utilise le meme moteur de mail premium, mais en mode transactionnel:
+
+- destinataire direct: email saisi a l'inscription;
+- sujet: `Code de vérification DTSC Platform`;
+- contenu HTML professionnel genere par `buildProfessionalMailHtml`;
+- expiration affichee dans le message;
+- aucune cle API n'est exposee cote client.
+
+Le mode transactionnel est active via `deliveryMode: "direct"` dans `sendZohoOutboundMail`.
+
+### 11.4 Configuration API Zoho Mail
+
+Variables necessaires:
+
+```txt
+ZOHO_MAIL_API_BASE_URL=https://mail.zoho.com
+ZOHO_ACCOUNTS_API_BASE_URL=https://accounts.zoho.com
+ZOHO_MAIL_ACCOUNT_ID=
+ZOHO_MAIL_FROM_ADDRESS=contact@dtsc-platform.com
+ZOHO_MAIL_CLIENT_ID=
+ZOHO_MAIL_CLIENT_SECRET=
+ZOHO_MAIL_REFRESH_TOKEN=
+```
+
+Flux OAuth:
+
+1. L'application echange `refresh_token` contre un `access_token` via:
+
+```txt
+POST {ZOHO_ACCOUNTS_API_BASE_URL}/oauth/v2/token
+```
+
+2. Elle envoie l'email via:
+
+```txt
+POST {ZOHO_MAIL_API_BASE_URL}/api/accounts/{ZOHO_MAIL_ACCOUNT_ID}/messages
+```
+
+Payload envoye a Zoho Mail API:
+
+```json
+{
+  "fromAddress": "contact@dtsc-platform.com",
+  "toAddress": "contact@dtsc-platform.com",
+  "ccAddress": "",
+  "bccAddress": "destinataire1@example.com,destinataire2@example.com",
+  "subject": "Objet",
+  "content": "<html>...</html>",
+  "mailFormat": "html",
+  "askReceipt": "no"
+}
+```
+
+### 11.5 Fallback Zoho Flow
+
+Si `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL` est utilise, l'application envoie:
+
+```json
+{
+  "to": ["contact@dtsc-platform.com"],
+  "toText": "contact@dtsc-platform.com",
+  "cc": [],
+  "ccText": "",
+  "bcc": ["client@example.com"],
+  "bccText": "client@example.com",
+  "subject": "Objet",
+  "content": "Version texte",
+  "body": "Version texte",
+  "html": "<html>...</html>",
+  "bodyHtml": "<html>...</html>",
+  "fromEmail": "contact@dtsc-platform.com",
+  "fromAddress": "contact@dtsc-platform.com",
+  "replyTo": "contact@dtsc-platform.com",
+  "source": "admin-broadcast"
+}
+```
+
+Mapping conseille dans Zoho Flow Send Mail:
+
+```txt
+From address -> fromAddress
+Reply to      -> replyTo
+To            -> toText
+CC            -> ccText
+BCC           -> bccText
+Subject       -> subject
+Body          -> bodyHtml
+Nicknames     -> laisser vide
+```
+
+## 12. Integration MaishaPay
+
+Fichiers principaux:
+
+- `lib/maishapay.ts`
+- `lib/billing.ts`
+- `app/api/billing/checkout/route.ts`
+- `app/api/billing/maishapay/callback/route.ts`
+
+Endpoint utilise:
+
+```txt
+POST https://marchand.maishapay.online/api/payment/rest/vers1.0/merchant
+```
+
+Payload serveur:
+
+```json
+{
+  "gatewayMode": 0,
+  "publicApiKey": "MAISHAPAY_PUBLIC_API_KEY",
+  "secretApiKey": "MAISHAPAY_SECRET_API_KEY",
+  "transactionReference": "DTSC-...",
+  "amount": 2,
+  "currency": "USD",
+  "customerFullName": "Nom client",
+  "customerPhoneNumber": "2438XXXXXXXX",
+  "customerEmailAddress": "client@example.com",
+  "chanel": "MOBILEMONEY",
+  "provider": "MPESA",
+  "walletID": "2438XXXXXXXX"
+}
+```
+
+Plans codes:
+
+| Plan | Prix | Positionnement |
+| --- | ---: | --- |
+| Decouverte | 0 USD | Freemium tres limite |
+| Essentiel | 2 USD/mois | Usage leger |
+| Professionnel | 15 USD/mois | Usage regulier PME |
+| Entreprise | 50 USD/mois | Usage intensif et documentaire |
+
+Flux:
+
+1. L'utilisateur selectionne un plan dans `/billing`.
+2. `POST /api/billing/checkout` cree une `Subscription` et un `Payment`.
+3. MaishaPay declenche la validation mobile money.
+4. Le callback DTSC marque le paiement `PAID`, active l'abonnement, applique les limites du plan et cree une facture.
+5. La facture est envoyee par email via Zoho Mail.
+
+Source d'integration utilisee: documentation REST MaishaPay, endpoint marchand et payload `gatewayMode`, `publicApiKey`, `secretApiKey`, `transactionReference`, `amount`, `currency`, `chanel`, `provider`, `walletID`.
+
+Tant que `MAISHAPAY_PUBLIC_API_KEY` et `MAISHAPAY_SECRET_API_KEY` sont absentes, les plans payants retournent `503 MAISHAPAY_MAINTENANCE` et le plan freemium reste actif.
+
+## 12.1 Integration RAG OpenAI + pgvector
+
+Fichiers principaux:
+
+- `lib/rag.ts`
+- `app/api/documents/route.ts`
+- `app/api/documents/[id]/route.ts`
+- `app/api/chat/route.ts`
+
+Flux:
+
+1. L'utilisateur charge un fichier dans `/documents`.
+2. Le serveur extrait le texte.
+3. Le texte est decoupe en chunks.
+4. Chaque chunk est vectorise via `POST https://api.openai.com/v1/embeddings`.
+5. Les vecteurs sont stockes en PostgreSQL avec `pgvector`.
+6. A chaque question, la recherche cosine recupere les chunks pertinents du meme utilisateur.
+7. Le contexte est injecte dans OpenAI Responses API.
+
+Variables:
+
+```txt
+OPENAI_API_KEY=
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+```
+
+Limites actuelles:
+
+- fichiers pris en charge: TXT, Markdown, CSV, JSON, PDF;
+- taille maximale: 2 Mo;
+- dimension vectorielle: 1536;
+- Supabase Storage conserve les fichiers originaux si `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_SERVICE_ROLE_KEY` et `SUPABASE_STORAGE_BUCKET` sont configures.
+
+## 12.2 Integration Supabase Storage
+
+Supabase Storage est utilise uniquement pour les fichiers originaux de la base documentaire. Neon PostgreSQL reste la base applicative principale.
+
+Variables:
+
+```txt
+SUPABASE_STORAGE_URL=
+SUPABASE_STORAGE_SERVICE_ROLE_KEY=
+SUPABASE_STORAGE_BUCKET=dtsc-documents
+```
+
+Regles:
+
+- le client Supabase est cree uniquement cote serveur;
+- la service role key ne doit jamais etre exposee au navigateur;
+- le chemin de stockage suit le format `userId/documentId/fileName`;
+- si Supabase Storage n'est pas configure, l'indexation RAG continue sans conservation de l'original.
+
+## 13. Integration Neon PostgreSQL
+
+Neon est connecte via `DATABASE_URL`.
+
+Sur Vercel:
+
+1. ajouter `DATABASE_URL` dans Environment Variables;
+2. lancer les migrations par le build command:
+
+```bash
+pnpm prisma migrate deploy && pnpm build
+```
+
+La generation Prisma est executee par `postinstall`:
+
+```bash
+prisma generate
+```
+
+## 14. Integration Vercel et CI/CD
+
+Le depot est connecte a Vercel. Chaque push sur `main` declenche le deploiement Vercel si le projet Vercel est relie au repository.
+
+Workflow GitHub Actions:
+
+- fichier: `.github/workflows/vercel-production.yml`;
+- declencheur: push sur `main`;
+- installe pnpm;
+- Node.js 22;
+- `pnpm install --no-frozen-lockfile`;
+- `pnpm type-check`.
+
+Vercel execute ensuite son propre build selon la configuration du projet.
+
+## 15. SEO et pages publiques
+
+Fichiers:
+
+- `app/sitemap.ts`
+- `app/robots.ts`
+- `app/layout.tsx`
+- pages publiques: `/`, `/data-afrique`, `/bi-kpi`, `/ia-entreprise`, `/secteurs`, `/conditions-utilisation`, `/politique-confidentialite`
+
+Objectifs codes:
+
+- sitemap;
+- robots.txt;
+- metadonnees;
+- Open Graph/Twitter;
+- contenus publics longs et indexes;
+- formulaire contact;
+- formulaire newsletter.
+
+## 16. Securite applicative
+
+Mesures codees:
+
+- validation Zod sur les entrees;
+- hashage PBKDF2 des mots de passe;
+- sessions signees HMAC;
+- cookie HTTP-only;
+- middleware de protection des routes privees;
+- RBAC serveur sur routes sensibles;
+- variables d'environnement validees;
+- OpenAI et Zoho appeles uniquement cote serveur;
+- suppression des listes d'emails visibles dans les diffusions;
+- destinataires de diffusion en CCI;
+- OTP email configurable pour l'inscription;
+- journalisation des actions sensibles dans `AuditLog`;
+- historisation des webhooks entrants dans `WebhookEvent`;
+- logs API critiques dans `ApiLog`;
+- audit des paiements MaishaPay;
+- factures envoyees par email uniquement apres confirmation de paiement;
+- isolement RAG par `userId`;
+- verification des limites documentaires par plan actif;
+- rate limit memoire sur `/api/chat`;
+- limites quotidiennes chat par utilisateur;
+- erreurs generiques cote API pour eviter la fuite d'informations sensibles.
+
+Limites techniques actuelles:
+
+- `rate-limit.ts` utilise une Map memoire: sur serverless/multi-instance, ce n'est pas un rate limit distribue. Pour production avancee, utiliser Redis/Upstash ou Vercel KV.
+- `estimateCost()` retourne actuellement `0`; le calcul de cout reel par modele reste a implementer.
+- Les fondations `AuditLog` et `WebhookEvent` sont en place; il reste a etendre leur usage a toutes les actions critiques.
+
+## 16. Connecter DTSC Platform a d'autres applications par API
+
+Il y a trois manieres propres de connecter l'application a d'autres systemes.
+
+### 16.1 Consommer une API externe depuis DTSC Platform
+
+Exemple: connecter un CRM, WhatsApp Business, outil de facturation, outil BI.
+
+Etapes recommandees:
+
+1. Ajouter les variables d'environnement dans `env.example` et `lib/env.ts`.
+2. Creer un client serveur dans `lib/nom-service.ts`.
+3. Ne jamais importer ce client dans un composant `"use client"`.
+4. Creer une route API dans `app/api/.../route.ts`.
+5. Proteger la route avec `getSession()` et le RBAC necessaire.
+6. Valider le payload avec Zod dans `lib/validators.ts`.
+7. Journaliser les donnees utiles en base si necessaire.
+
+Exemple de client serveur:
+
+```ts
+import { requireEnv } from "@/lib/env";
+
+export async function sendToCrm(payload: { email: string; name: string }) {
+  const response = await fetch("https://crm.example.com/api/leads", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${requireEnv("CRM_API_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`CRM request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+```
+
+### 16.2 Exposer une API DTSC pour qu'une autre application appelle DTSC Platform
+
+Creer une route dans `app/api/integrations/.../route.ts`.
+
+Regles:
+
+- authentifier par secret, signature HMAC ou OAuth selon le niveau de criticite;
+- valider les donnees avec Zod;
+- retourner des statuts HTTP clairs;
+- ne pas exposer les donnees d'autres utilisateurs sans controle d'acces;
+- ajouter des logs ou tables d'audit si l'integration est critique.
+
+Exemple simple avec secret:
+
+```ts
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { env } from "@/lib/env";
+
+const payloadSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2),
+});
+
+export async function POST(req: Request) {
+  const secret = req.headers.get("x-dtsc-webhook-secret");
+  if (!env.ZOHO_OUTGOING_WEBHOOK_SECRET || secret !== env.ZOHO_OUTGOING_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = payloadSchema.safeParse(await req.json());
+  if (!body.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+```
+
+### 16.3 Recevoir des webhooks externes
+
+Pattern deja present:
+
+- `app/api/webhooks/zoho/outgoing-mail/route.ts`
+
+URL type:
+
+```txt
+https://votre-domaine.com/api/webhooks/zoho/outgoing-mail?secret=VOTRE_SECRET
+```
+
+Pour un nouveau webhook:
+
+1. creer `app/api/webhooks/{provider}/{event}/route.ts`;
+2. verifier un secret ou une signature;
+3. parser le payload;
+4. sauvegarder ou declencher l'action;
+5. repondre rapidement `200 OK`;
+6. traiter les taches longues en arriere-plan si necessaire.
+
+## 17. Guide d'ajout d'une nouvelle integration
+
+Checklist:
+
+1. Identifier le sens du flux:
+   - DTSC appelle l'application externe;
+   - l'application externe appelle DTSC;
+   - les deux.
+2. Ajouter les variables dans:
+   - `env.example`;
+   - `lib/env.ts`;
+   - Vercel Environment Variables.
+3. Creer le client serveur dans `lib/`.
+4. Ajouter les schemas Zod dans `lib/validators.ts`.
+5. Creer la route API dans `app/api/`.
+6. Appliquer `getSession()` et RBAC si route privee.
+7. Ajouter une table Prisma si l'integration doit garder un historique.
+8. Ajouter une migration Prisma.
+9. Documenter le payload et les erreurs.
+10. Tester localement puis sur Vercel.
+
+## 18. Codes HTTP standards utilises
+
+| Code | Sens |
+| --- | --- |
+| `200` | Operation reussie |
+| `201` | Ressource creee |
+| `400` | Payload invalide |
+| `401` | Session absente ou secret invalide |
+| `403` | Role/statut non autorise |
+| `404` | Ressource introuvable |
+| `409` | Conflit, ex. email deja utilise |
+| `429` | Limite d'usage atteinte |
+| `502` | Echec provider externe |
+| `503` | Service temporairement indisponible |
+
+## 19. Donnees sensibles et conformite
+
+Donnees personnelles stockees:
+
+- nom;
+- email;
+- telephone;
+- entreprise;
+- messages contact;
+- conversations chatbot;
+- tickets support;
+- notifications;
+- reactions/commentaires.
+
+Bonnes pratiques a maintenir:
+
+- ne pas commiter `.env`;
+- eviter les logs contenant des secrets;
+- ne jamais rendre les listes d'emails de diffusion dans les mails;
+- garder les donnees administratives derriere RBAC;
+- prevoir a terme export/suppression des donnees utilisateur si exigence RGPD stricte.
+
+## 20. Roadmap technique recommandee et etat d'implementation
+
+Etat actuel:
+
+- audit log admin: fondation Prisma `AuditLog` et helper `writeAuditLog` ajoutes; deja utilise sur inscription OTP, creation utilisateur admin et parametres admin;
+- webhooks sortants/generiques: fondation `WebhookEvent` ajoutee; le webhook Zoho est historise;
+- securite inscription: OTP email configurable ajoute;
+- emails transactionnels: mode direct ajoute au service Zoho.
+- socle commercial: plans chatbot, MaishaPay, callback, activation automatique, factures email, logs API, exports et audit paiement ajoutes.
+- intelligence documentaire: upload TXT/Markdown/CSV/JSON, extraction texte, embeddings OpenAI, stockage pgvector et injection RAG dans le chatbot ajoutes.
+
+Fonctionnalites qui exigent des informations externes avant activation complete:
+
+- rate limit distribue Redis/Upstash: fournir `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`;
+- cout IA reel par modele: fournir la grille tarifaire a appliquer ou valider une source officielle a maintenir;
+- API keys internes partenaires: definir les partenaires, droits, quotas et duree de validite;
+- RAG documentaire DTSC: socle actif pour TXT/Markdown/CSV/JSON/PDF; fournir les documents sources et la politique d'indexation avancee;
+- upload de fichiers: Supabase Storage disponible si configure; definir retention et antivirus si fichiers originaux conserves;
+- WhatsApp Business API: fournir `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`;
+- CRM: fournir fournisseur, URL API, mode OAuth/API key, champs a synchroniser;
+- facturation/abonnements: socle MaishaPay actif; completer taxes, mentions legales locales et renouvellement automatique selon contrat marchand;
+- exports PDF: definir les templates et informations legalement affichables;
+- tests automatises API/e2e: ajouter Playwright/Vitest ou equivalent selon le niveau de couverture souhaite.

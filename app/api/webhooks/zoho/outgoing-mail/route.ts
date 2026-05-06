@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -24,8 +25,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
+  const event = await prisma.webhookEvent.create({
+    data: {
+      provider: "zoho",
+      eventType: "outgoing-mail",
+      payload,
+      status: "RECEIVED",
+      processedAt: new Date(),
+    },
+  });
+
   return NextResponse.json({
     ok: true,
+    eventId: event.id,
     receivedAt: new Date().toISOString(),
     expectedAdminOutboundPayload: {
       to: "array<string>",

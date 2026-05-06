@@ -31,7 +31,7 @@ export default async function AdminPage({
   }
   const roleFilter = isUserRole(role) ? role : undefined;
 
-  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits] =
+  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits, payments, apiLogs, webhookEvents] =
     await Promise.all([
       getAppSettings(),
       prisma.user.findMany({
@@ -58,6 +58,19 @@ export default async function AdminPage({
         where: { createdAt: { gte: visitStart, lte: visitEnd } },
         orderBy: { createdAt: "desc" },
         take: 500,
+      }),
+      prisma.payment.findMany({
+        orderBy: { createdAt: "desc" },
+        include: { user: true, subscription: { include: { plan: true } } },
+        take: 20,
+      }),
+      prisma.apiLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.webhookEvent.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 20,
       }),
     ]);
 
@@ -105,6 +118,8 @@ export default async function AdminPage({
             allowClientAnnouncements: settings.allowClientAnnouncements,
             commentEditWindowMinutes: settings.commentEditWindowMinutes,
             notificationRetentionDays: settings.notificationRetentionDays,
+            signUpOtpEnabled: settings.signUpOtpEnabled,
+            signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
           }}
         />
 
@@ -123,6 +138,45 @@ export default async function AdminPage({
           conversations={JSON.parse(JSON.stringify(conversations))}
           tickets={JSON.parse(JSON.stringify(tickets))}
         />
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="dtsc-card p-6">
+            <h2 className="font-black text-dtsc-ink">Audit des paiements</h2>
+            <div className="mt-4 divide-y divide-dtsc-border text-sm">
+              {payments.map((payment) => (
+                <div key={payment.id} className="py-3">
+                  <p className="font-bold text-dtsc-ink">{payment.reference}</p>
+                  <p className="text-dtsc-muted">
+                    {payment.user.email} · {payment.status} · {Number(payment.amount).toFixed(2)} {payment.currency}
+                  </p>
+                </div>
+              ))}
+              {!payments.length && <p className="py-4 text-sm text-dtsc-muted">Aucun paiement audité.</p>}
+            </div>
+          </div>
+          <div className="dtsc-card p-6">
+            <h2 className="font-black text-dtsc-ink">Logs API et webhooks</h2>
+            <div className="mt-4 divide-y divide-dtsc-border text-sm">
+              {apiLogs.map((event) => (
+                <div key={event.id} className="py-3">
+                  <p className="font-bold text-dtsc-ink">{event.method} · {event.path}</p>
+                  <p className="text-dtsc-muted">
+                    HTTP {event.statusCode} · {event.createdAt.toLocaleString("fr-FR")}
+                  </p>
+                </div>
+              ))}
+              {webhookEvents.map((event) => (
+                <div key={event.id} className="py-3">
+                  <p className="font-bold text-dtsc-ink">{event.provider} · {event.eventType}</p>
+                  <p className="text-dtsc-muted">
+                    {event.status} · {event.createdAt.toLocaleString("fr-FR")}
+                  </p>
+                </div>
+              ))}
+              {!apiLogs.length && !webhookEvents.length && <p className="py-4 text-sm text-dtsc-muted">Aucun log API récent.</p>}
+            </div>
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
           <div className="flex items-start gap-3">

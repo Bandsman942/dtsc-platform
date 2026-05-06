@@ -11,6 +11,7 @@ import {
 } from "@/lib/openai";
 import { truncate } from "@/lib/format";
 import { getAppSettings } from "@/lib/settings";
+import { retrieveKnowledgeContext } from "@/lib/rag";
 
 export const maxDuration = 60;
 
@@ -135,10 +136,30 @@ export async function POST(req: Request) {
     take: 24,
   });
 
-  const messages: OpenAIInputMessage[] = history.map((message) => ({
+  const ragContext = await retrieveKnowledgeContext(session.userId, body.data.content).catch((error) => {
+    console.error("RAG retrieval failed", error);
+    return "";
+  });
+
+  const messages: OpenAIInputMessage[] = [
+    ...(ragContext
+      ? [
+          {
+            role: "user" as const,
+            content: [
+              "Contexte documentaire privé DTSC à utiliser seulement s'il est pertinent pour répondre.",
+              "Ne cite pas une source documentaire si elle ne répond pas directement à la question.",
+              "",
+              ragContext,
+            ].join("\n"),
+          },
+        ]
+      : []),
+    ...history.map((message) => ({
     role: message.role,
     content: message.content,
-  }));
+    })),
+  ];
 
   let openAIStream: ReadableStream<Uint8Array>;
   try {

@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User } from "lucide-react";
+import { Bell, Bot, CreditCard, FileText, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chat", label: "Chatbot", icon: Bot },
+  { href: "/billing", label: "Abonnement", icon: CreditCard },
+  { href: "/documents", label: "Documents", icon: FileText },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/announcements", label: "Annonces", icon: Megaphone },
   { href: "/support", label: "Support", icon: Headphones },

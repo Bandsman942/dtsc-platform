@@ -6,6 +6,7 @@ export const signUpSchema = z.object({
   password: z.string().min(8).max(128),
   companyName: z.string().max(160).optional().or(z.literal("")),
   phone: z.string().max(40).optional().or(z.literal("")),
+  otp: z.string().regex(/^\d{6}$/).optional().or(z.literal("")),
 });
 
 export const signInSchema = z.object({
@@ -105,6 +106,8 @@ export const adminSettingsSchema = z.object({
   allowClientAnnouncements: z.coerce.boolean(),
   commentEditWindowMinutes: z.coerce.number().int().min(1).max(1440),
   notificationRetentionDays: z.coerce.number().int().min(7).max(365),
+  signUpOtpEnabled: z.coerce.boolean(),
+  signUpOtpExpirationMinutes: z.coerce.number().int().min(2).max(60),
   applyLimitsToExistingUsers: z.coerce.boolean().default(false),
 });
 
@@ -136,3 +139,24 @@ export const publicContactSchema = z.object({
   message: z.string().min(10).max(3_000),
   source: z.string().max(80).default("landing"),
 });
+
+export const checkoutSchema = z.object({
+  planId: z.string().min(2).max(80),
+  walletId: z.string().max(40).optional().or(z.literal("")),
+  provider: z.enum(["MPESA", "ORANGE", "AIRTEL", "AFRICEL", "MTN"]).default("MPESA"),
+});
+
+export const documentUploadSchema = z.object({
+  title: z.string().min(2).max(160).optional().or(z.literal("")),
+});
+
+export const maishaPayCallbackSchema = z.object({
+  transactionReference: z.string().min(1).optional(),
+  originatingTransactionId: z.string().min(1).optional(),
+  transactionId: z.string().min(1).optional(),
+  status: z.union([z.string(), z.number()]).optional(),
+  statusCode: z.union([z.string(), z.number()]).optional(),
+  statusDescription: z.string().optional(),
+  amount: z.union([z.string(), z.number()]).optional(),
+  currency: z.string().optional(),
+}).passthrough();

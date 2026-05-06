@@ -7,12 +7,18 @@ import {
   BrainCircuit,
   Building2,
   CheckCircle2,
+  CreditCard,
   Database,
+  FileText,
+  LockKeyhole,
+  MailCheck,
   Megaphone,
   Network,
   Printer,
+  ReceiptText,
   ShieldCheck,
   Sparkles,
+  UploadCloud,
 } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { ContactNewsletterSection } from "@/components/public/contact-newsletter-section";
@@ -95,6 +101,117 @@ export default function Page() {
               <p className="mt-2 text-sm leading-6 text-dtsc-muted">{item.text}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+          <div>
+            <p className="text-sm font-bold text-cyan-600">Plateforme DTSC</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Un espace client SaaS pour piloter les échanges IA, les documents et la relation DTSC.</h2>
+          </div>
+          <Button asChild variant="outline" className="w-fit rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+            <Link href="/auth/sign-up">
+              Essayer le plan Découverte
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              icon: LockKeyhole,
+              title: "Comptes sécurisés",
+              text: "Inscription avec OTP email, sessions privées, rôles ADMIN, MANAGER, SUPPORT et CLIENT.",
+              href: "/auth/sign-up",
+              label: "Créer un compte",
+            },
+            {
+              icon: CreditCard,
+              title: "Plans chatbot",
+              text: "Découverte gratuit, puis offres Essentiel, Professionnel et Entreprise selon le volume de messages et documents.",
+              href: "/billing",
+              label: "Voir les plans",
+            },
+            {
+              icon: FileText,
+              title: "Base documentaire",
+              text: "Upload de fichiers TXT, Markdown, CSV, JSON et PDF pour enrichir les réponses du chatbot par RAG privé.",
+              href: "/documents",
+              label: "Préparer les documents",
+            },
+            {
+              icon: ReceiptText,
+              title: "Factures et suivi",
+              text: "Paiement MaishaPay côté serveur, callback de confirmation, activation automatique et factures email.",
+              href: "/billing",
+              label: "Comprendre la facturation",
+            },
+          ].map((item) => (
+            <article key={item.title} className="group dtsc-card dtsc-card-hover flex min-h-72 flex-col p-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-500 transition group-hover:bg-cyan-400 group-hover:text-[#001736]">
+                <item.icon className="h-6 w-6" />
+              </div>
+              <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
+              <p className="mt-3 flex-1 text-sm leading-6 text-dtsc-muted">{item.text}</p>
+              <Link href={item.href} className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">
+                {item.label}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y border-dtsc-border bg-dtsc-surface">
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
+          <div className="rounded-[1.5rem] border border-cyan-300/30 bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
+            <p className="inline-flex items-center gap-2 rounded-full bg-cyan-300/10 px-3 py-1.5 text-sm font-black text-cyan-200">
+              <UploadCloud className="h-4 w-4" />
+              Intelligence documentaire
+            </p>
+            <h2 className="mt-5 text-3xl font-black">Le chatbot peut exploiter vos documents métier dans un espace privé.</h2>
+            <p className="mt-4 max-w-2xl leading-7 text-slate-300">
+              DTSC Platform prépare une approche RAG professionnelle: extraction de texte, embeddings OpenAI, recherche pgvector et réponse contextualisée. Chaque utilisateur conserve son propre périmètre documentaire.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              {["PDF inclus", "Contexte isolé", "Recherche vectorielle"].map((item) => (
+                <div key={item} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-bold text-white">
+                  <CheckCircle2 className="mb-3 h-5 w-5 text-cyan-300" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-4">
+            {[
+              {
+                icon: MailCheck,
+                title: "Emails transactionnels",
+                text: "OTP, notifications administratives, factures et communications professionnelles envoyés côté serveur.",
+              },
+              {
+                icon: ShieldCheck,
+                title: "Paiement en maintenance contrôlée",
+                text: "Les plans payants affichent un état clair tant que les clés MaishaPay ne sont pas configurées. Le plan gratuit reste actif.",
+              },
+              {
+                icon: Bot,
+                title: "Chatbot DTSC contextualisé",
+                text: "Le prompt système connaît les services DTSC, les modules actifs et distingue clairement les fonctions disponibles de la roadmap.",
+              },
+            ].map((item) => (
+              <article key={item.title} className="dtsc-card flex gap-4 p-5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-dtsc-ink">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-dtsc-muted">{item.text}</p>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 

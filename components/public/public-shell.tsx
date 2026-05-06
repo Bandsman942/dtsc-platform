@@ -5,6 +5,15 @@ import { publicLinks } from "@/components/public/public-links";
 import { PublicNav } from "@/components/public/public-nav";
 import { dtsc } from "@/lib/dtsc";
 
+const socialNetworks = [
+  { network: "facebook", href: "https://www.facebook.com/dtsc-platform", label: "Facebook DTSC Platform" },
+  { network: "instagram", href: "https://www.instagram.com/dtsc.platform", label: "Instagram DTSC Platform" },
+  { network: "x", href: "https://x.com/dtscplatform", label: "X DTSC Platform" },
+  { network: "youtube", href: null, label: "YouTube DTSC Platform à venir" },
+  { network: "linkedin", href: null, label: "LinkedIn DTSC Platform à venir" },
+  { network: "tiktok", href: null, label: "TikTok DTSC Platform à venir" },
+];
+
 export function PublicHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
@@ -51,11 +60,29 @@ export function PublicFooter() {
           <div className="mt-4">
             <p className="font-black text-dtsc-ink">Réseaux sociaux</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {["facebook", "instagram", "x", "youtube", "linkedin", "tiktok"].map((network) => (
-                <span key={network} className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-blue shadow-[0_10px_24px_rgba(0,43,91,0.08)] transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft" aria-label={network}>
-                  <SocialIcon network={network} />
-                </span>
-              ))}
+              {socialNetworks.map((item) =>
+                item.href ? (
+                  <a
+                    key={item.network}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-blue shadow-[0_10px_24px_rgba(0,43,91,0.08)] transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft"
+                    aria-label={item.label}
+                  >
+                    <SocialIcon network={item.network} />
+                  </a>
+                ) : (
+                  <span
+                    key={item.network}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-muted shadow-[0_10px_24px_rgba(0,43,91,0.08)]"
+                    aria-label={item.label}
+                    title="Compte à venir"
+                  >
+                    <SocialIcon network={item.network} />
+                  </span>
+                )
+              )}
               <span className="ml-1 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-black text-dtsc-blue">
                 {socialHandle}
               </span>

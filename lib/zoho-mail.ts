@@ -14,6 +14,7 @@ type ZohoMailPayload = {
   heading?: string;
   showRecipients?: boolean;
   showSource?: boolean;
+  deliveryMode?: "broadcast" | "direct";
 };
 
 type PersonalizedZohoRecipient = {
@@ -122,6 +123,46 @@ async function sendZohoMailApi(payload: ZohoMailPayload) {
   const mailBaseUrl = normalizeBaseUrl(env.ZOHO_MAIL_API_BASE_URL, "https://mail.zoho.com");
   const accountId = env.ZOHO_MAIL_ACCOUNT_ID || "";
   const fromAddress = env.ZOHO_MAIL_FROM_ADDRESS || contactEmail();
+  const endpoint = `${mailBaseUrl}/api/accounts/${accountId}/messages`;
+
+  if (payload.deliveryMode === "direct") {
+    let sent = 0;
+    for (const recipient of recipients) {
+      const content = buildProfessionalMailHtml({
+        ...payload,
+        to: [recipient],
+        cc: [],
+        bcc: [],
+        showRecipients: false,
+        showSource: false,
+      });
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+        body: JSON.stringify({
+          fromAddress,
+          toAddress: recipient,
+          subject: payload.subject,
+          content,
+          mailFormat: "html",
+          askReceipt: "no",
+        }),
+      });
+
+      if (!response.ok) {
+        const details = await response.text().catch(() => "");
+        throw new Error(`Zoho Mail API failed with status ${response.status}${details ? `: ${details.slice(0, 180)}` : ""}`);
+      }
+      sent += 1;
+    }
+
+    return { sent: true, provider: "zoho-mail-api", recipients: sent, deliveryMode: "direct" };
+  }
+
   const toAddress = contactEmail();
   const ccAddress = uniqueEmails(payload.cc).filter((email) => email !== toAddress).join(",");
   const bccAddress = uniqueEmails([...recipients, ...(payload.bcc || [])]).filter((email) => email !== toAddress).join(",");
@@ -133,8 +174,6 @@ async function sendZohoMailApi(payload: ZohoMailPayload) {
     showRecipients: false,
     showSource: false,
   });
-  const endpoint = `${mailBaseUrl}/api/accounts/${accountId}/messages`;
-
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -310,6 +349,48 @@ export async function sendZohoOutboundMail(payload: ZohoMailPayload) {
     return apiReason
       ? { sent: false, reason: apiReason }
       : { sent: false, reason: "ZOHO_OUTBOUND_MAIL_WEBHOOK_URL is not configured" };
+  }
+
+  if (payload.deliveryMode === "direct") {
+    const safePayload = {
+      ...payload,
+      cc: uniqueEmails(payload.cc),
+      bcc: uniqueEmails(payload.bcc),
+      showRecipients: false,
+      showSource: false,
+    };
+    const textContent = buildProfessionalMailText(safePayload);
+    const htmlContent = buildProfessionalMailHtml(safePayload);
+    const fromEmail = env.ZOHO_MAIL_FROM_ADDRESS || contactEmail();
+    const replyTo = payload.replyTo || fromEmail;
+    const response = await fetch(env.ZOHO_OUTBOUND_MAIL_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: recipients,
+        toText: recipients.join(","),
+        cc: safePayload.cc,
+        ccText: safePayload.cc.join(","),
+        bcc: safePayload.bcc,
+        bccText: safePayload.bcc.join(","),
+        subject: payload.subject,
+        content: textContent,
+        body: textContent,
+        html: htmlContent,
+        bodyHtml: htmlContent,
+        fromEmail,
+        fromAddress: fromEmail,
+        replyTo,
+        source: payload.source,
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      throw new Error(`Zoho outbound mail failed with status ${response.status}${details ? `: ${details.slice(0, 180)}` : ""}`);
+    }
+
+    return { sent: true, recipients: recipients.length, deliveryMode: "direct" };
   }
 
   const toAddress = contactEmail();

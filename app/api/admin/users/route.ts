@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
+import { SubscriptionStatus, UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { ensureBillingPlans, getNextBillingPeriod } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/security";
 import { adminCreateUserSchema } from "@/lib/validators";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -25,6 +27,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email already exists" }, { status: 409 });
   }
 
+  const plans = await ensureBillingPlans();
+  const freemium = plans.find((plan) => plan.id === "freemium");
   const user = await prisma.user.create({
     data: {
       name: body.data.name,
@@ -37,6 +41,28 @@ export async function POST(req: Request) {
       dailyTokenLimit: body.data.dailyTokenLimit,
     },
     select: { id: true },
+  });
+
+  if (freemium) {
+    const { start, end } = getNextBillingPeriod();
+    await prisma.subscription.create({
+      data: {
+        userId: user.id,
+        planId: freemium.id,
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodStart: start,
+        currentPeriodEnd: end,
+      },
+    });
+  }
+
+  await writeAuditLog({
+    userId: session.userId,
+    action: "ADMIN_USER_CREATED",
+    entity: "User",
+    entityId: user.id,
+    metadata: { role: body.data.role, email: body.data.email },
+    request: req,
   });
 
   return NextResponse.json({ ok: true, user }, { status: 201 });

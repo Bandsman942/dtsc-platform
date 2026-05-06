@@ -115,7 +115,11 @@ export default function RootLayout({
                 addressLocality: "Kinshasa",
                 addressCountry: "CD",
               },
-              sameAs: [],
+              sameAs: [
+                "https://www.facebook.com/dtsc-platform",
+                "https://www.instagram.com/dtsc.platform",
+                "https://x.com/dtscplatform",
+              ],
               serviceType: dtsc.services,
             }),
           }}

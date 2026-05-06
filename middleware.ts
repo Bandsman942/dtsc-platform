@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/profile", "/settings", "/support", "/notifications", "/announcements"];
+const privateRoutes = ["/dashboard", "/chat", "/billing", "/documents", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 
 function isPathMatch(pathname: string, routes: string[]) {
@@ -56,6 +56,8 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/chat/:path*",
+    "/billing/:path*",
+    "/documents/:path*",
     "/profile/:path*",
     "/settings/:path*",
     "/support/:path*",
