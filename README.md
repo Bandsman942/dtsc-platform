@@ -128,7 +128,7 @@ Notes:
 - Dans les diffusions admin et newsletter, le placeholder `{user}` est remplacé par le nom de l'utilisateur ou de l'abonné. Lorsqu'il est présent, l'application envoie des mails personnalisés individuellement en CCI pour préserver la confidentialité.
 - `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont des secrets: ne jamais les commiter et les régénérer s'ils ont été partagés.
 - `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY` et `MAISHAPAY_CALLBACK_SECRET` doivent être configurés dans Vercel pour activer les paiements payants. Le callback à fournir côté MaishaPay est `APP_URL/api/billing/maishapay/callback?secret=VOTRE_SECRET`.
-- Tant que MaishaPay n'a pas fourni les clés, ne créez pas ces variables dans Vercel ou laissez-les vides. L'application affichera les plans payants en maintenance et gardera le plan gratuit opérationnel.
+- Tant que le prestataire de paiement n'a pas fourni les clés, ne créez pas ces variables dans Vercel ou laissez-les vides. L'application affichera les plans payants en maintenance et gardera le plan gratuit opérationnel.
 - `OPENAI_EMBEDDING_MODEL` doit rester compatible avec la dimension pgvector configurée. Par défaut: `text-embedding-3-small` avec `vector(1536)`.
 - `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_SERVICE_ROLE_KEY` et `SUPABASE_STORAGE_BUCKET` activent uniquement le stockage des fichiers originaux dans Supabase Storage.
 
@@ -231,7 +231,7 @@ Sur Vercel, il n'est pas nécessaire d'ajouter ces variables vides avant le push
 
 ## Documents et Supabase Storage
 
-La base documentaire accepte TXT, Markdown, CSV, JSON et PDF jusqu'à 2 Mo. Le texte est extrait côté serveur, vectorisé avec OpenAI Embeddings et stocké dans Neon PostgreSQL via pgvector.
+La base documentaire accepte TXT, Markdown, CSV, JSON et PDF jusqu'à 2 Mo. Le plan Découverte autorise déjà 1 document afin de tester le flux complet. Le texte est extrait côté serveur, vectorisé avec OpenAI Embeddings et stocké dans Neon PostgreSQL via pgvector.
 
 Supabase Storage est utilisé uniquement pour conserver les fichiers originaux si les variables Supabase sont configurées. Créer un bucket privé `dtsc-documents`, puis ajouter dans Vercel:
 

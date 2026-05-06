@@ -33,7 +33,7 @@ export function BillingPlans({
     setSelectedPlan(planId);
     setMessage("");
     if (priceUsd > 0 && !paymentAvailable) {
-      setMessage("Les paiements MaishaPay sont momentanément en maintenance. Le plan gratuit Découverte reste opérationnel.");
+      setMessage("Les abonnements payants sont momentanément en préparation. Le plan gratuit Découverte reste opérationnel.");
       return;
     }
     if (priceUsd > 0 && !walletId.trim()) {
@@ -69,19 +69,19 @@ export function BillingPlans({
           <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-sm leading-6 text-dtsc-ink">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
             <div>
-              <p className="font-black">Paiements payants en maintenance</p>
+              <p className="font-black">Abonnements payants en préparation</p>
               <p className="text-dtsc-muted">
-                Les abonnements payants seront activés dès que les clés MaishaPay seront configurées. Le plan Découverte gratuit reste disponible pour tester DTSC Chatbot.
+                Les offres payantes seront ouvertes dès que le paiement en ligne sera finalisé. Le plan Découverte gratuit reste disponible pour tester DTSC Chatbot.
               </p>
             </div>
           </div>
         )}
         <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-          Numéro M-Pesa pour MaishaPay
+          Numéro mobile money
           <Input value={walletId} onChange={(event) => setWalletId(event.target.value)} placeholder="Ex: 2438XXXXXXXX" inputMode="tel" />
         </label>
         <p className="mt-2 text-xs leading-5 text-dtsc-muted">
-          Le plan gratuit ne demande pas de paiement. Pour les plans payants, MaishaPay déclenche la validation mobile money sur ce numéro.
+          Le plan gratuit ne demande pas de paiement. Pour les plans payants, la validation se fera sur le numéro mobile money renseigné.
         </p>
       </div>
 
@@ -106,7 +106,7 @@ export function BillingPlans({
               <ul className="mt-5 space-y-2 text-sm text-dtsc-muted">
                 <li>{plan.dailyMessageLimit} messages / jour</li>
                 <li>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens / jour</li>
-                <li>{plan.maxDocuments} document(s) RAG autorisé(s)</li>
+                <li>{plan.maxDocuments} document(s) autorisé(s)</li>
               </ul>
               <Button
                 className="mt-6 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]"
@@ -121,8 +121,8 @@ export function BillingPlans({
                     : plan.priceUsd === 0
                       ? "Activer"
                       : paymentAvailable
-                        ? "Payer avec MaishaPay"
-                        : "Paiement en maintenance"}
+                        ? "Payer en ligne"
+                        : "Indisponible temporairement"}
               </Button>
             </article>
           );

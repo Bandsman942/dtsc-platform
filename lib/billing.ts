@@ -14,7 +14,7 @@ export async function ensureBillingPlans() {
       priceUsd: 0,
       dailyMessageLimit: 5,
       dailyTokenLimit: 15000,
-      maxDocuments: 0,
+      maxDocuments: 1,
       sortOrder: 1,
     },
     {

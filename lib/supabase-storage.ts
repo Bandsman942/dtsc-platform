@@ -41,3 +41,28 @@ export async function uploadKnowledgeFileToSupabase({
     path: data.path,
   };
 }
+
+export async function deleteKnowledgeFileFromSupabase({
+  bucket,
+  path,
+}: {
+  bucket?: string | null;
+  path?: string | null;
+}) {
+  if (!bucket || !path || !isSupabaseStorageConfigured()) {
+    return { deleted: false };
+  }
+
+  const client = createClient(env.SUPABASE_STORAGE_URL!, env.SUPABASE_STORAGE_SERVICE_ROLE_KEY!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+  const { error } = await client.storage.from(bucket).remove([path]);
+  if (error) {
+    throw new Error(`Supabase Storage delete failed: ${error.message}`);
+  }
+
+  return { deleted: true };
+}

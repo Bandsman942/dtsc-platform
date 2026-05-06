@@ -146,6 +146,6 @@ export async function POST(req: Request) {
       },
     });
     await writeApiLog({ request: req, statusCode: 502, userId: user.id, startedAt, metadata: { planId: plan.id, reference } });
-    return NextResponse.json({ error: "Unable to initiate MaishaPay payment" }, { status: 502 });
+    return NextResponse.json({ error: "Unable to initiate online payment" }, { status: 502 });
   }
 }

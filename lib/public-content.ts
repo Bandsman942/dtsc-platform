@@ -117,9 +117,9 @@ export const publicPages: Record<string, PublicPageContent> = {
         bullets: ["Qualification automatique des demandes", "Synthèse et analyse documentaire", "Support client assisté", "Aide à la décision avec validation humaine"],
       },
       {
-        heading: "Architecture prête pour le RAG",
+        heading: "Base documentaire contextualisée",
         text:
-          "La plateforme est pensée pour accueillir plus tard une base documentaire DTSC et du RAG. Cette évolution permettra au chatbot de répondre à partir de documents internes validés: offres, procédures, FAQ, politiques, supports de formation ou documentation technique. Le système doit toutefois rester contrôlé: sources affichées, permissions respectées et contenus sensibles protégés.",
+          "La plateforme est pensée pour exploiter progressivement une base documentaire DTSC. Cette évolution permet au chatbot de répondre à partir de documents validés: offres, procédures, FAQ, politiques, supports de formation ou documentation technique. Le système doit toutefois rester contrôlé: contenus autorisés, permissions respectées et informations sensibles protégées.",
         bullets: ["Base documentaire interne", "Recherche sémantique contrôlée", "Réponses sourcées", "Permissions par rôle utilisateur"],
       },
       {

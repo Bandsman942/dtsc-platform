@@ -93,7 +93,7 @@ export default function Page() {
           {[
             { icon: BrainCircuit, title: "Conseil IA responsable", text: "Le chatbot qualifie, explique et recommande une validation humaine pour les décisions commerciales ou stratégiques." },
             { icon: Database, title: "Culture data & BI", text: "DTSC structure les KPI, les dashboards et le reporting pour transformer les données en décisions." },
-            { icon: Network, title: "Plateforme SaaS évolutive", text: "Architecture prête pour RAG, base documentaire, tickets avancés, CRM et analytics." },
+            { icon: Network, title: "Plateforme SaaS évolutive", text: "Un espace structuré pour le chatbot, les documents, les tickets, les notifications et le suivi client." },
           ].map((item) => (
             <div key={item.title} className="dtsc-card dtsc-card-hover p-6">
               <item.icon className="h-6 w-6 text-dtsc-blue" />
@@ -136,14 +136,14 @@ export default function Page() {
             {
               icon: FileText,
               title: "Base documentaire",
-              text: "Upload de fichiers TXT, Markdown, CSV, JSON et PDF pour enrichir les réponses du chatbot par RAG privé.",
+              text: "Ajoutez vos documents utiles pour aider le chatbot à mieux comprendre votre contexte métier.",
               href: "/documents",
               label: "Préparer les documents",
             },
             {
               icon: ReceiptText,
               title: "Factures et suivi",
-              text: "Paiement MaishaPay côté serveur, callback de confirmation, activation automatique et factures email.",
+              text: "Suivez vos abonnements, recevez vos factures par email et gardez une vision claire de votre accès.",
               href: "/billing",
               label: "Comprendre la facturation",
             },
@@ -168,14 +168,14 @@ export default function Page() {
           <div className="rounded-[1.5rem] border border-cyan-300/30 bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
             <p className="inline-flex items-center gap-2 rounded-full bg-cyan-300/10 px-3 py-1.5 text-sm font-black text-cyan-200">
               <UploadCloud className="h-4 w-4" />
-              Intelligence documentaire
+              Assistance documentaire
             </p>
             <h2 className="mt-5 text-3xl font-black">Le chatbot peut exploiter vos documents métier dans un espace privé.</h2>
             <p className="mt-4 max-w-2xl leading-7 text-slate-300">
-              DTSC Platform prépare une approche RAG professionnelle: extraction de texte, embeddings OpenAI, recherche pgvector et réponse contextualisée. Chaque utilisateur conserve son propre périmètre documentaire.
+              Ajoutez vos fichiers importants pour obtenir des réponses plus adaptées à votre activité. Vos contenus restent organisés dans votre espace et servent uniquement à améliorer vos échanges avec le chatbot DTSC.
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {["PDF inclus", "Contexte isolé", "Recherche vectorielle"].map((item) => (
+              {["PDF acceptés", "Espace privé", "Réponses plus utiles"].map((item) => (
                 <div key={item} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-bold text-white">
                   <CheckCircle2 className="mb-3 h-5 w-5 text-cyan-300" />
                   {item}
@@ -187,18 +187,18 @@ export default function Page() {
             {[
               {
                 icon: MailCheck,
-                title: "Emails transactionnels",
-                text: "OTP, notifications administratives, factures et communications professionnelles envoyés côté serveur.",
+                title: "Communications utiles",
+                text: "Codes de vérification, factures, notifications et messages importants sont envoyés de manière claire et professionnelle.",
               },
               {
                 icon: ShieldCheck,
-                title: "Paiement en maintenance contrôlée",
-                text: "Les plans payants affichent un état clair tant que les clés MaishaPay ne sont pas configurées. Le plan gratuit reste actif.",
+                title: "Abonnements payants en préparation",
+                text: "Le plan gratuit reste disponible. Les offres payantes seront ouvertes dès que le paiement en ligne sera finalisé.",
               },
               {
                 icon: Bot,
                 title: "Chatbot DTSC contextualisé",
-                text: "Le prompt système connaît les services DTSC, les modules actifs et distingue clairement les fonctions disponibles de la roadmap.",
+                text: "L'assistant connaît les services DTSC et oriente les demandes vers les bons modules: chatbot, documents, support, annonces ou contact.",
               },
             ].map((item) => (
               <article key={item.title} className="dtsc-card flex gap-4 p-5">

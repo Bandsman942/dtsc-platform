@@ -790,7 +790,7 @@ Flux:
 
 Source d'integration utilisee: documentation REST MaishaPay, endpoint marchand et payload `gatewayMode`, `publicApiKey`, `secretApiKey`, `transactionReference`, `amount`, `currency`, `chanel`, `provider`, `walletID`.
 
-Tant que `MAISHAPAY_PUBLIC_API_KEY` et `MAISHAPAY_SECRET_API_KEY` sont absentes, les plans payants retournent `503 MAISHAPAY_MAINTENANCE` et le plan freemium reste actif.
+Tant que `MAISHAPAY_PUBLIC_API_KEY` et `MAISHAPAY_SECRET_API_KEY` sont absentes, les plans payants retournent `503 MAISHAPAY_MAINTENANCE` et le plan freemium reste actif. Le plan freemium autorise 1 document pour tester le flux documentaire jusqu'au stockage Supabase si celui-ci est configure.
 
 ## 12.1 Integration RAG OpenAI + pgvector
 
@@ -843,6 +843,7 @@ Regles:
 - la service role key ne doit jamais etre exposee au navigateur;
 - le chemin de stockage suit le format `userId/documentId/fileName`;
 - si Supabase Storage n'est pas configure, l'indexation RAG continue sans conservation de l'original.
+- lorsqu'un document est supprime, l'application tente aussi de supprimer l'original dans Supabase Storage.
 
 ## 13. Integration Neon PostgreSQL
 
