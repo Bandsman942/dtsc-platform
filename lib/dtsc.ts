@@ -68,11 +68,11 @@ export const dtsc = {
     },
   ],
   advantages: [
-    "Pilotage par les indicateurs clés",
-    "Réduction des coûts opérationnels",
-    "Automatisation des processus métier",
-    "Visibilité marketing renforcée",
-    "Accompagnement conseil et exécution structurée",
+    "Décisions guidées par des indicateurs fiables",
+    "Optimisation des coûts et des processus",
+    "Automatisation des tâches répétitives et critiques",
+    "Meilleure visibilité et communication digitale",
+    "Conseil, mise en œuvre et suivi opérationnel",
   ],
 };
 

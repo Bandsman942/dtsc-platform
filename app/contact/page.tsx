@@ -4,7 +4,7 @@ import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { dtsc } from "@/lib/dtsc";
 
 export const metadata: Metadata = {
-  title: "Contacter DTSC",
+  title: "Demander une consultation",
   description: "Contactez DTSC pour une consultation en transformation numérique, data, IA, automatisation, reporting ou application métier.",
   alternates: { canonical: "/contact" },
 };

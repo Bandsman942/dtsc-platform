@@ -37,7 +37,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15">
-                <Link href="/ressources">Voir les ressources</Link>
+                <Link href="/ressources">Voir nos ressources</Link>
               </Button>
             </div>
           </div>

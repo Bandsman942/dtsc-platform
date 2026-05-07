@@ -79,9 +79,9 @@ export default function Page() {
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="mb-8 max-w-3xl">
           <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Explorer DTSC</p>
-          <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Chaque onglet ouvre maintenant une page dédiée.</h2>
+          <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Découvrez nos expertises à travers des pages dédiées.</h2>
           <p className="mt-4 leading-7 text-dtsc-muted">
-            La landing page sert de porte d&apos;entrée. Les contenus détaillés sont organisés dans des pages séparées pour améliorer la lisibilité, le référencement et le parcours des visiteurs.
+            Retrouvez en un coup d&apos;œil nos services, solutions, secteurs d&apos;intervention et projets. Chaque rubrique vous présente clairement notre approche, nos expertises et la valeur que nous apportons aux organisations.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -93,7 +93,7 @@ export default function Page() {
               <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
               <p className="mt-3 text-sm leading-6 text-dtsc-muted">{item.text}</p>
               <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
-                Ouvrir la page
+                En savoir plus
                 <ArrowRight className="h-4 w-4" />
               </span>
             </Link>
@@ -105,9 +105,9 @@ export default function Page() {
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_1fr] lg:px-8">
           <div className="rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">Pourquoi DTSC ?</p>
-            <h2 className="mt-3 text-3xl font-black">Une expertise hybride médecine, data et business.</h2>
+            <h2 className="mt-3 text-3xl font-black">Une expertise hybride entre santé, data et technologie.</h2>
             <p className="mt-4 leading-7 text-slate-300">
-              Le business plan DTSC positionne l&apos;entreprise comme un acteur africain de la performance numérique, avec une combinaison de revenus récurrents et de projets à forte valeur.
+              DTSC accompagne les organisations dans leur transformation numérique en combinant expertise métier, analyse des données, automatisation et solutions technologiques adaptées aux réalités du terrain.
             </p>
           </div>
           <div className="grid gap-3">
@@ -125,9 +125,9 @@ export default function Page() {
         <div className="rounded-[1.5rem] bg-[#002b5b] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] sm:p-8 lg:p-10">
           <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
-              <h2 className="text-3xl font-black">Votre organisation est prête pour le prochain niveau numérique ?</h2>
+              <h2 className="text-3xl font-black">Passez à une nouvelle étape de votre transformation numérique.</h2>
               <p className="mt-3 max-w-3xl leading-7 text-blue-100">
-                Discutons de vos besoins et construisons une solution adaptée à votre réalité.
+                Échangeons sur vos besoins et construisons ensemble une solution adaptée à vos objectifs, à vos équipes et à votre réalité opérationnelle.
               </p>
             </div>
             <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">

@@ -114,20 +114,20 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Transformer sans surcharger l'organisation",
         text:
-          "Beaucoup d'entreprises veulent se digitaliser, mais se retrouvent bloquées par des outils dispersés, des fichiers non standardisés et une adoption faible. DTSC privilégie une transformation progressive: comprendre les priorités, identifier les données disponibles, cadrer les décisions à améliorer, puis déployer des solutions utiles et compréhensibles. Cette approche correspond aux réalités observées sur les marchés africains où le potentiel digital est fort, mais où les contraintes de coût, de compétences et d'infrastructure doivent être prises au sérieux.",
+          "De nombreuses organisations souhaitent accélérer leur transformation numérique, mais restent freinées par des outils dispersés, des fichiers peu standardisés et une faible adoption par les équipes. DTSC privilégie une approche progressive : comprendre les priorités, identifier les données disponibles, repérer les décisions à mieux piloter, puis déployer des solutions utiles, simples et mesurables. Cette méthode tient compte des réalités opérationnelles africaines, où le potentiel numérique est important, mais où les contraintes de coût, de compétences et d’infrastructure doivent être intégrées dès le départ.",
         bullets: ["Diagnostic initial", "Priorisation des gains rapides", "Livrables mesurables", "Formation et adoption"],
       },
       {
         heading: "Relier data, IA et applications métier",
         text:
-          "Les services DTSC ne séparent pas artificiellement la donnée, l'IA et les applications. Un dashboard a besoin de données fiables; une automatisation a besoin d'un processus clair; un chatbot devient plus utile lorsqu'il s'appuie sur un contexte métier structuré. Cette cohérence permet de construire des solutions qui durent et qui peuvent évoluer vers des produits digitaux ou SaaS.",
-        bullets: ["Dashboards KPI", "Applications web", "Automatisation", "Chatbots et IA responsable"],
+          "Chez DTSC, la donnée, l’intelligence artificielle et les applications métier sont pensées ensemble. Un tableau de bord exige des données fiables, une automatisation repose sur un processus bien défini, et un chatbot devient réellement utile lorsqu’il comprend le contexte métier. Cette approche permet de créer des solutions cohérentes, durables et adaptées à l’évolution des organisations.",
+        bullets: ["Dashboards KPI", "Applications web", "Automatisation", "Chatbots et IA maîtrisée"],
       },
       {
-        heading: "Un modèle hybride pour les clients",
+        heading: "Des solutions adaptées à chaque besoin",
         text:
-          "Le business model DTSC repose sur une combinaison de consulting, abonnements, développement, marketing et formation. Cette structure permet de servir à la fois les organisations qui veulent un projet ciblé et celles qui souhaitent un accompagnement continu. Les abonnements facilitent la récurrence, tandis que les projets à forte valeur permettent de résoudre des problématiques stratégiques.",
-        bullets: ["Consulting", "Abonnements", "Développement produit", "Formation et accompagnement"],
+          "DTSC accompagne les organisations selon leur niveau de maturité et leurs priorités : mission de conseil, développement d’une solution métier, automatisation d’un processus, formation des équipes ou accompagnement continu. L’objectif est simple : proposer une réponse claire, utile et adaptée aux besoins réels de chaque client.",
+        bullets: ["Conseil stratégique", "Développement de solutions", "Formation des équipes"],
       },
     ],
   },
