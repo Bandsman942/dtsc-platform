@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 06 mai 2026
+Derniere mise a jour: 07 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -10,8 +10,8 @@ DTSC Platform est une application SaaS Next.js App Router pour DTSC - Data and T
 
 Objectifs couverts par le code actuel:
 
-- landing page publique DTSC avec pages d'information, formulaires contact et newsletter;
-- authentification maison avec sessions securisees par cookie HTTP-only et OTP email optionnel a l'inscription;
+- landing page publique DTSC refondue avec navigation corporate, sections Services, Solutions, Methode, Secteurs, Projets, Ressources, A propos, Contact, formulaires contact et newsletter;
+- authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
@@ -22,6 +22,7 @@ Objectifs couverts par le code actuel:
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, visites publiques et diffusions;
 - fondations techniques pour audit log et historisation de webhooks;
+- protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API, audit des paiements et exports CSV/HTML imprimable PDF;
 - integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
 
@@ -29,7 +30,7 @@ Objectifs couverts par le code actuel:
 
 - Framework: Next.js 15 App Router
 - Langage: TypeScript
-- UI: React 19, Tailwind CSS, lucide-react, composants locaux
+- UI: React 19.1.2+, Tailwind CSS, lucide-react, composants locaux
 - Base de donnees: Neon PostgreSQL
 - ORM: Prisma
 - IA: OpenAI Responses API cote serveur
@@ -92,7 +93,7 @@ lib/
   zoho-mail.ts                 Integration Zoho Mail/webhooks
   prisma.ts                    Client Prisma
   validators.ts                Schemas Zod
-  rate-limit.ts                Rate limit memoire
+  rate-limit.ts                Rate limit Upstash Redis optionnel avec fallback memoire
   settings.ts                  Parametres globaux
   notifications.ts             Creation notifications
 
@@ -119,6 +120,7 @@ NEXT_PUBLIC_DEFAULT_MODEL=
 ADMIN_EMAIL=
 DEFAULT_ADMIN_EMAIL=
 DEFAULT_ADMIN_PASSWORD=
+DEFAULT_ADMIN_BOOTSTRAP_ENABLED=false
 DTSC_CONTACT_EMAIL=
 ```
 
@@ -152,6 +154,12 @@ WHATSAPP_VERIFY_TOKEN=
 CRM_API_URL=
 CRM_API_KEY=
 ```
+
+Notes securite:
+
+- `DEFAULT_ADMIN_BOOTSTRAP_ENABLED` doit rester `false` en production apres la creation initiale du compte admin.
+- `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` activent le rate limiting distribue. Sans ces variables, le code utilise un fallback memoire non garanti en multi-instance serverless.
+- Les secrets MaishaPay, Supabase Storage, Zoho Mail et OpenAI restent strictement cote serveur.
 
 Regles:
 
@@ -215,9 +223,9 @@ L'application utilise une authentification maison.
 Fichiers principaux:
 
 - `lib/security.ts`: hashage PBKDF2 SHA-256 avec salt aleatoire.
-- `lib/session.ts`: creation et verification d'un token signe HMAC SHA-256.
+- `lib/session.ts`: creation et verification d'un token signe HMAC SHA-256, avec comparaison de signature en temps constant pour eviter les fuites par timing.
 - `lib/auth.ts`: lecture/ecriture du cookie de session.
-- `middleware.ts`: protection des routes privees et admin.
+- `middleware.ts`: protection des routes privees et admin, blocage de l'en-tete `x-middleware-subrequest`, blocage des requetes API mutantes provenant d'une autre origine sauf routes webhook autorisees.
 - `lib/otp.ts`: generation, stockage temporaire et verification des OTP d'inscription.
 
 Cookie:
@@ -300,7 +308,7 @@ Flux:
 
 1. Le client appelle `POST /api/chat`.
 2. La route verifie la session.
-3. Rate limit memoire: 30 requetes par heure et par utilisateur.
+3. Rate limit: 30 requetes par heure et par utilisateur via Upstash Redis si configure, sinon fallback memoire.
 4. Verification du statut utilisateur.
 5. Verification des parametres globaux: chatbot actif, maintenance inactive.
 6. Verification des limites journalieres:
@@ -904,9 +912,12 @@ Mesures codees:
 
 - validation Zod sur les entrees;
 - hashage PBKDF2 des mots de passe;
-- sessions signees HMAC;
+- sessions signees HMAC avec verification en temps constant;
 - cookie HTTP-only;
 - middleware de protection des routes privees;
+- blocage middleware de `x-middleware-subrequest`;
+- blocage des requetes API mutantes provenant d'une autre origine, avec exception pour les webhooks externes declares;
+- headers globaux: CSP, HSTS en production, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`;
 - RBAC serveur sur routes sensibles;
 - variables d'environnement validees;
 - OpenAI et Zoho appeles uniquement cote serveur;
@@ -920,13 +931,14 @@ Mesures codees:
 - factures envoyees par email uniquement apres confirmation de paiement;
 - isolement RAG par `userId`;
 - verification des limites documentaires par plan actif;
-- rate limit memoire sur `/api/chat`;
+- rate limiting Upstash Redis optionnel avec fallback memoire sur `/api/chat`, `/api/auth/sign-in`, `/api/auth/sign-up`, `/api/public/contact`, `/api/public/newsletter`;
 - limites quotidiennes chat par utilisateur;
 - erreurs generiques cote API pour eviter la fuite d'informations sensibles.
 
 Limites techniques actuelles:
 
-- `rate-limit.ts` utilise une Map memoire: sur serverless/multi-instance, ce n'est pas un rate limit distribue. Pour production avancee, utiliser Redis/Upstash ou Vercel KV.
+- Si `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` ne sont pas configures, `rate-limit.ts` retombe sur une Map memoire. Pour la production a forte charge, Upstash doit etre configure.
+- La CSP autorise encore `unsafe-inline` pour compatibilite avec l'UI actuelle. Un sprint dedie peut durcir cette politique avec nonces/hashes.
 - `estimateCost()` retourne actuellement `0`; le calcul de cout reel par modele reste a implementer.
 - Les fondations `AuditLog` et `WebhookEvent` sont en place; il reste a etendre leur usage a toutes les actions critiques.
 
@@ -1102,7 +1114,7 @@ Etat actuel:
 
 Fonctionnalites qui exigent des informations externes avant activation complete:
 
-- rate limit distribue Redis/Upstash: fournir `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`;
+- rate limit distribue Redis/Upstash: le code est pret; fournir `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` pour eviter le fallback memoire en production multi-instance;
 - cout IA reel par modele: fournir la grille tarifaire a appliquer ou valider une source officielle a maintenir;
 - API keys internes partenaires: definir les partenaires, droits, quotas et duree de validite;
 - RAG documentaire DTSC: socle actif pour TXT/Markdown/CSV/JSON/PDF; fournir les documents sources et la politique d'indexation avancee;

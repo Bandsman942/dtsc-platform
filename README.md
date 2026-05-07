@@ -11,7 +11,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 ## Stack Technique
 
 - Next.js App Router
-- TypeScript
+- React 19.1.2+ et TypeScript
 - Tailwind CSS
 - Neon PostgreSQL
 - Prisma ORM
@@ -26,7 +26,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 
 ## Fonctionnalités
 
-- Landing page publique DTSC
+- Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -70,7 +70,8 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système et préférences de notifications
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
-- Rate limiting basique sur l'API chat
+- Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local
+- Headers de sécurité globaux, blocage des requêtes cross-origin mutantes et protection contre l'en-tête `x-middleware-subrequest`
 - Validation des inputs avec Zod
 
 ## Variables D'environnement
@@ -90,6 +91,7 @@ NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
 ADMIN_EMAIL=
 DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
 DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!
+DEFAULT_ADMIN_BOOTSTRAP_ENABLED=false
 DTSC_CONTACT_EMAIL=contact@dtsc-platform.com
 ZOHO_MAIL_WEBHOOK_URL=
 ZOHO_OUTBOUND_MAIL_WEBHOOK_URL=
@@ -117,8 +119,8 @@ Notes:
 - `OPENAI_API_KEY` ne doit jamais être exposé côté client.
 - `AUTH_SECRET` doit être une chaîne aléatoire longue, au minimum 32 caractères.
 - `ADMIN_EMAIL` donne automatiquement le rôle `ADMIN` au premier compte créé avec cet email.
-- `DEFAULT_ADMIN_EMAIL` et `DEFAULT_ADMIN_PASSWORD` permettent le bootstrap du compte admin par défaut lors de la première connexion avec ces identifiants.
-- Changer immédiatement `DEFAULT_ADMIN_PASSWORD` en production, puis modifier le mot de passe depuis `/settings`.
+- `DEFAULT_ADMIN_EMAIL` et `DEFAULT_ADMIN_PASSWORD` permettent le bootstrap du compte admin uniquement si `DEFAULT_ADMIN_BOOTSTRAP_ENABLED=true`.
+- En production, garder `DEFAULT_ADMIN_BOOTSTRAP_ENABLED=false` après la création initiale de l'admin, puis changer le mot de passe depuis `/settings`.
 - Sur Vercel, configurer ces variables dans Project Settings → Environment Variables.
 - `ZOHO_MAIL_WEBHOOK_URL` doit contenir l'URL complète du webhook entrant Zoho Mail. Ne jamais la commiter dans le dépôt.
 - `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL` doit pointer vers le webhook Zoho/Zoho Flow chargé d'envoyer les emails directs. En diffusion, l'application place `DTSC_CONTACT_EMAIL` en destinataire principal et les membres en CCI.
@@ -127,6 +129,7 @@ Notes:
 - Si `ZOHO_MAIL_ACCOUNT_ID`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont configurés, l'application envoie les diffusions directement par l'API Zoho Mail avant de tenter les fallbacks webhook. Les listes d'adresses ne sont jamais ajoutées dans le contenu du mail.
 - Dans les diffusions admin et newsletter, le placeholder `{user}` est remplacé par le nom de l'utilisateur ou de l'abonné. Lorsqu'il est présent, l'application envoie des mails personnalisés individuellement en CCI pour préserver la confidentialité.
 - `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont des secrets: ne jamais les commiter et les régénérer s'ils ont été partagés.
+- `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` activent un rate limiting distribué en production. Si ces variables sont absentes, l'application utilise un fallback mémoire uniquement adapté au développement ou à faible charge.
 - `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY` et `MAISHAPAY_CALLBACK_SECRET` doivent être configurés dans Vercel pour activer les paiements payants. Le callback à fournir côté MaishaPay est `APP_URL/api/billing/maishapay/callback?secret=VOTRE_SECRET`.
 - Tant que le prestataire de paiement n'a pas fourni les clés, ne créez pas ces variables dans Vercel ou laissez-les vides. L'application affichera les plans payants en maintenance et gardera le plan gratuit opérationnel.
 - `OPENAI_EMBEDDING_MODEL` doit rester compatible avec la dimension pgvector configurée. Par défaut: `text-embedding-3-small` avec `vector(1536)`.
@@ -154,7 +157,7 @@ Email: admin@dtsc-platform.com
 Mot de passe: DtscAdmin2026!
 ```
 
-Au premier login avec ces valeurs, l'application crée automatiquement un utilisateur `ADMIN` actif si aucun compte avec cet email n'existe encore. Après connexion, changer le mot de passe dans `/settings`, puis remplacer `DEFAULT_ADMIN_PASSWORD` dans Vercel.
+Le bootstrap automatique ne fonctionne que si `DEFAULT_ADMIN_BOOTSTRAP_ENABLED=true`. Utiliser cette option uniquement pour créer le premier admin, puis repasser la variable à `false` en production. Après connexion, changer le mot de passe dans `/settings`, puis remplacer `DEFAULT_ADMIN_PASSWORD` dans Vercel.
 
 Générer un `AUTH_SECRET` localement avec PowerShell:
 
@@ -337,6 +340,7 @@ NEXT_PUBLIC_DEFAULT_MODEL
 ADMIN_EMAIL
 DEFAULT_ADMIN_EMAIL
 DEFAULT_ADMIN_PASSWORD
+DEFAULT_ADMIN_BOOTSTRAP_ENABLED
 DTSC_CONTACT_EMAIL
 ZOHO_MAIL_WEBHOOK_URL
 ZOHO_OUTBOUND_MAIL_WEBHOOK_URL
@@ -377,13 +381,15 @@ Mesures présentes:
 - Hash de mot de passe PBKDF2 avec salt
 - Validation Zod sur auth, chat, conversations, tickets et admin
 - API OpenAI uniquement côté serveur
-- Rate limiting mémoire sur `/api/chat`
+- Rate limiting distribué si Upstash Redis est configuré, sinon fallback mémoire sur `/api/chat`, `/api/auth/sign-in`, `/api/auth/sign-up`, `/api/public/contact` et `/api/public/newsletter`
 - Limites applicatives par utilisateur sur messages/tokens journaliers
 - Erreurs publiques génériques côté client
+- Headers sécurité globaux via `next.config.ts`
+- Protection middleware contre les requêtes cross-origin mutantes et l'en-tête `x-middleware-subrequest`
 
 À renforcer avant forte charge:
 
-- Rate limiting persistant Redis/Upstash
+- Remplacement complet du fallback mémoire par Redis/Upstash obligatoire sur forte charge
 - Rotation de sessions
 - MFA
 - Journalisation d'audit

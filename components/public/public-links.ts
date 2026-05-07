@@ -1,7 +1,16 @@
-export const publicLinks = [
+export type PublicLink = {
+  href: string;
+  label: string;
+  sectionId?: string;
+};
+
+export const publicLinks: PublicLink[] = [
   { href: "/", label: "Accueil" },
-  { href: "/data-afrique", label: "Data en Afrique" },
-  { href: "/bi-kpi", label: "BI & KPI" },
-  { href: "/ia-entreprise", label: "IA en entreprise" },
-  { href: "/secteurs", label: "Secteurs" },
+  { href: "/#services", label: "Services", sectionId: "services" },
+  { href: "/#solutions", label: "Solutions", sectionId: "solutions" },
+  { href: "/#secteurs", label: "Secteurs", sectionId: "secteurs" },
+  { href: "/#projets", label: "Projets", sectionId: "projets" },
+  { href: "/#ressources", label: "Ressources", sectionId: "ressources" },
+  { href: "/#a-propos", label: "À propos", sectionId: "a-propos" },
+  { href: "/#contact", label: "Contact", sectionId: "contact" },
 ];

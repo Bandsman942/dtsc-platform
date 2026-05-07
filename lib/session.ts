@@ -47,6 +47,19 @@ async function sign(value: string, secret: string) {
     .join("");
 }
 
+function constantTimeEqual(left: string, right: string) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+
+  return diff === 0;
+}
+
 export async function createSessionToken(
   payload: Omit<SessionPayload, "exp">,
   secret: string
@@ -72,7 +85,7 @@ export async function verifySessionToken(token: string | undefined, secret: stri
   }
 
   const expectedSignature = await sign(encodedPayload, secret);
-  if (signature !== expectedSignature) {
+  if (!constantTimeEqual(signature, expectedSignature)) {
     return null;
   }
 

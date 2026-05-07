@@ -26,6 +26,9 @@ const envSchema = z.object({
   OPENAI_MODEL_IDS: z.string().optional(),
   NEXT_PUBLIC_DEFAULT_MODEL: z.string().optional(),
   ADMIN_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
+  DEFAULT_ADMIN_BOOTSTRAP_ENABLED: z
+    .preprocess((value) => value === true || value === "true" || value === "1", z.boolean())
+    .default(false),
   DTSC_CONTACT_EMAIL: optionalEmailWithDefault("contact@dtsc-platform.com"),
   ZOHO_MAIL_WEBHOOK_URL: optionalUrl,
   ZOHO_OUTBOUND_MAIL_WEBHOOK_URL: optionalUrl,

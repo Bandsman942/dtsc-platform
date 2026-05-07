@@ -12,8 +12,17 @@ import {
 } from "@/lib/otp";
 import { writeAuditLog } from "@/lib/audit";
 import { ensureBillingPlans, getNextBillingPeriod } from "@/lib/billing";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
+  const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-up"), 5, 30 * 60 * 1000);
+  if (!limiter.ok) {
+    return NextResponse.json(
+      { error: "Too many registration attempts", resetAt: new Date(limiter.resetAt).toISOString() },
+      { status: 429 }
+    );
+  }
+
   const body = signUpSchema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: "Invalid registration data" }, { status: 400 });

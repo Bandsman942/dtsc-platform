@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { VisitTracker } from "@/components/analytics/visit-tracker";
-import { publicLinks } from "@/components/public/public-links";
 import { PublicNav } from "@/components/public/public-nav";
 import { dtsc } from "@/lib/dtsc";
 
@@ -12,6 +11,15 @@ const socialNetworks = [
   { network: "youtube", href: null, label: "YouTube DTSC Platform à venir" },
   { network: "linkedin", href: null, label: "LinkedIn DTSC Platform à venir" },
   { network: "tiktok", href: null, label: "TikTok DTSC Platform à venir" },
+];
+
+const resourceLinks = [
+  { href: "/data-afrique", label: "Data en Afrique" },
+  { href: "/bi-kpi", label: "BI & KPI" },
+  { href: "/ia-entreprise", label: "IA en entreprise" },
+  { href: "/secteurs", label: "Secteurs accompagnés" },
+  { href: "/#projets", label: "Projets" },
+  { href: "/#ressources", label: "Ressources" },
 ];
 
 export function PublicHeader() {
@@ -39,7 +47,7 @@ export function PublicFooter() {
         <div>
           <p className="font-black text-dtsc-ink">Ressources</p>
           <div className="mt-3 grid gap-2">
-            {publicLinks.slice(1).map((link) => (
+            {resourceLinks.map((link) => (
               <Link key={link.href} href={link.href} className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{link.label}</Link>
             ))}
           </div>

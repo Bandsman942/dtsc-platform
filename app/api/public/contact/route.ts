@@ -3,8 +3,17 @@ import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { publicContactSchema } from "@/lib/validators";
 import { sendZohoMailWebhook } from "@/lib/zoho-mail";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
+  const limiter = await rateLimit(getRateLimitKey(req, "public:contact"), 6, 60 * 60 * 1000);
+  if (!limiter.ok) {
+    return NextResponse.json(
+      { error: "Too many contact requests", resetAt: new Date(limiter.resetAt).toISOString() },
+      { status: 429 }
+    );
+  }
+
   const body = publicContactSchema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: "Invalid contact request" }, { status: 400 });

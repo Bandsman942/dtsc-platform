@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const limiter = rateLimit(`chat:${session.userId}`, 30, 60 * 60 * 1000);
+  const limiter = await rateLimit(`chat:${session.userId}`, 30, 60 * 60 * 1000);
   if (!limiter.ok) {
     return NextResponse.json(
       { error: "Usage limit reached. Please try again later." },

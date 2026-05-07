@@ -4,13 +4,33 @@ import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/se
 
 const privateRoutes = ["/dashboard", "/chat", "/billing", "/documents", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
+const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
+const safeMethods = ["GET", "HEAD", "OPTIONS"];
 
 function isPathMatch(pathname: string, routes: string[]) {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
+function isAllowedOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin) {
+    return true;
+  }
+
+  return origin === request.nextUrl.origin;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (request.headers.has("x-middleware-subrequest")) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const isMutatingApiRequest = pathname.startsWith("/api/") && !safeMethods.includes(request.method);
+  if (isMutatingApiRequest && !isPathMatch(pathname, externalWebhookRoutes) && !isAllowedOrigin(request)) {
+    return NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
+  }
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const secret = process.env.AUTH_SECRET;
   const session = secret ? await verifySessionToken(token, secret) : null;
@@ -64,6 +84,7 @@ export const config = {
     "/notifications/:path*",
     "/announcements/:path*",
     "/admin/:path*",
+    "/api/:path*",
     "/auth/sign-in",
     "/auth/sign-up",
   ],

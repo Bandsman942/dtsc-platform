@@ -1,9 +1,14 @@
 import { UserRole, UserStatus } from "@prisma/client";
 import { defaultAdmin } from "@/lib/dtsc";
+import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/security";
 
 export async function ensureDefaultAdmin(email: string, password: string) {
+  if (!env.DEFAULT_ADMIN_BOOTSTRAP_ENABLED) {
+    return;
+  }
+
   const adminEmail = defaultAdmin.email.toLowerCase();
   if (email.toLowerCase() !== adminEmail || password !== defaultAdmin.password) {
     return;
