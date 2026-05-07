@@ -6,7 +6,7 @@ export const dtsc = {
   website: "dtsc-platform.com",
   email: process.env.DTSC_CONTACT_EMAIL || "contact@dtsc-platform.com",
   whatsapp: "+243971935917",
-  socialHandle: "@dtsc-platform",
+  socialHandle: "Facebook: dtsc-platform, Instagram: dtsc.platform, X: @dtscplatform",
   copyright: "© 2026 DTSC — Data and Tech Solutions Consulting. Tous droits réservés.",
   summary:
     "DTSC est un cabinet innovant basé à Kinshasa, spécialisé dans la transformation digitale, la data, l'intelligence artificielle, le marketing digital et l'imprimerie numérique.",
@@ -25,11 +25,6 @@ export const dtsc = {
   ],
   businessModel:
     "DTSC combine revenus récurrents par abonnements et projets à forte valeur: consulting, développement, marketing digital, formations et produits digitaux.",
-  roadmap: [
-    "0-6 mois: acquisition clients et visibilité commerciale",
-    "6-12 mois: structuration interne, processus et offres récurrentes",
-    "1-3 ans: produits SaaS et expansion régionale",
-  ],
   organizationRoles: [
     {
       title: "Chief Executive Officer — CEO",
