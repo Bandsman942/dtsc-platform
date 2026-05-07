@@ -98,7 +98,7 @@ export function AdminSettingsPanel({
       );
       form.reset();
     } else {
-      setBroadcastMessage("Impossible d'envoyer la diffusion.");
+      setBroadcastMessage(body?.message || body?.details || "Impossible d'envoyer la diffusion.");
     }
   }
 
@@ -118,12 +118,12 @@ export function AdminSettingsPanel({
         body?.zoho?.sent
           ? body.zoho.personalized
             ? `Email personnalisé transmis à ${body.zoho.delivered || 0} abonné(s) newsletter.`
-            : `Email transmis à ${body.emails?.length || 0} abonné(s) newsletter en CCI.`
+            : `Email transmis à ${body.recipientCount || 0} abonné(s) newsletter en CCI.`
           : "Diffusion préparée. Configurez l'API Zoho Mail ou le webhook mail sortant pour envoyer directement aux abonnés."
       );
       form.reset();
     } else {
-      setNewsletterBroadcastMessage("Impossible d'envoyer la diffusion newsletter.");
+      setNewsletterBroadcastMessage(body?.message || body?.details || "Impossible d'envoyer la diffusion newsletter.");
     }
   }
 

@@ -442,8 +442,8 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `POST` | `/api/admin/publications` | `ADMIN` | Creation d'une publication publique |
 | `PATCH` | `/api/admin/publications/[id]` | `ADMIN` | Modification d'une publication publique |
 | `DELETE` | `/api/admin/publications/[id]` | `ADMIN` | Suppression d'une publication publique |
-| `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs |
-| `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter |
+| `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
+| `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter, avec logs API et cause d'erreur explicite |
 | `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
 
 ### Billing et paiements
@@ -553,6 +553,21 @@ Reponse:
 
 `{user}` est remplace par le nom du destinataire. Si `{user}` est present, l'application envoie des messages personnalises individuellement.
 
+Reponse reussie:
+
+```json
+{
+  "ok": true,
+  "recipientCount": 12,
+  "zoho": {
+    "sent": true,
+    "provider": "zoho-mail-api"
+  }
+}
+```
+
+En cas d'echec serveur, la route retourne un champ `message` lisible par l'administrateur et journalise la cause dans `ApiLog`. Les listes completes d'emails ne sont pas renvoyees au client.
+
 ### Diffusion newsletter
 
 ```json
@@ -561,6 +576,21 @@ Reponse:
   "content": "Bonjour {user}, contenu newsletter."
 }
 ```
+
+Reponse reussie:
+
+```json
+{
+  "ok": true,
+  "recipientCount": 120,
+  "zoho": {
+    "sent": true,
+    "provider": "zoho-mail-api"
+  }
+}
+```
+
+En cas de payload invalide, la route retourne un message explicite sur la longueur minimale de l'objet ou du contenu. En cas d'erreur serveur, la cause est journalisee dans `ApiLog`.
 
 ### Publication publique admin
 
