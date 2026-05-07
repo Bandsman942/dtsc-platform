@@ -3,62 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { publicLinks } from "@/components/public/public-links";
 import { cn } from "@/lib/utils";
 
-function isActive(pathname: string, href: string, activeSection: string | null, sectionId?: string) {
-  if (sectionId) {
-    return pathname === "/" && activeSection === sectionId;
-  }
-  return href === "/" ? pathname === "/" && !activeSection : pathname.startsWith(href);
+function isActive(pathname: string, href: string) {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function PublicNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (pathname !== "/") {
-      setActiveSection(null);
-      return undefined;
-    }
-
-    const linksWithSections = publicLinks.filter((link) => link.sectionId);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-        if (visible?.target.id) {
-          setActiveSection(visible.target.id);
-        }
-      },
-      { rootMargin: "-35% 0px -55% 0px", threshold: [0.1, 0.3, 0.6] }
-    );
-
-    linksWithSections.forEach((link) => {
-      const section = document.getElementById(link.sectionId || "");
-      if (section) {
-        observer.observe(section);
-      }
-    });
-
-    function updateTopState() {
-      if (window.scrollY < 180) {
-        setActiveSection(null);
-      }
-    }
-
-    window.addEventListener("scroll", updateTopState, { passive: true });
-    updateTopState();
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("scroll", updateTopState);
-    };
-  }, [pathname]);
 
   return (
     <div className="lg:flex lg:items-center lg:gap-3">
@@ -74,7 +29,7 @@ export function PublicNav() {
 
       <nav className={cn("mt-3 grid gap-2 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_12px_32px_rgba(0,43,91,0.08)] lg:mt-0 lg:flex lg:items-center lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none", !open && "hidden lg:flex")}>
         {publicLinks.map((link) => {
-          const active = isActive(pathname, link.href, activeSection, link.sectionId);
+          const active = isActive(pathname, link.href);
           return (
             <Link
               key={link.href}
@@ -93,7 +48,7 @@ export function PublicNav() {
           );
         })}
         <Link
-          href="/#contact"
+          href="/contact"
           onClick={() => setOpen(false)}
           className="rounded-xl bg-[#002b5b] px-3 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(0,43,91,0.22)] hover:bg-[#001736]"
         >

@@ -10,7 +10,8 @@ DTSC Platform est une application SaaS Next.js App Router pour DTSC - Data and T
 
 Objectifs couverts par le code actuel:
 
-- landing page publique DTSC refondue avec navigation corporate, sections Services, Solutions, Methode, Secteurs, Projets, Ressources, A propos, Contact, formulaires contact et newsletter;
+- landing page publique DTSC refondue avec navigation corporate vers des pages dediees: Services, Solutions, Secteurs, Projets, Ressources, A propos et Contact;
+- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
@@ -67,6 +68,12 @@ app/
   settings/                    Parametres compte/theme
   support/                     Tickets support
   page.tsx                     Landing page
+  services/                    Page publique services
+  solutions/                   Page publique solutions
+  projets/                     Page publique projets et demonstrations
+  ressources/                  Page publique ressources + publications admin
+  a-propos/                    Page publique entreprise et organisation
+  contact/                     Page publique contact/newsletter
   sitemap.ts                   Sitemap SEO
   robots.ts                    Robots SEO
 
@@ -96,6 +103,7 @@ lib/
   rate-limit.ts                Rate limit Upstash Redis optionnel avec fallback memoire
   settings.ts                  Parametres globaux
   notifications.ts             Creation notifications
+  public-site.ts               Contenus publics corporate, sources et pages dediees
 
 prisma/
   schema.prisma                Modele de donnees
@@ -189,6 +197,7 @@ Modeles actifs:
 | `Organization` | Base organisationnelle prevue |
 | `NewsletterSubscriber` | Abonnes newsletter publics |
 | `ContactMessage` | Messages publics de contact |
+| `PublicPublication` | Publication publique administrable pour Ressources, guides, annonces et cas pratiques |
 | `SupportTicket` | Ticket support |
 | `TicketMessage` | Discussion dans un ticket |
 | `SiteVisit` | Visites publiques du site |
@@ -430,6 +439,9 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `PATCH` | `/api/admin/users/[id]/status` | `ADMIN` | Activation/suspension/statut |
 | `PATCH` | `/api/admin/users/[id]/limits` | `ADMIN` | Limites messages/tokens |
 | `PATCH` | `/api/admin/settings` | `ADMIN` | Parametres globaux |
+| `POST` | `/api/admin/publications` | `ADMIN` | Creation d'une publication publique |
+| `PATCH` | `/api/admin/publications/[id]` | `ADMIN` | Modification d'une publication publique |
+| `DELETE` | `/api/admin/publications/[id]` | `ADMIN` | Suppression d'une publication publique |
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs |
 | `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter |
 | `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
@@ -549,6 +561,47 @@ Reponse:
   "content": "Bonjour {user}, contenu newsletter."
 }
 ```
+
+### Publication publique admin
+
+Routes:
+
+```txt
+POST /api/admin/publications
+PATCH /api/admin/publications/[id]
+DELETE /api/admin/publications/[id]
+```
+
+Payload `POST` et `PATCH`:
+
+```json
+{
+  "title": "Guide pratique data pour PME",
+  "slug": "guide-data-pme",
+  "category": "GUIDE",
+  "excerpt": "Résumé visible dans la page Ressources.",
+  "content": "Contenu long destiné aux visiteurs publics.",
+  "coverLabel": "Data & PME",
+  "published": true
+}
+```
+
+Categories autorisees:
+
+- `RESSOURCE`
+- `ARTICLE`
+- `GUIDE`
+- `CAS_PRATIQUE`
+- `ANNONCE`
+- `PROJET`
+
+Regles:
+
+- seul `ADMIN` peut creer, modifier ou supprimer;
+- le `slug` doit etre unique, en minuscules, avec tirets;
+- seules les publications `published=true` apparaissent sur `/ressources` et `/ressources/[slug]`;
+- chaque mutation est journalisee dans `AuditLog`;
+- les publications servent aux contenus publics mis a jour regulierement sans redeploiement applicatif.
 
 ### Checkout MaishaPay
 
@@ -894,7 +947,9 @@ Fichiers:
 - `app/sitemap.ts`
 - `app/robots.ts`
 - `app/layout.tsx`
-- pages publiques: `/`, `/data-afrique`, `/bi-kpi`, `/ia-entreprise`, `/secteurs`, `/conditions-utilisation`, `/politique-confidentialite`
+- pages publiques principales: `/`, `/services`, `/solutions`, `/secteurs`, `/projets`, `/ressources`, `/ressources/[slug]`, `/a-propos`, `/contact`
+- pages ressources historiques: `/data-afrique`, `/bi-kpi`, `/ia-entreprise`
+- pages legales: `/conditions-utilisation`, `/politique-confidentialite`
 
 Objectifs codes:
 
@@ -903,8 +958,35 @@ Objectifs codes:
 - metadonnees;
 - Open Graph/Twitter;
 - contenus publics longs et indexes;
+- navigation publique par routes dediees avec onglet actif selon `pathname`;
+- contenus corporate centralises dans `lib/public-site.ts`;
+- contexte DTSC issu du business plan: vision, mission, services, marche, organisation et approche commerciale;
+- publications administrables dans `PublicPublication` pour alimenter la page Ressources;
+- sources publiques verifiables integrees dans les pages de contenu;
 - formulaire contact;
 - formulaire newsletter.
+
+Pages publiques dediees:
+
+| Route | Objectif |
+| --- | --- |
+| `/` | Page d'accueil courte, conversion et orientation vers les pages dediees |
+| `/services` | Services DTSC: transformation numerique, data, IA, marketing digital, audit, formation |
+| `/solutions` | Offres concretes: chatbot, dashboards, applications metier, automatisation, RAG documentaire |
+| `/secteurs` | Secteurs cibles: assurances, sante, pharmacies, PME, ONG, education, finance |
+| `/projets` | Demonstrations et types de projets livrables |
+| `/ressources` | Ressources publiques statiques et publications admin publiees |
+| `/ressources/[slug]` | Lecture detaillee d'une publication admin publiee |
+| `/a-propos` | Presentation DTSC, vision, mission, business model et postes de l'organisation sans noms individuels |
+| `/contact` | Contact professionnel et inscription newsletter |
+
+Sources publiques actuellement utilisees:
+
+- IFC, digitalisation des entreprises africaines: `https://www.ifc.org/en/pressroom/2024/ifc-report-shows-digitalization-holds-immense-promise-economic-potential-for-african-businesses-of-all-sizes`
+- Banque mondiale, transformation digitale en Afrique: `https://www.worldbank.org/en/results/2024/01/18/digital-transformation-drives-development-in-afe-afw-africa.print`
+- GSMA Mobile Economy Sub-Saharan Africa 2024: `https://www.gsma.com/newsroom/press-release/powering-progress-through-connectivity-gsmas-mobile-economy-sub-saharan-africa-report-calls-for-action-to-close-the-digital-dividenew-report-highlights-opportunities-in-ai-5g-and-satellite-connectivit/`
+- NIST AI Risk Management Framework: `https://www.nist.gov/itl/ai-risk-management-framework`
+- WHO Global Strategy on Digital Health: `https://www.who.int/publications/i/item/9789240116870`
 
 ## 16. Securite applicative
 

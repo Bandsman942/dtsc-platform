@@ -14,12 +14,14 @@ const socialNetworks = [
 ];
 
 const resourceLinks = [
+  { href: "/services", label: "Services" },
+  { href: "/solutions", label: "Solutions" },
+  { href: "/projets", label: "Projets" },
+  { href: "/ressources", label: "Ressources" },
   { href: "/data-afrique", label: "Data en Afrique" },
   { href: "/bi-kpi", label: "BI & KPI" },
   { href: "/ia-entreprise", label: "IA en entreprise" },
   { href: "/secteurs", label: "Secteurs accompagnés" },
-  { href: "/#projets", label: "Projets" },
-  { href: "/#ressources", label: "Ressources" },
 ];
 
 export function PublicHeader() {

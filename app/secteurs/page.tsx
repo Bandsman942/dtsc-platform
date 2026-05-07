@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { InfoPage } from "@/components/public/info-page";
-import { publicPages } from "@/lib/public-content";
+import { CorporatePage } from "@/components/public/corporate-page";
+import { publicLongPages } from "@/lib/public-site";
 
 export const metadata: Metadata = {
   title: "Secteurs accompagnés",
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function SecteursPage() {
-  return <InfoPage {...publicPages.sectors} />;
+  return <CorporatePage page={publicLongPages.secteurs} />;
 }

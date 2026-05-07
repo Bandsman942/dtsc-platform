@@ -6,11 +6,11 @@ export type PublicLink = {
 
 export const publicLinks: PublicLink[] = [
   { href: "/", label: "Accueil" },
-  { href: "/#services", label: "Services", sectionId: "services" },
-  { href: "/#solutions", label: "Solutions", sectionId: "solutions" },
-  { href: "/#secteurs", label: "Secteurs", sectionId: "secteurs" },
-  { href: "/#projets", label: "Projets", sectionId: "projets" },
-  { href: "/#ressources", label: "Ressources", sectionId: "ressources" },
-  { href: "/#a-propos", label: "À propos", sectionId: "a-propos" },
-  { href: "/#contact", label: "Contact", sectionId: "contact" },
+  { href: "/services", label: "Services" },
+  { href: "/solutions", label: "Solutions" },
+  { href: "/secteurs", label: "Secteurs" },
+  { href: "/projets", label: "Projets" },
+  { href: "/ressources", label: "Ressources" },
+  { href: "/a-propos", label: "À propos" },
+  { href: "/contact", label: "Contact" },
 ];

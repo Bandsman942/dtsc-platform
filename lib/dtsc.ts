@@ -23,6 +23,50 @@ export const dtsc = {
     "Marketing digital et acquisition clients",
     "Imprimerie numérique et supports physiques",
   ],
+  businessModel:
+    "DTSC combine revenus récurrents par abonnements et projets à forte valeur: consulting, développement, marketing digital, formations et produits digitaux.",
+  roadmap: [
+    "0-6 mois: acquisition clients et visibilité commerciale",
+    "6-12 mois: structuration interne, processus et offres récurrentes",
+    "1-3 ans: produits SaaS et expansion régionale",
+  ],
+  organizationRoles: [
+    {
+      title: "Chief Executive Officer — CEO",
+      mission:
+        "Définit la vision stratégique, représente DTSC auprès des partenaires et supervise les objectifs commerciaux, financiers et opérationnels.",
+    },
+    {
+      title: "Chief Operations Officer — COO",
+      mission:
+        "Transforme la stratégie en actions concrètes, coordonne l'exécution des projets et veille à la discipline opérationnelle.",
+    },
+    {
+      title: "Chief Technical Officer — CTO",
+      mission:
+        "Pilote la stratégie technologique, l'architecture, la qualité, la sécurité et l'évolutivité des solutions digitales, data et IA.",
+    },
+    {
+      title: "Human Resources and Chief Financial Officer — HR & CFO",
+      mission:
+        "Assure la gestion administrative, financière et humaine: budgets, dépenses, factures, dossiers RH et stabilité interne.",
+    },
+    {
+      title: "Legal Advisor — LA",
+      mission:
+        "Sécurise les contrats, accompagne la conformité, protège les intérêts juridiques et réduit les risques administratifs.",
+    },
+    {
+      title: "Medical Projects Officer — MPO",
+      mission:
+        "Cadre les projets santé, garantit la cohérence médicale et relie les besoins cliniques, pharmaceutiques et assurantiels aux solutions numériques.",
+    },
+    {
+      title: "Supply Chain Officer — SCO",
+      mission:
+        "Gère les achats, ressources matérielles, fournisseurs, stocks, inventaire et logistique des formations, missions et événements.",
+    },
+  ],
   advantages: [
     "Pilotage par les indicateurs clés",
     "Réduction des coûts opérationnels",

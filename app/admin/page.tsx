@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
+import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -31,7 +32,7 @@ export default async function AdminPage({
   }
   const roleFilter = isUserRole(role) ? role : undefined;
 
-  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits, payments, apiLogs, webhookEvents] =
+  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits, payments, apiLogs, webhookEvents, publicPublications] =
     await Promise.all([
       getAppSettings(),
       prisma.user.findMany({
@@ -71,6 +72,10 @@ export default async function AdminPage({
       prisma.webhookEvent.findMany({
         orderBy: { createdAt: "desc" },
         take: 20,
+      }),
+      prisma.publicPublication.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 40,
       }),
     ]);
 
@@ -122,6 +127,8 @@ export default async function AdminPage({
             signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
           }}
         />
+
+        <PublicPublicationsManager publications={JSON.parse(JSON.stringify(publicPublications))} />
 
         <section className="dtsc-card p-6">
           <div className="mb-5">

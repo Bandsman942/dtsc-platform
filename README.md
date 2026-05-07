@@ -27,6 +27,8 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 ## Fonctionnalités
 
 - Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
+- Pages publiques dédiées avec onglet actif, contenus DTSC issus du business plan et sources vérifiables
+- Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -52,6 +54,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Indicateurs de limites visibles dans le chatbot
 - Gestion support pour `ADMIN` et `SUPPORT`: traitement, résolution et clôture de tickets
 - Pages publiques d'information: Data en Afrique, BI & KPI, IA en entreprise, secteurs accompagnés
+- Pages publiques corporate: Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
 - Analytics simples des visites publiques avec filtre par période dans `/admin`
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
 - Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
@@ -254,6 +257,13 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 ## Routes Principales
 
 - `/` landing page publique
+- `/services` services DTSC
+- `/solutions` solutions et offres concrètes
+- `/secteurs` secteurs accompagnés
+- `/projets` projets et démonstrations
+- `/ressources` ressources publiques et publications admin
+- `/a-propos` présentation DTSC et organisation
+- `/contact` contact et newsletter
 - `/auth/sign-in` connexion
 - `/auth/sign-up` inscription
 - `/dashboard` dashboard client
@@ -266,10 +276,25 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 - `/notifications` centre de notifications
 - `/announcements` fil d'annonces
 - `/admin` administration
-- `/data-afrique` ressource publique
-- `/bi-kpi` ressource publique
-- `/ia-entreprise` ressource publique
-- `/secteurs` ressource publique
+- `/data-afrique` ressource publique historique
+- `/bi-kpi` ressource publique historique
+- `/ia-entreprise` ressource publique historique
+
+## Administration Des Contenus Publics
+
+Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`.
+
+Champs principaux:
+
+- titre;
+- slug public unique;
+- catégorie: `RESSOURCE`, `ARTICLE`, `GUIDE`, `CAS_PRATIQUE`, `ANNONCE`, `PROJET`;
+- résumé;
+- contenu long;
+- libellé visuel;
+- statut publié/brouillon.
+
+Seules les publications marquées comme publiées sont visibles publiquement. Les contenus institutionnels fixes sont centralisés dans `lib/public-site.ts`.
 
 ## Structure
 
@@ -282,6 +307,13 @@ app/
     support/
     admin/
   admin/
+  services/
+  solutions/
+  secteurs/
+  projets/
+  ressources/
+  a-propos/
+  contact/
   auth/
   chat/
   dashboard/
@@ -309,6 +341,7 @@ lib/
   session.ts
   validators.ts
   dtsc.ts
+  public-site.ts
   default-admin.ts
 prisma/
   schema.prisma

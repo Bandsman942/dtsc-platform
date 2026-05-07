@@ -95,7 +95,8 @@ model User {
   subscriptions Subscription[]
   payments      Payment[]
   invoices      Invoice[]
-  documents     KnowledgeDocument[]
+  documents           KnowledgeDocument[]
+  publicPublications  PublicPublication[]
 
   @@index([role])
   @@index([status])
@@ -371,6 +372,24 @@ model SiteVisit {
 
   @@index([path, createdAt])
   @@index([createdAt])
+}
+
+model PublicPublication {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  category    String   @default("RESSOURCE")
+  excerpt     String
+  content     String
+  coverLabel  String?
+  published   Boolean  @default(false)
+  authorId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([category, published, createdAt])
+  @@index([authorId])
 }
 
 model Notification {

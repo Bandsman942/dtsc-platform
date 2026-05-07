@@ -1,0 +1,102 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowRight, FileText, Megaphone, Newspaper } from "lucide-react";
+import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { prisma } from "@/lib/prisma";
+import { trustedSources } from "@/lib/public-site";
+
+export const metadata: Metadata = {
+  title: "Ressources DTSC",
+  description: "Articles, annonces, guides, veille Data & IA et cas pratiques publiés par DTSC.",
+  alternates: { canonical: "/ressources" },
+};
+
+export const dynamic = "force-dynamic";
+
+const staticResources = [
+  { title: "Data en Afrique", href: "/data-afrique", text: "Comprendre les enjeux de structuration des données et de décision en Afrique.", icon: Newspaper },
+  { title: "BI & KPI", href: "/bi-kpi", text: "Construire des indicateurs utiles et des tableaux de bord orientés action.", icon: FileText },
+  { title: "IA en entreprise", href: "/ia-entreprise", text: "Identifier les bons cas d'usage IA et garder une validation humaine.", icon: Megaphone },
+];
+
+export default async function RessourcesPage() {
+  const publications = await prisma.publicPublication.findMany({
+    where: { published: true },
+    orderBy: { createdAt: "desc" },
+    take: 24,
+  });
+
+  return (
+    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+      <PublicHeader />
+      <section className="relative overflow-hidden border-b border-dtsc-border bg-gradient-to-br from-[#0f172a] via-[#002b5b] to-[#0057b8] text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(0,194,255,0.22),transparent_32%)]" />
+        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Ressources & annonces</p>
+          <h1 className="mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre la data, l&apos;IA et la transformation numérique avant de lancer un projet.</h1>
+          <p className="mt-5 max-w-3xl text-lg leading-8 text-blue-50">
+            Cette page regroupe les contenus publics réguliers que DTSC peut publier depuis l&apos;administration: articles, guides, annonces, veille, cas pratiques et démonstrations.
+          </p>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="grid gap-4 md:grid-cols-3">
+          {staticResources.map((resource) => (
+            <Link key={resource.href} href={resource.href} className="dtsc-card dtsc-card-hover p-6">
+              <resource.icon className="h-6 w-6 text-cyan-500" />
+              <h2 className="mt-5 text-xl font-black text-dtsc-ink">{resource.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-dtsc-muted">{resource.text}</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                Lire
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y border-dtsc-border bg-dtsc-surface">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications DTSC</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Contenus publiés depuis l&apos;administration</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {publications.map((publication) => (
+              <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover p-6">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{publication.category}</p>
+                <h3 className="mt-3 text-xl font-black text-dtsc-ink">{publication.title}</h3>
+                <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Ouvrir
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+            {!publications.length && (
+              <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-6 text-sm leading-7 text-dtsc-muted">
+                Aucune publication publique n&apos;est encore publiée. L&apos;administrateur peut ajouter des articles, guides, annonces et cas pratiques depuis le module Administration.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6">
+          <h2 className="font-black text-dtsc-ink">Sources de veille utilisées</h2>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {trustedSources.map((source) => (
+              <Link key={source.href} href={source.href} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">
+                {source.label}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+      <PublicFooter />
+    </main>
+  );
+}

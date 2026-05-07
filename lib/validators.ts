@@ -140,6 +140,20 @@ export const publicContactSchema = z.object({
   source: z.string().max(80).default("landing"),
 });
 
+export const publicPublicationSchema = z.object({
+  title: z.string().min(3).max(180),
+  slug: z
+    .string()
+    .min(3)
+    .max(140)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  category: z.enum(["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"]).default("RESSOURCE"),
+  excerpt: z.string().min(20).max(500),
+  content: z.string().min(80).max(12000),
+  coverLabel: z.string().max(80).optional().or(z.literal("")),
+  published: z.coerce.boolean().default(false),
+});
+
 export const checkoutSchema = z.object({
   planId: z.string().min(2).max(80),
   walletId: z.string().max(40).optional().or(z.literal("")),
