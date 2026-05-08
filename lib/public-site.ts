@@ -88,7 +88,7 @@ export const solutionsCards: PublicCard[] = [
   { title: "Applications métier", text: "Des outils digitaux adaptés aux processus réels de l'organisation.", icon: Layers3 },
   { title: "Automatisation", text: "Des flux plus rapides pour réduire les doubles saisies, relances manuelles et pertes d'information.", icon: Workflow },
   { title: "Portails clients & CRM", text: "Des espaces structurés pour centraliser interactions, tickets, prospects et suivi commercial.", icon: Building2 },
-  { title: "IA/RAG documentaire", text: "Une exploitation contrôlée des documents pour fournir des réponses plus contextualisées.", icon: UploadCloud },
+  { title: "Assistant documentaire", text: "Une façon simple d'interroger des documents validés et d'obtenir des réponses plus utiles.", icon: UploadCloud },
 ];
 
 export const sectorCards: PublicCard[] = [
@@ -106,29 +106,29 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     eyebrow: "Services DTSC",
     title: "Des services de conseil et d'exécution pour transformer la performance.",
     intro:
-      "DTSC combine stratégie business, data, IA, développement d'applications, marketing digital, formation et supports professionnels. L'objectif est de produire des résultats mesurables: meilleure visibilité, réduction des coûts, décisions plus fiables et opérations plus fluides.",
+      "DTSC accompagne les organisations qui veulent gagner du temps, mieux suivre leurs activités, attirer plus de clients et moderniser leurs outils sans complexité inutile.",
     tone: "blue",
     heroLabel: "Conseil + Exécution",
-    heroImage: "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80",
+    heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
     cards: serviceCards,
     sources: trustedSources,
     sections: [
       {
         heading: "Transformer sans surcharger l'organisation",
         text:
-          "De nombreuses organisations souhaitent accélérer leur transformation numérique, mais restent freinées par des outils dispersés, des fichiers peu standardisés et une faible adoption par les équipes. DTSC privilégie une approche progressive : comprendre les priorités, identifier les données disponibles, repérer les décisions à mieux piloter, puis déployer des solutions utiles, simples et mesurables. Cette méthode tient compte des réalités opérationnelles africaines, où le potentiel numérique est important, mais où les contraintes de coût, de compétences et d’infrastructure doivent être intégrées dès le départ.",
+          "Beaucoup d'organisations savent qu'elles doivent se moderniser, mais ne veulent pas perdre du temps dans des outils difficiles à utiliser. DTSC privilégie une approche progressive: comprendre vos priorités, choisir les gains rapides, puis déployer des solutions que les équipes peuvent adopter facilement.",
         bullets: ["Diagnostic initial", "Priorisation des gains rapides", "Livrables mesurables", "Formation et adoption"],
       },
       {
         heading: "Relier data, IA et applications métier",
         text:
-          "Chez DTSC, la donnée, l’intelligence artificielle et les applications métier sont pensées ensemble. Un tableau de bord exige des données fiables, une automatisation repose sur un processus bien défini, et un chatbot devient réellement utile lorsqu’il comprend le contexte métier. Cette approche permet de créer des solutions cohérentes, durables et adaptées à l’évolution des organisations.",
+          "Chez DTSC, les chiffres, les outils et l'assistance IA sont pensés comme un ensemble. Le but n'est pas d'ajouter de la technologie pour la technologie, mais de rendre les décisions plus claires, les opérations plus rapides et le service client plus fluide.",
         bullets: ["Dashboards KPI", "Applications web", "Automatisation", "Chatbots et IA maîtrisée"],
       },
       {
         heading: "Des solutions adaptées à chaque besoin",
         text:
-          "DTSC accompagne les organisations selon leur niveau de maturité et leurs priorités : mission de conseil, développement d’une solution métier, automatisation d’un processus, formation des équipes ou accompagnement continu. L’objectif est simple : proposer une réponse claire, utile et adaptée aux besoins réels de chaque client.",
+          "Chaque organisation avance à son rythme. DTSC peut intervenir pour un diagnostic, une solution métier, un tableau de bord, une automatisation, une formation ou un accompagnement continu. L'objectif reste le même: une réponse claire, utile et adaptée à votre réalité.",
         bullets: ["Conseil stratégique", "Développement de solutions", "Formation des équipes"],
       },
     ],
@@ -137,10 +137,10 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     eyebrow: "Solutions",
     title: "Des solutions concrètes pour automatiser, piloter et mieux servir vos clients.",
     intro:
-      "DTSC construit des solutions orientées cas d'usage: chatbot professionnel, dashboards, applications métier, portails clients, CRM, automatisations et IA documentaire.",
+      "DTSC construit des solutions concrètes pour mieux répondre aux clients, suivre les activités, réduire les tâches manuelles et exploiter les informations déjà disponibles dans l'organisation.",
     tone: "cyan",
     heroLabel: "Solutions métier",
-    heroImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
+    heroImage: "https://images.pexels.com/photos/5685870/pexels-photo-5685870.jpeg?auto=compress&cs=tinysrgb&w=1400",
     cards: solutionsCards,
     sources: trustedSources,
     sections: [
@@ -157,9 +157,9 @@ export const publicLongPages: Record<string, PublicLongPage> = {
         bullets: ["Power BI et reporting", "Applications métier", "Portails clients", "Automatisation des tâches"],
       },
       {
-        heading: "IA documentaire et RAG",
+        heading: "Assistant documentaire",
         text:
-          "L'IA documentaire permet d'améliorer la pertinence des réponses en exploitant des contenus validés. DTSC prévoit cette approche pour aider les équipes à interroger leurs documents métier dans un cadre privé, avec des droits d'accès et une validation humaine lorsque la décision devient critique.",
+          "Vos documents contiennent souvent des réponses utiles: procédures, offres, rapports, FAQ ou supports internes. DTSC prépare des assistants capables d'aider les équipes à retrouver plus vite l'information, tout en gardant un cadre privé et une validation humaine pour les décisions importantes.",
         bullets: ["Documents privés", "Réponses contextualisées", "Recherche sémantique", "Sécurité et confidentialité"],
       },
     ],
@@ -168,17 +168,17 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     eyebrow: "Secteurs",
     title: "Des offres adaptées aux assurances, cliniques, pharmacies, PME et institutions.",
     intro:
-      "Le marché cible DTSC inclut les assurances, cliniques, pharmacies et PME. Ces organisations partagent un besoin de visibilité, de structuration des données et d'amélioration opérationnelle.",
+      "DTSC accompagne les organisations qui ont besoin de mieux suivre leurs opérations, améliorer leur relation client, structurer leurs informations et gagner en efficacité au quotidien.",
     tone: "emerald",
     heroLabel: "Marchés cibles",
-    heroImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80",
+    heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
     cards: sectorCards,
     sources: trustedSources,
     sections: [
       {
         heading: "Santé, cliniques et pharmacies",
         text:
-          "Dans le secteur santé, les solutions numériques doivent améliorer la qualité de service sans négliger la confidentialité et les réalités opérationnelles. La stratégie mondiale de santé numérique de l'OMS rappelle que les initiatives efficaces doivent combiner ressources financières, organisationnelles, humaines et technologiques. DTSC traduit ce principe dans des projets concrets: tableaux de bord, suivi d'activité, gestion des stocks, reporting et solutions adaptées aux structures médicales.",
+          "Dans la santé, la technologie doit aider les équipes à mieux servir les patients, suivre les stocks, améliorer le reporting et gagner en visibilité sans compliquer le travail quotidien. DTSC apporte une approche attentive aux réalités des cliniques, pharmacies et projets médicaux.",
         bullets: ["Reporting médical", "Gestion des stocks", "Confidentialité", "Validation métier santé"],
       },
       {
@@ -199,10 +199,10 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     eyebrow: "Projets & démonstrations",
     title: "Des démonstrations pour passer rapidement d'une idée à une solution exploitable.",
     intro:
-      "DTSC développe des prototypes et produits digitaux pour rendre visibles les gains possibles: chatbot, dashboard, application interne, automatisation et plateforme client.",
+      "DTSC transforme les idées en démonstrations concrètes pour tester rapidement la valeur d'une solution avant d'investir dans un déploiement plus large.",
     tone: "indigo",
     heroLabel: "Démos utiles",
-    heroImage: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80",
+    heroImage: "https://images.pexels.com/photos/5685870/pexels-photo-5685870.jpeg?auto=compress&cs=tinysrgb&w=1400",
     cards: [
       { title: "Prototype chatbot DTSC", text: "Qualification des besoins, historique, support et orientation client.", icon: Bot },
       { title: "Dashboard de reporting", text: "Suivi KPI, décisions et pilotage de performance.", icon: BarChart3 },
@@ -227,8 +227,8 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Passer du projet au produit",
         text:
-          "La roadmap DTSC prévoit une progression vers des produits SaaS et une expansion régionale. Les démonstrations et projets pilotes servent donc aussi à identifier les fonctionnalités réutilisables et à préparer des offres plus scalables.",
-        bullets: ["Offres réutilisables", "SaaS", "Documentation", "Amélioration continue"],
+          "Une démonstration réussie peut devenir une solution durable. DTSC aide à stabiliser les fonctionnalités, documenter les usages, former les équipes et préparer une amélioration continue après la mise en service.",
+        bullets: ["Fonctionnalités utiles", "Documentation claire", "Formation", "Amélioration continue"],
       },
     ],
   },
@@ -239,7 +239,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "Data and Tech Solutions Consulting est né pour aider les organisations africaines à améliorer leur performance grâce à la data, l'IA, l'automatisation, le marketing digital et les solutions métier.",
     tone: "slate",
     heroLabel: "Kinshasa · 2026",
-    heroImage: "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=80",
+    heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
     cards: [
       { title: "Vision", text: "Devenir un leader africain en transformation digitale et data consulting.", icon: Lightbulb },
       { title: "Mission", text: "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité.", icon: Rocket },
@@ -251,7 +251,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Une expertise hybride",
         text:
-          "Le business plan DTSC met en avant une expertise unique qui combine médecine, data et business. Cette combinaison donne au cabinet une sensibilité particulière aux projets où la qualité de service, la donnée, la confidentialité et l'organisation opérationnelle sont essentielles.",
+          "DTSC réunit une compréhension du terrain, de la donnée et des solutions numériques. Cette combinaison permet d'aborder les projets avec une attention particulière à la qualité de service, à la confidentialité, à la simplicité d'usage et à l'impact mesurable pour le client.",
         bullets: ["Médecine", "Data", "Business", "Technologie"],
       },
       {
@@ -263,8 +263,8 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Roadmap et croissance",
         text:
-          "La trajectoire prévue démarre par l'acquisition clients sur les 0 à 6 premiers mois, se poursuit par la structuration sur 6 à 12 mois, puis évolue vers des produits SaaS et une expansion régionale sur 1 à 3 ans. Le besoin de financement identifié sert à accélérer le marketing, le recrutement et le développement produit.",
-        bullets: ["Acquisition clients", "Structuration", "Produits SaaS", "Expansion régionale"],
+          "DTSC avance avec une ambition claire: accompagner davantage d'organisations, améliorer continuellement ses solutions et développer des offres plus accessibles pour les entreprises qui veulent progresser rapidement sans perdre le contrôle de leurs opérations.",
+        bullets: ["Accompagnement client", "Solutions évolutives", "Formation", "Croissance maîtrisée"],
       },
     ],
   },

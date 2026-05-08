@@ -34,7 +34,7 @@ export const publicPages: Record<string, PublicPageContent> = {
     intro:
       "La donnée devient un actif stratégique pour les entreprises africaines: elle permet de comprendre les clients, réduire les gaspillages, fiabiliser les décisions et créer une gouvernance plus lisible.",
     narrative:
-      "Le business plan DTSC part d'un constat simple: beaucoup d'organisations disposent déjà d'informations utiles, mais celles-ci restent dispersées dans des fichiers, des conversations, des outils non connectés ou des processus manuels. DTSC aide les dirigeants à transformer cette matière brute en indicateurs exploitables, en automatisations concrètes et en décisions pilotées par les faits. À Kinshasa et plus largement en Afrique, cette approche est particulièrement importante pour les assurances, cliniques, pharmacies et PME, où la visibilité sur les opérations conditionne directement la qualité de service, la maîtrise des coûts et la croissance.",
+      "Beaucoup d'organisations disposent déjà d'informations utiles, mais elles restent dispersées dans des fichiers, des conversations, des outils non connectés ou des processus manuels. DTSC aide les dirigeants à transformer cette matière brute en indicateurs exploitables, en actions concrètes et en décisions plus fiables. À Kinshasa et plus largement en Afrique, cette approche est particulièrement importante pour les assurances, cliniques, pharmacies et PME, où la visibilité sur les opérations influence directement la qualité de service, la maîtrise des coûts et la croissance.",
     imageAlt: "Carte visuelle des flux data DTSC",
     highlights: [
       { label: "Priorité", value: "Structurer" },
@@ -136,7 +136,7 @@ export const publicPages: Record<string, PublicPageContent> = {
     intro:
       "DTSC cible les assurances, cliniques, pharmacies et PME: des organisations où la donnée, la visibilité et l'automatisation peuvent produire des gains rapides.",
     narrative:
-      "Le business plan DTSC identifie un marché africain caractérisé par une digitalisation encore inégale et un besoin urgent de structuration. L'approche consiste à choisir des secteurs où les processus sont fréquents, les données nombreuses et les décisions opérationnelles critiques. Le cabinet peut ainsi proposer des solutions concrètes: reporting, applications métier, automatisation, IA, marketing digital et accompagnement des équipes.",
+      "Le marché africain présente encore de fortes différences de maturité numérique, mais aussi une opportunité majeure pour les organisations capables de structurer leurs informations et d'améliorer leur service. DTSC concentre son accompagnement sur les secteurs où les opérations sont fréquentes, les données nombreuses et les décisions quotidiennes importantes. Le cabinet propose ainsi des solutions concrètes: reporting, applications métier, automatisation, assistance IA, marketing digital et accompagnement des équipes.",
     imageAlt: "Secteurs professionnels accompagnés par DTSC",
     highlights: [
       { label: "Santé", value: "Cliniques" },

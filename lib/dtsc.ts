@@ -24,7 +24,7 @@ export const dtsc = {
     "Imprimerie numérique et supports physiques",
   ],
   businessModel:
-    "DTSC combine revenus récurrents par abonnements et projets à forte valeur: consulting, développement, marketing digital, formations et produits digitaux.",
+    "Un accompagnement flexible: conseil, solutions digitales, formations, marketing et outils numériques adaptés à vos priorités.",
   organizationRoles: [
     {
       title: "Chief Executive Officer — CEO",
