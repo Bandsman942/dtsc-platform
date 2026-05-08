@@ -114,12 +114,57 @@ export const adminSettingsSchema = z.object({
 export const broadcastSchema = z.object({
   title: z.string().min(3).max(160),
   body: z.string().min(3).max(2_000),
+  bodyHtml: z.string().max(60_000).optional().or(z.literal("")),
   type: z.string().min(2).max(40).default("BROADCAST"),
 });
 
 export const massMailSchema = z.object({
   subject: z.string().min(3).max(160),
   content: z.string().min(10).max(6_000),
+  contentHtml: z.string().max(60_000).optional().or(z.literal("")),
+});
+
+export const adminAccessSchema = z.object({
+  MANAGER: z.array(z.enum(["overview", "settings", "publications", "users", "visits", "activity", "audits"])).default([]),
+  SUPPORT: z.array(z.enum(["overview", "settings", "publications", "users", "visits", "activity", "audits"])).default([]),
+});
+
+export const companyProfileSchema = z.object({
+  organizationName: z.string().min(2).max(180),
+  legalForm: z.string().max(120).optional().or(z.literal("")),
+  sector: z.string().max(140).optional().or(z.literal("")),
+  sizeRange: z.string().max(80).optional().or(z.literal("")),
+  country: z.string().max(100).optional().or(z.literal("")),
+  city: z.string().max(100).optional().or(z.literal("")),
+  website: z.string().max(180).optional().or(z.literal("")),
+  description: z.string().max(1200).optional().or(z.literal("")),
+  mission: z.string().max(1200).optional().or(z.literal("")),
+  productsServices: z.string().max(2000).optional().or(z.literal("")),
+  customers: z.string().max(1200).optional().or(z.literal("")),
+  markets: z.string().max(1200).optional().or(z.literal("")),
+  competitors: z.string().max(1200).optional().or(z.literal("")),
+  processes: z.string().max(2000).optional().or(z.literal("")),
+  tools: z.string().max(1600).optional().or(z.literal("")),
+  dataSystems: z.string().max(1600).optional().or(z.literal("")),
+  compliance: z.string().max(1600).optional().or(z.literal("")),
+  challenges: z.string().max(2000).optional().or(z.literal("")),
+  goals: z.string().max(1600).optional().or(z.literal("")),
+  kpis: z.string().max(1600).optional().or(z.literal("")),
+  userPosition: z.string().max(140).optional().or(z.literal("")),
+  department: z.string().max(140).optional().or(z.literal("")),
+  responsibilities: z.string().max(2000).optional().or(z.literal("")),
+  decisionRole: z.string().max(800).optional().or(z.literal("")),
+});
+
+export const companyActivitySchema = z.object({
+  title: z.string().min(3).max(180),
+  description: z.string().min(10).max(2000),
+  frequency: z.string().max(100).optional().or(z.literal("")),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
+  tools: z.string().max(1200).optional().or(z.literal("")),
+  dataInputs: z.string().max(1200).optional().or(z.literal("")),
+  dataOutputs: z.string().max(1200).optional().or(z.literal("")),
+  painPoints: z.string().max(1600).optional().or(z.literal("")),
 });
 
 export const newsletterSubscriptionSchema = z.object({

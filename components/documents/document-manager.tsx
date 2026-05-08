@@ -82,7 +82,7 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
       <form onSubmit={uploadDocument} className="dtsc-card grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
         <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
           Titre documentaire
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex: Offre DTSC, cahier de besoins..." />
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex: Offre DTSC, cahier de besoins..." title="Nom lisible du document dans votre base documentaire." />
         </label>
         <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
           Fichier
@@ -90,9 +90,10 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
             type="file"
             accept=".txt,.md,.csv,.json,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
+            title="Sélectionner un fichier métier à indexer pour le chatbot."
           />
         </label>
-        <Button type="submit" disabled={isPending || usedSlots >= maxDocuments} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+        <Button type="submit" disabled={isPending || usedSlots >= maxDocuments} title="Indexer ce document dans votre espace privé selon votre abonnement." className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <UploadCloud className="h-4 w-4" />
           {isPending ? "Indexation..." : "Indexer"}
         </Button>

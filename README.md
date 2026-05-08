@@ -36,10 +36,12 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Factures envoyées par email après confirmation du paiement
 - Base documentaire privée avec upload TXT/Markdown/CSV/JSON/PDF, embeddings OpenAI et recherche pgvector pour RAG chatbot
 - Stockage optionnel des fichiers originaux dans Supabase Storage, tout en gardant Neon PostgreSQL comme base principale
+- Module Entreprise: profil organisationnel, poste utilisateur, responsabilités, activités métier, processus, données, objectifs et KPI injectés dans le contexte privé du chatbot
+- Ancienne page `/documents` redirigée vers `/company`; les documents restent gérés dans le module Entreprise selon les limites d'abonnement
 - Sessions sécurisées par cookie signé
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Middleware de protection des routes privées
-- Dashboard client
+- Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Interface chatbot avec sidebar de conversations
 - Historique des conversations et messages en base
 - Renommage et suppression de conversation
@@ -48,7 +50,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Tickets support
 - Dashboard admin
 - Suivi utilisateurs, conversations, messages, usage IA et tickets
-- Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
+- Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
 - Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
 - Limites journalières configurables par utilisateur: messages et tokens
 - Indicateurs de limites visibles dans le chatbot
@@ -63,7 +65,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`
 - Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
 - Inscription newsletter publique avec stockage en base et notification Zoho
-- Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter, avec personnalisation `{user}`
+- Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter, avec personnalisation `{user}`, CCI confidentielle et éditeur riche pour conserver le format collé
 - Fondations audit log et historisation des webhooks entrants
 - Logs API, audit des paiements et exports CSV/HTML imprimable PDF
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium

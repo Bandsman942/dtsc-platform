@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 07 mai 2026
+Derniere mise a jour: 08 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -15,13 +15,14 @@ Objectifs couverts par le code actuel:
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
+- module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
-- tableau de bord client;
+- tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
 - chatbot OpenAI avec historique des conversations, streaming et limites d'usage;
 - notifications internes;
 - annonces internes avec commentaires et reactions;
 - support sous forme de tickets conversationnels;
-- administration utilisateurs, limites d'usage, parametres globaux, visites publiques et diffusions;
+- administration utilisateurs, limites d'usage, parametres globaux, visites publiques, diffusions et acces par blocs pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API, audit des paiements et exports CSV/HTML imprimable PDF;
@@ -62,7 +63,9 @@ app/
   auth/sign-in/                Connexion
   auth/sign-up/                Inscription
   chat/                        Interface chatbot
+  company/                     Contexte entreprise + documents
   dashboard/                   Dashboard client
+  documents/                   Redirection historique vers /company
   notifications/               Centre de notifications
   profile/                     Profil utilisateur
   settings/                    Parametres compte/theme
@@ -82,6 +85,7 @@ components/
   announcements/               UI annonces
   auth/                        Formulaires auth
   chat/                        UI chatbot
+  company/                     UI profil entreprise et activites metier
   dashboard/                   UI dashboard
   layout/                      Shell prive, navigation
   notifications/               UI notifications
@@ -96,6 +100,8 @@ lib/
   security.ts                  Hashage PBKDF2 des mots de passe
   env.ts                       Validation des variables d'environnement
   openai.ts                    Integration OpenAI Responses API
+  company-context.ts           Contexte entreprise prive injecte dans le chatbot
+  admin-access.ts              Acces aux blocs Administration par role
   rag.ts                       Extraction texte, embeddings et recherche pgvector
   zoho-mail.ts                 Integration Zoho Mail/webhooks
   prisma.ts                    Client Prisma
@@ -191,6 +197,8 @@ Modeles actifs:
 | `Invoice` | Facture utilisateur envoyee par email |
 | `KnowledgeDocument` | Document prive indexe pour le RAG avec chemin Supabase Storage optionnel |
 | `KnowledgeChunk` | Segment documentaire et embedding pgvector |
+| `CompanyProfile` | Profil entreprise prive d'un utilisateur: organisation, secteur, processus, donnees, objectifs, KPI et poste |
+| `CompanyActivity` | Activites professionnelles declarees par l'utilisateur pour contextualiser le chatbot |
 | `Conversation` | Conversation chatbot rattachee a un utilisateur |
 | `Message` | Message utilisateur/assistant/systeme |
 | `UsageLog` | Suivi tokens, modele et cout estime |
@@ -205,7 +213,7 @@ Modeles actifs:
 | `Announcement` | Publication interne |
 | `AnnouncementComment` | Commentaire d'annonce |
 | `AnnouncementReaction` | Like/dislike d'annonce |
-| `AppSetting` | Parametres globaux admin |
+| `AppSetting` | Parametres globaux admin, dont les acces aux blocs Administration par role |
 | `AuditLog` | Journalisation des actions sensibles |
 | `WebhookEvent` | Historisation des webhooks entrants |
 | `ApiLog` | Journalisation des appels API critiques |
@@ -279,6 +287,7 @@ Routes protegees par middleware:
 - `/dashboard`
 - `/chat`
 - `/billing`
+- `/company`
 - `/documents`
 - `/profile`
 - `/settings`
@@ -287,16 +296,26 @@ Routes protegees par middleware:
 - `/announcements`
 - `/admin`
 
-`/admin` exige le role `ADMIN`.
+`/documents` reste disponible comme ancienne route et redirige vers `/company`. `/admin` est visible pour `ADMIN`, `MANAGER` et `SUPPORT`; les blocs internes sont controles par `AppSetting.adminRoleAccess`. Le role `CLIENT` est redirige vers `/dashboard`.
 
 ## 7. RBAC
 
 Regles codees:
 
-- `ADMIN`: acces admin, gestion utilisateurs, parametres globaux, diffusions, moderation globale annonces/commentaires, resolution support.
-- `SUPPORT`: acces aux tickets et resolution support.
-- `MANAGER`: peut publier des annonces internes.
+- `ADMIN`: acces admin complet, gestion utilisateurs, parametres globaux, diffusions, moderation globale annonces/commentaires, resolution support et configuration des blocs Administration visibles par role.
+- `SUPPORT`: acces aux tickets, resolution support et aux blocs Administration autorises.
+- `MANAGER`: peut publier des annonces internes et acceder aux blocs Administration autorises.
 - `CLIENT`: acces dashboard, chatbot, support, notifications, annonces en lecture/commentaire/reaction.
+
+Blocs Administration configurables par `ADMIN`:
+
+- `overview`: statistiques generales;
+- `settings`: parametres globaux et diffusions;
+- `publications`: contenus publics administrables;
+- `users`: utilisateurs, roles et limites;
+- `visits`: visites du site;
+- `activity`: conversations, utilisateurs et tickets;
+- `audits`: paiements, logs API et webhooks.
 
 Regles annonces:
 
@@ -325,9 +344,12 @@ Flux:
    - total tokens depuis `UsageLog`.
 7. Creation ou recuperation de la conversation.
 8. Sauvegarde du message utilisateur.
-9. Envoi des 24 derniers messages a OpenAI Responses API.
-10. Streaming du texte vers le client.
-11. Sauvegarde de la reponse assistant et du `UsageLog`.
+9. Recuperation du contexte Entreprise prive via `lib/company-context.ts`, si renseigne.
+10. Envoi des 24 derniers messages a OpenAI Responses API, avec contexte Entreprise et contexte documentaire lorsque pertinent.
+11. Streaming du texte vers le client.
+12. Sauvegarde de la reponse assistant et du `UsageLog`.
+
+Le contexte Entreprise est strictement rattache au `userId` connecte. Il contient uniquement les informations saisies par l'utilisateur dans `/company`: organisation, poste, responsabilites, activites, processus, outils, donnees, contraintes, objectifs et KPI.
 
 Si des documents utilisateur sont indexes:
 
@@ -392,6 +414,11 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | Methode | Route | Acces | Description |
 | --- | --- | --- | --- |
 | `POST` | `/api/chat` | session | Generation OpenAI en streaming |
+| `PATCH` | `/api/company/profile` | session | Creation ou mise a jour du profil entreprise prive |
+| `DELETE` | `/api/company/profile` | session | Suppression du profil entreprise prive |
+| `POST` | `/api/company/activities` | session | Creation d'une activite professionnelle |
+| `PATCH` | `/api/company/activities/[id]` | proprietaire | Mise a jour d'une activite professionnelle |
+| `DELETE` | `/api/company/activities/[id]` | proprietaire | Suppression d'une activite professionnelle |
 | `GET` | `/api/documents` | session | Liste des documents indexes |
 | `POST` | `/api/documents` | session | Upload, extraction, embeddings et indexation |
 | `DELETE` | `/api/documents/[id]` | proprietaire | Suppression d'un document et de ses chunks |
@@ -442,6 +469,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `POST` | `/api/admin/publications` | `ADMIN` | Creation d'une publication publique |
 | `PATCH` | `/api/admin/publications/[id]` | `ADMIN` | Modification d'une publication publique |
 | `DELETE` | `/api/admin/publications/[id]` | `ADMIN` | Suppression d'une publication publique |
+| `PATCH` | `/api/admin/access` | `ADMIN` | Mise a jour des blocs Administration visibles par role non-client |
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
 | `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter, avec logs API et cause d'erreur explicite |
 | `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
@@ -633,6 +661,27 @@ Regles:
 - chaque mutation est journalisee dans `AuditLog`;
 - les publications servent aux contenus publics mis a jour regulierement sans redeploiement applicatif.
 
+### Acces Administration par role
+
+Route:
+
+```txt
+PATCH /api/admin/access
+```
+
+Acces: `ADMIN` uniquement.
+
+Payload:
+
+```json
+{
+  "MANAGER": ["overview", "publications", "visits", "activity"],
+  "SUPPORT": ["overview", "activity", "audits"]
+}
+```
+
+Le role `ADMIN` n'est pas parametrable: il garde toujours tous les blocs. Les roles `MANAGER` et `SUPPORT` peuvent ouvrir `/admin`, mais chaque bloc visible est filtre par `canAccessAdminBlock(role, blockId, adminRoleAccess)`. Le role `CLIENT` n'accede pas a `/admin`.
+
 ### Checkout MaishaPay
 
 ```json
@@ -644,6 +693,48 @@ Regles:
 ```
 
 Le plan gratuit `freemium` active directement l'abonnement. Les plans payants creent une souscription en attente et lancent MaishaPay.
+
+### Module Entreprise
+
+Route privee:
+
+```txt
+/company
+```
+
+La route `/documents` redirige vers `/company` pour conserver les anciens liens. Le module Entreprise contient deux niveaux de contexte:
+
+1. Profil entreprise, disponible dans tous les abonnements.
+2. Documents, limites par le plan actif via `BillingPlan.maxDocuments`.
+
+Donnees du profil entreprise:
+
+- identite de l'organisation: nom, forme juridique, secteur, taille, localisation, site web;
+- activite: description, mission, produits/services, clients, marches et concurrents;
+- fonctionnement: processus cles, outils, systemes de donnees, exigences de conformite;
+- pilotage: defis, objectifs et KPI;
+- contexte utilisateur: poste, departement, responsabilites et role decisionnel;
+- activites metier: titre, frequence, priorite, outils, donnees d'entree/sortie et irritants.
+
+Ces champs s'inspirent de pratiques documentees par des sources officielles:
+
+- ISO 9001:2015, qui structure la qualite autour du contexte, des processus, de la satisfaction client et de l'amelioration continue: https://www.iso.org/standard/62085.html
+- G20/OECD Principles of Corporate Governance 2023, pour le suivi des objectifs, de la gouvernance, de la transparence et de la performance: https://www.oecd.org/en/publications/g20-oecd-principles-of-corporate-governance-2023_ed750b30-en.html
+- NIST SP 800-53 Rev. 5, pour rappeler que les controles de securite et de confidentialite doivent etre adaptes aux besoins metier, risques et environnements d'une organisation: https://csrc.nist.gov/Pubs/sp/800/53/r5/upd1/Final
+
+Routes API:
+
+```txt
+PATCH  /api/company/profile
+DELETE /api/company/profile
+POST   /api/company/activities
+PATCH  /api/company/activities/[id]
+DELETE /api/company/activities/[id]
+```
+
+Toutes ces routes exigent une session. Les activites sont limitees au proprietaire via `userId`. Les mutations sont journalisees dans `AuditLog` et `ApiLog`.
+
+Le chatbot utilise `getCompanyContextForUser(userId)` pour injecter ce contexte prive uniquement dans la requete OpenAI du proprietaire connecte.
 
 ### Upload documentaire RAG
 
@@ -729,6 +820,8 @@ Regle de confidentialite codee:
 - `toAddress = contact@dtsc-platform.com`;
 - destinataires reels en `bccAddress`;
 - aucune liste d'emails n'est rendue dans le corps du message.
+- les champs riches `bodyHtml` et `contentHtml` permettent de conserver une partie du format colle par l'admin: gras, italique, soulignement, couleurs, liens, images externes et emojis;
+- le HTML est nettoye cote serveur par `sanitizeRichHtml` avant l'envoi afin de retirer scripts, iframes, handlers `on*` et URLs `javascript:`.
 
 Si le message contient `{user}`:
 

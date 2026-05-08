@@ -38,6 +38,7 @@ export type PublicLongPage = {
   intro: string;
   tone: "blue" | "cyan" | "emerald" | "slate" | "indigo";
   heroLabel: string;
+  heroImage: string;
   cards: PublicCard[];
   sections: Array<{
     heading: string;
@@ -108,6 +109,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "DTSC combine stratégie business, data, IA, développement d'applications, marketing digital, formation et supports professionnels. L'objectif est de produire des résultats mesurables: meilleure visibilité, réduction des coûts, décisions plus fiables et opérations plus fluides.",
     tone: "blue",
     heroLabel: "Conseil + Exécution",
+    heroImage: "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80",
     cards: serviceCards,
     sources: trustedSources,
     sections: [
@@ -138,6 +140,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "DTSC construit des solutions orientées cas d'usage: chatbot professionnel, dashboards, applications métier, portails clients, CRM, automatisations et IA documentaire.",
     tone: "cyan",
     heroLabel: "Solutions métier",
+    heroImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
     cards: solutionsCards,
     sources: trustedSources,
     sections: [
@@ -168,6 +171,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "Le marché cible DTSC inclut les assurances, cliniques, pharmacies et PME. Ces organisations partagent un besoin de visibilité, de structuration des données et d'amélioration opérationnelle.",
     tone: "emerald",
     heroLabel: "Marchés cibles",
+    heroImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80",
     cards: sectorCards,
     sources: trustedSources,
     sections: [
@@ -198,6 +202,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "DTSC développe des prototypes et produits digitaux pour rendre visibles les gains possibles: chatbot, dashboard, application interne, automatisation et plateforme client.",
     tone: "indigo",
     heroLabel: "Démos utiles",
+    heroImage: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80",
     cards: [
       { title: "Prototype chatbot DTSC", text: "Qualification des besoins, historique, support et orientation client.", icon: Bot },
       { title: "Dashboard de reporting", text: "Suivi KPI, décisions et pilotage de performance.", icon: BarChart3 },
@@ -234,6 +239,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "Data and Tech Solutions Consulting est né pour aider les organisations africaines à améliorer leur performance grâce à la data, l'IA, l'automatisation, le marketing digital et les solutions métier.",
     tone: "slate",
     heroLabel: "Kinshasa · 2026",
+    heroImage: "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=80",
     cards: [
       { title: "Vision", text: "Devenir un leader africain en transformation digitale et data consulting.", icon: Lightbulb },
       { title: "Mission", text: "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité.", icon: Rocket },

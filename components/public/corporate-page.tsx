@@ -46,7 +46,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
             <div className="absolute -inset-4 rounded-[2rem] bg-cyan-300/20 blur-2xl transition duration-500 group-hover:scale-105" />
             <div className="relative overflow-hidden rounded-[1.5rem] border border-white/15 bg-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
               <div className="relative h-72 overflow-hidden">
-                <Image src="/dtsc-logo.png" alt={page.heroLabel} fill className="object-cover opacity-90 transition duration-700 group-hover:scale-105" sizes="(max-width: 1024px) 100vw, 45vw" priority />
+                <Image src={page.heroImage} alt={page.heroLabel} fill className="object-cover opacity-90 transition duration-700 group-hover:scale-105" sizes="(max-width: 1024px) 100vw, 45vw" priority />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#001736] via-[#001736]/35 to-transparent" />
                 <div className="absolute bottom-5 left-5 right-5">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">DTSC Platform</p>

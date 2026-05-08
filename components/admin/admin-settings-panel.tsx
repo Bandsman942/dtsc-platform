@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 type Settings = {
   defaultDailyMessageLimit: number;
@@ -22,31 +23,26 @@ type Settings = {
 
 export function AdminSettingsPanel({
   settings,
+  canEdit = true,
 }: {
   settings: Settings;
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [settingsMessage, setSettingsMessage] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [newsletterBroadcastMessage, setNewsletterBroadcastMessage] = useState("");
-  const broadcastBodyRef = useRef<HTMLTextAreaElement>(null);
-  const newsletterContentRef = useRef<HTMLTextAreaElement>(null);
+  const broadcastBodyRef = useRef<HTMLDivElement>(null);
+  const newsletterContentRef = useRef<HTMLDivElement>(null);
 
-  function insertUserPlaceholder(target: RefObject<HTMLTextAreaElement | null>) {
-    const textarea = target.current;
-    if (!textarea) {
+  function insertUserPlaceholder(target: RefObject<HTMLDivElement | null>) {
+    const editor = target.current;
+    if (!editor) {
       return;
     }
 
-    const placeholder = "{user}";
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const before = textarea.value.slice(0, start);
-    const after = textarea.value.slice(end);
-    textarea.value = `${before}${placeholder}${after}`;
-    textarea.focus();
-    const nextPosition = start + placeholder.length;
-    textarea.setSelectionRange(nextPosition, nextPosition);
+    editor.focus();
+    document.execCommand("insertText", false, "{user}");
   }
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
@@ -172,7 +168,7 @@ export function AdminSettingsPanel({
             <input name="applyLimitsToExistingUsers" type="checkbox" className="h-4 w-4 accent-cyan-500" />
           </label>
           <div className="md:col-span-2 flex flex-wrap items-center gap-3">
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+            <Button disabled={!canEdit} title={canEdit ? "Enregistrer les paramètres globaux." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
           </div>
         </form>
       </div>
@@ -183,7 +179,7 @@ export function AdminSettingsPanel({
           Crée une notification interne et envoie un email aux utilisateurs actifs. Ajoutez <span className="font-black text-cyan-300">{"{user}"}</span> pour remplacer automatiquement par le nom du destinataire.
         </p>
         <form onSubmit={broadcast} className="mt-5 space-y-3">
-          <Input name="title" placeholder="Objet / titre" required />
+          <Input name="title" placeholder="Objet / titre" required disabled={!canEdit} />
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs text-dtsc-muted">
             <span>Variable disponible:</span>
             <Button
@@ -192,21 +188,22 @@ export function AdminSettingsPanel({
               size="sm"
               className="rounded-lg border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10"
               onClick={() => insertUserPlaceholder(broadcastBodyRef)}
+              disabled={!canEdit}
             >
               Insérer {"{user}"}
             </Button>
           </div>
-          <textarea
+          <RichTextEditor
             ref={broadcastBodyRef}
-            name="body"
-            placeholder="Bonjour {user},&#10;&#10;Message professionnel à diffuser..."
-            className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink"
-            required
+            textName="body"
+            htmlName="bodyHtml"
+            disabled={!canEdit}
+            placeholder="Bonjour {user}, collez ici un message riche ou rédigez votre diffusion..."
           />
           <p className="text-xs leading-6 text-dtsc-muted">
             Sans <span className="font-bold text-dtsc-ink">{"{user}"}</span>, l&apos;envoi est groupé en CCI. Avec <span className="font-bold text-dtsc-ink">{"{user}"}</span>, chaque destinataire reçoit une version personnalisée.
           </p>
-          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et envoyer email</Button>
+          <Button disabled={!canEdit} title={canEdit ? "Créer une notification et envoyer l'email aux utilisateurs actifs." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et envoyer email</Button>
         </form>
       </div>
 
@@ -216,7 +213,7 @@ export function AdminSettingsPanel({
           Envoie un email aux visiteurs inscrits via le formulaire public. La variable <span className="font-black text-cyan-300">{"{user}"}</span> reprend le nom saisi lors de l&apos;inscription newsletter.
         </p>
         <form onSubmit={newsletterBroadcast} className="mt-5 grid gap-3 lg:grid-cols-[320px_1fr_auto]">
-          <Input name="subject" placeholder="Objet de l'email newsletter" required />
+          <Input name="subject" placeholder="Objet de l'email newsletter" required disabled={!canEdit} />
           <div className="grid gap-2">
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs text-dtsc-muted">
               <span>Variable disponible:</span>
@@ -226,20 +223,21 @@ export function AdminSettingsPanel({
                 size="sm"
                 className="rounded-lg border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10"
                 onClick={() => insertUserPlaceholder(newsletterContentRef)}
+                disabled={!canEdit}
               >
                 Insérer {"{user}"}
               </Button>
             </div>
-            <textarea
+            <RichTextEditor
               ref={newsletterContentRef}
-              name="content"
-              placeholder="Bonjour {user},&#10;&#10;Contenu professionnel à envoyer aux abonnés newsletter..."
-              className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:min-h-20"
-              required
+              textName="content"
+              htmlName="contentHtml"
+              disabled={!canEdit}
+              placeholder="Bonjour {user}, collez ici le contenu riche de votre newsletter..."
             />
           </div>
           <div className="grid content-start gap-2">
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
+            <Button disabled={!canEdit} title={canEdit ? "Envoyer la diffusion aux abonnés newsletter." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
             <p className="text-xs leading-5 text-dtsc-muted">Les destinataires restent en CCI.</p>
           </div>
         </form>

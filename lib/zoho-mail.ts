@@ -4,6 +4,7 @@ import { dtsc } from "@/lib/dtsc";
 type ZohoMailPayload = {
   subject: string;
   message: string;
+  htmlMessage?: string;
   to?: string[];
   cc?: string[];
   bcc?: string[];
@@ -35,6 +36,20 @@ function normalizeMessage(message: string) {
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
     .join("\n")
+    .trim();
+}
+
+function sanitizeRichHtml(html: string) {
+  return html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, "")
+    .replace(/<embed[\s\S]*?>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/data:text\/html/gi, "")
     .trim();
 }
 
@@ -247,6 +262,7 @@ export function buildProfessionalMailText({
 export function buildProfessionalMailHtml({
   subject,
   message,
+  htmlMessage,
   to = [],
   cc = [],
   bcc = [],
@@ -265,10 +281,13 @@ export function buildProfessionalMailHtml({
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  const paragraphHtml = normalizeMessage(message)
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p style="margin:0 0 14px;line-height:1.7;">${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
-    .join("");
+  const richHtml = htmlMessage ? sanitizeRichHtml(htmlMessage) : "";
+  const paragraphHtml = richHtml
+    ? `<div style="font-size:15px;color:#334155;line-height:1.7;">${richHtml}</div>`
+    : normalizeMessage(message)
+        .split(/\n{2,}/)
+        .map((paragraph) => `<p style="margin:0 0 14px;line-height:1.7;">${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+        .join("");
   const recipients = uniqueEmails(to);
   const copy = uniqueEmails(cc);
   const blindCopy = uniqueEmails(bcc);
@@ -299,7 +318,7 @@ export function buildProfessionalMailHtml({
             : ""
         }
         <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
-          <div style="font-size:15px;color:#334155;">${paragraphHtml}</div>
+          ${paragraphHtml}
         </div>
       </div>
       <div style="background:#f1f5f9;padding:18px 28px;font-size:13px;color:#475569;">
@@ -456,10 +475,12 @@ export async function sendPersonalizedZohoOutboundMail(
   const results = [];
   for (const recipient of validRecipients) {
     const personalizedMessage = payload.message.replace(/\{user\}/gi, recipient.name);
+    const personalizedHtml = payload.htmlMessage?.replace(/\{user\}/gi, recipient.name);
     const result = await sendZohoOutboundMail({
       ...payload,
       to: [recipient.email],
       message: personalizedMessage,
+      htmlMessage: personalizedHtml,
       showRecipients: false,
       showSource: false,
     }).catch((error) => ({

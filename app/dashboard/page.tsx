@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, Clock, MessageSquare, Plus, Target, Ticket } from "lucide-react";
+import { Activity as ActivityIcon, BarChart3, Bot, BriefcaseBusiness, Clock, FileText, MessageSquare, Plus, Target, Ticket } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { dtsc } from "@/lib/dtsc";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [conversationCount, messageCount, recentConversations] = await Promise.all([
+  const [conversationCount, messageCount, recentConversations, profile, activityCount, documentCount, readyDocumentCount, usageToday] = await Promise.all([
     prisma.conversation.count({ where: { userId: user.id } }),
     prisma.message.count({ where: { conversation: { userId: user.id } } }),
     prisma.conversation.findMany({
@@ -18,6 +18,17 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { _count: { select: { messages: true } } },
+    }),
+    prisma.companyProfile.findUnique({ where: { userId: user.id } }),
+    prisma.companyActivity.count({ where: { userId: user.id } }),
+    prisma.knowledgeDocument.count({ where: { userId: user.id } }),
+    prisma.knowledgeDocument.count({ where: { userId: user.id, status: "READY" } }),
+    prisma.usageLog.aggregate({
+      where: {
+        userId: user.id,
+        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      },
+      _sum: { totalTokens: true },
     }),
   ]);
 
@@ -33,22 +44,64 @@ export default async function DashboardPage() {
             Pilotez vos échanges IA, structurez vos besoins en data, BI, IA, marketing digital ou solutions numériques, puis créez un ticket lorsqu&apos;un cadrage humain est nécessaire.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Button asChild title="Démarrer un échange avec le chatbot DTSC." className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <Link href="/chat">
                 <Plus className="h-4 w-4" />
                 Nouvelle conversation
               </Link>
             </Button>
-            <Button asChild variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+            <Button asChild variant="outline" title="Créer un ticket pour une demande commerciale, technique ou stratégique." className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
               <Link href="/support">Contacter l&apos;équipe DTSC</Link>
+            </Button>
+            <Button asChild variant="outline" title="Renseigner votre entreprise pour personnaliser le chatbot." className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              <Link href="/company">Compléter mon entreprise</Link>
             </Button>
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <StatCard label="Conversations" value={conversationCount} helper="Historique client" icon={Bot} />
-          <StatCard label="Messages" value={messageCount} helper="Messages échangés" icon={MessageSquare} />
-          <StatCard label="Dernière activité" value={lastActivity ? formatDate(lastActivity) : "Aucune"} helper="Activité récente" icon={Clock} />
+          <StatCard label="Conversations" value={conversationCount} helper="Historique client" icon={Bot} title="Nombre total de conversations ouvertes avec le chatbot." />
+          <StatCard label="Messages" value={messageCount} helper="Messages échangés" icon={MessageSquare} title="Volume total de messages dans vos conversations." />
+          <StatCard label="Dernière activité" value={lastActivity ? formatDate(lastActivity) : "Aucune"} helper="Activité récente" icon={Clock} title="Dernière conversation mise à jour." />
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Profil entreprise" value={profile ? "Actif" : "À compléter"} helper={profile?.organizationName || "Aucun contexte entreprise"} icon={BriefcaseBusiness} title="Indique si le chatbot dispose déjà de votre profil entreprise." />
+          <StatCard label="Activités métier" value={activityCount} helper="Activités contextualisées" icon={ActivityIcon} title="Nombre d'activités professionnelles utilisées pour personnaliser le chatbot." />
+          <StatCard label="Documents prêts" value={`${readyDocumentCount}/${documentCount}`} helper="Base documentaire privée" icon={FileText} title="Documents indexés et exploitables par le chatbot." />
+          <StatCard label="Tokens aujourd'hui" value={usageToday._sum.totalTokens || 0} helper="Usage IA journalier" icon={BarChart3} title="Volume de tokens consommés aujourd'hui dans vos échanges." />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div className="dtsc-card p-6">
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">KPI entreprise</p>
+            <h2 className="mt-1 font-black text-dtsc-ink">Résumé du contexte professionnel</h2>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {[
+                ["Organisation", profile?.organizationName || "Non renseignée"],
+                ["Secteur", profile?.sector || "Non renseigné"],
+                ["Poste", profile?.userPosition || "Non renseigné"],
+                ["Département", profile?.department || "Non renseigné"],
+                ["Objectifs", profile?.goals || "À préciser dans le module Entreprise"],
+                ["KPI", profile?.kpis || "À préciser dans le module Entreprise"],
+              ].map(([label, value]) => (
+                <div key={label} title={`Information entreprise: ${label}`} className="rounded-xl border border-dtsc-border bg-dtsc-page p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+                  <p className="mt-2 line-clamp-3 text-sm font-bold leading-6 text-dtsc-ink">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
+            <BriefcaseBusiness className="h-6 w-6 text-cyan-300" />
+            <h2 className="mt-4 font-black">Personnalisation chatbot</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Plus votre profil entreprise, vos activités et vos documents sont complets, plus les réponses du chatbot peuvent être adaptées à votre métier, vos objectifs et vos contraintes.
+            </p>
+            <Button asChild className="mt-5 rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300" title="Ouvrir le module Entreprise.">
+              <Link href="/company">Améliorer mon contexte</Link>
+            </Button>
+          </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">

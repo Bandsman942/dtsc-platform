@@ -46,11 +46,12 @@ export async function POST(req: Request) {
     const mailPayload = {
       subject: body.data.subject,
       message: body.data.content,
+      htmlMessage: body.data.contentHtml || undefined,
       to: emails,
       heading: "Admin-DTSC",
       source: "admin-newsletter-broadcast",
     };
-    const hasUserPlaceholder = /\{user\}/i.test(body.data.content);
+    const hasUserPlaceholder = /\{user\}/i.test(`${body.data.content} ${body.data.contentHtml || ""}`);
     const outbound = hasUserPlaceholder
       ? await sendPersonalizedZohoOutboundMail(subscribers, mailPayload).catch((error) => ({
           sent: false,

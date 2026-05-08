@@ -12,6 +12,7 @@ import {
 import { truncate } from "@/lib/format";
 import { getAppSettings } from "@/lib/settings";
 import { retrieveKnowledgeContext } from "@/lib/rag";
+import { getCompanyContextForUser } from "@/lib/company-context";
 
 export const maxDuration = 60;
 
@@ -136,12 +137,32 @@ export async function POST(req: Request) {
     take: 24,
   });
 
-  const ragContext = await retrieveKnowledgeContext(session.userId, body.data.content).catch((error) => {
-    console.error("RAG retrieval failed", error);
-    return "";
-  });
+  const [companyContext, ragContext] = await Promise.all([
+    getCompanyContextForUser(session.userId).catch((error) => {
+      console.error("Company context retrieval failed", error);
+      return "";
+    }),
+    retrieveKnowledgeContext(session.userId, body.data.content).catch((error) => {
+      console.error("RAG retrieval failed", error);
+      return "";
+    }),
+  ]);
 
   const messages: OpenAIInputMessage[] = [
+    ...(companyContext
+      ? [
+          {
+            role: "user" as const,
+            content: [
+              "Contexte entreprise privé fourni par l'utilisateur.",
+              "Utilise ce contexte pour adapter tes réponses à son entreprise, son poste, ses activités, ses objectifs et ses contraintes.",
+              "Ne divulgue pas ce contexte à des tiers et ne l'utilise que pour aider l'utilisateur dans cette conversation.",
+              "",
+              companyContext,
+            ].join("\n"),
+          },
+        ]
+      : []),
     ...(ragContext
       ? [
           {
@@ -156,8 +177,8 @@ export async function POST(req: Request) {
         ]
       : []),
     ...history.map((message) => ({
-    role: message.role,
-    content: message.content,
+      role: message.role,
+      content: message.content,
     })),
   ];
 

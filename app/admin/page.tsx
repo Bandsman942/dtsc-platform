@@ -1,13 +1,16 @@
 import { BarChart3, Bot, MessageSquare, ShieldCheck, Users } from "lucide-react";
 import { UserRole } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
+import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { requireRole } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
@@ -20,7 +23,10 @@ export default async function AdminPage({
 }: {
   searchParams: Promise<{ role?: string; period?: string; date?: string }>;
 }) {
-  const user = await requireRole([UserRole.ADMIN]);
+  const user = await requireUser();
+  if (!canAccessAdministration(user.role)) {
+    redirect("/dashboard");
+  }
   const { role, period, date } = await searchParams;
   const parsedPeriod = Number(period || 30);
   const selectedPeriod = Number.isFinite(parsedPeriod) ? parsedPeriod : 30;
@@ -80,6 +86,8 @@ export default async function AdminPage({
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
+  const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
+  const canView = (blockId: AdminBlockId) => canAccessAdminBlock(user.role, blockId, adminRoleAccess);
   const chartLength = selectedDate ? 1 : Math.min(selectedPeriod, 60);
   const visitPoints: VisitPoint[] = Array.from({ length: chartLength }).map((_, index) => {
     const day = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
@@ -106,84 +114,104 @@ export default async function AdminPage({
           </p>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
-          <StatCard label="Utilisateurs" value={userCount} helper="Comptes suivis" icon={Users} />
-          <StatCard label="Conversations" value={conversationCount} helper="Total plateforme" icon={Bot} />
-          <StatCard label="Messages" value={messageCount} helper="Total messages" icon={MessageSquare} />
-          <StatCard label="Tokens" value={totalTokens} helper="Usage estimé" icon={BarChart3} />
-        </section>
+        {canView("overview") && (
+          <section className="grid gap-4 md:grid-cols-4">
+            <StatCard label="Utilisateurs" value={userCount} helper="Comptes suivis" icon={Users} />
+            <StatCard label="Conversations" value={conversationCount} helper="Total plateforme" icon={Bot} />
+            <StatCard label="Messages" value={messageCount} helper="Total messages" icon={MessageSquare} />
+            <StatCard label="Tokens" value={totalTokens} helper="Usage estimé" icon={BarChart3} />
+          </section>
+        )}
 
-        <AdminSettingsPanel
-          settings={{
-            defaultDailyMessageLimit: settings.defaultDailyMessageLimit,
-            defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
-            chatbotEnabled: settings.chatbotEnabled,
-            maintenanceMode: settings.maintenanceMode,
-            supportAutoCloseDays: settings.supportAutoCloseDays,
-            allowClientAnnouncements: settings.allowClientAnnouncements,
-            commentEditWindowMinutes: settings.commentEditWindowMinutes,
-            notificationRetentionDays: settings.notificationRetentionDays,
-            signUpOtpEnabled: settings.signUpOtpEnabled,
-            signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
-          }}
-        />
+        {user.role === UserRole.ADMIN && (
+          <AdminAccessPanel access={adminRoleAccess} />
+        )}
 
-        <PublicPublicationsManager publications={JSON.parse(JSON.stringify(publicPublications))} />
+        {canView("settings") && (
+          <AdminSettingsPanel
+            canEdit={user.role === UserRole.ADMIN}
+            settings={{
+              defaultDailyMessageLimit: settings.defaultDailyMessageLimit,
+              defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
+              chatbotEnabled: settings.chatbotEnabled,
+              maintenanceMode: settings.maintenanceMode,
+              supportAutoCloseDays: settings.supportAutoCloseDays,
+              allowClientAnnouncements: settings.allowClientAnnouncements,
+              commentEditWindowMinutes: settings.commentEditWindowMinutes,
+              notificationRetentionDays: settings.notificationRetentionDays,
+              signUpOtpEnabled: settings.signUpOtpEnabled,
+              signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
+            }}
+          />
+        )}
 
-        <section className="dtsc-card p-6">
-          <div className="mb-5">
-            <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
-            <p className="text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
-          </div>
-          <CreateUserForm />
-        </section>
+        {canView("publications") && (
+          <PublicPublicationsManager publications={JSON.parse(JSON.stringify(publicPublications))} canEdit={user.role === UserRole.ADMIN} />
+        )}
 
-        <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} />
-
-        <AdminDataTables
-          users={JSON.parse(JSON.stringify(users))}
-          conversations={JSON.parse(JSON.stringify(conversations))}
-          tickets={JSON.parse(JSON.stringify(tickets))}
-        />
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="dtsc-card p-6">
-            <h2 className="font-black text-dtsc-ink">Audit des paiements</h2>
-            <div className="mt-4 divide-y divide-dtsc-border text-sm">
-              {payments.map((payment) => (
-                <div key={payment.id} className="py-3">
-                  <p className="font-bold text-dtsc-ink">{payment.reference}</p>
-                  <p className="text-dtsc-muted">
-                    {payment.user.email} · {payment.status} · {Number(payment.amount).toFixed(2)} {payment.currency}
-                  </p>
-                </div>
-              ))}
-              {!payments.length && <p className="py-4 text-sm text-dtsc-muted">Aucun paiement audité.</p>}
+        {canView("users") && (
+          <section className="dtsc-card p-6">
+            <div className="mb-5">
+              <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
+              <p className="text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
             </div>
-          </div>
-          <div className="dtsc-card p-6">
-            <h2 className="font-black text-dtsc-ink">Logs API et webhooks</h2>
-            <div className="mt-4 divide-y divide-dtsc-border text-sm">
-              {apiLogs.map((event) => (
-                <div key={event.id} className="py-3">
-                  <p className="font-bold text-dtsc-ink">{event.method} · {event.path}</p>
-                  <p className="text-dtsc-muted">
-                    HTTP {event.statusCode} · {event.createdAt.toLocaleString("fr-FR")}
-                  </p>
-                </div>
-              ))}
-              {webhookEvents.map((event) => (
-                <div key={event.id} className="py-3">
-                  <p className="font-bold text-dtsc-ink">{event.provider} · {event.eventType}</p>
-                  <p className="text-dtsc-muted">
-                    {event.status} · {event.createdAt.toLocaleString("fr-FR")}
-                  </p>
-                </div>
-              ))}
-              {!apiLogs.length && !webhookEvents.length && <p className="py-4 text-sm text-dtsc-muted">Aucun log API récent.</p>}
+            {user.role === UserRole.ADMIN ? <CreateUserForm /> : <p className="text-sm text-dtsc-muted">Bloc visible en lecture, modification réservée au rôle ADMIN.</p>}
+          </section>
+        )}
+
+        {canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} />}
+
+        {(canView("activity") || canView("users")) && (
+          <AdminDataTables
+            users={JSON.parse(JSON.stringify(users))}
+            conversations={JSON.parse(JSON.stringify(conversations))}
+            tickets={JSON.parse(JSON.stringify(tickets))}
+            showUsers={canView("users")}
+            showActivity={canView("activity")}
+            canManageUsers={user.role === UserRole.ADMIN}
+          />
+        )}
+
+        {canView("audits") && (
+          <section className="grid gap-6 lg:grid-cols-2">
+            <div className="dtsc-card p-6">
+              <h2 className="font-black text-dtsc-ink">Audit des paiements</h2>
+              <div className="mt-4 divide-y divide-dtsc-border text-sm">
+                {payments.map((payment) => (
+                  <div key={payment.id} className="py-3">
+                    <p className="font-bold text-dtsc-ink">{payment.reference}</p>
+                    <p className="text-dtsc-muted">
+                      {payment.user.email} · {payment.status} · {Number(payment.amount).toFixed(2)} {payment.currency}
+                    </p>
+                  </div>
+                ))}
+                {!payments.length && <p className="py-4 text-sm text-dtsc-muted">Aucun paiement audité.</p>}
+              </div>
             </div>
-          </div>
-        </section>
+            <div className="dtsc-card p-6">
+              <h2 className="font-black text-dtsc-ink">Logs API et webhooks</h2>
+              <div className="mt-4 divide-y divide-dtsc-border text-sm">
+                {apiLogs.map((event) => (
+                  <div key={event.id} className="py-3">
+                    <p className="font-bold text-dtsc-ink">{event.method} · {event.path}</p>
+                    <p className="text-dtsc-muted">
+                      HTTP {event.statusCode} · {event.createdAt.toLocaleString("fr-FR")}
+                    </p>
+                  </div>
+                ))}
+                {webhookEvents.map((event) => (
+                  <div key={event.id} className="py-3">
+                    <p className="font-bold text-dtsc-ink">{event.provider} · {event.eventType}</p>
+                    <p className="text-dtsc-muted">
+                      {event.status} · {event.createdAt.toLocaleString("fr-FR")}
+                    </p>
+                  </div>
+                ))}
+                {!apiLogs.length && !webhookEvents.length && <p className="py-4 text-sm text-dtsc-muted">Aucun log API récent.</p>}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
           <div className="flex items-start gap-3">

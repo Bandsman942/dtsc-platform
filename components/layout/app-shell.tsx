@@ -39,6 +39,7 @@ export async function AppShell({
 
         <Link
           href="/chat"
+          title="Démarrer une nouvelle conversation avec l'assistant DTSC."
           className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition hover:-translate-y-0.5 hover:bg-[#002b5b]"
         >
           <Sparkles className="h-4 w-4 text-cyan-300" />

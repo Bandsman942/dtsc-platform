@@ -97,6 +97,8 @@ model User {
   invoices      Invoice[]
   documents           KnowledgeDocument[]
   publicPublications  PublicPublication[]
+  companyProfile      CompanyProfile?
+  companyActivities   CompanyActivity[]
 
   @@index([role])
   @@index([status])
@@ -226,6 +228,59 @@ model KnowledgeChunk {
 
   @@index([documentId])
   @@index([userId, createdAt])
+}
+
+model CompanyProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  organizationName  String
+  legalForm         String?
+  sector            String?
+  sizeRange         String?
+  country           String?
+  city              String?
+  website           String?
+  description       String?
+  mission           String?
+  productsServices  String?
+  customers         String?
+  markets           String?
+  competitors       String?
+  processes         String?
+  tools             String?
+  dataSystems       String?
+  compliance        String?
+  challenges        String?
+  goals             String?
+  kpis              String?
+  userPosition      String?
+  department        String?
+  responsibilities  String?
+  decisionRole      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sector])
+  @@index([updatedAt])
+}
+
+model CompanyActivity {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  frequency   String?
+  priority    String   @default("MEDIUM")
+  tools       String?
+  dataInputs  String?
+  dataOutputs String?
+  painPoints  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, priority, updatedAt])
 }
 
 model PendingRegistration {
@@ -460,6 +515,7 @@ model AppSetting {
   notificationRetentionDays     Int @default(60)
   signUpOtpEnabled              Boolean @default(true)
   signUpOtpExpirationMinutes    Int @default(10)
+  adminRoleAccess               Json    @default("{}")
   updatedAt                DateTime @updatedAt
 }
 

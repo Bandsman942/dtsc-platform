@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/billing", "/documents", "/profile", "/settings", "/support", "/notifications", "/announcements"];
+const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/documents", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
@@ -41,7 +41,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
-  if (isPathMatch(pathname, adminRoutes) && session?.role !== "ADMIN") {
+  if (isPathMatch(pathname, adminRoutes) && session?.role === "CLIENT") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
@@ -77,6 +77,7 @@ export const config = {
     "/dashboard/:path*",
     "/chat/:path*",
     "/billing/:path*",
+    "/company/:path*",
     "/documents/:path*",
     "/profile/:path*",
     "/settings/:path*",
