@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useRef, useState, type ClipboardEvent, type FormEvent, type MutableRefObject } from "react";
+import { forwardRef, useRef, useState, type ClipboardEvent, type MutableRefObject } from "react";
 import { Bold, Italic, Palette, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -59,7 +59,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     sync();
   }
 
-  function handleInput(_: FormEvent<HTMLDivElement>) {
+  function handleInput() {
     sync();
   }
 

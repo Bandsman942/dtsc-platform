@@ -50,6 +50,8 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les graphiques admin doivent rester bornés dans leur conteneur: utiliser `overflow-hidden`/`overflow-x-auto`, une hauteur fixe et calculer les barres sur un maximum relatif.
 - Les composants serveur qui passent des données Prisma à un composant client doivent transmettre des objets JSON simples, pas des objets `Date` bruts.
 - Les props passées aux composants doivent être utilisées ou supprimées: `pnpm build` échoue sur `@typescript-eslint/no-unused-vars`.
+- Les handlers React ne doivent pas garder de paramètres inutilisés (`event`, `_`, etc.): ESLint Vercel échoue sur `@typescript-eslint/no-unused-vars`.
+- Les effets React doivent avoir des dépendances complètes ou des callbacks stabilisés avec `useCallback`; ne pas ignorer `react-hooks/exhaustive-deps` dans les composants client sensibles.
 - Les limites d'usage chat doivent être validées côté API, pas uniquement côté UI.
 - Les réponses `429 DAILY_LIMIT_REACHED` de `/api/chat` doivent inclure un `usage.resetAt` ISO pour afficher l'heure exacte de réinitialisation côté UI.
 - Ne pas importer un module `"use client"` dans un composant serveur uniquement pour partager des constantes: extraire les constantes dans un fichier sans directive client.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock3, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,16 @@ export function SessionTimeoutGuard() {
   const lastHeartbeatRef = useRef(0);
   const expiredRef = useRef(false);
 
-  async function heartbeat(force = false) {
+  const expireSession = useCallback(async () => {
+    if (expiredRef.current) {
+      return;
+    }
+    expiredRef.current = true;
+    await fetch("/api/auth/sign-out", { method: "POST" }).catch(() => null);
+    router.push("/session-expired");
+  }, [router]);
+
+  const heartbeat = useCallback(async (force = false) => {
     if (!force && Date.now() - lastHeartbeatRef.current < heartbeatIntervalMs) {
       return;
     }
@@ -34,25 +43,16 @@ export function SessionTimeoutGuard() {
     if (response.status === 401) {
       await expireSession();
     }
-  }
+  }, [expireSession]);
 
-  async function expireSession() {
-    if (expiredRef.current) {
-      return;
-    }
-    expiredRef.current = true;
-    await fetch("/api/auth/sign-out", { method: "POST" }).catch(() => null);
-    router.push("/session-expired");
-  }
-
-  function registerActivity() {
+  const registerActivity = useCallback(() => {
     if (expiredRef.current) {
       return;
     }
     lastActivityRef.current = Date.now();
     setShowWarning(false);
     void heartbeat();
-  }
+  }, [heartbeat]);
 
   useEffect(() => {
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
@@ -77,7 +77,7 @@ export function SessionTimeoutGuard() {
       window.clearInterval(interval);
       events.forEach((eventName) => window.removeEventListener(eventName, registerActivity));
     };
-  }, []);
+  }, [expireSession, heartbeat, registerActivity]);
 
   return (
     <Dialog
