@@ -139,6 +139,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
   ::selection {
@@ -245,6 +247,17 @@
   .text-dtsc-muted { color: var(--dtsc-muted); }
   .text-dtsc-blue { color: var(--dtsc-blue); }
   .border-dtsc-border { border-color: var(--dtsc-border); }
+
+  .dtsc-hero-heading {
+    color: #f8fbff;
+    text-shadow: 0 2px 22px rgba(0, 23, 54, 0.42);
+    -webkit-text-fill-color: currentColor;
+  }
+
+  .dtsc-hero-heading::selection {
+    background: rgba(67, 217, 255, 0.36);
+    color: #ffffff;
+  }
 
   .dtsc-assistant-markdown {
     color: var(--dtsc-ink);
@@ -508,12 +521,10 @@
     from {
       opacity: 0;
       transform: scale(1.03);
-      filter: blur(4px);
     }
     to {
       opacity: 0.9;
       transform: scale(1);
-      filter: blur(0);
     }
   }
 }

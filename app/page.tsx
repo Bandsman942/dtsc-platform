@@ -32,10 +32,8 @@ export default function Page() {
               <Sparkles className="h-4 w-4" />
               {dtsc.slogan}
             </p>
-            <h1 className="mt-6 max-w-5xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
-              <span className="bg-gradient-to-r from-white via-cyan-100 to-blue-100 bg-clip-text text-transparent">
-                Accélérez votre transformation numérique avec la data, l&apos;IA et des solutions technologiques sur mesure.
-              </span>
+            <h1 className="dtsc-hero-heading mt-6 max-w-5xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+              Accélérez votre transformation numérique avec la data, l&apos;IA et des solutions technologiques sur mesure.
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-cyan-50">
               DTSC accompagne les entreprises dans la conception, l&apos;automatisation et le déploiement de solutions digitales orientées performance.

@@ -27,8 +27,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
               <Sparkles className="h-4 w-4" />
               {page.eyebrow}
             </p>
-            <h1 className="mt-6 max-w-4xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
-              <span className="bg-gradient-to-r from-white via-cyan-100 to-blue-100 bg-clip-text text-transparent">{page.title}</span>
+            <h1 className="dtsc-hero-heading mt-6 max-w-4xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+              {page.title}
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-blue-50 animate-slide-up">{page.intro}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
