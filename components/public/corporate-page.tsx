@@ -34,7 +34,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
                 <Link href="/contact">
-                  Demander un avis
+                  Demander une consultation
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

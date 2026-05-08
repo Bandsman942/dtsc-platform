@@ -52,7 +52,7 @@ export function PublicNav() {
           onClick={() => setOpen(false)}
           className="rounded-xl bg-[#002b5b] px-3 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(0,43,91,0.22)] hover:bg-[#001736]"
         >
-          Demander un avis
+          Demander une consultation
         </Link>
         <Link
           href="/auth/sign-in"
