@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatEnumLabel } from "@/lib/labels";
 
 type DocumentItem = {
   id: string;
@@ -126,7 +127,7 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
                   <h2 className="font-black text-dtsc-ink">{item.title}</h2>
                   <p className="break-all text-sm text-dtsc-muted">{item.fileName}</p>
                   <p className="mt-1 text-xs font-semibold text-dtsc-muted">
-                    {item.status} · {item._count?.chunks || 0} segment(s) · {formatSize(item.sizeBytes)} · {new Date(item.createdAt).toLocaleString("fr-FR")}
+                    {formatEnumLabel(item.status)} · {item._count?.chunks || 0} segment(s) · {formatSize(item.sizeBytes)} · {new Date(item.createdAt).toLocaleString("fr-FR")}
                   </p>
                   {item.errorMessage && <p className="mt-2 text-xs font-semibold text-red-300">{item.errorMessage}</p>}
                 </div>

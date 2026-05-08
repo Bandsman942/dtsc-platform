@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { UserRole } from "@prisma/client";
+import { formatEnumLabel } from "@/lib/labels";
 
 export function UserRoleSelect({
   userId,
@@ -36,10 +37,10 @@ export function UserRoleSelect({
       onChange={(event) => updateRole(event.target.value)}
       className="h-8 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-xs font-bold text-dtsc-ink"
     >
-      <option value="ADMIN">ADMIN</option>
-      <option value="MANAGER">MANAGER</option>
-      <option value="CLIENT">CLIENT</option>
-      <option value="SUPPORT">SUPPORT</option>
+      <option value="ADMIN">{formatEnumLabel("ADMIN")}</option>
+      <option value="MANAGER">{formatEnumLabel("MANAGER")}</option>
+      <option value="CLIENT">{formatEnumLabel("CLIENT")}</option>
+      <option value="SUPPORT">{formatEnumLabel("SUPPORT")}</option>
     </select>
   );
 }

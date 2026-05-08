@@ -2,6 +2,7 @@ import { BarChart3, Bot, MessageSquare, ShieldCheck, Users } from "lucide-react"
 import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
+import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
@@ -69,15 +70,15 @@ export default async function AdminPage({
       prisma.payment.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: true, subscription: { include: { plan: true } } },
-        take: 20,
+        take: 200,
       }),
       prisma.apiLog.findMany({
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 200,
       }),
       prisma.webhookEvent.findMany({
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 200,
       }),
       prisma.publicPublication.findMany({
         orderBy: { createdAt: "desc" },
@@ -102,6 +103,34 @@ export default async function AdminPage({
       count,
     };
   });
+  const paymentAuditItems = payments.map((payment) => ({
+    id: payment.id,
+    reference: payment.reference,
+    userEmail: payment.user.email,
+    status: payment.status,
+    amount: Number(payment.amount),
+    currency: payment.currency,
+    planName: payment.subscription?.plan.name || null,
+    createdAt: payment.createdAt.toISOString(),
+  }));
+  const logAuditItems = [
+    ...apiLogs.map((event) => ({
+      id: event.id,
+      source: "API" as const,
+      title: `${event.method} · ${event.path}`,
+      detail: event.userId ? `Utilisateur: ${event.userId}` : "Requête système ou publique",
+      status: `HTTP ${event.statusCode}`,
+      createdAt: event.createdAt.toISOString(),
+    })),
+    ...webhookEvents.map((event) => ({
+      id: event.id,
+      source: "Webhook" as const,
+      title: `${event.provider} · ${event.eventType}`,
+      detail: event.lastError || "Événement reçu et journalisé",
+      status: event.status,
+      createdAt: event.createdAt.toISOString(),
+    })),
+  ].sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime());
 
   return (
     <AppShell user={user}>
@@ -172,46 +201,7 @@ export default async function AdminPage({
           />
         )}
 
-        {canView("audits") && (
-          <section className="grid gap-6 lg:grid-cols-2">
-            <div className="dtsc-card p-6">
-              <h2 className="font-black text-dtsc-ink">Audit des paiements</h2>
-              <div className="mt-4 divide-y divide-dtsc-border text-sm">
-                {payments.map((payment) => (
-                  <div key={payment.id} className="py-3">
-                    <p className="font-bold text-dtsc-ink">{payment.reference}</p>
-                    <p className="text-dtsc-muted">
-                      {payment.user.email} · {payment.status} · {Number(payment.amount).toFixed(2)} {payment.currency}
-                    </p>
-                  </div>
-                ))}
-                {!payments.length && <p className="py-4 text-sm text-dtsc-muted">Aucun paiement audité.</p>}
-              </div>
-            </div>
-            <div className="dtsc-card p-6">
-              <h2 className="font-black text-dtsc-ink">Logs API et webhooks</h2>
-              <div className="mt-4 divide-y divide-dtsc-border text-sm">
-                {apiLogs.map((event) => (
-                  <div key={event.id} className="py-3">
-                    <p className="font-bold text-dtsc-ink">{event.method} · {event.path}</p>
-                    <p className="text-dtsc-muted">
-                      HTTP {event.statusCode} · {event.createdAt.toLocaleString("fr-FR")}
-                    </p>
-                  </div>
-                ))}
-                {webhookEvents.map((event) => (
-                  <div key={event.id} className="py-3">
-                    <p className="font-bold text-dtsc-ink">{event.provider} · {event.eventType}</p>
-                    <p className="text-dtsc-muted">
-                      {event.status} · {event.createdAt.toLocaleString("fr-FR")}
-                    </p>
-                  </div>
-                ))}
-                {!apiLogs.length && !webhookEvents.length && <p className="py-4 text-sm text-dtsc-muted">Aucun log API récent.</p>}
-              </div>
-            </div>
-          </section>
-        )}
+        {canView("audits") && <AdminAuditTables payments={paymentAuditItems} logs={logAuditItems} />}
 
         <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
           <div className="flex items-start gap-3">

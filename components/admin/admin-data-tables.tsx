@@ -7,6 +7,7 @@ import { UserLimitsForm } from "@/components/admin/user-limits-form";
 import { UserRoleSelect } from "@/components/admin/user-role-select";
 import { UserStatusSelect } from "@/components/admin/user-status-select";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatEnumLabel } from "@/lib/labels";
 
 type ManagedUser = {
   id: string;
@@ -96,7 +97,7 @@ export function AdminDataTables({
                   href={`/admin?role=${userRole}`}
                   className="rounded-full border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-muted hover:bg-dtsc-soft"
                 >
-                  {userRole}
+                  {formatEnumLabel(userRole)}
                 </Link>
               ))}
             </div>
@@ -131,8 +132,8 @@ export function AdminDataTables({
                   <tr key={managedUser.id}>
                     <td className="py-3 font-bold text-dtsc-ink">{managedUser.name}</td>
                     <td>{managedUser.email}</td>
-                    <td>{canManageUsers ? <UserRoleSelect userId={managedUser.id} role={managedUser.role} /> : managedUser.role}</td>
-                    <td>{canManageUsers ? <UserStatusSelect userId={managedUser.id} status={managedUser.status} /> : managedUser.status}</td>
+                    <td>{canManageUsers ? <UserRoleSelect userId={managedUser.id} role={managedUser.role} /> : formatEnumLabel(managedUser.role)}</td>
+                    <td>{canManageUsers ? <UserStatusSelect userId={managedUser.id} status={managedUser.status} /> : formatEnumLabel(managedUser.status)}</td>
                     <td>
                       {canManageUsers ? (
                         <UserLimitsForm
@@ -202,7 +203,7 @@ export function AdminDataTables({
                 <div key={ticket.id} className="py-3">
                   <p className="font-bold text-dtsc-ink">{ticket.subject}</p>
                   <p className="text-dtsc-muted">
-                    {ticket.user.email} · {ticket.status} · {ticket.priority}
+                    {ticket.user.email} · {formatEnumLabel(ticket.status)} · {formatEnumLabel(ticket.priority)}
                   </p>
                 </div>
               ))}

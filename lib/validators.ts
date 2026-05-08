@@ -48,6 +48,12 @@ export const profileUpdateSchema = z.object({
   name: z.string().min(2).max(120),
   companyName: z.string().max(160).optional().or(z.literal("")),
   phone: z.string().max(40).optional().or(z.literal("")),
+  jobTitle: z.string().max(140).optional().or(z.literal("")),
+  bio: z.string().max(800).optional().or(z.literal("")),
+  location: z.string().max(120).optional().or(z.literal("")),
+  website: z.string().max(180).optional().or(z.literal("")),
+  avatarUrl: z.string().url().max(600).optional().or(z.literal("")),
+  publicProfileConsent: z.coerce.boolean().default(false),
 });
 
 export const passwordUpdateSchema = z.object({
@@ -82,7 +88,8 @@ export const ticketMessageSchema = z.object({
 
 export const announcementSchema = z.object({
   title: z.string().min(3).max(160),
-  content: z.string().min(3).max(5_000),
+  content: z.string().min(3).max(8_000),
+  contentHtml: z.string().max(60_000).optional().or(z.literal("")),
 });
 
 export const announcementUpdateSchema = announcementSchema;

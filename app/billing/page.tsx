@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { ensureBillingPlans } from "@/lib/billing";
 import { isMaishaPayConfigured } from "@/lib/maishapay";
 import { prisma } from "@/lib/prisma";
+import { formatEnumLabel } from "@/lib/labels";
 
 export default async function BillingPage() {
   const user = await requireUser();
@@ -68,7 +69,7 @@ export default async function BillingPage() {
                   <p className="font-black text-dtsc-ink">
                     {Number(invoice.amount).toFixed(2)} {invoice.currency}
                   </p>
-                  <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-muted">{invoice.status}</span>
+                  <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-muted">{formatEnumLabel(invoice.status)}</span>
                 </div>
               ))
             ) : (

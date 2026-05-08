@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichHtml } from "@/lib/rich-content";
 import { announcementUpdateSchema } from "@/lib/validators";
 
 type Params = {
@@ -33,7 +34,7 @@ export async function PATCH(req: Request, { params }: Params) {
     where: { id: announcement.id },
     data: {
       title: body.data.title,
-      content: body.data.content,
+      content: body.data.contentHtml ? sanitizeRichHtml(body.data.contentHtml) : body.data.content,
     },
   });
 

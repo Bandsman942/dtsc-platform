@@ -140,7 +140,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "DTSC construit des solutions concrètes pour mieux répondre aux clients, suivre les activités, réduire les tâches manuelles et exploiter les informations déjà disponibles dans l'organisation.",
     tone: "cyan",
     heroLabel: "Solutions métier",
-    heroImage: "https://images.pexels.com/photos/5685870/pexels-photo-5685870.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
     cards: solutionsCards,
     sources: trustedSources,
     sections: [
@@ -171,7 +171,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "DTSC accompagne les organisations qui ont besoin de mieux suivre leurs opérations, améliorer leur relation client, structurer leurs informations et gagner en efficacité au quotidien.",
     tone: "emerald",
     heroLabel: "Marchés cibles",
-    heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80",
     cards: sectorCards,
     sources: trustedSources,
     sections: [
@@ -202,7 +202,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "DTSC transforme les idées en démonstrations concrètes pour tester rapidement la valeur d'une solution avant d'investir dans un déploiement plus large.",
     tone: "indigo",
     heroLabel: "Démos utiles",
-    heroImage: "https://images.pexels.com/photos/5685870/pexels-photo-5685870.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImage: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80",
     cards: [
       { title: "Prototype chatbot DTSC", text: "Qualification des besoins, historique, support et orientation client.", icon: Bot },
       { title: "Dashboard de reporting", text: "Suivi KPI, décisions et pilotage de performance.", icon: BarChart3 },
@@ -239,7 +239,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "Data and Tech Solutions Consulting est né pour aider les organisations africaines à améliorer leur performance grâce à la data, l'IA, l'automatisation, le marketing digital et les solutions métier.",
     tone: "slate",
     heroLabel: "Kinshasa · 2026",
-    heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImage: "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
     cards: [
       { title: "Vision", text: "Devenir un leader africain en transformation digitale et data consulting.", icon: Lightbulb },
       { title: "Mission", text: "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité.", icon: Rocket },

@@ -11,10 +11,10 @@ export default async function AnnouncementsPage() {
     prisma.announcement.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        author: { select: { id: true, name: true, role: true } },
+        author: { select: { id: true, name: true, role: true, avatarUrl: true, jobTitle: true } },
         comments: {
           orderBy: { createdAt: "asc" },
-          include: { user: { select: { id: true, name: true, role: true } } },
+          include: { user: { select: { id: true, name: true, role: true, avatarUrl: true } } },
         },
         reactions: { select: { value: true } },
       },

@@ -42,6 +42,43 @@ export async function uploadKnowledgeFileToSupabase({
   };
 }
 
+export async function uploadProfileAvatarToSupabase({
+  userId,
+  file,
+}: {
+  userId: string;
+  file: File;
+}) {
+  if (!isSupabaseStorageConfigured()) {
+    throw new Error("Supabase Storage is not configured");
+  }
+
+  const client = createClient(env.SUPABASE_STORAGE_URL!, env.SUPABASE_STORAGE_SERVICE_ROLE_KEY!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const storagePath = `avatars/${userId}/profile.${extension}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storagePath, buffer, {
+    contentType: file.type || "image/jpeg",
+    upsert: true,
+  });
+
+  if (error) {
+    throw new Error(`Supabase Storage avatar upload failed: ${error.message}`);
+  }
+
+  const { data: publicData } = client.storage.from(env.SUPABASE_STORAGE_BUCKET).getPublicUrl(data.path);
+
+  return {
+    path: data.path,
+    publicUrl: publicData.publicUrl,
+  };
+}
+
 export async function deleteKnowledgeFileFromSupabase({
   bucket,
   path,

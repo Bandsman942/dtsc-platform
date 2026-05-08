@@ -9,6 +9,7 @@ import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { NavLinks } from "@/components/layout/nav-links";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
+import { formatEnumLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 
 export async function AppShell({
@@ -22,6 +23,7 @@ export async function AppShell({
     email: string;
     role: UserRole;
     companyName: string | null;
+    avatarUrl?: string | null;
   };
 }) {
   const unreadNotifications = await prisma.notification.count({
@@ -64,10 +66,14 @@ export async function AppShell({
               <ThemeToggle />
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-semibold text-dtsc-ink">{user.name}</p>
-                <p className="text-xs font-medium text-dtsc-muted">{user.role}</p>
+                <p className="text-xs font-medium text-dtsc-muted">{formatEnumLabel(user.role)}</p>
               </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-dtsc-soft text-sm font-bold text-dtsc-blue">
-                {initials(user.name)}
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-dtsc-soft text-sm font-bold text-dtsc-blue">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials(user.name)
+                )}
               </div>
               <SignOutButton />
             </div>

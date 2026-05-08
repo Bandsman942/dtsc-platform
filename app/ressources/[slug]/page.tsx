@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { prisma } from "@/lib/prisma";
+import { formatEnumLabel } from "@/lib/labels";
 import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -32,7 +33,7 @@ export default async function PublicationPage({ params }: Params) {
   const { slug } = await params;
   const publication = await prisma.publicPublication.findFirst({
     where: { slug, published: true },
-    include: { author: { select: { name: true } } },
+    include: { author: { select: { name: true, jobTitle: true, avatarUrl: true, publicProfileConsent: true } } },
   });
 
   if (!publication) {
@@ -49,12 +50,21 @@ export default async function PublicationPage({ params }: Params) {
               <ArrowLeft className="h-4 w-4" />
               Retour aux ressources
             </Link>
-            <p className="mt-8 text-sm font-black uppercase tracking-[0.18em] text-cyan-200">{publication.category}</p>
+            <p className="mt-8 text-sm font-black uppercase tracking-[0.18em] text-cyan-200">{formatEnumLabel(publication.category)}</p>
             <h1 className="mt-4 text-4xl font-black leading-tight sm:text-6xl">{publication.title}</h1>
             <p className="mt-5 text-lg leading-8 text-blue-50">{publication.excerpt}</p>
-            <p className="mt-6 text-sm text-blue-100">
-              Publié le {publication.createdAt.toLocaleDateString("fr-FR")} {publication.author?.name ? `par ${publication.author.name}` : "par DTSC"}
-            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-blue-100">
+              {publication.author?.publicProfileConsent && (
+                <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/15 text-sm font-black text-white">
+                  {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span>
+                Publié le {publication.createdAt.toLocaleDateString("fr-FR")}{" "}
+                {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}
+                {publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
+              </span>
+            </div>
           </div>
         </section>
 

@@ -17,6 +17,12 @@ export async function PATCH(req: Request) {
       name: body.data.name,
       companyName: body.data.companyName || null,
       phone: body.data.phone || null,
+      jobTitle: body.data.jobTitle || null,
+      bio: body.data.bio || null,
+      location: body.data.location || null,
+      website: body.data.website || null,
+      avatarUrl: body.data.avatarUrl || null,
+      publicProfileConsent: body.data.publicProfileConsent,
     },
     select: { id: true },
   });

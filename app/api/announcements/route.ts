@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 import { notifyUsers } from "@/lib/notifications";
+import { sanitizeRichHtml } from "@/lib/rich-content";
 import { announcementSchema } from "@/lib/validators";
 
 function canPublishAnnouncement(role: UserRole, allowClients: boolean) {
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
     data: {
       authorId: session.userId,
       title: body.data.title,
-      content: body.data.content,
+      content: body.data.contentHtml ? sanitizeRichHtml(body.data.contentHtml) : body.data.content,
     },
   });
 

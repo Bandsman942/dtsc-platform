@@ -7,6 +7,10 @@ import { notifyUsers } from "@/lib/notifications";
 import { broadcastSchema } from "@/lib/validators";
 import { sendPersonalizedZohoOutboundMail, sendZohoMailWebhook, sendZohoOutboundMail } from "@/lib/zoho-mail";
 
+function personalizeUserToken(content: string, name: string) {
+  return content.replace(/\{user\}/gi, name);
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   let sessionUserId: string | null = null;
@@ -42,14 +46,6 @@ export async function POST(req: Request) {
       select: { id: true, email: true, name: true },
     });
 
-    await notifyUsers({
-      userIds: users.map((user) => user.id),
-      title: body.data.title,
-      body: body.data.body,
-      type: body.data.type,
-      targetUrl: "/notifications",
-    });
-
     const emails = users.map((user) => user.email);
     const mailPayload = {
       subject: body.data.title,
@@ -60,6 +56,25 @@ export async function POST(req: Request) {
       source: "admin-broadcast",
     };
     const hasUserPlaceholder = /\{user\}/i.test(`${body.data.body} ${body.data.bodyHtml || ""}`);
+    if (hasUserPlaceholder) {
+      await prisma.notification.createMany({
+        data: users.map((targetUser) => ({
+          userId: targetUser.id,
+          title: personalizeUserToken(body.data.title, targetUser.name),
+          body: personalizeUserToken(body.data.body, targetUser.name),
+          type: body.data.type,
+          targetUrl: "/notifications",
+        })),
+      });
+    } else {
+      await notifyUsers({
+        userIds: users.map((targetUser) => targetUser.id),
+        title: body.data.title,
+        body: body.data.body,
+        type: body.data.type,
+        targetUrl: "/notifications",
+      });
+    }
     const outbound = hasUserPlaceholder
       ? await sendPersonalizedZohoOutboundMail(users, mailPayload).catch((error) => ({
           sent: false,

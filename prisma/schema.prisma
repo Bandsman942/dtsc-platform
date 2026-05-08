@@ -77,6 +77,12 @@ model User {
   role          UserRole        @default(CLIENT)
   companyName   String?
   phone         String?
+  jobTitle      String?
+  bio           String?
+  location      String?
+  website       String?
+  avatarUrl     String?
+  publicProfileConsent Boolean @default(false)
   status        UserStatus      @default(ACTIVE)
   dailyMessageLimit Int         @default(30)
   dailyTokenLimit   Int         @default(100000)

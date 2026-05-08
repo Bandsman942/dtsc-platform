@@ -21,6 +21,7 @@ Objectifs couverts par le code actuel:
 - chatbot OpenAI avec historique des conversations, streaming et limites d'usage;
 - notifications internes;
 - annonces internes avec commentaires et reactions;
+- editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, visites publiques, diffusions et acces par blocs pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
@@ -67,7 +68,7 @@ app/
   dashboard/                   Dashboard client
   documents/                   Redirection historique vers /company
   notifications/               Centre de notifications
-  profile/                     Profil utilisateur
+  profile/                     Profil utilisateur, CRUD profil, avatar et consentement public
   settings/                    Parametres compte/theme
   support/                     Tickets support
   page.tsx                     Landing page
@@ -89,6 +90,7 @@ components/
   dashboard/                   UI dashboard
   layout/                      Shell prive, navigation
   notifications/               UI notifications
+  profile/                     Edition profil utilisateur et avatar
   public/                      Sections landing page
   settings/                    Parametres utilisateur
   support/                     UI tickets support
@@ -174,6 +176,7 @@ Notes securite:
 - `DEFAULT_ADMIN_BOOTSTRAP_ENABLED` doit rester `false` en production apres la creation initiale du compte admin.
 - `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` activent le rate limiting distribue. Sans ces variables, le code utilise un fallback memoire non garanti en multi-instance serverless.
 - Les secrets MaishaPay, Supabase Storage, Zoho Mail et OpenAI restent strictement cote serveur.
+- Les avatars utilisent aussi Supabase Storage. Pour un affichage direct dans le navigateur, le bucket doit fournir des URL publiques ou une politique d'acces adaptee aux chemins `avatars/{userId}/...`.
 
 Regles:
 
@@ -189,7 +192,7 @@ Modeles actifs:
 
 | Modele | Role |
 | --- | --- |
-| `User` | Compte utilisateur, role, statut, limites journalieres |
+| `User` | Compte utilisateur, role, statut, limites journalieres, profil professionnel, avatar et consentement public |
 | `PendingRegistration` | Pre-inscriptions en attente de verification OTP |
 | `BillingPlan` | Plans d'abonnement chatbot |
 | `Subscription` | Abonnement actif ou en attente de paiement |
@@ -217,6 +220,12 @@ Modeles actifs:
 | `AuditLog` | Journalisation des actions sensibles |
 | `WebhookEvent` | Historisation des webhooks entrants |
 | `ApiLog` | Journalisation des appels API critiques |
+
+Champs profil utilisateur ajoutes:
+
+- `jobTitle`, `bio`, `location`, `website`: informations professionnelles facultatives;
+- `avatarUrl`: URL publique d'une photo de profil, renseignee manuellement ou via upload Supabase Storage;
+- `publicProfileConsent`: consentement explicite pour afficher le nom, la fonction et l'avatar sur les publications publiques dont l'utilisateur est auteur.
 
 Enums:
 
@@ -317,6 +326,8 @@ Blocs Administration configurables par `ADMIN`:
 - `activity`: conversations, utilisateurs et tickets;
 - `audits`: paiements, logs API et webhooks.
 
+Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI.
+
 Regles annonces:
 
 - `ADMIN`, `MANAGER`, `SUPPORT` peuvent publier.
@@ -406,7 +417,8 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 
 | Methode | Route | Acces | Description |
 | --- | --- | --- | --- |
-| `PATCH` | `/api/account/profile` | session | Mise a jour nom, entreprise, telephone |
+| `PATCH` | `/api/account/profile` | session | Mise a jour nom, entreprise, telephone, poste, bio, localisation, site, avatar URL et consentement public |
+| `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP vers Supabase Storage, maximum 2 Mo |
 | `PATCH` | `/api/account/password` | session | Changement mot de passe |
 
 ### Chatbot et conversations
@@ -456,6 +468,8 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `PATCH` | `/api/announcements/comments/[id]` | auteur dans delai ou `ADMIN` | Modifier commentaire |
 | `DELETE` | `/api/announcements/comments/[id]` | `ADMIN` | Supprimer commentaire |
 | `POST` | `/api/announcements/[id]/reactions` | session | Like/dislike |
+
+Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est nettoye cote serveur avec `sanitizeRichHtml` avant stockage. L'interface de creation et d'edition utilise l'editeur riche commun, avec barre d'outils fixe et zone de saisie scrollable.
 
 ### Administration
 
@@ -580,6 +594,8 @@ Reponse:
 ```
 
 `{user}` est remplace par le nom du destinataire. Si `{user}` est present, l'application envoie des messages personnalises individuellement.
+La notification interne creee pour chaque utilisateur applique aussi ce remplacement, afin que le centre de notifications n'affiche jamais la variable brute `{user}`.
+Le payload peut aussi contenir `bodyHtml`; l'editeur riche conserve la mise en forme utile avant nettoyage serveur et envoi email.
 
 Reponse reussie:
 

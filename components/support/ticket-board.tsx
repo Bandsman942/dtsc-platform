@@ -6,6 +6,7 @@ import type { SupportTicket, User, UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatEnumLabel } from "@/lib/labels";
 
 type TicketWithUser = SupportTicket & {
   user?: Pick<User, "name" | "email" | "role">;
@@ -80,7 +81,7 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">
-                {ticket.user?.email || "Utilisateur"} · {ticket.priority}
+                {ticket.user?.email || "Utilisateur"} · {formatEnumLabel(ticket.priority)}
               </p>
               <h3 className="mt-1 font-black text-dtsc-ink">{ticket.subject}</h3>
               <p className="mt-2 text-sm leading-6 text-dtsc-muted">{ticket.description}</p>
@@ -90,7 +91,7 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
                 </p>
               )}
             </div>
-            <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{ticket.status}</span>
+            <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{formatEnumLabel(ticket.status)}</span>
           </div>
           <div className="mt-5 space-y-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">Discussion</p>
@@ -105,10 +106,10 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
           {canManage && (
             <form onSubmit={(event) => resolveTicket(event, ticket.id)} className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
               <select name="status" defaultValue={ticket.status} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
-                <option value="OPEN">OPEN</option>
-                <option value="IN_PROGRESS">IN_PROGRESS</option>
-                <option value="RESOLVED">RESOLVED</option>
-                <option value="CLOSED">CLOSED</option>
+                <option value="OPEN">{formatEnumLabel("OPEN")}</option>
+                <option value="IN_PROGRESS">{formatEnumLabel("IN_PROGRESS")}</option>
+                <option value="RESOLVED">{formatEnumLabel("RESOLVED")}</option>
+                <option value="CLOSED">{formatEnumLabel("CLOSED")}</option>
               </select>
               <input name="resolution" defaultValue={ticket.resolution || ""} placeholder="Note de résolution visible par l'utilisateur" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
               <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={activeId === ticket.id}>
@@ -155,7 +156,7 @@ function TicketMessages({ messages }: { messages: TicketMessageItem[] }) {
       {messageList.paginatedItems.map((message) => (
         <div key={message.id} className="rounded-2xl bg-dtsc-surface p-3">
           <p className="text-xs font-black text-dtsc-blue">
-            {message.user.name} · {message.user.role} · {new Date(message.createdAt).toLocaleString("fr-FR")}
+            {message.user.name} · {formatEnumLabel(message.user.role)} · {new Date(message.createdAt).toLocaleString("fr-FR")}
           </p>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{message.content}</p>
         </div>

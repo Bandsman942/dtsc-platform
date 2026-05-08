@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatEnumLabel } from "@/lib/labels";
 
 type CompanyProfile = {
   organizationName: string;
@@ -180,7 +181,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
           <Input name="title" placeholder="Activité: reporting commercial" required />
           <Input name="frequency" placeholder="Fréquence: quotidien, mensuel..." />
           <select name="priority" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
           </select>
           <textarea name="description" placeholder="Description de l'activité" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:col-span-3" required />
           <Input name="tools" placeholder="Outils utilisés" />
@@ -207,7 +208,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
             {smartList.paginatedItems.map((activity) => (
               <article key={activity.id} className="flex flex-wrap items-start justify-between gap-4 py-4">
                 <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{activity.priority} · {activity.frequency || "Fréquence non renseignée"}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{formatEnumLabel(activity.priority)} · {activity.frequency || "Fréquence non renseignée"}</p>
                   <h3 className="mt-1 font-black text-dtsc-ink">{activity.title}</h3>
                   <p className="mt-2 max-w-4xl text-sm leading-6 text-dtsc-muted">{activity.description}</p>
                 </div>
@@ -236,7 +237,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
             <Input name="title" defaultValue={editingActivity.title} required />
             <Input name="frequency" defaultValue={editingActivity.frequency || ""} />
             <select name="priority" defaultValue={editingActivity.priority} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-              {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+              {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
             </select>
             <textarea name="description" defaultValue={editingActivity.description} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <Input name="tools" defaultValue={editingActivity.tools || ""} />

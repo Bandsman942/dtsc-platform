@@ -6,6 +6,7 @@ import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { formatEnumLabel } from "@/lib/labels";
 
 export function CreateUserForm() {
   const router = useRouter();
@@ -33,10 +34,10 @@ export function CreateUserForm() {
       <Input name="email" type="email" placeholder="Email" required />
       <PasswordInput name="password" placeholder="Mot de passe temporaire" autoComplete="new-password" required />
       <select name="role" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
-        <option value="CLIENT">CLIENT</option>
-        <option value="SUPPORT">SUPPORT</option>
-        <option value="MANAGER">MANAGER</option>
-        <option value="ADMIN">ADMIN</option>
+        <option value="CLIENT">{formatEnumLabel("CLIENT")}</option>
+        <option value="SUPPORT">{formatEnumLabel("SUPPORT")}</option>
+        <option value="MANAGER">{formatEnumLabel("MANAGER")}</option>
+        <option value="ADMIN">{formatEnumLabel("ADMIN")}</option>
       </select>
       <Input name="companyName" placeholder="Entreprise" />
       <Input name="phone" placeholder="Téléphone" />

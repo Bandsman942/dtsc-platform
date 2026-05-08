@@ -8,15 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatEnumLabel } from "@/lib/labels";
+import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
 
 type Announcement = {
   id: string;
   title: string;
   content: string;
   createdAt: string;
-  author: { id: string; name: string; role: UserRole };
-  comments: Array<{ id: string; content: string; createdAt: string; user: { id: string; name: string; role: UserRole } }>;
+  author: { id: string; name: string; role: UserRole; avatarUrl?: string | null; jobTitle?: string | null };
+  comments: Array<{ id: string; content: string; createdAt: string; user: { id: string; name: string; role: UserRole; avatarUrl?: string | null } }>;
   reactions: Array<{ value: number }>;
 };
 
@@ -192,7 +195,12 @@ export function AnnouncementWall({
           {canPost && (
             <form onSubmit={createAnnouncement} className="mt-5 space-y-3">
               <Input name="title" placeholder="Titre de l'annonce" required />
-              <textarea name="content" placeholder="Contenu de l'annonce" className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+              <RichTextEditor
+                textName="content"
+                htmlName="contentHtml"
+                placeholder="Contenu de l'annonce. Vous pouvez utiliser la mise en forme ou coller un texte déjà décoré."
+                minHeightClassName="min-h-40"
+              />
               <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Publier</Button>
             </form>
           )}
@@ -218,12 +226,18 @@ export function AnnouncementWall({
           return (
             <article key={announcement.id} className="dtsc-card p-6">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">
-                    {announcement.author.name} · {announcement.author.role} · {new Date(announcement.createdAt).toLocaleString("fr-FR")}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-3">
+                    <AuthorAvatar name={announcement.author.name} avatarUrl={announcement.author.avatarUrl} />
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">
+                        {announcement.author.name} · {formatEnumLabel(announcement.author.role)} · {new Date(announcement.createdAt).toLocaleString("fr-FR")}
+                      </p>
+                      {announcement.author.jobTitle && <p className="mt-1 text-xs font-bold text-dtsc-blue">{announcement.author.jobTitle}</p>}
+                    </div>
+                  </div>
                   <h2 className="mt-2 text-2xl font-black text-dtsc-ink">{announcement.title}</h2>
-                  <p className="mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted">{announcement.content}</p>
+                  <RichAnnouncementContent content={announcement.content} />
                 </div>
                 {isAdmin && (
                   <div className="flex flex-wrap gap-2">
@@ -277,7 +291,13 @@ export function AnnouncementWall({
         {editingAnnouncement && (
           <form onSubmit={updateAnnouncement} className="space-y-3">
             <Input name="title" defaultValue={editingAnnouncement.title} required />
-            <textarea name="content" defaultValue={editingAnnouncement.content} className="min-h-40 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" required />
+            <RichTextEditor
+              textName="content"
+              htmlName="contentHtml"
+              defaultValue={editingAnnouncement.content}
+              placeholder="Contenu de l'annonce"
+              minHeightClassName="min-h-48"
+            />
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
           </form>
         )}
@@ -374,7 +394,7 @@ function AnnouncementComments({
           <div key={commentItem.id} className="rounded-2xl bg-dtsc-page p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {commentItem.user.role}</p>
+                <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
                 <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
               </div>
               {canEditComment && (
@@ -398,4 +418,25 @@ function AnnouncementComments({
       )}
     </div>
   );
+}
+
+function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-sm font-black text-dtsc-blue">
+      {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : name.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function RichAnnouncementContent({ content }: { content: string }) {
+  if (hasHtmlMarkup(content)) {
+    return (
+      <div
+        className="dtsc-publication-content mt-3 text-dtsc-muted"
+        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content) }}
+      />
+    );
+  }
+
+  return <p className="mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted">{content}</p>;
 }

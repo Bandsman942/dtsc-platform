@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { formatEnumLabel } from "@/lib/labels";
 
 type Publication = {
   id: string;
@@ -66,7 +67,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <div className="grid gap-3 sm:grid-cols-2">
               <select name="category" disabled={!canEdit} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
                 {categories.map((category) => (
-                  <option key={category} value={category}>{category}</option>
+                  <option key={category} value={category}>{formatEnumLabel(category)}</option>
                 ))}
               </select>
               <Input name="coverLabel" placeholder="Label visuel court" disabled={!canEdit} />
@@ -94,7 +95,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <article key={publication.id} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{publication.category} · {publication.published ? "Publié" : "Brouillon"}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)} · {publication.published ? "Publié" : "Brouillon"}</p>
                   <h3 className="mt-1 font-black text-dtsc-ink">{publication.title}</h3>
                   <p className="mt-1 text-xs text-dtsc-muted">/{publication.slug}</p>
                 </div>
@@ -125,7 +126,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <Input name="slug" defaultValue={editing.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
             <select name="category" defaultValue={editing.category} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
               {categories.map((category) => (
-                <option key={category} value={category}>{category}</option>
+                <option key={category} value={category}>{formatEnumLabel(category)}</option>
               ))}
             </select>
             <Input name="coverLabel" defaultValue={editing.coverLabel || ""} />

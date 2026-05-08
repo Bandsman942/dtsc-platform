@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, FileText, Megaphone, Newspaper } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { prisma } from "@/lib/prisma";
+import { formatEnumLabel } from "@/lib/labels";
 import { trustedSources } from "@/lib/public-site";
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export default async function RessourcesPage() {
   const publications = await prisma.publicPublication.findMany({
     where: { published: true },
     orderBy: { createdAt: "desc" },
+    include: {
+      author: { select: { name: true, jobTitle: true, avatarUrl: true, publicProfileConsent: true } },
+    },
     take: 24,
   });
 
@@ -65,9 +69,17 @@ export default async function RessourcesPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {publications.map((publication) => (
               <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover p-6">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{publication.category}</p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)}</p>
                 <h3 className="mt-3 text-xl font-black text-dtsc-ink">{publication.title}</h3>
                 <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
+                {publication.author?.publicProfileConsent && (
+                  <span className="mt-5 flex items-center gap-3 text-xs font-bold text-dtsc-muted">
+                    <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-dtsc-soft text-dtsc-blue">
+                      {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+                    </span>
+                    {publication.author.name}
+                  </span>
+                )}
                 <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
                   Ouvrir
                   <ArrowRight className="h-4 w-4" />
