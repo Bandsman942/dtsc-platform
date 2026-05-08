@@ -117,7 +117,7 @@ const faqCategories = [
       {
         question: "Comment demander une démonstration ou un devis ?",
         answer:
-          "Vous pouvez passer par la page Contact, demander une consultation, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
+          "Vous pouvez passer par la page Contact, Demander un avais, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
       },
       {
         question: "Quels délais prévoir pour un projet ?",
@@ -175,7 +175,7 @@ export default function Page() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] shadow-[0_16px_40px_rgba(0,194,255,0.2)] hover:bg-cyan-300">
                 <Link href="/contact">
-                  Demander une consultation
+                  Demander un avais
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -274,7 +274,7 @@ export default function Page() {
                 Tout ce qu&apos;un client veut clarifier avant de démarrer avec DTSC.
               </h2>
               <p className="mt-5 max-w-2xl text-base leading-8 text-dtsc-muted">
-                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de demander une consultation.
+                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de Demander un avais.
               </p>
               <div className="mt-7 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_18px_60px_rgba(0,43,91,0.08)]">
                 <div className="flex items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-muted">
