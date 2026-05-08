@@ -11,6 +11,7 @@ DTSC Platform est une application SaaS Next.js App Router pour DTSC - Data and T
 Objectifs couverts par le code actuel:
 
 - landing page publique DTSC refondue avec navigation corporate vers des pages dediees: Services, Solutions, Secteurs, Projets, Ressources, A propos et Contact;
+- FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
@@ -96,7 +97,7 @@ components/
   public/hero-image-carousel   Carrousel client pour les images hero publiques
   settings/                    Parametres utilisateur
   support/                     UI tickets support
-  ui/                          Boutons, inputs, dialogues, etc.
+  ui/                          Boutons, inputs, dialogues, accordion, etc.
 
 lib/
   auth.ts                      Session serveur et helpers RBAC
@@ -1105,6 +1106,7 @@ Objectifs codes:
 - metadonnees;
 - Open Graph/Twitter;
 - contenus publics longs et indexes;
+- FAQ d'accueil avec composant local `Accordion` base sur `details/summary` accessible et donnees structurees JSON-LD `FAQPage`;
 - navigation publique par routes dediees avec onglet actif selon `pathname`;
 - contenus corporate centralises dans `lib/public-site.ts`;
 - contexte DTSC issu du business plan: vision, mission, services, marche, organisation et approche commerciale;
@@ -1117,7 +1119,7 @@ Pages publiques dediees:
 
 | Route | Objectif |
 | --- | --- |
-| `/` | Page d'accueil courte, conversion et orientation vers les pages dediees |
+| `/` | Page d'accueil courte, conversion, FAQ publique et orientation vers les pages dediees |
 | `/services` | Services DTSC: transformation numerique, data, IA, marketing digital, audit, formation |
 | `/solutions` | Offres concretes: chatbot, dashboards, applications metier, automatisation, RAG documentaire |
 | `/secteurs` | Secteurs cibles: assurances, sante, pharmacies, PME, ONG, education, finance |
