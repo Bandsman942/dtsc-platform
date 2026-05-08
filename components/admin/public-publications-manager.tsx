@@ -77,6 +77,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               textName="content"
               htmlName="contentHtml"
               disabled={!canEdit}
+              allowImageUpload
               placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
             />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
@@ -135,6 +136,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               textName="content"
               htmlName="contentHtml"
               defaultValue={editing.content}
+              allowImageUpload
               placeholder="Contenu long de la publication"
             />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">

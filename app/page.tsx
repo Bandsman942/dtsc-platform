@@ -117,7 +117,7 @@ const faqCategories = [
       {
         question: "Comment demander une démonstration ou un devis ?",
         answer:
-          "Vous pouvez passer par la page Contact, Demander un avais, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
+          "Vous pouvez passer par la page Contact, Demander un avis, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
       },
       {
         question: "Quels délais prévoir pour un projet ?",
@@ -175,7 +175,7 @@ export default function Page() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] shadow-[0_16px_40px_rgba(0,194,255,0.2)] hover:bg-cyan-300">
                 <Link href="/contact">
-                  Demander un avais
+                  Demander un avis
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -207,6 +207,32 @@ export default function Page() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="border-b border-dtsc-border bg-dtsc-surface">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <Link
+            href="/ressources"
+            className="group grid gap-4 overflow-hidden rounded-3xl border border-dtsc-border bg-[linear-gradient(120deg,var(--dtsc-soft),var(--dtsc-surface),var(--dtsc-page))] p-5 shadow-[0_18px_55px_rgba(0,43,91,0.08)] transition hover:-translate-y-0.5 hover:border-cyan-400 md:grid-cols-[1fr_auto]"
+          >
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-400 text-[#001736] shadow-[0_14px_34px_rgba(0,194,255,0.22)]">
+                <HelpCircle className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Ressources DTSC</p>
+                <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Lisez nos guides, annonces, cas pratiques et articles pour mieux préparer vos projets.</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
+                  Accédez à des contenus utiles sur la data, l&apos;IA, l&apos;automatisation, les dashboards et la transformation numérique avant de passer à l&apos;échange avec l&apos;équipe DTSC.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#002b5b] px-5 py-3 text-sm font-black text-white transition group-hover:bg-[#001736]">
+              Lire nos ressources
+              <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
         </div>
       </section>
 
@@ -274,7 +300,7 @@ export default function Page() {
                 Tout ce qu&apos;un client veut clarifier avant de démarrer avec DTSC.
               </h2>
               <p className="mt-5 max-w-2xl text-base leading-8 text-dtsc-muted">
-                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de Demander un avais.
+                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de Demander un avis.
               </p>
               <div className="mt-7 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_18px_60px_rgba(0,43,91,0.08)]">
                 <div className="flex items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-muted">

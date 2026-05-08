@@ -19,7 +19,7 @@ type Announcement = {
   content: string;
   createdAt: string;
   author: { id: string; name: string; role: UserRole; avatarUrl?: string | null; jobTitle?: string | null };
-  comments: Array<{ id: string; content: string; createdAt: string; user: { id: string; name: string; role: UserRole; avatarUrl?: string | null } }>;
+  comments: Array<{ id: string; parentId: string | null; content: string; createdAt: string; user: { id: string; name: string; role: UserRole; avatarUrl?: string | null } }>;
   reactions: Array<{ value: number }>;
 };
 
@@ -50,6 +50,7 @@ export function AnnouncementWall({
   const [feedback, setFeedback] = useState("");
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [editingComment, setEditingComment] = useState<AnnouncementCommentItem | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ announcementId: string; comment: AnnouncementCommentItem } | null>(null);
   const [deletingAnnouncement, setDeletingAnnouncement] = useState<Announcement | null>(null);
   const [deletingComment, setDeletingComment] = useState<AnnouncementCommentItem | null>(null);
   const canPost = canPublish(role, allowClientAnnouncements);
@@ -77,17 +78,18 @@ export function AnnouncementWall({
     }
   }
 
-  async function comment(event: React.FormEvent<HTMLFormElement>, announcementId: string) {
+  async function comment(event: React.FormEvent<HTMLFormElement>, announcementId: string, parentId?: string) {
     event.preventDefault();
     const form = event.currentTarget;
     const payload = Object.fromEntries(new FormData(form).entries());
     const response = await fetch(`/api/announcements/${announcementId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, parentId }),
     });
     if (response.ok) {
       form.reset();
+      setReplyingTo(null);
       router.refresh();
     } else {
       setFeedback("Impossible de publier ce commentaire.");
@@ -267,12 +269,14 @@ export function AnnouncementWall({
                 </span>
               </div>
               <AnnouncementComments
+                announcementId={announcement.id}
                 comments={announcement.comments}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
                 commentEditWindowMinutes={commentEditWindowMinutes}
                 onEdit={setEditingComment}
                 onDelete={setDeletingComment}
+                onReply={(commentItem) => setReplyingTo({ announcementId: announcement.id, comment: commentItem })}
               />
               <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 flex gap-2">
                 <Input name="content" placeholder="Ajouter un commentaire..." required />
@@ -307,6 +311,15 @@ export function AnnouncementWall({
           <form onSubmit={updateComment} className="space-y-3">
             <textarea name="content" defaultValue={editingComment.content} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" required />
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+          </form>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(replyingTo)} title="Répondre au commentaire" onClose={() => setReplyingTo(null)}>
+        {replyingTo && (
+          <form onSubmit={(event) => comment(event, replyingTo.announcementId, replyingTo.comment.id)} className="space-y-3">
+            <p className="rounded-xl bg-dtsc-page p-3 text-sm leading-6 text-dtsc-muted">{replyingTo.comment.content}</p>
+            <textarea name="content" className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" placeholder="Votre réponse..." required />
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Répondre</Button>
           </form>
         )}
       </Dialog>
@@ -354,29 +367,76 @@ export function AnnouncementWall({
 }
 
 function AnnouncementComments({
+  announcementId,
   comments,
   currentUserId,
   isAdmin,
   commentEditWindowMinutes,
   onEdit,
   onDelete,
+  onReply,
 }: {
+  announcementId: string;
   comments: AnnouncementCommentItem[];
   currentUserId: string;
   isAdmin: boolean;
   commentEditWindowMinutes: number;
   onEdit: (comment: AnnouncementCommentItem) => void;
   onDelete: (comment: AnnouncementCommentItem) => void;
+  onReply: (comment: AnnouncementCommentItem) => void;
 }) {
+  const commentsByParent = new Map<string, AnnouncementCommentItem[]>();
+  for (const commentItem of comments) {
+    const parentKey = commentItem.parentId || "root";
+    commentsByParent.set(parentKey, [...(commentsByParent.get(parentKey) || []), commentItem]);
+  }
+  const rootComments = commentsByParent.get("root") || [];
   const commentList = useSmartList({
-    items: comments,
+    items: rootComments,
     pageSize: 5,
-    getSearchText: (commentItem) => `${commentItem.content} ${commentItem.user.name} ${commentItem.user.role} ${commentItem.createdAt}`,
+    getSearchText: (commentItem) => {
+      const replies = commentsByParent.get(commentItem.id) || [];
+      return `${commentItem.content} ${commentItem.user.name} ${commentItem.user.role} ${commentItem.createdAt} ${replies.map((reply) => `${reply.content} ${reply.user.name}`).join(" ")}`;
+    },
   });
+
+  function renderComment(commentItem: AnnouncementCommentItem, depth = 0) {
+    const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
+    const replies = commentsByParent.get(commentItem.id) || [];
+
+    return (
+      <div key={commentItem.id} className={depth > 0 ? "ml-5 border-l border-dtsc-border pl-4" : ""}>
+        <div className="rounded-2xl bg-dtsc-page p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
+              <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => onReply(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
+                Répondre
+              </button>
+              {canEditComment && (
+                <button type="button" onClick={() => onEdit(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
+                  Modifier
+                </button>
+              )}
+              {isAdmin && (
+                <button type="button" onClick={() => onDelete(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-red-600 underline underline-offset-4 hover:bg-red-50">
+                  Supprimer
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        {replies.length > 0 && <div className="mt-3 space-y-3">{replies.map((reply) => renderComment(reply, depth + 1))}</div>}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-5 space-y-3">
-      {comments.length > 5 && (
+      {rootComments.length > 5 && (
         <ListControls
           query={commentList.query}
           onQueryChange={commentList.setQuery}
@@ -388,32 +448,9 @@ function AnnouncementComments({
           onPageChange={commentList.setPage}
         />
       )}
-      {commentList.paginatedItems.map((commentItem) => {
-        const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
-        return (
-          <div key={commentItem.id} className="rounded-2xl bg-dtsc-page p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
-                <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
-              </div>
-              {canEditComment && (
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={() => onEdit(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
-                    Modifier
-                  </button>
-                  {isAdmin && (
-                    <button type="button" onClick={() => onDelete(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-red-600 underline underline-offset-4 hover:bg-red-50">
-                      Supprimer
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-      {!commentList.filteredCount && comments.length > 0 && (
+      <span className="sr-only">Fil de commentaires de l&apos;annonce {announcementId}</span>
+      {commentList.paginatedItems.map((commentItem) => renderComment(commentItem))}
+      {!commentList.filteredCount && rootComments.length > 0 && (
         <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">Aucun commentaire ne correspond à votre recherche.</p>
       )}
     </div>

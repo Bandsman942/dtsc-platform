@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { PublicationEngagement } from "@/components/public/publication-engagement";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { getCurrentUser } from "@/lib/auth";
+import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 import { formatEnumLabel } from "@/lib/labels";
 import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
@@ -31,10 +34,21 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function PublicationPage({ params }: Params) {
   const { slug } = await params;
-  const publication = await prisma.publicPublication.findFirst({
-    where: { slug, published: true },
-    include: { author: { select: { name: true, jobTitle: true, avatarUrl: true, publicProfileConsent: true } } },
-  });
+  const [publication, currentUser, settings] = await Promise.all([
+    prisma.publicPublication.findFirst({
+      where: { slug, published: true },
+      include: {
+        author: { select: { name: true, jobTitle: true, avatarUrl: true, publicProfileConsent: true } },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          include: { user: { select: { id: true, name: true, role: true, avatarUrl: true } } },
+        },
+        reactions: { select: { value: true, userId: true } },
+      },
+    }),
+    getCurrentUser(),
+    getAppSettings(),
+  ]);
 
   if (!publication) {
     notFound();
@@ -70,22 +84,29 @@ export default async function PublicationPage({ params }: Params) {
 
         <section className="dtsc-public-band-light">
           <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
-          <div className="dtsc-card p-6 sm:p-8">
-            {hasHtmlMarkup(publication.content) ? (
-              <div
-                className="dtsc-publication-content text-dtsc-muted"
-                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(publication.content) }}
+            <div className="dtsc-card p-6 sm:p-8">
+              {hasHtmlMarkup(publication.content) ? (
+                <div
+                  className="dtsc-publication-content text-dtsc-muted"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(publication.content) }}
+                />
+              ) : (
+                <div className="prose prose-slate max-w-none text-dtsc-muted">
+                  {publication.content.split("\n").map((paragraph, index) => (
+                    <p key={`${index}-${paragraph.slice(0, 24)}`} className="mb-5 text-base leading-8">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <PublicationEngagement
+                publicationId={publication.id}
+                comments={JSON.parse(JSON.stringify(publication.comments))}
+                reactions={publication.reactions}
+                currentUser={currentUser ? { id: currentUser.id, role: currentUser.role, name: currentUser.name } : null}
+                commentEditWindowMinutes={settings.commentEditWindowMinutes}
               />
-            ) : (
-              <div className="prose prose-slate max-w-none text-dtsc-muted">
-                {publication.content.split("\n").map((paragraph, index) => (
-                  <p key={`${index}-${paragraph.slice(0, 24)}`} className="mb-5 text-base leading-8">
-                    {paragraph}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
           </div>
         </section>
       </article>

@@ -14,7 +14,7 @@ Objectifs couverts par le code actuel:
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
-- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources;
+- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec images optimisees, reactions, commentaires et reponses aux commentaires;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
@@ -213,6 +213,8 @@ Modeles actifs:
 | `NewsletterSubscriber` | Abonnes newsletter publics |
 | `ContactMessage` | Messages publics de contact |
 | `PublicPublication` | Publication publique administrable pour Ressources, guides, annonces et cas pratiques |
+| `PublicPublicationComment` | Commentaire ou reponse de commentaire sur une publication publique, rattache a un utilisateur connecte |
+| `PublicPublicationReaction` | Like/dislike d'un utilisateur sur une publication publique |
 | `SupportTicket` | Ticket support |
 | `TicketMessage` | Discussion dans un ticket |
 | `SiteVisit` | Visites publiques du site |
@@ -1036,7 +1038,7 @@ Limites actuelles:
 
 ## 12.2 Integration Supabase Storage
 
-Supabase Storage est utilise pour les fichiers originaux de la base documentaire et pour les avatars optimises des profils. Neon PostgreSQL reste la base applicative principale.
+Supabase Storage est utilise pour les fichiers originaux de la base documentaire, pour les avatars optimises des profils et pour les images optimisees inserees dans les publications publiques. Neon PostgreSQL reste la base applicative principale.
 
 Variables:
 
@@ -1052,8 +1054,34 @@ Regles:
 - la service role key ne doit jamais etre exposee au navigateur;
 - le chemin documentaire suit le format `userId/documentId/fileName`;
 - le chemin avatar suit le format `avatars/{userId}/profile.webp` et l'affichage passe par `/api/users/[id]/avatar`;
+- le chemin image de publication suit le format `publications/{userId}/{uuid}.webp` et l'affichage public passe par `/api/public/publication-images/[...path]`;
 - si Supabase Storage n'est pas configure, l'indexation RAG continue sans conservation de l'original.
 - lorsqu'un document est supprime, l'application tente aussi de supprimer l'original dans Supabase Storage.
+
+## 12.3 Publications publiques interactives
+
+Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase.
+
+Routes ajoutees:
+
+| Route | Methode | Acces | Payload | Reponse |
+| --- | --- | --- | --- | --- |
+| `/api/admin/publications/images` | `POST` | `ADMIN` | `multipart/form-data` avec `file` image JPEG/PNG/WebP optimisee | `{ ok, url, path }` |
+| `/api/public/publication-images/[...path]` | `GET` | Public | chemin Supabase commencant par `publications/` | Blob image cacheable |
+| `/api/publications/[id]/comments` | `POST` | Utilisateur connecte | `{ content, parentId? }` | commentaire cree |
+| `/api/publications/comments/[id]` | `PATCH` | `ADMIN` ou auteur dans la fenetre d'edition | `{ content }` | commentaire modifie |
+| `/api/publications/comments/[id]` | `DELETE` | `ADMIN` | aucun | suppression du commentaire et de ses reponses |
+| `/api/publications/[id]/reactions` | `POST` | Utilisateur connecte | `{ value: 1 | -1 }` | reaction creee, remplacee ou retiree |
+
+Regles RBAC:
+
+- seuls les `ADMIN` creent, modifient et suppriment les publications publiques;
+- les utilisateurs connectes peuvent commenter, repondre et reagir;
+- un utilisateur peut modifier son propre commentaire uniquement dans la fenetre `commentEditWindowMinutes`;
+- seul `ADMIN` supprime un commentaire public;
+- les commentaires et reactions ne divulguent pas d'informations techniques internes.
+
+Le module `/announcements` utilise maintenant aussi `AnnouncementComment.parentId` pour permettre les reponses aux commentaires avec la meme logique CRUD que les commentaires existants.
 
 ## 13. Integration Neon PostgreSQL
 

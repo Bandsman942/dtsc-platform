@@ -20,6 +20,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const parentId = body.data.parentId || null;
   const announcement = await prisma.announcement.findUnique({
     where: { id },
     select: { id: true, authorId: true, title: true },
@@ -29,10 +30,21 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  if (parentId) {
+    const parentComment = await prisma.announcementComment.findFirst({
+      where: { id: parentId, announcementId: announcement.id },
+      select: { id: true },
+    });
+    if (!parentComment) {
+      return NextResponse.json({ error: "Parent comment not found" }, { status: 404 });
+    }
+  }
+
   const comment = await prisma.announcementComment.create({
     data: {
       announcementId: announcement.id,
       userId: session.userId,
+      parentId,
       content: body.data.content,
     },
   });

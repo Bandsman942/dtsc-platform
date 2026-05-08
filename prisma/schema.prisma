@@ -104,6 +104,8 @@ model User {
   invoices      Invoice[]
   documents           KnowledgeDocument[]
   publicPublications  PublicPublication[]
+  publicPublicationComments PublicPublicationComment[]
+  publicPublicationReactions PublicPublicationReaction[]
   companyProfile      CompanyProfile?
   companyActivities   CompanyActivity[]
 
@@ -449,9 +451,42 @@ model PublicPublication {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  comments    PublicPublicationComment[]
+  reactions   PublicPublicationReaction[]
 
   @@index([category, published, createdAt])
   @@index([authorId])
+}
+
+model PublicPublicationComment {
+  id            String   @id @default(cuid())
+  publicationId String
+  userId        String
+  parentId      String?
+  content       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  publication   PublicPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent        PublicPublicationComment? @relation("PublicPublicationCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       PublicPublicationComment[] @relation("PublicPublicationCommentReplies")
+
+  @@index([publicationId, createdAt])
+  @@index([userId])
+  @@index([parentId])
+}
+
+model PublicPublicationReaction {
+  id            String   @id @default(cuid())
+  publicationId String
+  userId        String
+  value         Int
+  createdAt     DateTime @default(now())
+  publication   PublicPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publicationId, userId])
+  @@index([userId])
 }
 
 model Notification {
@@ -487,13 +522,17 @@ model AnnouncementComment {
   id             String       @id @default(cuid())
   announcementId String
   userId         String
+  parentId       String?
   content        String
   createdAt      DateTime     @default(now())
   announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent         AnnouncementComment? @relation("AnnouncementCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        AnnouncementComment[] @relation("AnnouncementCommentReplies")
 
   @@index([announcementId, createdAt])
   @@index([userId])
+  @@index([parentId])
 }
 
 model AnnouncementReaction {

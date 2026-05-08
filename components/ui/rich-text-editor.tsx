@@ -1,7 +1,7 @@
 "use client";
 
-import { forwardRef, useRef, useState, type ClipboardEvent, type MutableRefObject } from "react";
-import { AlignCenter, AlignLeft, Bold, Italic, List, ListOrdered, Palette, Underline } from "lucide-react";
+import { forwardRef, useRef, useState, type ChangeEvent, type ClipboardEvent, type MutableRefObject } from "react";
+import { AlignCenter, AlignLeft, Bold, ImagePlus, Italic, List, ListOrdered, Palette, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type RichTextEditorProps = {
@@ -11,7 +11,12 @@ type RichTextEditorProps = {
   disabled?: boolean;
   defaultValue?: string;
   minHeightClassName?: string;
+  allowImageUpload?: boolean;
 };
+
+const MAX_EDITOR_IMAGE_WIDTH = 1440;
+const MAX_EDITOR_IMAGE_HEIGHT = 900;
+const EDITOR_IMAGE_QUALITY = 0.84;
 
 const fontFamilies = [
   { label: "Inter", value: "Inter, Arial, sans-serif" },
@@ -28,12 +33,16 @@ const fontSizes = [
 ];
 
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
-  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44" },
+  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false },
   ref
 ) {
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectionRef = useRef<Range | null>(null);
   const [plainText, setPlainText] = useState(defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
   const [html, setHtml] = useState(defaultValue);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [editorMessage, setEditorMessage] = useState("");
 
   function sync() {
     const editor = editorRef.current;
@@ -47,6 +56,41 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     }
     editorRef.current?.focus();
     document.execCommand(name, false, value);
+    sync();
+  }
+
+  function rememberSelection() {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) {
+      selectionRef.current = range.cloneRange();
+      return selectionRef.current;
+    }
+
+    return selectionRef.current;
+  }
+
+  function restoreSelection(range?: Range | null) {
+    const selection = window.getSelection();
+    const targetRange = range || selectionRef.current;
+    if (!selection || !targetRange) {
+      editorRef.current?.focus();
+      return;
+    }
+
+    editorRef.current?.focus();
+    selection.removeAllRanges();
+    selection.addRange(targetRange);
+  }
+
+  function insertHtml(htmlContent: string, range?: Range | null) {
+    restoreSelection(range);
+    document.execCommand("insertHTML", false, htmlContent);
     sync();
   }
 
@@ -66,9 +110,125 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     }
   }
 
-  function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+  async function optimizeImage(file: File) {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const element = new Image();
+      element.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(element);
+      };
+      element.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Image illisible"));
+      };
+      element.src = url;
+    });
+
+    const scale = Math.min(1, MAX_EDITOR_IMAGE_WIDTH / image.naturalWidth, MAX_EDITOR_IMAGE_HEIGHT / image.naturalHeight);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Optimisation image indisponible");
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) {
+            resolve(result);
+          } else {
+            reject(new Error("Compression image impossible"));
+          }
+        },
+        "image/webp",
+        EDITOR_IMAGE_QUALITY
+      );
+    });
+
+    const cleanName = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, "-") || "publication-image";
+    return new File([blob], `${cleanName}.webp`, { type: "image/webp" });
+  }
+
+  async function uploadImage(file: File) {
+    const optimizedFile = await optimizeImage(file);
+    const formData = new FormData();
+    formData.append("file", optimizedFile);
+
+    const response = await fetch("/api/admin/publications/images", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+    if (!response.ok || !payload?.url) {
+      throw new Error(payload?.error || "Impossible d'envoyer l'image");
+    }
+
+    return payload.url;
+  }
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  async function insertUploadedImage(file: File, range?: Range | null) {
+    setIsUploadingImage(true);
+    setEditorMessage("Optimisation et insertion de l'image en cours...");
+    try {
+      const url = await uploadImage(file);
+      const alt = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "Image de publication DTSC";
+      insertHtml(
+        `<figure class="dtsc-publication-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async"><figcaption>${escapeHtml(alt)}</figcaption></figure>`,
+        range
+      );
+      setEditorMessage("Image ajoutée à la publication.");
+    } catch (error) {
+      setEditorMessage(error instanceof Error ? error.message : "Impossible d'ajouter l'image.");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }
+
+  async function replacePastedDataImages(htmlContent: string) {
+    let processedHtml = htmlContent;
+    const matches = [...htmlContent.matchAll(/<img[^>]+src=["'](data:image\/[^"']+)["'][^>]*>/gi)];
+    for (const [index, match] of matches.entries()) {
+      const dataUrl = match[1];
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const file = new File([blob], `image-collee-${index + 1}.${blob.type.includes("png") ? "png" : "jpg"}`, {
+        type: blob.type || "image/png",
+      });
+      const url = await uploadImage(file);
+      processedHtml = processedHtml.replace(dataUrl, url);
+    }
+
+    return processedHtml;
+  }
+
+  async function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
     if (disabled) {
       event.preventDefault();
+      return;
+    }
+
+    const range = rememberSelection();
+    const pastedImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+    if (allowImageUpload && pastedImages.length) {
+      event.preventDefault();
+      for (const file of pastedImages) {
+        await insertUploadedImage(file, range);
+      }
       return;
     }
 
@@ -78,12 +238,36 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     }
 
     event.preventDefault();
-    document.execCommand("insertHTML", false, htmlContent);
-    sync();
+    if (allowImageUpload && htmlContent.includes("data:image/")) {
+      setIsUploadingImage(true);
+      setEditorMessage("Optimisation des images collées...");
+      try {
+        insertHtml(await replacePastedDataImages(htmlContent), range);
+        setEditorMessage("Contenu collé avec images optimisées.");
+      } catch (error) {
+        setEditorMessage(error instanceof Error ? error.message : "Impossible d'optimiser les images collées.");
+      } finally {
+        setIsUploadingImage(false);
+      }
+      return;
+    }
+
+    insertHtml(htmlContent, range);
   }
 
   function handleInput() {
+    rememberSelection();
     sync();
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    await insertUploadedImage(file, selectionRef.current);
   }
 
   return (
@@ -113,6 +297,23 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyCenter")} title="Centrer le texte sélectionné." className="rounded-lg">
           <AlignCenter className="h-4 w-4" />
         </Button>
+        {allowImageUpload && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || isUploadingImage}
+              onMouseDown={() => rememberSelection()}
+              onClick={() => fileInputRef.current?.click()}
+              title="Ajouter une image optimisée à l'emplacement du curseur."
+              className="rounded-lg"
+            >
+              <ImagePlus className="h-4 w-4" />
+            </Button>
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFileChange} />
+          </>
+        )}
         <select
           disabled={disabled}
           defaultValue=""
@@ -144,6 +345,11 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         <span className="text-xs leading-5 text-dtsc-muted">
           Le collage conserve autant que possible le gras, l&apos;italique, les couleurs, images et émojis.
         </span>
+        {allowImageUpload && editorMessage && (
+          <span className="rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-blue">
+            {editorMessage}
+          </span>
+        )}
       </div>
       <div
         ref={setRefs}
@@ -151,7 +357,9 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         suppressContentEditableWarning
         onPaste={handlePaste}
         onInput={handleInput}
-        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
+        onClick={rememberSelection}
+        onKeyUp={rememberSelection}
+        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:my-4 [&_img]:max-h-[520px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:object-cover [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
         dangerouslySetInnerHTML={defaultValue ? { __html: defaultValue } : undefined}

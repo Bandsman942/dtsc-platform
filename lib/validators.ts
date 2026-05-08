@@ -100,9 +100,12 @@ export const announcementUpdateSchema = announcementSchema;
 
 export const announcementCommentSchema = z.object({
   content: z.string().min(1).max(1_000),
+  parentId: z.string().min(1).max(120).optional().or(z.literal("")),
 });
 
-export const announcementCommentUpdateSchema = announcementCommentSchema;
+export const announcementCommentUpdateSchema = z.object({
+  content: z.string().min(1).max(1_000),
+});
 
 export const announcementReactionSchema = z.object({
   value: z.union([z.literal(1), z.literal(-1)]),
@@ -209,6 +212,19 @@ export const publicPublicationSchema = z.object({
   contentHtml: z.string().max(60000).optional().or(z.literal("")),
   coverLabel: z.string().max(80).optional().or(z.literal("")),
   published: z.coerce.boolean().default(false),
+});
+
+export const publicPublicationCommentSchema = z.object({
+  content: z.string().min(1).max(1_000),
+  parentId: z.string().min(1).max(120).optional().or(z.literal("")),
+});
+
+export const publicPublicationCommentUpdateSchema = z.object({
+  content: z.string().min(1).max(1_000),
+});
+
+export const publicPublicationReactionSchema = z.object({
+  value: z.union([z.literal(1), z.literal(-1)]),
 });
 
 export const checkoutSchema = z.object({

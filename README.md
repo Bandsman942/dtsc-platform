@@ -30,8 +30,9 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - FAQ premium sur l'accueil avec composant Accordion accessible, catégories métier et données structurées SEO `FAQPage`
 - Sections publiques harmonisées avec bandes visuelles alternées et cartes contrastées pour éviter la confusion entre blocs et arrière-plan
 - Pages publiques dédiées avec onglet actif, contenus DTSC issus du business plan et sources vérifiables
-- Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code
-- Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, images externes et emojis avec nettoyage HTML côté serveur
+- Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
+- Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
+- Publications publiques interactives: likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -74,7 +75,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin
-- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires et réactions
+- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires, réponses aux commentaires et réactions
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système et préférences de notifications
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
@@ -141,7 +142,7 @@ Notes:
 - `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY` et `MAISHAPAY_CALLBACK_SECRET` doivent être configurés dans Vercel pour activer les paiements payants. Le callback à fournir côté MaishaPay est `APP_URL/api/billing/maishapay/callback?secret=VOTRE_SECRET`.
 - Tant que le prestataire de paiement n'a pas fourni les clés, ne créez pas ces variables dans Vercel ou laissez-les vides. L'application affichera les plans payants en maintenance et gardera le plan gratuit opérationnel.
 - `OPENAI_EMBEDDING_MODEL` doit rester compatible avec la dimension pgvector configurée. Par défaut: `text-embedding-3-small` avec `vector(1536)`.
-- `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_SERVICE_ROLE_KEY` et `SUPABASE_STORAGE_BUCKET` activent uniquement le stockage des fichiers originaux dans Supabase Storage.
+- `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_SERVICE_ROLE_KEY` et `SUPABASE_STORAGE_BUCKET` activent le stockage des fichiers originaux, des avatars et des images optimisées des publications publiques dans Supabase Storage.
 
 Mapping conseillé dans Zoho Flow, action Send Mail:
 
@@ -244,7 +245,7 @@ Sur Vercel, il n'est pas nécessaire d'ajouter ces variables vides avant le push
 
 La base documentaire accepte TXT, Markdown, CSV, JSON et PDF jusqu'à 2 Mo. Le plan Découverte autorise déjà 1 document afin de tester le flux complet. Le texte est extrait côté serveur, vectorisé avec OpenAI Embeddings et stocké dans Neon PostgreSQL via pgvector.
 
-Supabase Storage est utilisé uniquement pour conserver les fichiers originaux si les variables Supabase sont configurées. Créer un bucket privé `dtsc-documents`, puis ajouter dans Vercel:
+Supabase Storage est utilisé pour conserver les fichiers originaux, les avatars et les images optimisées des publications publiques si les variables Supabase sont configurées. Créer un bucket privé `dtsc-documents`, puis ajouter dans Vercel:
 
 ```bash
 SUPABASE_STORAGE_URL
@@ -287,7 +288,7 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 
 ## Administration Des Contenus Publics
 
-Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`.
+Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées et les repositionner dans le corps de la publication via l'éditeur riche.
 
 Champs principaux:
 
@@ -300,6 +301,8 @@ Champs principaux:
 - statut publié/brouillon.
 
 Seules les publications marquées comme publiées sont visibles publiquement. Les contenus institutionnels fixes sont centralisés dans `lib/public-site.ts`.
+
+Les utilisateurs connectés peuvent liker/disliker, commenter et répondre aux commentaires sur une publication publique. Un utilisateur peut modifier son propre commentaire dans la fenêtre configurée par l'admin; seul `ADMIN` peut supprimer un commentaire.
 
 ## Structure
 
