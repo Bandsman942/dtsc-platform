@@ -11,6 +11,7 @@ DTSC Platform est une application SaaS Next.js App Router pour DTSC - Data and T
 Objectifs couverts par le code actuel:
 
 - landing page publique DTSC refondue avec navigation corporate vers des pages dediees: Services, Solutions, Secteurs, Projets, Ressources, A propos et Contact;
+- pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
@@ -92,6 +93,7 @@ components/
   notifications/               UI notifications
   profile/                     Edition profil utilisateur et avatar
   public/                      Sections landing page
+  public/hero-image-carousel   Carrousel client pour les images hero publiques
   settings/                    Parametres utilisateur
   support/                     UI tickets support
   ui/                          Boutons, inputs, dialogues, etc.
@@ -418,7 +420,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | Methode | Route | Acces | Description |
 | --- | --- | --- | --- |
 | `PATCH` | `/api/account/profile` | session | Mise a jour nom, entreprise, telephone, poste, bio, localisation, site, avatar URL et consentement public |
-| `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP vers Supabase Storage, maximum 2 Mo |
+| `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP vers Supabase Storage, maximum 2 Mo; l'interface ouvre le selecteur de fichiers de l'appareil et affiche un apercu local avant envoi |
 | `PATCH` | `/api/account/password` | session | Changement mot de passe |
 
 ### Chatbot et conversations

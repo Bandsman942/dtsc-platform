@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
-import { Camera, CheckCircle2, Upload } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Camera, CheckCircle2, FolderOpen, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,22 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || "");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setPreviewUrl("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setPreviewUrl(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [selectedFile]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,7 +61,7 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
   }
 
   async function uploadAvatar() {
-    const file = fileRef.current?.files?.[0];
+    const file = selectedFile;
     if (!file) {
       setMessage("Sélectionnez une image de profil avant l'envoi.");
       return;
@@ -67,6 +81,10 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
       return;
     }
     setAvatarUrl(result.avatarUrl);
+    setSelectedFile(null);
+    if (fileRef.current) {
+      fileRef.current.value = "";
+    }
     setMessage("Photo de profil mise à jour.");
     router.refresh();
   }
@@ -78,15 +96,35 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
           <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-soft text-3xl font-black text-dtsc-blue">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Photo de profil" className="h-full w-full object-cover" />
+                {previewUrl || avatarUrl ? (
+                  <img src={previewUrl || avatarUrl} alt="Photo de profil" className="h-full w-full object-cover" />
                 ) : (
                   user.name.slice(0, 2).toUpperCase()
                 )}
               </div>
               <p className="mt-4 text-sm font-bold text-dtsc-ink">{user.email}</p>
               <p className="mt-1 text-xs leading-5 text-dtsc-muted">PNG, JPG ou WebP. Taille maximale: 2 Mo.</p>
-              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="mt-4 w-full text-xs text-dtsc-muted" />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileRef.current?.click()}
+                className="mt-4 w-full rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
+              >
+                <FolderOpen className="h-4 w-4" />
+                Choisir une photo
+              </Button>
+              {selectedFile && (
+                <p className="mt-2 max-w-full truncate rounded-lg bg-dtsc-soft px-3 py-2 text-xs font-bold text-dtsc-blue" title={selectedFile.name}>
+                  {selectedFile.name}
+                </p>
+              )}
               <Button type="button" onClick={uploadAvatar} disabled={uploading} className="mt-3 w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
                 <Upload className="h-4 w-4" />
                 {uploading ? "Envoi..." : "Envoyer la photo"}

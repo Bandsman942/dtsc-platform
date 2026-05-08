@@ -177,6 +177,10 @@
     animation: message-in 300ms ease-out;
   }
 
+  .animate-hero-image {
+    animation: hero-image 700ms ease-out;
+  }
+
   .shadow-border-small {
     box-shadow: 
       0 0 0 1px rgba(0, 0, 0, 0.08),
@@ -494,8 +498,22 @@
     .animate-slide-up,
     .animate-slide-down,
     .animate-scale-in,
-    .animate-message-in {
+    .animate-message-in,
+    .animate-hero-image {
       animation: fade-in 200ms ease-out;
+    }
+  }
+
+  @keyframes hero-image {
+    from {
+      opacity: 0;
+      transform: scale(1.03);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 0.9;
+      transform: scale(1);
+      filter: blur(0);
     }
   }
 }

@@ -39,6 +39,7 @@ export type PublicLongPage = {
   tone: "blue" | "cyan" | "emerald" | "slate" | "indigo";
   heroLabel: string;
   heroImage: string;
+  heroImages?: string[];
   cards: PublicCard[];
   sections: Array<{
     heading: string;
@@ -110,6 +111,12 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     tone: "blue",
     heroLabel: "Conseil + Exécution",
     heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImages: [
+      "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80",
+    ],
     cards: serviceCards,
     sources: trustedSources,
     sections: [
@@ -141,6 +148,12 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     tone: "cyan",
     heroLabel: "Solutions métier",
     heroImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
+    heroImages: [
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80",
+    ],
     cards: solutionsCards,
     sources: trustedSources,
     sections: [
@@ -172,6 +185,12 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     tone: "emerald",
     heroLabel: "Marchés cibles",
     heroImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80",
+    heroImages: [
+      "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80",
+      "https://images.pexels.com/photos/3184338/pexels-photo-3184338.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1400&q=80",
+    ],
     cards: sectorCards,
     sources: trustedSources,
     sections: [
@@ -203,6 +222,12 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     tone: "indigo",
     heroLabel: "Démos utiles",
     heroImage: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80",
+    heroImages: [
+      "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1400&q=80",
+      "https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=80",
+    ],
     cards: [
       { title: "Prototype chatbot DTSC", text: "Qualification des besoins, historique, support et orientation client.", icon: Bot },
       { title: "Dashboard de reporting", text: "Suivi KPI, décisions et pilotage de performance.", icon: BarChart3 },
@@ -240,6 +265,12 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     tone: "slate",
     heroLabel: "Kinshasa · 2026",
     heroImage: "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImages: [
+      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=80",
+    ],
     cards: [
       { title: "Vision", text: "Devenir un leader africain en transformation digitale et data consulting.", icon: Lightbulb },
       { title: "Mission", text: "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité.", icon: Rocket },
