@@ -68,7 +68,8 @@ export default async function PublicationPage({ params }: Params) {
           </div>
         </section>
 
-        <section className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
+        <section className="dtsc-public-band-light">
+          <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
           <div className="dtsc-card p-6 sm:p-8">
             {hasHtmlMarkup(publication.content) ? (
               <div
@@ -84,6 +85,7 @@ export default async function PublicationPage({ params }: Params) {
                 ))}
               </div>
             )}
+          </div>
           </div>
         </section>
       </article>

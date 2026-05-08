@@ -210,34 +210,36 @@ export default function Page() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mb-8 max-w-3xl">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Explorer DTSC</p>
-          <h2 className="mt-2 text-3xl font-black text-dtsc-ink">
-            Découvrez nos <span className="text-dtsc-blue">expertises</span> à travers des pages dédiées.
-          </h2>
-          <p className="mt-4 leading-7 text-dtsc-muted">
-            Retrouvez en un coup d&apos;œil nos services, solutions, secteurs d&apos;intervention et projets. Chaque rubrique vous présente clairement notre approche, nos expertises et la valeur que nous apportons aux organisations.
-          </p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {gateways.map((item) => (
-            <Link key={item.href} href={item.href} className="dtsc-card dtsc-card-hover p-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
-                <item.icon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-dtsc-muted">{item.text}</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
-                En savoir plus
-                <ArrowRight className="h-4 w-4" />
-              </span>
-            </Link>
-          ))}
+      <section className="dtsc-public-band-light border-b border-dtsc-border">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-3xl">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Explorer DTSC</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">
+              Découvrez nos <span className="text-dtsc-blue">expertises</span> à travers des pages dédiées.
+            </h2>
+            <p className="mt-4 leading-7 text-dtsc-muted">
+              Retrouvez en un coup d&apos;œil nos services, solutions, secteurs d&apos;intervention et projets. Chaque rubrique vous présente clairement notre approche, nos expertises et la valeur que nous apportons aux organisations.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {gateways.map((item, index) => (
+              <Link key={item.href} href={item.href} className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover p-6`}>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
+                  <item.icon className="h-6 w-6" />
+                </div>
+                <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-dtsc-muted">{item.text}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  En savoir plus
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="border-y border-dtsc-border bg-dtsc-surface">
+      <section className="border-y border-dtsc-border dtsc-public-band-cyan">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_1fr] lg:px-8">
           <div className="rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">Pourquoi DTSC ?</p>
@@ -250,7 +252,7 @@ export default function Page() {
           </div>
           <div className="grid gap-3">
             {dtsc.advantages.map((advantage) => (
-              <div key={advantage} className="dtsc-card flex items-center gap-3 p-4 text-sm font-bold text-dtsc-ink">
+              <div key={advantage} className="dtsc-card-alt flex items-center gap-3 p-4 text-sm font-bold text-dtsc-ink">
                 <CheckCircle2 className="h-5 w-5 text-cyan-500" />
                 {advantage}
               </div>
@@ -259,7 +261,7 @@ export default function Page() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden border-b border-dtsc-border bg-dtsc-page">
+      <section className="relative overflow-hidden border-b border-dtsc-border dtsc-public-band-soft">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_8%,rgba(0,194,255,0.14),transparent_28%),radial-gradient(circle_at_88%_18%,rgba(0,87,184,0.12),transparent_30%)]" />
         <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
@@ -318,7 +320,8 @@ export default function Page() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <section className="dtsc-public-band-light">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="rounded-[1.5rem] bg-[#002b5b] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] sm:p-8 lg:p-10">
           <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
@@ -334,6 +337,7 @@ export default function Page() {
               </Link>
             </Button>
           </div>
+        </div>
         </div>
       </section>
 

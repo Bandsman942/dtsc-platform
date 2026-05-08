@@ -35,7 +35,7 @@ export default function ContactPage() {
           </div>
         </div>
       </section>
-      <div className="pt-16">
+      <div className="dtsc-public-band-light pt-16">
         <ContactNewsletterSection contactEmail={dtsc.email} />
       </div>
       <PublicFooter />

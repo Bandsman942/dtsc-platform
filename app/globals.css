@@ -218,8 +218,35 @@
   .dtsc-card {
     border: 1px solid var(--dtsc-border);
     border-radius: 1rem;
-    background: var(--dtsc-surface);
-    box-shadow: 0 4px 20px rgba(0, 43, 91, 0.05);
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--dtsc-surface) 92%, var(--dtsc-cyan) 8%), color-mix(in srgb, var(--dtsc-page) 90%, var(--dtsc-blue) 10%));
+    box-shadow: 0 12px 34px rgba(0, 43, 91, 0.08);
+  }
+
+  .dtsc-card-alt {
+    border: 1px solid color-mix(in srgb, var(--dtsc-border) 78%, var(--dtsc-cyan) 22%);
+    border-radius: 1rem;
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--dtsc-soft) 74%, var(--dtsc-surface) 26%), color-mix(in srgb, var(--dtsc-surface) 88%, var(--dtsc-cyan) 12%));
+    box-shadow: 0 14px 38px rgba(0, 43, 91, 0.09);
+  }
+
+  .dtsc-public-band-light {
+    background:
+      radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--dtsc-cyan) 13%, transparent) 0, transparent 30%),
+      linear-gradient(180deg, color-mix(in srgb, var(--dtsc-surface) 88%, var(--dtsc-cyan) 12%), color-mix(in srgb, var(--dtsc-page) 92%, var(--dtsc-blue) 8%));
+  }
+
+  .dtsc-public-band-soft {
+    background:
+      radial-gradient(circle at 84% 14%, color-mix(in srgb, var(--dtsc-blue) 13%, transparent) 0, transparent 32%),
+      linear-gradient(135deg, color-mix(in srgb, var(--dtsc-soft) 82%, var(--dtsc-surface) 18%), color-mix(in srgb, var(--dtsc-page) 84%, var(--dtsc-cyan) 16%));
+  }
+
+  .dtsc-public-band-cyan {
+    background:
+      radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--dtsc-cyan) 18%, transparent) 0, transparent 30%),
+      linear-gradient(145deg, color-mix(in srgb, var(--dtsc-surface) 82%, var(--dtsc-cyan) 18%), color-mix(in srgb, var(--dtsc-soft) 78%, var(--dtsc-blue) 22%));
   }
 
   .dtsc-card-hover {

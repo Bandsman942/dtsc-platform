@@ -13,6 +13,7 @@ Objectifs couverts par le code actuel:
 - landing page publique DTSC refondue avec navigation corporate vers des pages dediees: Services, Solutions, Secteurs, Projets, Ressources, A propos et Contact;
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
+- bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
 - publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
@@ -1107,6 +1108,7 @@ Objectifs codes:
 - Open Graph/Twitter;
 - contenus publics longs et indexes;
 - FAQ d'accueil avec composant local `Accordion` base sur `details/summary` accessible et donnees structurees JSON-LD `FAQPage`;
+- sections publiques avec surfaces alternees et cartes `dtsc-card` / `dtsc-card-alt` pour ameliorer la hierarchie visuelle en mode clair et sombre;
 - navigation publique par routes dediees avec onglet actif selon `pathname`;
 - contenus corporate centralises dans `lib/public-site.ts`;
 - contexte DTSC issu du business plan: vision, mission, services, marche, organisation et approche commerciale;

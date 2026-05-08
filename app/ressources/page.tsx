@@ -44,23 +44,25 @@ export default async function RessourcesPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-4 md:grid-cols-3">
-          {staticResources.map((resource) => (
-            <Link key={resource.href} href={resource.href} className="dtsc-card dtsc-card-hover p-6">
-              <resource.icon className="h-6 w-6 text-cyan-500" />
-              <h2 className="mt-5 text-xl font-black text-dtsc-ink">{resource.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-dtsc-muted">{resource.text}</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
-                Lire
-                <ArrowRight className="h-4 w-4" />
-              </span>
-            </Link>
-          ))}
+      <section className="dtsc-public-band-light border-b border-dtsc-border">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="grid gap-4 md:grid-cols-3">
+            {staticResources.map((resource, index) => (
+              <Link key={resource.href} href={resource.href} className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover p-6`}>
+                <resource.icon className="h-6 w-6 text-cyan-500" />
+                <h2 className="mt-5 text-xl font-black text-dtsc-ink">{resource.title}</h2>
+                <p className="mt-3 text-sm leading-6 text-dtsc-muted">{resource.text}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Lire
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="border-y border-dtsc-border bg-dtsc-surface">
+      <section className="border-y border-dtsc-border dtsc-public-band-soft">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications DTSC</p>
@@ -87,7 +89,7 @@ export default async function RessourcesPage() {
               </Link>
             ))}
             {!publications.length && (
-              <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-6 text-sm leading-7 text-dtsc-muted">
+              <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 text-sm leading-7 text-dtsc-muted shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
                 Aucune publication publique n&apos;est encore publiée. L&apos;administrateur peut ajouter des articles, guides, annonces et cas pratiques depuis le module Administration.
               </div>
             )}
@@ -95,8 +97,9 @@ export default async function RessourcesPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6">
+      <section className="dtsc-public-band-cyan">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
           <h2 className="font-black text-dtsc-ink">Sources de veille utilisées</h2>
           <div className="mt-4 grid gap-2 md:grid-cols-2">
             {trustedSources.map((source) => (
@@ -106,6 +109,7 @@ export default async function RessourcesPage() {
               </Link>
             ))}
           </div>
+        </div>
         </div>
       </section>
       <PublicFooter />

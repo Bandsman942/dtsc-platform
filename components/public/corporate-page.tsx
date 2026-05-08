@@ -61,26 +61,28 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {page.cards.map((card) => (
-            <article key={card.title} className="dtsc-card dtsc-card-hover p-6">
-              {card.icon && (
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
-                  <card.icon className="h-6 w-6" />
-                </div>
-              )}
-              <h2 className="mt-5 text-xl font-black text-dtsc-ink">{card.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-dtsc-muted">{card.text}</p>
-            </article>
-          ))}
+      <section className="dtsc-public-band-light border-b border-dtsc-border">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {page.cards.map((card, index) => (
+              <article key={card.title} className={cn(index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt", "dtsc-card-hover p-6")}>
+                {card.icon && (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
+                    <card.icon className="h-6 w-6" />
+                  </div>
+                )}
+                <h2 className="mt-5 text-xl font-black text-dtsc-ink">{card.title}</h2>
+                <p className="mt-3 text-sm leading-6 text-dtsc-muted">{card.text}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="border-y border-dtsc-border bg-dtsc-surface">
+      <section className="border-y border-dtsc-border dtsc-public-band-soft">
         <div className="mx-auto grid max-w-7xl gap-5 px-4 py-16 sm:px-6 lg:px-8">
           {page.sections.map((section, index) => (
-            <article key={section.heading} className="grid overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page shadow-[0_12px_40px_rgba(0,43,91,0.06)] lg:grid-cols-[320px_1fr]">
+            <article key={section.heading} className={cn("grid overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] lg:grid-cols-[320px_1fr]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")}>
               <div className={cn("bg-gradient-to-br p-6 text-white", toneClasses[page.tone])}>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Partie {String(index + 1).padStart(2, "0")}</p>
                 <h3 className="mt-4 text-2xl font-black">{section.heading}</h3>
@@ -102,7 +104,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       </section>
 
       {page.sources && (
-        <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <section className="dtsc-public-band-light">
+          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,0.06)]">
               <h2 className="font-black text-dtsc-ink">
                 <span className="text-dtsc-blue">Sources vérifiables</span> utilisées pour enrichir cette page
@@ -115,6 +118,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
                 </Link>
               ))}
             </div>
+          </div>
           </div>
         </section>
       )}

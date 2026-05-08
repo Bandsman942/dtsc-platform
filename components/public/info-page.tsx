@@ -19,7 +19,7 @@ export function InfoPage({
   return (
     <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
-      <section className="relative overflow-hidden border-b border-dtsc-border bg-dtsc-surface">
+      <section className="relative overflow-hidden border-b border-dtsc-border dtsc-public-band-light">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(0,194,255,0.16),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(0,87,184,0.12),transparent_28%)]" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:py-20">
           <div>
@@ -29,7 +29,7 @@ export function InfoPage({
             <p className="mt-5 max-w-3xl leading-8 text-dtsc-muted">{narrative}</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               {highlights.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 shadow-[0_10px_28px_rgba(0,43,91,0.06)]">
+                <div key={item.label} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_10px_28px_rgba(0,43,91,0.08)]">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-dtsc-muted">{item.label}</p>
                   <p className="mt-2 text-2xl font-black text-dtsc-blue">{item.value}</p>
                 </div>
@@ -41,7 +41,8 @@ export function InfoPage({
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <section className="dtsc-public-band-soft border-y border-dtsc-border">
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Analyse DTSC</p>
@@ -54,7 +55,7 @@ export function InfoPage({
 
         <div className="grid gap-5">
           {sections.map((section, index) => (
-            <article key={section.heading} className="group grid overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-[0_12px_40px_rgba(0,43,91,0.06)] transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,43,91,0.12)] lg:grid-cols-[320px_1fr]">
+            <article key={section.heading} className={`group grid overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,43,91,0.12)] lg:grid-cols-[320px_1fr] ${index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft"}`}>
               <div className="relative min-h-56 overflow-hidden bg-[#001736] p-6 text-white">
                 <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,194,255,0.28),transparent_58%)] transition duration-500 group-hover:scale-110" />
                 <div className="relative flex h-full flex-col justify-between">
@@ -82,7 +83,7 @@ export function InfoPage({
           ))}
         </div>
 
-        <div className="mt-10 rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,0.06)]">
+        <div className="mt-10 rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,0.08)]">
           <h2 className="font-black text-dtsc-ink">Sources vérifiables</h2>
           <div className="mt-4 grid gap-2">
             {sourceList.map((source) => (
@@ -92,6 +93,7 @@ export function InfoPage({
               </Link>
             ))}
           </div>
+        </div>
         </div>
       </section>
       <PublicFooter />

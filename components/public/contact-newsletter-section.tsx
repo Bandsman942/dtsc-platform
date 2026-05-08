@@ -84,7 +84,7 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
           </form>
         </div>
 
-        <div className="dtsc-card p-6 sm:p-8">
+        <div className="dtsc-card-alt p-6 sm:p-8">
           <p className="inline-flex items-center gap-2 rounded-full bg-dtsc-soft px-3 py-1.5 text-sm font-black text-dtsc-blue">
             <Sparkles className="h-4 w-4 text-cyan-500" />
             Newsletter DTSC
