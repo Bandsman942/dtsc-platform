@@ -79,6 +79,26 @@ export async function uploadProfileAvatarToSupabase({
   };
 }
 
+export async function downloadProfileAvatarFromSupabase(path: string) {
+  if (!isSupabaseStorageConfigured()) {
+    throw new Error("Supabase Storage is not configured");
+  }
+
+  const client = createClient(env.SUPABASE_STORAGE_URL!, env.SUPABASE_STORAGE_SERVICE_ROLE_KEY!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).download(path);
+
+  if (error) {
+    throw new Error(`Supabase Storage avatar download failed: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function deleteKnowledgeFileFromSupabase({
   bucket,
   path,

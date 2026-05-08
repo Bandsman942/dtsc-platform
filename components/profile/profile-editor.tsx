@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
 type ProfileData = {
+  id: string;
   name: string;
   email: string;
   companyName: string | null;
@@ -20,12 +21,77 @@ type ProfileData = {
   publicProfileConsent: boolean;
 };
 
+const avatarOutputSize = 512;
+const avatarQuality = 0.86;
+const allowedAvatarTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Image illisible"));
+    image.src = src;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Compression impossible"));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/webp",
+      avatarQuality
+    );
+  });
+}
+
+async function optimizeAvatarFile(file: File) {
+  if (!allowedAvatarTypes.has(file.type)) {
+    throw new Error("Choisissez une image PNG, JPG ou WebP.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(sourceUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = avatarOutputSize;
+    canvas.height = avatarOutputSize;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Optimisation impossible sur cet appareil.");
+    }
+
+    const cropSize = Math.min(image.naturalWidth, image.naturalHeight);
+    const sourceX = Math.max(0, (image.naturalWidth - cropSize) / 2);
+    const sourceY = Math.max(0, (image.naturalHeight - cropSize) / 2);
+    context.fillStyle = "#001736";
+    context.fillRect(0, 0, avatarOutputSize, avatarOutputSize);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, sourceX, sourceY, cropSize, cropSize, 0, 0, avatarOutputSize, avatarOutputSize);
+
+    const blob = await canvasToBlob(canvas);
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "avatar"}-dtsc.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 export function ProfileEditor({ user }: { user: ProfileData }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || "");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [imageBroken, setImageBroken] = useState(false);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
 
@@ -40,6 +106,26 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
 
     return () => URL.revokeObjectURL(objectUrl);
   }, [selectedFile]);
+
+  useEffect(() => {
+    setImageBroken(false);
+  }, [previewUrl, avatarUrl]);
+
+  async function selectAvatarFile(file: File | null) {
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+
+    try {
+      const optimized = await optimizeAvatarFile(file);
+      setSelectedFile(optimized);
+      setMessage(`Image optimisée: ${Math.round(optimized.size / 1024)} Ko, ${avatarOutputSize} x ${avatarOutputSize}px.`);
+    } catch (error) {
+      setSelectedFile(null);
+      setMessage(error instanceof Error ? error.message : "Cette image ne peut pas être utilisée.");
+    }
+  }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -96,20 +182,28 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
           <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-soft text-3xl font-black text-dtsc-blue">
-                {previewUrl || avatarUrl ? (
-                  <img src={previewUrl || avatarUrl} alt="Photo de profil" className="h-full w-full object-cover" />
+                {(previewUrl || avatarUrl) && !imageBroken ? (
+                  <img
+                    src={previewUrl || avatarUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={() => {
+                      setImageBroken(true);
+                      setMessage("L'image n'a pas pu être affichée. Sélectionnez une autre photo ou renvoyez-la.");
+                    }}
+                  />
                 ) : (
                   user.name.slice(0, 2).toUpperCase()
                 )}
               </div>
               <p className="mt-4 text-sm font-bold text-dtsc-ink">{user.email}</p>
-              <p className="mt-1 text-xs leading-5 text-dtsc-muted">PNG, JPG ou WebP. Taille maximale: 2 Mo.</p>
+              <p className="mt-1 text-xs leading-5 text-dtsc-muted">PNG, JPG ou WebP. L&apos;image est recadrée en carré et compressée avant l&apos;envoi.</p>
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 className="sr-only"
-                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                onChange={(event) => selectAvatarFile(event.target.files?.[0] || null)}
               />
               <Button
                 type="button"

@@ -82,6 +82,7 @@ model User {
   location      String?
   website       String?
   avatarUrl     String?
+  avatarStoragePath String?
   publicProfileConsent Boolean @default(false)
   status        UserStatus      @default(ACTIVE)
   dailyMessageLimit Int         @default(30)

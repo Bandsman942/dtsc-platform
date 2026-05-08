@@ -6,7 +6,7 @@ import { uploadProfileAvatarToSupabase } from "@/lib/supabase-storage";
 export const runtime = "nodejs";
 
 const allowedAvatarTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxAvatarBytes = 2 * 1024 * 1024;
+const maxAvatarBytes = 850 * 1024;
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -27,10 +27,12 @@ export async function POST(req: Request) {
   let avatar;
   try {
     avatar = await uploadProfileAvatarToSupabase({ userId: session.userId, file });
+    const avatarUrl = `/api/users/${session.userId}/avatar?v=${Date.now()}`;
     await prisma.user.update({
       where: { id: session.userId },
-      data: { avatarUrl: avatar.publicUrl },
+      data: { avatarUrl, avatarStoragePath: avatar.path },
     });
+    avatar.publicUrl = avatarUrl;
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Impossible d'envoyer cette image" },

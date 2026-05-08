@@ -39,6 +39,7 @@ export async function getCurrentUser() {
       location: true,
       website: true,
       avatarUrl: true,
+      avatarStoragePath: true,
       publicProfileConsent: true,
       status: true,
       dailyMessageLimit: true,

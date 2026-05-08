@@ -178,7 +178,7 @@ Notes securite:
 - `DEFAULT_ADMIN_BOOTSTRAP_ENABLED` doit rester `false` en production apres la creation initiale du compte admin.
 - `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` activent le rate limiting distribue. Sans ces variables, le code utilise un fallback memoire non garanti en multi-instance serverless.
 - Les secrets MaishaPay, Supabase Storage, Zoho Mail et OpenAI restent strictement cote serveur.
-- Les avatars utilisent aussi Supabase Storage. Pour un affichage direct dans le navigateur, le bucket doit fournir des URL publiques ou une politique d'acces adaptee aux chemins `avatars/{userId}/...`.
+- Les avatars utilisent aussi Supabase Storage, mais l'affichage passe par la route interne `/api/users/[id]/avatar`. Le bucket peut donc rester prive; la service role key reste cote serveur.
 
 Regles:
 
@@ -226,7 +226,8 @@ Modeles actifs:
 Champs profil utilisateur ajoutes:
 
 - `jobTitle`, `bio`, `location`, `website`: informations professionnelles facultatives;
-- `avatarUrl`: URL publique d'une photo de profil, renseignee manuellement ou via upload Supabase Storage;
+- `avatarUrl`: URL d'affichage de la photo de profil, renseignee manuellement ou pointee vers `/api/users/[id]/avatar`;
+- `avatarStoragePath`: chemin prive Supabase Storage pour lire l'avatar via la route serveur;
 - `publicProfileConsent`: consentement explicite pour afficher le nom, la fonction et l'avatar sur les publications publiques dont l'utilisateur est auteur.
 
 Enums:
@@ -420,7 +421,8 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | Methode | Route | Acces | Description |
 | --- | --- | --- | --- |
 | `PATCH` | `/api/account/profile` | session | Mise a jour nom, entreprise, telephone, poste, bio, localisation, site, avatar URL et consentement public |
-| `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP vers Supabase Storage, maximum 2 Mo; l'interface ouvre le selecteur de fichiers de l'appareil et affiche un apercu local avant envoi |
+| `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP optimisee en WebP 512x512 cote client, maximum 850 Ko cote serveur |
+| `GET` | `/api/users/[id]/avatar` | proprietaire ou profil public consenti | Lecture serveur de l'avatar stocke dans Supabase Storage prive |
 | `PATCH` | `/api/account/password` | session | Changement mot de passe |
 
 ### Chatbot et conversations
@@ -1032,7 +1034,7 @@ Limites actuelles:
 
 ## 12.2 Integration Supabase Storage
 
-Supabase Storage est utilise uniquement pour les fichiers originaux de la base documentaire. Neon PostgreSQL reste la base applicative principale.
+Supabase Storage est utilise pour les fichiers originaux de la base documentaire et pour les avatars optimises des profils. Neon PostgreSQL reste la base applicative principale.
 
 Variables:
 
@@ -1046,7 +1048,8 @@ Regles:
 
 - le client Supabase est cree uniquement cote serveur;
 - la service role key ne doit jamais etre exposee au navigateur;
-- le chemin de stockage suit le format `userId/documentId/fileName`;
+- le chemin documentaire suit le format `userId/documentId/fileName`;
+- le chemin avatar suit le format `avatars/{userId}/profile.webp` et l'affichage passe par `/api/users/[id]/avatar`;
 - si Supabase Storage n'est pas configure, l'indexation RAG continue sans conservation de l'original.
 - lorsqu'un document est supprime, l'application tente aussi de supprimer l'original dans Supabase Storage.
 

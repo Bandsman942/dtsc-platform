@@ -52,7 +52,11 @@ export const profileUpdateSchema = z.object({
   bio: z.string().max(800).optional().or(z.literal("")),
   location: z.string().max(120).optional().or(z.literal("")),
   website: z.string().max(180).optional().or(z.literal("")),
-  avatarUrl: z.string().url().max(600).optional().or(z.literal("")),
+  avatarUrl: z.union([
+    z.string().url().max(600),
+    z.string().regex(/^\/api\/users\/[a-zA-Z0-9_-]+\/avatar(?:\?.*)?$/).max(600),
+    z.literal(""),
+  ]).optional(),
   publicProfileConsent: z.coerce.boolean().default(false),
 });
 
