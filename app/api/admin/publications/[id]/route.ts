@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichHtml } from "@/lib/rich-content";
 import { publicPublicationSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,10 +20,12 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid publication" }, { status: 400 });
   }
 
+  const { contentHtml, ...publicationData } = body.data;
   const publication = await prisma.publicPublication.update({
     where: { id },
     data: {
-      ...body.data,
+      ...publicationData,
+      content: contentHtml ? sanitizeRichHtml(contentHtml) : publicationData.content,
       coverLabel: body.data.coverLabel || null,
     },
   });

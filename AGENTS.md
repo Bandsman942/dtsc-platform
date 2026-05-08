@@ -66,6 +66,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les constantes partagées avec le client doivent rester dans un fichier neutre sans logique serveur, par exemple `lib/session-config.ts`.
 - Les pages publiques importantes doivent rester dans `app/sitemap.ts`, `app/robots.ts` et avoir des métadonnées SEO cohérentes.
 - Les contenus publics administrables doivent passer par `PublicPublication`, des routes API `ADMIN` uniquement, une validation Zod et une journalisation `AuditLog`.
+- Les contenus publics riches doivent être nettoyés avec `sanitizeRichHtml` avant stockage ou rendu; ne jamais rendre un HTML admin sans nettoyage serveur.
 - Les onglets de la landing page doivent correspondre à des routes publiques dédiées; l'état actif doit se baser sur le `pathname`, pas sur un scroll de sections.
 - Le contexte client du chatbot ne doit pas divulguer les détails internes de l'application (frameworks, schéma DB, routes API, variables, middleware, secrets). Il doit rester orienté services DTSC et fonctionnalités utiles aux clients.
 - Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs.

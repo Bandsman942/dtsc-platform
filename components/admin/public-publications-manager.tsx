@@ -5,6 +5,7 @@ import { Edit3, Globe2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 type Publication = {
   id: string;
@@ -71,7 +72,12 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               <Input name="coverLabel" placeholder="Label visuel court" disabled={!canEdit} />
             </div>
             <textarea name="excerpt" placeholder="Résumé court visible dans la carte publique" disabled={!canEdit} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
-            <textarea name="content" placeholder="Contenu long de la publication" disabled={!canEdit} className="min-h-40 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <RichTextEditor
+              textName="content"
+              htmlName="contentHtml"
+              disabled={!canEdit}
+              placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
+            />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publier sur la page Ressources
               <input name="published" type="checkbox" disabled={!canEdit} className="h-4 w-4 accent-cyan-500" />
@@ -124,7 +130,12 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             </select>
             <Input name="coverLabel" defaultValue={editing.coverLabel || ""} />
             <textarea name="excerpt" defaultValue={editing.excerpt} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
-            <textarea name="content" defaultValue={editing.content} className="min-h-36 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <RichTextEditor
+              textName="content"
+              htmlName="contentHtml"
+              defaultValue={editing.content}
+              placeholder="Contenu long de la publication"
+            />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publié
               <input name="published" type="checkbox" defaultChecked={editing.published} className="h-4 w-4 accent-cyan-500" />

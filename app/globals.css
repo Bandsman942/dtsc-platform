@@ -360,6 +360,54 @@
     font-weight: 900;
   }
 
+  .dtsc-publication-content {
+    color: var(--dtsc-muted);
+    font-size: 1rem;
+    line-height: 1.8;
+  }
+
+  .dtsc-publication-content > * + * {
+    margin-top: 1rem;
+  }
+
+  .dtsc-publication-content h1,
+  .dtsc-publication-content h2,
+  .dtsc-publication-content h3 {
+    color: var(--dtsc-ink);
+    font-weight: 900;
+    line-height: 1.25;
+  }
+
+  .dtsc-publication-content h1 { font-size: 2rem; }
+  .dtsc-publication-content h2 { font-size: 1.55rem; }
+  .dtsc-publication-content h3 { color: var(--dtsc-blue); font-size: 1.2rem; }
+
+  .dtsc-publication-content ul,
+  .dtsc-publication-content ol {
+    margin-left: 1.25rem;
+  }
+
+  .dtsc-publication-content ul { list-style: disc; }
+  .dtsc-publication-content ol { list-style: decimal; }
+
+  .dtsc-publication-content li {
+    margin-top: 0.45rem;
+    padding-left: 0.25rem;
+  }
+
+  .dtsc-publication-content a {
+    color: var(--dtsc-blue);
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .dtsc-publication-content img {
+    max-width: 100%;
+    border-radius: 1rem;
+    border: 1px solid var(--dtsc-border);
+  }
+
   .dark .bg-\[\#faf9fe\] { background-color: var(--dtsc-page); }
   .dark .bg-white,
   .dark .bg-white\/80,

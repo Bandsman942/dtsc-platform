@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import { dtsc } from "@/lib/dtsc";
+import { sanitizeRichHtml } from "@/lib/rich-content";
 
 type ZohoMailPayload = {
   subject: string;
@@ -36,20 +37,6 @@ function normalizeMessage(message: string) {
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
     .join("\n")
-    .trim();
-}
-
-function sanitizeRichHtml(html: string) {
-  return html
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
-    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, "")
-    .replace(/<embed[\s\S]*?>/gi, "")
-    .replace(/\son\w+="[^"]*"/gi, "")
-    .replace(/\son\w+='[^']*'/gi, "")
-    .replace(/javascript:/gi, "")
-    .replace(/data:text\/html/gi, "")
     .trim();
 }
 

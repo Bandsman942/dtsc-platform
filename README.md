@@ -29,6 +29,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
 - Pages publiques dédiées avec onglet actif, contenus DTSC issus du business plan et sources vérifiables
 - Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code
+- Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, images externes et emojis avec nettoyage HTML côté serveur
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise

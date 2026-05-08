@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { prisma } from "@/lib/prisma";
+import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -59,13 +60,20 @@ export default async function PublicationPage({ params }: Params) {
 
         <section className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
           <div className="dtsc-card p-6 sm:p-8">
-            <div className="prose prose-slate max-w-none text-dtsc-muted">
-              {publication.content.split("\n").map((paragraph, index) => (
-                <p key={`${index}-${paragraph.slice(0, 24)}`} className="mb-5 text-base leading-8">
-                  {paragraph}
-                </p>
-              ))}
-            </div>
+            {hasHtmlMarkup(publication.content) ? (
+              <div
+                className="dtsc-publication-content text-dtsc-muted"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(publication.content) }}
+              />
+            ) : (
+              <div className="prose prose-slate max-w-none text-dtsc-muted">
+                {publication.content.split("\n").map((paragraph, index) => (
+                  <p key={`${index}-${paragraph.slice(0, 24)}`} className="mb-5 text-base leading-8">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </article>

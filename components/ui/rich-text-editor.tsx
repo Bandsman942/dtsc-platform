@@ -9,15 +9,16 @@ type RichTextEditorProps = {
   htmlName: string;
   placeholder?: string;
   disabled?: boolean;
+  defaultValue?: string;
 };
 
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
-  { textName, htmlName, placeholder, disabled },
+  { textName, htmlName, placeholder, disabled, defaultValue = "" },
   ref
 ) {
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const [plainText, setPlainText] = useState("");
-  const [html, setHtml] = useState("");
+  const [plainText, setPlainText] = useState(defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  const [html, setHtml] = useState(defaultValue);
 
   function sync() {
     const editor = editorRef.current;
@@ -91,6 +92,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         className="min-h-36 w-full px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)]"
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
+        dangerouslySetInnerHTML={defaultValue ? { __html: defaultValue } : undefined}
       />
       <input type="hidden" name={textName} value={plainText} />
       <input type="hidden" name={htmlName} value={html} />

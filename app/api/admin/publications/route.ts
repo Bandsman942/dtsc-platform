@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichHtml } from "@/lib/rich-content";
 import { publicPublicationSchema } from "@/lib/validators";
 
 export async function POST(req: Request) {
@@ -16,9 +17,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid publication" }, { status: 400 });
   }
 
+  const { contentHtml, ...publicationData } = body.data;
   const publication = await prisma.publicPublication.create({
     data: {
-      ...body.data,
+      ...publicationData,
+      content: contentHtml ? sanitizeRichHtml(contentHtml) : publicationData.content,
       coverLabel: body.data.coverLabel || null,
       authorId: session.userId,
     },

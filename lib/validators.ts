@@ -195,6 +195,7 @@ export const publicPublicationSchema = z.object({
   category: z.enum(["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"]).default("RESSOURCE"),
   excerpt: z.string().min(20).max(500),
   content: z.string().min(80).max(12000),
+  contentHtml: z.string().max(60000).optional().or(z.literal("")),
   coverLabel: z.string().max(80).optional().or(z.literal("")),
   published: z.coerce.boolean().default(false),
 });

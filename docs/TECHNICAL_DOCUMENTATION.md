@@ -637,11 +637,12 @@ Payload `POST` et `PATCH`:
   "title": "Guide pratique data pour PME",
   "slug": "guide-data-pme",
   "category": "GUIDE",
-  "excerpt": "Résumé visible dans la page Ressources.",
-  "content": "Contenu long destiné aux visiteurs publics.",
-  "coverLabel": "Data & PME",
-  "published": true
-}
+    "excerpt": "Résumé visible dans la page Ressources.",
+    "content": "Contenu long destiné aux visiteurs publics.",
+    "contentHtml": "<p>Version HTML riche optionnelle nettoyée côté serveur.</p>",
+    "coverLabel": "Data & PME",
+    "published": true
+  }
 ```
 
 Categories autorisees:
@@ -657,6 +658,8 @@ Regles:
 
 - seul `ADMIN` peut creer, modifier ou supprimer;
 - le `slug` doit etre unique, en minuscules, avec tirets;
+- le bloc Administration utilise un editeur riche pour conserver le gras, l'italique, les couleurs, les liens, les images externes et les emojis;
+- `contentHtml` est nettoye avec `sanitizeRichHtml` avant stockage pour supprimer scripts, iframes, handlers `on*` et URLs `javascript:`;
 - seules les publications `published=true` apparaissent sur `/ressources` et `/ressources/[slug]`;
 - chaque mutation est journalisee dans `AuditLog`;
 - les publications servent aux contenus publics mis a jour regulierement sans redeploiement applicatif.
