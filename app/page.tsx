@@ -14,9 +14,9 @@ const gateways = [
 
 const homeHeroImages = [
   "/dtsc-logo.png",
-  "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
-  "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80",
-  "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1400&q=80",
+  "https://images.pexels.com/photos/36733421/pexels-photo-36733421.jpeg?auto=compress&cs=tinysrgb&w=1400",
+  "https://images.pexels.com/photos/7693688/pexels-photo-7693688.jpeg?auto=compress&cs=tinysrgb&w=1400",
+  "https://images.pexels.com/photos/3931865/pexels-photo-3931865.jpeg?auto=compress&cs=tinysrgb&w=1400",
 ];
 
 export default function Page() {
