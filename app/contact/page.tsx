@@ -5,7 +5,7 @@ import { dtsc } from "@/lib/dtsc";
 
 export const metadata: Metadata = {
   title: "Demander un avis",
-  description: "Contactez DTSC pour une consultation en transformation numérique, data, IA, automatisation, reporting ou application métier.",
+  description: "Contactez DTSC pour une consultation en transformation numérique, data, IA, automatisation, reporting, application métier ou besoin de formation.",
   alternates: { canonical: "/contact" },
 };
 
