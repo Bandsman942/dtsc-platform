@@ -1,7 +1,7 @@
 "use client";
 
-import { forwardRef, useRef, useState, type ChangeEvent, type ClipboardEvent, type MutableRefObject } from "react";
-import { AlignCenter, AlignLeft, Bold, ImagePlus, Italic, List, ListOrdered, Palette, Underline } from "lucide-react";
+import { forwardRef, useRef, useState, type ChangeEvent, type ClipboardEvent, type MouseEvent, type MutableRefObject } from "react";
+import { AlignCenter, AlignLeft, Bold, ImagePlus, Italic, List, ListOrdered, Palette, Trash2, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type RichTextEditorProps = {
@@ -17,6 +17,11 @@ type RichTextEditorProps = {
 const MAX_EDITOR_IMAGE_WIDTH = 1440;
 const MAX_EDITOR_IMAGE_HEIGHT = 900;
 const EDITOR_IMAGE_QUALITY = 0.84;
+
+type ImageDeletePosition = {
+  top: number;
+  left: number;
+} | null;
 
 const fontFamilies = [
   { label: "Inter", value: "Inter, Arial, sans-serif" },
@@ -36,18 +41,62 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
   { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false },
   ref
 ) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectionRef = useRef<Range | null>(null);
+  const selectedImageRef = useRef<HTMLImageElement | null>(null);
   const [plainText, setPlainText] = useState(defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
   const [html, setHtml] = useState(defaultValue);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [editorMessage, setEditorMessage] = useState("");
+  const [imageDeletePosition, setImageDeletePosition] = useState<ImageDeletePosition>(null);
 
   function sync() {
     const editor = editorRef.current;
     setPlainText(editor?.innerText.trim() || "");
     setHtml(editor?.innerHTML || "");
+  }
+
+  function updateImageDeletePosition(image = selectedImageRef.current) {
+    const shell = shellRef.current;
+    if (!shell || !image) {
+      setImageDeletePosition(null);
+      return;
+    }
+
+    const shellRect = shell.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    const buttonSize = 40;
+    setImageDeletePosition({
+      top: Math.max(56, imageRect.top - shellRect.top + 10),
+      left: Math.min(Math.max(10, imageRect.right - shellRect.left - buttonSize - 10), shellRect.width - buttonSize - 10),
+    });
+  }
+
+  function selectImageForDeletion(target: EventTarget | null) {
+    if (!allowImageUpload || disabled || !(target instanceof HTMLImageElement) || !editorRef.current?.contains(target)) {
+      selectedImageRef.current = null;
+      setImageDeletePosition(null);
+      return;
+    }
+
+    selectedImageRef.current = target;
+    updateImageDeletePosition(target);
+  }
+
+  function removeSelectedImage() {
+    if (disabled || !selectedImageRef.current) {
+      return;
+    }
+
+    const image = selectedImageRef.current;
+    const removable = image.closest("figure") || image;
+    removable.remove();
+    selectedImageRef.current = null;
+    setImageDeletePosition(null);
+    setEditorMessage("Image retirée du contenu. Enregistrez pour appliquer la modification.");
+    sync();
   }
 
   function command(name: string, value?: string) {
@@ -257,7 +306,17 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
 
   function handleInput() {
     rememberSelection();
+    updateImageDeletePosition();
     sync();
+  }
+
+  function handleEditorClick(event: MouseEvent<HTMLDivElement>) {
+    rememberSelection();
+    selectImageForDeletion(event.target);
+  }
+
+  function handleEditorScroll() {
+    updateImageDeletePosition();
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -271,7 +330,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-dtsc-border bg-dtsc-surface">
+    <div ref={shellRef} className="relative overflow-hidden rounded-xl border border-dtsc-border bg-dtsc-surface">
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-dtsc-border bg-dtsc-surface/95 px-3 py-2 backdrop-blur">
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("bold")} title="Mettre le texte sélectionné en gras." className="rounded-lg">
           <Bold className="h-4 w-4" />
@@ -357,13 +416,27 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         suppressContentEditableWarning
         onPaste={handlePaste}
         onInput={handleInput}
-        onClick={rememberSelection}
+        onClick={handleEditorClick}
         onKeyUp={rememberSelection}
+        onScroll={handleEditorScroll}
         className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:my-4 [&_img]:max-h-[520px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:object-cover [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
         dangerouslySetInnerHTML={defaultValue ? { __html: defaultValue } : undefined}
       />
+      {allowImageUpload && imageDeletePosition && (
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={removeSelectedImage}
+          title="Supprimer cette image de la publication."
+          aria-label="Supprimer cette image de la publication"
+          className="absolute z-20 flex h-10 w-10 items-center justify-center rounded-full border border-red-300/70 bg-red-600 text-white shadow-[0_14px_34px_rgba(185,28,28,0.28)] transition hover:bg-red-700"
+          style={{ top: imageDeletePosition.top, left: imageDeletePosition.left }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
       <input type="hidden" name={textName} value={plainText} />
       <input type="hidden" name={htmlName} value={html} />
     </div>

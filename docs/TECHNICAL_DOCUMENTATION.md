@@ -1060,7 +1060,7 @@ Regles:
 
 ## 12.3 Publications publiques interactives
 
-Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase.
+Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement.
 
 Routes ajoutees:
 
