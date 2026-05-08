@@ -288,7 +288,7 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 
 ## Administration Des Contenus Publics
 
-Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées, les repositionner dans le corps de la publication via l'éditeur riche et retirer une image en cliquant dessus puis sur l'icône de suppression.
+Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées en format web, les prévisualiser avant publication, les repositionner dans le corps de la publication via l'éditeur riche et retirer une image en cliquant dessus puis sur l'icône de suppression.
 
 Champs principaux:
 

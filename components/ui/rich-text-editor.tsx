@@ -12,10 +12,11 @@ type RichTextEditorProps = {
   defaultValue?: string;
   minHeightClassName?: string;
   allowImageUpload?: boolean;
+  onContentChange?: (content: { text: string; html: string }) => void;
 };
 
-const MAX_EDITOR_IMAGE_WIDTH = 1440;
-const MAX_EDITOR_IMAGE_HEIGHT = 900;
+const MAX_EDITOR_IMAGE_WIDTH = 960;
+const MAX_EDITOR_IMAGE_HEIGHT = 540;
 const EDITOR_IMAGE_QUALITY = 0.84;
 
 type ImageDeletePosition = {
@@ -38,7 +39,7 @@ const fontSizes = [
 ];
 
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
-  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false },
+  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, onContentChange },
   ref
 ) {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -54,8 +55,11 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
 
   function sync() {
     const editor = editorRef.current;
-    setPlainText(editor?.innerText.trim() || "");
-    setHtml(editor?.innerHTML || "");
+    const nextText = editor?.innerText.trim() || "";
+    const nextHtml = editor?.innerHTML || "";
+    setPlainText(nextText);
+    setHtml(nextHtml);
+    onContentChange?.({ text: nextText, html: nextHtml });
   }
 
   function updateImageDeletePosition(image = selectedImageRef.current) {
@@ -419,7 +423,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         onClick={handleEditorClick}
         onKeyUp={rememberSelection}
         onScroll={handleEditorScroll}
-        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:my-4 [&_img]:max-h-[520px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:object-cover [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
+        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:mx-auto [&_figure]:my-4 [&_figure]:max-w-[640px] [&_img]:max-h-[320px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:bg-dtsc-page [&_img]:object-contain [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
         dangerouslySetInnerHTML={defaultValue ? { __html: defaultValue } : undefined}

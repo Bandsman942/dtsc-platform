@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatEnumLabel } from "@/lib/labels";
+import { sanitizeRichHtml } from "@/lib/rich-content";
 
 type Publication = {
   id: string;
@@ -25,6 +26,8 @@ const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", 
 export function PublicPublicationsManager({ publications, canEdit = true }: { publications: Publication[]; canEdit?: boolean }) {
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
+  const [createPreviewHtml, setCreatePreviewHtml] = useState("");
+  const [editingPreviewHtml, setEditingPreviewHtml] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>, publicationId?: string) {
     event.preventDefault();
@@ -40,6 +43,8 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
     if (response.ok) {
       form.reset();
       setEditing(null);
+      setCreatePreviewHtml("");
+      setEditingPreviewHtml("");
       window.location.reload();
     }
   }
@@ -78,8 +83,10 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               htmlName="contentHtml"
               disabled={!canEdit}
               allowImageUpload
+              onContentChange={({ html }) => setCreatePreviewHtml(html)}
               placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
             />
+            <PublicationPreview html={createPreviewHtml} />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publier sur la page Ressources
               <input name="published" type="checkbox" disabled={!canEdit} className="h-4 w-4 accent-cyan-500" />
@@ -101,7 +108,10 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
                   <p className="mt-1 text-xs text-dtsc-muted">/{publication.slug}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => setEditing(publication)} className="rounded-xl">
+                  <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => {
+                    setEditing(publication);
+                    setEditingPreviewHtml(publication.content);
+                  }} className="rounded-xl">
                     <Edit3 className="h-4 w-4" />
                   </Button>
                   <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => remove(publication)} className="rounded-xl text-red-400">
@@ -120,7 +130,10 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
         <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
       </Dialog>
 
-      <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => setEditing(null)}>
+      <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => {
+        setEditing(null);
+        setEditingPreviewHtml("");
+      }}>
         {editing && (
           <form onSubmit={(event) => submit(event, editing.id)} className="grid gap-3">
             <Input name="title" defaultValue={editing.title} required />
@@ -137,8 +150,10 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               htmlName="contentHtml"
               defaultValue={editing.content}
               allowImageUpload
+              onContentChange={({ html }) => setEditingPreviewHtml(html)}
               placeholder="Contenu long de la publication"
             />
+            <PublicationPreview html={editingPreviewHtml} />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publié
               <input name="published" type="checkbox" defaultChecked={editing.published} className="h-4 w-4 accent-cyan-500" />
@@ -148,5 +163,30 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
         )}
       </Dialog>
     </section>
+  );
+}
+
+function PublicationPreview({ html }: { html: string }) {
+  const cleanHtml = sanitizeRichHtml(html);
+
+  if (!cleanHtml) {
+    return (
+      <div className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">
+        L&apos;aperçu public apparaîtra ici dès que le contenu sera rédigé ou qu&apos;une image sera ajoutée.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Aperçu public</p>
+        <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">Avant publication</span>
+      </div>
+      <div
+        className="dtsc-publication-content max-h-[420px] overflow-y-auto rounded-xl border border-dtsc-border bg-dtsc-surface p-4 text-sm"
+        dangerouslySetInnerHTML={{ __html: cleanHtml }}
+      />
+    </div>
   );
 }
