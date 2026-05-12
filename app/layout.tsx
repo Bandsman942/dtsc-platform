@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { PWARegister } from "@/components/pwa/pwa-register";
 import { dtsc } from "@/lib/dtsc";
 import "./globals.css";
 
@@ -145,6 +146,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <PWARegister />
           {children}
         </ThemeProvider>
       </body>

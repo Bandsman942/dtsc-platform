@@ -32,7 +32,7 @@ Objectifs couverts par le code actuel:
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API, audit des paiements et exports CSV/HTML imprimable PDF;
-- experience PWA orientee espace prive avec manifest, service worker prudent, page hors ligne et prompt d'installation affiche uniquement apres authentification;
+- experience PWA orientee espace prive avec manifest, service worker prudent, page hors ligne, prompt d'installation authentifie et carte publique d'installation sur l'accueil;
 - integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
 
 ## 2. Stack technique
@@ -1134,8 +1134,9 @@ La configuration PWA est volontairement orientee vers l'espace prive:
 
 - `app/manifest.ts` expose `name: DTSC Platform`, `short_name: DTSC`, `start_url: /dashboard`, `display: standalone`, `theme_color: #0B1220` et les categories business/productivity/technology;
 - si un utilisateur non connecte ouvre `/dashboard`, le middleware d'authentification conserve la redirection vers la page de connexion;
-- `components/pwa/pwa-register.tsx` enregistre `/sw.js` uniquement en production et uniquement dans le shell prive;
+- `components/pwa/pwa-register.tsx` enregistre `/sw.js` uniquement en production depuis le layout global afin que la landing page puisse proposer l'installation;
 - `components/pwa/pwa-install-prompt.tsx` affiche une proposition discrete uniquement dans l'espace authentifie, avec les boutons `Installer l'application` et `Plus tard`;
+- `components/pwa/public-pwa-install-card.tsx` ajoute sur l'accueil une invitation publique a installer l'application, avec fallback d'instructions si le navigateur ne declenche pas le prompt natif;
 - le choix `Plus tard` est conserve dans `localStorage` pendant sept jours;
 - `app/offline/page.tsx` affiche une page hors ligne neutre sans donnees utilisateur.
 
@@ -1151,6 +1152,7 @@ Fichiers PWA:
 | `public/icons/apple-touch-icon.png` | Icône iOS |
 | `components/pwa/pwa-register.tsx` | Enregistrement du service worker |
 | `components/pwa/pwa-install-prompt.tsx` | Prompt d'installation prive |
+| `components/pwa/public-pwa-install-card.tsx` | Carte d'installation publique sur la landing page |
 
 Regles de cache:
 
@@ -1181,7 +1183,7 @@ Objectifs codes:
 - FAQ d'accueil avec composant local `Accordion` base sur `details/summary` accessible et donnees structurees JSON-LD `FAQPage`;
 - sections publiques avec surfaces alternees et cartes `dtsc-card` / `dtsc-card-alt` pour ameliorer la hierarchie visuelle en mode clair et sombre;
 - navigation publique par routes dediees avec onglet actif selon `pathname`;
-- recherche publique intelligente dans le header via `/api/public/search`, combinant l'index statique `lib/public-search.ts` et les publications admin publiees;
+- recherche publique intelligente dans une barre large dediee sous la navigation via `/api/public/search`, combinant l'index statique `lib/public-search.ts` et les publications admin publiees;
 - contenus corporate centralises dans `lib/public-site.ts`;
 - contexte DTSC issu du business plan: vision, mission, services, marche, organisation et approche commerciale;
 - publications administrables dans `PublicPublication` pour alimenter la page Ressources;

@@ -8,7 +8,6 @@ import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { NavLinks } from "@/components/layout/nav-links";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
-import { PWARegister } from "@/components/pwa/pwa-register";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -38,7 +37,6 @@ export async function AppShell({
   return (
     <div className="min-h-screen bg-dtsc-page text-dtsc-ink">
       <SessionTimeoutGuard />
-      <PWARegister />
       <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:block">
         <DtscLogo href="/dashboard" />
 

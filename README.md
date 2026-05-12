@@ -36,7 +36,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
 - Publications publiques interactives: likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
 - Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
-- Recherche intelligente sur les pages publiques via le header du site
+- Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -86,7 +86,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local
 - Headers de sécurité globaux, blocage des requêtes cross-origin mutantes et protection contre l'en-tête `x-middleware-subrequest`
 - Validation des inputs avec Zod
-- PWA avec manifest, icônes, page hors ligne et service worker qui cache uniquement les assets statiques, jamais les API ni les pages privées
+- PWA avec manifest, icônes, page hors ligne, invitation publique d'installation sur l'accueil et service worker qui cache uniquement les assets statiques, jamais les API ni les pages privées
 
 ## Variables D'environnement
 
@@ -321,7 +321,7 @@ DTSC Platform est installable comme application depuis l'espace privé authentif
 - Page hors ligne: `/offline`
 - Icônes: `public/icons/icon-192x192.png`, `public/icons/icon-512x512.png`, `public/icons/maskable-icon-512x512.png`, `public/icons/apple-touch-icon.png`
 
-Le prompt d'installation est rendu uniquement dans le shell privé. Le service worker ne met pas en cache les réponses `/api/*`, les routes d'authentification ni les pages privées contenant des données utilisateur; il cache seulement les assets statiques, icônes, images publiques, polices, JS et CSS.
+Le prompt discret reste disponible dans le shell privé. La page d'accueil affiche aussi une carte publique "Installer l'application" pour aider les visiteurs à ajouter DTSC Platform sur mobile avant d'ouvrir leur espace client. Le service worker ne met pas en cache les réponses `/api/*`, les routes d'authentification ni les pages privées contenant des données utilisateur; il cache seulement les assets statiques, icônes, images publiques, polices, JS et CSS.
 
 ## Structure
 

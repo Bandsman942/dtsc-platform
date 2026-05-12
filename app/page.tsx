@@ -14,6 +14,7 @@ import {
 import { HeroImageCarousel } from "@/components/public/hero-image-carousel";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { PublicPWAInstallCard } from "@/components/pwa/public-pwa-install-card";
 import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
 
@@ -235,6 +236,8 @@ export default function Page() {
           </Link>
         </div>
       </section>
+
+      <PublicPWAInstallCard />
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">

@@ -62,14 +62,15 @@ export function PublicSiteSearch() {
   }, []);
 
   return (
-    <div ref={containerRef} className="relative w-full lg:w-72 xl:w-80">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
+    <div ref={containerRef} className="relative w-full">
+      <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-dtsc-blue" />
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onFocus={() => query.trim().length >= 2 && setOpen(true)}
-        placeholder="Rechercher..."
-        className="h-11 rounded-2xl border-dtsc-border bg-dtsc-page pl-10 pr-10 text-sm text-dtsc-ink shadow-sm"
+        placeholder="Rechercher un service, une solution, un secteur, un article..."
+        autoComplete="off"
+        className="h-12 rounded-[1rem] border-dtsc-border bg-dtsc-surface pl-12 pr-11 text-sm font-semibold text-dtsc-ink shadow-sm outline-none transition placeholder:text-dtsc-muted focus:border-cyan-400 focus:ring-4 focus:ring-cyan-300/20"
         aria-label="Rechercher sur les pages publiques DTSC"
       />
       {query && (
@@ -80,15 +81,15 @@ export function PublicSiteSearch() {
             setResults([]);
             setOpen(false);
           }}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-blue"
+          className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-blue"
           aria-label="Effacer la recherche"
         >
           <X className="h-4 w-4" />
         </button>
       )}
       {open && query.trim().length >= 2 && (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-[0_24px_70px_rgba(0,23,54,0.18)]">
-          <div className="max-h-96 overflow-y-auto p-2">
+        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-50 overflow-hidden rounded-[1.25rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_70px_rgba(0,23,54,0.18)]">
+          <div className="max-h-96 overflow-y-auto p-2 sm:p-3">
             {results.length > 0 ? (
               results.map((result) => (
                 <Link

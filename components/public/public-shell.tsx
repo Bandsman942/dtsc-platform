@@ -29,11 +29,15 @@ export function PublicHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
       <VisitTracker />
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-        <DtscLogo />
-        <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-          <PublicSiteSearch />
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center justify-between gap-4">
+          <div className="min-w-0 shrink-0">
+            <DtscLogo />
+          </div>
           <PublicNav />
+        </div>
+        <div className="rounded-[1.35rem] border border-dtsc-border bg-[linear-gradient(120deg,var(--dtsc-page),var(--dtsc-surface),var(--dtsc-soft))] p-2 shadow-[0_16px_42px_rgba(0,43,91,0.08)]">
+          <PublicSiteSearch />
         </div>
       </div>
     </header>
