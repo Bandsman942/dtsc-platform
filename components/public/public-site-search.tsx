@@ -62,7 +62,7 @@ export function PublicSiteSearch() {
   }, []);
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className="relative z-[110] w-full">
       <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-dtsc-blue" />
       <Input
         value={query}
@@ -88,8 +88,8 @@ export function PublicSiteSearch() {
         </button>
       )}
       {open && query.trim().length >= 2 && (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-50 overflow-hidden rounded-[1.25rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_70px_rgba(0,23,54,0.18)]">
-          <div className="max-h-96 overflow-y-auto p-2 sm:p-3">
+        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-[130] overflow-hidden rounded-[1.25rem] border border-dtsc-border bg-dtsc-surface/95 shadow-[0_28px_80px_rgba(0,23,54,0.24)] backdrop-blur-xl">
+          <div className="max-h-[min(70dvh,25rem)] overflow-y-auto p-2 sm:p-3">
             {results.length > 0 ? (
               results.map((result) => (
                 <Link

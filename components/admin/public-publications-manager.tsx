@@ -188,6 +188,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <Input name="coverLabel" defaultValue={editing.coverLabel || ""} />
             <textarea name="excerpt" defaultValue={editing.excerpt} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <RichTextEditor
+              key={editing.id}
               textName="content"
               htmlName="contentHtml"
               defaultValue={editing.content}

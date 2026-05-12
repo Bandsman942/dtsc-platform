@@ -24,21 +24,21 @@ export function ListControls({
   onPageChange: (page: number) => void;
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="relative min-w-0 flex-1">
+    <div className="mb-4 grid w-full min-w-0 gap-3 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="relative w-full min-w-0">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
         <Input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={placeholder}
-          className="h-11 rounded-xl bg-dtsc-surface pl-10 text-dtsc-ink"
+          className="h-11 w-full min-w-0 truncate rounded-xl bg-dtsc-surface pl-10 pr-3 text-dtsc-ink"
         />
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-        <span className="text-xs font-bold text-dtsc-muted">
+      <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
+        <span className="min-w-0 flex-1 truncate text-[0.7rem] font-bold text-dtsc-muted sm:flex-none sm:text-xs">
           {filteredCount}/{totalCount} élément(s) · page {page}/{pageCount}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             type="button"
             variant="outline"

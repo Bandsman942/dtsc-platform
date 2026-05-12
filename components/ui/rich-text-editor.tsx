@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useRef, useState, type ChangeEvent, type ClipboardEvent, type MouseEvent, type MutableRefObject } from "react";
+import { forwardRef, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type MouseEvent, type MutableRefObject } from "react";
 import { AlignCenter, AlignLeft, Bold, ImagePlus, Italic, List, ListOrdered, Palette, Trash2, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -52,6 +52,17 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [editorMessage, setEditorMessage] = useState("");
   const [imageDeletePosition, setImageDeletePosition] = useState<ImageDeletePosition>(null);
+
+  useEffect(() => {
+    const nextText = defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    setPlainText(nextText);
+    setHtml(defaultValue);
+    selectedImageRef.current = null;
+    setImageDeletePosition(null);
+    if (editorRef.current && editorRef.current.innerHTML !== defaultValue) {
+      editorRef.current.innerHTML = defaultValue;
+    }
+  }, [defaultValue]);
 
   function sync() {
     const editor = editorRef.current;

@@ -27,7 +27,7 @@ const resourceLinks = [
 
 export function PublicHeader() {
   return (
-    <header className="sticky top-0 z-50 overflow-x-hidden border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
+    <header className="sticky top-0 z-[90] overflow-visible border-b border-dtsc-border bg-dtsc-surface/95 shadow-[0_18px_55px_rgba(0,23,54,0.12)] backdrop-blur-xl">
       <VisitTracker />
       <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:flex lg:justify-between">

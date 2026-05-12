@@ -16,7 +16,7 @@ export function PublicNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="relative lg:flex lg:items-center lg:gap-3">
+    <div className="relative z-[120] lg:flex lg:items-center lg:gap-3">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -27,7 +27,7 @@ export function PublicNav() {
         Menu
       </button>
 
-      <nav className={cn("absolute right-0 top-[calc(100%+0.75rem)] z-50 grid w-[min(19rem,calc(100vw-2rem))] gap-2 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_18px_50px_rgba(0,43,91,0.16)] lg:static lg:mt-0 lg:flex lg:w-auto lg:items-center lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none", !open && "hidden lg:flex")}>
+      <nav className={cn("fixed left-4 right-4 top-[8.25rem] z-[120] grid max-h-[min(72dvh,32rem)] min-w-0 gap-2 overflow-y-auto rounded-[1.35rem] border border-dtsc-border bg-dtsc-surface/95 p-3 shadow-[0_28px_80px_rgba(0,23,54,0.28)] backdrop-blur-xl lg:static lg:left-auto lg:right-auto lg:top-auto lg:mt-0 lg:flex lg:max-h-none lg:w-auto lg:items-center lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0", !open && "hidden lg:flex")}>
         {publicLinks.map((link) => {
           const active = isActive(pathname, link.href);
           return (

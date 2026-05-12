@@ -41,8 +41,8 @@ export function AdminAuditTables({ payments, logs }: { payments: PaymentAuditIte
   });
 
   return (
-    <section className="grid gap-6 lg:grid-cols-2">
-      <div className="dtsc-card p-6">
+    <section className="grid min-w-0 gap-6 lg:grid-cols-2">
+      <div className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
         <h2 className="font-black text-dtsc-ink">Audit des paiements</h2>
         <div className="mt-4">
           <ListControls
@@ -56,11 +56,11 @@ export function AdminAuditTables({ payments, logs }: { payments: PaymentAuditIte
             onPageChange={paymentList.setPage}
           />
         </div>
-        <div className="mt-4 divide-y divide-dtsc-border text-sm">
+        <div className="mt-4 min-w-0 divide-y divide-dtsc-border text-sm">
           {paymentList.paginatedItems.map((payment) => (
-            <div key={payment.id} className="py-3">
-              <p className="font-bold text-dtsc-ink">{payment.reference}</p>
-              <p className="text-dtsc-muted">
+            <div key={payment.id} className="min-w-0 py-3">
+              <p className="break-words font-bold text-dtsc-ink">{payment.reference}</p>
+              <p className="break-words text-dtsc-muted">
                 {payment.userEmail} · {formatEnumLabel(payment.status)} · {payment.amount.toFixed(2)} {payment.currency}
               </p>
               {payment.planName && <p className="mt-1 text-xs font-semibold text-dtsc-blue">{payment.planName}</p>}
@@ -70,7 +70,7 @@ export function AdminAuditTables({ payments, logs }: { payments: PaymentAuditIte
           {!paymentList.filteredCount && <p className="py-4 text-sm text-dtsc-muted">Aucun paiement audité.</p>}
         </div>
       </div>
-      <div className="dtsc-card p-6">
+      <div className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
         <h2 className="font-black text-dtsc-ink">Logs API et webhooks</h2>
         <div className="mt-4">
           <ListControls
@@ -84,14 +84,14 @@ export function AdminAuditTables({ payments, logs }: { payments: PaymentAuditIte
             onPageChange={logList.setPage}
           />
         </div>
-        <div className="mt-4 divide-y divide-dtsc-border text-sm">
+        <div className="mt-4 min-w-0 divide-y divide-dtsc-border text-sm">
           {logList.paginatedItems.map((event) => (
-            <div key={event.id} className="py-3">
-              <p className="font-bold text-dtsc-ink">{event.title}</p>
-              <p className="text-dtsc-muted">
+            <div key={event.id} className="min-w-0 py-3">
+              <p className="break-words font-bold text-dtsc-ink">{event.title}</p>
+              <p className="break-words text-dtsc-muted">
                 {event.source} · {formatEnumLabel(event.status)} · {formatDateTime(event.createdAt)}
               </p>
-              <p className="mt-1 text-xs text-dtsc-muted">{event.detail}</p>
+              <p className="mt-1 break-words text-xs text-dtsc-muted">{event.detail}</p>
             </div>
           ))}
           {!logList.filteredCount && <p className="py-4 text-sm text-dtsc-muted">Aucun log API récent.</p>}
