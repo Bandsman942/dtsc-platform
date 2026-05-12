@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
     const users = await prisma.user.findMany({
       where: { status: UserStatus.ACTIVE },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, notifyBroadcastEnabled: true },
     });
 
     const emails = users.map((user) => user.email);
@@ -57,15 +57,18 @@ export async function POST(req: Request) {
     };
     const hasUserPlaceholder = /\{user\}/i.test(`${body.data.body} ${body.data.bodyHtml || ""}`);
     if (hasUserPlaceholder) {
-      await prisma.notification.createMany({
-        data: users.map((targetUser) => ({
+      const notificationTargets = users
+        .filter((targetUser) => targetUser.notifyBroadcastEnabled)
+        .map((targetUser) => ({
           userId: targetUser.id,
           title: personalizeUserToken(body.data.title, targetUser.name),
           body: personalizeUserToken(body.data.body, targetUser.name),
           type: body.data.type,
           targetUrl: "/notifications",
-        })),
-      });
+        }));
+      if (notificationTargets.length) {
+        await prisma.notification.createMany({ data: notificationTargets });
+      }
     } else {
       await notifyUsers({
         userIds: users.map((targetUser) => targetUser.id),

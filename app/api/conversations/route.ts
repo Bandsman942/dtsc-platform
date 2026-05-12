@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { writeApiLog } from "@/lib/audit";
 
 export async function GET() {
   const session = await getSession();
@@ -20,7 +21,8 @@ export async function GET() {
   return NextResponse.json({ conversations });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const startedAt = Date.now();
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,6 +33,14 @@ export async function POST() {
       userId: session.userId,
       title: "Nouvelle conversation",
     },
+  });
+
+  await writeApiLog({
+    request: req,
+    statusCode: 200,
+    userId: session.userId,
+    startedAt,
+    metadata: { action: "conversation_create", conversationId: conversation.id },
   });
 
   return NextResponse.json({ conversation });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Copy, FolderKanban, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 type ConversationSummary = {
   id: string;
   title: string;
+  projectName: string | null;
   updatedAt: string;
   _count?: { messages: number };
 };
@@ -50,7 +51,7 @@ export function ChatWorkspace({
   const [dailyUsage, setDailyUsage] = useState(usage);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messageScrollRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId),
@@ -59,8 +60,16 @@ export function ChatWorkspace({
   const conversationList = useSmartList({
     items: conversations,
     pageSize: 8,
-    getSearchText: (conversation) => `${conversation.title} ${conversation.updatedAt} ${conversation._count?.messages ?? 0}`,
+    getSearchText: (conversation) =>
+      `${conversation.title} ${conversation.projectName || ""} ${conversation.updatedAt} ${conversation._count?.messages ?? 0}`,
   });
+  const groupedConversations = useMemo(() => {
+    return conversationList.paginatedItems.reduce<Record<string, ConversationSummary[]>>((groups, conversation) => {
+      const key = conversation.projectName?.trim() || "Sans projet";
+      groups[key] = [...(groups[key] || []), conversation];
+      return groups;
+    }, {});
+  }, [conversationList.paginatedItems]);
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -75,7 +84,11 @@ export function ChatWorkspace({
   }, [activeConversationId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messageScrollRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages, isStreaming]);
 
   async function refreshConversations(nextId?: string) {
@@ -98,7 +111,9 @@ export function ChatWorkspace({
     if (!activeConversation) {
       return;
     }
-    const title = String(new FormData(event.currentTarget).get("title") || "").trim();
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    const projectName = String(formData.get("projectName") || "").trim();
     if (!title) {
       return;
     }
@@ -106,7 +121,7 @@ export function ChatWorkspace({
     await fetch(`/api/conversations/${activeConversation.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, projectName }),
     });
     setRenameOpen(false);
     await refreshConversations(activeConversation.id);
@@ -202,13 +217,13 @@ export function ChatWorkspace({
   const resetLabel = formatResetAt(dailyUsage.resetAt);
 
   return (
-    <div className="grid min-h-[calc(100vh-7rem)] gap-4 lg:grid-cols-[320px_1fr]">
-      <aside className="dtsc-card flex flex-col p-4">
+    <div className="grid h-[calc(100vh-7rem)] min-h-0 gap-4 lg:grid-cols-[320px_1fr]">
+      <aside className="dtsc-card flex min-h-0 flex-col overflow-hidden p-4">
         <Button onClick={createConversation} className="h-11 w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <Plus className="h-4 w-4" />
           Nouvelle conversation
         </Button>
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {conversations.length > 0 && (
             <ListControls
               query={conversationList.query}
@@ -221,22 +236,30 @@ export function ChatWorkspace({
               onPageChange={conversationList.setPage}
             />
           )}
-          {conversationList.paginatedItems.map((conversation) => (
-            <button
-              key={conversation.id}
-              onClick={() => setActiveConversationId(conversation.id)}
-              className={cn(
-                "w-full rounded-xl px-3 py-3 text-left text-sm transition",
-                activeConversationId === conversation.id
-                  ? "border-l-4 border-cyan-400 bg-slate-100 text-[#001736]"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-[#001736]"
-              )}
-            >
-              <span className="block truncate font-medium">{conversation.title}</span>
-              <span className="text-xs text-slate-500">
-                {conversation._count?.messages ?? 0} messages
-              </span>
-            </button>
+          {Object.entries(groupedConversations).map(([projectName, items]) => (
+            <div key={projectName} className="space-y-2">
+              <div className="flex items-center gap-2 px-2 pt-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-dtsc-muted">
+                <FolderKanban className="h-3.5 w-3.5 text-cyan-500" />
+                {projectName}
+              </div>
+              {items.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  onClick={() => setActiveConversationId(conversation.id)}
+                  className={cn(
+                    "w-full rounded-xl px-3 py-3 text-left text-sm transition",
+                    activeConversationId === conversation.id
+                      ? "border-l-4 border-cyan-400 bg-slate-100 text-[#001736]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-[#001736]"
+                  )}
+                >
+                  <span className="block truncate font-medium">{conversation.title}</span>
+                  <span className="text-xs text-slate-500">
+                    {conversation._count?.messages ?? 0} messages
+                  </span>
+                </button>
+              ))}
+            </div>
           ))}
           {!conversationList.filteredCount && conversations.length > 0 && (
             <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
@@ -244,7 +267,7 @@ export function ChatWorkspace({
             </p>
           )}
         </div>
-        <div className="mt-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
+        <div className="mt-4 shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
           <p className="font-black text-dtsc-ink">Usage journalier</p>
           <div className="mt-3 space-y-3">
             <UsageBar label="Messages" value={dailyUsage.messagesToday} limit={dailyUsage.dailyMessageLimit} percent={messagePercent} />
@@ -258,7 +281,7 @@ export function ChatWorkspace({
         </div>
       </aside>
 
-      <section className="flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
           <div>
             <h1 className="text-xl font-bold text-[#001736]">
@@ -279,7 +302,7 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-[#faf9fe] px-4 py-6 lg:px-8">
+        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[#faf9fe] px-4 py-6 lg:px-8">
           {!messages.length && (
             <div className="mx-auto flex h-full max-w-2xl flex-col justify-center text-center">
               <p className="text-3xl font-bold text-[#001736]">Comment DTSC peut vous aider ?</p>
@@ -336,7 +359,6 @@ export function ChatWorkspace({
                 DTSC Assistant rédige une réponse...
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
         </div>
 
@@ -360,7 +382,12 @@ export function ChatWorkspace({
       </Dialog>
       <Dialog open={renameOpen} title="Renommer la conversation" onClose={() => setRenameOpen(false)}>
         <form onSubmit={renameConversation} className="space-y-3">
-          <Input name="title" defaultValue={activeConversation?.title || ""} required />
+          <Input name="title" defaultValue={activeConversation?.title || ""} required placeholder="Titre de la conversation" />
+          <Input
+            name="projectName"
+            defaultValue={activeConversation?.projectName || ""}
+            placeholder="Dossier ou projet, ex. Reporting ventes"
+          />
           <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
         </form>
       </Dialog>

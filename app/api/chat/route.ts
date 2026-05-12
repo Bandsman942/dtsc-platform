@@ -13,6 +13,7 @@ import { truncate } from "@/lib/format";
 import { getAppSettings } from "@/lib/settings";
 import { retrieveKnowledgeContext } from "@/lib/rag";
 import { getCompanyContextForUser } from "@/lib/company-context";
+import { writeApiLog } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -41,13 +42,16 @@ function parseOpenAIEvent(block: string) {
 }
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
   const session = await getSession();
   if (!session) {
+    await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const limiter = await rateLimit(`chat:${session.userId}`, 30, 60 * 60 * 1000);
   if (!limiter.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
     return NextResponse.json(
       { error: "Usage limit reached. Please try again later." },
       { status: 429 }
@@ -56,20 +60,23 @@ export async function POST(req: Request) {
 
   const body = chatRequestSchema.safeParse(await req.json());
   if (!body.success) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid chat request" }, { status: 400 });
   }
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, status: true, dailyMessageLimit: true, dailyTokenLimit: true },
+    select: { id: true, status: true, dailyMessageLimit: true, dailyTokenLimit: true, preferredModel: true },
   });
 
   if (!user || user.status !== "ACTIVE") {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Account unavailable" }, { status: 403 });
   }
 
   const settings = await getAppSettings();
   if (!settings.chatbotEnabled || settings.maintenanceMode) {
+    await writeApiLog({ request: req, statusCode: 503, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Chatbot temporarily disabled" }, { status: 503 });
   }
 
@@ -89,6 +96,7 @@ export async function POST(req: Request) {
 
   const totalTokensToday = tokensToday._sum.totalTokens ?? 0;
   if (messagesToday >= user.dailyMessageLimit || totalTokensToday >= user.dailyTokenLimit) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt, metadata: { code: "DAILY_LIMIT_REACHED" } });
     return NextResponse.json(
       {
         error: "Daily usage limit reached",
@@ -105,7 +113,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const model = getOpenAIModel(body.data.model);
+  const model = getOpenAIModel(body.data.model || user.preferredModel || undefined);
   const conversation = body.data.conversationId
     ? await prisma.conversation.findFirst({
         where: { id: body.data.conversationId, userId: session.userId },
@@ -118,6 +126,7 @@ export async function POST(req: Request) {
       });
 
   if (!conversation) {
+    await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
 
@@ -187,6 +196,7 @@ export async function POST(req: Request) {
     openAIStream = await createOpenAIResponseStream({ model, messages });
   } catch (error) {
     console.error("OpenAI response failed", error);
+    await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { model } });
     return NextResponse.json(
       { error: "Unable to generate the assistant response." },
       { status: 502 }
@@ -265,6 +275,14 @@ export async function POST(req: Request) {
           await prisma.conversation.update({
             where: { id: conversation.id },
             data: { updatedAt: new Date() },
+          });
+
+          await writeApiLog({
+            request: req,
+            statusCode: 200,
+            userId: session.userId,
+            startedAt,
+            metadata: { model, conversationId: conversation.id, totalTokens: usage.totalTokens },
           });
         }
       } catch (error) {

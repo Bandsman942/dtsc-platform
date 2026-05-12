@@ -320,11 +320,23 @@ export async function sendZohoMailWebhook(payload: ZohoMailPayload) {
     return { sent: false, reason: "ZOHO_MAIL_WEBHOOK_URL is not configured" };
   }
 
+  const textContent = buildProfessionalMailText({ ...payload, showRecipients: false, showSource: false });
+  const htmlContent = buildProfessionalMailHtml({ ...payload, showRecipients: false, showSource: false });
+  const fromEmail = env.ZOHO_MAIL_FROM_ADDRESS || contactEmail();
   const response = await fetch(env.ZOHO_MAIL_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: buildProfessionalMailText({ ...payload, showRecipients: false, showSource: false }),
+      message: textContent,
+      subject: payload.subject,
+      content: textContent,
+      body: textContent,
+      html: htmlContent,
+      bodyHtml: htmlContent,
+      fromEmail,
+      fromAddress: fromEmail,
+      replyTo: payload.replyTo || fromEmail,
+      source: payload.source,
     }),
   });
 

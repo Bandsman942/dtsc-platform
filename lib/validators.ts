@@ -21,7 +21,24 @@ export const chatRequestSchema = z.object({
 });
 
 export const conversationUpdateSchema = z.object({
-  title: z.string().min(2).max(120),
+  title: z.string().min(2).max(120).optional(),
+  projectName: z.string().max(120).optional().or(z.literal("")),
+});
+
+export const accountPreferencesSchema = z.object({
+  preferredModel: z.string().min(1).max(120).optional().or(z.literal("")),
+  notifySupportEnabled: z.coerce.boolean().default(true),
+  notifyUsageEnabled: z.coerce.boolean().default(true),
+  notifyBroadcastEnabled: z.coerce.boolean().default(true),
+  pushNotificationsEnabled: z.coerce.boolean().default(false),
+});
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url().max(2000),
+  keys: z.object({
+    p256dh: z.string().min(10).max(500),
+    auth: z.string().min(10).max(500),
+  }),
 });
 
 export const supportTicketSchema = z.object({

@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { conversationUpdateSchema } from "@/lib/validators";
+import { writeApiLog } from "@/lib/audit";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
 
-export async function GET(_: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
+  void req;
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,6 +31,7 @@ export async function GET(_: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const startedAt = Date.now();
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,23 +39,39 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const body = conversationUpdateSchema.safeParse(await req.json());
   if (!body.success) {
-    return NextResponse.json({ error: "Invalid title" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid conversation update" }, { status: 400 });
+  }
+
+  if (!body.data.title && typeof body.data.projectName === "undefined") {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const { id } = await params;
   const conversation = await prisma.conversation.updateMany({
     where: { id, userId: session.userId },
-    data: { title: body.data.title },
+    data: {
+      ...(body.data.title ? { title: body.data.title } : {}),
+      ...(typeof body.data.projectName !== "undefined" ? { projectName: body.data.projectName || null } : {}),
+    },
   });
 
   if (!conversation.count) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
 
+  await writeApiLog({
+    request: req,
+    statusCode: 200,
+    userId: session.userId,
+    startedAt,
+    metadata: { action: "conversation_update", conversationId: id, projectName: body.data.projectName || null },
+  });
+
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_: Request, { params }: Params) {
+export async function DELETE(req: Request, { params }: Params) {
+  const startedAt = Date.now();
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -66,6 +85,14 @@ export async function DELETE(_: Request, { params }: Params) {
   if (!conversation.count) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
+
+  await writeApiLog({
+    request: req,
+    statusCode: 200,
+    userId: session.userId,
+    startedAt,
+    metadata: { action: "conversation_delete", conversationId: id },
+  });
 
   return NextResponse.json({ ok: true });
 }

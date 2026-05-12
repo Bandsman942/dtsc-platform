@@ -1,9 +1,14 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { requireUser } from "@/lib/auth";
+import { getConfiguredOpenAIModels, getDisplayName } from "@/lib/openai-config";
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const models = getConfiguredOpenAIModels().map((id) => ({
+    id,
+    label: getDisplayName(id),
+  }));
 
   return (
     <AppShell user={user}>
@@ -15,7 +20,7 @@ export default async function SettingsPage() {
             Gérez votre profil, votre mot de passe, le mode sombre et les préférences de notification de la plateforme DTSC.
           </p>
         </section>
-        <SettingsPanel user={user} />
+        <SettingsPanel user={user} models={models} />
       </div>
     </AppShell>
   );

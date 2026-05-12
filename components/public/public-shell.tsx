@@ -27,11 +27,11 @@ const resourceLinks = [
 
 export function PublicHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
+    <header className="sticky top-0 z-50 overflow-x-hidden border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
       <VisitTracker />
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center justify-between gap-4">
-          <div className="min-w-0 shrink-0">
+      <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:flex lg:justify-between">
+          <div className="min-w-0 max-w-[calc(100vw-8.5rem)] overflow-hidden lg:max-w-none">
             <DtscLogo />
           </div>
           <PublicNav />

@@ -50,9 +50,9 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
-- Interface chatbot avec sidebar de conversations
-- Historique des conversations et messages en base
-- Renommage et suppression de conversation
+- Interface chatbot avec sidebar de conversations scrollable
+- Historique des conversations et messages en base, avec classement par dossier/projet
+- Renommage, classement et suppression de conversation
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
@@ -78,15 +78,15 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Logs API, audit des paiements et exports CSV/HTML imprimable PDF
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
-- Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin
+- Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires, réponses aux commentaires et réactions
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
-- Paramètres complets: profil, mot de passe, mode clair/sombre/système et préférences de notifications
+- Paramètres complets: profil, mot de passe, mode clair/sombre/système, modèle LLM préféré et préférences de notifications persistantes
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
 - Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local
 - Headers de sécurité globaux, blocage des requêtes cross-origin mutantes et protection contre l'en-tête `x-middleware-subrequest`
 - Validation des inputs avec Zod
-- PWA avec manifest, icônes, page hors ligne, invitation publique d'installation sur l'accueil et service worker qui cache uniquement les assets statiques, jamais les API ni les pages privées
+- PWA avec manifest, icônes, page hors ligne, invitation publique d'installation sur l'accueil, notifications visibles pendant session connectée et service worker qui cache uniquement les assets statiques, jamais les API ni les pages privées
 
 ## Variables D'environnement
 

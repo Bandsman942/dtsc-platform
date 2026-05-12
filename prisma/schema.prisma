@@ -84,6 +84,11 @@ model User {
   avatarUrl     String?
   avatarStoragePath String?
   publicProfileConsent Boolean @default(false)
+  preferredModel String?
+  notifySupportEnabled Boolean @default(true)
+  notifyUsageEnabled   Boolean @default(true)
+  notifyBroadcastEnabled Boolean @default(true)
+  pushNotificationsEnabled Boolean @default(false)
   status        UserStatus      @default(ACTIVE)
   dailyMessageLimit Int         @default(30)
   dailyTokenLimit   Int         @default(100000)
@@ -108,6 +113,7 @@ model User {
   publicPublicationReactions PublicPublicationReaction[]
   companyProfile      CompanyProfile?
   companyActivities   CompanyActivity[]
+  pushSubscriptions    PushSubscription[]
 
   @@index([role])
   @@index([status])
@@ -314,11 +320,27 @@ model Conversation {
   id        String     @id @default(cuid())
   userId    String
   title     String     @default("Nouvelle conversation")
+  projectName String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   usageLogs UsageLog[]
+
+  @@index([userId, updatedAt])
+  @@index([userId, projectName, updatedAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh     String
+  auth       String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, updatedAt])
 }

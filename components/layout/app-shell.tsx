@@ -8,6 +8,7 @@ import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { NavLinks } from "@/components/layout/nav-links";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
+import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -25,19 +26,30 @@ export async function AppShell({
     role: UserRole;
     companyName: string | null;
     avatarUrl?: string | null;
+    pushNotificationsEnabled?: boolean;
   };
 }) {
-  const unreadNotifications = await prisma.notification.count({
-    where: {
-      userId: user.id,
-      readAt: null,
-    },
-  });
+  const [unreadNotifications, latestUnreadNotifications] = await Promise.all([
+    prisma.notification.count({
+      where: {
+        userId: user.id,
+        readAt: null,
+      },
+    }),
+    user.pushNotificationsEnabled
+      ? prisma.notification.findMany({
+          where: { userId: user.id, readAt: null },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          select: { id: true, title: true, body: true, targetUrl: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
   return (
     <div className="min-h-screen bg-dtsc-page text-dtsc-ink">
       <SessionTimeoutGuard />
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
         <DtscLogo href="/dashboard" />
 
         <Link
@@ -49,7 +61,7 @@ export async function AppShell({
           Nouveau chat
         </Link>
 
-        <nav className="mt-10 space-y-1">
+        <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
           <NavLinks role={user.role} unreadNotifications={unreadNotifications} />
         </nav>
       </aside>
@@ -85,6 +97,7 @@ export async function AppShell({
         </header>
         <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         <PWAInstallPrompt />
+        <PwaNotificationBridge notifications={latestUnreadNotifications} enabled={Boolean(user.pushNotificationsEnabled)} />
         <DtscFooter />
       </div>
     </div>

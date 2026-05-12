@@ -23,15 +23,15 @@ Objectifs couverts par le code actuel:
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
-- chatbot OpenAI avec historique des conversations, streaming et limites d'usage;
-- notifications internes;
+- chatbot OpenAI avec historique des conversations, classement par dossier/projet, streaming, choix de modele LLM prefere par utilisateur et limites d'usage;
+- notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires et reactions;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, visites publiques, diffusions et acces par blocs pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
-- logs API, audit des paiements et exports CSV/HTML imprimable PDF;
+- logs API et webhooks etendus aux zones critiques: chat, conversations, notifications, documents, paiements, diffusions, newsletter, entreprise et publications;
 - experience PWA orientee espace prive avec manifest, service worker prudent, page hors ligne, prompt d'installation authentifie et carte publique d'installation sur l'accueil;
 - integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
 
@@ -234,6 +234,7 @@ Modeles actifs:
 | `AuditLog` | Journalisation des actions sensibles |
 | `WebhookEvent` | Historisation des webhooks entrants |
 | `ApiLog` | Journalisation des appels API critiques |
+| `PushSubscription` | Abonnement navigateur/PWA prevu pour les notifications visibles et futures notifications push |
 
 Champs profil utilisateur ajoutes:
 
@@ -241,6 +242,13 @@ Champs profil utilisateur ajoutes:
 - `avatarUrl`: URL d'affichage de la photo de profil, renseignee manuellement ou pointee vers `/api/users/[id]/avatar`;
 - `avatarStoragePath`: chemin prive Supabase Storage pour lire l'avatar via la route serveur;
 - `publicProfileConsent`: consentement explicite pour afficher le nom, la fonction et l'avatar sur les publications publiques dont l'utilisateur est auteur.
+- `preferredModel`: modele LLM prefere par l'utilisateur pour le chatbot, parmi les modeles configures;
+- `notifySupportEnabled`, `notifyUsageEnabled`, `notifyBroadcastEnabled`: preferences de notifications applicatives;
+- `pushNotificationsEnabled`: autorise l'affichage de notifications navigateur/PWA pendant une session connectee.
+
+Champs conversation ajoutes:
+
+- `projectName`: dossier ou projet libre permettant de classer l'historique des conversations par sujet.
 
 Enums:
 
@@ -368,12 +376,13 @@ Flux:
 6. Verification des limites journalieres:
    - nombre de messages utilisateur;
    - total tokens depuis `UsageLog`.
-7. Creation ou recuperation de la conversation.
+7. Creation ou recuperation de la conversation; l'historique peut etre classe par `projectName`.
 8. Sauvegarde du message utilisateur.
 9. Recuperation du contexte Entreprise prive via `lib/company-context.ts`, si renseigne.
-10. Envoi des 24 derniers messages a OpenAI Responses API, avec contexte Entreprise et contexte documentaire lorsque pertinent.
-11. Streaming du texte vers le client.
-12. Sauvegarde de la reponse assistant et du `UsageLog`.
+10. Selection du modele: modele explicite de la requete, sinon `User.preferredModel`, sinon modele par defaut serveur.
+11. Envoi des 24 derniers messages a OpenAI Responses API, avec contexte Entreprise et contexte documentaire lorsque pertinent.
+12. Streaming du texte vers le client.
+13. Sauvegarde de la reponse assistant, du `UsageLog` et du log API.
 
 Le contexte Entreprise est strictement rattache au `userId` connecte. Il contient uniquement les informations saisies par l'utilisateur dans `/company`: organisation, poste, responsabilites, activites, processus, outils, donnees, contraintes, objectifs et KPI.
 
@@ -436,6 +445,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP optimisee en WebP 512x512 cote client, maximum 850 Ko cote serveur |
 | `GET` | `/api/users/[id]/avatar` | proprietaire ou profil public consenti | Lecture serveur de l'avatar stocke dans Supabase Storage prive |
 | `PATCH` | `/api/account/password` | session | Changement mot de passe |
+| `PATCH` | `/api/account/preferences` | session | Modele LLM prefere, preferences notifications et notifications navigateur/PWA |
 
 ### Chatbot et conversations
 
@@ -454,7 +464,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `GET` | `/api/conversations` | session | Liste conversations utilisateur |
 | `POST` | `/api/conversations` | session | Nouvelle conversation |
 | `GET` | `/api/conversations/[id]` | session proprietaire | Detail conversation/messages |
-| `PATCH` | `/api/conversations/[id]` | session proprietaire | Renommer conversation |
+| `PATCH` | `/api/conversations/[id]` | session proprietaire | Renommer conversation et renseigner le dossier/projet |
 | `DELETE` | `/api/conversations/[id]` | session proprietaire | Supprimer conversation |
 
 ### Support
@@ -472,6 +482,13 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `DELETE` | `/api/notifications` | session | Vider ses notifications |
 | `PATCH` | `/api/notifications/[id]/read` | session proprietaire | Marquer comme lu |
 | `DELETE` | `/api/notifications/[id]` | session proprietaire | Supprimer une notification |
+
+Preferences:
+
+- `SUPPORT` respecte `notifySupportEnabled`;
+- `USAGE` respecte `notifyUsageEnabled`;
+- `BROADCAST` et `ANNOUNCEMENT` respectent `notifyBroadcastEnabled`;
+- `pushNotificationsEnabled` affiche une notification navigateur/PWA pour les dernieres notifications non lues pendant que l'utilisateur est connecte. Les vraies notifications push serveur peuvent etre ajoutees plus tard avec VAPID ou un fournisseur push, sans changer le modele `PushSubscription`.
 
 ### Annonces
 
@@ -1137,6 +1154,7 @@ La configuration PWA est volontairement orientee vers l'espace prive:
 - `components/pwa/pwa-register.tsx` enregistre `/sw.js` uniquement en production depuis le layout global afin que la landing page puisse proposer l'installation;
 - `components/pwa/pwa-install-prompt.tsx` affiche une proposition discrete uniquement dans l'espace authentifie, avec les boutons `Installer l'application` et `Plus tard`;
 - `components/pwa/public-pwa-install-card.tsx` ajoute sur l'accueil une invitation publique a installer l'application, avec fallback d'instructions si le navigateur ne declenche pas le prompt natif;
+- `components/pwa/pwa-notification-bridge.tsx` affiche des notifications navigateur/PWA pour les dernieres notifications non lues lorsque l'utilisateur a active cette preference et que le navigateur a accorde la permission;
 - le choix `Plus tard` est conserve dans `localStorage` pendant sept jours;
 - `app/offline/page.tsx` affiche une page hors ligne neutre sans donnees utilisateur.
 
@@ -1152,6 +1170,7 @@ Fichiers PWA:
 | `public/icons/apple-touch-icon.png` | Icône iOS |
 | `components/pwa/pwa-register.tsx` | Enregistrement du service worker |
 | `components/pwa/pwa-install-prompt.tsx` | Prompt d'installation prive |
+| `components/pwa/pwa-notification-bridge.tsx` | Alertes navigateur/PWA pendant session connectee |
 | `components/pwa/public-pwa-install-card.tsx` | Carte d'installation publique sur la landing page |
 
 Regles de cache:

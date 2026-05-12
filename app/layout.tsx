@@ -99,6 +99,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   themeColor: "#0B1220",
 };
 
@@ -110,7 +112,7 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body
-        className="antialiased"
+        className="overflow-x-hidden antialiased"
       >
         <script
           type="application/ld+json"
