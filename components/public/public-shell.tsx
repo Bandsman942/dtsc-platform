@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { VisitTracker } from "@/components/analytics/visit-tracker";
 import { PublicNav } from "@/components/public/public-nav";
+import { PublicSiteSearch } from "@/components/public/public-site-search";
 import { dtsc } from "@/lib/dtsc";
 
 const socialNetworks = [
@@ -30,7 +31,10 @@ export function PublicHeader() {
       <VisitTracker />
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
         <DtscLogo />
-        <PublicNav />
+        <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
+          <PublicSiteSearch />
+          <PublicNav />
+        </div>
       </div>
     </header>
   );

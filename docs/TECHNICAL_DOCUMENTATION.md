@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 08 mai 2026
+Derniere mise a jour: 12 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -14,7 +14,9 @@ Objectifs couverts par le code actuel:
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
-- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec images optimisees, reactions, commentaires et reponses aux commentaires;
+- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec recherche instantanee, pagination, images optimisees, reactions, commentaires et reponses aux commentaires;
+- recherche intelligente publique via le header pour orienter les visiteurs vers les pages, services, solutions et publications utiles;
+- page Ressources organisee par categories en accordion, avec seulement les trois dernieres publications mises en avant sous forme de cartes;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
@@ -30,6 +32,7 @@ Objectifs couverts par le code actuel:
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API, audit des paiements et exports CSV/HTML imprimable PDF;
+- experience PWA orientee espace prive avec manifest, service worker prudent, page hors ligne et prompt d'installation affiche uniquement apres authentification;
 - integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
 
 ## 2. Stack technique
@@ -44,6 +47,7 @@ Objectifs couverts par le code actuel:
 - Validation: Zod
 - Deploiement: Vercel
 - CI: GitHub Actions avec `pnpm type-check`
+- PWA: manifest App Router, service worker statique et prompt d'installation prive
 
 Scripts importants:
 
@@ -81,6 +85,8 @@ app/
   ressources/                  Page publique ressources + publications admin
   a-propos/                    Page publique entreprise et organisation
   contact/                     Page publique contact/newsletter
+  manifest.ts                  Manifest PWA start_url /dashboard
+  offline/                     Page hors ligne sans donnees utilisateur
   sitemap.ts                   Sitemap SEO
   robots.ts                    Robots SEO
 
@@ -94,6 +100,7 @@ components/
   layout/                      Shell prive, navigation
   notifications/               UI notifications
   profile/                     Edition profil utilisateur et avatar
+  pwa/                         Enregistrement service worker et prompt d'installation prive
   public/                      Sections landing page
   public/hero-image-carousel   Carrousel client pour les images hero publiques
   settings/                    Parametres utilisateur
@@ -115,6 +122,7 @@ lib/
   rate-limit.ts                Rate limit Upstash Redis optionnel avec fallback memoire
   settings.ts                  Parametres globaux
   notifications.ts             Creation notifications
+  public-search.ts             Index statique de recherche publique
   public-site.ts               Contenus publics corporate, sources et pages dediees
 
 prisma/
@@ -1062,12 +1070,15 @@ Regles:
 
 Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee en format web lisible, limitee a 960x540 et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement. Le formulaire affiche aussi un apercu public avant publication pour verifier la taille, le texte et les images.
 
+Le catalogue admin des publications utilise `ListControls` et `useSmartList`: recherche accent-insensible sur titre, slug, resume, categorie et statut, puis pagination cote UI. L'objectif est d'eviter que les brouillons et articles publies rendent la page Administration trop longue.
+
 Routes ajoutees:
 
 | Route | Methode | Acces | Payload | Reponse |
 | --- | --- | --- | --- | --- |
 | `/api/admin/publications/images` | `POST` | `ADMIN` | `multipart/form-data` avec `file` image JPEG/PNG/WebP optimisee | `{ ok, url, path }` |
 | `/api/public/publication-images/[...path]` | `GET` | Public | chemin Supabase commencant par `publications/` | Blob image cacheable |
+| `/api/public/search` | `GET` | Public | query string `q` optionnelle, max 80 caracteres | `{ results: [{ title, description, href, category }] }` |
 | `/api/publications/[id]/comments` | `POST` | Utilisateur connecte | `{ content, parentId? }` | commentaire cree |
 | `/api/publications/comments/[id]` | `PATCH` | `ADMIN` ou auteur dans la fenetre d'edition | `{ content }` | commentaire modifie |
 | `/api/publications/comments/[id]` | `DELETE` | `ADMIN` | aucun | suppression du commentaire et de ses reponses |
@@ -1117,6 +1128,38 @@ Workflow GitHub Actions:
 
 Vercel execute ensuite son propre build selon la configuration du projet.
 
+## 14.1 PWA DTSC Platform
+
+La configuration PWA est volontairement orientee vers l'espace prive:
+
+- `app/manifest.ts` expose `name: DTSC Platform`, `short_name: DTSC`, `start_url: /dashboard`, `display: standalone`, `theme_color: #0B1220` et les categories business/productivity/technology;
+- si un utilisateur non connecte ouvre `/dashboard`, le middleware d'authentification conserve la redirection vers la page de connexion;
+- `components/pwa/pwa-register.tsx` enregistre `/sw.js` uniquement en production et uniquement dans le shell prive;
+- `components/pwa/pwa-install-prompt.tsx` affiche une proposition discrete uniquement dans l'espace authentifie, avec les boutons `Installer l'application` et `Plus tard`;
+- le choix `Plus tard` est conserve dans `localStorage` pendant sept jours;
+- `app/offline/page.tsx` affiche une page hors ligne neutre sans donnees utilisateur.
+
+Fichiers PWA:
+
+| Fichier | Role |
+| --- | --- |
+| `app/manifest.ts` | Manifest App Router, start URL privee `/dashboard` |
+| `public/sw.js` | Service worker prudent, cache assets statiques uniquement |
+| `public/icons/icon-192x192.png` | Icône PWA 192 |
+| `public/icons/icon-512x512.png` | Icône PWA 512 |
+| `public/icons/maskable-icon-512x512.png` | Icône maskable avec marge de securite |
+| `public/icons/apple-touch-icon.png` | Icône iOS |
+| `components/pwa/pwa-register.tsx` | Enregistrement du service worker |
+| `components/pwa/pwa-install-prompt.tsx` | Prompt d'installation prive |
+
+Regles de cache:
+
+- aucune reponse `/api/*` n'est mise en cache;
+- aucune page HTML privee n'est stockee en cache applicatif;
+- les navigations hors ligne peuvent tomber sur `/offline`, qui ne contient aucune donnee personnelle;
+- seuls les assets statiques Next.js, images publiques, icônes, polices, JS et CSS sont caches;
+- `/auth/*`, `/dashboard`, `/chat`, `/admin`, `/profile`, `/settings`, `/support`, `/notifications`, `/announcements`, `/billing`, `/company`, `/documents` et `/session-expired` restent exclus du cache de contenu.
+
 ## 15. SEO et pages publiques
 
 Fichiers:
@@ -1138,6 +1181,7 @@ Objectifs codes:
 - FAQ d'accueil avec composant local `Accordion` base sur `details/summary` accessible et donnees structurees JSON-LD `FAQPage`;
 - sections publiques avec surfaces alternees et cartes `dtsc-card` / `dtsc-card-alt` pour ameliorer la hierarchie visuelle en mode clair et sombre;
 - navigation publique par routes dediees avec onglet actif selon `pathname`;
+- recherche publique intelligente dans le header via `/api/public/search`, combinant l'index statique `lib/public-search.ts` et les publications admin publiees;
 - contenus corporate centralises dans `lib/public-site.ts`;
 - contexte DTSC issu du business plan: vision, mission, services, marche, organisation et approche commerciale;
 - publications administrables dans `PublicPublication` pour alimenter la page Ressources;
@@ -1154,7 +1198,7 @@ Pages publiques dediees:
 | `/solutions` | Offres concretes: chatbot, dashboards, applications metier, automatisation, RAG documentaire |
 | `/secteurs` | Secteurs cibles: assurances, sante, pharmacies, PME, ONG, education, finance |
 | `/projets` | Demonstrations et types de projets livrables |
-| `/ressources` | Ressources publiques statiques et publications admin publiees |
+| `/ressources` | Ressources publiques statiques, accordions par categorie et trois dernieres publications admin en cartes |
 | `/ressources/[slug]` | Lecture detaillee d'une publication admin publiee |
 | `/a-propos` | Presentation DTSC, vision, mission, business model et postes de l'organisation sans noms individuels |
 | `/contact` | Contact professionnel et inscription newsletter |
@@ -1193,6 +1237,7 @@ Mesures codees:
 - isolement RAG par `userId`;
 - verification des limites documentaires par plan actif;
 - rate limiting Upstash Redis optionnel avec fallback memoire sur `/api/chat`, `/api/auth/sign-in`, `/api/auth/sign-up`, `/api/public/contact`, `/api/public/newsletter`;
+- service worker PWA limite aux assets statiques: les API, routes d'authentification et pages privees ne sont pas cachees;
 - limites quotidiennes chat par utilisateur;
 - erreurs generiques cote API pour eviter la fuite d'informations sensibles.
 

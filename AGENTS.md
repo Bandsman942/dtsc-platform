@@ -65,6 +65,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Si une modification ajoute ou change une intégration externe, documenter les secrets requis, le flux d'authentification, les endpoints appelés, les fallbacks et les règles de sécurité.
 - Les constantes partagées avec le client doivent rester dans un fichier neutre sans logique serveur, par exemple `lib/session-config.ts`.
 - Les pages publiques importantes doivent rester dans `app/sitemap.ts`, `app/robots.ts` et avoir des métadonnées SEO cohérentes.
+- Le service worker PWA ne doit jamais mettre en cache les réponses `/api/*`, les pages privées HTML, les routes d'authentification ou des données utilisateur; limiter le cache aux assets statiques et à `/offline`.
 - Les contenus publics administrables doivent passer par `PublicPublication`, des routes API `ADMIN` uniquement, une validation Zod et une journalisation `AuditLog`.
 - Les contenus publics riches doivent être nettoyés avec `sanitizeRichHtml` avant stockage ou rendu; ne jamais rendre un HTML admin sans nettoyage serveur.
 - Les onglets de la landing page doivent correspondre à des routes publiques dédiées; l'état actif doit se baser sur le `pathname`, pas sur un scroll de sections.

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { dtsc } from "@/lib/dtsc";
@@ -18,6 +18,8 @@ const appUrl = process.env.APP_URL || "https://dtsc-platform.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
+  applicationName: "DTSC Platform",
+  manifest: "/manifest.webmanifest",
   title: {
     default: "DTSC Platform | Data, IA et transformation digitale",
     template: "%s | DTSC Platform",
@@ -81,9 +83,22 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "/favicon.ico",
-    apple: "/icon.png",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
+  appleWebApp: {
+    capable: true,
+    title: "DTSC",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0B1220",
 };
 
 export default function RootLayout({

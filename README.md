@@ -17,6 +17,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Prisma ORM
 - OpenAI Responses API côté serveur
 - Auth maison par cookie signé HTTP-only
+- PWA privée installable côté espace client
 - Déploiement Vercel
 - GitHub Actions CI/CD
 
@@ -31,8 +32,11 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Sections publiques harmonisées avec bandes visuelles alternées et cartes contrastées pour éviter la confusion entre blocs et arrière-plan
 - Pages publiques dédiées avec onglet actif, contenus DTSC issus du business plan et sources vérifiables
 - Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
+- Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
 - Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
 - Publications publiques interactives: likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
+- Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
+- Recherche intelligente sur les pages publiques via le header du site
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -82,6 +86,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local
 - Headers de sécurité globaux, blocage des requêtes cross-origin mutantes et protection contre l'en-tête `x-middleware-subrequest`
 - Validation des inputs avec Zod
+- PWA avec manifest, icônes, page hors ligne et service worker qui cache uniquement les assets statiques, jamais les API ni les pages privées
 
 ## Variables D'environnement
 
@@ -290,6 +295,8 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 
 Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées en format web, les prévisualiser avant publication, les repositionner dans le corps de la publication via l'éditeur riche et retirer une image en cliquant dessus puis sur l'icône de suppression.
 
+Le catalogue des articles et brouillons utilise une recherche intelligente instantanée et une pagination côté interface pour éviter une page Administration trop longue.
+
 Champs principaux:
 
 - titre;
@@ -300,9 +307,21 @@ Champs principaux:
 - libellé visuel;
 - statut publié/brouillon.
 
-Seules les publications marquées comme publiées sont visibles publiquement. Les contenus institutionnels fixes sont centralisés dans `lib/public-site.ts`.
+Seules les publications marquées comme publiées sont visibles publiquement. Dans `/ressources`, elles sont regroupées par catégorie dans des accordions, tandis que les cartes visibles présentent seulement les 3 derniers contenus publiés. Les contenus institutionnels fixes sont centralisés dans `lib/public-site.ts` et l'index de recherche publique dans `lib/public-search.ts`.
 
 Les utilisateurs connectés peuvent liker/disliker, commenter et répondre aux commentaires sur une publication publique. Un utilisateur peut modifier son propre commentaire dans la fenêtre configurée par l'admin; seul `ADMIN` peut supprimer un commentaire.
+
+## PWA
+
+DTSC Platform est installable comme application depuis l'espace privé authentifié.
+
+- Manifest: `app/manifest.ts`
+- Start URL: `/dashboard`
+- Service worker: `public/sw.js`
+- Page hors ligne: `/offline`
+- Icônes: `public/icons/icon-192x192.png`, `public/icons/icon-512x512.png`, `public/icons/maskable-icon-512x512.png`, `public/icons/apple-touch-icon.png`
+
+Le prompt d'installation est rendu uniquement dans le shell privé. Le service worker ne met pas en cache les réponses `/api/*`, les routes d'authentification ni les pages privées contenant des données utilisateur; il cache seulement les assets statiques, icônes, images publiques, polices, JS et CSS.
 
 ## Structure
 

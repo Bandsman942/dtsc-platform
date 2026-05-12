@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { Edit3, Globe2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ListControls } from "@/components/ui/list-controls";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 import { sanitizeRichHtml } from "@/lib/rich-content";
 
@@ -28,6 +30,22 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
   const [editing, setEditing] = useState<Publication | null>(null);
   const [createPreviewHtml, setCreatePreviewHtml] = useState("");
   const [editingPreviewHtml, setEditingPreviewHtml] = useState("");
+  const getPublicationSearchText = useCallback((publication: Publication) => {
+    return [
+      publication.title,
+      publication.slug,
+      publication.excerpt,
+      publication.category,
+      formatEnumLabel(publication.category),
+      publication.published ? "publie publié publication" : "brouillon draft",
+      publication.createdAt,
+    ].join(" ");
+  }, []);
+  const publicationList = useSmartList({
+    items: publications,
+    pageSize: 5,
+    getSearchText: getPublicationSearchText,
+  });
 
   async function submit(event: FormEvent<HTMLFormElement>, publicationId?: string) {
     event.preventDefault();
@@ -99,7 +117,26 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
         </div>
 
         <div className="space-y-3">
-          {publications.map((publication) => (
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Catalogue public</p>
+            <h3 className="mt-2 text-xl font-black text-dtsc-ink">Articles publiés et brouillons</h3>
+            <p className="mt-2 text-sm leading-6 text-dtsc-muted">
+              Recherchez instantanément par titre, statut, catégorie ou slug, puis parcourez la liste paginée.
+            </p>
+          </div>
+          {publications.length > 0 && (
+            <ListControls
+              query={publicationList.query}
+              onQueryChange={publicationList.setQuery}
+              page={publicationList.page}
+              pageCount={publicationList.pageCount}
+              totalCount={publicationList.totalCount}
+              filteredCount={publicationList.filteredCount}
+              placeholder="Rechercher un article, brouillon, statut ou slug..."
+              onPageChange={publicationList.setPage}
+            />
+          )}
+          {publicationList.paginatedItems.map((publication) => (
             <article key={publication.id} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -122,6 +159,11 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               <p className="mt-3 line-clamp-2 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
             </article>
           ))}
+          {publications.length > 0 && publicationList.filteredCount === 0 && (
+            <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">
+              Aucun contenu ne correspond à cette recherche.
+            </p>
+          )}
           {!publications.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">Aucune publication publique enregistrée.</p>}
         </div>
       </div>

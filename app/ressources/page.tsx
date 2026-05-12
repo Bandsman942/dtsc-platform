@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, FileText, Megaphone, Newspaper } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { prisma } from "@/lib/prisma";
 import { formatEnumLabel } from "@/lib/labels";
 import { trustedSources } from "@/lib/public-site";
@@ -27,8 +28,15 @@ export default async function RessourcesPage() {
     include: {
       author: { select: { name: true, jobTitle: true, avatarUrl: true, publicProfileConsent: true } },
     },
-    take: 24,
+    take: 80,
   });
+  const latestPublications = publications.slice(0, 3);
+  const groupedPublications = publications.reduce<Record<string, typeof publications>>((groups, publication) => {
+    const label = formatEnumLabel(publication.category);
+    groups[label] = [...(groups[label] || []), publication];
+    return groups;
+  }, {});
+  const publicationGroups = Object.entries(groupedPublications);
 
   return (
     <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
@@ -68,31 +76,86 @@ export default async function RessourcesPage() {
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications DTSC</p>
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Contenus publiés depuis l&apos;administration</h2>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {publications.map((publication) => (
-              <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover p-6">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)}</p>
-                <h3 className="mt-3 text-xl font-black text-dtsc-ink">{publication.title}</h3>
-                <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
-                {publication.author?.publicProfileConsent && (
-                  <span className="mt-5 flex items-center gap-3 text-xs font-bold text-dtsc-muted">
-                    <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-dtsc-soft text-dtsc-blue">
-                      {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    {publication.author.name}
-                  </span>
-                )}
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
-                  Ouvrir
-                  <ArrowRight className="h-4 w-4" />
-                </span>
-              </Link>
-            ))}
-            {!publications.length && (
-              <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 text-sm leading-7 text-dtsc-muted shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
-                Aucune publication publique n&apos;est encore publiée. L&apos;administrateur peut ajouter des articles, guides, annonces et cas pratiques depuis le module Administration.
+          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="dtsc-card overflow-hidden">
+              <div className="border-b border-dtsc-border p-6">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Explorer par catégorie</p>
+                <h3 className="mt-2 text-2xl font-black text-dtsc-ink">Tous les contenus publiés</h3>
+                <p className="mt-2 text-sm leading-6 text-dtsc-muted">
+                  Ouvrez une catégorie pour accéder directement aux articles, annonces, guides et cas pratiques disponibles.
+                </p>
               </div>
-            )}
+              {publicationGroups.length > 0 ? (
+                <Accordion>
+                  {publicationGroups.map(([category, items], index) => (
+                    <AccordionItem
+                      key={category}
+                      defaultOpen={index === 0}
+                      title={
+                        <span className="flex w-full items-center justify-between gap-3">
+                          <span>{category}</span>
+                          <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">
+                            {items.length}
+                          </span>
+                        </span>
+                      }
+                    >
+                      <div className="grid gap-3">
+                        {items.map((publication) => (
+                          <Link
+                            key={publication.id}
+                            href={`/ressources/${publication.slug}`}
+                            className="group rounded-xl border border-dtsc-border bg-dtsc-page p-4 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft"
+                          >
+                            <p className="text-sm font-black text-dtsc-ink">{publication.title}</p>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-dtsc-muted">{publication.excerpt}</p>
+                            <span className="mt-3 inline-flex items-center gap-2 text-xs font-black text-dtsc-blue underline underline-offset-4">
+                              Lire l&apos;article
+                              <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              ) : (
+                <p className="p-6 text-sm leading-7 text-dtsc-muted">
+                  Aucune publication publique n&apos;est encore publiée. L&apos;administrateur peut ajouter des articles, guides, annonces et cas pratiques depuis le module Administration.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">À la une</p>
+                <h3 className="mt-2 text-2xl font-black text-dtsc-ink">Les 3 dernières publications</h3>
+                <p className="mt-2 text-sm leading-6 text-dtsc-muted">
+                  Les cartes mettent en avant les nouveautés récentes. La liste complète reste accessible par catégorie.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                {latestPublications.map((publication) => (
+                  <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover p-6">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)}</p>
+                    <h3 className="mt-3 text-xl font-black text-dtsc-ink">{publication.title}</h3>
+                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
+                    {publication.author?.publicProfileConsent && (
+                      <span className="mt-5 flex items-center gap-3 text-xs font-bold text-dtsc-muted">
+                        <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-dtsc-soft text-dtsc-blue">
+                          {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        {publication.author.name}
+                      </span>
+                    )}
+                    <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                      Ouvrir
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
