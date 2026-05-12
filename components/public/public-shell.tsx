@@ -67,6 +67,7 @@ export function PublicFooter() {
           <div className="mt-3 grid gap-2">
             <Link href="/conditions-utilisation" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Conditions d&apos;utilisation</Link>
             <Link href="/politique-confidentialite" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Politique de confidentialité</Link>
+            <Link href="/politique-cookies" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Politique des cookies</Link>
           </div>
         </div>
         <div>

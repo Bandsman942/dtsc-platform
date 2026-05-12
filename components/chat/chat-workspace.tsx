@@ -1,21 +1,30 @@
 "use client";
 
-import { Copy, FolderKanban, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Copy, FolderKanban, FolderPlus, Loader2, Menu, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { ShareActionButton } from "@/components/ui/share-action-button";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { cn } from "@/lib/utils";
 
 type ConversationSummary = {
   id: string;
   title: string;
+  projectId: string | null;
   projectName: string | null;
+  project?: { id: string; name: string } | null;
   updatedAt: string;
   _count?: { messages: number };
+};
+
+type ConversationProject = {
+  id: string;
+  name: string;
+  _count?: { conversations: number };
 };
 
 type ChatMessage = {
@@ -27,10 +36,12 @@ type ChatMessage = {
 
 export function ChatWorkspace({
   initialConversations,
+  initialProjects,
   initialConversationId,
   usage,
 }: {
   initialConversations: ConversationSummary[];
+  initialProjects: ConversationProject[];
   initialConversationId?: string;
   usage: {
     messagesToday: number;
@@ -41,6 +52,7 @@ export function ChatWorkspace({
   };
 }) {
   const [conversations, setConversations] = useState(initialConversations);
+  const [projects, setProjects] = useState(initialProjects);
   const [activeConversationId, setActiveConversationId] = useState(
     initialConversationId || initialConversations[0]?.id || ""
   );
@@ -51,6 +63,9 @@ export function ChatWorkspace({
   const [dailyUsage, setDailyUsage] = useState(usage);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);
+  const [selectedProject, setSelectedProject] = useState<ConversationProject | null>(null);
   const messageScrollRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = useMemo(
@@ -61,15 +76,19 @@ export function ChatWorkspace({
     items: conversations,
     pageSize: 8,
     getSearchText: (conversation) =>
-      `${conversation.title} ${conversation.projectName || ""} ${conversation.updatedAt} ${conversation._count?.messages ?? 0}`,
+      `${conversation.title} ${conversation.project?.name || conversation.projectName || ""} ${conversation.updatedAt} ${conversation._count?.messages ?? 0}`,
   });
   const groupedConversations = useMemo(() => {
-    return conversationList.paginatedItems.reduce<Record<string, ConversationSummary[]>>((groups, conversation) => {
-      const key = conversation.projectName?.trim() || "Sans projet";
-      groups[key] = [...(groups[key] || []), conversation];
+    const initialGroups = projects.reduce<Record<string, ConversationSummary[]>>((groups, project) => {
+      groups[project.name] = [];
       return groups;
     }, {});
-  }, [conversationList.paginatedItems]);
+    return conversationList.paginatedItems.reduce<Record<string, ConversationSummary[]>>((groups, conversation) => {
+      const key = conversation.project?.name || conversation.projectName?.trim() || "Sans projet";
+      groups[key] = [...(groups[key] || []), conversation];
+      return groups;
+    }, initialGroups);
+  }, [conversationList.paginatedItems, projects]);
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -92,11 +111,17 @@ export function ChatWorkspace({
   }, [messages, isStreaming]);
 
   async function refreshConversations(nextId?: string) {
-    const response = await fetch("/api/conversations");
-    const data = await response.json();
+    const [conversationResponse, projectResponse] = await Promise.all([
+      fetch("/api/conversations"),
+      fetch("/api/conversation-projects"),
+    ]);
+    const data = await conversationResponse.json();
+    const projectData = await projectResponse.json();
     setConversations(data.conversations ?? []);
+    setProjects(projectData.projects ?? []);
     if (nextId) {
       setActiveConversationId(nextId);
+      setHistoryOpen(false);
     }
   }
 
@@ -113,7 +138,7 @@ export function ChatWorkspace({
     }
     const formData = new FormData(event.currentTarget);
     const title = String(formData.get("title") || "").trim();
-    const projectName = String(formData.get("projectName") || "").trim();
+    const projectIdValue = String(formData.get("projectId") || "").trim();
     if (!title) {
       return;
     }
@@ -121,10 +146,41 @@ export function ChatWorkspace({
     await fetch(`/api/conversations/${activeConversation.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, projectName }),
+      body: JSON.stringify({ title, projectId: projectIdValue || null }),
     });
     setRenameOpen(false);
     await refreshConversations(activeConversation.id);
+  }
+
+  async function saveProject(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = String(new FormData(event.currentTarget).get("name") || "").trim();
+    if (!name) {
+      return;
+    }
+
+    const endpoint = selectedProject && projectDialog === "rename"
+      ? `/api/conversation-projects/${selectedProject.id}`
+      : "/api/conversation-projects";
+    await fetch(endpoint, {
+      method: selectedProject && projectDialog === "rename" ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setProjectDialog(null);
+    setSelectedProject(null);
+    await refreshConversations(activeConversationId);
+  }
+
+  async function deleteProject() {
+    if (!selectedProject) {
+      return;
+    }
+
+    await fetch(`/api/conversation-projects/${selectedProject.id}`, { method: "DELETE" });
+    setProjectDialog(null);
+    setSelectedProject(null);
+    await refreshConversations(activeConversationId);
   }
 
   async function deleteConversation() {
@@ -215,16 +271,29 @@ export function ChatWorkspace({
   const tokenPercent = Math.min(100, Math.round((dailyUsage.tokensToday / dailyUsage.dailyTokenLimit) * 100));
   const limitReached = dailyUsage.messagesToday >= dailyUsage.dailyMessageLimit || dailyUsage.tokensToday >= dailyUsage.dailyTokenLimit;
   const resetLabel = formatResetAt(dailyUsage.resetAt);
+  const activeConversationShareUrl = activeConversationId ? `/chat?conversationId=${activeConversationId}` : "/chat";
 
-  return (
-    <div className="grid h-[calc(100vh-7rem)] min-h-0 gap-4 lg:grid-cols-[320px_1fr]">
-      <aside className="dtsc-card flex min-h-0 flex-col overflow-hidden p-4">
-        <Button onClick={createConversation} className="h-11 w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+  const historyPanel = (
+    <aside className="dtsc-card flex h-full min-h-0 flex-col overflow-hidden p-4">
+      <div className="flex items-center justify-between gap-2">
+        <Button onClick={createConversation} className="h-11 flex-1 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <Plus className="h-4 w-4" />
           Nouvelle conversation
         </Button>
-        <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-          {conversations.length > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setProjectDialog("create")}
+          className="h-11 w-11 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
+          aria-label="Créer un dossier de conversations"
+        >
+          <FolderPlus className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {conversations.length > 0 && (
+          <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
             <ListControls
               query={conversationList.query}
               onQueryChange={conversationList.setQuery}
@@ -232,20 +301,54 @@ export function ChatWorkspace({
               pageCount={conversationList.pageCount}
               totalCount={conversationList.totalCount}
               filteredCount={conversationList.filteredCount}
-              placeholder="Rechercher un chat..."
+              placeholder="Rechercher une conversation..."
               onPageChange={conversationList.setPage}
             />
-          )}
-          {Object.entries(groupedConversations).map(([projectName, items]) => (
+          </div>
+        )}
+        {Object.entries(groupedConversations).map(([projectName, items]) => {
+          const project = projects.find((item) => item.name === projectName);
+          return (
             <div key={projectName} className="space-y-2">
-              <div className="flex items-center gap-2 px-2 pt-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-dtsc-muted">
-                <FolderKanban className="h-3.5 w-3.5 text-cyan-500" />
-                {projectName}
+              <div className="flex items-center justify-between gap-2 px-2 pt-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-dtsc-muted">
+                <span className="flex min-w-0 items-center gap-2">
+                  <FolderKanban className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
+                  <span className="truncate">{projectName}</span>
+                </span>
+                {project && (
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProject(project);
+                        setProjectDialog("rename");
+                      }}
+                      className="rounded-lg p-1 text-dtsc-blue hover:bg-dtsc-soft"
+                      aria-label={`Renommer ${project.name}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProject(project);
+                        setProjectDialog("delete");
+                      }}
+                      className="rounded-lg p-1 text-red-600 hover:bg-red-50"
+                      aria-label={`Supprimer ${project.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                )}
               </div>
               {items.map((conversation) => (
                 <button
                   key={conversation.id}
-                  onClick={() => setActiveConversationId(conversation.id)}
+                  onClick={() => {
+                    setActiveConversationId(conversation.id);
+                    setHistoryOpen(false);
+                  }}
                   className={cn(
                     "w-full rounded-xl px-3 py-3 text-left text-sm transition",
                     activeConversationId === conversation.id
@@ -259,31 +362,57 @@ export function ChatWorkspace({
                   </span>
                 </button>
               ))}
+              {!items.length && (
+                <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
+                  Dossier vide. Ajoutez une conversation via le bouton modifier d&apos;une conversation.
+                </p>
+              )}
             </div>
-          ))}
-          {!conversationList.filteredCount && conversations.length > 0 && (
-            <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
-              Aucune conversation ne correspond à votre recherche.
-            </p>
-          )}
+          );
+        })}
+        {!conversationList.filteredCount && conversations.length > 0 && (
+          <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
+            Aucune conversation ne correspond à votre recherche.
+          </p>
+        )}
+      </div>
+      <div className="mt-4 shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
+        <p className="font-black text-dtsc-ink">Usage journalier</p>
+        <div className="mt-3 space-y-3">
+          <UsageBar label="Messages" value={dailyUsage.messagesToday} limit={dailyUsage.dailyMessageLimit} percent={messagePercent} />
+          <UsageBar label="Tokens" value={dailyUsage.tokensToday} limit={dailyUsage.dailyTokenLimit} percent={tokenPercent} />
         </div>
-        <div className="mt-4 shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
-          <p className="font-black text-dtsc-ink">Usage journalier</p>
-          <div className="mt-3 space-y-3">
-            <UsageBar label="Messages" value={dailyUsage.messagesToday} limit={dailyUsage.dailyMessageLimit} percent={messagePercent} />
-            <UsageBar label="Tokens" value={dailyUsage.tokensToday} limit={dailyUsage.dailyTokenLimit} percent={tokenPercent} />
+        {limitReached && (
+          <div className="mt-3 rounded-xl bg-red-50 p-3 font-bold text-red-700">
+            Limite atteinte: l&apos;envoi est bloqué jusqu&apos;au {resetLabel}.
           </div>
-          {limitReached && (
-            <div className="mt-3 rounded-xl bg-red-50 p-3 font-bold text-red-700">
-              Limite atteinte: l&apos;envoi est bloqué jusqu&apos;au {resetLabel}.
+        )}
+      </div>
+    </aside>
+  );
+
+  return (
+    <div className="relative grid h-[calc(100dvh-8.5rem)] min-h-[620px] gap-4 lg:h-[calc(100vh-7rem)] lg:min-h-0 lg:grid-cols-[320px_1fr]">
+      <div className="hidden min-h-0 lg:block">{historyPanel}</div>
+      {historyOpen && (
+        <div className="fixed inset-0 z-40 bg-[#001736]/55 backdrop-blur-sm lg:hidden" onClick={() => setHistoryOpen(false)}>
+          <div className="h-full w-[min(92vw,24rem)] p-3" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-2 flex justify-end">
+              <Button type="button" size="icon" variant="outline" onClick={() => setHistoryOpen(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-          )}
+            {historyPanel}
+          </div>
         </div>
-      </aside>
+      )}
 
       <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-          <div>
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4">
+          <Button type="button" variant="outline" size="icon" onClick={() => setHistoryOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden" aria-label="Ouvrir les conversations">
+            <Menu className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0 flex-1">
             <h1 className="text-xl font-bold text-[#001736]">
               {activeConversation?.title || "Assistant DTSC"}
             </h1>
@@ -292,7 +421,15 @@ export function ChatWorkspace({
               <span className="text-xs font-medium text-slate-500">En ligne</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <ShareActionButton
+              title={activeConversation?.title || "Conversation DTSC"}
+              text="Conversation DTSC Platform"
+              url={activeConversationShareUrl}
+              label="Partager"
+              size="icon"
+              className="border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
+            />
             <Button variant="ghost" size="icon" onClick={() => setRenameOpen(true)} disabled={!activeConversation}>
               <Pencil className="h-4 w-4" />
             </Button>
@@ -363,6 +500,9 @@ export function ChatWorkspace({
         </div>
 
         <form onSubmit={sendMessage} className="border-t border-slate-200 bg-white p-4">
+          <p className="mb-2 text-center text-[0.72rem] font-medium text-slate-500">
+            Le chatbot DTSC peut se tromper. Vérifiez les informations importantes avant toute décision.
+          </p>
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
             <Input
               value={input}
@@ -383,13 +523,52 @@ export function ChatWorkspace({
       <Dialog open={renameOpen} title="Renommer la conversation" onClose={() => setRenameOpen(false)}>
         <form onSubmit={renameConversation} className="space-y-3">
           <Input name="title" defaultValue={activeConversation?.title || ""} required placeholder="Titre de la conversation" />
-          <Input
-            name="projectName"
-            defaultValue={activeConversation?.projectName || ""}
-            placeholder="Dossier ou projet, ex. Reporting ventes"
-          />
+          <select
+            name="projectId"
+            defaultValue={activeConversation?.projectId || activeConversation?.project?.id || ""}
+            className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink outline-none focus:border-cyan-400"
+          >
+            <option value="">Sans dossier</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>{project.name}</option>
+            ))}
+          </select>
           <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
         </form>
+      </Dialog>
+      <Dialog
+        open={projectDialog === "create" || projectDialog === "rename"}
+        title={projectDialog === "rename" ? "Renommer le dossier" : "Créer un dossier"}
+        onClose={() => {
+          setProjectDialog(null);
+          setSelectedProject(null);
+        }}
+      >
+        <form onSubmit={saveProject} className="space-y-3">
+          <Input name="name" defaultValue={selectedProject?.name || ""} placeholder="Nom du dossier ou projet" required />
+          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+        </form>
+      </Dialog>
+      <Dialog
+        open={projectDialog === "delete"}
+        title="Supprimer le dossier"
+        description="Les conversations ne seront pas supprimées. Elles seront replacées dans Sans dossier."
+        onClose={() => {
+          setProjectDialog(null);
+          setSelectedProject(null);
+        }}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setProjectDialog(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              Annuler
+            </Button>
+            <Button type="button" variant="destructive" onClick={deleteProject} className="rounded-xl">
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression du dossier {selectedProject?.name}.</p>
       </Dialog>
       <Dialog
         open={deleteOpen}

@@ -17,6 +17,7 @@ const publicRoutes = [
   { path: "/ia-entreprise", priority: 0.86 },
   { path: "/conditions-utilisation", priority: 0.45 },
   { path: "/politique-confidentialite", priority: 0.45 },
+  { path: "/politique-cookies", priority: 0.45 },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

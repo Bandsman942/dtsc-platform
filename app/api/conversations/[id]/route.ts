@@ -42,16 +42,31 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid conversation update" }, { status: 400 });
   }
 
-  if (!body.data.title && typeof body.data.projectName === "undefined") {
+  if (!body.data.title && typeof body.data.projectName === "undefined" && typeof body.data.projectId === "undefined") {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const { id } = await params;
+  let projectName = body.data.projectName || null;
+  const projectId = body.data.projectId || null;
+  if (projectId) {
+    const project = await prisma.conversationProject.findFirst({
+      where: { id: projectId, userId: session.userId },
+      select: { id: true, name: true },
+    });
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+    projectName = project.name;
+  }
+
   const conversation = await prisma.conversation.updateMany({
     where: { id, userId: session.userId },
     data: {
       ...(body.data.title ? { title: body.data.title } : {}),
-      ...(typeof body.data.projectName !== "undefined" ? { projectName: body.data.projectName || null } : {}),
+      ...(typeof body.data.projectName !== "undefined" || typeof body.data.projectId !== "undefined"
+        ? { projectName, projectId }
+        : {}),
     },
   });
 
@@ -64,7 +79,7 @@ export async function PATCH(req: Request, { params }: Params) {
     statusCode: 200,
     userId: session.userId,
     startedAt,
-    metadata: { action: "conversation_update", conversationId: id, projectName: body.data.projectName || null },
+    metadata: { action: "conversation_update", conversationId: id, projectId, projectName },
   });
 
   return NextResponse.json({ ok: true });

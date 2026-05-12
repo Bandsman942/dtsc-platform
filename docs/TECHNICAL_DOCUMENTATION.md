@@ -14,7 +14,7 @@ Objectifs couverts par le code actuel:
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
-- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec recherche instantanee, pagination, images optimisees, reactions, commentaires et reponses aux commentaires;
+- publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec recherche instantanee, pagination, images optimisees, partage, reactions, commentaires et reponses aux commentaires;
 - recherche intelligente publique via le header pour orienter les visiteurs vers les pages, services, solutions et publications utiles;
 - page Ressources organisee par categories en accordion, avec seulement les trois dernieres publications mises en avant sous forme de cartes;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
@@ -23,7 +23,7 @@ Objectifs couverts par le code actuel:
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
-- chatbot OpenAI avec historique des conversations, classement par dossier/projet, streaming, choix de modele LLM prefere par utilisateur et limites d'usage;
+- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, streaming, choix de modele LLM prefere par utilisateur et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires et reactions;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
@@ -215,6 +215,7 @@ Modeles actifs:
 | `CompanyProfile` | Profil entreprise prive d'un utilisateur: organisation, secteur, processus, donnees, objectifs, KPI et poste |
 | `CompanyActivity` | Activites professionnelles declarees par l'utilisateur pour contextualiser le chatbot |
 | `Conversation` | Conversation chatbot rattachee a un utilisateur |
+| `ConversationProject` | Dossier/projet utilisateur pour classer les conversations chatbot |
 | `Message` | Message utilisateur/assistant/systeme |
 | `UsageLog` | Suivi tokens, modele et cout estime |
 | `Organization` | Base organisationnelle prevue |
@@ -249,6 +250,7 @@ Champs profil utilisateur ajoutes:
 Champs conversation ajoutes:
 
 - `projectName`: dossier ou projet libre permettant de classer l'historique des conversations par sujet.
+- `projectId`: lien vers `ConversationProject` pour les dossiers geres par CRUD.
 
 Enums:
 
@@ -384,6 +386,12 @@ Flux:
 12. Streaming du texte vers le client.
 13. Sauvegarde de la reponse assistant, du `UsageLog` et du log API.
 
+Interface:
+
+- sur mobile/PWA, l'historique des conversations s'ouvre dans un panneau lateral via un bouton menu, afin que la conversation active garde l'espace principal;
+- les dossiers/projets peuvent etre crees, renommes et supprimes depuis l'historique; supprimer un dossier ne supprime pas les conversations, il les remet dans `Sans dossier`;
+- le fil de conversation affiche un avertissement indiquant que le chatbot peut se tromper et que les reponses importantes doivent etre verifiees.
+
 Le contexte Entreprise est strictement rattache au `userId` connecte. Il contient uniquement les informations saisies par l'utilisateur dans `/company`: organisation, poste, responsabilites, activites, processus, outils, donnees, contraintes, objectifs et KPI.
 
 Si des documents utilisateur sont indexes:
@@ -466,6 +474,10 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `GET` | `/api/conversations/[id]` | session proprietaire | Detail conversation/messages |
 | `PATCH` | `/api/conversations/[id]` | session proprietaire | Renommer conversation et renseigner le dossier/projet |
 | `DELETE` | `/api/conversations/[id]` | session proprietaire | Supprimer conversation |
+| `GET` | `/api/conversation-projects` | session | Liste des dossiers/projets de conversations |
+| `POST` | `/api/conversation-projects` | session | Creer un dossier/projet |
+| `PATCH` | `/api/conversation-projects/[id]` | proprietaire | Renommer un dossier/projet |
+| `DELETE` | `/api/conversation-projects/[id]` | proprietaire | Supprimer un dossier et retirer le classement des conversations |
 
 ### Support
 
@@ -1190,7 +1202,7 @@ Fichiers:
 - `app/layout.tsx`
 - pages publiques principales: `/`, `/services`, `/solutions`, `/secteurs`, `/projets`, `/ressources`, `/ressources/[slug]`, `/a-propos`, `/contact`
 - pages ressources historiques: `/data-afrique`, `/bi-kpi`, `/ia-entreprise`
-- pages legales: `/conditions-utilisation`, `/politique-confidentialite`
+- pages legales: `/conditions-utilisation`, `/politique-confidentialite`, `/politique-cookies`
 
 Objectifs codes:
 
@@ -1223,6 +1235,9 @@ Pages publiques dediees:
 | `/ressources/[slug]` | Lecture detaillee d'une publication admin publiee |
 | `/a-propos` | Presentation DTSC, vision, mission, business model et postes de l'organisation sans noms individuels |
 | `/contact` | Contact professionnel et inscription newsletter |
+| `/politique-cookies` | Cookies essentiels, stockage local, PWA, statistiques publiques et choix utilisateur |
+
+La politique des cookies decrit les cookies strictement necessaires, le stockage local, la PWA, les statistiques de visites publiques et les futurs traceurs non essentiels. Elle s'appuie sur les recommandations CNIL et rappelle qu'aucun cookie publicitaire n'est utilise actuellement.
 
 Sources publiques actuellement utilisees:
 

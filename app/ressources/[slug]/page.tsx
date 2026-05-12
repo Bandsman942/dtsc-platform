@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PublicationEngagement } from "@/components/public/publication-engagement";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { ShareActionButton } from "@/components/ui/share-action-button";
 import { getCurrentUser } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
@@ -67,17 +68,25 @@ export default async function PublicationPage({ params }: Params) {
             <p className="mt-8 text-sm font-black uppercase tracking-[0.18em] text-cyan-200">{formatEnumLabel(publication.category)}</p>
             <h1 className="mt-4 text-4xl font-black leading-tight sm:text-6xl">{publication.title}</h1>
             <p className="mt-5 text-lg leading-8 text-blue-50">{publication.excerpt}</p>
-            <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-blue-100">
-              {publication.author?.publicProfileConsent && (
-                <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/15 text-sm font-black text-white">
-                  {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-sm text-blue-100">
+              <div className="flex flex-wrap items-center gap-3">
+                {publication.author?.publicProfileConsent && (
+                  <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/15 text-sm font-black text-white">
+                    {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <span>
+                  Publié le {publication.createdAt.toLocaleDateString("fr-FR")}{" "}
+                  {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}
+                  {publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
                 </span>
-              )}
-              <span>
-                Publié le {publication.createdAt.toLocaleDateString("fr-FR")}{" "}
-                {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}
-                {publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
-              </span>
+              </div>
+              <ShareActionButton
+                title={publication.title}
+                text={publication.excerpt}
+                url={`/ressources/${publication.slug}`}
+                className="border-white/20 bg-white/10 text-white hover:bg-white/20"
+              />
             </div>
           </div>
         </section>

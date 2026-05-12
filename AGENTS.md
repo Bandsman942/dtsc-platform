@@ -60,6 +60,9 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les blocs de données qui peuvent grandir doivent utiliser la barre réutilisable `ListControls` avec `useSmartList` pour recherche accent-insensible et pagination côté UI.
 - Les layouts publics mobiles doivent rester `overflow-x-hidden` avec des conteneurs `min-w-0`; vérifier en particulier le header public, le logo et les CTA pour éviter un rendu en deux largeurs sur navigateurs mobiles.
 - L'historique du chatbot doit rester scrollable et peut être classé par `Conversation.projectName`; toute évolution du champ doit rester propriétaire `userId`.
+- Les dossiers de conversations sont représentés par `ConversationProject`; supprimer un dossier ne doit pas supprimer les conversations, seulement retirer leur classement.
+- Sur mobile/PWA, le chat doit garder la conversation active en plein espace principal et afficher l'historique via un panneau menu, pas par empilement qui écrase le fil.
+- Toute fonctionnalité de partage doit utiliser l'API `navigator.share` si disponible et copier le lien en fallback, sans exposer de données privées au-delà de l'URL demandée.
 - Les notifications utilisateur doivent respecter `notifySupportEnabled`, `notifyUsageEnabled`, `notifyBroadcastEnabled` et `pushNotificationsEnabled`.
 - Les notifications navigateur/PWA ne doivent pas contourner l'authentification et ne doivent afficher que des extraits non sensibles.
 - Toute évolution fonctionnelle importante doit être reflétée dans `DTSC_SYSTEM_PROMPT` dans `lib/openai.ts`, en distinguant clairement les fonctionnalités actives de la roadmap.

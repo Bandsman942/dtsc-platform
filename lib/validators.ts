@@ -23,6 +23,11 @@ export const chatRequestSchema = z.object({
 export const conversationUpdateSchema = z.object({
   title: z.string().min(2).max(120).optional(),
   projectName: z.string().max(120).optional().or(z.literal("")),
+  projectId: z.string().max(120).optional().nullable().or(z.literal("")),
+});
+
+export const conversationProjectSchema = z.object({
+  name: z.string().trim().min(2).max(80),
 });
 
 export const accountPreferencesSchema = z.object({

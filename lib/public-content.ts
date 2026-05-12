@@ -25,6 +25,8 @@ export const legalSources = [
   { label: "Règlement (UE) 2016/679 - RGPD, texte officiel EUR-Lex", href: "https://eur-lex.europa.eu/legal-content/EN-FR/TXT/?uri=CELEX%3A32016R0679" },
   { label: "Comité européen de la protection des données - Guidelines on transparency", href: "https://www.edpb.europa.eu/our-work-tools/our-documents/article-29-working-party-guidelines-transparency-under-regulation_en" },
   { label: "CNIL - RGPD: comprendre et agir", href: "https://www.cnil.fr/fr/reglement-europeen-protection-donnees" },
+  { label: "CNIL - Les règles à suivre pour les cookies", href: "https://www.cnil.fr/fr/cookies-et-autres-traceurs/regles/cookies" },
+  { label: "CNIL - Questions-réponses cookies et autres traceurs", href: "https://www.cnil.fr/fr/cookies-et-autres-traceurs/regles/cookies/FAQ" },
 ];
 
 export const publicPages: Record<string, PublicPageContent> = {
@@ -250,6 +252,52 @@ export const legalPages: Record<string, PublicPageContent> = {
         text:
           "La plateforme peut s'appuyer sur des services techniques comme l'hébergement Vercel, la base Neon PostgreSQL et l'API OpenAI côté serveur. Ces prestataires interviennent pour l'hébergement, la persistance des données, l'inférence IA ou la sécurité applicative. DTSC doit veiller à sélectionner des prestataires présentant des garanties appropriées et à documenter les traitements lorsque le cadre juridique l'exige.",
         bullets: ["Hébergement cloud", "Base de données PostgreSQL", "Traitement IA côté serveur", "Documentation des garanties prestataires"],
+      },
+    ],
+  },
+  cookies: {
+    eyebrow: "Cookies et préférences",
+    title: "Politique des cookies",
+    intro:
+      "Cette page explique les cookies, traceurs et stockages locaux utilisés par DTSC Platform pour faire fonctionner le site public, l'espace client et la PWA.",
+    narrative:
+      "DTSC Platform privilégie une approche sobre: aucun cookie publicitaire n'est nécessaire au fonctionnement actuel. Les traceurs strictement nécessaires servent à maintenir la session, la sécurité, les préférences d'interface et l'expérience PWA. Les statistiques de visites publiques sont enregistrées côté serveur pour mesurer l'impact du site, sans profilage publicitaire ni revente de données. Cette politique s'inspire des recommandations CNIL: information claire, refus aussi simple que l'acceptation pour les traceurs non essentiels, et possibilité de modifier ses choix.",
+    imageAlt: "Préférences cookies DTSC",
+    highlights: [
+      { label: "Publicité", value: "Aucune" },
+      { label: "Session", value: "Essentielle" },
+      { label: "Choix", value: "Modifiable" },
+    ],
+    sections: [
+      {
+        heading: "Cookies strictement nécessaires",
+        text:
+          "Le cookie de session sécurisé permet à un utilisateur connecté d'accéder à son espace privé sans ressaisir ses identifiants à chaque page. Il est HTTP-only, signé côté serveur et nécessaire à l'authentification. Sans ce cookie, les modules privés comme le dashboard, le chatbot, l'entreprise, le support ou l'administration ne peuvent pas fonctionner correctement.",
+        bullets: ["Session authentifiée", "Protection HTTP-only", "Accès aux routes privées", "Expiration de session pour sécurité"],
+      },
+      {
+        heading: "Préférences locales et PWA",
+        text:
+          "Certaines préférences peuvent être conservées localement dans le navigateur: thème clair/sombre, choix de reporter l'installation PWA, notifications visibles déjà affichées ou réglages d'interface. Ces informations améliorent l'expérience sans être utilisées pour du ciblage publicitaire. La PWA peut aussi mettre en cache des fichiers statiques afin de charger l'interface plus vite, mais elle ne cache pas les pages privées ni les réponses API contenant des données utilisateur.",
+        bullets: ["Thème et confort visuel", "Invitation PWA mémorisée", "Pas de cache API privée", "Page hors ligne sans données personnelles"],
+      },
+      {
+        heading: "Mesure d'audience et sécurité",
+        text:
+          "Les visites des pages publiques peuvent être comptabilisées côté serveur afin d'aider l'administrateur à suivre l'intérêt pour les contenus DTSC. Les journaux techniques peuvent aussi contenir l'adresse IP, l'agent utilisateur, la route appelée, le statut HTTP et la durée de traitement pour la sécurité, le diagnostic et la lutte contre les abus. Ces données ne servent pas à créer des profils publicitaires.",
+        bullets: ["Statistiques publiques agrégées", "Logs API critiques", "Détection d'erreurs et d'abus", "Aucune publicité ciblée"],
+      },
+      {
+        heading: "Cookies non essentiels et contrôle utilisateur",
+        text:
+          "Si DTSC ajoute plus tard des outils non essentiels comme analytics tiers, marketing, pixels sociaux, chat externe ou mesure publicitaire, ils devront être présentés clairement et soumis à un choix explicite lorsque le cadre applicable l'exige. Le refus devra rester aussi simple que l'acceptation, et l'utilisateur devra pouvoir revenir sur son choix.",
+        bullets: ["Information avant dépôt", "Consentement explicite si nécessaire", "Refus simple", "Retrait possible"],
+      },
+      {
+        heading: "Gérer ou supprimer les cookies",
+        text:
+          "L'utilisateur peut supprimer les cookies et données locales depuis les paramètres de son navigateur. Sur mobile, cette option se trouve généralement dans les paramètres du navigateur, rubrique confidentialité ou données de site. La suppression peut déconnecter l'utilisateur, réinitialiser le thème ou faire réapparaître certains messages d'information.",
+        bullets: ["Suppression depuis le navigateur", "Déconnexion possible", "Réinitialisation de préférences", "Nouvelle connexion nécessaire"],
       },
     ],
   },

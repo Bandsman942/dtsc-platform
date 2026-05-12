@@ -13,6 +13,7 @@ export async function GET() {
     where: { userId: session.userId },
     orderBy: { updatedAt: "desc" },
     include: {
+      project: { select: { id: true, name: true } },
       _count: { select: { messages: true } },
     },
     take: 200,

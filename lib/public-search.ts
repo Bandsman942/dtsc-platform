@@ -84,6 +84,12 @@ export const publicSearchIndex: PublicSearchItem[] = [
     href: "/politique-confidentialite",
     category: "Confidentialité",
   },
+  {
+    title: "Politique des cookies",
+    description: "Cookies essentiels, stockage local, PWA, statistiques publiques et gestion des préférences.",
+    href: "/politique-cookies",
+    category: "Cookies",
+  },
 ];
 
 export function normalizePublicSearch(value: string) {

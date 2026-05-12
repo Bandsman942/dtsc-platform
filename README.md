@@ -34,7 +34,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
 - Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
 - Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
-- Publications publiques interactives: likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
+- Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
 - Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
 - Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
 - Inscription, connexion, déconnexion
@@ -50,9 +50,10 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
-- Interface chatbot avec sidebar de conversations scrollable
-- Historique des conversations et messages en base, avec classement par dossier/projet
+- Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
+- Historique des conversations et messages en base, avec classement par dossier/projet et CRUD des dossiers
 - Renommage, classement et suppression de conversation
+- Partage fonctionnel des conversations via API native du navigateur ou copie du lien
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
@@ -64,7 +65,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Indicateurs de limites visibles dans le chatbot
 - Gestion support pour `ADMIN` et `SUPPORT`: traitement, résolution et clôture de tickets
 - Pages publiques d'information: Data en Afrique, BI & KPI, IA en entreprise, secteurs accompagnés
-- Pages publiques corporate: Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
+- Pages publiques corporate: Services, Solutions, Secteurs, Projets, Ressources, À propos, Contact et politique des cookies
 - Analytics simples des visites publiques avec filtre par période dans `/admin`
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
 - Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
