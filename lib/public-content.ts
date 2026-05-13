@@ -226,8 +226,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Données collectées",
         text:
-          "La plateforme peut traiter les informations de compte, les coordonnées professionnelles, le rôle utilisateur, les paramètres de sécurité, les conversations chatbot, les tickets support, les annonces, les commentaires, les notifications, les journaux d'usage IA, les données techniques nécessaires au fonctionnement et les statistiques de visites des pages publiques.",
-        bullets: ["Identité et coordonnées professionnelles", "Messages, tickets et conversations", "Rôles, statuts et limites d'usage", "Journaux techniques et statistiques de visite"],
+          "La plateforme peut traiter les informations de compte, les coordonnées professionnelles, le rôle utilisateur, les paramètres de sécurité, les préférences privées du compte, les conversations chatbot, les tickets support, les annonces, les commentaires, les notifications, les journaux d'usage IA, les données techniques nécessaires au fonctionnement et les statistiques de visites des pages publiques.",
+        bullets: ["Identité et coordonnées professionnelles", "Préférences privées de compte et d'interface", "Messages, tickets et conversations", "Rôles, statuts et limites d'usage", "Journaux techniques et statistiques de visite"],
       },
       {
         heading: "Finalités du traitement",
@@ -278,8 +278,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Préférences locales et PWA",
         text:
-          "Certaines préférences peuvent être conservées localement dans le navigateur: thème clair/sombre, choix de reporter l'installation PWA, notifications visibles déjà affichées ou réglages d'interface. Ces informations améliorent l'expérience sans être utilisées pour du ciblage publicitaire. La PWA peut aussi mettre en cache des fichiers statiques afin de charger l'interface plus vite, mais elle ne cache pas les pages privées ni les réponses API contenant des données utilisateur.",
-        bullets: ["Thème et confort visuel", "Invitation PWA mémorisée", "Pas de cache API privée", "Page hors ligne sans données personnelles"],
+          "Certaines préférences peuvent être conservées localement dans le navigateur: thème clair/sombre, choix de reporter l'installation PWA, notifications visibles déjà affichées ou réglages d'interface. D'autres préférences privées peuvent être enregistrées sur le compte utilisateur pour retrouver la page de démarrage, la densité d'affichage, la langue, le fuseau horaire, le format de date, les synthèses email et les préférences de réponse IA après reconnexion. Ces informations améliorent l'expérience sans être utilisées pour du ciblage publicitaire. La PWA peut aussi mettre en cache des fichiers statiques afin de charger l'interface plus vite, mais elle ne cache pas les pages privées ni les réponses API contenant des données utilisateur.",
+        bullets: ["Thème et confort visuel", "Préférences privées persistées", "Invitation PWA mémorisée", "Pas de cache API privée", "Page hors ligne sans données personnelles"],
       },
       {
         heading: "Mesure d'audience et sécurité",

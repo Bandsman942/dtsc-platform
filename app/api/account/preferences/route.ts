@@ -49,6 +49,14 @@ export async function PATCH(req: Request) {
       notifyUsageEnabled: body.data.notifyUsageEnabled,
       notifyBroadcastEnabled: body.data.notifyBroadcastEnabled,
       pushNotificationsEnabled: body.data.pushNotificationsEnabled,
+      interfaceDensity: body.data.interfaceDensity,
+      startPage: body.data.startPage,
+      locale: body.data.locale,
+      timezone: body.data.timezone,
+      dateFormat: body.data.dateFormat,
+      emailDigestFrequency: body.data.emailDigestFrequency,
+      chatResponseStyle: body.data.chatResponseStyle,
+      chatResponseLength: body.data.chatResponseLength,
     },
   });
 
@@ -60,6 +68,9 @@ export async function PATCH(req: Request) {
     metadata: {
       preferredModel,
       pushNotificationsEnabled: body.data.pushNotificationsEnabled,
+      interfaceDensity: body.data.interfaceDensity,
+      startPage: body.data.startPage,
+      emailDigestFrequency: body.data.emailDigestFrequency,
     },
     request: req,
   });

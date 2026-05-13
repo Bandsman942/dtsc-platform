@@ -52,13 +52,14 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
 - Historique des conversations et messages en base, avec classement par dossier/projet et CRUD des dossiers
+- Préférences chatbot persistantes: modèle préféré, style de réponse et longueur de réponse par utilisateur
 - Renommage, classement et suppression de conversation
 - Partage fonctionnel des conversations via API native du navigateur ou copie du lien
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
 - Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, visites, activité et audits
-- Suivi utilisateurs, conversations, messages, usage IA et tickets
+- Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
 - Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
 - Limites journalières configurables par utilisateur: messages et tokens
@@ -82,7 +83,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires, réponses aux commentaires et réactions
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
-- Paramètres complets: profil, mot de passe, mode clair/sombre/système, modèle LLM préféré et préférences de notifications persistantes
+- Paramètres complets: profil, mot de passe, mode clair/sombre/système, page de démarrage, densité d'interface, langue, fuseau horaire, format de date, synthèse email, modèle LLM préféré, style IA et préférences de notifications persistantes
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
 - Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local
 - Headers de sécurité globaux, blocage des requêtes cross-origin mutantes et protection contre l'en-tête `x-middleware-subrequest`
@@ -296,7 +297,7 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 
 Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées en format web, les prévisualiser avant publication, les repositionner dans le corps de la publication via l'éditeur riche et retirer une image en cliquant dessus puis sur l'icône de suppression.
 
-Le catalogue des articles et brouillons utilise une recherche intelligente instantanée et une pagination côté interface pour éviter une page Administration trop longue. Les modifications sont synchronisées immédiatement côté interface, puis les données serveur sont rafraîchies.
+Le catalogue des articles et brouillons utilise une recherche intelligente instantanée et une pagination côté interface pour éviter une page Administration trop longue. Chaque élément affiche son auteur, son statut, ainsi que la date et l'heure de publication ou de mise en brouillon. Les modifications sont synchronisées immédiatement côté interface, puis les données serveur sont rafraîchies.
 
 Champs principaux:
 

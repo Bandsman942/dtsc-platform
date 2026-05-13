@@ -41,6 +41,23 @@ function parseOpenAIEvent(block: string) {
   };
 }
 
+function buildChatPreferenceContext(style?: string | null, length?: string | null) {
+  const styleInstruction = {
+    PROFESSIONAL: "Réponds avec un ton professionnel, clair et orienté conseil.",
+    DIRECT: "Réponds de façon directe, concise et actionnable.",
+    DETAILED: "Réponds de façon pédagogique, structurée et explicative.",
+    EXECUTIVE: "Réponds comme une note de synthèse pour direction: enjeux, impacts, décisions et prochaines étapes.",
+  }[style || "PROFESSIONAL"] || "Réponds avec un ton professionnel, clair et orienté conseil.";
+
+  const lengthInstruction = {
+    SHORT: "Privilégie des réponses courtes, sauf si l'utilisateur demande une analyse complète.",
+    BALANCED: "Privilégie une réponse équilibrée avec assez de contexte pour agir.",
+    DETAILED: "Développe les points importants avec titres, listes et exemples utiles.",
+  }[length || "BALANCED"] || "Privilégie une réponse équilibrée avec assez de contexte pour agir.";
+
+  return [styleInstruction, lengthInstruction].join("\n");
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -66,7 +83,15 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, status: true, dailyMessageLimit: true, dailyTokenLimit: true, preferredModel: true },
+    select: {
+      id: true,
+      status: true,
+      dailyMessageLimit: true,
+      dailyTokenLimit: true,
+      preferredModel: true,
+      chatResponseStyle: true,
+      chatResponseLength: true,
+    },
   });
 
   if (!user || user.status !== "ACTIVE") {
@@ -158,6 +183,13 @@ export async function POST(req: Request) {
   ]);
 
   const messages: OpenAIInputMessage[] = [
+    {
+      role: "user" as const,
+      content: [
+        "Préférences de réponse configurées par l'utilisateur dans DTSC Platform.",
+        buildChatPreferenceContext(user.chatResponseStyle, user.chatResponseLength),
+      ].join("\n"),
+    },
     ...(companyContext
       ? [
           {

@@ -56,7 +56,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    router.push(searchParams.get("next") || "/dashboard");
+    router.push(searchParams.get("next") || body?.redirectTo || "/dashboard");
     router.refresh();
   }
 

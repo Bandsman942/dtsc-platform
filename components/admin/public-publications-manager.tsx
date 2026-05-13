@@ -22,6 +22,11 @@ type Publication = {
   coverLabel: string | null;
   published: boolean;
   createdAt: string;
+  updatedAt: string;
+  author?: {
+    name: string;
+    email: string;
+  } | null;
 };
 
 const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
@@ -42,6 +47,9 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
       formatEnumLabel(publication.category),
       publication.published ? "publie publié publication" : "brouillon draft",
       publication.createdAt,
+      publication.updatedAt,
+      publication.author?.name,
+      publication.author?.email,
     ].join(" ");
   }, []);
   const publicationList = useSmartList({
@@ -156,6 +164,9 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)} · {publication.published ? "Publié" : "Brouillon"}</p>
                   <h3 className="mt-1 font-black text-dtsc-ink">{publication.title}</h3>
                   <p className="mt-1 text-xs text-dtsc-muted">/{publication.slug}</p>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-dtsc-muted">
+                    {publication.published ? "Publié" : "Mis en brouillon"} par {publication.author?.name || "DTSC"} · {formatPublicationDate(publication.updatedAt || publication.createdAt)}
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => {
@@ -220,6 +231,16 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
       </Dialog>
     </section>
   );
+}
+
+function formatPublicationDate(value: string) {
+  return new Date(value).toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function PublicationPreview({ html }: { html: string }) {

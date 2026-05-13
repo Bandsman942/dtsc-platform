@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { BarChart3, Bot, FileText, Megaphone, MessageSquare, Settings, ShieldCheck, Users } from "lucide-react";
-import { UserRole } from "@prisma/client";
+import { BarChart3, FileText, Megaphone, MessageSquare, Settings, ShieldCheck, Users } from "lucide-react";
+import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
+import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
-import { StatCard } from "@/components/dashboard/stat-card";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
 import { prisma } from "@/lib/prisma";
@@ -21,6 +21,8 @@ function isUserRole(value: string | undefined): value is UserRole {
 }
 
 type AdminSectionId = AdminBlockId | "access";
+type RawMetricRow = { date: Date | string; count: number | bigint };
+type RawModelRow = { model: string; count: number | bigint; tokens: number | bigint };
 
 const adminSections: Array<{ id: AdminSectionId; label: string; description: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Vue générale", description: "KPIs et synthèse plateforme", icon: BarChart3 },
@@ -53,7 +55,44 @@ export default async function AdminPage({
   }
   const roleFilter = isUserRole(role) ? role : undefined;
 
-  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visitRows, visitTotal, payments, apiLogs, webhookEvents, publicPublications] =
+  const periodWhere = { createdAt: { gte: visitStart, lte: visitEnd } };
+
+  const [
+    settings,
+    users,
+    userCount,
+    activeUserCount,
+    conversationCount,
+    conversations,
+    messageCount,
+    usageLogs,
+    tickets,
+    visitRows,
+    messageRows,
+    tokenRows,
+    visitTotal,
+    usersInPeriod,
+    conversationsInPeriod,
+    messagesInPeriod,
+    tokensInPeriod,
+    ticketsInPeriod,
+    resolvedTicketsInPeriod,
+    contactsInPeriod,
+    subscribersInPeriod,
+    paidPaymentsInPeriod,
+    apiErrorsInPeriod,
+    readyDocuments,
+    publishedPublicationsCount,
+    draftPublicationsCount,
+    roleBreakdown,
+    ticketBreakdown,
+    paymentBreakdown,
+    topModels,
+    payments,
+    apiLogs,
+    webhookEvents,
+    publicPublications,
+  ] =
     await Promise.all([
       getAppSettings(),
       prisma.user.findMany({
@@ -63,6 +102,7 @@ export default async function AdminPage({
         take: 200,
       }),
       prisma.user.count(),
+      prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
       prisma.conversation.count(),
       prisma.conversation.findMany({
         orderBy: { updatedAt: "desc" },
@@ -83,7 +123,45 @@ export default async function AdminPage({
         GROUP BY DATE("createdAt")
         ORDER BY DATE("createdAt") ASC
       `,
-      prisma.siteVisit.count({ where: { createdAt: { gte: visitStart, lte: visitEnd } } }),
+      prisma.$queryRaw<RawMetricRow[]>`
+        SELECT DATE("createdAt") AS date, COUNT(*)::int AS count
+        FROM "Message"
+        WHERE "createdAt" >= ${visitStart} AND "createdAt" <= ${visitEnd}
+        GROUP BY DATE("createdAt")
+        ORDER BY DATE("createdAt") ASC
+      `,
+      prisma.$queryRaw<RawMetricRow[]>`
+        SELECT DATE("createdAt") AS date, COALESCE(SUM("totalTokens"), 0)::int AS count
+        FROM "UsageLog"
+        WHERE "createdAt" >= ${visitStart} AND "createdAt" <= ${visitEnd}
+        GROUP BY DATE("createdAt")
+        ORDER BY DATE("createdAt") ASC
+      `,
+      prisma.siteVisit.count({ where: periodWhere }),
+      prisma.user.count({ where: periodWhere }),
+      prisma.conversation.count({ where: periodWhere }),
+      prisma.message.count({ where: periodWhere }),
+      prisma.usageLog.aggregate({ where: periodWhere, _sum: { totalTokens: true } }),
+      prisma.supportTicket.count({ where: periodWhere }),
+      prisma.supportTicket.count({ where: { resolvedAt: { gte: visitStart, lte: visitEnd } } }),
+      prisma.contactMessage.count({ where: periodWhere }),
+      prisma.newsletterSubscriber.count({ where: periodWhere }),
+      prisma.payment.aggregate({ where: { ...periodWhere, status: { in: [PaymentStatus.ACCEPTED, PaymentStatus.PAID] } }, _count: { _all: true }, _sum: { amount: true } }),
+      prisma.apiLog.count({ where: { ...periodWhere, statusCode: { gte: 400 } } }),
+      prisma.knowledgeDocument.count({ where: { status: DocumentStatus.READY } }),
+      prisma.publicPublication.count({ where: { published: true } }),
+      prisma.publicPublication.count({ where: { published: false } }),
+      prisma.user.groupBy({ by: ["role"], where: periodWhere, _count: { _all: true } }),
+      prisma.supportTicket.groupBy({ by: ["status"], where: periodWhere, _count: { _all: true } }),
+      prisma.payment.groupBy({ by: ["status"], where: periodWhere, _count: { _all: true } }),
+      prisma.$queryRaw<RawModelRow[]>`
+        SELECT "model", COUNT(*)::int AS count, COALESCE(SUM("totalTokens"), 0)::int AS tokens
+        FROM "UsageLog"
+        WHERE "createdAt" >= ${visitStart} AND "createdAt" <= ${visitEnd}
+        GROUP BY "model"
+        ORDER BY tokens DESC
+        LIMIT 5
+      `,
       prisma.payment.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: true, subscription: { include: { plan: true } } },
@@ -99,6 +177,7 @@ export default async function AdminPage({
       }),
       prisma.publicPublication.findMany({
         orderBy: { createdAt: "desc" },
+        include: { author: { select: { name: true, email: true } } },
         take: 40,
       }),
     ]);
@@ -125,25 +204,71 @@ export default async function AdminPage({
     return `/admin?${params.toString()}`;
   };
   const chartLength = selectedDate ? 1 : Math.min(selectedPeriod, 60);
-  const visitCountsByDate = new Map(
-    visitRows.map((row) => {
+  const buildPoints = (rows: RawMetricRow[]): VisitPoint[] => {
+    const countsByDate = new Map(
+      rows.map((row) => {
       const key = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
       return [key, Number(row.count)];
-    })
-  );
-  const visitPoints: VisitPoint[] = Array.from({ length: chartLength }).map((_, index) => {
-    const day = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
-    if (!selectedDate) {
-      day.setDate(day.getDate() - (chartLength - 1 - index));
-    }
-    const dateKey = day.toISOString().slice(0, 10);
-    const count = visitCountsByDate.get(dateKey) || 0;
-    return {
-      date: dateKey,
-      label: day.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
-      count,
-    };
-  });
+      })
+    );
+    return [...Array(chartLength).keys()].map((index) => {
+      const day = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+      if (!selectedDate) {
+        day.setDate(day.getDate() - (chartLength - 1 - index));
+      }
+      const dateKey = day.toISOString().slice(0, 10);
+      const count = countsByDate.get(dateKey) || 0;
+      return {
+        date: dateKey,
+        label: day.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+        count,
+      };
+    });
+  };
+  const visitPoints = buildPoints(visitRows);
+  const messagePoints = buildPoints(messageRows);
+  const tokenPoints = buildPoints(tokenRows);
+  const overviewMetrics = {
+    totals: {
+      users: userCount,
+      activeUsers: activeUserCount,
+      conversations: conversationCount,
+      messages: messageCount,
+      tokens: totalTokens,
+    },
+    period: {
+      users: usersInPeriod,
+      conversations: conversationsInPeriod,
+      messages: messagesInPeriod,
+      tokens: tokensInPeriod._sum.totalTokens || 0,
+      tickets: ticketsInPeriod,
+      resolvedTickets: resolvedTicketsInPeriod,
+      visits: visitTotal,
+      contacts: contactsInPeriod,
+      subscribers: subscribersInPeriod,
+      payments: paidPaymentsInPeriod._count._all,
+      revenue: Number(paidPaymentsInPeriod._sum.amount || 0),
+      apiErrors: apiErrorsInPeriod,
+      readyDocuments,
+      publishedPublications: publishedPublicationsCount,
+      draftPublications: draftPublicationsCount,
+    },
+    series: {
+      visits: visitPoints.map((point) => ({ label: point.label, value: point.count })),
+      messages: messagePoints.map((point) => ({ label: point.label, value: point.count })),
+      tokens: tokenPoints.map((point) => ({ label: point.label, value: point.count })),
+    },
+    breakdowns: {
+      roles: roleBreakdown.map((item) => ({ label: item.role, value: item._count._all })),
+      tickets: ticketBreakdown.map((item) => ({ label: item.status, value: item._count._all })),
+      payments: paymentBreakdown.map((item) => ({ label: item.status, value: item._count._all })),
+    },
+    topModels: topModels.map((item) => ({
+      model: item.model,
+      count: Number(item.count),
+      tokens: Number(item.tokens),
+    })),
+  };
   const paymentAuditItems = payments.map((payment) => ({
     id: payment.id,
     reference: payment.reference,
@@ -213,12 +338,15 @@ export default async function AdminPage({
         </nav>
 
         {activeSection === "overview" && canView("overview") && (
-          <section className="grid gap-4 md:grid-cols-4">
-            <StatCard label="Utilisateurs" value={userCount} helper="Comptes suivis" icon={Users} />
-            <StatCard label="Conversations" value={conversationCount} helper="Total plateforme" icon={Bot} />
-            <StatCard label="Messages" value={messageCount} helper="Total messages" icon={MessageSquare} />
-            <StatCard label="Tokens" value={totalTokens} helper="Usage estimé" icon={BarChart3} />
-          </section>
+          <AdminOverviewMetrics
+            selectedPeriod={selectedPeriod}
+            selectedDate={selectedDate}
+            totals={overviewMetrics.totals}
+            period={overviewMetrics.period}
+            series={overviewMetrics.series}
+            breakdowns={overviewMetrics.breakdowns}
+            topModels={overviewMetrics.topModels}
+          />
         )}
 
         {activeSection === "access" && user.role === UserRole.ADMIN && (

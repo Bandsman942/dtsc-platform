@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
-import { Bell, Lock, Monitor, Moon, Save, Sun, UserCog } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Bell, Bot, Globe2, LayoutDashboard, Lock, Monitor, Moon, Save, SlidersHorizontal, Sun, UserCog, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -22,6 +22,14 @@ export function SettingsPanel({
     notifyUsageEnabled?: boolean;
     notifyBroadcastEnabled?: boolean;
     pushNotificationsEnabled?: boolean;
+    interfaceDensity?: string | null;
+    startPage?: string | null;
+    locale?: string | null;
+    timezone?: string | null;
+    dateFormat?: string | null;
+    emailDigestFrequency?: string | null;
+    chatResponseStyle?: string | null;
+    chatResponseLength?: string | null;
   };
   models: { id: string; label: string }[];
 }) {
@@ -34,6 +42,7 @@ export function SettingsPanel({
   const [pushEnabled, setPushEnabled] = useState(Boolean(user.pushNotificationsEnabled));
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => setPushEnabled(Boolean(user.pushNotificationsEnabled)), [user.pushNotificationsEnabled]);
 
   async function updateProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,6 +96,14 @@ export function SettingsPanel({
       notifyUsageEnabled: formData.get("notifyUsageEnabled") === "on",
       notifyBroadcastEnabled: formData.get("notifyBroadcastEnabled") === "on",
       pushNotificationsEnabled: wantsPush,
+      interfaceDensity: String(formData.get("interfaceDensity") || "COMFORTABLE"),
+      startPage: String(formData.get("startPage") || "/dashboard"),
+      locale: String(formData.get("locale") || "fr"),
+      timezone: String(formData.get("timezone") || "Africa/Kinshasa"),
+      dateFormat: String(formData.get("dateFormat") || "FR"),
+      emailDigestFrequency: String(formData.get("emailDigestFrequency") || "WEEKLY"),
+      chatResponseStyle: String(formData.get("chatResponseStyle") || "PROFESSIONAL"),
+      chatResponseLength: String(formData.get("chatResponseLength") || "BALANCED"),
     };
     const response = await fetch("/api/account/preferences", {
       method: "PATCH",
@@ -145,6 +162,95 @@ export function SettingsPanel({
             </div>
           </form>
         </section>
+
+        <section className="dtsc-card p-6">
+          <div className="flex items-center gap-3">
+            <SlidersHorizontal className="h-5 w-5 text-cyan-500" />
+            <div>
+              <h2 className="font-black text-dtsc-ink">Préférences privées</h2>
+              <p className="text-sm text-dtsc-muted">Réglages persistés sur votre compte pour personnaliser votre espace.</p>
+            </div>
+          </div>
+          <form id="account-preferences-form" onSubmit={updatePreferences} className="mt-5 grid gap-4 md:grid-cols-2">
+            <input type="hidden" name="preferredModel" value={user.preferredModel || ""} />
+            {user.notifySupportEnabled ?? true ? <input type="hidden" name="notifySupportEnabled" value="on" /> : null}
+            {user.notifyUsageEnabled ?? true ? <input type="hidden" name="notifyUsageEnabled" value="on" /> : null}
+            {user.notifyBroadcastEnabled ?? true ? <input type="hidden" name="notifyBroadcastEnabled" value="on" /> : null}
+            {user.pushNotificationsEnabled ? <input type="hidden" name="pushNotificationsEnabled" value="on" /> : null}
+            <Field label="Page après connexion" icon={LayoutDashboard}>
+              <select name="startPage" defaultValue={user.startPage || "/dashboard"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="/dashboard">Dashboard</option>
+                <option value="/chat">Chatbot</option>
+                <option value="/billing">Abonnement</option>
+                <option value="/company">Entreprise</option>
+                <option value="/support">Support</option>
+                <option value="/notifications">Notifications</option>
+                <option value="/announcements">Annonces</option>
+                <option value="/profile">Profil</option>
+                <option value="/settings">Paramètres</option>
+              </select>
+            </Field>
+            <Field label="Densité interface" icon={Monitor}>
+              <select name="interfaceDensity" defaultValue={user.interfaceDensity || "COMFORTABLE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="COMFORTABLE">Confortable</option>
+                <option value="COMPACT">Compacte</option>
+              </select>
+            </Field>
+            <Field label="Langue" icon={Globe2}>
+              <select name="locale" defaultValue={user.locale || "fr"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </Field>
+            <Field label="Fuseau horaire" icon={Globe2}>
+              <select name="timezone" defaultValue={user.timezone || "Africa/Kinshasa"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="Africa/Kinshasa">Kinshasa</option>
+                <option value="Africa/Lubumbashi">Lubumbashi</option>
+                <option value="Africa/Lagos">Lagos</option>
+                <option value="Africa/Johannesburg">Johannesburg</option>
+                <option value="Europe/Paris">Paris</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </Field>
+            <Field label="Format de date" icon={Globe2}>
+              <select name="dateFormat" defaultValue={user.dateFormat || "FR"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="FR">JJ/MM/AAAA</option>
+                <option value="LONG">Date longue</option>
+                <option value="ISO">AAAA-MM-JJ</option>
+              </select>
+            </Field>
+            <Field label="Synthèse email" icon={Bell}>
+              <select name="emailDigestFrequency" defaultValue={user.emailDigestFrequency || "WEEKLY"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="NEVER">Jamais</option>
+                <option value="DAILY">Quotidienne</option>
+                <option value="WEEKLY">Hebdomadaire</option>
+                <option value="MONTHLY">Mensuelle</option>
+              </select>
+            </Field>
+            <Field label="Style de réponse IA" icon={Bot}>
+              <select name="chatResponseStyle" defaultValue={user.chatResponseStyle || "PROFESSIONAL"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="PROFESSIONAL">Professionnel</option>
+                <option value="DIRECT">Direct</option>
+                <option value="DETAILED">Pédagogique</option>
+                <option value="EXECUTIVE">Comité de direction</option>
+              </select>
+            </Field>
+            <Field label="Longueur réponse IA" icon={Bot}>
+              <select name="chatResponseLength" defaultValue={user.chatResponseLength || "BALANCED"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="SHORT">Courte</option>
+                <option value="BALANCED">Équilibrée</option>
+                <option value="DETAILED">Détaillée</option>
+              </select>
+            </Field>
+            <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+                <Save className="h-4 w-4" />
+                Enregistrer les préférences
+              </Button>
+              {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
+            </div>
+          </form>
+        </section>
       </div>
 
       <aside className="space-y-6">
@@ -187,6 +293,14 @@ export function SettingsPanel({
             </div>
           </div>
           <form onSubmit={updatePreferences} className="mt-5 space-y-3 text-sm text-dtsc-muted">
+            <input type="hidden" name="interfaceDensity" value={user.interfaceDensity || "COMFORTABLE"} />
+            <input type="hidden" name="startPage" value={user.startPage || "/dashboard"} />
+            <input type="hidden" name="locale" value={user.locale || "fr"} />
+            <input type="hidden" name="timezone" value={user.timezone || "Africa/Kinshasa"} />
+            <input type="hidden" name="dateFormat" value={user.dateFormat || "FR"} />
+            <input type="hidden" name="emailDigestFrequency" value={user.emailDigestFrequency || "WEEKLY"} />
+            <input type="hidden" name="chatResponseStyle" value={user.chatResponseStyle || "PROFESSIONAL"} />
+            <input type="hidden" name="chatResponseLength" value={user.chatResponseLength || "BALANCED"} />
             <label className="grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
               <span className="font-bold text-dtsc-ink">Modèle LLM préféré</span>
               <select
@@ -235,5 +349,25 @@ export function SettingsPanel({
         </section>
       </aside>
     </div>
+  );
+}
+
+function Field({
+  label,
+  icon: Icon,
+  children,
+}: {
+  label: string;
+  icon: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
+      <span className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-cyan-500" />
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }

@@ -25,6 +25,7 @@ export async function POST(req: Request) {
       coverLabel: body.data.coverLabel || null,
       authorId: session.userId,
     },
+    include: { author: { select: { name: true, email: true } } },
   });
 
   await writeAuditLog({

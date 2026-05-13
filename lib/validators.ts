@@ -36,6 +36,14 @@ export const accountPreferencesSchema = z.object({
   notifyUsageEnabled: z.coerce.boolean().default(true),
   notifyBroadcastEnabled: z.coerce.boolean().default(true),
   pushNotificationsEnabled: z.coerce.boolean().default(false),
+  interfaceDensity: z.enum(["COMFORTABLE", "COMPACT"]).default("COMFORTABLE"),
+  startPage: z.enum(["/dashboard", "/chat", "/billing", "/company", "/support", "/notifications", "/announcements", "/profile", "/settings"]).default("/dashboard"),
+  locale: z.enum(["fr", "en"]).default("fr"),
+  timezone: z.string().min(2).max(80).default("Africa/Kinshasa"),
+  dateFormat: z.enum(["FR", "ISO", "LONG"]).default("FR"),
+  emailDigestFrequency: z.enum(["NEVER", "DAILY", "WEEKLY", "MONTHLY"]).default("WEEKLY"),
+  chatResponseStyle: z.enum(["PROFESSIONAL", "DIRECT", "DETAILED", "EXECUTIVE"]).default("PROFESSIONAL"),
+  chatResponseLength: z.enum(["SHORT", "BALANCED", "DETAILED"]).default("BALANCED"),
 });
 
 export const pushSubscriptionSchema = z.object({

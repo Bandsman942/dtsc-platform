@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 12 mai 2026
+Derniere mise a jour: 13 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -23,12 +23,12 @@ Objectifs couverts par le code actuel:
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
-- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, streaming, choix de modele LLM prefere par utilisateur et limites d'usage;
+- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires et reactions;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
-- administration utilisateurs, limites d'usage, parametres globaux, visites publiques, diffusions et acces par blocs pour les roles non-client;
+- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions et acces par blocs pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API et webhooks etendus aux zones critiques: chat, conversations, notifications, documents, paiements, diffusions, newsletter, entreprise et publications;
@@ -246,6 +246,8 @@ Champs profil utilisateur ajoutes:
 - `preferredModel`: modele LLM prefere par l'utilisateur pour le chatbot, parmi les modeles configures;
 - `notifySupportEnabled`, `notifyUsageEnabled`, `notifyBroadcastEnabled`: preferences de notifications applicatives;
 - `pushNotificationsEnabled`: autorise l'affichage de notifications navigateur/PWA pendant une session connectee.
+- `interfaceDensity`, `startPage`, `locale`, `timezone`, `dateFormat`, `emailDigestFrequency`: preferences privees persistantes pour l'affichage, la page de demarrage, la langue, le fuseau horaire, le format de date et la synthese email;
+- `chatResponseStyle`, `chatResponseLength`: preferences qui orientent le ton et la longueur des reponses du chatbot sans exposer de details techniques internes.
 
 Champs conversation ajoutes:
 
@@ -351,7 +353,7 @@ Blocs Administration configurables par `ADMIN`:
 - `activity`: conversations, utilisateurs et tickets;
 - `audits`: paiements, logs API et webhooks.
 
-La page Administration est organisee en sous-modules via `section` dans l'URL (`/admin?section=users`, `/admin?section=audits`, etc.) afin d'eviter une page unique trop longue. Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI. Les visites publiques sont agregees par requete SQL et le total est calcule par `count()` sur la periode filtree, sans limite fixe a 500 lignes.
+La page Administration est organisee en sous-modules via `section` dans l'URL (`/admin?section=users`, `/admin?section=audits`, etc.) afin d'eviter une page unique trop longue. La vue generale accepte un filtre periode (`7`, `30`, `90`, `200` jours) ou une date precise, puis recalcule les metriques serveur: utilisateurs actifs et nouveaux comptes, conversations, messages, tokens, visites publiques, tickets, paiements confirmes, revenus suivis, contacts, abonnes newsletter, erreurs API, documents prets, publications publiques et brouillons. Les graphiques restent bornes dans leurs cartes et utilisent les series journalieres de visites, messages et tokens. Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI. Les visites publiques sont agregees par requete SQL et le total est calcule par `count()` sur la periode filtree, sans limite fixe a 500 lignes.
 
 Regles annonces:
 
@@ -382,9 +384,10 @@ Flux:
 8. Sauvegarde du message utilisateur.
 9. Recuperation du contexte Entreprise prive via `lib/company-context.ts`, si renseigne.
 10. Selection du modele: modele explicite de la requete, sinon `User.preferredModel`, sinon modele par defaut serveur.
-11. Envoi des 24 derniers messages a OpenAI Responses API, avec contexte Entreprise et contexte documentaire lorsque pertinent.
-12. Streaming du texte vers le client.
-13. Sauvegarde de la reponse assistant, du `UsageLog` et du log API.
+11. Injection des preferences privees `chatResponseStyle` et `chatResponseLength` pour adapter le ton et le niveau de detail de la reponse.
+12. Envoi des 24 derniers messages a OpenAI Responses API, avec contexte Entreprise et contexte documentaire lorsque pertinent.
+13. Streaming du texte vers le client.
+14. Sauvegarde de la reponse assistant, du `UsageLog` et du log API.
 
 Interface:
 
@@ -453,7 +456,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `POST` | `/api/account/avatar` | session | Upload photo de profil PNG/JPG/WebP optimisee en WebP 512x512 cote client, maximum 850 Ko cote serveur |
 | `GET` | `/api/users/[id]/avatar` | proprietaire ou profil public consenti | Lecture serveur de l'avatar stocke dans Supabase Storage prive |
 | `PATCH` | `/api/account/password` | session | Changement mot de passe |
-| `PATCH` | `/api/account/preferences` | session | Modele LLM prefere, preferences notifications et notifications navigateur/PWA |
+| `PATCH` | `/api/account/preferences` | session | Modele LLM prefere, notifications, notifications navigateur/PWA, page de demarrage, densite d'interface, langue, fuseau horaire, format de date, synthese email, style et longueur de reponse IA |
 
 ### Chatbot et conversations
 
@@ -1097,7 +1100,7 @@ Regles:
 
 ## 12.3 Publications publiques interactives
 
-Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee en format web lisible, limitee a 960x540 et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement. Le formulaire affiche aussi un apercu public avant publication pour verifier la taille, le texte et les images.
+Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee en format web lisible, limitee a 960x540 et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement. Le formulaire affiche aussi un apercu public avant publication pour verifier la taille, le texte et les images. Le catalogue admin affiche maintenant l'auteur, le statut et la date/heure de derniere publication ou mise en brouillon pour chaque contenu.
 
 Le catalogue admin des publications utilise `ListControls` et `useSmartList`: recherche accent-insensible sur titre, slug, resume, categorie et statut, puis pagination cote UI. Les creations, modifications et suppressions sont synchronisees dans l'etat client puis `router.refresh()` recharge les donnees serveur sans attendre un rechargement complet de la page.
 

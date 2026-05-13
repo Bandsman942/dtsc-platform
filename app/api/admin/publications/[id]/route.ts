@@ -28,6 +28,7 @@ export async function PATCH(req: Request, { params }: Params) {
       content: contentHtml ? sanitizeRichHtml(contentHtml) : publicationData.content,
       coverLabel: body.data.coverLabel || null,
     },
+    include: { author: { select: { name: true, email: true } } },
   });
 
   await writeAuditLog({
