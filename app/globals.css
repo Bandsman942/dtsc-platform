@@ -476,6 +476,15 @@
     font-weight: 800;
   }
 
+  .dtsc-feed-content {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .dtsc-feed-content h1 { font-size: clamp(1.35rem, 6vw, 1.85rem); }
+  .dtsc-feed-content h2 { font-size: clamp(1.2rem, 5vw, 1.55rem); }
+  .dtsc-feed-content h3 { font-size: clamp(1.05rem, 4.5vw, 1.25rem); }
+
   .dark .bg-\[\#faf9fe\] { background-color: var(--dtsc-page); }
   .dark .bg-white,
   .dark .bg-white\/80,

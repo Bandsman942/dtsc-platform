@@ -1,4 +1,5 @@
-import { BarChart3, Bot, MessageSquare, ShieldCheck, Users } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, Bot, FileText, Megaphone, MessageSquare, Settings, ShieldCheck, Users } from "lucide-react";
 import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -19,18 +20,31 @@ function isUserRole(value: string | undefined): value is UserRole {
   return value === UserRole.ADMIN || value === UserRole.MANAGER || value === UserRole.CLIENT || value === UserRole.SUPPORT;
 }
 
+type AdminSectionId = AdminBlockId | "access";
+
+const adminSections: Array<{ id: AdminSectionId; label: string; description: string; icon: typeof BarChart3 }> = [
+  { id: "overview", label: "Vue générale", description: "KPIs et synthèse plateforme", icon: BarChart3 },
+  { id: "access", label: "Accès RBAC", description: "Droits des rôles non-client", icon: ShieldCheck },
+  { id: "settings", label: "Paramètres", description: "Limites, OTP, diffusions", icon: Settings },
+  { id: "publications", label: "Publications", description: "Articles et ressources publiques", icon: FileText },
+  { id: "users", label: "Utilisateurs", description: "Comptes, rôles et limites", icon: Users },
+  { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
+  { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
+  { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
+];
+
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string; period?: string; date?: string }>;
+  searchParams: Promise<{ role?: string; period?: string; date?: string; section?: string }>;
 }) {
   const user = await requireUser();
   if (!canAccessAdministration(user.role)) {
     redirect("/dashboard");
   }
-  const { role, period, date } = await searchParams;
+  const { role, period, date, section } = await searchParams;
   const parsedPeriod = Number(period || 30);
-  const selectedPeriod = Number.isFinite(parsedPeriod) ? parsedPeriod : 30;
+  const selectedPeriod = Number.isFinite(parsedPeriod) ? Math.min(Math.max(parsedPeriod, 7), 200) : 30;
   const selectedDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
   const visitStart = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
   const visitEnd = selectedDate ? new Date(`${selectedDate}T23:59:59`) : new Date();
@@ -39,7 +53,7 @@ export default async function AdminPage({
   }
   const roleFilter = isUserRole(role) ? role : undefined;
 
-  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visits, payments, apiLogs, webhookEvents, publicPublications] =
+  const [settings, users, userCount, conversationCount, conversations, messageCount, usageLogs, tickets, visitRows, visitTotal, payments, apiLogs, webhookEvents, publicPublications] =
     await Promise.all([
       getAppSettings(),
       prisma.user.findMany({
@@ -62,11 +76,14 @@ export default async function AdminPage({
         include: { user: true },
         take: 200,
       }),
-      prisma.siteVisit.findMany({
-        where: { createdAt: { gte: visitStart, lte: visitEnd } },
-        orderBy: { createdAt: "desc" },
-        take: 500,
-      }),
+      prisma.$queryRaw<Array<{ date: Date | string; count: number | bigint }>>`
+        SELECT DATE("createdAt") AS date, COUNT(*)::int AS count
+        FROM "SiteVisit"
+        WHERE "createdAt" >= ${visitStart} AND "createdAt" <= ${visitEnd}
+        GROUP BY DATE("createdAt")
+        ORDER BY DATE("createdAt") ASC
+      `,
+      prisma.siteVisit.count({ where: { createdAt: { gte: visitStart, lte: visitEnd } } }),
       prisma.payment.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: true, subscription: { include: { plan: true } } },
@@ -89,14 +106,38 @@ export default async function AdminPage({
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
   const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
   const canView = (blockId: AdminBlockId) => canAccessAdminBlock(user.role, blockId, adminRoleAccess);
+  const canViewSection = (sectionId: AdminSectionId) => sectionId === "access" ? user.role === UserRole.ADMIN : canView(sectionId);
+  const visibleSections = adminSections.filter((item) => canViewSection(item.id));
+  const activeSection = visibleSections.some((item) => item.id === section)
+    ? (section as AdminSectionId)
+    : visibleSections[0]?.id || "overview";
+  const sectionHref = (sectionId: AdminSectionId) => {
+    const params = new URLSearchParams();
+    params.set("section", sectionId);
+    if (roleFilter) {
+      params.set("role", roleFilter);
+    }
+    if (selectedDate) {
+      params.set("date", selectedDate);
+    } else {
+      params.set("period", String(selectedPeriod));
+    }
+    return `/admin?${params.toString()}`;
+  };
   const chartLength = selectedDate ? 1 : Math.min(selectedPeriod, 60);
+  const visitCountsByDate = new Map(
+    visitRows.map((row) => {
+      const key = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
+      return [key, Number(row.count)];
+    })
+  );
   const visitPoints: VisitPoint[] = Array.from({ length: chartLength }).map((_, index) => {
     const day = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
     if (!selectedDate) {
       day.setDate(day.getDate() - (chartLength - 1 - index));
     }
     const dateKey = day.toISOString().slice(0, 10);
-    const count = visits.filter((visit) => new Date(visit.createdAt).toISOString().slice(0, 10) === dateKey).length;
+    const count = visitCountsByDate.get(dateKey) || 0;
     return {
       date: dateKey,
       label: day.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
@@ -143,7 +184,35 @@ export default async function AdminPage({
           </p>
         </section>
 
-        {canView("overview") && (
+        <nav className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Sous-modules Administration">
+          {visibleSections.map((item) => {
+            const Icon = item.icon;
+            const active = activeSection === item.id;
+            return (
+              <Link
+                key={item.id}
+                href={sectionHref(item.id)}
+                className={`rounded-2xl border p-4 shadow-[0_12px_34px_rgba(0,43,91,0.07)] transition ${
+                  active
+                    ? "border-cyan-300 bg-[#002b5b] text-white"
+                    : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-300 hover:bg-dtsc-soft"
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${active ? "bg-white/10 text-cyan-200" : "bg-dtsc-soft text-dtsc-blue"}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span className="block font-black">{item.label}</span>
+                    <span className={`mt-1 block text-xs leading-5 ${active ? "text-slate-200" : "text-dtsc-muted"}`}>{item.description}</span>
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {activeSection === "overview" && canView("overview") && (
           <section className="grid gap-4 md:grid-cols-4">
             <StatCard label="Utilisateurs" value={userCount} helper="Comptes suivis" icon={Users} />
             <StatCard label="Conversations" value={conversationCount} helper="Total plateforme" icon={Bot} />
@@ -152,11 +221,11 @@ export default async function AdminPage({
           </section>
         )}
 
-        {user.role === UserRole.ADMIN && (
+        {activeSection === "access" && user.role === UserRole.ADMIN && (
           <AdminAccessPanel access={adminRoleAccess} />
         )}
 
-        {canView("settings") && (
+        {activeSection === "settings" && canView("settings") && (
           <AdminSettingsPanel
             canEdit={user.role === UserRole.ADMIN}
             settings={{
@@ -174,11 +243,11 @@ export default async function AdminPage({
           />
         )}
 
-        {canView("publications") && (
+        {activeSection === "publications" && canView("publications") && (
           <PublicPublicationsManager publications={JSON.parse(JSON.stringify(publicPublications))} canEdit={user.role === UserRole.ADMIN} />
         )}
 
-        {canView("users") && (
+        {activeSection === "users" && canView("users") && (
           <section className="dtsc-card p-6">
             <div className="mb-5">
               <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
@@ -188,22 +257,34 @@ export default async function AdminPage({
           </section>
         )}
 
-        {canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} />}
+        {activeSection === "visits" && canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />}
 
-        {(canView("activity") || canView("users")) && (
+        {activeSection === "users" && canView("users") && (
           <AdminDataTables
             users={JSON.parse(JSON.stringify(users))}
             conversations={JSON.parse(JSON.stringify(conversations))}
             tickets={JSON.parse(JSON.stringify(tickets))}
-            showUsers={canView("users")}
-            showActivity={canView("activity")}
+            showUsers={true}
+            showActivity={false}
             canManageUsers={user.role === UserRole.ADMIN}
           />
         )}
 
-        {canView("audits") && <AdminAuditTables payments={paymentAuditItems} logs={logAuditItems} />}
+        {activeSection === "activity" && canView("activity") && (
+          <AdminDataTables
+            users={JSON.parse(JSON.stringify(users))}
+            conversations={JSON.parse(JSON.stringify(conversations))}
+            tickets={JSON.parse(JSON.stringify(tickets))}
+            showUsers={false}
+            showActivity={true}
+            canManageUsers={false}
+          />
+        )}
 
-        <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
+        {activeSection === "audits" && canView("audits") && <AdminAuditTables payments={paymentAuditItems} logs={logAuditItems} />}
+
+        {activeSection === "overview" && (
+          <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
           <div className="flex items-start gap-3">
             <ShieldCheck className="h-5 w-5 text-cyan-300" />
             <div>
@@ -213,7 +294,8 @@ export default async function AdminPage({
               </p>
             </div>
           </div>
-        </section>
+          </section>
+        )}
       </div>
     </AppShell>
   );

@@ -6,16 +6,23 @@ import { DtscFooter } from "@/components/layout/dtsc-footer";
 export default function SignUpPage() {
   return (
     <main className="grid min-h-screen bg-dtsc-page text-dtsc-ink lg:grid-cols-[0.95fr_1.05fr]">
-      <section className="hidden border-r border-dtsc-border bg-dtsc-surface p-10 lg:flex lg:flex-col lg:justify-between">
-        <DtscLogo />
-        <div>
-          <p className="max-w-lg text-4xl font-black leading-tight text-dtsc-ink">Créez votre accès client.</p>
-          <p className="mt-4 max-w-md leading-7 text-dtsc-muted">
+      <section className="relative hidden overflow-hidden border-r border-dtsc-border bg-[#001736] p-10 text-white lg:flex lg:flex-col lg:justify-between">
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-50"
+          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?auto=format&fit=crop&w=1500&q=82')" }}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,23,54,0.94),rgba(0,43,91,0.62)),radial-gradient(circle_at_20%_20%,rgba(0,194,255,0.22),transparent_34%)]" />
+        <div className="relative w-fit rounded-2xl bg-white/90 p-3 shadow-[0_16px_42px_rgba(0,0,0,0.22)] backdrop-blur">
+          <DtscLogo />
+        </div>
+        <div className="relative">
+          <p className="max-w-lg text-4xl font-black leading-tight text-white">Créez votre accès client.</p>
+          <p className="mt-4 max-w-md leading-7 text-slate-200">
             Lancez vos premières conversations et structurez vos besoins en data, IA, marketing digital et solutions numériques.
           </p>
-          <div className="mt-10 grid gap-3 text-sm text-dtsc-ink">
+          <div className="mt-10 grid gap-3 text-sm text-cyan-50">
             {["Historique de conversations", "Tickets support", "Assistant IA DTSC", "Cadrage conseil"].map((item) => (
-              <div key={item} className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 font-semibold">
+              <div key={item} className="rounded-xl border border-cyan-300/25 bg-white/10 px-4 py-3 font-semibold shadow-[0_18px_48px_rgba(0,0,0,0.18)] backdrop-blur-md">
                 {item}
               </div>
             ))}
@@ -25,8 +32,13 @@ export default function SignUpPage() {
           <DtscFooter compact />
         </div>
       </section>
-      <section className="flex flex-col items-center justify-center gap-6 px-4 py-10">
-        <div className="w-full max-w-md rounded-2xl border border-dtsc-border bg-dtsc-surface p-8 shadow-[0_18px_60px_rgba(0,43,91,0.12)]">
+      <section className="relative flex flex-col items-center justify-center gap-6 overflow-hidden px-4 py-10">
+        <div
+          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.07]"
+          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1400&q=80')" }}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(0,194,255,0.16),transparent_34%),linear-gradient(180deg,transparent,rgba(232,243,255,0.55))]" />
+        <div className="relative w-full max-w-md rounded-2xl border border-dtsc-border bg-dtsc-surface/94 p-8 shadow-[0_24px_80px_rgba(0,43,91,0.16)] backdrop-blur-xl">
           <h1 className="text-2xl font-black text-dtsc-ink">Inscription</h1>
           <p className="mt-2 text-sm text-dtsc-muted">Créez un compte sécurisé DTSC.</p>
           <div className="mt-6">

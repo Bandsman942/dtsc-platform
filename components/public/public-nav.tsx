@@ -47,8 +47,8 @@ export function PublicNav() {
               className={cn(
                 "rounded-xl px-3 py-2 text-sm font-black underline-offset-4 transition",
                 active
-                  ? "bg-white/12 text-white shadow-inner ring-1 ring-cyan-300/20 lg:bg-dtsc-soft lg:text-dtsc-blue lg:ring-0"
-                  : "text-slate-200 hover:bg-white/10 hover:text-white hover:underline lg:text-dtsc-muted lg:hover:bg-dtsc-soft lg:hover:text-dtsc-blue"
+                  ? "bg-white/10 text-white shadow-inner ring-1 ring-cyan-300/20 lg:bg-[#e8f3ff] lg:text-[#003b7a] lg:ring-0 dark:lg:bg-dtsc-soft dark:lg:text-white"
+                  : "text-slate-200 hover:bg-white/10 hover:text-white hover:underline lg:text-[#1f3654] lg:hover:bg-[#e8f3ff] lg:hover:text-[#002b5b] dark:lg:text-slate-200 dark:lg:hover:bg-white/10 dark:lg:hover:text-white"
               )}
               aria-current={active ? "page" : undefined}
             >

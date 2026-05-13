@@ -10,13 +10,15 @@ export function SiteVisitsChart({
   points,
   selectedPeriod,
   selectedDate,
+  totalVisits,
 }: {
   points: VisitPoint[];
   selectedPeriod: number;
   selectedDate?: string;
+  totalVisits?: number;
 }) {
   const maxCount = Math.max(1, ...points.map((point) => point.count));
-  const total = points.reduce((sum, point) => sum + point.count, 0);
+  const total = totalVisits ?? points.reduce((sum, point) => sum + point.count, 0);
   const periodLabel = selectedDate ? `le ${selectedDate}` : `sur ${selectedPeriod} jours`;
 
   return (
@@ -28,6 +30,7 @@ export function SiteVisitsChart({
           <p className="mt-2 text-sm font-black text-dtsc-blue">{total} visite(s) {periodLabel}</p>
         </div>
         <form className="flex flex-wrap items-end gap-2" action="/admin">
+          <input type="hidden" name="section" value="visits" />
           <label className="grid gap-1 text-xs font-bold text-dtsc-muted">
             Date précise
             <input name="date" type="date" defaultValue={selectedDate || ""} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
@@ -37,7 +40,7 @@ export function SiteVisitsChart({
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-4">
         {["7", "30", "90", "200"].map((days) => (
-          <Link key={days} href={`/admin?period=${days}`} className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink hover:border-cyan-300">
+          <Link key={days} href={`/admin?section=visits&period=${days}`} className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink hover:border-cyan-300">
             {days} jours
           </Link>
         ))}

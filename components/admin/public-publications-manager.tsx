@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Edit3, Globe2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -26,6 +27,8 @@ type Publication = {
 const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
 
 export function PublicPublicationsManager({ publications, canEdit = true }: { publications: Publication[]; canEdit?: boolean }) {
+  const router = useRouter();
+  const [items, setItems] = useState(publications);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
   const [createPreviewHtml, setCreatePreviewHtml] = useState("");
@@ -42,7 +45,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
     ].join(" ");
   }, []);
   const publicationList = useSmartList({
-    items: publications,
+    items,
     pageSize: 5,
     getSearchText: getPublicationSearchText,
   });
@@ -57,13 +60,22 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
       body: JSON.stringify({ ...payload, published: payload.published === "on" }),
     });
 
+    const body = (await response.json().catch(() => null)) as { publication?: Publication } | null;
     setMessage(response.ok ? "Publication publique enregistrée." : "Impossible d'enregistrer cette publication.");
     if (response.ok) {
       form.reset();
+      if (body?.publication) {
+        const savedPublication = body.publication;
+        setItems((current) =>
+          publicationId
+            ? current.map((publication) => publication.id === savedPublication.id ? savedPublication : publication)
+            : [savedPublication, ...current]
+        );
+      }
       setEditing(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
-      window.location.reload();
+      router.refresh();
     }
   }
 
@@ -71,7 +83,8 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
     const response = await fetch(`/api/admin/publications/${publication.id}`, { method: "DELETE" });
     setMessage(response.ok ? "Publication supprimée." : "Impossible de supprimer cette publication.");
     if (response.ok) {
-      window.location.reload();
+      setItems((current) => current.filter((item) => item.id !== publication.id));
+      router.refresh();
     }
   }
 
@@ -124,7 +137,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               Recherchez instantanément par titre, statut, catégorie ou slug, puis parcourez la liste paginée.
             </p>
           </div>
-          {publications.length > 0 && (
+          {items.length > 0 && (
             <ListControls
               query={publicationList.query}
               onQueryChange={publicationList.setQuery}
@@ -159,12 +172,12 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
               <p className="mt-3 line-clamp-2 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
             </article>
           ))}
-          {publications.length > 0 && publicationList.filteredCount === 0 && (
+          {items.length > 0 && publicationList.filteredCount === 0 && (
             <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">
               Aucun contenu ne correspond à cette recherche.
             </p>
           )}
-          {!publications.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">Aucune publication publique enregistrée.</p>}
+          {!items.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">Aucune publication publique enregistrée.</p>}
         </div>
       </div>
 

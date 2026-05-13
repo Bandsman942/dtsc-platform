@@ -182,9 +182,9 @@ export function AnnouncementWall({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-      <aside className="space-y-4">
-        <section className="dtsc-card p-6">
+    <div className="grid min-w-0 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <aside className="min-w-0 space-y-4">
+        <section className="dtsc-card min-w-0 p-4 sm:p-6">
           <div className="flex items-center gap-3">
             <Megaphone className="h-5 w-5 text-cyan-500" />
             <div>
@@ -209,7 +209,7 @@ export function AnnouncementWall({
         </section>
       </aside>
 
-      <section className="space-y-5">
+      <section className="min-w-0 space-y-5">
         {announcements.length > 0 && (
           <ListControls
             query={announcementList.query}
@@ -226,28 +226,28 @@ export function AnnouncementWall({
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
           const dislikes = announcement.reactions.filter((reaction) => reaction.value === -1).length;
           return (
-            <article key={announcement.id} className="dtsc-card p-6">
-              <div className="flex items-start justify-between gap-4">
+            <article key={announcement.id} className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
+              <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <AuthorAvatar name={announcement.author.name} avatarUrl={announcement.author.avatarUrl} />
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">
+                    <div className="min-w-0">
+                      <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted sm:tracking-[0.18em]">
                         {announcement.author.name} · {formatEnumLabel(announcement.author.role)} · {new Date(announcement.createdAt).toLocaleString("fr-FR")}
                       </p>
                       {announcement.author.jobTitle && <p className="mt-1 text-xs font-bold text-dtsc-blue">{announcement.author.jobTitle}</p>}
                     </div>
                   </div>
-                  <h2 className="mt-2 text-2xl font-black text-dtsc-ink">{announcement.title}</h2>
+                  <h2 className="mt-3 break-words text-xl font-black leading-tight text-dtsc-ink sm:text-2xl">{announcement.title}</h2>
                   <RichAnnouncementContent content={announcement.content} />
                 </div>
                 {isAdmin && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" onClick={() => setEditingAnnouncement(announcement)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+                  <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
+                    <Button type="button" variant="outline" onClick={() => setEditingAnnouncement(announcement)} className="min-w-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
                       <Pencil className="h-4 w-4" />
                       Modifier
                     </Button>
-                    <Button type="button" variant="destructive" onClick={() => setDeletingAnnouncement(announcement)} className="rounded-xl">
+                    <Button type="button" variant="destructive" onClick={() => setDeletingAnnouncement(announcement)} className="min-w-0 rounded-xl">
                       <Trash2 className="h-4 w-4" />
                       Supprimer
                     </Button>
@@ -278,7 +278,7 @@ export function AnnouncementWall({
                 onDelete={setDeletingComment}
                 onReply={(commentItem) => setReplyingTo({ announcementId: announcement.id, comment: commentItem })}
               />
-              <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 flex gap-2">
+              <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <Input name="content" placeholder="Ajouter un commentaire..." required />
                 <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
               </form>
@@ -296,6 +296,7 @@ export function AnnouncementWall({
           <form onSubmit={updateAnnouncement} className="space-y-3">
             <Input name="title" defaultValue={editingAnnouncement.title} required />
             <RichTextEditor
+              key={editingAnnouncement.id}
               textName="content"
               htmlName="contentHtml"
               defaultValue={editingAnnouncement.content}
@@ -405,14 +406,14 @@ function AnnouncementComments({
     const replies = commentsByParent.get(commentItem.id) || [];
 
     return (
-      <div key={commentItem.id} className={depth > 0 ? "ml-5 border-l border-dtsc-border pl-4" : ""}>
+      <div key={commentItem.id} className={depth > 0 ? "ml-3 min-w-0 border-l border-dtsc-border pl-3 sm:ml-5 sm:pl-4" : "min-w-0"}>
         <div className="rounded-2xl bg-dtsc-page p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
-              <p className="mt-1 text-sm text-dtsc-muted">{commentItem.content}</p>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+            <div className="min-w-0">
+              <p className="break-words text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
+              <p className="mt-1 break-words text-sm text-dtsc-muted">{commentItem.content}</p>
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex flex-wrap gap-2 sm:justify-end">
               <button type="button" onClick={() => onReply(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
                 Répondre
               </button>
@@ -469,11 +470,11 @@ function RichAnnouncementContent({ content }: { content: string }) {
   if (hasHtmlMarkup(content)) {
     return (
       <div
-        className="dtsc-publication-content mt-3 text-dtsc-muted"
+        className="dtsc-publication-content dtsc-feed-content mt-3 text-dtsc-muted"
         dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content) }}
       />
     );
   }
 
-  return <p className="mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted">{content}</p>;
+  return <p className="dtsc-feed-content mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted">{content}</p>;
 }

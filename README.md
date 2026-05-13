@@ -57,7 +57,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
-- Dashboard admin
+- Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, visites, activité et audits
 - Suivi utilisateurs, conversations, messages, usage IA et tickets
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
 - Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
@@ -66,7 +66,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Gestion support pour `ADMIN` et `SUPPORT`: traitement, résolution et clôture de tickets
 - Pages publiques d'information: Data en Afrique, BI & KPI, IA en entreprise, secteurs accompagnés
 - Pages publiques corporate: Services, Solutions, Secteurs, Projets, Ressources, À propos, Contact et politique des cookies
-- Analytics simples des visites publiques avec filtre par période dans `/admin`
+- Analytics simples des visites publiques avec filtre par période dans `/admin`, agrégation journalière et total calculé en temps réel
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
 - Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
 - Paramètres OTP: activation et durée d'expiration des codes d'inscription
@@ -296,7 +296,7 @@ SUPABASE_STORAGE_BUCKET=dtsc-documents
 
 Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées en format web, les prévisualiser avant publication, les repositionner dans le corps de la publication via l'éditeur riche et retirer une image en cliquant dessus puis sur l'icône de suppression.
 
-Le catalogue des articles et brouillons utilise une recherche intelligente instantanée et une pagination côté interface pour éviter une page Administration trop longue.
+Le catalogue des articles et brouillons utilise une recherche intelligente instantanée et une pagination côté interface pour éviter une page Administration trop longue. Les modifications sont synchronisées immédiatement côté interface, puis les données serveur sont rafraîchies.
 
 Champs principaux:
 

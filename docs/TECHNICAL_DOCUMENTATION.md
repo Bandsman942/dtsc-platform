@@ -330,7 +330,7 @@ Routes protegees par middleware:
 - `/announcements`
 - `/admin`
 
-`/documents` reste disponible comme ancienne route et redirige vers `/company`. `/admin` est visible pour `ADMIN`, `MANAGER` et `SUPPORT`; les blocs internes sont controles par `AppSetting.adminRoleAccess`. Le role `CLIENT` est redirige vers `/dashboard`.
+`/documents` reste disponible comme ancienne route et redirige vers `/company`. `/admin` est visible pour `ADMIN`, `MANAGER` et `SUPPORT`; les sous-modules internes sont controles par `AppSetting.adminRoleAccess`. Le role `CLIENT` est redirige vers `/dashboard`.
 
 ## 7. RBAC
 
@@ -351,7 +351,7 @@ Blocs Administration configurables par `ADMIN`:
 - `activity`: conversations, utilisateurs et tickets;
 - `audits`: paiements, logs API et webhooks.
 
-Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI.
+La page Administration est organisee en sous-modules via `section` dans l'URL (`/admin?section=users`, `/admin?section=audits`, etc.) afin d'eviter une page unique trop longue. Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI. Les visites publiques sont agregees par requete SQL et le total est calcule par `count()` sur la periode filtree, sans limite fixe a 500 lignes.
 
 Regles annonces:
 
@@ -1099,7 +1099,7 @@ Regles:
 
 Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee en format web lisible, limitee a 960x540 et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement. Le formulaire affiche aussi un apercu public avant publication pour verifier la taille, le texte et les images.
 
-Le catalogue admin des publications utilise `ListControls` et `useSmartList`: recherche accent-insensible sur titre, slug, resume, categorie et statut, puis pagination cote UI. L'objectif est d'eviter que les brouillons et articles publies rendent la page Administration trop longue.
+Le catalogue admin des publications utilise `ListControls` et `useSmartList`: recherche accent-insensible sur titre, slug, resume, categorie et statut, puis pagination cote UI. Les creations, modifications et suppressions sont synchronisees dans l'etat client puis `router.refresh()` recharge les donnees serveur sans attendre un rechargement complet de la page.
 
 Routes ajoutees:
 
