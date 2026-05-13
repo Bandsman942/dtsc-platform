@@ -24,7 +24,7 @@ export function ListControls({
   onPageChange: (page: number) => void;
 }) {
   return (
-    <div className="mb-4 grid w-full min-w-0 gap-3 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <div className="mb-4 grid w-full max-w-full min-w-0 gap-3 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="relative w-full min-w-0">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
         <Input

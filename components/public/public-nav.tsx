@@ -27,7 +27,16 @@ export function PublicNav() {
         Menu
       </button>
 
-      <nav className={cn("fixed left-4 right-4 top-[8.25rem] z-[120] grid max-h-[min(72dvh,32rem)] min-w-0 gap-2 overflow-y-auto rounded-[1.35rem] border border-dtsc-border bg-dtsc-surface/95 p-3 shadow-[0_28px_80px_rgba(0,23,54,0.28)] backdrop-blur-xl lg:static lg:left-auto lg:right-auto lg:top-auto lg:mt-0 lg:flex lg:max-h-none lg:w-auto lg:items-center lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0", !open && "hidden lg:flex")}>
+      {open && (
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[115] bg-[#001736]/88 backdrop-blur-2xl lg:hidden"
+          aria-label="Fermer le menu public"
+        />
+      )}
+
+      <nav className={cn("fixed left-4 right-4 top-[8.25rem] z-[125] grid max-h-[min(72dvh,32rem)] min-w-0 gap-2 overflow-y-auto rounded-[1.35rem] border border-cyan-300/35 bg-[#071427] p-3 text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] ring-1 ring-white/10 lg:static lg:left-auto lg:right-auto lg:top-auto lg:mt-0 lg:flex lg:max-h-none lg:w-auto lg:items-center lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0 lg:text-inherit lg:shadow-none lg:ring-0", !open && "hidden lg:flex")}>
         {publicLinks.map((link) => {
           const active = isActive(pathname, link.href);
           return (
@@ -38,8 +47,8 @@ export function PublicNav() {
               className={cn(
                 "rounded-xl px-3 py-2 text-sm font-black underline-offset-4 transition",
                 active
-                  ? "bg-dtsc-soft text-dtsc-blue shadow-inner"
-                  : "text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-blue hover:underline"
+                  ? "bg-white/12 text-white shadow-inner ring-1 ring-cyan-300/20 lg:bg-dtsc-soft lg:text-dtsc-blue lg:ring-0"
+                  : "text-slate-200 hover:bg-white/10 hover:text-white hover:underline lg:text-dtsc-muted lg:hover:bg-dtsc-soft lg:hover:text-dtsc-blue"
               )}
               aria-current={active ? "page" : undefined}
             >

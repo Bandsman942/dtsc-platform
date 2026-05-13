@@ -68,6 +68,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Toute évolution fonctionnelle importante doit être reflétée dans `DTSC_SYSTEM_PROMPT` dans `lib/openai.ts`, en distinguant clairement les fonctionnalités actives de la roadmap.
 - Toute évolution fonctionnelle, API, schéma Prisma, variable d'environnement, intégration externe, règle de sécurité, workflow CI/CD ou comportement admin/client doit être documentée dans le même travail.
 - Mettre à jour en priorité `docs/TECHNICAL_DOCUMENTATION.md` pour les détails techniques, puis `README.md` pour les changements utiles à l'installation, au déploiement ou à l'utilisation.
+- Mettre aussi à jour `app/conditions-utilisation/page.tsx`, `app/politique-confidentialite/page.tsx` et `app/politique-cookies/page.tsx` quand une modification impacte les conditions d'utilisation, les données personnelles, les cookies, le suivi, les emails, les paiements, les notifications, les documents ou les intégrations externes.
 - Si une modification ajoute ou change une API, documenter la route, la méthode HTTP, le niveau d'accès, le payload attendu, la réponse et les variables d'environnement nécessaires.
 - Si une modification ajoute ou change une intégration externe, documenter les secrets requis, le flux d'authentification, les endpoints appelés, les fallbacks et les règles de sécurité.
 - Les constantes partagées avec le client doivent rester dans un fichier neutre sans logique serveur, par exemple `lib/session-config.ts`.
