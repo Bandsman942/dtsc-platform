@@ -249,6 +249,14 @@ Modeles actifs:
 | `ScoInventoryItem` | Stocks, quantites, seuils minimums, emplacement, responsable et lien optionnel vers un bien materiel |
 | `ScoAsset` | Actifs et equipements, assignation, etat, statut, maintenance et lien optionnel vers un bien materiel |
 | `ScoLogisticsEvent` | Missions, evenements, transport, checklist, risques, responsable collaborateur et statut logistique |
+| `CooOperation` | Operations internes transversales, responsable, departements impliques, progression, priorite et piece jointe |
+| `CooTask` | Taches journalieres COO assignees aux collaborateurs, statut, priorite, preuve/livrable et blocage |
+| `CooRecurringTask` | Modeles de taches recurrentes actives/inactives |
+| `CooDepartmentRequest` | Demandes et dependances inter-departements |
+| `CooBlocker` | Blocages operationnels, criticite, impact, action corrective et resolution |
+| `CooMeeting` | Reunions, comptes rendus, decisions et pieces jointes |
+| `CooWorkflow` | Workflows operationnels repetables et etapes |
+| `CooOperationalReport` | Rapports operationnels et KPI COO |
 
 Champs profil utilisateur ajoutes:
 
@@ -308,6 +316,25 @@ Routes publiques d'auth:
 - `POST /api/auth/sign-in`
 - `POST /api/auth/sign-out`
 - `POST /api/auth/heartbeat`
+
+## 6.1. Administration COO, fichiers operationnels et espace collaborateur
+
+La section Administration `COO` est controlee par `AppSetting.adminRoleAccess` via `requireAdminBlockAccess("coo")`. Elle couvre les operations internes, taches journalieres, taches recurrentes, coordination inter-departements, blocages, reunions, workflows et rapports operationnels.
+
+Routes API:
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/admin/coo/[entity]` | bloc admin `coo` | Cree une operation COO validee par `cooSchemas` |
+| `PATCH` | `/api/admin/coo/[entity]/[id]` | bloc admin `coo` | Met a jour une operation COO avec enrichissement departement/collaborateur |
+| `DELETE` | `/api/admin/coo/[entity]/[id]` | bloc admin `coo` | Supprime avec controles de relations sensibles |
+| `POST` | `/api/admin/operation-files` | blocs `coo`, `hrCfo` ou `sco` | Importe une piece justificative dans Supabase Storage |
+| `GET` | `/api/admin/operation-files/[...path]` | blocs `coo`, `hrCfo` ou `sco` | Sert un fichier operationnel via route serveur privee |
+| `GET` | `/api/admin/payrolls/[id]/pdf` | bloc admin `hrCfo` | Affiche un bulletin de paie imprimable/exportable en PDF |
+
+Les champs de pieces justificatives ne sont plus des champs texte libres dans l'UI operations: l'utilisateur selectionne un fichier depuis ordinateur ou mobile. Le fichier est valide cote serveur (type MIME, taille, session, RBAC), stocke dans Supabase Storage via la cle service role cote serveur, puis reference par une URL interne `/api/admin/operation-files/...`. Cette URL ne doit pas etre exposee comme un objet public Supabase.
+
+Les collaborateurs lies a `HrcfoEmployee.userId` disposent d'un module prive `/activities`. Il affiche les activites COO partagees avec eux: taches assignees ou supervisees, operations pilotees, demandes inter-departements, blocages et reunions. Un utilisateur sans dossier collaborateur actif est redirige vers `/dashboard`.
 
 Workflow OTP d'inscription:
 

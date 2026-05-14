@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type FormEvent } from "react";
-import { ClipboardList, Plus, Save, Trash2 } from "lucide-react";
+import { ClipboardList, Download, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,13 @@ export function OperationsAdminPanel({
   }, [datasets, itemsByDataset]);
 
   async function createRecord(dataset: OperationDataset, form: HTMLFormElement) {
-    const payload = Object.fromEntries(new FormData(form).entries());
+    let payload: Record<string, FormDataEntryValue>;
+    try {
+      payload = await buildPayloadWithUploads(form);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Import de fichier impossible.");
+      return;
+    }
     const response = await fetch(dataset.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -59,20 +65,26 @@ export function OperationsAdminPanel({
   }
 
   async function updateRecord(dataset: OperationDataset, record: OperationRecord, form: HTMLFormElement) {
-    const payload = Object.fromEntries(new FormData(form).entries());
+    let payload: Record<string, FormDataEntryValue>;
+    try {
+      payload = await buildPayloadWithUploads(form);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Import de fichier impossible.");
+      return;
+    }
     const response = await fetch(`${dataset.endpoint}/${record.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown>; message?: string } | null;
-    setMessage(response.ok ? "Statut opérationnel mis à jour." : body?.message || "Impossible de mettre à jour cet élément.");
+    setMessage(response.ok ? "Élément opérationnel mis à jour." : body?.message || "Impossible de mettre à jour cet élément.");
     const savedRecord = body?.record;
     if (response.ok && savedRecord) {
       const saved = recordFromRaw(dataset, savedRecord);
       setItemsByDataset((current) => ({
         ...current,
-        [dataset.id]: (current[dataset.id] || []).map((item) => item.id === saved.id ? { ...item, status: saved.status, notes: saved.notes } : item),
+        [dataset.id]: (current[dataset.id] || []).map((item) => item.id === saved.id ? saved : item),
       }));
     }
   }
@@ -175,7 +187,7 @@ function DatasetCard({
   }
 
   return (
-    <article className="dtsc-card min-w-0 p-5">
+    <article className="dtsc-card min-w-0 overflow-hidden p-5">
       <div className="flex items-start gap-3">
         <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-500">
           <ClipboardList className="h-5 w-5" />
@@ -186,17 +198,7 @@ function DatasetCard({
         </div>
       </div>
 
-      <form onSubmit={submit} className="mt-5 grid gap-3 md:grid-cols-2">
-        {dataset.fields.map((field) => (
-          <FieldInput key={field.name} field={field} disabled={!canEdit} />
-        ))}
-        <div className="md:col-span-2">
-          <Button disabled={!canEdit} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-            <Plus className="h-4 w-4" />
-            Ajouter
-          </Button>
-        </div>
-      </form>
+      <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel="Ajouter" submitIcon="plus" />
 
       <div className="mt-5">
         <ListControls
@@ -235,10 +237,12 @@ function RecordCard({
   onRemove: (dataset: OperationDataset, record: OperationRecord) => Promise<void>;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onUpdate(dataset, record, event.currentTarget);
+    setEditOpen(false);
   }
 
   return (
@@ -262,24 +266,36 @@ function RecordCard({
       </div>
       {record.notes && <p className="mt-3 text-sm leading-6 text-dtsc-muted">{record.notes}</p>}
       {record.href && (
-        <a href={record.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl bg-dtsc-soft px-3 py-2 text-xs font-black text-dtsc-blue underline-offset-4 hover:underline">
-          Ouvrir la facture
+        <a href={record.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-3 py-2 text-xs font-black text-white shadow-[0_10px_30px_rgba(0,43,91,0.18)] transition hover:-translate-y-0.5 hover:bg-[#001736]">
+          <Download className="h-4 w-4" />
+          {record.hrefLabel || "Ouvrir le document"}
         </a>
       )}
-      <form onSubmit={submit} className="mt-4 grid gap-2 md:grid-cols-[180px_1fr_auto_auto]">
-        <select name="status" defaultValue={record.status} disabled={!canEdit} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-          {dataset.statusOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-        <Input name="notes" defaultValue={record.notes || ""} placeholder="Note de suivi" disabled={!canEdit} />
-        <Button type="submit" disabled={!canEdit} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button type="button" disabled={!canEdit} variant="outline" onClick={() => setEditOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
           <Save className="h-4 w-4" />
+          Modifier
         </Button>
         <Button type="button" disabled={!canEdit} variant="outline" onClick={() => setConfirmDelete(true)} className="rounded-xl border-red-200 text-red-500">
           <Trash2 className="h-4 w-4" />
+          Supprimer
         </Button>
-      </form>
+      </div>
+      <Dialog
+        open={editOpen}
+        title={`Modifier: ${record.title}`}
+        description="Mettez à jour les informations de l'opération puis envoyez la modification au serveur."
+        onClose={() => setEditOpen(false)}
+      >
+        <OperationForm
+          fields={dataset.fields}
+          defaults={{ ...(record.values || {}), status: record.status, notes: record.notes || "" }}
+          disabled={!canEdit}
+          onSubmit={submit}
+          submitLabel="Enregistrer les modifications"
+          submitIcon="save"
+        />
+      </Dialog>
       <Dialog
         open={confirmDelete}
         title="Supprimer cet élément"
@@ -312,8 +328,76 @@ function RecordCard({
   );
 }
 
-function FieldInput({ field, disabled }: { field: OperationField; disabled: boolean }) {
-  const className = "rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink";
+function OperationForm({
+  fields,
+  defaults = {},
+  disabled,
+  onSubmit,
+  submitLabel,
+  submitIcon,
+}: {
+  fields: OperationField[];
+  defaults?: Record<string, string>;
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  submitLabel: string;
+  submitIcon: "plus" | "save";
+}) {
+  const initialPreviews = useMemo(() => {
+    const values: Record<string, string> = {};
+    for (const field of fields) {
+      if (field.type !== "select") {
+        continue;
+      }
+      const selected = field.options?.find((option) => option.value === defaults[field.name]);
+      if (selected?.email) {
+        values[field.name] = selected.email;
+      }
+    }
+    return values;
+  }, [defaults, fields]);
+  const [previewValues, setPreviewValues] = useState(initialPreviews);
+
+  function setSelectPreview(fieldName: string, email: string) {
+    setPreviewValues((current) => ({ ...current, [fieldName]: email }));
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="mt-5 grid min-w-0 gap-3 md:grid-cols-2">
+      {fields.map((field) => (
+        <FieldInput
+          key={field.name}
+          field={field}
+          disabled={disabled}
+          defaultValue={defaults[field.name] || ""}
+          previewValue={field.previewFor ? previewValues[field.previewFor] || "" : ""}
+          onSelectPreview={setSelectPreview}
+        />
+      ))}
+      <div className="md:col-span-2">
+        <Button disabled={disabled} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          {submitIcon === "plus" ? <Plus className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+          {submitLabel}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function FieldInput({
+  field,
+  disabled,
+  defaultValue,
+  previewValue,
+  onSelectPreview,
+}: {
+  field: OperationField;
+  disabled: boolean;
+  defaultValue: string;
+  previewValue: string;
+  onSelectPreview: (fieldName: string, email: string) => void;
+}) {
+  const className = "w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink";
   const label = (
     <span className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">
       {field.label}
@@ -321,14 +405,46 @@ function FieldInput({ field, disabled }: { field: OperationField; disabled: bool
   );
 
   if (field.type === "hidden") {
-    return <input type="hidden" name={field.name} value={field.placeholder || ""} />;
+    return <input type="hidden" name={field.name} value={defaultValue || field.placeholder || ""} />;
+  }
+
+  if (field.type === "preview") {
+    return (
+      <label className="grid min-w-0 gap-1">
+        {label}
+        <Input value={previewValue} readOnly disabled placeholder={field.placeholder || "Sélectionnez d'abord un collaborateur"} />
+        {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
+      </label>
+    );
+  }
+
+  if (field.type === "file") {
+    return (
+      <label className="grid min-w-0 gap-1 md:col-span-2">
+        {label}
+        {defaultValue && (
+          <a href={defaultValue} target="_blank" rel="noreferrer" className="w-fit rounded-xl bg-dtsc-soft px-3 py-2 text-xs font-black text-dtsc-blue underline-offset-4 hover:underline">
+            Voir le fichier existant
+          </a>
+        )}
+        <input type="hidden" name={field.name} value={defaultValue} />
+        <input
+          name={`${field.name}__file`}
+          type="file"
+          disabled={disabled}
+          className={`${className} file:mr-3 file:rounded-lg file:border-0 file:bg-dtsc-blue file:px-3 file:py-1 file:text-xs file:font-black file:text-white`}
+          accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.txt,application/pdf,image/png,image/jpeg,image/webp"
+        />
+        {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
+      </label>
+    );
   }
 
   if (field.type === "textarea") {
     return (
-      <label className="grid gap-1 md:col-span-2">
+      <label className="grid min-w-0 gap-1 md:col-span-2">
         {label}
-        <textarea name={field.name} required={field.required} disabled={disabled} placeholder={field.placeholder} className={`${className} min-h-20`} />
+        <textarea name={field.name} required={field.required} disabled={disabled} defaultValue={defaultValue} placeholder={field.placeholder} className={`${className} min-h-20`} />
         {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
       </label>
     );
@@ -336,12 +452,22 @@ function FieldInput({ field, disabled }: { field: OperationField; disabled: bool
 
   if (field.type === "select") {
     return (
-      <label className="grid gap-1">
+      <label className="grid min-w-0 gap-1">
         {label}
-        <select name={field.name} required={field.required} disabled={disabled} className={className}>
+        <select
+          name={field.name}
+          required={field.required}
+          disabled={disabled || field.readOnly}
+          defaultValue={defaultValue}
+          className={className}
+          onChange={(event) => {
+            const email = event.currentTarget.selectedOptions[0]?.dataset.email || "";
+            onSelectPreview(field.name, email);
+          }}
+        >
           {!field.required && <option value="">Non renseigné</option>}
           {field.options?.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <option key={option.value} value={option.value} data-email={option.email || ""}>{option.label}</option>
           ))}
         </select>
         {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
@@ -350,9 +476,9 @@ function FieldInput({ field, disabled }: { field: OperationField; disabled: bool
   }
 
   return (
-    <label className="grid gap-1">
+    <label className="grid min-w-0 gap-1">
       {label}
-      <Input name={field.name} type={field.type} required={field.required} disabled={disabled || field.readOnly} placeholder={field.placeholder} />
+      <Input name={field.name} type={field.type} required={field.required} disabled={disabled || field.readOnly} defaultValue={defaultValue} placeholder={field.placeholder} />
       {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
     </label>
   );
@@ -365,6 +491,32 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <p className="mt-2 text-2xl font-black text-dtsc-ink">{value}</p>
     </div>
   );
+}
+
+async function buildPayloadWithUploads(form: HTMLFormElement) {
+  const formData = new FormData(form);
+  const payload: Record<string, FormDataEntryValue> = {};
+  const uploadEntries = Array.from(formData.entries()).filter(([key, value]) => key.endsWith("__file") && value instanceof File && value.size > 0);
+
+  for (const [key, value] of formData.entries()) {
+    if (!key.endsWith("__file")) {
+      payload[key] = value;
+    }
+  }
+
+  for (const [key, value] of uploadEntries) {
+    const targetName = key.replace(/__file$/, "");
+    const fileData = new FormData();
+    fileData.set("file", value);
+    const response = await fetch("/api/admin/operation-files", { method: "POST", body: fileData });
+    const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+    if (!response.ok || !body?.url) {
+      throw new Error(body?.error || "Import de la pièce justificative impossible.");
+    }
+    payload[targetName] = body.url;
+  }
+
+  return payload;
 }
 
 function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown>): OperationRecord {
@@ -387,8 +539,33 @@ function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown
     notes: typeof record.notes === "string" ? record.notes : null,
     createdAt: String(record.createdAt || new Date().toISOString()),
     meta,
-    href: typeof record.href === "string" ? record.href : typeof record.invoiceId === "string" ? `/api/invoices/${record.invoiceId}/pdf` : null,
+    href: typeof record.href === "string"
+      ? record.href
+      : typeof record.invoiceId === "string"
+        ? `/api/invoices/${record.invoiceId}/pdf`
+        : dataset.id === "payrolls" && typeof record.id === "string"
+          ? `/api/admin/payrolls/${record.id}/pdf`
+          : null,
+    hrefLabel: typeof record.hrefLabel === "string"
+      ? record.hrefLabel
+      : typeof record.invoiceId === "string"
+        ? "Télécharger la facture"
+        : dataset.id === "payrolls"
+          ? "Télécharger le bulletin de paie"
+          : null,
+    values: Object.fromEntries(dataset.fields.map((field) => [field.name, stringifyValue(record[field.name])])),
   };
+}
+
+function stringifyValue(value: unknown) {
+  if (value == null) {
+    return "";
+  }
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value);
+  return /^\d{4}-\d{2}-\d{2}T/.test(text) ? text.slice(0, 10) : text;
 }
 
 function compactStrings(values: Array<string | null | undefined>) {

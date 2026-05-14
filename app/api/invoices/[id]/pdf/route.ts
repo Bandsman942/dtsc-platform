@@ -58,11 +58,12 @@ export async function GET(_req: Request, { params }: Params) {
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
         .box { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; background: #f8fafc; }
         footer { margin-top: 32px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; }
+        .print-button { display: inline-flex; margin: 0 0 18px; border: 0; border-radius: 14px; background: #002b5b; color: white; padding: 12px 18px; font-weight: 800; cursor: pointer; box-shadow: 0 14px 36px rgba(0,43,91,.18); }
         @media print { button { display: none; } body { margin: 20px; } }
       </style>
     </head>
     <body>
-      <button onclick="window.print()">Exporter en PDF</button>
+      <button class="print-button" onclick="window.print()">Imprimer / télécharger la facture en PDF</button>
       <main class="sheet">
         <div class="header">
           <p class="brand">DTSC - Data and Tech Solutions Consulting</p>

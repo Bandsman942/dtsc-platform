@@ -36,6 +36,10 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les champs opérationnels visibles comme `Responsable`, `Demandeur` ou `Assigné à` dans HR & CFO/SCO doivent être des combobox alimentées par les collaborateurs enregistrés, pas des champs texte libres.
 - Les demandes d'achat SCO doivent sélectionner le fournisseur retenu depuis les fournisseurs enregistrés; ne pas réintroduire un champ fournisseur libre pour cette décision.
 - Les stocks, inventaires, actifs et équipements SCO doivent pouvoir se rattacher au référentiel `MaterialItem` pour garder une traçabilité cohérente des biens matériels DTSC.
+- Les routes et écrans COO doivent passer par `requireAdminBlockAccess("coo")`, `cooSchemas`, `AuditLog` et `ApiLog`; les tâches, opérations, réunions, workflows, blocages et rapports doivent rester reliés aux départements et collaborateurs référencés.
+- Les utilisateurs liés à `HrcfoEmployee.userId` doivent voir leurs activités internes dans `/activities`; ce module ne doit pas apparaître pour un utilisateur sans dossier collaborateur actif.
+- Les pièces justificatives opérationnelles HR & CFO/SCO/COO ne doivent pas être saisies en texte libre: utiliser un input fichier, valider taille/type/RBAC côté serveur, stocker dans Supabase Storage via service role et servir via une route privée.
+- Les factures et bulletins de paie doivent avoir des boutons UI explicites de téléchargement/impression; les données interpolées dans HTML/PDF doivent rester échappées.
 - Une transaction validée ne doit pas être supprimée ou modifiée par un raccourci CRUD générique sans logique de contrepassation documentée; préférer une annulation métier journalisée.
 - Le module Entreprise remplace la navigation Documents. `/documents` doit rester une redirection vers `/company` tant que des anciens liens existent.
 - Le contexte Entreprise du chatbot doit rester strictement isolé par `userId` et ne jamais mélanger les profils, activités ou documents de deux utilisateurs.

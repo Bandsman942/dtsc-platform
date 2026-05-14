@@ -29,7 +29,7 @@ export async function AppShell({
     pushNotificationsEnabled?: boolean;
   };
 }) {
-  const [unreadNotifications, latestUnreadNotifications] = await Promise.all([
+  const [unreadNotifications, latestUnreadNotifications, employeeRecord] = await Promise.all([
     prisma.notification.count({
       where: {
         userId: user.id,
@@ -44,6 +44,10 @@ export async function AppShell({
           select: { id: true, title: true, body: true, targetUrl: true },
         })
       : Promise.resolve([]),
+    prisma.hrcfoEmployee.findFirst({
+      where: { userId: user.id, status: { not: "EXITED" } },
+      select: { id: true },
+    }),
   ]);
 
   return (
@@ -62,7 +66,7 @@ export async function AppShell({
         </Link>
 
         <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-          <NavLinks role={user.role} unreadNotifications={unreadNotifications} />
+          <NavLinks role={user.role} unreadNotifications={unreadNotifications} showEmployeeActivities={Boolean(employeeRecord)} />
         </nav>
       </aside>
 
@@ -92,7 +96,7 @@ export async function AppShell({
             </div>
           </div>
           <nav className="flex gap-2 overflow-x-auto border-t border-dtsc-border px-4 py-2 lg:hidden">
-            <NavLinks role={user.role} mobile unreadNotifications={unreadNotifications} />
+            <NavLinks role={user.role} mobile unreadNotifications={unreadNotifications} showEmployeeActivities={Boolean(employeeRecord)} />
           </nav>
         </header>
         <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>

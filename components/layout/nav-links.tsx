@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, BriefcaseBusiness, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User } from "lucide-react";
+import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
@@ -23,15 +23,20 @@ export function NavLinks({
   role,
   mobile = false,
   unreadNotifications = 0,
+  showEmployeeActivities = false,
 }: {
   role: UserRole;
   mobile?: boolean;
   unreadNotifications?: number;
+  showEmployeeActivities?: boolean;
 }) {
   const pathname = usePathname();
+  const employeeItems = showEmployeeActivities
+    ? [{ href: "/activities", label: "Activités DTSC", icon: CalendarCheck, help: "Voir les tâches, opérations, réunions et blocages internes qui vous concernent." }]
+    : [];
   const navItems = canAccessAdministration(role)
-    ? [...items, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
-    : items;
+    ? [...items, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
+    : [...items, ...employeeItems];
 
   return (
     <>

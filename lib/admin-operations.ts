@@ -17,6 +17,17 @@ const scoStatus = {
   logistics: ["PLANNED", "READY", "IN_PROGRESS", "COMPLETED", "BLOCKED", "CANCELED"],
 };
 
+const cooStatus = {
+  operations: ["DRAFT", "PLANNED", "IN_PROGRESS", "WAITING", "BLOCKED", "COMPLETED", "CANCELED"],
+  tasks: ["TODO", "IN_PROGRESS", "PENDING_VALIDATION", "COMPLETED", "VALIDATED", "REJECTED", "LATE", "BLOCKED", "CANCELED"],
+  recurringTasks: ["ACTIVE", "INACTIVE"],
+  departmentRequests: ["NEW", "ACCEPTED", "IN_PROGRESS", "WAITING_INFORMATION", "DONE", "REJECTED", "BLOCKED", "CANCELED"],
+  blockers: ["OPEN", "IN_PROGRESS", "RESOLVED", "UNRESOLVED", "ESCALATED", "CANCELED"],
+  meetings: ["PLANNED", "HELD", "POSTPONED", "CANCELED"],
+  workflows: ["DRAFT", "ACTIVE", "IN_PROGRESS", "COMPLETED", "BLOCKED", "ARCHIVED"],
+  reports: ["DRAFT", "PUBLISHED", "ARCHIVED"],
+};
+
 function statusOptions(values: string[]) {
   return values.map((value) => ({ value, label: formatEnumLabel(value) }));
 }
@@ -46,7 +57,7 @@ type HrcfoData = {
 export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
   const activeDepartments = data.departments.filter((item) => stringOf(item.status) === "ACTIVE");
   const activeAccounts = data.accounts.filter((item) => stringOf(item.status) === "ACTIVE");
-  const staffOptions = data.staffUsers.map((user) => option(user.id, `${stringOf(user.name)} · ${formatEnumLabel(stringOf(user.role))} · ${stringOf(user.email)}`, user.email));
+  const staffOptions = data.staffUsers.map((user) => option(user.id, `${stringOf(user.name)} · ${formatEnumLabel(stringOf(user.role))}`, user.email));
   const departmentOptions = activeDepartments.map((department) => option(department.id, stringOf(department.name)));
   const accountOptions = activeAccounts.map((account) => option(account.id, `${stringOf(account.name)} · ${formatEnumLabel(stringOf(account.accountType))}`));
   const budgetOptions = data.budgets
@@ -80,6 +91,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         notes: stringOrNull(item.description),
         createdAt: stringOf(item.createdAt),
         meta: [],
+        values: fieldValues(item, ["name", "status", "description"]),
       })),
     },
     {
@@ -105,6 +117,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         notes: stringOrNull(item.description),
         createdAt: stringOf(item.createdAt),
         meta: [`Solde initial: ${numberOf(item.openingBalance)?.toFixed(2) || "0.00"} USD`],
+        values: fieldValues(item, ["name", "accountType", "openingBalance", "status", "description"]),
       })),
     },
     {
@@ -114,6 +127,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
       endpoint: "/api/admin/hr-cfo/employees",
       fields: [
         { name: "userId", label: "Collaborateur", type: "select", required: true, options: staffOptions, helperText: "Seuls les membres non-client actifs ou suspendus sont proposés." },
+        { name: "userEmailPreview", label: "Email du collaborateur", type: "preview", previewFor: "userId", helperText: "Lecture seule: l'email vient du compte utilisateur sélectionné." },
         { name: "departmentId", label: "Département", type: "select", required: true, options: departmentOptions },
         { name: "jobTitle", label: "Poste", type: "text", required: true },
         selectField("contractType", "Contrat", ["PERMANENT", "CONSULTANT", "PART_TIME", "INTERN", "TEMPORARY"]),
@@ -142,6 +156,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
           stringOf(item.managerName) ? `Responsable: ${stringOf(item.managerName)}` : "",
           stringOf(item.kpis) ? "KPIs définis" : "",
         ]),
+        values: fieldValues(item, ["userId", "departmentId", "jobTitle", "contractType", "status", "startDate", "monthlyCompensation", "managerUserId", "complianceStatus", "skills", "kpis", "notes"]),
       })),
     },
     {
@@ -176,6 +191,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
           notes: stringOrNull(item.notes),
           createdAt: stringOf(item.createdAt),
           meta: [`Consommé: ${spent.toFixed(2)} USD`, `Solde: ${remaining.toFixed(2)} USD`, `Utilisation: ${percent}%`, `Risque: ${formatEnumLabel(stringOf(item.riskLevel))}`],
+          values: fieldValues(item, ["name", "departmentId", "accountId", "periodStart", "periodEnd", "amount", "status", "riskLevel", "notes"]),
         };
       }),
     },
@@ -194,7 +210,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "budgetId", label: "Budget concerné", type: "select", options: budgetOptions, helperText: "Obligatoire pour une sortie validée." },
         { name: "paymentMethod", label: "Moyen de paiement", type: "text", placeholder: "Espèces, banque, mobile money..." },
-        { name: "attachmentUrl", label: "Pièce justificative", type: "text", placeholder: "Lien du justificatif" },
+        { name: "attachmentUrl", label: "Pièce justificative", type: "file", helperText: "Import PDF, image ou document. Le fichier est stocké côté serveur dans Supabase." },
         selectField("status", "Statut", hrStatus.transactions),
         { name: "notes", label: "Notes / commentaires", type: "textarea" },
       ],
@@ -210,6 +226,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         createdAt: stringOf(item.createdAt),
         href: stringOf(item.invoiceId) ? `/api/invoices/${stringOf(item.invoiceId)}/pdf` : null,
         meta: compactStrings([formatEnumLabel(stringOf(item.transactionType)), stringOf(item.accountName), stringOf(item.budgetName), stringOf(item.departmentName)]),
+        values: fieldValues(item, ["transactionType", "transactionCategory", "title", "amount", "transactionDate", "accountId", "departmentId", "budgetId", "paymentMethod", "attachmentUrl", "status", "notes"]),
       })),
     },
     {
@@ -239,7 +256,10 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         currency: "USD",
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
+        href: stringOf(item.id) ? `/api/admin/payrolls/${stringOf(item.id)}/pdf` : null,
+        hrefLabel: "Télécharger le bulletin de paie",
         meta: compactStrings([`Brut: ${(numberOf(item.grossAmount) || 0).toFixed(2)} USD`, stringOf(item.accountName), stringOf(item.budgetName)]),
+        values: fieldValues(item, ["employeeId", "periodStart", "periodEnd", "grossAmount", "bonusAmount", "deductionAmount", "accountId", "budgetId", "status", "notes"]),
       })),
     },
   ];
@@ -288,6 +308,7 @@ export function buildScoDatasets(data: {
         notes: stringOrNull(item.description),
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([stringOf(item.sku), `Unité: ${stringOf(item.unit)}`]),
+        values: fieldValues(item, ["name", "sku", "category", "itemType", "unit", "status", "description"]),
       })),
     },
     {
@@ -316,6 +337,7 @@ export function buildScoDatasets(data: {
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([`Score: ${stringOf(item.reliabilityScore)}/100`, `${stringOf(item.avgLeadTimeDays)} j`, stringOf(item.contactName)]),
+        values: fieldValues(item, ["name", "category", "contactName", "email", "phone", "paymentTerms", "reliabilityScore", "avgLeadTimeDays", "status", "notes"]),
       })),
     },
     {
@@ -348,6 +370,7 @@ export function buildScoDatasets(data: {
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([formatEnumLabel(stringOf(item.urgency)), `Budget: ${formatEnumLabel(stringOf(item.budgetStatus))}`, stringOf(item.selectedVendorName), formatDate(item.neededBy)]),
+        values: fieldValues(item, ["title", "requesterName", "project", "urgency", "estimatedAmount", "currency", "status", "budgetStatus", "selectedVendorName", "neededBy", "justification", "notes"]),
       })),
     },
     {
@@ -378,6 +401,7 @@ export function buildScoDatasets(data: {
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([`Qté: ${stringOf(item.quantity)} ${stringOf(item.unit)}`, `Seuil: ${stringOf(item.minimumQuantity)}`, stringOf(item.ownerName)]),
+        values: fieldValues(item, ["materialItemId", "name", "sku", "category", "quantity", "minimumQuantity", "unit", "location", "ownerName", "status", "lastInventoryAt", "notes"]),
       })),
     },
     {
@@ -406,6 +430,7 @@ export function buildScoDatasets(data: {
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([`État: ${formatEnumLabel(stringOf(item.condition))}`, stringOf(item.assignedTo), formatDate(item.maintenanceDueAt)]),
+        values: fieldValues(item, ["materialItemId", "tag", "name", "category", "assignedTo", "condition", "status", "purchaseDate", "maintenanceDueAt", "notes"]),
       })),
     },
     {
@@ -433,6 +458,297 @@ export function buildScoDatasets(data: {
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([formatDate(item.eventDate), stringOf(item.transportPlan) ? "Transport cadré" : "", stringOf(item.equipmentChecklist) ? "Checklist prête" : ""]),
+        values: fieldValues(item, ["title", "location", "eventDate", "ownerName", "status", "transportPlan", "equipmentChecklist", "riskNotes", "notes"]),
+      })),
+    },
+  ];
+}
+
+export function buildCooDatasets(data: {
+  operations: Array<Record<string, unknown>>;
+  tasks: Array<Record<string, unknown>>;
+  recurringTasks: Array<Record<string, unknown>>;
+  departmentRequests: Array<Record<string, unknown>>;
+  blockers: Array<Record<string, unknown>>;
+  meetings: Array<Record<string, unknown>>;
+  workflows: Array<Record<string, unknown>>;
+  reports: Array<Record<string, unknown>>;
+  departments: Array<Record<string, unknown>>;
+  employees: Array<Record<string, unknown>>;
+}): OperationDataset[] {
+  const activeDepartments = data.departments.filter((item) => stringOf(item.status) === "ACTIVE");
+  const activeEmployees = data.employees.filter((employee) => stringOf(employee.status) !== "EXITED");
+  const departmentOptions = activeDepartments.map((department) => option(department.id, stringOf(department.name)));
+  const employeeOptions = activeEmployees.map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
+  const operationOptions = data.operations.map((operation) => option(operation.id, stringOf(operation.title)));
+  const taskOptions = data.tasks.map((task) => option(task.id, stringOf(task.title)));
+
+  return [
+    {
+      id: "operations",
+      label: "Opérations internes",
+      description: "Activités transversales entre départements: objectifs, livrables, responsable, progression et priorités.",
+      endpoint: "/api/admin/coo/operations",
+      fields: [
+        { name: "title", label: "Titre", type: "text", required: true },
+        { name: "pilotDepartmentId", label: "Département pilote", type: "select", required: true, options: departmentOptions },
+        { name: "leadEmployeeId", label: "Responsable principal", type: "select", required: true, options: employeeOptions },
+        { name: "involvedDepartments", label: "Départements impliqués", type: "text", placeholder: "Commercial, Tech, HR & CFO..." },
+        { name: "collaborators", label: "Collaborateurs impliqués", type: "text" },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        selectField("status", "Statut", cooStatus.operations),
+        { name: "startDate", label: "Date de début", type: "date" },
+        { name: "dueDate", label: "Date limite", type: "date" },
+        { name: "progress", label: "Progression %", type: "number" },
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "objectives", label: "Objectifs attendus", type: "textarea" },
+        { name: "deliverables", label: "Livrables attendus", type: "textarea" },
+        { name: "attachmentUrl", label: "Pièce jointe", type: "file" },
+        { name: "comments", label: "Commentaires", type: "textarea" },
+      ],
+      statusOptions: statusOptions(cooStatus.operations),
+      records: data.operations.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${stringOf(item.pilotDepartmentName)} · ${stringOf(item.leadEmployeeName)}`,
+        status: stringOf(item.status),
+        amount: numberOf(item.progress),
+        currency: "%",
+        notes: stringOrNull(item.comments || item.description),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), formatDate(item.dueDate), stringOf(item.involvedDepartments)]),
+        values: fieldValues(item, ["title", "description", "pilotDepartmentId", "leadEmployeeId", "involvedDepartments", "collaborators", "priority", "status", "startDate", "dueDate", "progress", "objectives", "deliverables", "attachmentUrl", "comments"]),
+      })),
+    },
+    {
+      id: "tasks",
+      label: "Tâches journalières",
+      description: "Distribution, suivi, validation, blocage et preuve d'exécution des tâches quotidiennes.",
+      endpoint: "/api/admin/coo/tasks",
+      fields: [
+        { name: "title", label: "Tâche", type: "text", required: true },
+        selectField("taskType", "Type de tâche", ["ADMINISTRATIVE", "COMMERCIAL", "TECHNICAL", "FINANCIAL", "LEGAL", "HR", "CLIENT_SUPPORT", "MARKETING", "REPORTING", "MEETING", "CLIENT_FOLLOW_UP", "DELIVERY", "OTHER"]),
+        { name: "operationId", label: "Opération liée", type: "select", options: operationOptions },
+        { name: "departmentId", label: "Département", type: "select", required: true, options: departmentOptions },
+        { name: "responsibleEmployeeId", label: "Responsable", type: "select", required: true, options: employeeOptions },
+        { name: "assigneeEmployeeId", label: "Assigné à", type: "select", required: true, options: employeeOptions },
+        { name: "plannedDate", label: "Date prévue", type: "date" },
+        { name: "plannedStartTime", label: "Heure début", type: "text", placeholder: "08:30" },
+        { name: "deadlineTime", label: "Heure limite", type: "text", placeholder: "17:00" },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        selectField("status", "Statut", cooStatus.tasks),
+        { name: "progress", label: "Avancement %", type: "number" },
+        { name: "description", label: "Instructions", type: "textarea" },
+        { name: "managerComment", label: "Commentaire responsable", type: "textarea" },
+        { name: "assigneeComment", label: "Commentaire exécutant", type: "textarea" },
+        { name: "proofUrl", label: "Preuve / livrable", type: "file" },
+        { name: "lateReason", label: "Raison du retard", type: "textarea" },
+        { name: "blockerReason", label: "Raison du blocage", type: "textarea" },
+      ],
+      statusOptions: statusOptions(cooStatus.tasks),
+      records: data.tasks.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${stringOf(item.departmentName)} · ${stringOf(item.assigneeName)}`,
+        status: stringOf(item.status),
+        amount: numberOf(item.progress),
+        currency: "%",
+        notes: stringOrNull(item.description || item.managerComment),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), formatEnumLabel(stringOf(item.taskType)), formatDate(item.plannedDate), stringOf(item.responsibleName)]),
+        values: fieldValues(item, ["title", "taskType", "operationId", "departmentId", "responsibleEmployeeId", "assigneeEmployeeId", "plannedDate", "plannedStartTime", "deadlineTime", "priority", "status", "progress", "description", "managerComment", "assigneeComment", "proofUrl", "lateReason", "blockerReason"]),
+      })),
+    },
+    {
+      id: "recurringTasks",
+      label: "Tâches récurrentes",
+      description: "Modèles de tâches quotidiennes, hebdomadaires ou mensuelles à générer sans doublons.",
+      endpoint: "/api/admin/coo/recurringTasks",
+      fields: [
+        { name: "title", label: "Modèle", type: "text", required: true },
+        selectField("frequency", "Fréquence", ["DAILY", "WEEKLY", "MONTHLY", "CUSTOM"]),
+        { name: "daysOfWeek", label: "Jours concernés", type: "text" },
+        { name: "startDate", label: "Début", type: "date" },
+        { name: "endDate", label: "Fin optionnelle", type: "date" },
+        { name: "deadlineTime", label: "Heure limite", type: "text" },
+        { name: "departmentId", label: "Département", type: "select", required: true, options: departmentOptions },
+        { name: "responsibleEmployeeId", label: "Responsable", type: "select", required: true, options: employeeOptions },
+        { name: "assigneeEmployeeId", label: "Assigné à", type: "select", required: true, options: employeeOptions },
+        selectField("status", "Statut", cooStatus.recurringTasks),
+        { name: "taskTemplate", label: "Modèle de tâche", type: "textarea", required: true },
+      ],
+      statusOptions: statusOptions(cooStatus.recurringTasks),
+      records: data.recurringTasks.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.frequency))} · ${stringOf(item.assigneeName)}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.taskTemplate),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([stringOf(item.departmentName), stringOf(item.deadlineTime)]),
+        values: fieldValues(item, ["title", "frequency", "daysOfWeek", "startDate", "endDate", "deadlineTime", "departmentId", "responsibleEmployeeId", "assigneeEmployeeId", "status", "taskTemplate"]),
+      })),
+    },
+    {
+      id: "departmentRequests",
+      label: "Coordination inter-départements",
+      description: "Demandes, dépendances, validations et réponses attendues entre départements DTSC.",
+      endpoint: "/api/admin/coo/departmentRequests",
+      fields: [
+        { name: "requesterDepartmentId", label: "Département demandeur", type: "select", required: true, options: departmentOptions },
+        { name: "targetDepartmentId", label: "Département destinataire", type: "select", required: true, options: departmentOptions },
+        { name: "subject", label: "Objet", type: "text", required: true },
+        { name: "requesterEmployeeId", label: "Responsable demandeur", type: "select", required: true, options: employeeOptions },
+        { name: "targetResponsibleEmployeeId", label: "Responsable destinataire", type: "select", required: true, options: employeeOptions },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        selectField("status", "Statut", cooStatus.departmentRequests),
+        { name: "requestedAt", label: "Date demande", type: "date" },
+        { name: "dueDate", label: "Date limite", type: "date" },
+        { name: "taskId", label: "Tâche liée", type: "select", options: taskOptions },
+        { name: "operationId", label: "Opération liée", type: "select", options: operationOptions },
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "expectedResponse", label: "Réponse attendue", type: "textarea" },
+        { name: "comment", label: "Commentaire", type: "textarea" },
+      ],
+      statusOptions: statusOptions(cooStatus.departmentRequests),
+      records: data.departmentRequests.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.subject),
+        subtitle: `${stringOf(item.requesterDepartmentName)} → ${stringOf(item.targetDepartmentName)}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.comment || item.description),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), stringOf(item.targetResponsibleName), formatDate(item.dueDate)]),
+        values: fieldValues(item, ["requesterDepartmentId", "targetDepartmentId", "subject", "requesterEmployeeId", "targetResponsibleEmployeeId", "priority", "status", "requestedAt", "dueDate", "taskId", "operationId", "description", "expectedResponse", "comment"]),
+      })),
+    },
+    {
+      id: "blockers",
+      label: "Suivi des blocages",
+      description: "Blocages opérationnels, criticité, impact, action corrective et résolution.",
+      endpoint: "/api/admin/coo/blockers",
+      fields: [
+        { name: "title", label: "Blocage", type: "text", required: true },
+        selectField("sourceType", "Source", ["TASK", "OPERATION", "DEPARTMENT_REQUEST", "HR", "FINANCE", "TECHNICAL", "INFORMATION", "VALIDATION_DELAY", "OTHER"]),
+        { name: "taskId", label: "Tâche liée", type: "select", options: taskOptions },
+        { name: "operationId", label: "Opération liée", type: "select", options: operationOptions },
+        { name: "departmentId", label: "Département", type: "select", required: true, options: departmentOptions },
+        { name: "responsibleEmployeeId", label: "Responsable", type: "select", required: true, options: employeeOptions },
+        selectField("severity", "Criticité", ["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+        selectField("status", "Statut", cooStatus.blockers),
+        { name: "declaredAt", label: "Déclaré le", type: "date" },
+        { name: "resolvedAt", label: "Résolu le", type: "date" },
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "impact", label: "Impact", type: "textarea" },
+        { name: "correctiveAction", label: "Action corrective", type: "textarea" },
+        { name: "resolutionComment", label: "Commentaire résolution", type: "textarea" },
+      ],
+      statusOptions: statusOptions(cooStatus.blockers),
+      records: data.blockers.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${stringOf(item.departmentName)} · ${stringOf(item.responsibleName)}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.description || item.resolutionComment),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([`Criticité: ${formatEnumLabel(stringOf(item.severity))}`, formatEnumLabel(stringOf(item.sourceType)), formatDate(item.resolvedAt)]),
+        values: fieldValues(item, ["title", "sourceType", "taskId", "operationId", "departmentId", "responsibleEmployeeId", "severity", "status", "declaredAt", "resolvedAt", "description", "impact", "correctiveAction", "resolutionComment"]),
+      })),
+    },
+    {
+      id: "meetings",
+      label: "Réunions et comptes rendus",
+      description: "Planification, décisions, participants, tâches générées et comptes rendus.",
+      endpoint: "/api/admin/coo/meetings",
+      fields: [
+        { name: "title", label: "Réunion", type: "text", required: true },
+        selectField("meetingType", "Type", ["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"]),
+        { name: "meetingDate", label: "Date", type: "date" },
+        { name: "meetingTime", label: "Heure", type: "text" },
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "reportOwnerEmployeeId", label: "Responsable CR", type: "select", required: true, options: employeeOptions },
+        selectField("status", "Statut", cooStatus.meetings),
+        { name: "participants", label: "Participants", type: "textarea" },
+        { name: "agenda", label: "Ordre du jour", type: "textarea" },
+        { name: "decisions", label: "Décisions prises", type: "textarea" },
+        { name: "generatedTasks", label: "Tâches générées", type: "textarea" },
+        { name: "minutes", label: "Compte rendu", type: "textarea" },
+        { name: "attachmentUrl", label: "Pièce jointe", type: "file" },
+      ],
+      statusOptions: statusOptions(cooStatus.meetings),
+      records: data.meetings.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.meetingType))} · ${stringOf(item.departmentName)}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.minutes || item.decisions),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatDate(item.meetingDate), stringOf(item.meetingTime), stringOf(item.reportOwnerName)]),
+        values: fieldValues(item, ["title", "meetingType", "meetingDate", "meetingTime", "departmentId", "reportOwnerEmployeeId", "status", "participants", "agenda", "decisions", "generatedTasks", "minutes", "attachmentUrl"]),
+      })),
+    },
+    {
+      id: "workflows",
+      label: "Workflows opérationnels",
+      description: "Processus internes répétables, étapes, responsables et délais.",
+      endpoint: "/api/admin/coo/workflows",
+      fields: [
+        { name: "name", label: "Workflow", type: "text", required: true },
+        { name: "departmentId", label: "Département responsable", type: "select", required: true, options: departmentOptions },
+        selectField("status", "Statut", cooStatus.workflows),
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "steps", label: "Étapes", type: "textarea", required: true },
+        { name: "stepOwners", label: "Responsables par étape", type: "textarea" },
+        { name: "stepDeadlines", label: "Délais par étape", type: "textarea" },
+      ],
+      statusOptions: statusOptions(cooStatus.workflows),
+      records: data.workflows.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.name),
+        subtitle: stringOf(item.departmentName),
+        status: stringOf(item.status),
+        notes: stringOrNull(item.description || item.steps),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([stringOf(item.stepOwners) ? "Responsables définis" : "", stringOf(item.stepDeadlines) ? "Délais cadrés" : ""]),
+        values: fieldValues(item, ["name", "departmentId", "status", "description", "steps", "stepOwners", "stepDeadlines"]),
+      })),
+    },
+    {
+      id: "reports",
+      label: "Rapports opérationnels",
+      description: "Rapports journaliers, hebdomadaires, mensuels, par département, collaborateur ou opération.",
+      endpoint: "/api/admin/coo/reports",
+      fields: [
+        { name: "title", label: "Rapport", type: "text", required: true },
+        selectField("reportType", "Type", ["DAILY", "WEEKLY", "MONTHLY", "DEPARTMENT", "EMPLOYEE", "OPERATION"]),
+        { name: "periodStart", label: "Début période", type: "date" },
+        { name: "periodEnd", label: "Fin période", type: "date" },
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "employeeId", label: "Collaborateur", type: "select", options: employeeOptions },
+        { name: "operationId", label: "Opération", type: "select", options: operationOptions },
+        { name: "tasksCreated", label: "Tâches créées", type: "number" },
+        { name: "tasksCompleted", label: "Tâches terminées", type: "number" },
+        { name: "tasksValidated", label: "Tâches validées", type: "number" },
+        { name: "tasksRejected", label: "Tâches rejetées", type: "number" },
+        { name: "lateTasks", label: "Tâches en retard", type: "number" },
+        { name: "blockersCount", label: "Blocages", type: "number" },
+        { name: "executionRate", label: "Taux d'exécution %", type: "number" },
+        selectField("status", "Statut", cooStatus.reports),
+        { name: "mainBlockers", label: "Principaux blocages", type: "textarea" },
+        { name: "recommendations", label: "Recommandations", type: "textarea" },
+      ],
+      statusOptions: statusOptions(cooStatus.reports),
+      records: data.reports.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: formatEnumLabel(stringOf(item.reportType)),
+        status: stringOf(item.status),
+        amount: numberOf(item.executionRate),
+        currency: "%",
+        notes: stringOrNull(item.recommendations || item.mainBlockers),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([stringOf(item.departmentName), stringOf(item.employeeName), formatDate(item.periodEnd)]),
+        values: fieldValues(item, ["title", "reportType", "periodStart", "periodEnd", "departmentId", "employeeId", "operationId", "tasksCreated", "tasksCompleted", "tasksValidated", "tasksRejected", "lateTasks", "blockersCount", "executionRate", "status", "mainBlockers", "recommendations"]),
       })),
     },
   ];
@@ -463,4 +779,19 @@ function formatDate(value: unknown) {
     return "";
   }
   return new Date(String(value)).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function fieldValues(item: Record<string, unknown>, fields: string[]) {
+  return Object.fromEntries(fields.map((field) => [field, formValue(item[field])]));
+}
+
+function formValue(value: unknown) {
+  if (value == null) {
+    return "";
+  }
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    return text.slice(0, 10);
+  }
+  return text;
 }

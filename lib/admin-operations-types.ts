@@ -9,17 +9,20 @@ export type OperationRecord = {
   createdAt: string;
   meta: string[];
   href?: string | null;
+  hrefLabel?: string | null;
+  values?: Record<string, string>;
 };
 
 export type OperationField = {
   name: string;
   label: string;
-  type: "text" | "email" | "number" | "date" | "textarea" | "select" | "hidden";
+  type: "text" | "email" | "number" | "date" | "textarea" | "select" | "hidden" | "preview" | "file";
   required?: boolean;
   placeholder?: string;
   options?: Array<{ value: string; label: string; email?: string }>;
   helperText?: string;
   readOnly?: boolean;
+  previewFor?: string;
 };
 
 export type OperationDataset = {

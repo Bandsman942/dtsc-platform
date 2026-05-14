@@ -973,3 +973,233 @@ model MaterialItem {
   @@index([status, category])
   @@index([itemType, status])
 }
+
+model CooOperation {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String?
+  pilotDepartmentId    String?
+  pilotDepartmentName  String?
+  involvedDepartments  String?
+  leadEmployeeId       String?
+  leadEmployeeName     String?
+  collaborators        String?
+  priority             String   @default("NORMAL")
+  status               String   @default("PLANNED")
+  startDate            DateTime?
+  dueDate              DateTime?
+  progress             Int      @default(0)
+  objectives           String?
+  deliverables         String?
+  comments             String?
+  attachmentUrl        String?
+  createdById          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  tasks                CooTask[]
+  departmentRequests   CooDepartmentRequest[]
+  blockers             CooBlocker[]
+  reports              CooOperationalReport[]
+
+  @@index([status, priority])
+  @@index([pilotDepartmentId])
+  @@index([leadEmployeeId])
+  @@index([dueDate])
+}
+
+model CooTask {
+  id                    String   @id @default(cuid())
+  title                 String
+  description           String?
+  taskType              String   @default("ADMINISTRATIVE")
+  operationId           String?
+  departmentId          String?
+  departmentName        String?
+  responsibleEmployeeId String?
+  responsibleName       String?
+  assigneeEmployeeId    String?
+  assigneeName          String?
+  plannedDate           DateTime?
+  plannedStartTime      String?
+  deadlineTime          String?
+  priority              String   @default("NORMAL")
+  status                String   @default("TODO")
+  progress              Int      @default(0)
+  managerComment        String?
+  assigneeComment       String?
+  proofUrl              String?
+  lateReason            String?
+  blockerReason         String?
+  closedAt              DateTime?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  operation             CooOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+  blockers              CooBlocker[]
+
+  @@index([status, priority])
+  @@index([plannedDate])
+  @@index([departmentId])
+  @@index([responsibleEmployeeId])
+  @@index([assigneeEmployeeId])
+  @@index([operationId])
+}
+
+model CooRecurringTask {
+  id                    String   @id @default(cuid())
+  title                 String
+  frequency             String   @default("DAILY")
+  daysOfWeek            String?
+  startDate             DateTime?
+  endDate               DateTime?
+  deadlineTime          String?
+  departmentId          String?
+  departmentName        String?
+  responsibleEmployeeId String?
+  responsibleName       String?
+  assigneeEmployeeId    String?
+  assigneeName          String?
+  taskTemplate          String
+  status                String   @default("ACTIVE")
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status, frequency])
+  @@index([departmentId])
+}
+
+model CooDepartmentRequest {
+  id                          String   @id @default(cuid())
+  requesterDepartmentId       String?
+  requesterDepartmentName     String?
+  targetDepartmentId          String?
+  targetDepartmentName        String?
+  subject                     String
+  description                 String?
+  requesterEmployeeId         String?
+  requesterName               String?
+  targetResponsibleEmployeeId String?
+  targetResponsibleName       String?
+  priority                    String   @default("NORMAL")
+  status                      String   @default("NEW")
+  requestedAt                 DateTime?
+  dueDate                     DateTime?
+  expectedResponse            String?
+  comment                     String?
+  taskId                      String?
+  operationId                 String?
+  createdById                 String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  operation                   CooOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  @@index([status, priority])
+  @@index([requesterDepartmentId])
+  @@index([targetDepartmentId])
+  @@index([operationId])
+}
+
+model CooBlocker {
+  id                    String   @id @default(cuid())
+  title                 String
+  description           String?
+  sourceType            String   @default("TASK")
+  taskId                String?
+  operationId           String?
+  departmentId          String?
+  departmentName        String?
+  responsibleEmployeeId String?
+  responsibleName       String?
+  severity              String   @default("MEDIUM")
+  impact                String?
+  correctiveAction      String?
+  status                String   @default("OPEN")
+  declaredAt            DateTime?
+  resolvedAt            DateTime?
+  resolutionComment     String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  task                  CooTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  operation             CooOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  @@index([status, severity])
+  @@index([departmentId])
+  @@index([taskId])
+  @@index([operationId])
+}
+
+model CooMeeting {
+  id                    String   @id @default(cuid())
+  title                 String
+  meetingType           String   @default("COORDINATION")
+  meetingDate           DateTime?
+  meetingTime           String?
+  departmentId          String?
+  departmentName        String?
+  participants          String?
+  agenda                String?
+  decisions             String?
+  generatedTasks        String?
+  reportOwnerEmployeeId String?
+  reportOwnerName       String?
+  status                String   @default("PLANNED")
+  minutes               String?
+  attachmentUrl         String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status, meetingDate])
+  @@index([departmentId])
+}
+
+model CooWorkflow {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  departmentId   String?
+  departmentName String?
+  steps          String
+  stepOwners     String?
+  stepDeadlines  String?
+  status         String   @default("DRAFT")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, departmentId])
+}
+
+model CooOperationalReport {
+  id              String   @id @default(cuid())
+  title           String
+  reportType      String   @default("DAILY")
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  departmentId    String?
+  departmentName  String?
+  employeeId      String?
+  employeeName    String?
+  operationId     String?
+  tasksCreated    Int      @default(0)
+  tasksCompleted  Int      @default(0)
+  tasksValidated  Int      @default(0)
+  tasksRejected   Int      @default(0)
+  lateTasks       Int      @default(0)
+  blockersCount   Int      @default(0)
+  executionRate   Decimal  @default(0) @db.Decimal(5, 2)
+  mainBlockers    String?
+  recommendations String?
+  status          String   @default("DRAFT")
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  operation       CooOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  @@index([reportType, status])
+  @@index([departmentId])
+  @@index([employeeId])
+  @@index([operationId])
+}

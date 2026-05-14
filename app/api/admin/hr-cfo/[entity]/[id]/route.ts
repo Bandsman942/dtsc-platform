@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { operationPatchSchema } from "@/lib/validators";
+import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string; id: string }> };
 type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts";
@@ -24,20 +24,21 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unknown HR & CFO entity", message: "Module HR & CFO introuvable." }, { status: 404 });
   }
 
-  const body = operationPatchSchema.safeParse(await req.json());
+  const rawBody = await req.json();
+  const body = parsePatch(entity, rawBody);
   if (!body.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid HR & CFO update", message: "La mise à jour demandée est invalide." }, { status: 400 });
   }
 
   try {
-    const record = await updateRecord(entity, id, body.data);
+    const record = await updateRecord(entity, id, body.data as Record<string, unknown>);
     await writeAuditLog({
       userId: session.userId,
       action: `HR_CFO_${entity.toUpperCase()}_UPDATED`,
       entity,
       entityId: id,
-      metadata: body.data,
+      metadata: JSON.parse(JSON.stringify(body.data)),
       request: req,
     });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
@@ -82,27 +83,97 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 }
 
-async function updateRecord(entity: HrcfoEntity, id: string, data: { status?: string; notes?: string }) {
+function parsePatch(entity: HrcfoEntity, body: Record<string, unknown>) {
   if (entity === "departments") {
-    return prisma.department.update({ where: { id }, data: { status: data.status, description: data.notes } });
+    return hrcfoReferenceSchemas.departments.partial().safeParse(body);
   }
   if (entity === "accounts") {
-    return prisma.financialAccount.update({ where: { id }, data: { status: data.status, description: data.notes } });
+    return hrcfoReferenceSchemas.accounts.partial().safeParse(body);
+  }
+  if (entity === "transactions") {
+    return hrcfoSchemas.transactions.partial().safeParse({ ...body, category: body.transactionCategory });
   }
   if (entity === "employees") {
-    return prisma.hrcfoEmployee.update({ where: { id }, data });
+    return hrcfoSchemas.employees.partial().safeParse(body);
   }
   if (entity === "budgets") {
-    return prisma.hrcfoBudget.update({ where: { id }, data });
+    return hrcfoSchemas.budgets.partial().safeParse(body);
+  }
+  return hrcfoSchemas.payrolls.partial().safeParse(body);
+}
+
+async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string, unknown>) {
+  if (entity === "departments") {
+    return prisma.department.update({ where: { id }, data: data as never });
+  }
+  if (entity === "accounts") {
+    return prisma.financialAccount.update({ where: { id }, data: data as never });
+  }
+  if (entity === "employees") {
+    const departmentId = data.departmentId ? String(data.departmentId) : undefined;
+    const department = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
+    if (departmentId && (!department || department.status !== "ACTIVE")) {
+      throw new Error("Le département sélectionné est inactif ou introuvable.");
+    }
+    const managerUserId = data.managerUserId ? String(data.managerUserId) : undefined;
+    const managerEmployee = managerUserId
+      ? await prisma.hrcfoEmployee.findFirst({ where: { userId: managerUserId, status: { not: "EXITED" } } })
+      : null;
+    if (managerUserId && !managerEmployee) {
+      throw new Error("Le responsable doit être un collaborateur DTSC déjà enregistré et actif.");
+    }
+    const updateData = {
+      department: department?.name,
+      departmentId: department?.id,
+      jobTitle: data.jobTitle ? String(data.jobTitle) : undefined,
+      contractType: data.contractType ? String(data.contractType) : undefined,
+      status: data.status ? String(data.status) : undefined,
+      startDate: data.startDate as Date | undefined,
+      monthlyCompensation: data.monthlyCompensation as number | undefined,
+      managerName: managerEmployee?.fullName || null,
+      managerUserId: managerEmployee?.userId || null,
+      skills: data.skills ? String(data.skills) : null,
+      kpis: data.kpis ? String(data.kpis) : null,
+      complianceStatus: data.complianceStatus ? String(data.complianceStatus) : undefined,
+      notes: data.notes ? String(data.notes) : null,
+    };
+    return prisma.hrcfoEmployee.update({ where: { id }, data: updateData });
+  }
+  if (entity === "budgets") {
+    const departmentId = data.departmentId ? String(data.departmentId) : undefined;
+    const department = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
+    const updateData = { ...data, ownerDepartment: department?.name } as Record<string, unknown>;
+    return prisma.hrcfoBudget.update({ where: { id }, data: updateData as never });
   }
   if (entity === "transactions") {
     const transaction = await prisma.hrcfoExpense.findUnique({ where: { id } });
     if (transaction?.status === "VALIDATED") {
       throw new Error("Une transaction déjà validée ne peut pas être modifiée depuis ce raccourci.");
     }
-    return prisma.hrcfoExpense.update({ where: { id }, data });
+    const saved = await prisma.hrcfoExpense.update({
+      where: { id },
+      data: { ...data, category: data.transactionCategory } as never,
+      include: { account: true, department: true, budget: true, invoice: true },
+    });
+    return {
+      ...saved,
+      accountName: saved.account?.name,
+      departmentName: saved.department?.name,
+      budgetName: saved.budget?.name,
+      invoiceId: saved.invoice?.id,
+    };
   }
-  return prisma.hrcfoPayroll.update({ where: { id }, data });
+  const payroll = await prisma.hrcfoPayroll.findUnique({ where: { id } });
+  if (payroll?.transactionId || payroll?.status === "VALIDATED" || payroll?.status === "PAID") {
+    throw new Error("Une paie validée ou payée ne peut pas être modifiée depuis ce raccourci.");
+  }
+  const saved = await prisma.hrcfoPayroll.update({ where: { id }, data: data as never, include: { employee: true, account: true, budget: true } });
+  return {
+    ...saved,
+    employeeName: saved.employee.fullName,
+    accountName: saved.account?.name,
+    budgetName: saved.budget?.name,
+  };
 }
 
 async function deleteRecord(entity: HrcfoEntity, id: string) {

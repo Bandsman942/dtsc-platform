@@ -183,6 +183,7 @@ export function SettingsPanel({
                 <option value="/chat">Chatbot</option>
                 <option value="/billing">Abonnement</option>
                 <option value="/company">Entreprise</option>
+                <option value="/activities">Activités DTSC</option>
                 <option value="/support">Support</option>
                 <option value="/notifications">Notifications</option>
                 <option value="/announcements">Annonces</option>

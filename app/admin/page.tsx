@@ -14,7 +14,7 @@ import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
-import { buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
+import { buildCooDatasets, buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
@@ -34,6 +34,7 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "users", label: "Utilisateurs", description: "Comptes, rôles et limites", icon: Users },
   { id: "hrCfo", label: "HR & CFO", description: "RH, finance et contrôle", icon: BriefcaseBusiness },
   { id: "sco", label: "SCO", description: "Achats, stocks et logistique", icon: PackageCheck },
+  { id: "coo", label: "COO", description: "Opérations, tâches et workflows", icon: BarChart3 },
   { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
   { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
   { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
@@ -109,6 +110,14 @@ export default async function AdminPage({
     scoInventory,
     scoAssets,
     scoLogistics,
+    cooOperations,
+    cooTasks,
+    cooRecurringTasks,
+    cooDepartmentRequests,
+    cooBlockers,
+    cooMeetings,
+    cooWorkflows,
+    cooReports,
   ] =
     await Promise.all([
       getAppSettings(),
@@ -223,6 +232,14 @@ export default async function AdminPage({
       prisma.scoInventoryItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.scoAsset.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.scoLogisticsEvent.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooOperation.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooRecurringTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooDepartmentRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooBlocker.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
@@ -369,6 +386,18 @@ export default async function AdminPage({
     assets: scoAssets,
     logistics: scoLogistics,
   })));
+  const cooDatasets = buildCooDatasets(JSON.parse(JSON.stringify({
+    operations: cooOperations,
+    tasks: cooTasks,
+    recurringTasks: cooRecurringTasks,
+    departmentRequests: cooDepartmentRequests,
+    blockers: cooBlockers,
+    meetings: cooMeetings,
+    workflows: cooWorkflows,
+    reports: cooReports,
+    departments: hrcfoDepartments,
+    employees: hrcfoEmployees,
+  })));
 
   return (
     <AppShell user={user}>
@@ -476,6 +505,17 @@ export default async function AdminPage({
             playbook={["Besoin exprimé", "Budget vérifié", "Fournisseur comparé", "Commande", "Réception", "Stock ou actif", "Facture CFO"]}
             datasets={scoDatasets}
             canEdit={canView("sco")}
+          />
+        )}
+
+        {activeSection === "coo" && canView("coo") && (
+          <OperationsAdminPanel
+            eyebrow="Chief Operating Officer"
+            title="Pilotage COO"
+            description="Organisez les opérations internes, distribuez les tâches, suivez les blocages, structurez les réunions et consolidez les rapports opérationnels DTSC."
+            playbook={["Opération cadrée", "Tâches assignées", "Coordination", "Blocages traités", "Validation", "Rapport opérationnel"]}
+            datasets={cooDatasets}
+            canEdit={canView("coo")}
           />
         )}
 

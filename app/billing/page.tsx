@@ -1,4 +1,5 @@
 import { CreditCard } from "lucide-react";
+import Link from "next/link";
 import { SubscriptionStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { BillingPlans } from "@/components/billing/billing-plans";
@@ -70,6 +71,13 @@ export default async function BillingPage() {
                     {Number(invoice.amount).toFixed(2)} {invoice.currency}
                   </p>
                   <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-muted">{formatEnumLabel(invoice.status)}</span>
+                  <Link
+                    href={`/api/invoices/${invoice.id}/pdf`}
+                    target="_blank"
+                    className="rounded-xl bg-[#002b5b] px-3 py-2 text-xs font-black text-white shadow-[0_10px_24px_rgba(0,43,91,0.15)] transition hover:-translate-y-0.5 hover:bg-[#001736]"
+                  >
+                    Télécharger la facture
+                  </Link>
                 </div>
               ))
             ) : (

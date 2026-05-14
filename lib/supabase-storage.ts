@@ -123,6 +123,54 @@ export async function uploadPublicPublicationImageToSupabase({
   };
 }
 
+export async function uploadOperationFileToSupabase({
+  userId,
+  file,
+}: {
+  userId: string;
+  file: File;
+}) {
+  if (!isSupabaseStorageConfigured()) {
+    throw new Error("Supabase Storage is not configured");
+  }
+
+  const client = createSupabaseStorageClient();
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
+  const storagePath = `operations/${userId}/${randomUUID()}-${safeFileName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storagePath, buffer, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+
+  if (error) {
+    throw new Error(`Supabase Storage operation file upload failed: ${error.message}`);
+  }
+
+  return {
+    path: data.path,
+    url: `/api/admin/operation-files/${data.path.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}`,
+  };
+}
+
+export async function downloadOperationFileFromSupabase(path: string) {
+  if (!isSupabaseStorageConfigured()) {
+    throw new Error("Supabase Storage is not configured");
+  }
+  if (!path.startsWith("operations/")) {
+    throw new Error("Invalid operation file path");
+  }
+
+  const client = createSupabaseStorageClient();
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).download(path);
+
+  if (error) {
+    throw new Error(`Supabase Storage operation file download failed: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function downloadPublicPublicationImageFromSupabase(path: string) {
   if (!isSupabaseStorageConfigured()) {
     throw new Error("Supabase Storage is not configured");

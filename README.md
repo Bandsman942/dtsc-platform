@@ -458,6 +458,10 @@ Mesures présentes:
 - Erreurs publiques génériques côté client
 - Headers sécurité globaux via `next.config.ts`
 - Protection middleware contre les requêtes cross-origin mutantes et l'en-tête `x-middleware-subrequest`
+- Administration COO avec RBAC configurable, suivi des opérations internes, tâches, blocages, réunions, workflows et rapports
+- Pièces justificatives HR & CFO / SCO / COO importées depuis l'appareil et stockées côté serveur dans Supabase Storage
+- Boutons de téléchargement visibles pour les factures et les bulletins de paie imprimables/exportables en PDF
+- Module privé `Activités DTSC` pour les utilisateurs reliés à un dossier collaborateur HR & CFO
 
 À renforcer avant forte charge:
 
