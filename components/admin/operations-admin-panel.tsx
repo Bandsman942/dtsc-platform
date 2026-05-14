@@ -46,10 +46,11 @@ export function OperationsAdminPanel({
     });
     const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown> } | null;
     setMessage(response.ok ? `${dataset.label}: élément enregistré.` : `${dataset.label}: enregistrement impossible.`);
-    if (response.ok && body?.record) {
+    const savedRecord = body?.record;
+    if (response.ok && savedRecord) {
       setItemsByDataset((current) => ({
         ...current,
-        [dataset.id]: [recordFromRaw(dataset, body.record), ...(current[dataset.id] || [])],
+        [dataset.id]: [recordFromRaw(dataset, savedRecord), ...(current[dataset.id] || [])],
       }));
       form.reset();
     }
@@ -64,8 +65,9 @@ export function OperationsAdminPanel({
     });
     const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown> } | null;
     setMessage(response.ok ? "Statut opérationnel mis à jour." : "Impossible de mettre à jour cet élément.");
-    if (response.ok && body?.record) {
-      const saved = recordFromRaw(dataset, body.record);
+    const savedRecord = body?.record;
+    if (response.ok && savedRecord) {
+      const saved = recordFromRaw(dataset, savedRecord);
       setItemsByDataset((current) => ({
         ...current,
         [dataset.id]: (current[dataset.id] || []).map((item) => item.id === saved.id ? { ...item, status: saved.status, notes: saved.notes } : item),
