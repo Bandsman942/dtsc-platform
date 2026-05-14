@@ -1,5 +1,6 @@
 import { InvoiceStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createSubscriptionIncomeTransaction } from "@/lib/hr-cfo-finance";
 import { sendZohoOutboundMail } from "@/lib/zoho-mail";
 
 export const defaultPlanIds = ["freemium", "starter", "growth", "premium"] as const;
@@ -140,12 +141,20 @@ export async function activateSubscriptionFromPayment(paymentReference: string, 
     include: { user: true },
   });
 
+  const incomeTransaction = await createSubscriptionIncomeTransaction(updatedPayment.id).catch(() => null);
+  if (incomeTransaction) {
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: { hrcfoTransactionId: incomeTransaction.id },
+    });
+  }
+
   const mail = await sendInvoiceEmail(invoice.id).catch((error) => ({
     sent: false,
     reason: error instanceof Error ? error.message : "Invoice email failed",
   }));
 
-  return { ok: true, payment: updatedPayment, subscription, invoice, mail };
+  return { ok: true, payment: updatedPayment, subscription, invoice, mail, incomeTransaction };
 }
 
 export async function sendInvoiceEmail(invoiceId: string) {

@@ -34,8 +34,10 @@ export function OperationsAdminPanel({
     const records = Object.values(itemsByDataset).flat();
     const amount = records.reduce((sum, item) => sum + (item.amount || 0), 0);
     const alerts = records.filter((item) => /OVER|URGENT|CRITICAL|LOW_STOCK|OVERDUE|BLOCKED|MISSING|EXPIRED/i.test(item.status)).length;
-    return { records: records.length, amount, alerts };
-  }, [itemsByDataset]);
+    const datasetCounts = datasets.map((dataset) => ({ label: dataset.label, count: (itemsByDataset[dataset.id] || []).length }));
+    const maxCount = Math.max(1, ...datasetCounts.map((item) => item.count));
+    return { records: records.length, amount, alerts, datasetCounts, maxCount };
+  }, [datasets, itemsByDataset]);
 
   async function createRecord(dataset: OperationDataset, form: HTMLFormElement) {
     const payload = Object.fromEntries(new FormData(form).entries());
@@ -44,8 +46,8 @@ export function OperationsAdminPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown> } | null;
-    setMessage(response.ok ? `${dataset.label}: élément enregistré.` : `${dataset.label}: enregistrement impossible.`);
+    const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown>; message?: string } | null;
+    setMessage(response.ok ? `${dataset.label}: élément enregistré.` : body?.message || `${dataset.label}: enregistrement impossible.`);
     const savedRecord = body?.record;
     if (response.ok && savedRecord) {
       setItemsByDataset((current) => ({
@@ -63,8 +65,8 @@ export function OperationsAdminPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown> } | null;
-    setMessage(response.ok ? "Statut opérationnel mis à jour." : "Impossible de mettre à jour cet élément.");
+    const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown>; message?: string } | null;
+    setMessage(response.ok ? "Statut opérationnel mis à jour." : body?.message || "Impossible de mettre à jour cet élément.");
     const savedRecord = body?.record;
     if (response.ok && savedRecord) {
       const saved = recordFromRaw(dataset, savedRecord);
@@ -77,7 +79,8 @@ export function OperationsAdminPanel({
 
   async function removeRecord(dataset: OperationDataset, record: OperationRecord) {
     const response = await fetch(`${dataset.endpoint}/${record.id}`, { method: "DELETE" });
-    setMessage(response.ok ? "Élément supprimé." : "Suppression impossible.");
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    setMessage(response.ok ? "Élément supprimé." : body?.message || "Suppression impossible.");
     if (response.ok) {
       setItemsByDataset((current) => ({
         ...current,
@@ -104,6 +107,22 @@ export function OperationsAdminPanel({
               <span key={step} className="rounded-full border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs font-bold text-dtsc-muted">
                 {index + 1}. {step}
               </span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <h3 className="font-black text-dtsc-ink">Lecture rapide des volumes</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {totals.datasetCounts.map((item) => (
+              <div key={item.label} className="min-w-0">
+                <div className="flex items-center justify-between gap-3 text-xs font-black text-dtsc-muted">
+                  <span className="truncate">{item.label}</span>
+                  <span>{item.count}</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-dtsc-soft">
+                  <div className="h-full rounded-full bg-cyan-400" style={{ width: `${Math.max(4, (item.count / totals.maxCount) * 100)}%` }} />
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -242,6 +261,11 @@ function RecordCard({
         )}
       </div>
       {record.notes && <p className="mt-3 text-sm leading-6 text-dtsc-muted">{record.notes}</p>}
+      {record.href && (
+        <a href={record.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl bg-dtsc-soft px-3 py-2 text-xs font-black text-dtsc-blue underline-offset-4 hover:underline">
+          Ouvrir la facture
+        </a>
+      )}
       <form onSubmit={submit} className="mt-4 grid gap-2 md:grid-cols-[180px_1fr_auto_auto]">
         <select name="status" defaultValue={record.status} disabled={!canEdit} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
           {dataset.statusOptions.map((option) => (
@@ -296,11 +320,16 @@ function FieldInput({ field, disabled }: { field: OperationField; disabled: bool
     </span>
   );
 
+  if (field.type === "hidden") {
+    return <input type="hidden" name={field.name} value={field.placeholder || ""} />;
+  }
+
   if (field.type === "textarea") {
     return (
       <label className="grid gap-1 md:col-span-2">
         {label}
         <textarea name={field.name} required={field.required} disabled={disabled} placeholder={field.placeholder} className={`${className} min-h-20`} />
+        {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
       </label>
     );
   }
@@ -310,10 +339,12 @@ function FieldInput({ field, disabled }: { field: OperationField; disabled: bool
       <label className="grid gap-1">
         {label}
         <select name={field.name} required={field.required} disabled={disabled} className={className}>
+          {!field.required && <option value="">Non renseigné</option>}
           {field.options?.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
+        {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
       </label>
     );
   }
@@ -321,7 +352,8 @@ function FieldInput({ field, disabled }: { field: OperationField; disabled: bool
   return (
     <label className="grid gap-1">
       {label}
-      <Input name={field.name} type={field.type} required={field.required} disabled={disabled} placeholder={field.placeholder} />
+      <Input name={field.name} type={field.type} required={field.required} disabled={disabled || field.readOnly} placeholder={field.placeholder} />
+      {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
     </label>
   );
 }
@@ -336,12 +368,13 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 }
 
 function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown>): OperationRecord {
-  const title = pickString(record, ["title", "fullName", "name", "invoiceNumber", "tag"]) || dataset.label;
+  const title = pickString(record, ["title", "fullName", "employeeName", "name", "invoiceNumber", "tag"]) || dataset.label;
   const subtitle = pickString(record, ["department", "jobTitle", "category", "counterparty", "requesterName", "location", "ownerDepartment"]);
-  const amount = pickNumber(record, ["amount", "monthlyCompensation", "estimatedAmount"]);
+  const amount = pickNumber(record, ["amount", "netAmount", "monthlyCompensation", "estimatedAmount", "currentBalance"]);
   const meta = compactStrings([
     pickString(record, ["project", "relatedProject", "selectedVendorName", "assignedTo", "ownerName"]),
     pickString(record, ["priority", "urgency", "riskLevel", "condition", "complianceStatus", "budgetStatus"]),
+    pickString(record, ["accountName", "budgetName", "departmentName"]),
   ]);
 
   return {
@@ -354,6 +387,7 @@ function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown
     notes: typeof record.notes === "string" ? record.notes : null,
     createdAt: String(record.createdAt || new Date().toISOString()),
     meta,
+    href: typeof record.href === "string" ? record.href : typeof record.invoiceId === "string" ? `/api/invoices/${record.invoiceId}/pdf` : null,
   };
 }
 

@@ -31,6 +31,12 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les emails riches collés par l'admin doivent être nettoyés côté serveur avant envoi: retirer scripts, iframes, handlers `on*` et URLs `javascript:`.
 - Les modules Administration visibles par `MANAGER` et `SUPPORT` doivent passer par `AppSetting.adminRoleAccess`; `ADMIN` garde toujours tous les blocs.
 - Les routes des sous-modules Administration HR & CFO et SCO doivent utiliser `requireAdminBlockAccess("hrCfo")` ou `requireAdminBlockAccess("sco")`, valider avec Zod, journaliser `ApiLog`/`AuditLog` et rester strictement internes.
+- Les règles financières HR & CFO critiques doivent rester côté serveur dans `lib/hr-cfo-finance.ts`: création de budget avec solde disponible, transaction d'entrée/sortie, consommation budgétaire, génération de facture, paie et transaction d'abonnement. Ne jamais se contenter d'une validation frontend pour les soldes, budgets, comptes ou paies.
+- Les collaborateurs HR & CFO doivent référencer des `User` non-`CLIENT`; ne jamais créer, modifier ou supprimer un compte utilisateur depuis le dossier collaborateur. Les départements et comptes financiers doivent passer par leurs référentiels dédiés.
+- Les champs opérationnels visibles comme `Responsable`, `Demandeur` ou `Assigné à` dans HR & CFO/SCO doivent être des combobox alimentées par les collaborateurs enregistrés, pas des champs texte libres.
+- Les demandes d'achat SCO doivent sélectionner le fournisseur retenu depuis les fournisseurs enregistrés; ne pas réintroduire un champ fournisseur libre pour cette décision.
+- Les stocks, inventaires, actifs et équipements SCO doivent pouvoir se rattacher au référentiel `MaterialItem` pour garder une traçabilité cohérente des biens matériels DTSC.
+- Une transaction validée ne doit pas être supprimée ou modifiée par un raccourci CRUD générique sans logique de contrepassation documentée; préférer une annulation métier journalisée.
 - Le module Entreprise remplace la navigation Documents. `/documents` doit rester une redirection vers `/company` tant que des anciens liens existent.
 - Le contexte Entreprise du chatbot doit rester strictement isolé par `userId` et ne jamais mélanger les profils, activités ou documents de deux utilisateurs.
 - Toute création de champ Entreprise doit être reflétée dans `lib/company-context.ts`, les validateurs Zod, Prisma, la migration SQL, le dashboard et la documentation.

@@ -58,8 +58,8 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
-- Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, visites, activité et audits
-- Sous-modules admin HR & CFO et SCO avec RBAC: dossiers RH, budgets, dépenses, factures, fournisseurs, achats, stocks, actifs et logistique
+- Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, HR & CFO, SCO, visites, activité et audits
+- Sous-modules admin HR & CFO et SCO avec RBAC: collaborateurs liés aux membres internes, départements, comptes financiers, budgets contrôlés, transactions, paie, factures automatiques, fournisseurs, achats, stocks, actifs et logistique
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
 - Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
@@ -318,8 +318,8 @@ Les utilisateurs connectés peuvent liker/disliker, commenter et répondre aux c
 
 Deux sous-modules internes complètent l'administration:
 
-- `HR & CFO`: collaborateurs, contrats, conformité RH, budgets, dépenses, remboursements, factures et contrôle interne.
-- `SCO`: fournisseurs, demandes d'achat, stocks, inventaire, actifs, équipements et logistique des missions ou événements.
+- `HR & CFO`: départements, comptes financiers, collaborateurs liés aux utilisateurs non-clients, budgets, transactions et paie. Les budgets exigent un compte suffisamment provisionné; les sorties exigent un budget disponible; les transactions validées mettent à jour les soldes et peuvent générer une facture exportable.
+- `SCO`: référentiel des biens matériels DTSC, fournisseurs, demandes d'achat, stocks, inventaire, actifs, équipements et logistique des missions ou événements. Le fournisseur retenu d'une demande d'achat se choisit dans la liste des fournisseurs déjà enregistrés, et les champs Responsable/Demandeur/Assigné à s'appuient sur les collaborateurs déjà créés.
 
 Ces sections utilisent le RBAC Administration existant: `ADMIN` conserve l'accès complet, tandis que `MANAGER` et `SUPPORT` peuvent recevoir ou perdre l'accès depuis le bloc `Accès RBAC`. Chaque sous-module dispose de formulaires de création, listes paginées, recherche intelligente, modification de statut, notes de suivi, suppression contrôlée, journalisation API et audit log.
 

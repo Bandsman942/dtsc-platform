@@ -181,61 +181,91 @@ const optionalDate = z
 
 const optionalText = (max = 500) => z.string().max(max).optional().or(z.literal(""));
 const money = z.coerce.number().min(0).max(10_000_000);
+const positiveMoney = z.coerce.number().positive().max(10_000_000);
 
 export const hrcfoSchemas = {
   employees: z.object({
-    fullName: z.string().min(2).max(160),
-    email: z.string().email().max(180).optional().or(z.literal("")),
-    department: z.string().min(2).max(120),
+    userId: z.string().min(5),
+    departmentId: z.string().min(5),
     jobTitle: z.string().min(2).max(140),
     contractType: z.enum(["PERMANENT", "CONSULTANT", "PART_TIME", "INTERN", "TEMPORARY"]).default("PERMANENT"),
     status: z.enum(["ACTIVE", "ONBOARDING", "ON_LEAVE", "SUSPENDED", "EXITED"]).default("ACTIVE"),
     startDate: optionalDate,
     monthlyCompensation: money.optional(),
-    managerName: optionalText(120),
+    managerUserId: optionalText(120),
     skills: optionalText(1000),
+    kpis: optionalText(1500),
     complianceStatus: z.enum(["COMPLETE", "TO_REVIEW", "MISSING_DOCUMENTS", "EXPIRED"]).default("TO_REVIEW"),
     notes: optionalText(1500),
   }),
   budgets: z.object({
     name: z.string().min(2).max(160),
-    ownerDepartment: z.string().min(2).max(120),
+    departmentId: z.string().min(5),
+    accountId: z.string().min(5),
     periodStart: optionalDate,
     periodEnd: optionalDate,
-    amount: money,
-    spentAmount: money.default(0),
+    amount: positiveMoney,
     status: z.enum(["OPEN", "MONITORING", "OVER_BUDGET", "CLOSED"]).default("OPEN"),
     riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("LOW"),
     notes: optionalText(1500),
   }),
-  expenses: z.object({
+  transactions: z.object({
+    transactionType: z.enum(["MANUAL", "SUBSCRIPTION", "PAYROLL", "SCO"]).default("MANUAL"),
+    transactionCategory: z.enum(["IN", "OUT"]),
     title: z.string().min(2).max(180),
-    requesterName: z.string().min(2).max(160),
-    category: z.string().min(2).max(120),
-    amount: money,
+    category: z.enum(["IN", "OUT"]),
+    requesterName: z.string().max(160).optional().or(z.literal("")),
+    amount: positiveMoney,
     currency: z.string().min(3).max(8).default("USD"),
-    project: optionalText(160),
-    status: z.enum(["SUBMITTED", "APPROVED", "REJECTED", "PAID", "ARCHIVED"]).default("SUBMITTED"),
+    transactionDate: optionalDate,
+    accountId: z.string().min(5),
+    departmentId: optionalText(120),
+    budgetId: optionalText(120),
+    paymentMethod: optionalText(120),
+    attachmentUrl: optionalText(600),
+    status: z.enum(["DRAFT", "PENDING", "VALIDATED", "REJECTED", "CANCELED"]).default("PENDING"),
     priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
-    evidenceUrl: optionalText(600),
-    dueDate: optionalDate,
-    paidAt: optionalDate,
     notes: optionalText(1500),
   }),
-  invoices: z.object({
-    invoiceNumber: z.string().min(1).max(120),
-    counterparty: z.string().min(2).max(180),
-    invoiceType: z.enum(["PAYABLE", "RECEIVABLE"]).default("PAYABLE"),
-    amount: money,
-    currency: z.string().min(3).max(8).default("USD"),
-    dueDate: optionalDate,
-    status: z.enum(["PENDING", "APPROVED", "PAID", "OVERDUE", "CANCELED"]).default("PENDING"),
-    relatedProject: optionalText(160),
+  payrolls: z.object({
+    employeeId: z.string().min(5),
+    periodStart: optionalDate.refine(Boolean, "La période de début est obligatoire."),
+    periodEnd: optionalDate.refine(Boolean, "La période de fin est obligatoire."),
+    grossAmount: positiveMoney,
+    bonusAmount: money.default(0),
+    deductionAmount: money.default(0),
+    accountId: z.string().min(5),
+    budgetId: z.string().min(5),
+    status: z.enum(["DRAFT", "VALIDATED", "PAID", "CANCELED"]).default("DRAFT"),
     notes: optionalText(1500),
   }),
 };
 
+export const hrcfoReferenceSchemas = {
+  departments: z.object({
+    name: z.string().min(2).max(140),
+    description: optionalText(800),
+    status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+  }),
+  accounts: z.object({
+    name: z.string().min(2).max(140),
+    accountType: z.enum(["CASH", "BANK", "MOBILE_MONEY", "PROJECT", "OPERATIONS"]).default("CASH"),
+    description: optionalText(800),
+    openingBalance: money.default(0),
+    status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+  }),
+};
+
 export const scoSchemas = {
+  materialItems: z.object({
+    name: z.string().min(2).max(180),
+    sku: optionalText(100),
+    category: z.string().min(2).max(120),
+    itemType: z.enum(["STOCK", "ASSET", "EQUIPMENT", "CONSUMABLE", "SERVICE_TOOL"]).default("EQUIPMENT"),
+    unit: z.string().min(1).max(40).default("unité"),
+    status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).default("ACTIVE"),
+    description: optionalText(1200),
+  }),
   vendors: z.object({
     name: z.string().min(2).max(180),
     category: z.string().min(2).max(120),
@@ -263,6 +293,7 @@ export const scoSchemas = {
     notes: optionalText(1500),
   }),
   inventory: z.object({
+    materialItemId: optionalText(120),
     name: z.string().min(2).max(180),
     sku: optionalText(80),
     category: z.string().min(2).max(120),
@@ -276,6 +307,7 @@ export const scoSchemas = {
     notes: optionalText(1500),
   }),
   assets: z.object({
+    materialItemId: optionalText(120),
     tag: z.string().min(1).max(100),
     name: z.string().min(2).max(180),
     category: z.string().min(2).max(120),

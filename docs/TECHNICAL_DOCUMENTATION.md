@@ -236,15 +236,19 @@ Modeles actifs:
 | `WebhookEvent` | Historisation des webhooks entrants |
 | `ApiLog` | Journalisation des appels API critiques |
 | `PushSubscription` | Abonnement navigateur/PWA prevu pour les notifications visibles et futures notifications push |
-| `HrcfoEmployee` | Dossiers collaborateurs, contrats, poste, statut et conformite RH |
-| `HrcfoBudget` | Enveloppes budgetaires, consommation, risque et statut de controle |
-| `HrcfoExpense` | Depenses, remboursements, justificatifs, priorites et paiements |
-| `HrcfoInvoice` | Factures internes fournisseurs/clients, echeances et statut |
+| `HrcfoEmployee` | Dossier collaborateur lie a un `User` non-client, departement, manager, KPIs, contrat, poste et conformite RH |
+| `Department` | Referentiel des departements DTSC actifs/inactifs |
+| `FinancialAccount` | Comptes financiers, solde initial, solde courant et statut |
+| `HrcfoBudget` | Enveloppes budgetaires liees a un departement et un compte, consommation, solde restant, risque et statut |
+| `HrcfoExpense` | Transactions financieres HR & CFO: entree/sortie, compte, budget, source, validation et facture associee |
+| `HrcfoPayroll` | Paie collaborateur, periode, brut, primes, retenues, compte, budget et transaction de sortie associee |
+| `HrcfoInvoice` | Ancienne table interne conservee pour compatibilite historique, plus exposee comme bloc manuel |
 | `ScoVendor` | Fournisseurs, categorie, contact, fiabilite et delais moyens |
-| `ScoPurchaseRequest` | Demandes d'achat, urgence, budget, fournisseur et statut de commande |
-| `ScoInventoryItem` | Stocks, quantites, seuils minimums, emplacement et inventaire |
-| `ScoAsset` | Actifs et equipements, assignation, etat, statut et maintenance |
-| `ScoLogisticsEvent` | Missions, evenements, transport, checklist, risques et statut logistique |
+| `ScoPurchaseRequest` | Demandes d'achat, urgence, budget, fournisseur retenu issu du referentiel Fournisseurs et statut de commande |
+| `MaterialItem` | Referentiel central des biens materiels DTSC: nom, reference, categorie, type, unite et statut |
+| `ScoInventoryItem` | Stocks, quantites, seuils minimums, emplacement, responsable et lien optionnel vers un bien materiel |
+| `ScoAsset` | Actifs et equipements, assignation, etat, statut, maintenance et lien optionnel vers un bien materiel |
+| `ScoLogisticsEvent` | Missions, evenements, transport, checklist, risques, responsable collaborateur et statut logistique |
 
 Champs profil utilisateur ajoutes:
 
@@ -546,16 +550,20 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
 | `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter, avec logs API et cause d'erreur explicite |
 | `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
-| `POST` | `/api/admin/hr-cfo/[entity]` | bloc `hrCfo` | Creation d'un dossier HR & CFO (`employees`, `budgets`, `expenses`, `invoices`) |
+| `POST` | `/api/admin/hr-cfo/[entity]` | bloc `hrCfo` | Creation d'un dossier HR & CFO (`departments`, `accounts`, `employees`, `budgets`, `transactions`, `payrolls`) |
 | `PATCH` | `/api/admin/hr-cfo/[entity]/[id]` | bloc `hrCfo` | Mise a jour statut/notes d'un dossier HR & CFO |
 | `DELETE` | `/api/admin/hr-cfo/[entity]/[id]` | bloc `hrCfo` | Suppression controlee d'un dossier HR & CFO |
-| `POST` | `/api/admin/sco/[entity]` | bloc `sco` | Creation d'un dossier SCO (`vendors`, `purchaseRequests`, `inventory`, `assets`, `logistics`) |
+| `POST` | `/api/admin/sco/[entity]` | bloc `sco` | Creation d'un dossier SCO (`materialItems`, `vendors`, `purchaseRequests`, `inventory`, `assets`, `logistics`) |
 | `PATCH` | `/api/admin/sco/[entity]/[id]` | bloc `sco` | Mise a jour statut/notes d'un dossier SCO |
 | `DELETE` | `/api/admin/sco/[entity]/[id]` | bloc `sco` | Suppression controlee d'un dossier SCO |
 
 Les routes HR & CFO / SCO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
 
-Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le reporting du capital humain, COSO pour le controle interne, ISO 9001 pour l'approche processus et l'amelioration continue, ISO 45001 pour la logique sante/securite lorsque des risques operations apparaissent, et ASCM SCOR pour structurer les operations supply chain.
+Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le reporting du capital humain, COSO pour le controle interne, ISO 9001 pour l'approche processus et l'amelioration continue, ISO 45001 pour la logique sante/securite lorsque des risques operations apparaissent, et ASCM SCOR pour structurer les operations supply chain. Les champs visibles `Responsable`, `Demandeur` et `Assigne a` des operations internes sont alimentes par les collaborateurs deja enregistres afin d'eviter les noms libres incoherents.
+
+Les regles financieres sensibles sont centralisees dans `lib/hr-cfo-finance.ts`: creation de budget avec solde disponible, validation des transactions d'entree/sortie, mise a jour du solde du compte, consommation budgetaire, generation de facture, transaction d'abonnement et paie. Une transaction de sortie exige un budget actif et suffisamment disponible; une paie validee cree une transaction de sortie; un paiement d'abonnement confirme cree une transaction d'entree idempotente et rattache la facture de paiement a cette transaction.
+
+Le SCO dispose maintenant d'un referentiel `MaterialItem` pour les biens materiels. Les stocks et actifs peuvent etre rattaches a ce referentiel pour suivre le meme bien entre inventaire, equipement, assignation et maintenance. Les demandes d'achat selectionnent le fournisseur retenu dans la liste des fournisseurs actifs ou sous surveillance, ce qui evite de saisir un fournisseur non reference.
 
 ### Billing et paiements
 

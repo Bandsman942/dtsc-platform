@@ -5,10 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { operationPatchSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string; id: string }> };
-type ScoEntity = "vendors" | "purchaseRequests" | "inventory" | "assets" | "logistics";
+type ScoEntity = "materialItems" | "vendors" | "purchaseRequests" | "inventory" | "assets" | "logistics";
 
 function isScoEntity(value: string): value is ScoEntity {
-  return value === "vendors" || value === "purchaseRequests" || value === "inventory" || value === "assets" || value === "logistics";
+  return value === "materialItems" || value === "vendors" || value === "purchaseRequests" || value === "inventory" || value === "assets" || value === "logistics";
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -30,18 +30,24 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid SCO update" }, { status: 400 });
   }
 
-  const record = await updateRecord(entity, id, body.data);
-  await writeAuditLog({
-    userId: session.userId,
-    action: `SCO_${entity.toUpperCase()}_UPDATED`,
-    entity,
-    entityId: id,
-    metadata: body.data,
-    request: req,
-  });
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
+  try {
+    const record = await updateRecord(entity, id, body.data);
+    await writeAuditLog({
+      userId: session.userId,
+      action: `SCO_${entity.toUpperCase()}_UPDATED`,
+      entity,
+      entityId: id,
+      metadata: body.data,
+      request: req,
+    });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
 
-  return NextResponse.json({ ok: true, record });
+    return NextResponse.json({ ok: true, record });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Mise à jour SCO impossible.";
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { entity, message } });
+    return NextResponse.json({ error: "SCO_RULE_FAILED", message }, { status: 400 });
+  }
 }
 
 export async function DELETE(req: Request, { params }: Params) {
@@ -57,20 +63,29 @@ export async function DELETE(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unknown SCO entity" }, { status: 404 });
   }
 
-  await deleteRecord(entity, id);
-  await writeAuditLog({
-    userId: session.userId,
-    action: `SCO_${entity.toUpperCase()}_DELETED`,
-    entity,
-    entityId: id,
-    request: req,
-  });
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
+  try {
+    await deleteRecord(entity, id);
+    await writeAuditLog({
+      userId: session.userId,
+      action: `SCO_${entity.toUpperCase()}_DELETED`,
+      entity,
+      entityId: id,
+      request: req,
+    });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
 
-  return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Suppression SCO impossible.";
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { entity, message } });
+    return NextResponse.json({ error: "SCO_RULE_FAILED", message }, { status: 400 });
+  }
 }
 
 async function updateRecord(entity: ScoEntity, id: string, data: { status?: string; notes?: string }) {
+  if (entity === "materialItems") {
+    return prisma.materialItem.update({ where: { id }, data: { status: data.status, description: data.notes } });
+  }
   if (entity === "vendors") {
     return prisma.scoVendor.update({ where: { id }, data });
   }
@@ -87,6 +102,16 @@ async function updateRecord(entity: ScoEntity, id: string, data: { status?: stri
 }
 
 async function deleteRecord(entity: ScoEntity, id: string) {
+  if (entity === "materialItems") {
+    const linked = await prisma.materialItem.findUnique({
+      where: { id },
+      include: { _count: { select: { inventoryItems: true, assets: true } } },
+    });
+    if (linked && (linked._count.inventoryItems || linked._count.assets)) {
+      throw new Error("Ce bien matériel est utilisé par le stock ou les actifs. Désactivez-le au lieu de le supprimer.");
+    }
+    return prisma.materialItem.delete({ where: { id } });
+  }
   if (entity === "vendors") {
     return prisma.scoVendor.delete({ where: { id } });
   }

@@ -8,15 +8,18 @@ export type OperationRecord = {
   notes?: string | null;
   createdAt: string;
   meta: string[];
+  href?: string | null;
 };
 
 export type OperationField = {
   name: string;
   label: string;
-  type: "text" | "email" | "number" | "date" | "textarea" | "select";
+  type: "text" | "email" | "number" | "date" | "textarea" | "select" | "hidden";
   required?: boolean;
   placeholder?: string;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string; email?: string }>;
+  helperText?: string;
+  readOnly?: boolean;
 };
 
 export type OperationDataset = {
