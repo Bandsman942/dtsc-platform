@@ -5,6 +5,8 @@ export const adminBlocks = [
   { id: "settings", label: "Paramètres globaux", description: "Limites, OTP, maintenance, diffusions et réglages applicatifs." },
   { id: "publications", label: "Publications publiques", description: "Contenus visibles sur la page Ressources." },
   { id: "users", label: "Utilisateurs", description: "Création, rôles, statuts et limites des comptes." },
+  { id: "hrCfo", label: "HR & CFO", description: "Ressources humaines, budgets, dépenses, factures et contrôle interne." },
+  { id: "sco", label: "SCO", description: "Fournisseurs, achats, stocks, actifs et logistique opérationnelle." },
   { id: "visits", label: "Visites du site", description: "Suivi des visites publiques et filtres de période." },
   { id: "activity", label: "Activité plateforme", description: "Conversations, tickets et tableaux opérationnels." },
   { id: "audits", label: "Audits et logs", description: "Paiements, logs API, webhooks et traces techniques." },
@@ -15,7 +17,7 @@ export type AdminRoleAccess = Record<Exclude<UserRole, "CLIENT">, AdminBlockId[]
 
 const defaultAccess: AdminRoleAccess = {
   ADMIN: adminBlocks.map((block) => block.id),
-  MANAGER: ["overview", "publications", "visits", "activity"],
+  MANAGER: ["overview", "publications", "hrCfo", "sco", "visits", "activity"],
   SUPPORT: ["overview", "activity", "audits"],
 };
 

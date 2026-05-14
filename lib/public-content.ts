@@ -202,6 +202,12 @@ export const legalPages: Record<string, PublicPageContent> = {
         bullets: ["Publication professionnelle requise", "Modération possible", "Confidentialité des tickets", "Fenêtre de modification paramétrable"],
       },
       {
+        heading: "Modules internes HR & CFO / SCO",
+        text:
+          "Les modules internes de gestion RH, financière, achats, stocks, actifs et logistique sont réservés aux utilisateurs habilités. Les informations saisies doivent être exactes, nécessaires au travail, proportionnées et traitées avec confidentialité. Les actions sensibles peuvent être journalisées afin d'assurer le contrôle interne, l'audit et la traçabilité.",
+        bullets: ["Accès réservé par rôle", "Données internes confidentielles", "Exactitude et proportionnalité", "Traçabilité des actions sensibles"],
+      },
+      {
         heading: "Disponibilité, évolution et responsabilité",
         text:
           "DTSC fournit une plateforme en évolution continue. Des interruptions temporaires peuvent être nécessaires pour la maintenance, la sécurité, l'amélioration fonctionnelle ou la résolution d'incidents. DTSC s'efforce de maintenir un service fiable, mais l'utilisateur reste responsable de ses décisions et de la vérification des informations critiques.",
@@ -226,14 +232,14 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Données collectées",
         text:
-          "La plateforme peut traiter les informations de compte, les coordonnées professionnelles, le rôle utilisateur, les paramètres de sécurité, les préférences privées du compte, les conversations chatbot, les tickets support, les annonces, les commentaires, les notifications, les journaux d'usage IA, les données techniques nécessaires au fonctionnement et les statistiques de visites des pages publiques.",
-        bullets: ["Identité et coordonnées professionnelles", "Préférences privées de compte et d'interface", "Messages, tickets et conversations", "Rôles, statuts et limites d'usage", "Journaux techniques et statistiques de visite"],
+          "La plateforme peut traiter les informations de compte, les coordonnées professionnelles, le rôle utilisateur, les paramètres de sécurité, les préférences privées du compte, les conversations chatbot, les tickets support, les annonces, les commentaires, les notifications, les journaux d'usage IA, les données techniques nécessaires au fonctionnement, les statistiques de visites des pages publiques et, pour les utilisateurs autorisés, des données internes de gestion HR & CFO ou SCO comme dossiers RH, budgets, dépenses, factures, fournisseurs, achats, stocks, actifs et opérations logistiques.",
+        bullets: ["Identité et coordonnées professionnelles", "Préférences privées de compte et d'interface", "Messages, tickets et conversations", "Données internes HR & CFO / SCO selon habilitation", "Rôles, statuts et limites d'usage", "Journaux techniques et statistiques de visite"],
       },
       {
         heading: "Finalités du traitement",
         text:
-          "Les données sont utilisées pour fournir l'accès à la plateforme, authentifier les utilisateurs, sécuriser les comptes, traiter les demandes support, afficher l'historique des conversations, mesurer l'usage IA, améliorer l'expérience utilisateur, administrer les rôles et préparer les échanges commerciaux ou techniques avec DTSC.",
-        bullets: ["Authentification et gestion des accès", "Support et suivi client", "Historique chatbot et continuité de service", "Pilotage administratif et sécurité"],
+          "Les données sont utilisées pour fournir l'accès à la plateforme, authentifier les utilisateurs, sécuriser les comptes, traiter les demandes support, afficher l'historique des conversations, mesurer l'usage IA, améliorer l'expérience utilisateur, administrer les rôles, préparer les échanges commerciaux ou techniques avec DTSC et piloter les opérations internes autorisées comme les ressources humaines, budgets, dépenses, achats, stocks et logistique.",
+        bullets: ["Authentification et gestion des accès", "Support et suivi client", "Historique chatbot et continuité de service", "Pilotage administratif HR & CFO / SCO", "Sécurité et audit"],
       },
       {
         heading: "Sécurité et confidentialité",

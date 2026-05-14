@@ -30,6 +30,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Quand les variables `ZOHO_MAIL_*` API sont configurées, privilégier l'API Zoho Mail directe avant les fallbacks Zoho Flow/webhook.
 - Les emails riches collés par l'admin doivent être nettoyés côté serveur avant envoi: retirer scripts, iframes, handlers `on*` et URLs `javascript:`.
 - Les modules Administration visibles par `MANAGER` et `SUPPORT` doivent passer par `AppSetting.adminRoleAccess`; `ADMIN` garde toujours tous les blocs.
+- Les routes des sous-modules Administration HR & CFO et SCO doivent utiliser `requireAdminBlockAccess("hrCfo")` ou `requireAdminBlockAccess("sco")`, valider avec Zod, journaliser `ApiLog`/`AuditLog` et rester strictement internes.
 - Le module Entreprise remplace la navigation Documents. `/documents` doit rester une redirection vers `/company` tant que des anciens liens existent.
 - Le contexte Entreprise du chatbot doit rester strictement isolé par `userId` et ne jamais mélanger les profils, activités ou documents de deux utilisateurs.
 - Toute création de champ Entreprise doit être reflétée dans `lib/company-context.ts`, les validateurs Zod, Prisma, la migration SQL, le dashboard et la documentation.

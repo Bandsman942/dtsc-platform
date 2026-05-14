@@ -661,3 +661,186 @@ model ApiLog {
   @@index([statusCode, createdAt])
   @@index([userId, createdAt])
 }
+
+model HrcfoEmployee {
+  id                  String   @id @default(cuid())
+  fullName            String
+  email               String?
+  department          String
+  jobTitle            String
+  contractType        String   @default("PERMANENT")
+  status              String   @default("ACTIVE")
+  startDate           DateTime?
+  monthlyCompensation Decimal? @db.Decimal(10, 2)
+  managerName         String?
+  skills              String?
+  complianceStatus    String   @default("TO_REVIEW")
+  notes               String?
+  createdById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([status, department])
+  @@index([createdAt])
+}
+
+model HrcfoBudget {
+  id              String   @id @default(cuid())
+  name            String
+  ownerDepartment String
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  amount          Decimal  @db.Decimal(12, 2)
+  spentAmount     Decimal  @default(0) @db.Decimal(12, 2)
+  status          String   @default("OPEN")
+  riskLevel       String   @default("LOW")
+  notes           String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, ownerDepartment])
+  @@index([createdAt])
+}
+
+model HrcfoExpense {
+  id          String   @id @default(cuid())
+  title       String
+  requesterName String
+  category    String
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("USD")
+  project     String?
+  status      String   @default("SUBMITTED")
+  priority    String   @default("MEDIUM")
+  evidenceUrl String?
+  dueDate     DateTime?
+  paidAt      DateTime?
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, priority])
+  @@index([createdAt])
+}
+
+model HrcfoInvoice {
+  id             String   @id @default(cuid())
+  invoiceNumber  String
+  counterparty   String
+  invoiceType    String   @default("PAYABLE")
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("USD")
+  dueDate        DateTime?
+  status         String   @default("PENDING")
+  relatedProject String?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, dueDate])
+  @@index([invoiceType, createdAt])
+}
+
+model ScoVendor {
+  id              String   @id @default(cuid())
+  name            String
+  category        String
+  contactName     String?
+  email           String?
+  phone           String?
+  paymentTerms    String?
+  reliabilityScore Int     @default(70)
+  avgLeadTimeDays Int      @default(7)
+  status          String   @default("ACTIVE")
+  notes           String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, category])
+  @@index([createdAt])
+}
+
+model ScoPurchaseRequest {
+  id                 String   @id @default(cuid())
+  title              String
+  requesterName      String
+  justification      String
+  project            String?
+  urgency            String   @default("MEDIUM")
+  estimatedAmount    Decimal? @db.Decimal(12, 2)
+  currency           String   @default("USD")
+  status             String   @default("DRAFT")
+  budgetStatus       String   @default("PENDING_REVIEW")
+  selectedVendorName String?
+  neededBy           DateTime?
+  notes              String?
+  createdById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, urgency])
+  @@index([createdAt])
+}
+
+model ScoInventoryItem {
+  id              String   @id @default(cuid())
+  name            String
+  sku             String?
+  category        String
+  quantity        Int      @default(0)
+  minimumQuantity Int      @default(1)
+  unit            String   @default("unité")
+  location        String?
+  ownerName       String?
+  status          String   @default("AVAILABLE")
+  lastInventoryAt DateTime?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, category])
+  @@index([quantity])
+}
+
+model ScoAsset {
+  id              String   @id @default(cuid())
+  tag             String
+  name            String
+  category        String
+  assignedTo      String?
+  condition       String   @default("GOOD")
+  status          String   @default("ASSIGNED")
+  purchaseDate    DateTime?
+  maintenanceDueAt DateTime?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, condition])
+  @@index([tag])
+}
+
+model ScoLogisticsEvent {
+  id                 String   @id @default(cuid())
+  title              String
+  location           String
+  eventDate          DateTime?
+  ownerName          String
+  status             String   @default("PLANNED")
+  transportPlan      String?
+  equipmentChecklist String?
+  riskNotes          String?
+  notes              String?
+  createdById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, eventDate])
+  @@index([createdAt])
+}

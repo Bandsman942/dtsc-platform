@@ -28,7 +28,7 @@ Objectifs couverts par le code actuel:
 - annonces internes avec commentaires et reactions;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
-- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions et acces par blocs pour les roles non-client;
+- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO et acces par blocs pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API et webhooks etendus aux zones critiques: chat, conversations, notifications, documents, paiements, diffusions, newsletter, entreprise et publications;
@@ -236,6 +236,15 @@ Modeles actifs:
 | `WebhookEvent` | Historisation des webhooks entrants |
 | `ApiLog` | Journalisation des appels API critiques |
 | `PushSubscription` | Abonnement navigateur/PWA prevu pour les notifications visibles et futures notifications push |
+| `HrcfoEmployee` | Dossiers collaborateurs, contrats, poste, statut et conformite RH |
+| `HrcfoBudget` | Enveloppes budgetaires, consommation, risque et statut de controle |
+| `HrcfoExpense` | Depenses, remboursements, justificatifs, priorites et paiements |
+| `HrcfoInvoice` | Factures internes fournisseurs/clients, echeances et statut |
+| `ScoVendor` | Fournisseurs, categorie, contact, fiabilite et delais moyens |
+| `ScoPurchaseRequest` | Demandes d'achat, urgence, budget, fournisseur et statut de commande |
+| `ScoInventoryItem` | Stocks, quantites, seuils minimums, emplacement et inventaire |
+| `ScoAsset` | Actifs et equipements, assignation, etat, statut et maintenance |
+| `ScoLogisticsEvent` | Missions, evenements, transport, checklist, risques et statut logistique |
 
 Champs profil utilisateur ajoutes:
 
@@ -349,11 +358,13 @@ Blocs Administration configurables par `ADMIN`:
 - `settings`: parametres globaux et diffusions;
 - `publications`: contenus publics administrables;
 - `users`: utilisateurs, roles et limites;
+- `hrCfo`: ressources humaines, finance, budgets, depenses, factures et controle interne;
+- `sco`: supply chain operations, fournisseurs, achats, stocks, actifs et logistique;
 - `visits`: visites du site;
 - `activity`: conversations, utilisateurs et tickets;
 - `audits`: paiements, logs API et webhooks.
 
-La page Administration est organisee en sous-modules via `section` dans l'URL (`/admin?section=users`, `/admin?section=audits`, etc.) afin d'eviter une page unique trop longue. La vue generale accepte un filtre periode (`7`, `30`, `90`, `200` jours) ou une date precise, puis recalcule les metriques serveur: utilisateurs actifs et nouveaux comptes, conversations, messages, tokens, visites publiques, tickets, paiements confirmes, revenus suivis, contacts, abonnes newsletter, erreurs API, documents prets, publications publiques et brouillons. Les graphiques restent bornes dans leurs cartes et utilisent les series journalieres de visites, messages et tokens. Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI. Les visites publiques sont agregees par requete SQL et le total est calcule par `count()` sur la periode filtree, sans limite fixe a 500 lignes.
+La page Administration est organisee en sous-modules via `section` dans l'URL (`/admin?section=users`, `/admin?section=audits`, etc.) afin d'eviter une page unique trop longue. La vue generale accepte un filtre periode (`7`, `30`, `90`, `200` jours) ou une date precise, puis recalcule les metriques serveur: utilisateurs actifs et nouveaux comptes, conversations, messages, tokens, visites publiques, tickets, paiements confirmes, revenus suivis, contacts, abonnes newsletter, erreurs API, documents prets, publications publiques et brouillons. Les graphiques restent bornes dans leurs cartes et utilisent les series journalieres de visites, messages et tokens. Les sous-modules `HR & CFO` et `SCO` ajoutent un mini-ERP interne DTSC: formulaires de creation, listes paginees, recherche intelligente, changement de statut, notes de suivi, suppression controlee, audit log et logs API. Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI. Les visites publiques sont agregees par requete SQL et le total est calcule par `count()` sur la periode filtree, sans limite fixe a 500 lignes.
 
 Regles annonces:
 
@@ -535,6 +546,16 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
 | `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter, avec logs API et cause d'erreur explicite |
 | `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
+| `POST` | `/api/admin/hr-cfo/[entity]` | bloc `hrCfo` | Creation d'un dossier HR & CFO (`employees`, `budgets`, `expenses`, `invoices`) |
+| `PATCH` | `/api/admin/hr-cfo/[entity]/[id]` | bloc `hrCfo` | Mise a jour statut/notes d'un dossier HR & CFO |
+| `DELETE` | `/api/admin/hr-cfo/[entity]/[id]` | bloc `hrCfo` | Suppression controlee d'un dossier HR & CFO |
+| `POST` | `/api/admin/sco/[entity]` | bloc `sco` | Creation d'un dossier SCO (`vendors`, `purchaseRequests`, `inventory`, `assets`, `logistics`) |
+| `PATCH` | `/api/admin/sco/[entity]/[id]` | bloc `sco` | Mise a jour statut/notes d'un dossier SCO |
+| `DELETE` | `/api/admin/sco/[entity]/[id]` | bloc `sco` | Suppression controlee d'un dossier SCO |
+
+Les routes HR & CFO / SCO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
+
+Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le reporting du capital humain, COSO pour le controle interne, ISO 9001 pour l'approche processus et l'amelioration continue, ISO 45001 pour la logique sante/securite lorsque des risques operations apparaissent, et ASCM SCOR pour structurer les operations supply chain.
 
 ### Billing et paiements
 

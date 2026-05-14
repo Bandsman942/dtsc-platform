@@ -169,8 +169,139 @@ export const massMailSchema = z.object({
 });
 
 export const adminAccessSchema = z.object({
-  MANAGER: z.array(z.enum(["overview", "settings", "publications", "users", "visits", "activity", "audits"])).default([]),
-  SUPPORT: z.array(z.enum(["overview", "settings", "publications", "users", "visits", "activity", "audits"])).default([]),
+  MANAGER: z.array(z.enum(["overview", "settings", "publications", "users", "hrCfo", "sco", "visits", "activity", "audits"])).default([]),
+  SUPPORT: z.array(z.enum(["overview", "settings", "publications", "users", "hrCfo", "sco", "visits", "activity", "audits"])).default([]),
+});
+
+const optionalDate = z
+  .string()
+  .optional()
+  .or(z.literal(""))
+  .transform((value) => value ? new Date(value) : undefined);
+
+const optionalText = (max = 500) => z.string().max(max).optional().or(z.literal(""));
+const money = z.coerce.number().min(0).max(10_000_000);
+
+export const hrcfoSchemas = {
+  employees: z.object({
+    fullName: z.string().min(2).max(160),
+    email: z.string().email().max(180).optional().or(z.literal("")),
+    department: z.string().min(2).max(120),
+    jobTitle: z.string().min(2).max(140),
+    contractType: z.enum(["PERMANENT", "CONSULTANT", "PART_TIME", "INTERN", "TEMPORARY"]).default("PERMANENT"),
+    status: z.enum(["ACTIVE", "ONBOARDING", "ON_LEAVE", "SUSPENDED", "EXITED"]).default("ACTIVE"),
+    startDate: optionalDate,
+    monthlyCompensation: money.optional(),
+    managerName: optionalText(120),
+    skills: optionalText(1000),
+    complianceStatus: z.enum(["COMPLETE", "TO_REVIEW", "MISSING_DOCUMENTS", "EXPIRED"]).default("TO_REVIEW"),
+    notes: optionalText(1500),
+  }),
+  budgets: z.object({
+    name: z.string().min(2).max(160),
+    ownerDepartment: z.string().min(2).max(120),
+    periodStart: optionalDate,
+    periodEnd: optionalDate,
+    amount: money,
+    spentAmount: money.default(0),
+    status: z.enum(["OPEN", "MONITORING", "OVER_BUDGET", "CLOSED"]).default("OPEN"),
+    riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("LOW"),
+    notes: optionalText(1500),
+  }),
+  expenses: z.object({
+    title: z.string().min(2).max(180),
+    requesterName: z.string().min(2).max(160),
+    category: z.string().min(2).max(120),
+    amount: money,
+    currency: z.string().min(3).max(8).default("USD"),
+    project: optionalText(160),
+    status: z.enum(["SUBMITTED", "APPROVED", "REJECTED", "PAID", "ARCHIVED"]).default("SUBMITTED"),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
+    evidenceUrl: optionalText(600),
+    dueDate: optionalDate,
+    paidAt: optionalDate,
+    notes: optionalText(1500),
+  }),
+  invoices: z.object({
+    invoiceNumber: z.string().min(1).max(120),
+    counterparty: z.string().min(2).max(180),
+    invoiceType: z.enum(["PAYABLE", "RECEIVABLE"]).default("PAYABLE"),
+    amount: money,
+    currency: z.string().min(3).max(8).default("USD"),
+    dueDate: optionalDate,
+    status: z.enum(["PENDING", "APPROVED", "PAID", "OVERDUE", "CANCELED"]).default("PENDING"),
+    relatedProject: optionalText(160),
+    notes: optionalText(1500),
+  }),
+};
+
+export const scoSchemas = {
+  vendors: z.object({
+    name: z.string().min(2).max(180),
+    category: z.string().min(2).max(120),
+    contactName: optionalText(140),
+    email: z.string().email().max(180).optional().or(z.literal("")),
+    phone: optionalText(60),
+    paymentTerms: optionalText(180),
+    reliabilityScore: z.coerce.number().int().min(0).max(100).default(70),
+    avgLeadTimeDays: z.coerce.number().int().min(0).max(365).default(7),
+    status: z.enum(["ACTIVE", "WATCHLIST", "SUSPENDED", "ARCHIVED"]).default("ACTIVE"),
+    notes: optionalText(1500),
+  }),
+  purchaseRequests: z.object({
+    title: z.string().min(2).max(180),
+    requesterName: z.string().min(2).max(160),
+    justification: z.string().min(5).max(1500),
+    project: optionalText(160),
+    urgency: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
+    estimatedAmount: money.optional(),
+    currency: z.string().min(3).max(8).default("USD"),
+    status: z.enum(["DRAFT", "SUBMITTED", "APPROVED", "ORDERED", "RECEIVED", "REJECTED", "CANCELED"]).default("DRAFT"),
+    budgetStatus: z.enum(["PENDING_REVIEW", "AVAILABLE", "INSUFFICIENT", "APPROVED"]).default("PENDING_REVIEW"),
+    selectedVendorName: optionalText(180),
+    neededBy: optionalDate,
+    notes: optionalText(1500),
+  }),
+  inventory: z.object({
+    name: z.string().min(2).max(180),
+    sku: optionalText(80),
+    category: z.string().min(2).max(120),
+    quantity: z.coerce.number().int().min(0).max(1_000_000).default(0),
+    minimumQuantity: z.coerce.number().int().min(0).max(1_000_000).default(1),
+    unit: z.string().min(1).max(40).default("unité"),
+    location: optionalText(140),
+    ownerName: optionalText(140),
+    status: z.enum(["AVAILABLE", "LOW_STOCK", "RESERVED", "OUT_OF_STOCK", "ARCHIVED"]).default("AVAILABLE"),
+    lastInventoryAt: optionalDate,
+    notes: optionalText(1500),
+  }),
+  assets: z.object({
+    tag: z.string().min(1).max(100),
+    name: z.string().min(2).max(180),
+    category: z.string().min(2).max(120),
+    assignedTo: optionalText(140),
+    condition: z.enum(["NEW", "GOOD", "FAIR", "DAMAGED", "REPAIR"]).default("GOOD"),
+    status: z.enum(["ASSIGNED", "AVAILABLE", "MAINTENANCE", "LOST", "RETIRED"]).default("ASSIGNED"),
+    purchaseDate: optionalDate,
+    maintenanceDueAt: optionalDate,
+    notes: optionalText(1500),
+  }),
+  logistics: z.object({
+    title: z.string().min(2).max(180),
+    location: z.string().min(2).max(180),
+    eventDate: optionalDate,
+    ownerName: z.string().min(2).max(160),
+    status: z.enum(["PLANNED", "READY", "IN_PROGRESS", "COMPLETED", "BLOCKED", "CANCELED"]).default("PLANNED"),
+    transportPlan: optionalText(1500),
+    equipmentChecklist: optionalText(1500),
+    riskNotes: optionalText(1500),
+    notes: optionalText(1500),
+  }),
+};
+
+export const operationPatchSchema = z.object({
+  status: z.string().min(2).max(80).optional(),
+  notes: optionalText(1500),
 });
 
 export const companyProfileSchema = z.object({

@@ -59,6 +59,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Copier une réponse assistant
 - Tickets support
 - Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, visites, activité et audits
+- Sous-modules admin HR & CFO et SCO avec RBAC: dossiers RH, budgets, dépenses, factures, fournisseurs, achats, stocks, actifs et logistique
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
 - Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
@@ -312,6 +313,15 @@ Champs principaux:
 Seules les publications marquées comme publiées sont visibles publiquement. Dans `/ressources`, elles sont regroupées par catégorie dans des accordions, tandis que les cartes visibles présentent seulement les 3 derniers contenus publiés. Les contenus institutionnels fixes sont centralisés dans `lib/public-site.ts` et l'index de recherche publique dans `lib/public-search.ts`.
 
 Les utilisateurs connectés peuvent liker/disliker, commenter et répondre aux commentaires sur une publication publique. Un utilisateur peut modifier son propre commentaire dans la fenêtre configurée par l'admin; seul `ADMIN` peut supprimer un commentaire.
+
+## Administration HR & CFO / SCO
+
+Deux sous-modules internes complètent l'administration:
+
+- `HR & CFO`: collaborateurs, contrats, conformité RH, budgets, dépenses, remboursements, factures et contrôle interne.
+- `SCO`: fournisseurs, demandes d'achat, stocks, inventaire, actifs, équipements et logistique des missions ou événements.
+
+Ces sections utilisent le RBAC Administration existant: `ADMIN` conserve l'accès complet, tandis que `MANAGER` et `SUPPORT` peuvent recevoir ou perdre l'accès depuis le bloc `Accès RBAC`. Chaque sous-module dispose de formulaires de création, listes paginées, recherche intelligente, modification de statut, notes de suivi, suppression contrôlée, journalisation API et audit log.
 
 ## PWA
 

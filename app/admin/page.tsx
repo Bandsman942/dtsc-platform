@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, FileText, Megaphone, MessageSquare, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, FileText, Megaphone, MessageSquare, PackageCheck, Settings, ShieldCheck, Users } from "lucide-react";
 import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -8,11 +8,13 @@ import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
+import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
+import { buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
@@ -30,6 +32,8 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "settings", label: "Paramètres", description: "Limites, OTP, diffusions", icon: Settings },
   { id: "publications", label: "Publications", description: "Articles et ressources publiques", icon: FileText },
   { id: "users", label: "Utilisateurs", description: "Comptes, rôles et limites", icon: Users },
+  { id: "hrCfo", label: "HR & CFO", description: "RH, finance et contrôle", icon: BriefcaseBusiness },
+  { id: "sco", label: "SCO", description: "Achats, stocks et logistique", icon: PackageCheck },
   { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
   { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
   { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
@@ -92,6 +96,15 @@ export default async function AdminPage({
     apiLogs,
     webhookEvents,
     publicPublications,
+    hrcfoEmployees,
+    hrcfoBudgets,
+    hrcfoExpenses,
+    hrcfoInvoices,
+    scoVendors,
+    scoPurchaseRequests,
+    scoInventory,
+    scoAssets,
+    scoLogistics,
   ] =
     await Promise.all([
       getAppSettings(),
@@ -180,6 +193,15 @@ export default async function AdminPage({
         include: { author: { select: { name: true, email: true } } },
         take: 40,
       }),
+      prisma.hrcfoEmployee.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.hrcfoBudget.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.hrcfoExpense.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.hrcfoInvoice.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.scoVendor.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.scoPurchaseRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.scoInventoryItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.scoAsset.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.scoLogisticsEvent.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
@@ -297,6 +319,19 @@ export default async function AdminPage({
       createdAt: event.createdAt.toISOString(),
     })),
   ].sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime());
+  const hrcfoDatasets = buildHrcfoDatasets(JSON.parse(JSON.stringify({
+    employees: hrcfoEmployees,
+    budgets: hrcfoBudgets,
+    expenses: hrcfoExpenses,
+    invoices: hrcfoInvoices,
+  })));
+  const scoDatasets = buildScoDatasets(JSON.parse(JSON.stringify({
+    vendors: scoVendors,
+    purchaseRequests: scoPurchaseRequests,
+    inventory: scoInventory,
+    assets: scoAssets,
+    logistics: scoLogistics,
+  })));
 
   return (
     <AppShell user={user}>
@@ -383,6 +418,28 @@ export default async function AdminPage({
             </div>
             {user.role === UserRole.ADMIN ? <CreateUserForm /> : <p className="text-sm text-dtsc-muted">Bloc visible en lecture, modification réservée au rôle ADMIN.</p>}
           </section>
+        )}
+
+        {activeSection === "hrCfo" && canView("hrCfo") && (
+          <OperationsAdminPanel
+            eyebrow="Gestion interne"
+            title="Opérations HR & CFO"
+            description="Centralisez les dossiers RH, budgets, dépenses, factures, alertes et contrôles internes de DTSC. Cette section suit les principes de reporting capital humain, contrôle interne, séparation des validations et pilotage financier utile aux décisions."
+            playbook={["Dossier RH complet", "Budget cadré", "Dépense soumise", "Validation financière", "Paiement ou clôture", "Audit"]}
+            datasets={hrcfoDatasets}
+            canEdit={canView("hrCfo")}
+          />
+        )}
+
+        {activeSection === "sco" && canView("sco") && (
+          <OperationsAdminPanel
+            eyebrow="Supply Chain Operations"
+            title="Opérations SCO"
+            description="Pilotez les fournisseurs, demandes d'achat, stocks, actifs et missions logistiques nécessaires aux formations, projets clients, événements, supports imprimés et opérations DTSC."
+            playbook={["Besoin exprimé", "Budget vérifié", "Fournisseur comparé", "Commande", "Réception", "Stock ou actif", "Facture CFO"]}
+            datasets={scoDatasets}
+            canEdit={canView("sco")}
+          />
         )}
 
         {activeSection === "visits" && canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />}
