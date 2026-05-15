@@ -1,5 +1,5 @@
-import { CircleAlert, ClipboardList, GitBranch, Users, type LucideIcon } from "lucide-react";
 import { redirect } from "next/navigation";
+import { ActivitiesDashboard } from "@/components/activities/activities-dashboard";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { formatEnumLabel } from "@/lib/labels";
@@ -15,7 +15,18 @@ export default async function ActivitiesPage() {
     redirect("/dashboard");
   }
 
-  const [tasks, operations, requests, blockers, meetings] = await Promise.all([
+  const [
+    tasks,
+    operations,
+    requests,
+    blockers,
+    meetings,
+    reports,
+    workflowShares,
+    payrolls,
+    collaborators,
+    operationOptions,
+  ] = await Promise.all([
     prisma.cooTask.findMany({
       where: {
         OR: [
@@ -24,17 +35,18 @@ export default async function ActivitiesPage() {
         ],
       },
       orderBy: [{ plannedDate: "desc" }, { updatedAt: "desc" }],
-      take: 80,
+      take: 120,
     }),
     prisma.cooOperation.findMany({
       where: {
         OR: [
           { leadEmployeeId: employee.id },
+          { collaborators: { contains: employee.id } },
           { collaborators: { contains: employee.fullName, mode: "insensitive" } },
         ],
       },
       orderBy: { updatedAt: "desc" },
-      take: 40,
+      take: 80,
     }),
     prisma.cooDepartmentRequest.findMany({
       where: {
@@ -44,22 +56,55 @@ export default async function ActivitiesPage() {
         ],
       },
       orderBy: { updatedAt: "desc" },
-      take: 40,
+      take: 80,
     }),
     prisma.cooBlocker.findMany({
       where: { responsibleEmployeeId: employee.id },
       orderBy: { updatedAt: "desc" },
-      take: 40,
+      take: 80,
     }),
     prisma.cooMeeting.findMany({
       where: {
         OR: [
           { reportOwnerEmployeeId: employee.id },
+          { participants: { contains: employee.id } },
           { participants: { contains: employee.fullName, mode: "insensitive" } },
         ],
       },
       orderBy: [{ meetingDate: "desc" }, { updatedAt: "desc" }],
-      take: 40,
+      take: 80,
+    }),
+    prisma.cooOperationalReport.findMany({
+      where: {
+        OR: [
+          { employeeId: employee.id },
+          { recipientEmployeeId: employee.id },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.cooWorkflowShare.findMany({
+      where: { employeeId: employee.id },
+      include: { workflow: true },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+    }),
+    prisma.hrcfoPayroll.findMany({
+      where: { employeeId: employee.id },
+      include: { budget: true, account: true },
+      orderBy: [{ periodStart: "desc" }, { updatedAt: "desc" }],
+      take: 80,
+    }),
+    prisma.hrcfoEmployee.findMany({
+      where: { status: { not: "EXITED" } },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true, email: true },
+    }),
+    prisma.cooOperation.findMany({
+      orderBy: { title: "asc" },
+      select: { id: true, title: true },
+      take: 200,
     }),
   ]);
 
@@ -67,114 +112,148 @@ export default async function ActivitiesPage() {
   const blocked = [...tasks.filter((task) => task.status === "BLOCKED"), ...blockers.filter((blocker) => blocker.status !== "RESOLVED")].length;
   const completed = tasks.filter((task) => task.status === "COMPLETED" || task.status === "VALIDATED").length;
 
+  const sections = [
+    {
+      id: "tasks",
+      title: "Mes tâches journalières",
+      description: "Consultez vos tâches, changez leur statut, ajoutez des commentaires et signalez les blocages.",
+      items: tasks.map((task) => ({
+        id: task.id,
+        entityType: "TASK" as const,
+        title: task.title,
+        status: task.status,
+        detail: [task.departmentName, task.plannedDate ? formatDate(task.plannedDate) : "", task.deadlineTime, task.responsibleName ? `Responsable: ${task.responsibleName}` : ""].filter(Boolean).join(" · "),
+        body: task.description || task.managerComment || task.assigneeComment,
+        date: toIso(task.plannedDate || task.updatedAt),
+        priority: task.priority,
+        progress: task.progress,
+      })),
+    },
+    {
+      id: "operations",
+      title: "Opérations internes",
+      description: "Suivez les opérations où vous êtes impliqué, leurs objectifs, livrables, priorités et mises à jour COO.",
+      items: operations.map((operation) => ({
+        id: operation.id,
+        entityType: "OPERATION" as const,
+        title: operation.title,
+        status: operation.status,
+        detail: [operation.pilotDepartmentName, `${operation.progress}%`, operation.dueDate ? formatDate(operation.dueDate) : ""].filter(Boolean).join(" · "),
+        body: operation.objectives || operation.deliverables || operation.description,
+        date: toIso(operation.updatedAt),
+        priority: operation.priority,
+        progress: operation.progress,
+      })),
+    },
+    {
+      id: "requests",
+      title: "Coordination inter-départements",
+      description: "Retrouvez les demandes reçues ou envoyées entre départements et échangez avec les responsables concernés.",
+      items: requests.map((request) => ({
+        id: request.id,
+        entityType: "DEPARTMENT_REQUEST" as const,
+        title: request.subject,
+        status: request.status,
+        detail: [request.requesterDepartmentName, request.targetDepartmentName].filter(Boolean).join(" → "),
+        body: request.expectedResponse || request.comment || request.description,
+        date: toIso(request.requestedAt || request.updatedAt),
+        priority: request.priority,
+      })),
+    },
+    {
+      id: "blockers",
+      title: "Blocages et réunions",
+      description: "Suivez les points bloqués, réunions, décisions, comptes rendus et échanges opérationnels.",
+      items: [
+        ...blockers.map((blocker) => ({
+          id: blocker.id,
+          entityType: "BLOCKER" as const,
+          title: blocker.title,
+          status: blocker.status,
+          detail: [blocker.departmentName, `Criticité ${formatEnumLabel(blocker.severity)}`].filter(Boolean).join(" · "),
+          body: blocker.correctiveAction || blocker.impact || blocker.description,
+          date: toIso(blocker.declaredAt || blocker.updatedAt),
+          priority: blocker.severity,
+        })),
+        ...meetings.map((meeting) => ({
+          id: meeting.id,
+          entityType: "MEETING" as const,
+          title: meeting.title,
+          status: meeting.status,
+          detail: [formatEnumLabel(meeting.meetingType), meeting.meetingDate ? formatDate(meeting.meetingDate) : "", meeting.meetingTime].filter(Boolean).join(" · "),
+          body: meeting.minutes || meeting.decisions || meeting.agenda,
+          date: toIso(meeting.meetingDate || meeting.updatedAt),
+        })),
+      ],
+    },
+    {
+      id: "reports",
+      title: "Rapports opérationnels",
+      description: "Rédigez des rapports, consultez ceux que vous avez reçus et commentez les suivis opérationnels.",
+      items: reports.map((report) => ({
+        id: report.id,
+        entityType: "REPORT" as const,
+        title: report.title,
+        status: report.status,
+        detail: [formatEnumLabel(report.reportType), report.recipientName ? `À: ${report.recipientName}` : "", report.employeeName ? `De: ${report.employeeName}` : ""].filter(Boolean).join(" · "),
+        body: report.content || report.recommendations || report.mainBlockers,
+        date: toIso(report.updatedAt),
+        priority: report.priority,
+      })),
+    },
+    {
+      id: "payrolls",
+      title: "Suivi de la paie",
+      description: "Consultez vos rémunérations dans le temps, le net payé, le budget lié et vos bulletins de paie.",
+      items: payrolls.map((payroll) => ({
+        id: payroll.id,
+        entityType: "PAYROLL" as const,
+        title: `Paie ${formatDate(payroll.periodStart)} - ${formatDate(payroll.periodEnd)}`,
+        status: payroll.status,
+        detail: [`Net: ${Number(payroll.netAmount).toFixed(2)} USD`, payroll.budget?.name, payroll.account?.name].filter(Boolean).join(" · "),
+        body: [
+          `Brut: ${Number(payroll.grossAmount).toFixed(2)} USD`,
+          `Primes: ${Number(payroll.bonusAmount).toFixed(2)} USD`,
+          `Retenues: ${Number(payroll.deductionAmount).toFixed(2)} USD`,
+          payroll.notes || "",
+        ].filter(Boolean).join("\n"),
+        href: `/api/admin/payrolls/${payroll.id}/pdf`,
+        hrefLabel: "Télécharger le bulletin de paie",
+        date: toIso(payroll.periodStart),
+      })),
+    },
+    {
+      id: "workflows",
+      title: "Workflows partagés",
+      description: "Ouvrez les procédures COO partagées avec vous et posez vos questions en commentaires.",
+      items: workflowShares.map((share) => ({
+        id: share.workflowId,
+        entityType: "WORKFLOW" as const,
+        title: share.workflow.name,
+        status: share.workflow.status,
+        detail: [share.workflow.departmentName, share.instruction].filter(Boolean).join(" · "),
+        body: share.workflow.steps || share.workflow.description,
+        date: toIso(share.createdAt),
+      })),
+    },
+  ];
+
   return (
     <AppShell user={user}>
-      <div className="space-y-6">
-        <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">Espace collaborateur</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Activités DTSC</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            Retrouvez les tâches, opérations internes, demandes inter-départements, réunions et blocages qui vous sont partagés par l&apos;équipe COO.
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <Metric label="Tâches ouvertes" value={openTasks} />
-            <Metric label="Terminées / validées" value={completed} />
-            <Metric label="Points bloqués" value={blocked} />
-          </div>
-        </section>
-
-        <div className="grid gap-5 xl:grid-cols-2">
-          <ActivityCard icon={ClipboardList} title="Mes tâches journalières" items={tasks.map((task) => ({
-            id: task.id,
-            title: task.title,
-            status: task.status,
-            detail: [task.departmentName, task.plannedDate ? task.plannedDate.toLocaleDateString("fr-FR") : "", task.deadlineTime].filter(Boolean).join(" · "),
-            body: task.description,
-          }))} />
-          <ActivityCard icon={GitBranch} title="Opérations internes" items={operations.map((operation) => ({
-            id: operation.id,
-            title: operation.title,
-            status: operation.status,
-            detail: [operation.pilotDepartmentName, `${operation.progress}%`, operation.dueDate ? operation.dueDate.toLocaleDateString("fr-FR") : ""].filter(Boolean).join(" · "),
-            body: operation.objectives || operation.description,
-          }))} />
-          <ActivityCard icon={Users} title="Coordination inter-départements" items={requests.map((request) => ({
-            id: request.id,
-            title: request.subject,
-            status: request.status,
-            detail: [request.requesterDepartmentName, request.targetDepartmentName].filter(Boolean).join(" → "),
-            body: request.expectedResponse || request.description,
-          }))} />
-          <ActivityCard icon={CircleAlert} title="Blocages et réunions" items={[
-            ...blockers.map((blocker) => ({
-              id: blocker.id,
-              title: blocker.title,
-              status: blocker.status,
-              detail: [blocker.departmentName, `Criticité ${formatEnumLabel(blocker.severity)}`].filter(Boolean).join(" · "),
-              body: blocker.correctiveAction || blocker.description,
-            })),
-            ...meetings.map((meeting) => ({
-              id: meeting.id,
-              title: meeting.title,
-              status: meeting.status,
-              detail: [formatEnumLabel(meeting.meetingType), meeting.meetingDate ? meeting.meetingDate.toLocaleDateString("fr-FR") : "", meeting.meetingTime].filter(Boolean).join(" · "),
-              body: meeting.agenda || meeting.minutes,
-            })),
-          ]} />
-        </div>
-      </div>
+      <ActivitiesDashboard
+        sections={sections}
+        collaborators={collaborators.map((collaborator) => ({ id: collaborator.id, label: `${collaborator.fullName} · ${collaborator.email}` }))}
+        operations={operationOptions.map((operation) => ({ id: operation.id, label: operation.title }))}
+        metrics={{ openTasks, completed, blocked }}
+      />
     </AppShell>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-      <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
-      <p className="mt-2 text-3xl font-black text-dtsc-ink">{value}</p>
-    </div>
-  );
+function toIso(value: Date) {
+  return value.toISOString();
 }
 
-function ActivityCard({
-  icon: Icon,
-  title,
-  items,
-}: {
-  icon: LucideIcon;
-  title: string;
-  items: Array<{ id: string; title: string; status: string; detail: string; body?: string | null }>;
-}) {
-  return (
-    <section className="dtsc-card min-w-0 p-5">
-      <div className="flex items-start gap-3">
-        <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-500">
-          <Icon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-xl font-black text-dtsc-ink">{title}</h2>
-          <p className="text-sm text-dtsc-muted">{items.length} élément(s) lié(s) à votre dossier collaborateur.</p>
-        </div>
-      </div>
-      <div className="mt-5 max-h-[520px] space-y-3 overflow-y-auto pr-1">
-        {items.map((item) => (
-          <article key={item.id} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words font-black text-dtsc-ink">{item.title}</p>
-                {item.detail && <p className="mt-1 text-sm text-dtsc-muted">{item.detail}</p>}
-              </div>
-              <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{formatEnumLabel(item.status)}</span>
-            </div>
-            {item.body && <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{item.body}</p>}
-          </article>
-        ))}
-        {items.length === 0 && (
-          <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">
-            Aucun élément partagé pour le moment.
-          </p>
-        )}
-      </div>
-    </section>
-  );
+function formatDate(value: Date) {
+  return value.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }

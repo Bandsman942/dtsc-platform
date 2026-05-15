@@ -330,7 +330,7 @@ Routes API:
 | `DELETE` | `/api/admin/coo/[entity]/[id]` | bloc admin `coo` | Supprime avec controles de relations sensibles |
 | `POST` | `/api/admin/operation-files` | blocs `coo`, `hrCfo` ou `sco` | Importe une piece justificative dans Supabase Storage |
 | `GET` | `/api/admin/operation-files/[...path]` | blocs `coo`, `hrCfo` ou `sco` | Sert un fichier operationnel via route serveur privee |
-| `GET` | `/api/admin/payrolls/[id]/pdf` | bloc admin `hrCfo` | Affiche un bulletin de paie imprimable/exportable en PDF |
+| `GET` | `/api/admin/payrolls/[id]/pdf` | bloc admin `hrCfo` ou collaborateur proprietaire | Affiche un bulletin de paie imprimable/exportable en PDF |
 
 Les champs de pieces justificatives ne sont plus des champs texte libres dans l'UI operations: l'utilisateur selectionne un fichier depuis ordinateur ou mobile. Le fichier est valide cote serveur (type MIME, taille, session, RBAC), stocke dans Supabase Storage via la cle service role cote serveur, puis reference par une URL interne `/api/admin/operation-files/...`. Cette URL ne doit pas etre exposee comme un objet public Supabase.
 
@@ -588,7 +588,7 @@ Les routes HR & CFO / SCO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujo
 
 Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le reporting du capital humain, COSO pour le controle interne, ISO 9001 pour l'approche processus et l'amelioration continue, ISO 45001 pour la logique sante/securite lorsque des risques operations apparaissent, et ASCM SCOR pour structurer les operations supply chain. Les champs visibles `Responsable`, `Demandeur` et `Assigne a` des operations internes sont alimentes par les collaborateurs deja enregistres afin d'eviter les noms libres incoherents.
 
-Les regles financieres sensibles sont centralisees dans `lib/hr-cfo-finance.ts`: creation de budget avec solde disponible, validation des transactions d'entree/sortie, mise a jour du solde du compte, consommation budgetaire, generation de facture, transaction d'abonnement et paie. Une transaction de sortie exige un budget actif et suffisamment disponible; une paie validee cree une transaction de sortie; un paiement d'abonnement confirme cree une transaction d'entree idempotente et rattache la facture de paiement a cette transaction.
+Les regles financieres sensibles sont centralisees dans `lib/hr-cfo-finance.ts`: creation de budget avec solde disponible, validation des transactions d'entree/sortie, mise a jour du solde du compte, consommation budgetaire, generation de facture, transaction d'abonnement et paie. Une transaction de sortie exige un budget actif et suffisamment disponible; une paie validee cree une transaction de sortie; un paiement d'abonnement confirme cree une transaction d'entree idempotente sur le compte `Banque` et rattache la facture de paiement a cette transaction.
 
 Le SCO dispose maintenant d'un referentiel `MaterialItem` pour les biens materiels. Les stocks et actifs peuvent etre rattaches a ce referentiel pour suivre le meme bien entre inventaire, equipement, assignation et maintenance. Les demandes d'achat selectionnent le fournisseur retenu dans la liste des fournisseurs actifs ou sous surveillance, ce qui evite de saisir un fournisseur non reference.
 
@@ -1503,6 +1503,50 @@ Bonnes pratiques a maintenir:
 - prevoir a terme export/suppression des donnees utilisateur si exigence RGPD stricte.
 
 ## 20. Roadmap technique recommandee et etat d'implementation
+
+## 20.1 Mise a jour HR & CFO, COO et Activites DTSC - 15 mai 2026
+
+Regles financieres appliquees:
+
+- le service `lib/hr-cfo-finance.ts` centralise les statuts impactants, le recalcul des soldes, la consommation budgetaire, la creation de paie et les transactions d'abonnement;
+- le KPI `Chiffre d'affaires` additionne uniquement les transactions d'entree validees, payees ou approuvees, en excluant le libelle exact `capital de départ`;
+- le `capital de départ` augmente le solde du compte selectionne mais ne compte pas comme revenu commercial;
+- les transactions en brouillon n'impactent ni les comptes, ni les budgets, ni les KPIs; une annulation retire l'impact precedent;
+- les transactions de sortie exigent un budget actif; le budget determine le compte financier consomme;
+- la paie derive le brut du dossier RH, ajoute les primes, retire les retenues et cree une sortie financiere uniquement quand elle devient validee ou payee;
+- tous les paiements d'abonnement confirmes creent une entree idempotente sur le compte financier `Banque`.
+
+Nouveaux modeles et champs Prisma:
+
+- `CooComment`: commentaires securises rattaches a une tache, operation, demande, blocage, reunion, rapport, workflow ou paie;
+- `CooWorkflowShare`: historique des workflows partages par le COO a des collaborateurs;
+- `CooOperationalReport.recipientEmployeeId`, `recipientName`, `priority`, `content`, `readAt`, `treatedAt`.
+
+Routes API ajoutees ou modifiees:
+
+| Methode | Route | Acces | Usage |
+| --- | --- | --- | --- |
+| `GET` | `/api/activities/comments?entityType=&entityId=` | session collaborateur ou role autorise | Lire les commentaires d'un element operationnel autorise |
+| `POST` | `/api/activities/comments` | session collaborateur ou role autorise | Ajouter un commentaire et notifier les participants concernes |
+| `PATCH` | `/api/activities/tasks/[id]` | collaborateur assigne/responsable | Changer l'avancement d'une tache et declarer un blocage lie si necessaire |
+| `POST` | `/api/activities/blockers` | collaborateur DTSC | Declarer un blocage visible par le COO/admin |
+| `POST` | `/api/activities/reports` | collaborateur DTSC | Envoyer un rapport operationnel a un autre collaborateur |
+| `GET` | `/api/admin/payrolls/[id]/pdf` | admin/role autorise ou collaborateur proprietaire | Telecharger un bulletin de paie PDF |
+| `POST/PATCH/DELETE` | `/api/admin/hr-cfo/[entity]` | bloc admin `hrCfo` | Appliquer les regles financieres centralisees |
+| `POST/PATCH` | `/api/admin/coo/[entity]` | bloc admin `coo` | Partager des workflows, renseigner destinataires de rapports et journaliser les operations |
+
+Interface:
+
+- les sous-modules HR & CFO, SCO et COO disposent d'un filtre de date immediate qui ajuste les listes et indicateurs visibles;
+- le module `/activities` dispose du meme filtre de periode et affiche les blocs interactifs: taches, operations, coordination, blocages/reunions, rapports, paie et workflows partages;
+- le bloc `Suivi de la paie` permet au collaborateur de consulter ses remunerations dans le temps et de telecharger ses bulletins;
+- les collaborateurs peuvent commenter les elements operationnels autorises, declarer un blocage et envoyer un rapport operationnel.
+
+Points de securite:
+
+- les commentaires et actions collaborateur verifient l'appartenance a l'objet ou le role cote serveur;
+- le RABC admin reste applique via `requireAdminBlockAccess`;
+- les donnees de paie restent limitees au collaborateur concerne et aux roles autorises.
 
 Etat actuel:
 

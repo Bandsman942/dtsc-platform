@@ -15,6 +15,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
 import { buildCooDatasets, buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
+import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
@@ -61,6 +62,8 @@ export default async function AdminPage({
   const roleFilter = isUserRole(role) ? role : undefined;
 
   const periodWhere = { createdAt: { gte: visitStart, lte: visitEnd } };
+  await syncPaidSubscriptionIncomeTransactions();
+  await reconcileFinancialState();
 
   const [
     settings,
@@ -238,7 +241,7 @@ export default async function AdminPage({
       prisma.cooDepartmentRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.cooBlocker.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { shares: true } } }, take: 200 }),
       prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
     ]);
 
@@ -393,7 +396,7 @@ export default async function AdminPage({
     departmentRequests: cooDepartmentRequests,
     blockers: cooBlockers,
     meetings: cooMeetings,
-    workflows: cooWorkflows,
+    workflows: cooWorkflows.map((workflow) => ({ ...workflow, shareCount: workflow._count.shares })),
     reports: cooReports,
     departments: hrcfoDepartments,
     employees: hrcfoEmployees,

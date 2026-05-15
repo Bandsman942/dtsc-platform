@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type FormEvent } from "react";
-import { ClipboardList, Download, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarDays, ClipboardList, Download, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -29,15 +29,55 @@ export function OperationsAdminPanel({
     Object.fromEntries(datasets.map((dataset) => [dataset.id, dataset.records]))
   );
   const [message, setMessage] = useState("");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+
+  const visibleItemsByDataset = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(itemsByDataset).map(([datasetId, records]) => [
+        datasetId,
+        records.filter((record) => isInDateRange(record.createdAt, dateStart, dateEnd)),
+      ])
+    );
+  }, [dateEnd, dateStart, itemsByDataset]);
 
   const totals = useMemo(() => {
-    const records = Object.values(itemsByDataset).flat();
+    const records = Object.values(visibleItemsByDataset).flat();
+    const hrcfoRevenue = (visibleItemsByDataset.transactions || []).reduce((sum, item) => {
+      const category = item.values?.transactionCategory;
+      const title = (item.values?.title || item.title || "").trim().toLocaleLowerCase("fr-FR");
+      const impactsRevenue = category === "IN" && (item.status === "VALIDATED" || item.status === "PAID") && title !== "capital de départ";
+      return impactsRevenue ? sum + (item.amount || 0) : sum;
+    }, 0);
     const amount = records.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const transactions = visibleItemsByDataset.transactions || [];
+    const financialTransactions = transactions.filter((item) => item.status === "VALIDATED" || item.status === "PAID");
+    const totalIn = financialTransactions.filter((item) => item.values?.transactionCategory === "IN").reduce((sum, item) => sum + (item.amount || 0), 0);
+    const totalOut = financialTransactions.filter((item) => item.values?.transactionCategory === "OUT").reduce((sum, item) => sum + (item.amount || 0), 0);
+    const startingCapital = financialTransactions
+      .filter((item) => item.values?.transactionCategory === "IN" && (item.values?.title || item.title || "").trim().toLocaleLowerCase("fr-FR") === "capital de départ")
+      .reduce((sum, item) => sum + (item.amount || 0), 0);
+    const accountsBalance = (visibleItemsByDataset.accounts || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+    const budgets = visibleItemsByDataset.budgets || [];
+    const budgetTotal = budgets.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const budgetSpent = budgets.reduce((sum, item) => {
+      const spentMeta = item.meta.find((entry) => entry.startsWith("Consommé:"));
+      const value = Number((spentMeta || "").replace("Consommé:", "").replace("USD", "").trim());
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+    const payrolls = visibleItemsByDataset.payrolls || [];
+    const netPayrollPaid = payrolls.filter((item) => item.status === "VALIDATED" || item.status === "PAID").reduce((sum, item) => sum + (item.amount || 0), 0);
     const alerts = records.filter((item) => /OVER|URGENT|CRITICAL|LOW_STOCK|OVERDUE|BLOCKED|MISSING|EXPIRED/i.test(item.status)).length;
-    const datasetCounts = datasets.map((dataset) => ({ label: dataset.label, count: (itemsByDataset[dataset.id] || []).length }));
+    const taskRecords = visibleItemsByDataset.tasks || [];
+    const operationalExecution = taskRecords.length
+      ? Math.round((taskRecords.filter((item) => item.status === "COMPLETED" || item.status === "VALIDATED").length / taskRecords.length) * 100)
+      : 0;
+    const datasetCounts = datasets.map((dataset) => ({ label: dataset.label, count: (visibleItemsByDataset[dataset.id] || []).length }));
     const maxCount = Math.max(1, ...datasetCounts.map((item) => item.count));
-    return { records: records.length, amount, alerts, datasetCounts, maxCount };
-  }, [datasets, itemsByDataset]);
+    return { records: records.length, amount, alerts, hrcfoRevenue, operationalExecution, datasetCounts, maxCount, totalIn, totalOut, startingCapital, accountsBalance, budgetTotal, budgetSpent, netPayrollPaid };
+  }, [datasets, visibleItemsByDataset]);
+  const isHrcfoPanel = datasets.some((dataset) => dataset.id === "transactions" && dataset.endpoint.includes("/hr-cfo/"));
+  const isCooPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/coo/"));
 
   async function createRecord(dataset: OperationDataset, form: HTMLFormElement) {
     let payload: Record<string, FormDataEntryValue>;
@@ -108,10 +148,56 @@ export function OperationsAdminPanel({
         <h2 className="mt-2 text-3xl font-black text-dtsc-ink">{title}</h2>
         <p className="mt-3 max-w-4xl text-sm leading-7 text-dtsc-muted">{description}</p>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <Metric label="Dossiers suivis" value={totals.records} />
-          <Metric label="Valeur suivie" value={`${totals.amount.toFixed(2)} USD`} />
+          <Metric label={isCooPanel ? "Éléments COO suivis" : "Dossiers suivis"} value={totals.records} />
+          <Metric
+            label={isCooPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Valeur suivie"}
+            value={isCooPanel ? `${totals.operationalExecution}%` : `${(isHrcfoPanel ? totals.hrcfoRevenue : totals.amount).toFixed(2)} USD`}
+          />
           <Metric label="Alertes opérationnelles" value={totals.alerts} />
         </div>
+        {isHrcfoPanel && (
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <Metric label="Entrées validées/payées" value={`${totals.totalIn.toFixed(2)} USD`} />
+            <Metric label="Sorties validées/payées" value={`${totals.totalOut.toFixed(2)} USD`} />
+            <Metric label="Solde global comptes" value={`${totals.accountsBalance.toFixed(2)} USD`} />
+            <Metric label="Capital de départ" value={`${totals.startingCapital.toFixed(2)} USD`} />
+            <Metric label="Budget total" value={`${totals.budgetTotal.toFixed(2)} USD`} />
+            <Metric label="Budget consommé" value={`${totals.budgetSpent.toFixed(2)} USD`} />
+            <Metric label="Budget restant" value={`${Math.max(0, totals.budgetTotal - totals.budgetSpent).toFixed(2)} USD`} />
+            <Metric label="Net paie validé/payé" value={`${totals.netPayrollPaid.toFixed(2)} USD`} />
+          </div>
+        )}
+        {isCooPanel && (
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <Metric label="Tâches suivies" value={(visibleItemsByDataset.tasks || []).length} />
+            <Metric label="Tâches terminées" value={(visibleItemsByDataset.tasks || []).filter((item) => item.status === "COMPLETED" || item.status === "VALIDATED").length} />
+            <Metric label="Blocages ouverts" value={(visibleItemsByDataset.blockers || []).filter((item) => item.status !== "RESOLVED" && item.status !== "CANCELED").length} />
+            <Metric label="Workflows partagés" value={(visibleItemsByDataset.workflows || []).filter((item) => item.meta.some((entry) => entry.includes("partage"))).length} />
+          </div>
+        )}
+        <div className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h3 className="font-black text-dtsc-ink">Filtre de période</h3>
+              <p className="mt-1 text-sm text-dtsc-muted">Affinez immédiatement les blocs, volumes et KPIs selon les dates de création.</p>
+            </div>
+            <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <label className="grid min-w-0 gap-1 text-xs font-bold uppercase tracking-[0.1em] text-dtsc-muted">
+                Début
+                <Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-11 rounded-xl bg-dtsc-surface text-dtsc-ink" />
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-bold uppercase tracking-[0.1em] text-dtsc-muted">
+                Fin
+                <Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-11 rounded-xl bg-dtsc-surface text-dtsc-ink" />
+              </label>
+              <Button type="button" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }} className="self-end rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                <CalendarDays className="h-4 w-4" />
+                Tout afficher
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <div className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
           <h3 className="font-black text-dtsc-ink">Flux recommandé</h3>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -145,7 +231,7 @@ export function OperationsAdminPanel({
           <DatasetCard
             key={dataset.id}
             dataset={dataset}
-            records={itemsByDataset[dataset.id] || []}
+            records={visibleItemsByDataset[dataset.id] || []}
             canEdit={canEdit}
             onCreate={createRecord}
             onUpdate={updateRecord}
@@ -159,6 +245,29 @@ export function OperationsAdminPanel({
       </Dialog>
     </section>
   );
+}
+
+function isInDateRange(value: string, start: string, end: string) {
+  if (!start && !end) {
+    return true;
+  }
+  const time = Date.parse(value);
+  if (Number.isNaN(time)) {
+    return true;
+  }
+  if (start) {
+    const startTime = new Date(`${start}T00:00:00`).getTime();
+    if (time < startTime) {
+      return false;
+    }
+  }
+  if (end) {
+    const endTime = new Date(`${end}T23:59:59.999`).getTime();
+    if (time > endTime) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function DatasetCard({
@@ -450,7 +559,8 @@ function FieldInput({
     );
   }
 
-  if (field.type === "select") {
+  if (field.type === "select" || field.type === "select-multiple") {
+    const defaultValues = defaultValue.split(",").map((value) => value.trim()).filter(Boolean);
     return (
       <label className="grid min-w-0 gap-1">
         {label}
@@ -458,14 +568,15 @@ function FieldInput({
           name={field.name}
           required={field.required}
           disabled={disabled || field.readOnly}
-          defaultValue={defaultValue}
-          className={className}
+          multiple={field.type === "select-multiple"}
+          defaultValue={field.type === "select-multiple" ? defaultValues : defaultValue}
+          className={`${className} ${field.type === "select-multiple" ? "min-h-28" : ""}`}
           onChange={(event) => {
             const email = event.currentTarget.selectedOptions[0]?.dataset.email || "";
             onSelectPreview(field.name, email);
           }}
         >
-          {!field.required && <option value="">Non renseigné</option>}
+          {!field.required && field.type !== "select-multiple" && <option value="">Non renseigné</option>}
           {field.options?.map((option) => (
             <option key={option.value} value={option.value} data-email={option.email || ""}>{option.label}</option>
           ))}
@@ -500,7 +611,8 @@ async function buildPayloadWithUploads(form: HTMLFormElement) {
 
   for (const [key, value] of formData.entries()) {
     if (!key.endsWith("__file")) {
-      payload[key] = value;
+      const existing = payload[key];
+      payload[key] = existing ? `${existing}, ${value}` : value;
     }
   }
 

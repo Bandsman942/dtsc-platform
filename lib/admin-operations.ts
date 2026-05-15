@@ -4,7 +4,7 @@ import type { OperationDataset, OperationField } from "@/lib/admin-operations-ty
 const hrStatus = {
   employees: ["ACTIVE", "ONBOARDING", "ON_LEAVE", "SUSPENDED", "EXITED"],
   budgets: ["OPEN", "MONITORING", "OVER_BUDGET", "CLOSED"],
-  transactions: ["DRAFT", "PENDING", "VALIDATED", "REJECTED", "CANCELED"],
+  transactions: ["DRAFT", "PENDING", "VALIDATED", "PAID", "REJECTED", "CANCELED"],
   payrolls: ["DRAFT", "VALIDATED", "PAID", "CANCELED"],
   references: ["ACTIVE", "INACTIVE"],
 };
@@ -65,7 +65,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
     .map((budget) => option(budget.id, `${stringOf(budget.name)} · solde ${budgetRemaining(budget).toFixed(2)} USD`));
   const employeeOptions = data.employees
     .filter((employee) => stringOf(employee.status) !== "EXITED")
-    .map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
+    .map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`, `${(numberOf(employee.monthlyCompensation) || 0).toFixed(2)} USD`));
   const employeeUserOptions = data.employees
     .filter((employee) => stringOf(employee.status) !== "EXITED")
     .map((employee) => option(employee.userId, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`))
@@ -206,7 +206,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         { name: "title", label: "Libellé", type: "text", required: true, placeholder: "Paiement client, achat matériel, salaire..." },
         { name: "amount", label: "Montant", type: "number", required: true },
         { name: "transactionDate", label: "Date", type: "date" },
-        { name: "accountId", label: "Compte", type: "select", required: true, options: accountOptions },
+        { name: "accountId", label: "Compte", type: "select", options: accountOptions, helperText: "Obligatoire pour une entrée. Pour une sortie, le compte est déduit du budget sélectionné." },
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "budgetId", label: "Budget concerné", type: "select", options: budgetOptions, helperText: "Obligatoire pour une sortie validée." },
         { name: "paymentMethod", label: "Moyen de paiement", type: "text", placeholder: "Espèces, banque, mobile money..." },
@@ -232,16 +232,15 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
     {
       id: "payrolls",
       label: "Gestion de la paie",
-      description: "Paies par collaborateur, période, budget et compte. Une paie validée crée automatiquement une sortie financière.",
+      description: "Paies par collaborateur et budget. Le salaire brut vient automatiquement du dossier RH et le compte est déduit du budget.",
       endpoint: "/api/admin/hr-cfo/payrolls",
       fields: [
         { name: "employeeId", label: "Collaborateur", type: "select", required: true, options: employeeOptions },
+        { name: "grossAmountPreview", label: "Montant brut automatique", type: "preview", previewFor: "employeeId", helperText: "Lecture seule: rémunération mensuelle issue du dossier RH." },
         { name: "periodStart", label: "Début période", type: "date", required: true },
         { name: "periodEnd", label: "Fin période", type: "date", required: true },
-        { name: "grossAmount", label: "Montant brut", type: "number", required: true },
         { name: "bonusAmount", label: "Primes", type: "number" },
         { name: "deductionAmount", label: "Retenues", type: "number" },
-        { name: "accountId", label: "Compte de paiement", type: "select", required: true, options: accountOptions },
         { name: "budgetId", label: "Budget concerné", type: "select", required: true, options: budgetOptions },
         selectField("status", "Statut de paie", hrStatus.payrolls),
         { name: "notes", label: "Notes", type: "textarea" },
@@ -259,7 +258,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         href: stringOf(item.id) ? `/api/admin/payrolls/${stringOf(item.id)}/pdf` : null,
         hrefLabel: "Télécharger le bulletin de paie",
         meta: compactStrings([`Brut: ${(numberOf(item.grossAmount) || 0).toFixed(2)} USD`, stringOf(item.accountName), stringOf(item.budgetName)]),
-        values: fieldValues(item, ["employeeId", "periodStart", "periodEnd", "grossAmount", "bonusAmount", "deductionAmount", "accountId", "budgetId", "status", "notes"]),
+        values: fieldValues(item, ["employeeId", "periodStart", "periodEnd", "bonusAmount", "deductionAmount", "budgetId", "status", "notes"]),
       })),
     },
   ];
@@ -668,7 +667,7 @@ export function buildCooDatasets(data: {
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "reportOwnerEmployeeId", label: "Responsable CR", type: "select", required: true, options: employeeOptions },
         selectField("status", "Statut", cooStatus.meetings),
-        { name: "participants", label: "Participants", type: "textarea" },
+        { name: "participants", label: "Participants", type: "select-multiple", options: employeeOptions, helperText: "Maintenez Ctrl ou Cmd pour sélectionner plusieurs collaborateurs." },
         { name: "agenda", label: "Ordre du jour", type: "textarea" },
         { name: "decisions", label: "Décisions prises", type: "textarea" },
         { name: "generatedTasks", label: "Tâches générées", type: "textarea" },
@@ -700,6 +699,8 @@ export function buildCooDatasets(data: {
         { name: "steps", label: "Étapes", type: "textarea", required: true },
         { name: "stepOwners", label: "Responsables par étape", type: "textarea" },
         { name: "stepDeadlines", label: "Délais par étape", type: "textarea" },
+        { name: "shareEmployeeIds", label: "Partager avec", type: "select-multiple", options: employeeOptions, helperText: "Optionnel: partage le workflow aux collaborateurs sélectionnés." },
+        { name: "shareInstruction", label: "Instruction de partage", type: "textarea" },
       ],
       statusOptions: statusOptions(cooStatus.workflows),
       records: data.workflows.map((item) => ({
@@ -709,8 +710,8 @@ export function buildCooDatasets(data: {
         status: stringOf(item.status),
         notes: stringOrNull(item.description || item.steps),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([stringOf(item.stepOwners) ? "Responsables définis" : "", stringOf(item.stepDeadlines) ? "Délais cadrés" : ""]),
-        values: fieldValues(item, ["name", "departmentId", "status", "description", "steps", "stepOwners", "stepDeadlines"]),
+        meta: compactStrings([stringOf(item.stepOwners) ? "Responsables définis" : "", stringOf(item.stepDeadlines) ? "Délais cadrés" : "", stringOf(item.shareCount) ? `${stringOf(item.shareCount)} partage(s)` : ""]),
+        values: fieldValues(item, ["name", "departmentId", "status", "description", "steps", "stepOwners", "stepDeadlines", "shareEmployeeIds", "shareInstruction"]),
       })),
     },
     {
@@ -725,7 +726,9 @@ export function buildCooDatasets(data: {
         { name: "periodEnd", label: "Fin période", type: "date" },
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "employeeId", label: "Collaborateur", type: "select", options: employeeOptions },
+        { name: "recipientEmployeeId", label: "Destinataire", type: "select", options: employeeOptions },
         { name: "operationId", label: "Opération", type: "select", options: operationOptions },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
         { name: "tasksCreated", label: "Tâches créées", type: "number" },
         { name: "tasksCompleted", label: "Tâches terminées", type: "number" },
         { name: "tasksValidated", label: "Tâches validées", type: "number" },
@@ -734,6 +737,7 @@ export function buildCooDatasets(data: {
         { name: "blockersCount", label: "Blocages", type: "number" },
         { name: "executionRate", label: "Taux d'exécution %", type: "number" },
         selectField("status", "Statut", cooStatus.reports),
+        { name: "content", label: "Contenu du rapport", type: "textarea" },
         { name: "mainBlockers", label: "Principaux blocages", type: "textarea" },
         { name: "recommendations", label: "Recommandations", type: "textarea" },
       ],
@@ -745,10 +749,10 @@ export function buildCooDatasets(data: {
         status: stringOf(item.status),
         amount: numberOf(item.executionRate),
         currency: "%",
-        notes: stringOrNull(item.recommendations || item.mainBlockers),
+        notes: stringOrNull(item.content || item.recommendations || item.mainBlockers),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([stringOf(item.departmentName), stringOf(item.employeeName), formatDate(item.periodEnd)]),
-        values: fieldValues(item, ["title", "reportType", "periodStart", "periodEnd", "departmentId", "employeeId", "operationId", "tasksCreated", "tasksCompleted", "tasksValidated", "tasksRejected", "lateTasks", "blockersCount", "executionRate", "status", "mainBlockers", "recommendations"]),
+        meta: compactStrings([stringOf(item.departmentName), stringOf(item.employeeName), stringOf(item.recipientName) ? `À: ${stringOf(item.recipientName)}` : "", formatEnumLabel(stringOf(item.priority)), formatDate(item.periodEnd)]),
+        values: fieldValues(item, ["title", "reportType", "periodStart", "periodEnd", "departmentId", "employeeId", "recipientEmployeeId", "operationId", "priority", "tasksCreated", "tasksCompleted", "tasksValidated", "tasksRejected", "lateTasks", "blockersCount", "executionRate", "status", "content", "mainBlockers", "recommendations"]),
       })),
     },
   ];

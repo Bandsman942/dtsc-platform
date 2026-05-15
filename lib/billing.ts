@@ -95,7 +95,14 @@ export async function activateSubscriptionFromPayment(paymentReference: string, 
 
   if (payment.status === PaymentStatus.PAID) {
     const existingInvoice = await prisma.invoice.findUnique({ where: { paymentId: payment.id } });
-    return { ok: true, payment, subscription: payment.subscription, invoice: existingInvoice, mail: { sent: false, reason: "Already processed" } };
+    const incomeTransaction = await createSubscriptionIncomeTransaction(payment.id).catch(() => null);
+    if (existingInvoice && incomeTransaction && !existingInvoice.hrcfoTransactionId) {
+      await prisma.invoice.update({
+        where: { id: existingInvoice.id },
+        data: { hrcfoTransactionId: incomeTransaction.id },
+      });
+    }
+    return { ok: true, payment, subscription: payment.subscription, invoice: existingInvoice, mail: { sent: false, reason: "Already processed" }, incomeTransaction };
   }
 
   const { start, end } = getNextBillingPeriod();

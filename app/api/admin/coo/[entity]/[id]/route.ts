@@ -128,7 +128,10 @@ async function updateRecord(entity: CooEntity, id: string, data: Record<string, 
     return prisma.cooMeeting.update({ where: { id }, data: enriched as never });
   }
   if (entity === "workflows") {
-    return prisma.cooWorkflow.update({ where: { id }, data: enriched as never });
+    const { shareEmployeeIds, shareInstruction, ...workflowData } = enriched;
+    const workflow = await prisma.cooWorkflow.update({ where: { id }, data: workflowData as never });
+    await shareWorkflow(id, shareEmployeeIds, shareInstruction, "");
+    return { ...workflow, shareCount: countIds(shareEmployeeIds) };
   }
   return prisma.cooOperationalReport.update({ where: { id }, data: enriched as never });
 }
@@ -204,7 +207,53 @@ async function enrichCooData(data: Record<string, unknown>) {
   if ("employeeId" in enriched) {
     enriched.employeeName = await employeeName(enriched.employeeId);
   }
+  if ("recipientEmployeeId" in enriched) {
+    enriched.recipientName = await employeeName(enriched.recipientEmployeeId);
+  }
   return enriched;
+}
+
+async function shareWorkflow(workflowId: string, employeeIds: unknown, instruction: unknown, createdById: string) {
+  const ids = String(employeeIds || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!ids.length) {
+    return;
+  }
+  const employees = await prisma.hrcfoEmployee.findMany({
+    where: { id: { in: ids }, status: { not: "EXITED" } },
+    select: { id: true, fullName: true, userId: true },
+  });
+  for (const employee of employees) {
+    await prisma.cooWorkflowShare.upsert({
+      where: { workflowId_employeeId: { workflowId, employeeId: employee.id } },
+      update: { instruction: typeof instruction === "string" ? instruction : null, userId: employee.userId },
+      create: {
+        workflowId,
+        employeeId: employee.id,
+        employeeName: employee.fullName,
+        userId: employee.userId,
+        instruction: typeof instruction === "string" ? instruction : null,
+        createdById: createdById || null,
+      },
+    });
+    if (employee.userId) {
+      await prisma.notification.create({
+        data: {
+          userId: employee.userId,
+          title: "Workflow opérationnel partagé",
+          body: "Un workflow COO vient d'être partagé ou mis à jour pour vous.",
+          type: "COO_WORKFLOW",
+          targetUrl: "/activities",
+        },
+      });
+    }
+  }
+}
+
+function countIds(value: unknown) {
+  return String(value || "").split(",").map((item) => item.trim()).filter(Boolean).length;
 }
 
 async function departmentName(id: unknown) {

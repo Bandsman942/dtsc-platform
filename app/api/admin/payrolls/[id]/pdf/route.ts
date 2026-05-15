@@ -1,4 +1,5 @@
-import { requireAdminBlockAccess } from "@/lib/admin-api";
+import { UserRole } from "@prisma/client";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -13,9 +14,9 @@ function escapeHtml(value: unknown) {
 }
 
 export async function GET(_req: Request, { params }: Params) {
-  const { session, response } = await requireAdminBlockAccess("hrCfo");
-  if (!session) {
-    return response || new Response("Forbidden", { status: 403 });
+  const user = await getCurrentUser();
+  if (!user) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const { id } = await params;
@@ -31,6 +32,14 @@ export async function GET(_req: Request, { params }: Params) {
 
   if (!payroll) {
     return new Response("Not found", { status: 404 });
+  }
+  const canReadPayroll =
+    user.role === UserRole.ADMIN ||
+    user.role === UserRole.MANAGER ||
+    user.role === UserRole.SUPPORT ||
+    payroll.employee.userId === user.id;
+  if (!canReadPayroll) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const fullName = escapeHtml(payroll.employee.fullName);

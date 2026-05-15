@@ -125,6 +125,7 @@ model User {
   conversationProjects ConversationProject[]
   hrcfoEmployee        HrcfoEmployee? @relation("EmployeeUser")
   managedHrcfoEmployees HrcfoEmployee[] @relation("EmployeeManager")
+  cooComments          CooComment[]
 
   @@index([role])
   @@index([status])
@@ -1168,6 +1169,7 @@ model CooWorkflow {
   createdById    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  shares         CooWorkflowShare[]
 
   @@index([status, departmentId])
 }
@@ -1182,7 +1184,13 @@ model CooOperationalReport {
   departmentName  String?
   employeeId      String?
   employeeName    String?
+  recipientEmployeeId String?
+  recipientName   String?
   operationId     String?
+  priority        String   @default("NORMAL")
+  content         String?
+  readAt          DateTime?
+  treatedAt       DateTime?
   tasksCreated    Int      @default(0)
   tasksCompleted  Int      @default(0)
   tasksValidated  Int      @default(0)
@@ -1201,5 +1209,37 @@ model CooOperationalReport {
   @@index([reportType, status])
   @@index([departmentId])
   @@index([employeeId])
+  @@index([recipientEmployeeId])
   @@index([operationId])
+}
+
+model CooComment {
+  id                  String   @id @default(cuid())
+  entityType          String
+  entityId            String
+  authorId            String
+  content             String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  author              User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([authorId])
+}
+
+model CooWorkflowShare {
+  id                 String    @id @default(cuid())
+  workflowId         String
+  employeeId         String
+  employeeName       String
+  userId             String?
+  instruction        String?
+  readAt             DateTime?
+  createdById        String?
+  createdAt          DateTime  @default(now())
+  workflow           CooWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, employeeId])
+  @@index([employeeId])
+  @@index([userId])
 }

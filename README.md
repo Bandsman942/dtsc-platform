@@ -58,8 +58,12 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
-- Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, HR & CFO, SCO, visites, activité et audits
+- Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, HR & CFO, SCO, COO, visites, activité et audits
 - Sous-modules admin HR & CFO et SCO avec RBAC: collaborateurs liés aux membres internes, départements, comptes financiers, budgets contrôlés, transactions, paie, factures automatiques, fournisseurs, achats, stocks, actifs et logistique
+- Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque
+- Sous-module COO avec opérations, tâches, réunions, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
+- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, blocages, rapports, workflows partagés, suivi de paie et téléchargement des bulletins personnels
+- Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
 - Création de comptes utilisateurs par l'admin avec rôle et limites d'usage

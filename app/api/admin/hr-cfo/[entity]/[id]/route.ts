@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { deleteHrcfoTransaction, updateHrcfoTransaction, updatePayroll } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
@@ -146,34 +147,9 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
     return prisma.hrcfoBudget.update({ where: { id }, data: updateData as never });
   }
   if (entity === "transactions") {
-    const transaction = await prisma.hrcfoExpense.findUnique({ where: { id } });
-    if (transaction?.status === "VALIDATED") {
-      throw new Error("Une transaction déjà validée ne peut pas être modifiée depuis ce raccourci.");
-    }
-    const saved = await prisma.hrcfoExpense.update({
-      where: { id },
-      data: { ...data, category: data.transactionCategory } as never,
-      include: { account: true, department: true, budget: true, invoice: true },
-    });
-    return {
-      ...saved,
-      accountName: saved.account?.name,
-      departmentName: saved.department?.name,
-      budgetName: saved.budget?.name,
-      invoiceId: saved.invoice?.id,
-    };
+    return updateHrcfoTransaction(id, data);
   }
-  const payroll = await prisma.hrcfoPayroll.findUnique({ where: { id } });
-  if (payroll?.transactionId || payroll?.status === "VALIDATED" || payroll?.status === "PAID") {
-    throw new Error("Une paie validée ou payée ne peut pas être modifiée depuis ce raccourci.");
-  }
-  const saved = await prisma.hrcfoPayroll.update({ where: { id }, data: data as never, include: { employee: true, account: true, budget: true } });
-  return {
-    ...saved,
-    employeeName: saved.employee.fullName,
-    accountName: saved.account?.name,
-    budgetName: saved.budget?.name,
-  };
+  return updatePayroll(id, data);
 }
 
 async function deleteRecord(entity: HrcfoEntity, id: string) {
@@ -208,11 +184,7 @@ async function deleteRecord(entity: HrcfoEntity, id: string) {
     return prisma.hrcfoBudget.delete({ where: { id } });
   }
   if (entity === "transactions") {
-    const transaction = await prisma.hrcfoExpense.findUnique({ where: { id } });
-    if (transaction?.status === "VALIDATED") {
-      throw new Error("Une transaction validée ne peut pas être supprimée.");
-    }
-    return prisma.hrcfoExpense.delete({ where: { id } });
+    return deleteHrcfoTransaction(id);
   }
   const payroll = await prisma.hrcfoPayroll.findUnique({ where: { id } });
   if (payroll?.transactionId || payroll?.status === "VALIDATED" || payroll?.status === "PAID") {
