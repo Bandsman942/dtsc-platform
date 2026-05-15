@@ -30,6 +30,8 @@ export default async function ActivitiesPage() {
     reports,
     workflowShares,
     payrolls,
+    ceoObjectives,
+    ceoSupervisionLogs,
     collaborators,
     operationOptions,
   ] = await Promise.all([
@@ -100,6 +102,21 @@ export default async function ActivitiesPage() {
       where: { employeeId: employee.id },
       include: { budget: true, account: true },
       orderBy: [{ periodStart: "desc" }, { updatedAt: "desc" }],
+      take: 80,
+    }),
+    prisma.ceoObjective.findMany({
+      where: isCeo ? {} : { responsibleEmployeeId: employee.id },
+      orderBy: [{ periodEnd: "desc" }, { updatedAt: "desc" }],
+      take: 80,
+    }),
+    prisma.ceoSupervisionLog.findMany({
+      where: isCeo ? {} : {
+        OR: [
+          { employeeId: employee.id },
+          { followUpResponsibleId: employee.id },
+        ],
+      },
+      orderBy: [{ logDate: "desc" }, { updatedAt: "desc" }],
       take: 80,
     }),
     prisma.hrcfoEmployee.findMany({
@@ -273,6 +290,44 @@ export default async function ActivitiesPage() {
         hrefLabel: "Télécharger le bulletin de paie",
         date: toIso(payroll.periodStart),
       })),
+    },
+    {
+      id: "ceo-follow-up",
+      title: "Objectifs et supervision CEO",
+      description: "Suivez les objectifs assignés par le CEO, les décisions de supervision et les échanges associés.",
+      items: [
+        ...ceoObjectives.map((objective) => ({
+          id: objective.id,
+          entityType: "CEO_OBJECTIVE" as const,
+          title: objective.title,
+          status: objective.status,
+          detail: [
+            formatEnumLabel(objective.objectiveType),
+            objective.responsibleName ? `Responsable: ${objective.responsibleName}` : "",
+            objective.periodEnd ? `Échéance: ${formatDate(objective.periodEnd)}` : "",
+            `${objective.progress}%`,
+          ].filter(Boolean).join(" · "),
+          body: objective.comments || objective.description,
+          date: toIso(objective.periodEnd || objective.updatedAt),
+          priority: objective.priority,
+          progress: objective.progress,
+        })),
+        ...ceoSupervisionLogs.map((log) => ({
+          id: log.id,
+          entityType: "CEO_SUPERVISION" as const,
+          title: log.title,
+          status: log.status,
+          detail: [
+            formatEnumLabel(log.entryType),
+            log.employeeName ? `Collaborateur: ${log.employeeName}` : "",
+            log.followUpResponsibleName ? `Suivi: ${log.followUpResponsibleName}` : "",
+            formatDate(log.logDate),
+          ].filter(Boolean).join(" · "),
+          body: log.comments || log.expectedAction || log.description,
+          date: toIso(log.logDate || log.updatedAt),
+          priority: log.priority,
+        })),
+      ],
     },
     {
       id: "workflows",

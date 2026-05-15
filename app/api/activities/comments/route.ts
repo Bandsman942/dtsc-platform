@@ -7,7 +7,7 @@ import { normalizePositionCode } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
 
 const commentSchema = z.object({
-  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL"]),
+  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION"]),
   entityId: z.string().min(5),
   content: z.string().min(2).max(2000),
 });
@@ -81,7 +81,7 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   if (positionCode === "CEO") {
     return true;
   }
-  if (positionCode === "COO" && entityType !== "PAYROLL") {
+  if (positionCode === "COO" && entityType !== "PAYROLL" && entityType !== "CEO_OBJECTIVE" && entityType !== "CEO_SUPERVISION") {
     return true;
   }
   if (entityType === "TASK") {
@@ -104,6 +104,12 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   }
   if (entityType === "PAYROLL") {
     return Boolean(await prisma.hrcfoPayroll.findFirst({ where: { id: entityId, employeeId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "CEO_OBJECTIVE") {
+    return Boolean(await prisma.ceoObjective.findFirst({ where: { id: entityId, responsibleEmployeeId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "CEO_SUPERVISION") {
+    return Boolean(await prisma.ceoSupervisionLog.findFirst({ where: { id: entityId, OR: [{ employeeId: employee.id }, { followUpResponsibleId: employee.id }] }, select: { id: true } }));
   }
   return Boolean(await prisma.cooWorkflowShare.findFirst({ where: { workflowId: entityId, employeeId: employee.id }, select: { id: true } }));
 }
@@ -144,6 +150,14 @@ async function relatedUserIds(entityType: string, entityId: string) {
   if (entityType === "PAYROLL") {
     const payroll = await prisma.hrcfoPayroll.findUnique({ where: { id: entityId }, select: { employeeId: true, createdById: true } });
     return employeesToUserIds([payroll?.employeeId], payroll?.createdById);
+  }
+  if (entityType === "CEO_OBJECTIVE") {
+    const objective = await prisma.ceoObjective.findUnique({ where: { id: entityId }, select: { responsibleEmployeeId: true, createdById: true } });
+    return employeesToUserIds([objective?.responsibleEmployeeId], objective?.createdById);
+  }
+  if (entityType === "CEO_SUPERVISION") {
+    const log = await prisma.ceoSupervisionLog.findUnique({ where: { id: entityId }, select: { employeeId: true, followUpResponsibleId: true, createdById: true } });
+    return employeesToUserIds([log?.employeeId, log?.followUpResponsibleId], log?.createdById);
   }
   if (entityType === "WORKFLOW") {
     const shares = await prisma.cooWorkflowShare.findMany({ where: { workflowId: entityId }, select: { userId: true, createdById: true } });

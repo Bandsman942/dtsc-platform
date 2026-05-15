@@ -1532,12 +1532,16 @@ La fonction `requireAdminBlockAccess()` prend maintenant en compte deux niveaux:
 
 La section Administration `CEO` ajoute:
 
-- une vue executive consolidee finance/RH/COO/SCO;
+- une vue executive consolidee finance/RH/COO/SCO avec filtre de periode `ceoStart` / `ceoEnd` porte par l'URL `/admin?section=ceo`;
 - les objectifs strategiques `CeoObjective`;
 - le journal de supervision `CeoSupervisionLog`;
 - des routes CRUD securisees `/api/admin/ceo/[entity]` et `/api/admin/ceo/[entity]/[id]`.
 
-Le module `/activities` lit aussi le poste officiel: un collaborateur `CEO` voit une synthese de supervision critique; un collaborateur `COO` voit les operations/taches/blocages a piloter globalement; les autres collaborateurs gardent la logique de propriete ou d'implication. Les commentaires operationnels autorisent `CEO` et `COO` selon leur poste, toujours cote serveur.
+Le filtre CEO ne modifie pas les donnees source: il filtre les transactions, collaborateurs, taches COO, operations, reunions et donnees SCO utilisees dans les cartes de synthese. Les soldes de comptes restent affiches comme solde courant non periodise afin d'eviter une lecture comptable trompeuse.
+
+Le module `/activities` lit aussi le poste officiel: un collaborateur `CEO` voit une synthese de supervision critique; un collaborateur `COO` voit les operations/taches/blocages a piloter globalement; les autres collaborateurs gardent la logique de propriete ou d'implication. Les objectifs `CeoObjective` assignes et les entrees `CeoSupervisionLog` concernant un collaborateur apparaissent dans le bloc "Objectifs et supervision CEO". Les commentaires utilisent `CooComment` avec les types `CEO_OBJECTIVE` et `CEO_SUPERVISION`, avec controle serveur: CEO et roles admin autorises peuvent superviser, tandis que les collaborateurs non autorises ne voient que les objectifs ou suivis qui les concernent.
+
+Les routes CEO creent une notification applicative ciblee vers `/activities` lors de la creation ou de la mise a jour d'un objectif ou d'une entree de supervision. Les notifications ne sont pas diffusees a toute l'equipe: elles ciblent le responsable de l'objectif, le collaborateur concerne et/ou le responsable de suivi.
 
 ## 20.1 Mise a jour HR & CFO, COO et Activites DTSC - 15 mai 2026
 
@@ -1553,7 +1557,7 @@ Regles financieres appliquees:
 
 Nouveaux modeles et champs Prisma:
 
-- `CooComment`: commentaires securises rattaches a une tache, operation, demande, blocage, reunion, rapport, workflow ou paie;
+- `CooComment`: commentaires securises rattaches a une tache, operation, demande, blocage, reunion, rapport, workflow, paie, objectif CEO ou suivi de supervision CEO;
 - `CooWorkflowShare`: historique des workflows partages par le COO a des collaborateurs;
 - `CooOperationalReport.recipientEmployeeId`, `recipientName`, `priority`, `content`, `readAt`, `treatedAt`.
 
@@ -1569,6 +1573,8 @@ Routes API ajoutees ou modifiees:
 | `GET` | `/api/admin/payrolls/[id]/pdf` | admin/role autorise ou collaborateur proprietaire | Telecharger un bulletin de paie PDF |
 | `POST/PATCH/DELETE` | `/api/admin/hr-cfo/[entity]` | bloc admin `hrCfo` | Appliquer les regles financieres centralisees |
 | `POST/PATCH` | `/api/admin/coo/[entity]` | bloc admin `coo` | Partager des workflows, renseigner destinataires de rapports et journaliser les operations |
+
+Les types de commentaires acceptes incluent `CEO_OBJECTIVE` et `CEO_SUPERVISION`; ces deux types limitent l'acces au CEO, aux roles admin autorises et aux collaborateurs directement references par l'objectif ou la supervision.
 
 Interface:
 

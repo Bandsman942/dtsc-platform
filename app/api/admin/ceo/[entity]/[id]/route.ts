@@ -31,6 +31,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const record = await updateRecord(entity, id, parsed.data as Record<string, unknown>);
+    await notifyCeoRecipients(entity, id, session.userId);
     await writeAuditLog({ userId: session.userId, action: `CEO_${entity.toUpperCase()}_UPDATED`, entity, entityId: id, metadata: JSON.parse(JSON.stringify(parsed.data)), request: req });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
     return NextResponse.json({ ok: true, record });
@@ -136,4 +137,39 @@ async function resolveEmployee(employeeId: unknown) {
     throw new Error("Le collaborateur sélectionné est introuvable ou sorti.");
   }
   return employee;
+}
+
+async function notifyCeoRecipients(entity: CeoEntity, recordId: string, senderId: string) {
+  if (entity === "objectives") {
+    const objective = await prisma.ceoObjective.findUnique({ where: { id: recordId } });
+    if (!objective) {
+      return;
+    }
+    await notifyEmployees([objective.responsibleEmployeeId], senderId, "Objectif CEO mis à jour", objective.title, "CEO_OBJECTIVE");
+    return;
+  }
+  const log = await prisma.ceoSupervisionLog.findUnique({ where: { id: recordId } });
+  if (!log) {
+    return;
+  }
+  await notifyEmployees([log.employeeId, log.followUpResponsibleId], senderId, "Suivi CEO mis à jour", log.title, "CEO_SUPERVISION");
+}
+
+async function notifyEmployees(employeeIds: Array<string | null>, senderId: string, title: string, body: string, type: string) {
+  const employees = await prisma.hrcfoEmployee.findMany({
+    where: { id: { in: employeeIds.filter((id): id is string => Boolean(id)) } },
+    select: { userId: true },
+  });
+  const recipients = [...new Set(employees.map((employee) => employee.userId).filter((id): id is string => Boolean(id) && id !== senderId))];
+  for (const userId of recipients) {
+    await prisma.notification.create({
+      data: {
+        userId,
+        title,
+        body: body.slice(0, 220),
+        type,
+        targetUrl: "/activities",
+      },
+    });
+  }
 }

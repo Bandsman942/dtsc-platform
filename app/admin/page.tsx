@@ -47,13 +47,13 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string; period?: string; date?: string; section?: string }>;
+  searchParams: Promise<{ role?: string; period?: string; date?: string; section?: string; ceoStart?: string; ceoEnd?: string }>;
 }) {
   const user = await requireUser();
   if (!canAccessAdministration(user.role)) {
     redirect("/dashboard");
   }
-  const { role, period, date, section } = await searchParams;
+  const { role, period, date, section, ceoStart, ceoEnd } = await searchParams;
   const parsedPeriod = Number(period || 30);
   const selectedPeriod = Number.isFinite(parsedPeriod) ? Math.min(Math.max(parsedPeriod, 7), 200) : 30;
   const selectedDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
@@ -63,6 +63,10 @@ export default async function AdminPage({
     visitStart.setDate(visitStart.getDate() - Math.min(Math.max(selectedPeriod, 7), 200));
   }
   const roleFilter = isUserRole(role) ? role : undefined;
+  const selectedCeoStart = ceoStart && /^\d{4}-\d{2}-\d{2}$/.test(ceoStart) ? ceoStart : undefined;
+  const selectedCeoEnd = ceoEnd && /^\d{4}-\d{2}-\d{2}$/.test(ceoEnd) ? ceoEnd : undefined;
+  const ceoStartDate = selectedCeoStart ? new Date(`${selectedCeoStart}T00:00:00`) : undefined;
+  const ceoEndDate = selectedCeoEnd ? new Date(`${selectedCeoEnd}T23:59:59.999`) : undefined;
 
   const periodWhere = { createdAt: { gte: visitStart, lte: visitEnd } };
   await ensureDefaultPositions();
@@ -300,6 +304,12 @@ export default async function AdminPage({
     } else {
       params.set("period", String(selectedPeriod));
     }
+    if (selectedCeoStart) {
+      params.set("ceoStart", selectedCeoStart);
+    }
+    if (selectedCeoEnd) {
+      params.set("ceoEnd", selectedCeoEnd);
+    }
     return `/admin?${params.toString()}`;
   };
   const chartLength = selectedDate ? 1 : Math.min(selectedPeriod, 60);
@@ -444,7 +454,35 @@ export default async function AdminPage({
     departments: hrcfoDepartments,
     employees: hrcfoEmployees,
   })));
-  const financiallyImpacting = hrcfoTransactions.filter((transaction) => transaction.status === "VALIDATED" || transaction.status === "PAID");
+  const isInCeoPeriod = (value: Date | string | null | undefined) => {
+    if (!ceoStartDate && !ceoEndDate) {
+      return true;
+    }
+    if (!value) {
+      return true;
+    }
+    const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    if (Number.isNaN(time)) {
+      return true;
+    }
+    if (ceoStartDate && time < ceoStartDate.getTime()) {
+      return false;
+    }
+    if (ceoEndDate && time > ceoEndDate.getTime()) {
+      return false;
+    }
+    return true;
+  };
+  const ceoTransactions = hrcfoTransactions.filter((transaction) => isInCeoPeriod(transaction.transactionDate || transaction.createdAt));
+  const ceoEmployees = hrcfoEmployees.filter((employee) => isInCeoPeriod(employee.createdAt));
+  const ceoTasks = cooTasks.filter((task) => isInCeoPeriod(task.plannedDate || task.createdAt));
+  const ceoOperations = cooOperations.filter((operation) => isInCeoPeriod(operation.createdAt));
+  const ceoMeetings = cooMeetings.filter((meeting) => isInCeoPeriod(meeting.meetingDate || meeting.createdAt));
+  const ceoVendors = scoVendors.filter((vendor) => isInCeoPeriod(vendor.createdAt));
+  const ceoPurchaseRequests = scoPurchaseRequests.filter((request) => isInCeoPeriod(request.neededBy || request.createdAt));
+  const ceoInventory = scoInventory.filter((item) => isInCeoPeriod(item.updatedAt || item.createdAt));
+  const ceoAssets = scoAssets.filter((asset) => isInCeoPeriod(asset.createdAt));
+  const financiallyImpacting = ceoTransactions.filter((transaction) => transaction.status === "VALIDATED" || transaction.status === "PAID");
   const revenue = financiallyImpacting
     .filter((transaction) => transaction.transactionCategory === "IN" && transaction.title.trim().toLocaleLowerCase("fr-FR") !== "capital de départ")
     .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
@@ -463,16 +501,16 @@ export default async function AdminPage({
         { label: "Chiffre d'affaires", value: `${revenue.toFixed(2)} USD`, detail: "Entrées réelles hors capital de départ." },
         { label: "Entrées", value: `${totalIn.toFixed(2)} USD`, detail: "Transactions d'entrée impactantes." },
         { label: "Sorties", value: `${totalOut.toFixed(2)} USD`, detail: "Transactions de sortie impactantes." },
-        { label: "Solde comptes", value: `${hrcfoAccounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0).toFixed(2)} USD`, detail: "Somme des comptes financiers." },
+        { label: "Solde comptes", value: `${hrcfoAccounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0).toFixed(2)} USD`, detail: "Solde courant des comptes, non limité par période." },
       ],
     },
     {
       title: "Vue RH synthétique",
       description: "Lecture capital humain, paie et postes officiels DTSC.",
       metrics: [
-        { label: "Collaborateurs", value: hrcfoEmployees.length, detail: "Dossiers RH enregistrés." },
-        { label: "Actifs", value: hrcfoEmployees.filter((employee) => employee.status === "ACTIVE").length, detail: "Collaborateurs actifs." },
-        { label: "Masse salariale", value: `${hrcfoEmployees.reduce((sum, employee) => sum + Number(employee.monthlyCompensation || 0), 0).toFixed(2)} USD`, detail: "Rémunération mensuelle théorique." },
+        { label: "Collaborateurs", value: ceoEmployees.length, detail: "Dossiers RH enregistrés sur la période." },
+        { label: "Actifs", value: ceoEmployees.filter((employee) => employee.status === "ACTIVE").length, detail: "Collaborateurs actifs sur la période." },
+        { label: "Masse salariale", value: `${ceoEmployees.reduce((sum, employee) => sum + Number(employee.monthlyCompensation || 0), 0).toFixed(2)} USD`, detail: "Rémunération mensuelle théorique des dossiers filtrés." },
         { label: "Postes actifs", value: hrcfoPositions.filter((position) => position.status === "ACTIVE").length, detail: "Référentiel officiel des postes." },
       ],
     },
@@ -480,20 +518,20 @@ export default async function AdminPage({
       title: "Vue opérationnelle COO",
       description: "Charge opérationnelle, retards, blocages et décisions terrain.",
       metrics: [
-        { label: "Tâches du jour", value: cooTasks.filter((task) => task.plannedDate?.toISOString().slice(0, 10) === todayKey).length, detail: "Tâches planifiées aujourd'hui." },
-        { label: "Tâches bloquées", value: cooTasks.filter((task) => task.status === "BLOCKED").length, detail: "À débloquer ou escalader." },
-        { label: "Opérations critiques", value: cooOperations.filter((operation) => operation.priority === "CRITICAL" || operation.status === "BLOCKED").length, detail: "Suivi exécutif recommandé." },
-        { label: "Réunions prévues", value: cooMeetings.filter((meeting) => meeting.status === "PLANNED").length, detail: "Réunions COO planifiées." },
+        { label: selectedCeoStart || selectedCeoEnd ? "Tâches filtrées" : "Tâches du jour", value: selectedCeoStart || selectedCeoEnd ? ceoTasks.length : ceoTasks.filter((task) => task.plannedDate?.toISOString().slice(0, 10) === todayKey).length, detail: "Tâches COO selon la période CEO." },
+        { label: "Tâches bloquées", value: ceoTasks.filter((task) => task.status === "BLOCKED").length, detail: "À débloquer ou escalader." },
+        { label: "Opérations critiques", value: ceoOperations.filter((operation) => operation.priority === "CRITICAL" || operation.status === "BLOCKED").length, detail: "Suivi exécutif recommandé." },
+        { label: "Réunions prévues", value: ceoMeetings.filter((meeting) => meeting.status === "PLANNED").length, detail: "Réunions COO planifiées." },
       ],
     },
     {
       title: "Vue commerciale et SCO",
       description: "Suivi fournisseurs, achats, stocks, actifs et logistique.",
       metrics: [
-        { label: "Fournisseurs", value: scoVendors.length, detail: "Référentiel fournisseurs." },
-        { label: "Achats ouverts", value: scoPurchaseRequests.filter((request) => request.status !== "RECEIVED" && request.status !== "CANCELED" && request.status !== "REJECTED").length, detail: "Demandes d'achat à suivre." },
-        { label: "Stocks faibles", value: scoInventory.filter((item) => item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK").length, detail: "Risque opérationnel SCO." },
-        { label: "Actifs suivis", value: scoAssets.length, detail: "Biens matériels affectés ou disponibles." },
+        { label: "Fournisseurs", value: ceoVendors.length, detail: "Référentiel fournisseurs filtré." },
+        { label: "Achats ouverts", value: ceoPurchaseRequests.filter((request) => request.status !== "RECEIVED" && request.status !== "CANCELED" && request.status !== "REJECTED").length, detail: "Demandes d'achat à suivre." },
+        { label: "Stocks faibles", value: ceoInventory.filter((item) => item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK").length, detail: "Risque opérationnel SCO." },
+        { label: "Actifs suivis", value: ceoAssets.length, detail: "Biens matériels affectés ou disponibles." },
       ],
     },
   ];
@@ -620,7 +658,7 @@ export default async function AdminPage({
 
         {activeSection === "ceo" && canView("ceo") && (
           <div className="space-y-5">
-            <CeoExecutiveSummary groups={ceoExecutiveGroups} />
+            <CeoExecutiveSummary groups={ceoExecutiveGroups} dateStart={selectedCeoStart} dateEnd={selectedCeoEnd} />
             <OperationsAdminPanel
               eyebrow="Chief Executive Officer"
               title="Supervision CEO"

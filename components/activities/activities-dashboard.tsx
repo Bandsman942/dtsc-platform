@@ -9,7 +9,7 @@ import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
-type EntityType = "TASK" | "OPERATION" | "DEPARTMENT_REQUEST" | "BLOCKER" | "MEETING" | "REPORT" | "WORKFLOW" | "PAYROLL";
+type EntityType = "TASK" | "OPERATION" | "DEPARTMENT_REQUEST" | "BLOCKER" | "MEETING" | "REPORT" | "WORKFLOW" | "PAYROLL" | "CEO_OBJECTIVE" | "CEO_SUPERVISION";
 
 type ActivityItem = {
   id: string;
@@ -375,6 +375,9 @@ function sectionIcon(id: string) {
   }
   if (id === "payrolls") {
     return <CalendarDays className="h-5 w-5" />;
+  }
+  if (id === "ceo-follow-up") {
+    return <ClipboardList className="h-5 w-5" />;
   }
   return <CircleAlert className="h-5 w-5" />;
 }

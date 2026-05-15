@@ -62,8 +62,8 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Sous-modules admin HR & CFO et SCO avec RBAC et permissions métier par poste officiel: collaborateurs liés aux membres internes, départements, postes DTSC, comptes financiers, budgets contrôlés, transactions, paie, factures automatiques, fournisseurs, achats, stocks, actifs et logistique
 - Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque
 - Sous-module COO avec opérations, tâches, réunions, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
-- Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO, objectifs stratégiques, alertes critiques et journal de supervision
-- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, blocages, rapports, workflows partagés, suivi de paie et téléchargement des bulletins personnels
+- Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO filtrable par période, objectifs stratégiques, alertes critiques et journal de supervision
+- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivi de paie et téléchargement des bulletins personnels
 - Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
@@ -325,7 +325,7 @@ Trois sous-modules internes complètent l'administration:
 
 - `HR & CFO`: départements, postes officiels DTSC, comptes financiers, collaborateurs liés aux utilisateurs non-clients, budgets, transactions et paie. Les budgets exigent un compte suffisamment provisionné; les sorties exigent un budget disponible; les transactions validées mettent à jour les soldes et peuvent générer une facture exportable.
 - `SCO`: référentiel des biens matériels DTSC, fournisseurs, demandes d'achat, stocks, inventaire, actifs, équipements et logistique des missions ou événements. Le fournisseur retenu d'une demande d'achat se choisit dans la liste des fournisseurs déjà enregistrés, et les champs Responsable/Demandeur/Assigné à s'appuient sur les collaborateurs déjà créés. Un collaborateur dont le dossier RH porte le poste officiel `SCO` peut accéder aux opérations SCO autorisées.
-- `CEO`: tableau de bord exécutif consolidant finance, RH, COO et SCO, avec suivi des objectifs stratégiques et journal de supervision.
+- `CEO`: tableau de bord exécutif consolidant finance, RH, COO et SCO avec filtre de période dédié, suivi des objectifs stratégiques et journal de supervision. Les objectifs et suivis assignés apparaissent dans `Activités DTSC` chez les collaborateurs concernés avec commentaires et notifications ciblées.
 
 Ces sections utilisent le RBAC Administration existant et les postes officiels du dossier RH: `ADMIN` conserve l'accès complet, tandis que `MANAGER` et `SUPPORT` peuvent recevoir ou perdre l'accès depuis le bloc `Accès RBAC`; les postes `CEO`, `COO`, `HR_CFO`, `SCO`, `CTO` et `MPO` complètent les droits métier côté serveur. Chaque sous-module dispose de formulaires de création, listes paginées, recherche intelligente, modification de statut, notes de suivi, suppression contrôlée, journalisation API et audit log.
 

@@ -32,6 +32,7 @@ export async function POST(req: Request, { params }: Params) {
 
   try {
     const record = await createRecord(entity, parsed.data as Record<string, unknown>, session.userId);
+    await notifyCeoRecipients(entity, record.id, session.userId);
     await writeAuditLog({ userId: session.userId, action: `CEO_${entity.toUpperCase()}_CREATED`, entity, entityId: record.id, request: req });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { entity } });
     return NextResponse.json({ ok: true, record }, { status: 201 });
@@ -120,4 +121,39 @@ async function resolveEmployee(employeeId: unknown) {
 function textOrNull(value: unknown) {
   const text = String(value || "").trim();
   return text || null;
+}
+
+async function notifyCeoRecipients(entity: CeoEntity, recordId: string, senderId: string) {
+  if (entity === "objectives") {
+    const objective = await prisma.ceoObjective.findUnique({ where: { id: recordId } });
+    if (!objective) {
+      return;
+    }
+    await notifyEmployees([objective.responsibleEmployeeId], senderId, "Nouvel objectif CEO", objective.title, "CEO_OBJECTIVE");
+    return;
+  }
+  const log = await prisma.ceoSupervisionLog.findUnique({ where: { id: recordId } });
+  if (!log) {
+    return;
+  }
+  await notifyEmployees([log.employeeId, log.followUpResponsibleId], senderId, "Nouveau suivi CEO", log.title, "CEO_SUPERVISION");
+}
+
+async function notifyEmployees(employeeIds: Array<string | null>, senderId: string, title: string, body: string, type: string) {
+  const employees = await prisma.hrcfoEmployee.findMany({
+    where: { id: { in: employeeIds.filter((id): id is string => Boolean(id)) } },
+    select: { userId: true },
+  });
+  const recipients = [...new Set(employees.map((employee) => employee.userId).filter((id): id is string => Boolean(id) && id !== senderId))];
+  for (const userId of recipients) {
+    await prisma.notification.create({
+      data: {
+        userId,
+        title,
+        body: body.slice(0, 220),
+        type,
+        targetUrl: "/activities",
+      },
+    });
+  }
 }

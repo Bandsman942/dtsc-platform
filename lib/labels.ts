@@ -128,6 +128,8 @@ export const statusLabels = {
   DEPARTMENT: "Département",
   EMPLOYEE: "Collaborateur",
   CEO: "CEO",
+  CEO_OBJECTIVE: "Objectif CEO",
+  CEO_SUPERVISION: "Supervision CEO",
   COO: "COO",
   CTO: "CTO",
   HR_CFO: "RH & CFO",
