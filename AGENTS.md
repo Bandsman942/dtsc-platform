@@ -71,6 +71,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les handlers React ne doivent pas garder de paramètres inutilisés (`event`, `_`, etc.): ESLint Vercel échoue sur `@typescript-eslint/no-unused-vars`.
 - Les effets React doivent avoir des dépendances complètes ou des callbacks stabilisés avec `useCallback`; ne pas ignorer `react-hooks/exhaustive-deps` dans les composants client sensibles.
 - Dans les composants client, ne pas passer directement `body?.record` ou une propriété JSON optionnelle à une fonction typée dans un callback d'état React: TypeScript peut perdre le narrowing pendant `pnpm build`. Stocker d'abord la valeur dans une constante locale (`const savedRecord = body?.record`) puis tester cette constante.
+- Les objets de labels/enums partagés comme `lib/labels.ts` ne doivent jamais contenir deux fois la même clé: TypeScript échoue sur Vercel avec "An object literal cannot have multiple properties with the same name". Avant commit, inspecter les ajouts de labels pour fusionner les clés existantes au lieu de les répéter.
 - Les limites d'usage chat doivent être validées côté API, pas uniquement côté UI.
 - Les réponses `429 DAILY_LIMIT_REACHED` de `/api/chat` doivent inclure un `usage.resetAt` ISO pour afficher l'heure exacte de réinitialisation côté UI.
 - Ne pas importer un module `"use client"` dans un composant serveur uniquement pour partager des constantes: extraire les constantes dans un fichier sans directive client.

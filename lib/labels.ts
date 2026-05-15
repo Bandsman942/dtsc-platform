@@ -148,9 +148,7 @@ export const statusLabels = {
   INSTRUCTION: "Instruction",
   RISK: "Risque",
   OPPORTUNITY: "Opportunité",
-  FOLLOW_UP: "Suivi",
   VALIDATION: "Validation",
-  STRATEGIC: "Stratégique",
 } as const;
 
 export const publicationCategoryLabels = {
