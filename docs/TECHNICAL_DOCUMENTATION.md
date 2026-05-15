@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 13 mai 2026
+Derniere mise a jour: 15 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -28,7 +28,7 @@ Objectifs couverts par le code actuel:
 - annonces internes avec commentaires et reactions;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
-- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO et acces par blocs pour les roles non-client;
+- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO et acces par blocs/postes pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API et webhooks etendus aux zones critiques: chat, conversations, notifications, documents, paiements, diffusions, newsletter, entreprise et publications;
@@ -243,6 +243,7 @@ Modeles actifs:
 | `HrcfoExpense` | Transactions financieres HR & CFO: entree/sortie, compte, budget, source, validation et facture associee |
 | `HrcfoPayroll` | Paie collaborateur, periode, brut, primes, retenues, compte, budget et transaction de sortie associee |
 | `HrcfoInvoice` | Ancienne table interne conservee pour compatibilite historique, plus exposee comme bloc manuel |
+| `DtscPosition` | Referentiel officiel des postes DTSC; les codes `CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO` completent les permissions metier |
 | `ScoVendor` | Fournisseurs, categorie, contact, fiabilite et delais moyens |
 | `ScoPurchaseRequest` | Demandes d'achat, urgence, budget, fournisseur retenu issu du referentiel Fournisseurs et statut de commande |
 | `MaterialItem` | Referentiel central des biens materiels DTSC: nom, reference, categorie, type, unite et statut |
@@ -257,6 +258,8 @@ Modeles actifs:
 | `CooMeeting` | Reunions, comptes rendus, decisions et pieces jointes |
 | `CooWorkflow` | Workflows operationnels repetables et etapes |
 | `CooOperationalReport` | Rapports operationnels et KPI COO |
+| `CeoObjective` | Objectifs executifs suivis par le CEO: type, departement, responsable, periode, cible, progression et statut |
+| `CeoSupervisionLog` | Journal de supervision CEO: observations, decisions, instructions, risques, actions attendues et responsable de suivi |
 
 Champs profil utilisateur ajoutes:
 
@@ -577,14 +580,19 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
 | `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter, avec logs API et cause d'erreur explicite |
 | `GET` | `/api/admin/exports/payments` | `ADMIN` | Export CSV compatible Excel des paiements |
-| `POST` | `/api/admin/hr-cfo/[entity]` | bloc `hrCfo` | Creation d'un dossier HR & CFO (`departments`, `accounts`, `employees`, `budgets`, `transactions`, `payrolls`) |
+| `POST` | `/api/admin/hr-cfo/[entity]` | bloc `hrCfo` | Creation d'un dossier HR & CFO (`departments`, `positions`, `accounts`, `employees`, `budgets`, `transactions`, `payrolls`) |
 | `PATCH` | `/api/admin/hr-cfo/[entity]/[id]` | bloc `hrCfo` | Mise a jour statut/notes d'un dossier HR & CFO |
 | `DELETE` | `/api/admin/hr-cfo/[entity]/[id]` | bloc `hrCfo` | Suppression controlee d'un dossier HR & CFO |
 | `POST` | `/api/admin/sco/[entity]` | bloc `sco` | Creation d'un dossier SCO (`materialItems`, `vendors`, `purchaseRequests`, `inventory`, `assets`, `logistics`) |
 | `PATCH` | `/api/admin/sco/[entity]/[id]` | bloc `sco` | Mise a jour statut/notes d'un dossier SCO |
 | `DELETE` | `/api/admin/sco/[entity]/[id]` | bloc `sco` | Suppression controlee d'un dossier SCO |
+| `POST` | `/api/admin/ceo/[entity]` | bloc/poste `ceo` | Creation d'un objectif CEO ou d'une entree de journal de supervision (`objectives`, `supervisionLogs`) |
+| `PATCH` | `/api/admin/ceo/[entity]/[id]` | bloc/poste `ceo` | Mise a jour d'un objectif CEO ou d'une entree de supervision |
+| `DELETE` | `/api/admin/ceo/[entity]/[id]` | bloc/poste `ceo` | Suppression controlee d'un objectif CEO ou d'une entree de supervision |
 
-Les routes HR & CFO / SCO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
+Les routes HR & CFO / SCO / COO / CEO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Les postes officiels du dossier RH completent ces droits: `CEO` peut superviser `ceo`, `hrCfo`, `coo`, `sco`, `activity` et `audits`; `COO` accede a `coo`; `HR_CFO` accede a `hrCfo`; `SCO` accede a `sco`; `CTO` et `MPO` obtiennent les blocs operationnels correspondants. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
+
+Le champ `Poste` du dossier collaborateur n'est plus un texte libre. Il pointe vers `DtscPosition`, gere depuis `HR & CFO > Manager les postes`. Les codes de poste sont stables (`CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO`, etc.) et servent a determiner les permissions metier cote serveur sans se baser sur une comparaison approximative de texte.
 
 Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le reporting du capital humain, COSO pour le controle interne, ISO 9001 pour l'approche processus et l'amelioration continue, ISO 45001 pour la logique sante/securite lorsque des risques operations apparaissent, et ASCM SCOR pour structurer les operations supply chain. Les champs visibles `Responsable`, `Demandeur` et `Assigne a` des operations internes sont alimentes par les collaborateurs deja enregistres afin d'eviter les noms libres incoherents.
 
@@ -1503,6 +1511,33 @@ Bonnes pratiques a maintenir:
 - prevoir a terme export/suppression des donnees utilisateur si exigence RGPD stricte.
 
 ## 20. Roadmap technique recommandee et etat d'implementation
+
+## 20.2 Postes officiels, permissions metier et section CEO - 15 mai 2026
+
+Cette mise a jour centralise les fonctions internes DTSC dans une table officielle `DtscPosition`. Le dossier `HrcfoEmployee` conserve `jobTitle` pour compatibilite historique, mais le champ visible `Poste` pointe maintenant vers `positionId`, avec `positionCode` et `positionTitle` denormalises pour les recherches et les affichages. Les postes par defaut sont seedes par migration et par `ensureDefaultPositions()` lorsque l'administration se charge.
+
+Postes critiques initiaux:
+
+- `CEO`: supervision executive et arbitrage strategique;
+- `COO`: pilotage operationnel, taches, workflows, blocages et rapports;
+- `HR_CFO`: RH, finances, budgets, transactions, paie et controle;
+- `SCO`: fournisseurs, achats, stocks, actifs, biens materiels et logistique;
+- `CTO`: pilotage technique;
+- `MPO`: marketing, production et communication.
+
+La fonction `requireAdminBlockAccess()` prend maintenant en compte deux niveaux:
+
+- RBAC systeme via `AppSetting.adminRoleAccess`;
+- poste metier officiel via `lib/business-roles.ts`.
+
+La section Administration `CEO` ajoute:
+
+- une vue executive consolidee finance/RH/COO/SCO;
+- les objectifs strategiques `CeoObjective`;
+- le journal de supervision `CeoSupervisionLog`;
+- des routes CRUD securisees `/api/admin/ceo/[entity]` et `/api/admin/ceo/[entity]/[id]`.
+
+Le module `/activities` lit aussi le poste officiel: un collaborateur `CEO` voit une synthese de supervision critique; un collaborateur `COO` voit les operations/taches/blocages a piloter globalement; les autres collaborateurs gardent la logique de propriete ou d'implication. Les commentaires operationnels autorisent `CEO` et `COO` selon leur poste, toujours cote serveur.
 
 ## 20.1 Mise a jour HR & CFO, COO et Activites DTSC - 15 mai 2026
 

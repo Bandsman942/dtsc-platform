@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { normalizePositionCode } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,13 +20,15 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized", message: "Connexion requise." }, { status: 401 });
   }
-  const employee = await prisma.hrcfoEmployee.findFirst({ where: { userId: user.id, status: { not: "EXITED" } } });
+  const employee = await prisma.hrcfoEmployee.findFirst({ where: { userId: user.id, status: { not: "EXITED" } }, include: { position: true } });
   if (!employee) {
     return NextResponse.json({ error: "Forbidden", message: "Aucun dossier collaborateur actif." }, { status: 403 });
   }
   const { id } = await params;
+  const positionCode = normalizePositionCode(employee.position?.code || employee.positionCode || employee.jobTitle);
+  const supervisesOperations = positionCode === "CEO" || positionCode === "COO";
   const task = await prisma.cooTask.findFirst({
-    where: { id, OR: [{ assigneeEmployeeId: employee.id }, { responsibleEmployeeId: employee.id }] },
+    where: supervisesOperations ? { id } : { id, OR: [{ assigneeEmployeeId: employee.id }, { responsibleEmployeeId: employee.id }] },
   });
   if (!task) {
     return NextResponse.json({ error: "Forbidden", message: "Tâche introuvable ou non autorisée." }, { status: 403 });

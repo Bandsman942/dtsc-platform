@@ -9,6 +9,11 @@ const hrStatus = {
   references: ["ACTIVE", "INACTIVE"],
 };
 
+const ceoStatus = {
+  objectives: ["PLANNED", "IN_PROGRESS", "ACHIEVED", "MISSED", "LATE", "CANCELED"],
+  supervisionLogs: ["OPEN", "IN_PROGRESS", "DONE", "ARCHIVED", "CANCELED"],
+};
+
 const scoStatus = {
   vendors: ["ACTIVE", "WATCHLIST", "SUSPENDED", "ARCHIVED"],
   purchaseRequests: ["DRAFT", "SUBMITTED", "APPROVED", "ORDERED", "RECEIVED", "REJECTED", "CANCELED"],
@@ -51,6 +56,7 @@ type HrcfoData = {
   payrolls: Array<Record<string, unknown>>;
   departments: Array<Record<string, unknown>>;
   accounts: Array<Record<string, unknown>>;
+  positions: Array<Record<string, unknown>>;
   staffUsers: Array<Record<string, unknown>>;
 };
 
@@ -60,6 +66,9 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
   const staffOptions = data.staffUsers.map((user) => option(user.id, `${stringOf(user.name)} · ${formatEnumLabel(stringOf(user.role))}`, user.email));
   const departmentOptions = activeDepartments.map((department) => option(department.id, stringOf(department.name)));
   const accountOptions = activeAccounts.map((account) => option(account.id, `${stringOf(account.name)} · ${formatEnumLabel(stringOf(account.accountType))}`));
+  const positionOptions = data.positions
+    .filter((position) => stringOf(position.status) === "ACTIVE")
+    .map((position) => option(position.id, `${stringOf(position.title)} · ${stringOf(position.code)}`));
   const budgetOptions = data.budgets
     .filter((budget) => ["OPEN", "MONITORING"].includes(stringOf(budget.status)) && budgetRemaining(budget) > 0)
     .map((budget) => option(budget.id, `${stringOf(budget.name)} · solde ${budgetRemaining(budget).toFixed(2)} USD`));
@@ -121,6 +130,32 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
       })),
     },
     {
+      id: "positions",
+      label: "Manager les postes",
+      description: "Référentiel officiel des postes DTSC. Les permissions métier CEO, COO, HR & CFO, SCO, CTO et MPO se basent sur ces codes.",
+      endpoint: "/api/admin/hr-cfo/positions",
+      fields: [
+        { name: "title", label: "Titre du poste", type: "text", required: true },
+        { name: "code", label: "Code stable", type: "text", required: true, placeholder: "CEO, COO, HR_CFO..." },
+        { name: "departmentId", label: "Département associé", type: "select", options: departmentOptions },
+        { name: "hierarchyLevel", label: "Niveau hiérarchique", type: "number" },
+        selectField("status", "Statut", hrStatus.references),
+        { name: "permissions", label: "Permissions métier", type: "textarea", placeholder: "Ex: CEO_SUPERVISION, SCO_OPERATIONS" },
+        { name: "description", label: "Description", type: "textarea" },
+      ],
+      statusOptions: statusOptions(hrStatus.references),
+      records: data.positions.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${stringOf(item.code)} · Niveau ${stringOf(item.hierarchyLevel) || "50"}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.description),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([stringOf(item.departmentName), stringOf(item.permissions)]),
+        values: fieldValues(item, ["title", "code", "departmentId", "hierarchyLevel", "status", "permissions", "description"]),
+      })),
+    },
+    {
       id: "employees",
       label: "Collaborateurs & dossiers RH",
       description: "Dossier RH lié aux membres internes existants. Le nom et l'email viennent du compte utilisateur et ne sont pas modifiés ici.",
@@ -129,7 +164,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
         { name: "userId", label: "Collaborateur", type: "select", required: true, options: staffOptions, helperText: "Seuls les membres non-client actifs ou suspendus sont proposés." },
         { name: "userEmailPreview", label: "Email du collaborateur", type: "preview", previewFor: "userId", helperText: "Lecture seule: l'email vient du compte utilisateur sélectionné." },
         { name: "departmentId", label: "Département", type: "select", required: true, options: departmentOptions },
-        { name: "jobTitle", label: "Poste", type: "text", required: true },
+        { name: "positionId", label: "Poste", type: "select", required: true, options: positionOptions, helperText: "Liste officielle des postes DTSC. Les droits métier se basent sur ce choix." },
         selectField("contractType", "Contrat", ["PERMANENT", "CONSULTANT", "PART_TIME", "INTERN", "TEMPORARY"]),
         selectField("status", "Statut", hrStatus.employees),
         { name: "startDate", label: "Date d'entrée", type: "date" },
@@ -144,7 +179,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
       records: data.employees.map((item) => ({
         id: stringOf(item.id),
         title: stringOf(item.fullName),
-        subtitle: `${stringOf(item.jobTitle)} · ${stringOf(item.department)}`,
+        subtitle: `${stringOf(item.positionTitle || item.jobTitle)} · ${stringOf(item.department)}`,
         status: stringOf(item.status),
         amount: numberOf(item.monthlyCompensation),
         currency: "USD",
@@ -156,7 +191,7 @@ export function buildHrcfoDatasets(data: HrcfoData): OperationDataset[] {
           stringOf(item.managerName) ? `Responsable: ${stringOf(item.managerName)}` : "",
           stringOf(item.kpis) ? "KPIs définis" : "",
         ]),
-        values: fieldValues(item, ["userId", "departmentId", "jobTitle", "contractType", "status", "startDate", "monthlyCompensation", "managerUserId", "complianceStatus", "skills", "kpis", "notes"]),
+        values: fieldValues(item, ["userId", "departmentId", "positionId", "contractType", "status", "startDate", "monthlyCompensation", "managerUserId", "complianceStatus", "skills", "kpis", "notes"]),
       })),
     },
     {
@@ -753,6 +788,95 @@ export function buildCooDatasets(data: {
         createdAt: stringOf(item.createdAt),
         meta: compactStrings([stringOf(item.departmentName), stringOf(item.employeeName), stringOf(item.recipientName) ? `À: ${stringOf(item.recipientName)}` : "", formatEnumLabel(stringOf(item.priority)), formatDate(item.periodEnd)]),
         values: fieldValues(item, ["title", "reportType", "periodStart", "periodEnd", "departmentId", "employeeId", "recipientEmployeeId", "operationId", "priority", "tasksCreated", "tasksCompleted", "tasksValidated", "tasksRejected", "lateTasks", "blockersCount", "executionRate", "status", "content", "mainBlockers", "recommendations"]),
+      })),
+    },
+  ];
+}
+
+export function buildCeoDatasets(data: {
+  objectives: Array<Record<string, unknown>>;
+  supervisionLogs: Array<Record<string, unknown>>;
+  departments: Array<Record<string, unknown>>;
+  employees: Array<Record<string, unknown>>;
+}): OperationDataset[] {
+  const activeDepartments = data.departments.filter((item) => stringOf(item.status) === "ACTIVE");
+  const departmentOptions = activeDepartments.map((department) => option(department.id, stringOf(department.name)));
+  const employeeOptions = data.employees
+    .filter((employee) => stringOf(employee.status) !== "EXITED")
+    .map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
+
+  return [
+    {
+      id: "objectives",
+      label: "Suivi des objectifs",
+      description: "Objectifs exécutifs DTSC par période, département, responsable, cible et progression.",
+      endpoint: "/api/admin/ceo/objectives",
+      fields: [
+        { name: "title", label: "Objectif", type: "text", required: true },
+        selectField("objectiveType", "Type d'objectif", ["FINANCIAL", "COMMERCIAL", "OPERATIONAL", "HR", "TECHNICAL", "MARKETING", "STRATEGIC"]),
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "responsibleEmployeeId", label: "Responsable", type: "select", options: employeeOptions },
+        { name: "periodStart", label: "Début période", type: "date" },
+        { name: "periodEnd", label: "Fin période", type: "date" },
+        { name: "targetValue", label: "Cible", type: "number" },
+        { name: "currentValue", label: "Valeur actuelle", type: "number" },
+        { name: "progress", label: "Progression %", type: "number" },
+        selectField("status", "Statut", ceoStatus.objectives),
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "comments", label: "Commentaires", type: "textarea" },
+      ],
+      statusOptions: statusOptions(ceoStatus.objectives),
+      records: data.objectives.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.objectiveType))} · ${stringOf(item.departmentName)}`,
+        status: stringOf(item.status),
+        amount: numberOf(item.progress),
+        currency: "%",
+        notes: stringOrNull(item.comments || item.description),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([
+          `Priorité: ${formatEnumLabel(stringOf(item.priority))}`,
+          stringOf(item.responsibleName),
+          formatDate(item.periodEnd),
+          stringOf(item.targetValue) ? `Cible: ${stringOf(item.targetValue)}` : "",
+        ]),
+        values: fieldValues(item, ["title", "objectiveType", "departmentId", "responsibleEmployeeId", "periodStart", "periodEnd", "targetValue", "currentValue", "progress", "status", "priority", "description", "comments"]),
+      })),
+    },
+    {
+      id: "supervisionLogs",
+      label: "Journal de supervision",
+      description: "Observations, décisions, instructions, risques, opportunités et suivis exécutifs.",
+      endpoint: "/api/admin/ceo/supervisionLogs",
+      fields: [
+        { name: "title", label: "Titre", type: "text", required: true },
+        selectField("entryType", "Type d'entrée", ["OBSERVATION", "DECISION", "INSTRUCTION", "RISK", "OPPORTUNITY", "FOLLOW_UP", "VALIDATION", "OTHER"]),
+        { name: "departmentId", label: "Département concerné", type: "select", options: departmentOptions },
+        { name: "employeeId", label: "Collaborateur concerné", type: "select", options: employeeOptions },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        selectField("status", "Statut", ceoStatus.supervisionLogs),
+        { name: "logDate", label: "Date", type: "date" },
+        { name: "followUpResponsibleId", label: "Responsable suivi", type: "select", options: employeeOptions },
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "expectedAction", label: "Action attendue", type: "textarea" },
+        { name: "comments", label: "Commentaires", type: "textarea" },
+      ],
+      statusOptions: statusOptions(ceoStatus.supervisionLogs),
+      records: data.supervisionLogs.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.entryType))} · ${stringOf(item.departmentName)}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.expectedAction || item.comments || item.description),
+        createdAt: stringOf(item.logDate || item.createdAt),
+        meta: compactStrings([
+          `Priorité: ${formatEnumLabel(stringOf(item.priority))}`,
+          stringOf(item.employeeName),
+          stringOf(item.followUpResponsibleName) ? `Suivi: ${stringOf(item.followUpResponsibleName)}` : "",
+        ]),
+        values: fieldValues(item, ["title", "entryType", "departmentId", "employeeId", "priority", "status", "logDate", "followUpResponsibleId", "description", "expectedAction", "comments"]),
       })),
     },
   ];

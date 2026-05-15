@@ -168,7 +168,7 @@ export const massMailSchema = z.object({
   contentHtml: z.string().max(60_000).optional().or(z.literal("")),
 });
 
-const adminBlockSchema = z.enum(["overview", "settings", "publications", "users", "hrCfo", "sco", "coo", "visits", "activity", "audits"]);
+const adminBlockSchema = z.enum(["overview", "settings", "publications", "users", "hrCfo", "sco", "coo", "ceo", "visits", "activity", "audits"]);
 
 export const adminAccessSchema = z.object({
   MANAGER: z.array(adminBlockSchema).default([]),
@@ -189,7 +189,8 @@ export const hrcfoSchemas = {
   employees: z.object({
     userId: z.string().min(5),
     departmentId: z.string().min(5),
-    jobTitle: z.string().min(2).max(140),
+    positionId: z.string().min(5),
+    jobTitle: z.string().max(140).optional().or(z.literal("")),
     contractType: z.enum(["PERMANENT", "CONSULTANT", "PART_TIME", "INTERN", "TEMPORARY"]).default("PERMANENT"),
     status: z.enum(["ACTIVE", "ONBOARDING", "ON_LEAVE", "SUSPENDED", "EXITED"]).default("ACTIVE"),
     startDate: optionalDate,
@@ -254,6 +255,46 @@ export const hrcfoReferenceSchemas = {
     description: optionalText(800),
     openingBalance: money.default(0),
     status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+  }),
+  positions: z.object({
+    title: z.string().min(2).max(140),
+    code: z.string().min(2).max(40).regex(/^[A-Z0-9_]+$/, "Le code doit être en majuscules sans espaces."),
+    description: optionalText(1200),
+    departmentId: optionalText(120),
+    hierarchyLevel: z.coerce.number().int().min(1).max(99).default(50),
+    status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+    permissions: optionalText(800),
+  }),
+};
+
+export const ceoSchemas = {
+  objectives: z.object({
+    title: z.string().min(2).max(180),
+    description: optionalText(2000),
+    objectiveType: z.enum(["FINANCIAL", "COMMERCIAL", "OPERATIONAL", "HR", "TECHNICAL", "MARKETING", "STRATEGIC"]).default("STRATEGIC"),
+    departmentId: optionalText(120),
+    responsibleEmployeeId: optionalText(120),
+    periodStart: optionalDate,
+    periodEnd: optionalDate,
+    targetValue: money.optional(),
+    currentValue: money.optional(),
+    progress: z.coerce.number().int().min(0).max(100).default(0),
+    status: z.enum(["PLANNED", "IN_PROGRESS", "ACHIEVED", "MISSED", "LATE", "CANCELED"]).default("PLANNED"),
+    priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+    comments: optionalText(1800),
+  }),
+  supervisionLogs: z.object({
+    title: z.string().min(2).max(180),
+    entryType: z.enum(["OBSERVATION", "DECISION", "INSTRUCTION", "RISK", "OPPORTUNITY", "FOLLOW_UP", "VALIDATION", "OTHER"]).default("OBSERVATION"),
+    description: optionalText(2200),
+    departmentId: optionalText(120),
+    employeeId: optionalText(120),
+    priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+    status: z.enum(["OPEN", "IN_PROGRESS", "DONE", "ARCHIVED", "CANCELED"]).default("OPEN"),
+    logDate: optionalDate,
+    expectedAction: optionalText(1500),
+    followUpResponsibleId: optionalText(120),
+    comments: optionalText(1800),
   }),
 };
 

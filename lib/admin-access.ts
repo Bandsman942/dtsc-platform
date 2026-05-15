@@ -8,6 +8,7 @@ export const adminBlocks = [
   { id: "hrCfo", label: "HR & CFO", description: "Ressources humaines, budgets, dépenses, factures et contrôle interne." },
   { id: "sco", label: "SCO", description: "Fournisseurs, achats, stocks, actifs et logistique opérationnelle." },
   { id: "coo", label: "COO", description: "Opérations internes, tâches, workflows, blocages et performance." },
+  { id: "ceo", label: "CEO", description: "Supervision exécutive, objectifs, alertes critiques et journal stratégique." },
   { id: "visits", label: "Visites du site", description: "Suivi des visites publiques et filtres de période." },
   { id: "activity", label: "Activité plateforme", description: "Conversations, tickets et tableaux opérationnels." },
   { id: "audits", label: "Audits et logs", description: "Paiements, logs API, webhooks et traces techniques." },

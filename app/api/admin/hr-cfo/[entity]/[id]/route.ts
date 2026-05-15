@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { normalizePositionCode } from "@/lib/business-roles";
 import { deleteHrcfoTransaction, updateHrcfoTransaction, updatePayroll } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string; id: string }> };
-type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts";
+type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts" | "positions";
 
 function isHrcfoEntity(value: string): value is HrcfoEntity {
-  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts";
+  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts" || value === "positions";
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -91,6 +92,13 @@ function parsePatch(entity: HrcfoEntity, body: Record<string, unknown>) {
   if (entity === "accounts") {
     return hrcfoReferenceSchemas.accounts.partial().safeParse(body);
   }
+  if (entity === "positions") {
+    const payload = typeof body === "object" && body ? { ...(body as Record<string, unknown>) } : {};
+    if (payload.code) {
+      payload.code = normalizePositionCode(payload.code);
+    }
+    return hrcfoReferenceSchemas.positions.partial().safeParse(payload);
+  }
   if (entity === "transactions") {
     return hrcfoSchemas.transactions.partial().safeParse({ ...body, category: body.transactionCategory });
   }
@@ -110,6 +118,31 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
   if (entity === "accounts") {
     return prisma.financialAccount.update({ where: { id }, data: data as never });
   }
+  if (entity === "positions") {
+    const departmentId = data.departmentId ? String(data.departmentId) : undefined;
+    const department = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
+    if (departmentId && (!department || department.status !== "ACTIVE")) {
+      throw new Error("Le département associé au poste est inactif ou introuvable.");
+    }
+    const updateData = {
+      title: data.title ? String(data.title) : undefined,
+      code: data.code ? normalizePositionCode(data.code) : undefined,
+      description: data.description ? String(data.description) : null,
+      departmentId: departmentId ? department?.id : data.departmentId === "" ? null : undefined,
+      departmentName: departmentId ? department?.name : data.departmentId === "" ? null : undefined,
+      hierarchyLevel: data.hierarchyLevel != null && data.hierarchyLevel !== "" ? Number(data.hierarchyLevel) : undefined,
+      status: data.status ? String(data.status) : undefined,
+      permissions: data.permissions ? String(data.permissions) : null,
+    };
+    const position = await prisma.dtscPosition.update({ where: { id }, data: updateData });
+    if (data.title || data.code) {
+      await prisma.hrcfoEmployee.updateMany({
+        where: { positionId: id },
+        data: { jobTitle: position.title, positionTitle: position.title, positionCode: position.code },
+      });
+    }
+    return position;
+  }
   if (entity === "employees") {
     const departmentId = data.departmentId ? String(data.departmentId) : undefined;
     const department = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
@@ -123,10 +156,18 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
     if (managerUserId && !managerEmployee) {
       throw new Error("Le responsable doit être un collaborateur DTSC déjà enregistré et actif.");
     }
+    const positionId = data.positionId ? String(data.positionId) : undefined;
+    const position = positionId ? await prisma.dtscPosition.findUnique({ where: { id: positionId } }) : null;
+    if (positionId && (!position || position.status !== "ACTIVE")) {
+      throw new Error("Le poste sélectionné est inactif ou introuvable.");
+    }
     const updateData = {
       department: department?.name,
       departmentId: department?.id,
-      jobTitle: data.jobTitle ? String(data.jobTitle) : undefined,
+      jobTitle: position?.title,
+      positionId: position?.id,
+      positionCode: position?.code,
+      positionTitle: position?.title,
       contractType: data.contractType ? String(data.contractType) : undefined,
       status: data.status ? String(data.status) : undefined,
       startDate: data.startDate as Date | undefined,
@@ -172,6 +213,16 @@ async function deleteRecord(entity: HrcfoEntity, id: string) {
       throw new Error("Ce compte est utilisé. Désactivez-le au lieu de le supprimer.");
     }
     return prisma.financialAccount.delete({ where: { id } });
+  }
+  if (entity === "positions") {
+    const linked = await prisma.dtscPosition.findUnique({
+      where: { id },
+      include: { _count: { select: { employees: true } } },
+    });
+    if (linked && linked._count.employees) {
+      throw new Error("Ce poste est déjà utilisé. Désactivez-le au lieu de le supprimer.");
+    }
+    return prisma.dtscPosition.delete({ where: { id } });
   }
   if (entity === "employees") {
     return prisma.hrcfoEmployee.delete({ where: { id } });

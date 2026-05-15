@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { normalizePositionCode } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
 
 const commentSchema = z.object({
@@ -69,9 +70,19 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER || user.role === UserRole.SUPPORT) {
     return true;
   }
-  const employee = await prisma.hrcfoEmployee.findFirst({ where: { userId: user.id, status: { not: "EXITED" } }, select: { id: true, fullName: true } });
+  const employee = await prisma.hrcfoEmployee.findFirst({
+    where: { userId: user.id, status: { not: "EXITED" } },
+    include: { position: true },
+  });
   if (!employee) {
     return false;
+  }
+  const positionCode = normalizePositionCode(employee.position?.code || employee.positionCode || employee.jobTitle);
+  if (positionCode === "CEO") {
+    return true;
+  }
+  if (positionCode === "COO" && entityType !== "PAYROLL") {
+    return true;
   }
   if (entityType === "TASK") {
     return Boolean(await prisma.cooTask.findFirst({ where: { id: entityId, OR: [{ assigneeEmployeeId: employee.id }, { responsibleEmployeeId: employee.id }] }, select: { id: true } }));

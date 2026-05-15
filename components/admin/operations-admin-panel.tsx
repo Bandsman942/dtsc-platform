@@ -78,6 +78,7 @@ export function OperationsAdminPanel({
   }, [datasets, visibleItemsByDataset]);
   const isHrcfoPanel = datasets.some((dataset) => dataset.id === "transactions" && dataset.endpoint.includes("/hr-cfo/"));
   const isCooPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/coo/"));
+  const isCeoPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/ceo/"));
 
   async function createRecord(dataset: OperationDataset, form: HTMLFormElement) {
     let payload: Record<string, FormDataEntryValue>;
@@ -150,8 +151,8 @@ export function OperationsAdminPanel({
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <Metric label={isCooPanel ? "Éléments COO suivis" : "Dossiers suivis"} value={totals.records} />
           <Metric
-            label={isCooPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Valeur suivie"}
-            value={isCooPanel ? `${totals.operationalExecution}%` : `${(isHrcfoPanel ? totals.hrcfoRevenue : totals.amount).toFixed(2)} USD`}
+            label={isCooPanel || isCeoPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Valeur suivie"}
+            value={isCooPanel || isCeoPanel ? `${totals.operationalExecution}%` : `${(isHrcfoPanel ? totals.hrcfoRevenue : totals.amount).toFixed(2)} USD`}
           />
           <Metric label="Alertes opérationnelles" value={totals.alerts} />
         </div>

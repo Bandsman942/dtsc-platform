@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ActivitiesDashboard } from "@/components/activities/activities-dashboard";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
+import { normalizePositionCode } from "@/lib/business-roles";
 import { formatEnumLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 
@@ -9,11 +10,16 @@ export default async function ActivitiesPage() {
   const user = await requireUser();
   const employee = await prisma.hrcfoEmployee.findFirst({
     where: { userId: user.id, status: { not: "EXITED" } },
+    include: { position: true },
   });
 
   if (!employee) {
     redirect("/dashboard");
   }
+  const positionCode = normalizePositionCode(employee.position?.code || employee.positionCode || employee.jobTitle);
+  const isCeo = positionCode === "CEO";
+  const isCoo = positionCode === "COO";
+  const supervisesOperations = isCeo || isCoo;
 
   const [
     tasks,
@@ -28,7 +34,7 @@ export default async function ActivitiesPage() {
     operationOptions,
   ] = await Promise.all([
     prisma.cooTask.findMany({
-      where: {
+      where: supervisesOperations ? {} : {
         OR: [
           { assigneeEmployeeId: employee.id },
           { responsibleEmployeeId: employee.id },
@@ -38,7 +44,7 @@ export default async function ActivitiesPage() {
       take: 120,
     }),
     prisma.cooOperation.findMany({
-      where: {
+      where: supervisesOperations ? {} : {
         OR: [
           { leadEmployeeId: employee.id },
           { collaborators: { contains: employee.id } },
@@ -49,7 +55,7 @@ export default async function ActivitiesPage() {
       take: 80,
     }),
     prisma.cooDepartmentRequest.findMany({
-      where: {
+      where: supervisesOperations ? {} : {
         OR: [
           { requesterEmployeeId: employee.id },
           { targetResponsibleEmployeeId: employee.id },
@@ -59,12 +65,12 @@ export default async function ActivitiesPage() {
       take: 80,
     }),
     prisma.cooBlocker.findMany({
-      where: { responsibleEmployeeId: employee.id },
+      where: supervisesOperations ? {} : { responsibleEmployeeId: employee.id },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
     prisma.cooMeeting.findMany({
-      where: {
+      where: supervisesOperations ? {} : {
         OR: [
           { reportOwnerEmployeeId: employee.id },
           { participants: { contains: employee.id } },
@@ -75,7 +81,7 @@ export default async function ActivitiesPage() {
       take: 80,
     }),
     prisma.cooOperationalReport.findMany({
-      where: {
+      where: supervisesOperations ? {} : {
         OR: [
           { employeeId: employee.id },
           { recipientEmployeeId: employee.id },
@@ -113,10 +119,56 @@ export default async function ActivitiesPage() {
   const completed = tasks.filter((task) => task.status === "COMPLETED" || task.status === "VALIDATED").length;
 
   const sections = [
+    ...(isCeo ? [{
+      id: "ceo",
+      title: "Supervision CEO",
+      description: "Vue des opérations critiques, blocages majeurs, rapports importants et décisions à suivre.",
+      items: [
+        ...blockers
+          .filter((blocker) => blocker.severity === "CRITICAL" || blocker.status === "ESCALATED")
+          .map((blocker) => ({
+            id: blocker.id,
+            entityType: "BLOCKER" as const,
+            title: blocker.title,
+            status: blocker.status,
+            detail: [blocker.departmentName, `Criticité ${formatEnumLabel(blocker.severity)}`].filter(Boolean).join(" · "),
+            body: blocker.impact || blocker.correctiveAction || blocker.description,
+            date: toIso(blocker.declaredAt || blocker.updatedAt),
+            priority: blocker.severity,
+          })),
+        ...operations
+          .filter((operation) => operation.priority === "CRITICAL" || operation.status === "BLOCKED")
+          .map((operation) => ({
+            id: operation.id,
+            entityType: "OPERATION" as const,
+            title: operation.title,
+            status: operation.status,
+            detail: [operation.pilotDepartmentName, `${operation.progress}%`, operation.dueDate ? formatDate(operation.dueDate) : ""].filter(Boolean).join(" · "),
+            body: operation.objectives || operation.deliverables || operation.description,
+            date: toIso(operation.updatedAt),
+            priority: operation.priority,
+            progress: operation.progress,
+          })),
+        ...reports
+          .filter((report) => report.priority === "CRITICAL" || report.priority === "HIGH")
+          .map((report) => ({
+            id: report.id,
+            entityType: "REPORT" as const,
+            title: report.title,
+            status: report.status,
+            detail: [formatEnumLabel(report.reportType), report.recipientName ? `À: ${report.recipientName}` : "", report.employeeName ? `De: ${report.employeeName}` : ""].filter(Boolean).join(" · "),
+            body: report.content || report.recommendations || report.mainBlockers,
+            date: toIso(report.updatedAt),
+            priority: report.priority,
+          })),
+      ],
+    }] : []),
     {
       id: "tasks",
-      title: "Mes tâches journalières",
-      description: "Consultez vos tâches, changez leur statut, ajoutez des commentaires et signalez les blocages.",
+      title: supervisesOperations ? "Tâches journalières" : "Mes tâches journalières",
+      description: supervisesOperations
+        ? "Supervisez les tâches opérationnelles, leur avancement, les retards et les points bloqués."
+        : "Consultez vos tâches, changez leur statut, ajoutez des commentaires et signalez les blocages.",
       items: tasks.map((task) => ({
         id: task.id,
         entityType: "TASK" as const,

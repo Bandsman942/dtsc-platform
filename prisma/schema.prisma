@@ -675,6 +675,9 @@ model HrcfoEmployee {
   department          String
   departmentId        String?
   jobTitle            String
+  positionId          String?
+  positionCode        String?
+  positionTitle       String?
   contractType        String   @default("PERMANENT")
   status              String   @default("ACTIVE")
   startDate           DateTime?
@@ -691,11 +694,14 @@ model HrcfoEmployee {
   user                User?    @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
   managerUser         User?    @relation("EmployeeManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   departmentRef       Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  position            DtscPosition? @relation(fields: [positionId], references: [id], onDelete: SetNull)
   payrolls            HrcfoPayroll[]
 
   @@index([status, department])
   @@index([userId])
   @@index([departmentId])
+  @@index([positionId])
+  @@index([positionCode])
   @@index([managerUserId])
   @@index([createdAt])
 }
@@ -798,10 +804,32 @@ model Department {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   employees   HrcfoEmployee[]
+  positions   DtscPosition[]
   budgets     HrcfoBudget[]
   transactions HrcfoExpense[]
+  ceoObjectives CeoObjective[]
+  ceoSupervisionLogs CeoSupervisionLog[]
 
   @@index([status, name])
+}
+
+model DtscPosition {
+  id             String   @id @default(cuid())
+  title          String
+  code           String   @unique
+  description    String?
+  departmentId   String?
+  departmentName String?
+  hierarchyLevel Int      @default(50)
+  status         String   @default("ACTIVE")
+  permissions    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  department     Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employees      HrcfoEmployee[]
+
+  @@index([status, code])
+  @@index([departmentId])
 }
 
 model FinancialAccount {
@@ -1242,4 +1270,61 @@ model CooWorkflowShare {
   @@unique([workflowId, employeeId])
   @@index([employeeId])
   @@index([userId])
+}
+
+model CeoObjective {
+  id                      String   @id @default(cuid())
+  title                   String
+  description             String?
+  objectiveType           String   @default("STRATEGIC")
+  departmentId            String?
+  departmentName          String?
+  responsibleEmployeeId   String?
+  responsibleName         String?
+  periodStart             DateTime?
+  periodEnd               DateTime?
+  targetValue             Decimal? @db.Decimal(12, 2)
+  currentValue            Decimal? @db.Decimal(12, 2)
+  progress                Int      @default(0)
+  status                  String   @default("PLANNED")
+  priority                String   @default("NORMAL")
+  comments                String?
+  createdById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  department              Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([status, priority])
+  @@index([objectiveType])
+  @@index([departmentId])
+  @@index([responsibleEmployeeId])
+  @@index([periodEnd])
+}
+
+model CeoSupervisionLog {
+  id                      String   @id @default(cuid())
+  title                   String
+  entryType               String   @default("OBSERVATION")
+  description             String?
+  departmentId            String?
+  departmentName          String?
+  employeeId              String?
+  employeeName            String?
+  priority                String   @default("NORMAL")
+  status                  String   @default("OPEN")
+  logDate                 DateTime @default(now())
+  expectedAction          String?
+  followUpResponsibleId   String?
+  followUpResponsibleName String?
+  comments                String?
+  createdById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  department              Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([entryType, status])
+  @@index([departmentId])
+  @@index([employeeId])
+  @@index([priority])
+  @@index([logDate])
 }

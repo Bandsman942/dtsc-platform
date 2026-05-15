@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { canAccessAdminBlock, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
+import { canAccessAdminBlockByPosition } from "@/lib/business-roles";
 import { getAppSettings } from "@/lib/settings";
 
 type AdminSession = NonNullable<Awaited<ReturnType<typeof getSession>>>;
@@ -16,7 +17,9 @@ export async function requireAdminBlockAccess(blockId: AdminBlockId): Promise<Ad
 
   const settings = await getAppSettings();
   const access = parseAdminRoleAccess(settings.adminRoleAccess);
-  if (!canAccessAdminBlock(session.role, blockId, access)) {
+  const hasRoleAccess = canAccessAdminBlock(session.role, blockId, access);
+  const hasPositionAccess = await canAccessAdminBlockByPosition(session.userId, session.role, blockId);
+  if (!hasRoleAccess && !hasPositionAccess) {
     return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 

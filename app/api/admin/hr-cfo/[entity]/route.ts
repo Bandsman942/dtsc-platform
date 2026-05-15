@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { normalizePositionCode } from "@/lib/business-roles";
 import { createHrcfoBudget, createPayroll, createValidatedTransaction } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string }> };
-type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts";
+type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts" | "positions";
 
 function isHrcfoEntity(value: string): value is HrcfoEntity {
-  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts";
+  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts" || value === "positions";
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -59,6 +60,9 @@ function parseEntity(entity: HrcfoEntity, body: Record<string, unknown>) {
   if (entity === "accounts") {
     return hrcfoReferenceSchemas.accounts.safeParse(body);
   }
+  if (entity === "positions") {
+    return hrcfoReferenceSchemas.positions.safeParse({ ...body, code: normalizePositionCode(body.code) });
+  }
   if (entity === "transactions") {
     return hrcfoSchemas.transactions.safeParse({ ...body, category: body.transactionCategory });
   }
@@ -79,6 +83,24 @@ async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, 
     const openingBalance = Number(data.openingBalance || 0);
     return prisma.financialAccount.create({ data: { ...data, openingBalance, currentBalance: openingBalance } as never });
   }
+  if (entity === "positions") {
+    const department = data.departmentId ? await prisma.department.findUnique({ where: { id: String(data.departmentId) } }) : null;
+    if (data.departmentId && (!department || department.status !== "ACTIVE")) {
+      throw new Error("Le département associé au poste est inactif ou introuvable.");
+    }
+    return prisma.dtscPosition.create({
+      data: {
+        title: String(data.title),
+        code: normalizePositionCode(data.code),
+        description: data.description ? String(data.description) : null,
+        departmentId: department?.id,
+        departmentName: department?.name,
+        hierarchyLevel: Number(data.hierarchyLevel || 50),
+        status: String(data.status || "ACTIVE"),
+        permissions: data.permissions ? String(data.permissions) : null,
+      },
+    });
+  }
   if (entity === "employees") {
     const userId = String(data.userId);
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -88,6 +110,10 @@ async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, 
     const department = await prisma.department.findUnique({ where: { id: String(data.departmentId) } });
     if (!department || department.status !== "ACTIVE") {
       throw new Error("Le département sélectionné est inactif ou introuvable.");
+    }
+    const position = await prisma.dtscPosition.findUnique({ where: { id: String(data.positionId) } });
+    if (!position || position.status !== "ACTIVE") {
+      throw new Error("Le poste sélectionné est inactif ou introuvable.");
     }
     const managerUserId = data.managerUserId ? String(data.managerUserId) : undefined;
     const managerEmployee = managerUserId
@@ -107,7 +133,10 @@ async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, 
         email: user.email,
         department: department.name,
         departmentId: department.id,
-        jobTitle: String(data.jobTitle),
+        jobTitle: position.title,
+        positionId: position.id,
+        positionCode: position.code,
+        positionTitle: position.title,
         contractType: String(data.contractType || "PERMANENT"),
         status: String(data.status || "ACTIVE"),
         startDate: data.startDate as Date | undefined,

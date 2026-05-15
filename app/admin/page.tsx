@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, FileText, Megaphone, MessageSquare, PackageCheck, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Crown, FileText, Megaphone, MessageSquare, PackageCheck, Settings, ShieldCheck, Users } from "lucide-react";
 import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -8,13 +8,15 @@ import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
+import { CeoExecutiveSummary } from "@/components/admin/ceo-executive-summary";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
-import { buildCooDatasets, buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
+import { buildCeoDatasets, buildCooDatasets, buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
+import { ensureDefaultPositions, getCollaboratorBusinessContext } from "@/lib/business-roles";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
@@ -36,6 +38,7 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "hrCfo", label: "HR & CFO", description: "RH, finance et contrôle", icon: BriefcaseBusiness },
   { id: "sco", label: "SCO", description: "Achats, stocks et logistique", icon: PackageCheck },
   { id: "coo", label: "COO", description: "Opérations, tâches et workflows", icon: BarChart3 },
+  { id: "ceo", label: "CEO", description: "Supervision exécutive", icon: Crown },
   { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
   { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
   { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
@@ -62,8 +65,10 @@ export default async function AdminPage({
   const roleFilter = isUserRole(role) ? role : undefined;
 
   const periodWhere = { createdAt: { gte: visitStart, lte: visitEnd } };
+  await ensureDefaultPositions();
   await syncPaidSubscriptionIncomeTransactions();
   await reconcileFinancialState();
+  const businessContext = await getCollaboratorBusinessContext(user.id);
 
   const [
     settings,
@@ -106,6 +111,7 @@ export default async function AdminPage({
     hrcfoPayrolls,
     hrcfoDepartments,
     hrcfoAccounts,
+    hrcfoPositions,
     hrcfoStaffUsers,
     scoMaterialItems,
     scoVendors,
@@ -121,6 +127,8 @@ export default async function AdminPage({
     cooMeetings,
     cooWorkflows,
     cooReports,
+    ceoObjectives,
+    ceoSupervisionLogs,
   ] =
     await Promise.all([
       getAppSettings(),
@@ -223,6 +231,7 @@ export default async function AdminPage({
       }),
       prisma.department.findMany({ orderBy: { name: "asc" }, take: 200 }),
       prisma.financialAccount.findMany({ orderBy: { name: "asc" }, take: 200 }),
+      prisma.dtscPosition.findMany({ orderBy: [{ hierarchyLevel: "asc" }, { title: "asc" }], take: 200 }),
       prisma.user.findMany({
         where: { role: { not: UserRole.CLIENT } },
         orderBy: { name: "asc" },
@@ -243,11 +252,38 @@ export default async function AdminPage({
       prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { shares: true } } }, take: 200 }),
       prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.ceoObjective.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.ceoSupervisionLog.findMany({ orderBy: { logDate: "desc" }, take: 200 }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
   const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
-  const canView = (blockId: AdminBlockId) => canAccessAdminBlock(user.role, blockId, adminRoleAccess);
+  const canViewByPosition = (blockId: AdminBlockId) => {
+    const positionCode = businessContext.positionCode;
+    if (user.role === UserRole.ADMIN) {
+      return true;
+    }
+    if (positionCode === "CEO") {
+      return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "activity" || blockId === "audits";
+    }
+    if (positionCode === "COO") {
+      return blockId === "coo" || blockId === "activity" || blockId === "overview";
+    }
+    if (positionCode === "HR_CFO" || positionCode === "HR_MANAGER" || positionCode === "FINANCE_MANAGER") {
+      return blockId === "hrCfo" || blockId === "activity" || blockId === "overview" || blockId === "audits";
+    }
+    if (positionCode === "SCO" || positionCode === "COMMERCIAL_MANAGER") {
+      return blockId === "sco" || blockId === "activity" || blockId === "overview";
+    }
+    if (positionCode === "CTO") {
+      return blockId === "coo" || blockId === "activity" || blockId === "overview";
+    }
+    if (positionCode === "MPO" || positionCode === "MARKETING_MANAGER") {
+      return blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
+    }
+    return false;
+  };
+  const canView = (blockId: AdminBlockId) => canAccessAdminBlock(user.role, blockId, adminRoleAccess) || canViewByPosition(blockId);
   const canViewSection = (sectionId: AdminSectionId) => sectionId === "access" ? user.role === UserRole.ADMIN : canView(sectionId);
   const visibleSections = adminSections.filter((item) => canViewSection(item.id));
   const activeSection = visibleSections.some((item) => item.id === section)
@@ -378,6 +414,7 @@ export default async function AdminPage({
     })),
     departments: hrcfoDepartments,
     accounts: hrcfoAccounts,
+    positions: hrcfoPositions,
     staffUsers: hrcfoStaffUsers,
   })));
   const scoDatasets = buildScoDatasets(JSON.parse(JSON.stringify({
@@ -401,6 +438,65 @@ export default async function AdminPage({
     departments: hrcfoDepartments,
     employees: hrcfoEmployees,
   })));
+  const ceoDatasets = buildCeoDatasets(JSON.parse(JSON.stringify({
+    objectives: ceoObjectives,
+    supervisionLogs: ceoSupervisionLogs,
+    departments: hrcfoDepartments,
+    employees: hrcfoEmployees,
+  })));
+  const financiallyImpacting = hrcfoTransactions.filter((transaction) => transaction.status === "VALIDATED" || transaction.status === "PAID");
+  const revenue = financiallyImpacting
+    .filter((transaction) => transaction.transactionCategory === "IN" && transaction.title.trim().toLocaleLowerCase("fr-FR") !== "capital de départ")
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const totalIn = financiallyImpacting
+    .filter((transaction) => transaction.transactionCategory === "IN")
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const totalOut = financiallyImpacting
+    .filter((transaction) => transaction.transactionCategory === "OUT")
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const ceoExecutiveGroups = [
+    {
+      title: "Vue financière synthétique",
+      description: "Chiffres issus des transactions validées ou payées, hors brouillons.",
+      metrics: [
+        { label: "Chiffre d'affaires", value: `${revenue.toFixed(2)} USD`, detail: "Entrées réelles hors capital de départ." },
+        { label: "Entrées", value: `${totalIn.toFixed(2)} USD`, detail: "Transactions d'entrée impactantes." },
+        { label: "Sorties", value: `${totalOut.toFixed(2)} USD`, detail: "Transactions de sortie impactantes." },
+        { label: "Solde comptes", value: `${hrcfoAccounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0).toFixed(2)} USD`, detail: "Somme des comptes financiers." },
+      ],
+    },
+    {
+      title: "Vue RH synthétique",
+      description: "Lecture capital humain, paie et postes officiels DTSC.",
+      metrics: [
+        { label: "Collaborateurs", value: hrcfoEmployees.length, detail: "Dossiers RH enregistrés." },
+        { label: "Actifs", value: hrcfoEmployees.filter((employee) => employee.status === "ACTIVE").length, detail: "Collaborateurs actifs." },
+        { label: "Masse salariale", value: `${hrcfoEmployees.reduce((sum, employee) => sum + Number(employee.monthlyCompensation || 0), 0).toFixed(2)} USD`, detail: "Rémunération mensuelle théorique." },
+        { label: "Postes actifs", value: hrcfoPositions.filter((position) => position.status === "ACTIVE").length, detail: "Référentiel officiel des postes." },
+      ],
+    },
+    {
+      title: "Vue opérationnelle COO",
+      description: "Charge opérationnelle, retards, blocages et décisions terrain.",
+      metrics: [
+        { label: "Tâches du jour", value: cooTasks.filter((task) => task.plannedDate?.toISOString().slice(0, 10) === todayKey).length, detail: "Tâches planifiées aujourd'hui." },
+        { label: "Tâches bloquées", value: cooTasks.filter((task) => task.status === "BLOCKED").length, detail: "À débloquer ou escalader." },
+        { label: "Opérations critiques", value: cooOperations.filter((operation) => operation.priority === "CRITICAL" || operation.status === "BLOCKED").length, detail: "Suivi exécutif recommandé." },
+        { label: "Réunions prévues", value: cooMeetings.filter((meeting) => meeting.status === "PLANNED").length, detail: "Réunions COO planifiées." },
+      ],
+    },
+    {
+      title: "Vue commerciale et SCO",
+      description: "Suivi fournisseurs, achats, stocks, actifs et logistique.",
+      metrics: [
+        { label: "Fournisseurs", value: scoVendors.length, detail: "Référentiel fournisseurs." },
+        { label: "Achats ouverts", value: scoPurchaseRequests.filter((request) => request.status !== "RECEIVED" && request.status !== "CANCELED" && request.status !== "REJECTED").length, detail: "Demandes d'achat à suivre." },
+        { label: "Stocks faibles", value: scoInventory.filter((item) => item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK").length, detail: "Risque opérationnel SCO." },
+        { label: "Actifs suivis", value: scoAssets.length, detail: "Biens matériels affectés ou disponibles." },
+      ],
+    },
+  ];
 
   return (
     <AppShell user={user}>
@@ -520,6 +616,20 @@ export default async function AdminPage({
             datasets={cooDatasets}
             canEdit={canView("coo")}
           />
+        )}
+
+        {activeSection === "ceo" && canView("ceo") && (
+          <div className="space-y-5">
+            <CeoExecutiveSummary groups={ceoExecutiveGroups} />
+            <OperationsAdminPanel
+              eyebrow="Chief Executive Officer"
+              title="Supervision CEO"
+              description="Consolidez la lecture stratégique de DTSC: finance, RH, opérations COO, performance SCO, alertes critiques, objectifs exécutifs et journal de supervision."
+              playbook={["Synthèse exécutive", "Alertes critiques", "Objectifs", "Décisions", "Suivi responsable", "Rapport consolidé"]}
+              datasets={ceoDatasets}
+              canEdit={canView("ceo")}
+            />
+          </div>
         )}
 
         {activeSection === "visits" && canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />}
