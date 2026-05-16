@@ -8,6 +8,7 @@ export const businessRoleCodes = {
   CTO: "CTO",
   SCO: "SCO",
   MPO: "MPO",
+  LA: "LA",
   HR_CFO: "HR_CFO",
 } as const;
 
@@ -19,6 +20,7 @@ export const defaultDtscPositions = [
   { id: "pos-cto", title: "CTO", code: "CTO", hierarchyLevel: 3, permissions: "CTO_TECH", description: "Direction technique, architecture, cybersécurité et delivery technologique." },
   { id: "pos-sco", title: "SCO", code: "SCO", hierarchyLevel: 3, permissions: "SCO_SUPPLY_CHAIN", description: "Supply Chain Officer: achats, fournisseurs, stocks, inventaires, matériels et logistique." },
   { id: "pos-mpo", title: "MPO", code: "MPO", hierarchyLevel: 4, permissions: "MPO_PROJECTS", description: "Management & Projects Officer: portefeuille projets, cadrage, livrables, risques et coordination numérique." },
+  { id: "pos-la", title: "Legal Advisor", code: "LA", hierarchyLevel: 3, permissions: "LA_LEGAL", description: "Conseil juridique, contrats, conformité, litiges, archivage et confidentialité." },
   { id: "pos-hr-cfo", title: "RH & CFO", code: "HR_CFO", hierarchyLevel: 3, permissions: "HR_CFO_FINANCE", description: "Ressources humaines, finances, budgets, transactions, paie et contrôle." },
   { id: "pos-hr-manager", title: "Responsable RH", code: "HR_MANAGER", hierarchyLevel: 5, permissions: "HR_MANAGEMENT", description: "Suivi administratif RH, conformité et dossiers collaborateurs." },
   { id: "pos-finance-manager", title: "Responsable Finance", code: "FINANCE_MANAGER", hierarchyLevel: 5, permissions: "FINANCE_MANAGEMENT", description: "Suivi financier, paiements, budgets et contrôle interne." },
@@ -93,7 +95,10 @@ export async function canAccessAdminBlockByPosition(userId: string, role: UserRo
   const context = await getCollaboratorBusinessContext(userId);
   const position = context.positionCode;
   if (position === "CEO") {
-    return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "audits";
+    return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "la" || blockId === "activity" || blockId === "audits";
+  }
+  if (position === "LA" || position === "LEGAL_ADVISOR") {
+    return blockId === "la" || blockId === "activity" || blockId === "overview" || blockId === "audits";
   }
   if (position === "COO") {
     return blockId === "coo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";

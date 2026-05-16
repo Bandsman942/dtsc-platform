@@ -11,6 +11,7 @@ export const adminBlocks = [
   { id: "ceo", label: "CEO", description: "Supervision exécutive, objectifs, alertes critiques et journal stratégique." },
   { id: "mpo", label: "MPO", description: "Management des projets, cadrage, livrables, risques et coordination numérique." },
   { id: "cto", label: "CTO", description: "Architecture, développement, APIs, infrastructure, incidents et qualité technique." },
+  { id: "la", label: "LA", description: "Dossiers juridiques, contrats, conformité, litiges et archivage confidentiel." },
   { id: "visits", label: "Visites du site", description: "Suivi des visites publiques et filtres de période." },
   { id: "activity", label: "Activité plateforme", description: "Conversations, tickets et tableaux opérationnels." },
   { id: "audits", label: "Audits et logs", description: "Paiements, logs API, webhooks et traces techniques." },

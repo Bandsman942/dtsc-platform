@@ -1575,3 +1575,224 @@ model CtoTechnicalRecord {
   @@index([departmentId])
   @@index([dueDate])
 }
+
+model LegalCase {
+  id                    String   @id @default(cuid())
+  title                 String
+  caseType              String   @default("OTHER")
+  requesterDepartmentId String?
+  requesterDepartmentName String?
+  requesterEmployeeId   String?
+  requesterName         String?
+  responsibleLegalId    String?
+  responsibleLegalName  String?
+  subject               String?
+  description           String?
+  riskLevel             String   @default("MEDIUM")
+  priority              String   @default("NORMAL")
+  status                String   @default("SUBMITTED")
+  dueDate               DateTime?
+  linkedEntityType      String?
+  linkedEntityId        String?
+  attachmentUrl         String?
+  legalDecision         String?
+  ceoValidationRequired Boolean  @default(false)
+  comments              String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([caseType, status])
+  @@index([requesterDepartmentId])
+  @@index([requesterEmployeeId])
+  @@index([responsibleLegalId])
+  @@index([riskLevel, priority])
+  @@index([dueDate])
+}
+
+model LegalContract {
+  id                      String   @id @default(cuid())
+  title                   String
+  contractType            String   @default("SERVICE_CONTRACT")
+  counterparty            String?
+  requesterDepartmentId   String?
+  requesterDepartmentName String?
+  internalResponsibleId   String?
+  internalResponsibleName String?
+  startDate               DateTime?
+  endDate                 DateTime?
+  duration                String?
+  amount                  Decimal? @db.Decimal(12, 2)
+  currency                String   @default("USD")
+  status                  String   @default("DRAFT")
+  version                 String?
+  documentUrl             String?
+  legalCaseId             String?
+  legalValidation         String?
+  ceoValidationRequired   Boolean  @default(false)
+  comments                String?
+  createdById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([contractType, status])
+  @@index([requesterDepartmentId])
+  @@index([internalResponsibleId])
+  @@index([legalCaseId])
+  @@index([endDate])
+}
+
+model LegalTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  templateType String   @default("SERVICE_CONTRACT_TEMPLATE")
+  description  String?
+  content      String?
+  version      String?
+  status       String   @default("DRAFT")
+  authorId     String?
+  authorName   String?
+  comments     String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([templateType, status])
+  @@index([authorId])
+}
+
+model LegalRisk {
+  id                    String   @id @default(cuid())
+  title                 String
+  source                String?
+  departmentId          String?
+  departmentName        String?
+  linkedEntityType      String?
+  linkedEntityId        String?
+  description           String?
+  potentialImpact       String?
+  probability           String   @default("MEDIUM")
+  riskLevel             String   @default("MEDIUM")
+  correctiveMeasure     String?
+  responsibleEmployeeId String?
+  responsibleName       String?
+  status                String   @default("OPEN")
+  dueDate               DateTime?
+  ceoEscalation         Boolean  @default(false)
+  comments              String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status, riskLevel])
+  @@index([departmentId])
+  @@index([responsibleEmployeeId])
+  @@index([dueDate])
+}
+
+model LegalDocument {
+  id                      String   @id @default(cuid())
+  title                   String
+  documentType            String   @default("ADMINISTRATIVE_DOCUMENT")
+  reference               String?
+  documentDate            DateTime?
+  expirationDate          DateTime?
+  requesterDepartmentId   String?
+  requesterDepartmentName String?
+  legalCaseId             String?
+  fileUrl                 String?
+  status                  String   @default("ACTIVE")
+  confidentialityLevel    String   @default("INTERNAL_PUBLIC")
+  comments                String?
+  createdById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([documentType, status])
+  @@index([requesterDepartmentId])
+  @@index([legalCaseId])
+  @@index([confidentialityLevel])
+  @@index([expirationDate])
+}
+
+model LegalDispute {
+  id                    String   @id @default(cuid())
+  title                 String
+  counterparty          String?
+  disputeType           String   @default("OTHER")
+  departmentId          String?
+  departmentName        String?
+  description           String?
+  potentialAmount       Decimal? @db.Decimal(12, 2)
+  currency              String   @default("USD")
+  riskLevel             String   @default("MEDIUM")
+  followUpResponsibleId String?
+  followUpResponsibleName String?
+  status                String   @default("OPEN")
+  nextAction            String?
+  dueDate               DateTime?
+  documentUrl           String?
+  comments              String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([disputeType, status])
+  @@index([departmentId])
+  @@index([followUpResponsibleId])
+  @@index([riskLevel])
+  @@index([dueDate])
+}
+
+model LegalRequest {
+  id                      String   @id @default(cuid())
+  subject                 String
+  requesterDepartmentId   String?
+  requesterDepartmentName String?
+  requesterEmployeeId     String?
+  requesterName           String?
+  requestType             String   @default("OTHER")
+  description             String?
+  priority                String   @default("NORMAL")
+  desiredDueDate          DateTime?
+  documentUrl             String?
+  linkedEntityType        String?
+  linkedEntityId          String?
+  status                  String   @default("SUBMITTED")
+  legalResponse           String?
+  comments                String?
+  createdById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([requestType, status])
+  @@index([requesterDepartmentId])
+  @@index([requesterEmployeeId])
+  @@index([priority])
+  @@index([desiredDueDate])
+}
+
+model LegalReport {
+  id                    String   @id @default(cuid())
+  title                 String
+  reportType            String   @default("WEEKLY_LA")
+  periodStart           DateTime?
+  periodEnd             DateTime?
+  departmentId          String?
+  departmentName        String?
+  responsibleLegalId    String?
+  responsibleLegalName  String?
+  status                String   @default("DRAFT")
+  priority              String   @default("NORMAL")
+  content               String?
+  recommendations       String?
+  attachmentUrl         String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([reportType, status])
+  @@index([departmentId])
+  @@index([responsibleLegalId])
+  @@index([periodEnd])
+}

@@ -9,7 +9,7 @@ import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
-type EntityType = "TASK" | "OPERATION" | "DEPARTMENT_REQUEST" | "BLOCKER" | "MEETING" | "REPORT" | "WORKFLOW" | "PAYROLL" | "CEO_OBJECTIVE" | "CEO_SUPERVISION" | "SCO_PURCHASE_REQUEST" | "SCO_VENDOR" | "SCO_MATERIAL" | "SCO_INVENTORY" | "SCO_ASSET" | "SCO_LOGISTICS" | "MPO_PROJECT" | "MPO_RECORD" | "CTO_PROJECT" | "CTO_RECORD";
+type EntityType = "TASK" | "OPERATION" | "DEPARTMENT_REQUEST" | "BLOCKER" | "MEETING" | "REPORT" | "WORKFLOW" | "PAYROLL" | "CEO_OBJECTIVE" | "CEO_SUPERVISION" | "SCO_PURCHASE_REQUEST" | "SCO_VENDOR" | "SCO_MATERIAL" | "SCO_INVENTORY" | "SCO_ASSET" | "SCO_LOGISTICS" | "MPO_PROJECT" | "MPO_RECORD" | "CTO_PROJECT" | "CTO_RECORD" | "LEGAL_CASE" | "LEGAL_CONTRACT" | "LEGAL_TEMPLATE" | "LEGAL_RISK" | "LEGAL_DOCUMENT" | "LEGAL_DISPUTE" | "LEGAL_REQUEST" | "LEGAL_REPORT";
 
 type ActivityItem = {
   id: string;
@@ -384,6 +384,9 @@ function sectionIcon(id: string) {
   }
   if (id === "mpo-projects" || id === "cto-tech") {
     return <GitBranch className="h-5 w-5" />;
+  }
+  if (id === "la-legal") {
+    return <ClipboardList className="h-5 w-5" />;
   }
   return <CircleAlert className="h-5 w-5" />;
 }

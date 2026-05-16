@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 15 mai 2026
+Derniere mise a jour: 16 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -28,7 +28,7 @@ Objectifs couverts par le code actuel:
 - annonces internes avec commentaires et reactions;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
-- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO et acces par blocs/postes pour les roles non-client;
+- administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
 - logs API et webhooks etendus aux zones critiques: chat, conversations, notifications, documents, paiements, diffusions, newsletter, entreprise et publications;
@@ -243,7 +243,7 @@ Modeles actifs:
 | `HrcfoExpense` | Transactions financieres HR & CFO: entree/sortie, compte, budget, source, validation et facture associee |
 | `HrcfoPayroll` | Paie collaborateur, periode, brut, primes, retenues, compte, budget et transaction de sortie associee |
 | `HrcfoInvoice` | Ancienne table interne conservee pour compatibilite historique, plus exposee comme bloc manuel |
-| `DtscPosition` | Referentiel officiel des postes DTSC; les codes `CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO` completent les permissions metier |
+| `DtscPosition` | Referentiel officiel des postes DTSC; les codes `CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO`, `LA` completent les permissions metier |
 | `ScoVendor` | Fournisseurs, categorie, contact, fiabilite et delais moyens |
 | `ScoPurchaseRequest` | Demandes d'achat, urgence, budget, fournisseur retenu issu du referentiel Fournisseurs et statut de commande |
 | `MaterialItem` | Referentiel central des biens materiels DTSC: nom, reference, categorie, type, unite et statut |
@@ -264,6 +264,14 @@ Modeles actifs:
 | `MpoProjectRecord` | Registres MPO: cadrage, cahier de charges, livrable, risque, collaboration CTO/COO, demande budgetaire, besoin SCO, rapport, workflow ou documentation |
 | `CtoTechnicalProject` | Projets techniques CTO lies eventuellement a un projet MPO: solution, responsable, stack, environnement, statut, depot et livrables techniques |
 | `CtoTechnicalRecord` | Registres CTO: architecture, tache technique, API, base de donnees, deploiement, securite, bug/incident, qualite, besoin budgetaire ou materiel SCO |
+| `LegalCase` | Dossiers juridiques LA: type, departement demandeur, demandeur, responsable LA, risque, priorite, echeance, decision et validation CEO |
+| `LegalContract` | Contrats et conventions: partie concernee, responsable interne, periode, montant, document joint, dossier lie et validations LA/CEO |
+| `LegalTemplate` | Modeles juridiques: contrats, NDA, conventions, lettres, mandats, clauses, version et statut |
+| `LegalRisk` | Risques juridiques et conformite: source, impact, probabilite, niveau, mesure corrective, responsable et escalade CEO |
+| `LegalDocument` | Archivage juridique securise: document officiel, reference, expiration, dossier lie, fichier, statut et niveau de confidentialite |
+| `LegalDispute` | Litiges et reclamations: partie concernee, type, montant potentiel, risque, responsable, prochaine action et documents |
+| `LegalRequest` | Demandes juridiques internes provenant de HR & CFO, COO, CTO, MPO, SCO ou CEO |
+| `LegalReport` | Rapports juridiques hebdomadaires, mensuels, contrats, risques, litiges, documents expirant et demandes par departement |
 
 Champs profil utilisateur ajoutes:
 
@@ -599,10 +607,15 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `POST` | `/api/admin/cto/[entity]` | bloc/poste `cto` | Creation d'un projet technique CTO ou registre technique (`projects`, `records`) |
 | `PATCH` | `/api/admin/cto/[entity]/[id]` | bloc/poste `cto` | Mise a jour d'un projet technique CTO ou registre technique |
 | `DELETE` | `/api/admin/cto/[entity]/[id]` | bloc/poste `cto` | Suppression controlee d'un projet technique CTO ou registre technique |
+| `POST` | `/api/admin/la/[entity]` | bloc/poste `la` | Creation d'un dossier juridique (`cases`, `contracts`, `templates`, `risks`, `documents`, `disputes`, `requests`, `reports`) |
+| `PATCH` | `/api/admin/la/[entity]/[id]` | bloc/poste `la` | Mise a jour d'un element juridique LA avec enrichissement collaborateur/departement |
+| `DELETE` | `/api/admin/la/[entity]/[id]` | bloc/poste `la` | Suppression controlee d'un element juridique; un dossier lie a des contrats/documents doit etre archive |
 
-Les routes HR & CFO / SCO / COO / CEO / MPO / CTO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Les postes officiels du dossier RH completent ces droits: `CEO` peut superviser les vues executives et critiques; `COO` coordonne les operations, projets et blocages; `HR_CFO` gere les donnees RH/finance; `SCO` gere uniquement la supply chain; `MPO` pilote les projets; `CTO` pilote la technologie. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
+Les routes HR & CFO / SCO / COO / CEO / MPO / CTO / LA utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Les postes officiels du dossier RH completent ces droits: `CEO` peut superviser les vues executives et critiques; `COO` coordonne les operations, projets et blocages; `HR_CFO` gere les donnees RH/finance; `SCO` gere uniquement la supply chain; `MPO` pilote les projets; `CTO` pilote la technologie; `LA` pilote les dossiers juridiques, contrats, conformite, litiges et archives confidentielles. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
 
-Le champ `Poste` du dossier collaborateur n'est plus un texte libre. Il pointe vers `DtscPosition`, gere depuis `HR & CFO > Manager les postes`. Les codes de poste sont stables (`CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO`, etc.) et servent a determiner les permissions metier cote serveur sans se baser sur une comparaison approximative de texte.
+Les cartes KPI generiques des sous-modules operationnels n'utilisent plus `Valeur suivie` ni `Alertes operationnelles`. Elles affichent des indicateurs actionnables: elements actifs, priorites a traiter, transactions impactantes pour HR & CFO, taches bloquees/en retard pour COO et decisions a suivre pour CEO.
+
+Le champ `Poste` du dossier collaborateur n'est plus un texte libre. Il pointe vers `DtscPosition`, gere depuis `HR & CFO > Manager les postes`. Les codes de poste sont stables (`CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO`, `LA`, etc.) et servent a determiner les permissions metier cote serveur sans se baser sur une comparaison approximative de texte.
 
 Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le reporting du capital humain, COSO pour le controle interne, ISO 9001 pour l'approche processus et l'amelioration continue, ISO 45001 pour la logique sante/securite lorsque des risques operations apparaissent, et ASCM SCOR pour structurer les operations supply chain. Les champs visibles `Responsable`, `Demandeur` et `Assigne a` des operations internes sont alimentes par les collaborateurs deja enregistres afin d'eviter les noms libres incoherents.
 
@@ -1571,6 +1584,25 @@ Deux sections administratives complementaires sont disponibles:
 - `CTO`: `CtoTechnicalProject` et `CtoTechnicalRecord` pour projets techniques, architecture, taches techniques, APIs, bases de donnees, deploiements, securite, bugs/incidents, qualite, besoins budgetaires et besoins materiels SCO.
 
 `/activities` expose les blocs SCO/MPO/CTO aux collaborateurs concernes selon leur poste officiel ou leur implication. Les roles CEO/COO conservent une vue de supervision; SCO n'est pas assimile au commercial, et MPO n'est pas assimile au marketing.
+
+## 20.4 Section LA - Legal Advisor - 16 mai 2026
+
+La section Administration `LA` est ajoutee comme module juridique transversal. L'acces repose sur `requireAdminBlockAccess("la")`, le RBAC configure par `AppSetting.adminRoleAccess` et le poste officiel `LA` du dossier `HrcfoEmployee`. `CEO` conserve une supervision sur les dossiers critiques ou necessitant arbitrage; les autres collaborateurs ne voient dans `/activities` que les elements juridiques ou ils sont demandeurs, responsables ou explicitement impliques.
+
+Modeles ajoutes:
+
+- `LegalCase`: dossiers juridiques, types de dossiers, departement demandeur, demandeur, responsable juridique, risque, priorite, statut, echeance, piece jointe, decision juridique et validation CEO requise;
+- `LegalContract`: contrats et conventions, partie concernee, responsable interne, periode, montant, document joint, dossier juridique lie, validation LA et validation CEO;
+- `LegalTemplate`: modeles juridiques, clauses, versions et statuts;
+- `LegalRisk`: risques juridiques et conformite avec probabilite, impact, mesure corrective, responsable et escalade CEO;
+- `LegalDocument`: archivage juridique avec fichier joint, date d'expiration, statut et niveau de confidentialite (`INTERNAL_PUBLIC`, `CONFIDENTIAL`, `VERY_CONFIDENTIAL`, `CEO_ONLY`, `LA_CEO_ONLY`);
+- `LegalDispute`: litiges et reclamations avec montant potentiel, responsable de suivi, prochaine action et documents;
+- `LegalRequest`: demandes internes vers LA depuis HR & CFO, COO, CTO, MPO, SCO ou CEO;
+- `LegalReport`: rapports LA hebdomadaires, mensuels, contrats, risques, litiges, documents expirant et demandes par departement.
+
+Les routes `/api/admin/la/[entity]` et `/api/admin/la/[entity]/[id]` valident les payloads via `laSchemas`, enrichissent les IDs collaborateurs/departements en noms d'affichage, journalisent `ApiLog` et `AuditLog`, et creent des notifications ciblees vers les collaborateurs concernes, les postes `LA` et le `CEO` en cas de criticite, escalade ou validation requise. Les pieces jointes utilisent les champs fichier du panneau operationnel et doivent rester servies par les routes privees Supabase Storage existantes.
+
+Les commentaires juridiques reutilisent `CooComment` avec les types `LEGAL_CASE`, `LEGAL_CONTRACT`, `LEGAL_TEMPLATE`, `LEGAL_RISK`, `LEGAL_DOCUMENT`, `LEGAL_DISPUTE`, `LEGAL_REQUEST` et `LEGAL_REPORT`. Pour les documents juridiques, les niveaux `CEO_ONLY` et `LA_CEO_ONLY` limitent les commentaires et notifications aux postes LA/CEO et a l'admin autorise.
 
 ## 20.1 Mise a jour HR & CFO, COO et Activites DTSC - 15 mai 2026
 

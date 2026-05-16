@@ -22,10 +22,12 @@ export default async function ActivitiesPage() {
   const isSco = positionCode === "SCO";
   const isMpo = positionCode === "MPO";
   const isCto = positionCode === "CTO";
+  const isLa = positionCode === "LA" || positionCode === "LEGAL_ADVISOR";
   const supervisesOperations = isCeo || isCoo;
   const supervisesSupplyChain = isCeo || isCoo || isSco;
   const supervisesProjects = isCeo || isCoo || isMpo;
   const supervisesTechnology = isCeo || isCoo || isCto;
+  const supervisesLegal = isCeo || isLa;
 
   const [
     tasks,
@@ -47,6 +49,14 @@ export default async function ActivitiesPage() {
     mpoRecords,
     ctoProjects,
     ctoRecords,
+    legalCases,
+    legalContracts,
+    legalTemplates,
+    legalRisks,
+    legalDocuments,
+    legalDisputes,
+    legalRequests,
+    legalReports,
     collaborators,
     operationOptions,
   ] = await Promise.all([
@@ -216,6 +226,46 @@ export default async function ActivitiesPage() {
         ],
       },
       include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalCase.findMany({
+      where: supervisesLegal ? {} : { OR: [{ requesterEmployeeId: employee.id }, { responsibleLegalId: employee.id }] },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalContract.findMany({
+      where: supervisesLegal ? {} : { internalResponsibleId: employee.id },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalTemplate.findMany({
+      where: supervisesLegal ? {} : { authorId: employee.id },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalRisk.findMany({
+      where: supervisesLegal ? {} : { responsibleEmployeeId: employee.id },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalDocument.findMany({
+      where: supervisesLegal ? {} : { confidentialityLevel: "INTERNAL_PUBLIC", createdById: user.id },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalDispute.findMany({
+      where: supervisesLegal ? {} : { followUpResponsibleId: employee.id },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalRequest.findMany({
+      where: supervisesLegal ? {} : { requesterEmployeeId: employee.id },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.legalReport.findMany({
+      where: supervisesLegal ? {} : { responsibleLegalId: employee.id },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
@@ -539,6 +589,98 @@ export default async function ActivitiesPage() {
           date: toIso(record.dueDate || record.updatedAt),
           priority: record.priority,
           progress: record.progress,
+        })),
+      ],
+    }] : []),
+    ...((isLa || isCeo || legalCases.length || legalContracts.length || legalTemplates.length || legalRisks.length || legalDocuments.length || legalDisputes.length || legalRequests.length || legalReports.length) ? [{
+      id: "la-legal",
+      title: isLa ? "Mes activités juridiques LA" : "Suivi juridique",
+      description: "Consultez les dossiers juridiques, contrats, risques, documents officiels, litiges, demandes et rapports qui vous concernent.",
+      items: [
+        ...legalCases.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_CASE" as const,
+          title: item.title,
+          status: item.status,
+          detail: [formatEnumLabel(item.caseType), item.requesterDepartmentName, item.dueDate ? formatDate(item.dueDate) : ""].filter(Boolean).join(" · "),
+          body: item.legalDecision || item.comments || item.description,
+          date: toIso(item.dueDate || item.updatedAt),
+          priority: item.priority,
+        })),
+        ...legalContracts.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_CONTRACT" as const,
+          title: item.title,
+          status: item.status,
+          detail: [formatEnumLabel(item.contractType), item.counterparty, item.endDate ? formatDate(item.endDate) : ""].filter(Boolean).join(" · "),
+          body: item.legalValidation || item.comments,
+          date: toIso(item.endDate || item.updatedAt),
+          href: item.documentUrl,
+          hrefLabel: "Ouvrir le contrat",
+        })),
+        ...legalTemplates.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_TEMPLATE" as const,
+          title: item.name,
+          status: item.status,
+          detail: [formatEnumLabel(item.templateType), item.version, item.authorName].filter(Boolean).join(" · "),
+          body: item.comments || item.description || item.content,
+          date: toIso(item.updatedAt),
+        })),
+        ...legalRisks.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_RISK" as const,
+          title: item.title,
+          status: item.status,
+          detail: [item.departmentName, `Risque ${formatEnumLabel(item.riskLevel)}`, item.dueDate ? formatDate(item.dueDate) : ""].filter(Boolean).join(" · "),
+          body: item.correctiveMeasure || item.potentialImpact || item.description,
+          date: toIso(item.dueDate || item.updatedAt),
+          priority: item.riskLevel,
+        })),
+        ...legalDocuments.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_DOCUMENT" as const,
+          title: item.title,
+          status: item.status,
+          detail: [formatEnumLabel(item.documentType), formatEnumLabel(item.confidentialityLevel), item.expirationDate ? formatDate(item.expirationDate) : ""].filter(Boolean).join(" · "),
+          body: item.comments,
+          date: toIso(item.expirationDate || item.updatedAt),
+          href: item.fileUrl,
+          hrefLabel: "Ouvrir le document",
+        })),
+        ...legalDisputes.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_DISPUTE" as const,
+          title: item.title,
+          status: item.status,
+          detail: [formatEnumLabel(item.disputeType), item.counterparty, item.dueDate ? formatDate(item.dueDate) : ""].filter(Boolean).join(" · "),
+          body: item.nextAction || item.comments || item.description,
+          date: toIso(item.dueDate || item.updatedAt),
+          priority: item.riskLevel,
+        })),
+        ...legalRequests.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_REQUEST" as const,
+          title: item.subject,
+          status: item.status,
+          detail: [formatEnumLabel(item.requestType), item.requesterDepartmentName, item.desiredDueDate ? formatDate(item.desiredDueDate) : ""].filter(Boolean).join(" · "),
+          body: item.legalResponse || item.comments || item.description,
+          date: toIso(item.desiredDueDate || item.updatedAt),
+          priority: item.priority,
+          href: item.documentUrl,
+          hrefLabel: "Ouvrir le document",
+        })),
+        ...legalReports.map((item) => ({
+          id: item.id,
+          entityType: "LEGAL_REPORT" as const,
+          title: item.title,
+          status: item.status,
+          detail: [formatEnumLabel(item.reportType), item.departmentName, item.periodEnd ? formatDate(item.periodEnd) : ""].filter(Boolean).join(" · "),
+          body: item.recommendations || item.content,
+          date: toIso(item.periodEnd || item.updatedAt),
+          priority: item.priority,
+          href: item.attachmentUrl,
+          hrefLabel: "Ouvrir la pièce jointe",
         })),
       ],
     }] : []),

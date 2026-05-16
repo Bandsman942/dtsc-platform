@@ -7,7 +7,7 @@ import { normalizePositionCode } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
 
 const commentSchema = z.object({
-  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD"]),
+  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD", "LEGAL_CASE", "LEGAL_CONTRACT", "LEGAL_TEMPLATE", "LEGAL_RISK", "LEGAL_DOCUMENT", "LEGAL_DISPUTE", "LEGAL_REQUEST", "LEGAL_REPORT"]),
   entityId: z.string().min(5),
   content: z.string().min(2).max(2000),
 });
@@ -67,7 +67,10 @@ export async function POST(req: Request) {
 }
 
 async function canAccessEntity(user: { id: string; role: UserRole }, entityType: string, entityId: string) {
-  if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER || user.role === UserRole.SUPPORT) {
+  if (entityType.startsWith("LEGAL_") && user.role === UserRole.ADMIN) {
+    return true;
+  }
+  if (!entityType.startsWith("LEGAL_") && (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER || user.role === UserRole.SUPPORT)) {
     return true;
   }
   const employee = await prisma.hrcfoEmployee.findFirst({
@@ -79,6 +82,9 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   }
   const positionCode = normalizePositionCode(employee.position?.code || employee.positionCode || employee.jobTitle);
   if (positionCode === "CEO") {
+    return true;
+  }
+  if ((positionCode === "LA" || positionCode === "LEGAL_ADVISOR") && entityType.startsWith("LEGAL_")) {
     return true;
   }
   if (positionCode === "SCO" && entityType.startsWith("SCO_")) {
@@ -143,6 +149,31 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   }
   if (entityType === "CTO_RECORD") {
     return Boolean(await prisma.ctoTechnicalRecord.findFirst({ where: { id: entityId, OR: [{ responsibleEmployeeId: employee.id }, { assigneeEmployeeId: employee.id }, { technicalProject: { OR: [{ responsibleCtoId: employee.id }, { technicalCollaborators: { contains: employee.id } }, { technicalCollaborators: { contains: employee.fullName, mode: "insensitive" } }] } }] }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_CASE") {
+    return Boolean(await prisma.legalCase.findFirst({ where: { id: entityId, OR: [{ requesterEmployeeId: employee.id }, { responsibleLegalId: employee.id }] }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_CONTRACT") {
+    return Boolean(await prisma.legalContract.findFirst({ where: { id: entityId, internalResponsibleId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_TEMPLATE") {
+    return Boolean(await prisma.legalTemplate.findFirst({ where: { id: entityId, authorId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_RISK") {
+    return Boolean(await prisma.legalRisk.findFirst({ where: { id: entityId, responsibleEmployeeId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_DISPUTE") {
+    return Boolean(await prisma.legalDispute.findFirst({ where: { id: entityId, followUpResponsibleId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_REQUEST") {
+    return Boolean(await prisma.legalRequest.findFirst({ where: { id: entityId, requesterEmployeeId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_REPORT") {
+    return Boolean(await prisma.legalReport.findFirst({ where: { id: entityId, responsibleLegalId: employee.id }, select: { id: true } }));
+  }
+  if (entityType === "LEGAL_DOCUMENT") {
+    const document = await prisma.legalDocument.findUnique({ where: { id: entityId }, select: { confidentialityLevel: true, createdById: true } });
+    return document?.createdById === user.id && document.confidentialityLevel === "INTERNAL_PUBLIC";
   }
   return Boolean(await prisma.cooWorkflowShare.findFirst({ where: { workflowId: entityId, employeeId: employee.id }, select: { id: true } }));
 }
@@ -248,6 +279,38 @@ async function relatedUserIds(entityType: string, entityId: string) {
     const record = await prisma.ctoTechnicalRecord.findUnique({ where: { id: entityId }, select: { responsibleEmployeeId: true, assigneeEmployeeId: true, createdById: true } });
     return employeesToUserIds([record?.responsibleEmployeeId, record?.assigneeEmployeeId], record?.createdById);
   }
+  if (entityType === "LEGAL_CASE") {
+    const record = await prisma.legalCase.findUnique({ where: { id: entityId }, select: { requesterEmployeeId: true, responsibleLegalId: true, ceoValidationRequired: true, riskLevel: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.requesterEmployeeId, record?.responsibleLegalId], record?.createdById)), ...((record?.ceoValidationRequired || record?.riskLevel === "CRITICAL") ? await employeesByPosition("CEO") : [])]);
+  }
+  if (entityType === "LEGAL_CONTRACT") {
+    const record = await prisma.legalContract.findUnique({ where: { id: entityId }, select: { internalResponsibleId: true, ceoValidationRequired: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.internalResponsibleId], record?.createdById)), ...(record?.ceoValidationRequired ? await employeesByPosition("CEO") : [])]);
+  }
+  if (entityType === "LEGAL_TEMPLATE") {
+    const record = await prisma.legalTemplate.findUnique({ where: { id: entityId }, select: { authorId: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.authorId], record?.createdById))]);
+  }
+  if (entityType === "LEGAL_RISK") {
+    const record = await prisma.legalRisk.findUnique({ where: { id: entityId }, select: { responsibleEmployeeId: true, ceoEscalation: true, riskLevel: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.responsibleEmployeeId], record?.createdById)), ...((record?.ceoEscalation || record?.riskLevel === "CRITICAL") ? await employeesByPosition("CEO") : [])]);
+  }
+  if (entityType === "LEGAL_DOCUMENT") {
+    const record = await prisma.legalDocument.findUnique({ where: { id: entityId }, select: { confidentialityLevel: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...((record?.confidentialityLevel === "CEO_ONLY" || record?.confidentialityLevel === "LA_CEO_ONLY") ? await employeesByPosition("CEO") : []), record?.createdById]);
+  }
+  if (entityType === "LEGAL_DISPUTE") {
+    const record = await prisma.legalDispute.findUnique({ where: { id: entityId }, select: { followUpResponsibleId: true, riskLevel: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.followUpResponsibleId], record?.createdById)), ...(record?.riskLevel === "CRITICAL" ? await employeesByPosition("CEO") : [])]);
+  }
+  if (entityType === "LEGAL_REQUEST") {
+    const record = await prisma.legalRequest.findUnique({ where: { id: entityId }, select: { requesterEmployeeId: true, priority: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.requesterEmployeeId], record?.createdById)), ...(record?.priority === "CRITICAL" ? await employeesByPosition("CEO") : [])]);
+  }
+  if (entityType === "LEGAL_REPORT") {
+    const record = await prisma.legalReport.findUnique({ where: { id: entityId }, select: { responsibleLegalId: true, priority: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("LA")), ...(await employeesToUserIds([record?.responsibleLegalId], record?.createdById)), ...(record?.priority === "CRITICAL" ? await employeesByPosition("CEO") : [])]);
+  }
   return [];
 }
 
@@ -264,7 +327,11 @@ async function employeesToUserIds(employeeIds: Array<string | null | undefined>,
 }
 
 async function employeesByPosition(positionCode: string) {
-  const employees = await prisma.hrcfoEmployee.findMany({ where: { positionCode, status: { not: "EXITED" } }, select: { userId: true } });
+  const codes = positionCode === "LA" ? ["LA", "LEGAL_ADVISOR"] : [positionCode];
+  const employees = await prisma.hrcfoEmployee.findMany({
+    where: { status: { not: "EXITED" }, OR: [{ positionCode: { in: codes } }, { position: { is: { code: { in: codes } } } }] },
+    select: { userId: true },
+  });
   return employees.map((employee) => employee.userId).filter((id): id is string => Boolean(id));
 }
 

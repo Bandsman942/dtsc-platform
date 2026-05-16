@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, Code2, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Code2, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
 import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -9,15 +9,17 @@ import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
 import { CeoExecutiveSummary } from "@/components/admin/ceo-executive-summary";
+import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
-import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDatasets, buildMpoDatasets, buildScoDatasets } from "@/lib/admin-operations";
+import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDatasets, buildLaDatasets, buildMpoDatasets, buildScoDatasets } from "@/lib/admin-operations";
 import { ensureDefaultPositions, getCollaboratorBusinessContext } from "@/lib/business-roles";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
+import { formatEnumLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
@@ -41,6 +43,7 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "ceo", label: "CEO", description: "Supervision exécutive", icon: Crown },
   { id: "mpo", label: "MPO", description: "Management & projets", icon: FolderKanban },
   { id: "cto", label: "CTO", description: "Technologie & développement", icon: Code2 },
+  { id: "la", label: "LA", description: "Legal Advisor", icon: Scale },
   { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
   { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
   { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
@@ -139,6 +142,14 @@ export default async function AdminPage({
     mpoRecords,
     ctoProjects,
     ctoRecords,
+    legalCases,
+    legalContracts,
+    legalTemplates,
+    legalRisks,
+    legalDocuments,
+    legalDisputes,
+    legalRequests,
+    legalReports,
   ] =
     await Promise.all([
       getAppSettings(),
@@ -268,6 +279,14 @@ export default async function AdminPage({
       prisma.mpoProjectRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { project: { select: { title: true } } }, take: 200 }),
       prisma.ctoTechnicalProject.findMany({ orderBy: { updatedAt: "desc" }, include: { mpoProject: { select: { title: true } } }, take: 200 }),
       prisma.ctoTechnicalRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } }, take: 200 }),
+      prisma.legalCase.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalContract.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalTemplate.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalRisk.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalDocument.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalDispute.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.legalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
@@ -278,7 +297,10 @@ export default async function AdminPage({
       return true;
     }
     if (positionCode === "CEO") {
-      return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "audits";
+      return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "la" || blockId === "activity" || blockId === "audits";
+    }
+    if (positionCode === "LA" || positionCode === "LEGAL_ADVISOR") {
+      return blockId === "la" || blockId === "activity" || blockId === "overview" || blockId === "audits";
     }
     if (positionCode === "COO") {
       return blockId === "coo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
@@ -486,6 +508,68 @@ export default async function AdminPage({
     departments: hrcfoDepartments,
     employees: hrcfoEmployees,
   })));
+  const laDatasets = buildLaDatasets(JSON.parse(JSON.stringify({
+    cases: legalCases,
+    contracts: legalContracts,
+    templates: legalTemplates,
+    risks: legalRisks,
+    documents: legalDocuments,
+    disputes: legalDisputes,
+    requests: legalRequests,
+    reports: legalReports,
+    departments: hrcfoDepartments,
+    employees: hrcfoEmployees,
+    mpoProjects,
+    ctoProjects,
+    scoPurchaseRequests,
+  })));
+  const countBy = <T,>(items: T[], getLabel: (item: T) => string | null | undefined) => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const rawLabel = getLabel(item);
+      const label = rawLabel ? formatEnumLabel(rawLabel) : "Non renseigné";
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((first, second) => second.value - first.value || first.label.localeCompare(second.label, "fr"));
+  };
+  const now = new Date();
+  const legalSoonLimit = new Date(now);
+  legalSoonLimit.setDate(legalSoonLimit.getDate() + 30);
+  const isDueSoon = (value: Date | string | null | undefined) => {
+    if (!value) {
+      return false;
+    }
+    const dateValue = value instanceof Date ? value : new Date(value);
+    const time = dateValue.getTime();
+    return !Number.isNaN(time) && time >= now.getTime() && time <= legalSoonLimit.getTime();
+  };
+  const isLegalOpen = (status: string) => !/ARCHIVED|CANCELED|CANCELLED|SIGNED|REJECTED|RESOLVED|CLOSED|EXPIRED/i.test(status);
+  const legalMonthDeadlines = [
+    ...legalCases.filter((item) => isDueSoon(item.dueDate)).map(() => ({ label: "Dossiers" })),
+    ...legalContracts.filter((item) => isDueSoon(item.endDate)).map(() => ({ label: "Contrats" })),
+    ...legalDocuments.filter((item) => isDueSoon(item.expirationDate)).map(() => ({ label: "Documents" })),
+    ...legalRequests.filter((item) => isDueSoon(item.desiredDueDate)).map(() => ({ label: "Demandes" })),
+  ];
+  const legalMetrics = [
+    { label: "Dossiers ouverts", value: legalCases.filter((item) => isLegalOpen(item.status)).length, detail: "Dossiers juridiques encore actifs." },
+    { label: "Contrats à relire", value: legalContracts.filter((item) => item.status === "LEGAL_REVIEW" || item.status === "TO_CORRECT").length, detail: "Contrats en relecture LA ou à corriger." },
+    { label: "Risques critiques", value: legalRisks.filter((item) => item.riskLevel === "CRITICAL" && isLegalOpen(item.status)).length, detail: "Risques juridiques à escalader." },
+    { label: "Arbitrage CEO", value: legalCases.filter((item) => item.ceoValidationRequired || item.status === "WAITING_CEO").length + legalContracts.filter((item) => item.ceoValidationRequired).length + legalRisks.filter((item) => item.ceoEscalation).length, detail: "Dossiers sensibles nécessitant une décision." },
+    { label: "Documents bientôt expirés", value: legalDocuments.filter((item) => isDueSoon(item.expirationDate)).length, detail: "Échéances documentaires à anticiper." },
+    { label: "Demandes en retard", value: legalRequests.filter((item) => item.desiredDueDate && new Date(item.desiredDueDate).getTime() < now.getTime() && isLegalOpen(item.status)).length, detail: "Demandes internes dépassant l'échéance." },
+    { label: "Litiges ouverts", value: legalDisputes.filter((item) => isLegalOpen(item.status)).length, detail: "Réclamations et litiges en suivi." },
+    { label: "Documents archivés", value: legalDocuments.filter((item) => item.status === "ARCHIVED").length, detail: "Archives juridiques sécurisées." },
+  ];
+  const legalCharts = [
+    { title: "Dossiers juridiques par statut", items: countBy(legalCases, (item) => item.status) },
+    { title: "Dossiers par département demandeur", items: countBy(legalCases, (item) => item.requesterDepartmentName) },
+    { title: "Risques juridiques par niveau", items: countBy(legalRisks, (item) => item.riskLevel) },
+    { title: "Contrats par type", items: countBy(legalContracts, (item) => item.contractType) },
+    { title: "Échéances juridiques du mois", items: countBy(legalMonthDeadlines, (item) => item.label) },
+    { title: "Demandes juridiques par priorité", items: countBy(legalRequests, (item) => item.priority) },
+  ];
   const isInCeoPeriod = (value: Date | string | null | undefined) => {
     if (!ceoStartDate && !ceoEndDate) {
       return true;
@@ -722,6 +806,20 @@ export default async function AdminPage({
             datasets={ctoDatasets}
             canEdit={canView("cto")}
           />
+        )}
+
+        {activeSection === "la" && canView("la") && (
+          <div className="space-y-5">
+            <LegalDashboardSummary metrics={legalMetrics} charts={legalCharts} />
+            <OperationsAdminPanel
+              eyebrow="Legal Advisor"
+              title="LA — Legal Advisor"
+              description="Pilotez les dossiers juridiques, contrats, conventions, modèles, risques de conformité, documents officiels, litiges, demandes internes et rapports juridiques DTSC avec confidentialité et traçabilité."
+              playbook={["Demande juridique", "Analyse LA", "Contrat ou avis", "Validation LA", "Arbitrage CEO si requis", "Archivage confidentiel"]}
+              datasets={laDatasets}
+              canEdit={canView("la")}
+            />
+          </div>
         )}
 
         {activeSection === "visits" && canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />}

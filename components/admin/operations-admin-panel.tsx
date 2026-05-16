@@ -49,7 +49,6 @@ export function OperationsAdminPanel({
       const impactsRevenue = category === "IN" && (item.status === "VALIDATED" || item.status === "PAID") && title !== "capital de départ";
       return impactsRevenue ? sum + (item.amount || 0) : sum;
     }, 0);
-    const amount = records.reduce((sum, item) => sum + (item.amount || 0), 0);
     const transactions = visibleItemsByDataset.transactions || [];
     const financialTransactions = transactions.filter((item) => item.status === "VALIDATED" || item.status === "PAID");
     const totalIn = financialTransactions.filter((item) => item.values?.transactionCategory === "IN").reduce((sum, item) => sum + (item.amount || 0), 0);
@@ -67,14 +66,16 @@ export function OperationsAdminPanel({
     }, 0);
     const payrolls = visibleItemsByDataset.payrolls || [];
     const netPayrollPaid = payrolls.filter((item) => item.status === "VALIDATED" || item.status === "PAID").reduce((sum, item) => sum + (item.amount || 0), 0);
-    const alerts = records.filter((item) => /OVER|URGENT|CRITICAL|LOW_STOCK|OVERDUE|BLOCKED|MISSING|EXPIRED/i.test(item.status)).length;
+    const activeRecords = records.filter((item) => !isClosedStatus(item.status)).length;
+    const attentionItems = records.filter((item) => needsAttention(item)).length;
     const taskRecords = visibleItemsByDataset.tasks || [];
+    const blockedTasks = taskRecords.filter((item) => item.status === "BLOCKED" || item.status === "LATE").length;
     const operationalExecution = taskRecords.length
       ? Math.round((taskRecords.filter((item) => item.status === "COMPLETED" || item.status === "VALIDATED").length / taskRecords.length) * 100)
       : 0;
     const datasetCounts = datasets.map((dataset) => ({ label: dataset.label, count: (visibleItemsByDataset[dataset.id] || []).length }));
     const maxCount = Math.max(1, ...datasetCounts.map((item) => item.count));
-    return { records: records.length, amount, alerts, hrcfoRevenue, operationalExecution, datasetCounts, maxCount, totalIn, totalOut, startingCapital, accountsBalance, budgetTotal, budgetSpent, netPayrollPaid };
+    return { records: records.length, activeRecords, attentionItems, blockedTasks, hrcfoRevenue, operationalExecution, datasetCounts, maxCount, totalIn, totalOut, startingCapital, accountsBalance, budgetTotal, budgetSpent, netPayrollPaid, financialTransactionCount: financialTransactions.length };
   }, [datasets, visibleItemsByDataset]);
   const isHrcfoPanel = datasets.some((dataset) => dataset.id === "transactions" && dataset.endpoint.includes("/hr-cfo/"));
   const isCooPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/coo/"));
@@ -151,10 +152,13 @@ export function OperationsAdminPanel({
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <Metric label={isCooPanel ? "Éléments COO suivis" : "Dossiers suivis"} value={totals.records} />
           <Metric
-            label={isCooPanel || isCeoPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Valeur suivie"}
-            value={isCooPanel || isCeoPanel ? `${totals.operationalExecution}%` : `${(isHrcfoPanel ? totals.hrcfoRevenue : totals.amount).toFixed(2)} USD`}
+            label={isCooPanel || isCeoPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Éléments actifs"}
+            value={isCooPanel || isCeoPanel ? `${totals.operationalExecution}%` : isHrcfoPanel ? `${totals.hrcfoRevenue.toFixed(2)} USD` : totals.activeRecords}
           />
-          <Metric label="Alertes opérationnelles" value={totals.alerts} />
+          <Metric
+            label={isCooPanel ? "Tâches bloquées/retard" : isCeoPanel ? "Décisions à suivre" : isHrcfoPanel ? "Transactions impactantes" : "Priorités à traiter"}
+            value={isCooPanel ? totals.blockedTasks : isHrcfoPanel ? totals.financialTransactionCount : totals.attentionItems}
+          />
         </div>
         {isHrcfoPanel && (
           <div className="mt-3 grid gap-3 md:grid-cols-4">
@@ -269,6 +273,15 @@ function isInDateRange(value: string, start: string, end: string) {
     }
   }
   return true;
+}
+
+function isClosedStatus(status: string) {
+  return /ARCHIVED|CANCELED|CANCELLED|CLOSED|COMPLETED|RESOLVED|DELIVERED|RECEIVED|SIGNED|PAID|VALIDATED|APPROVED|TERMINATED|DONE/i.test(status);
+}
+
+function needsAttention(record: OperationRecord) {
+  const status = `${record.status} ${record.meta.join(" ")}`;
+  return /BLOCKED|LATE|OVERDUE|CRITICAL|URGENT|LOW_STOCK|OUT_OF_STOCK|MISSING|EXPIRED|REJECTED|TO_CORRECT|WAITING|PENDING|SUBMITTED|OPEN|ESCALATED|INSUFFICIENT/i.test(status);
 }
 
 function DatasetCard({
