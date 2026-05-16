@@ -308,7 +308,7 @@ function RequestComposer({ collaborators, selected }: { collaborators: Collabora
     <form onSubmit={createRequest} className="mb-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">Formuler une demande à un collaborateur</h4>
       <p className="mt-1 text-sm leading-6 text-dtsc-muted">
-        Envoyez une demande d'information, validation, document ou action. La discussion reste attachée à la demande et visible par les personnes concernées.
+        Envoyez une demande d&apos;information, validation, document ou action. La discussion reste attachée à la demande et visible par les personnes concernées.
       </p>
       <input type="hidden" name="relatedEntityType" value={selected?.entityType || ""} />
       <input type="hidden" name="relatedEntityId" value={selected?.id || ""} />

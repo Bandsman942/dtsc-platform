@@ -108,7 +108,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les contenus publics riches doivent être nettoyés avec `sanitizeRichHtml` avant stockage ou rendu; ne jamais rendre un HTML admin sans nettoyage serveur.
 - Les onglets de la landing page doivent correspondre à des routes publiques dédiées; l'état actif doit se baser sur le `pathname`, pas sur un scroll de sections.
 - Le contexte client du chatbot ne doit pas divulguer les détails internes de l'application (frameworks, schéma DB, routes API, variables, middleware, secrets). Il doit rester orienté services DTSC et fonctionnalités utiles aux clients.
-- Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs.
+- Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs. Avant commit, scanner les nouveaux textes TSX visibles pour éviter `react/no-unescaped-entities`, surtout après ajout de phrases françaises comme `d'information`, `l'utilisateur`, `n'est`.
 - Les contenus publics sourcés doivent garder des liens vérifiables.
 
 ## Validation locale
