@@ -260,6 +260,10 @@ Modeles actifs:
 | `CooOperationalReport` | Rapports operationnels et KPI COO |
 | `CeoObjective` | Objectifs executifs suivis par le CEO: type, departement, responsable, periode, cible, progression et statut |
 | `CeoSupervisionLog` | Journal de supervision CEO: observations, decisions, instructions, risques, actions attendues et responsable de suivi |
+| `MpoProject` | Portefeuille projets MPO: besoin, objectifs, responsables impliques, priorite, risque, budget estime, statut, livrables et donnees sante digitale |
+| `MpoProjectRecord` | Registres MPO: cadrage, cahier de charges, livrable, risque, collaboration CTO/COO, demande budgetaire, besoin SCO, rapport, workflow ou documentation |
+| `CtoTechnicalProject` | Projets techniques CTO lies eventuellement a un projet MPO: solution, responsable, stack, environnement, statut, depot et livrables techniques |
+| `CtoTechnicalRecord` | Registres CTO: architecture, tache technique, API, base de donnees, deploiement, securite, bug/incident, qualite, besoin budgetaire ou materiel SCO |
 
 Champs profil utilisateur ajoutes:
 
@@ -589,8 +593,14 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `POST` | `/api/admin/ceo/[entity]` | bloc/poste `ceo` | Creation d'un objectif CEO ou d'une entree de journal de supervision (`objectives`, `supervisionLogs`) |
 | `PATCH` | `/api/admin/ceo/[entity]/[id]` | bloc/poste `ceo` | Mise a jour d'un objectif CEO ou d'une entree de supervision |
 | `DELETE` | `/api/admin/ceo/[entity]/[id]` | bloc/poste `ceo` | Suppression controlee d'un objectif CEO ou d'une entree de supervision |
+| `POST` | `/api/admin/mpo/[entity]` | bloc/poste `mpo` | Creation d'un projet MPO ou registre projet (`projects`, `records`) |
+| `PATCH` | `/api/admin/mpo/[entity]/[id]` | bloc/poste `mpo` | Mise a jour d'un projet MPO ou registre projet |
+| `DELETE` | `/api/admin/mpo/[entity]/[id]` | bloc/poste `mpo` | Suppression controlee d'un projet MPO ou registre projet |
+| `POST` | `/api/admin/cto/[entity]` | bloc/poste `cto` | Creation d'un projet technique CTO ou registre technique (`projects`, `records`) |
+| `PATCH` | `/api/admin/cto/[entity]/[id]` | bloc/poste `cto` | Mise a jour d'un projet technique CTO ou registre technique |
+| `DELETE` | `/api/admin/cto/[entity]/[id]` | bloc/poste `cto` | Suppression controlee d'un projet technique CTO ou registre technique |
 
-Les routes HR & CFO / SCO / COO / CEO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Les postes officiels du dossier RH completent ces droits: `CEO` peut superviser `ceo`, `hrCfo`, `coo`, `sco`, `activity` et `audits`; `COO` accede a `coo`; `HR_CFO` accede a `hrCfo`; `SCO` accede a `sco`; `CTO` et `MPO` obtiennent les blocs operationnels correspondants. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
+Les routes HR & CFO / SCO / COO / CEO / MPO / CTO utilisent `requireAdminBlockAccess()`: `ADMIN` a toujours acces, tandis que `MANAGER` et `SUPPORT` dependent de `AppSetting.adminRoleAccess`. Les postes officiels du dossier RH completent ces droits: `CEO` peut superviser les vues executives et critiques; `COO` coordonne les operations, projets et blocages; `HR_CFO` gere les donnees RH/finance; `SCO` gere uniquement la supply chain; `MPO` pilote les projets; `CTO` pilote la technologie. Chaque mutation valide le payload avec Zod, ecrit `ApiLog` et `AuditLog`, et ne renvoie pas de donnees sensibles hors de la session autorisee.
 
 Le champ `Poste` du dossier collaborateur n'est plus un texte libre. Il pointe vers `DtscPosition`, gere depuis `HR & CFO > Manager les postes`. Les codes de poste sont stables (`CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO`, etc.) et servent a determiner les permissions metier cote serveur sans se baser sur une comparaison approximative de texte.
 
@@ -598,7 +608,7 @@ Les champs et workflows s'inspirent des principes suivants: ISO 30414 pour le re
 
 Les regles financieres sensibles sont centralisees dans `lib/hr-cfo-finance.ts`: creation de budget avec solde disponible, validation des transactions d'entree/sortie, mise a jour du solde du compte, consommation budgetaire, generation de facture, transaction d'abonnement et paie. Une transaction de sortie exige un budget actif et suffisamment disponible; une paie validee cree une transaction de sortie; un paiement d'abonnement confirme cree une transaction d'entree idempotente sur le compte `Banque` et rattache la facture de paiement a cette transaction.
 
-Le SCO dispose maintenant d'un referentiel `MaterialItem` pour les biens materiels. Les stocks et actifs peuvent etre rattaches a ce referentiel pour suivre le meme bien entre inventaire, equipement, assignation et maintenance. Les demandes d'achat selectionnent le fournisseur retenu dans la liste des fournisseurs actifs ou sous surveillance, ce qui evite de saisir un fournisseur non reference.
+Le SCO dispose maintenant d'un referentiel `MaterialItem` pour les biens materiels. Les stocks et actifs peuvent etre rattaches a ce referentiel pour suivre le meme bien entre inventaire, equipement, assignation et maintenance. Les demandes d'achat selectionnent le fournisseur retenu dans la liste des fournisseurs actifs ou sous surveillance, ce qui evite de saisir un fournisseur non reference. Les champs SCO ajoutent aussi `sourceSection`, `sourceItemId`, liens projet MPO, liens projet CTO, liens budget HR & CFO, liens tache COO, mission et actif afin de retracer l'origine et la destination d'un besoin supply chain sans dupliquer les transactions ni les taches.
 
 ### Billing et paiements
 
@@ -1523,7 +1533,7 @@ Postes critiques initiaux:
 - `HR_CFO`: RH, finances, budgets, transactions, paie et controle;
 - `SCO`: fournisseurs, achats, stocks, actifs, biens materiels et logistique;
 - `CTO`: pilotage technique;
-- `MPO`: marketing, production et communication.
+- `MPO`: Management & Projects Officer, portefeuille projets, cadrage, cahiers de charges, livrables, risques et coordination numerique.
 
 La fonction `requireAdminBlockAccess()` prend maintenant en compte deux niveaux:
 
@@ -1542,6 +1552,25 @@ Le filtre CEO ne modifie pas les donnees source: il filtre les transactions, col
 Le module `/activities` lit aussi le poste officiel: un collaborateur `CEO` voit une synthese de supervision critique; un collaborateur `COO` voit les operations/taches/blocages a piloter globalement; les autres collaborateurs gardent la logique de propriete ou d'implication. Les objectifs `CeoObjective` assignes et les entrees `CeoSupervisionLog` concernant un collaborateur apparaissent dans le bloc "Objectifs et supervision CEO". Les commentaires utilisent `CooComment` avec les types `CEO_OBJECTIVE` et `CEO_SUPERVISION`, avec controle serveur: CEO et roles admin autorises peuvent superviser, tandis que les collaborateurs non autorises ne voient que les objectifs ou suivis qui les concernent.
 
 Les routes CEO creent une notification applicative ciblee vers `/activities` lors de la creation ou de la mise a jour d'un objectif ou d'une entree de supervision. Les notifications ne sont pas diffusees a toute l'equipe: elles ciblent le responsable de l'objectif, le collaborateur concerne et/ou le responsable de suivi.
+
+## 20.3 Integrations SCO, MPO et CTO - 16 mai 2026
+
+La section SCO reste le centre supply chain: biens materiels, fournisseurs, demandes d'achat, stocks, inventaires, actifs, equipements, missions et logistique. Elle ne remplace pas HR & CFO pour les budgets/transactions et ne recree pas un systeme de taches COO. Les champs ajoutes sont non destructifs et permettent de relier les dossiers SCO a:
+
+- HR & CFO via `relatedBudgetId` pour les besoins budgetaires;
+- COO via `relatedTaskId` ou les notifications de blocage/missions;
+- MPO via `relatedProjectId` pour les besoins materiels/logistiques projets;
+- CTO via `relatedTechnicalProjectId` pour les equipements techniques;
+- CEO via notifications uniquement sur criticite, arbitrage ou rupture.
+
+Les notifications SCO sont ciblees: demande d'achat recue, besoin venant de CTO/MPO, besoin budgetaire HR & CFO, achat critique CEO, stock faible/rupture, actif endommage/perdu et mission logistique a coordonner. Les commentaires transversaux utilisent `CooComment` avec les types `SCO_PURCHASE_REQUEST`, `SCO_VENDOR`, `SCO_MATERIAL`, `SCO_INVENTORY`, `SCO_ASSET`, `SCO_LOGISTICS`, et verifient l'appartenance ou le poste cote API.
+
+Deux sections administratives complementaires sont disponibles:
+
+- `MPO`: `MpoProject` et `MpoProjectRecord` pour portefeuille projets, cadrage, cahiers de charges, livrables, risques, demandes budgetaires, besoins SCO, collaboration CTO/COO, rapports et documentation projet;
+- `CTO`: `CtoTechnicalProject` et `CtoTechnicalRecord` pour projets techniques, architecture, taches techniques, APIs, bases de donnees, deploiements, securite, bugs/incidents, qualite, besoins budgetaires et besoins materiels SCO.
+
+`/activities` expose les blocs SCO/MPO/CTO aux collaborateurs concernes selon leur poste officiel ou leur implication. Les roles CEO/COO conservent une vue de supervision; SCO n'est pas assimile au commercial, et MPO n'est pas assimile au marketing.
 
 ## 20.1 Mise a jour HR & CFO, COO et Activites DTSC - 15 mai 2026
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, Crown, FileText, Megaphone, MessageSquare, PackageCheck, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Code2, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Settings, ShieldCheck, Users } from "lucide-react";
 import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -15,7 +15,7 @@ import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
-import { buildCeoDatasets, buildCooDatasets, buildHrcfoDatasets, buildScoDatasets } from "@/lib/admin-operations";
+import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDatasets, buildMpoDatasets, buildScoDatasets } from "@/lib/admin-operations";
 import { ensureDefaultPositions, getCollaboratorBusinessContext } from "@/lib/business-roles";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
@@ -39,6 +39,8 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "sco", label: "SCO", description: "Achats, stocks et logistique", icon: PackageCheck },
   { id: "coo", label: "COO", description: "Opérations, tâches et workflows", icon: BarChart3 },
   { id: "ceo", label: "CEO", description: "Supervision exécutive", icon: Crown },
+  { id: "mpo", label: "MPO", description: "Management & projets", icon: FolderKanban },
+  { id: "cto", label: "CTO", description: "Technologie & développement", icon: Code2 },
   { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
   { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
   { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
@@ -133,6 +135,10 @@ export default async function AdminPage({
     cooReports,
     ceoObjectives,
     ceoSupervisionLogs,
+    mpoProjects,
+    mpoRecords,
+    ctoProjects,
+    ctoRecords,
   ] =
     await Promise.all([
       getAppSettings(),
@@ -258,6 +264,10 @@ export default async function AdminPage({
       prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.ceoObjective.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.ceoSupervisionLog.findMany({ orderBy: { logDate: "desc" }, take: 200 }),
+      prisma.mpoProject.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.mpoProjectRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { project: { select: { title: true } } }, take: 200 }),
+      prisma.ctoTechnicalProject.findMany({ orderBy: { updatedAt: "desc" }, include: { mpoProject: { select: { title: true } } }, take: 200 }),
+      prisma.ctoTechnicalRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } }, take: 200 }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
@@ -268,22 +278,22 @@ export default async function AdminPage({
       return true;
     }
     if (positionCode === "CEO") {
-      return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "activity" || blockId === "audits";
+      return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "audits";
     }
     if (positionCode === "COO") {
-      return blockId === "coo" || blockId === "activity" || blockId === "overview";
+      return blockId === "coo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
     }
     if (positionCode === "HR_CFO" || positionCode === "HR_MANAGER" || positionCode === "FINANCE_MANAGER") {
-      return blockId === "hrCfo" || blockId === "activity" || blockId === "overview" || blockId === "audits";
+      return blockId === "hrCfo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview" || blockId === "audits";
     }
-    if (positionCode === "SCO" || positionCode === "COMMERCIAL_MANAGER") {
-      return blockId === "sco" || blockId === "activity" || blockId === "overview";
+    if (positionCode === "SCO") {
+      return blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
     }
     if (positionCode === "CTO") {
-      return blockId === "coo" || blockId === "activity" || blockId === "overview";
+      return blockId === "cto" || blockId === "mpo" || blockId === "coo" || blockId === "activity" || blockId === "overview";
     }
-    if (positionCode === "MPO" || positionCode === "MARKETING_MANAGER") {
-      return blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
+    if (positionCode === "MPO") {
+      return blockId === "mpo" || blockId === "cto" || blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
     }
     return false;
   };
@@ -435,6 +445,11 @@ export default async function AdminPage({
     inventory: scoInventory,
     assets: scoAssets,
     logistics: scoLogistics,
+    departments: hrcfoDepartments,
+    budgets: hrcfoBudgets,
+    mpoProjects,
+    ctoProjects,
+    cooTasks,
   })));
   const cooDatasets = buildCooDatasets(JSON.parse(JSON.stringify({
     operations: cooOperations,
@@ -451,6 +466,23 @@ export default async function AdminPage({
   const ceoDatasets = buildCeoDatasets(JSON.parse(JSON.stringify({
     objectives: ceoObjectives,
     supervisionLogs: ceoSupervisionLogs,
+    departments: hrcfoDepartments,
+    employees: hrcfoEmployees,
+  })));
+  const mpoDatasets = buildMpoDatasets(JSON.parse(JSON.stringify({
+    projects: mpoProjects,
+    records: mpoRecords.map((record) => ({ ...record, projectTitle: record.project?.title })),
+    departments: hrcfoDepartments,
+    employees: hrcfoEmployees,
+  })));
+  const ctoDatasets = buildCtoDatasets(JSON.parse(JSON.stringify({
+    projects: ctoProjects.map((project) => ({ ...project, mpoProjectTitle: project.mpoProject?.title })),
+    records: ctoRecords.map((record) => ({
+      ...record,
+      technicalProjectTitle: record.technicalProject?.title,
+      mpoProjectTitle: record.mpoProject?.title,
+    })),
+    mpoProjects,
     departments: hrcfoDepartments,
     employees: hrcfoEmployees,
   })));
@@ -668,6 +700,28 @@ export default async function AdminPage({
               canEdit={canView("ceo")}
             />
           </div>
+        )}
+
+        {activeSection === "mpo" && canView("mpo") && (
+          <OperationsAdminPanel
+            eyebrow="Management & Projects Officer"
+            title="MPO — Management & Projets"
+            description="Pilotez le portefeuille des projets numériques DTSC: cadrage des besoins, cahiers de charges, livrables, risques, besoins budgétaires, demandes SCO, coordination CTO/COO et projets santé digitale."
+            playbook={["Besoin cadré", "Cahier de charges", "Transmission CTO", "Budget ou logistique", "Livrable suivi", "Validation", "Clôture projet"]}
+            datasets={mpoDatasets}
+            canEdit={canView("mpo")}
+          />
+        )}
+
+        {activeSection === "cto" && canView("cto") && (
+          <OperationsAdminPanel
+            eyebrow="Chief Technical Officer"
+            title="CTO — Technologie & Développement"
+            description="Pilotez l'architecture, le développement, les APIs, bases de données, déploiements, sécurité, incidents, documentation technique, qualité, tests et collaboration avec MPO, COO, SCO, HR & CFO et CEO."
+            playbook={["Analyse technique", "Architecture", "Tâches dev", "Tests et revue", "Déploiement", "Documentation", "Retour MPO"]}
+            datasets={ctoDatasets}
+            canEdit={canView("cto")}
+          />
         )}
 
         {activeSection === "visits" && canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />}

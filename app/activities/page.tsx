@@ -19,7 +19,13 @@ export default async function ActivitiesPage() {
   const positionCode = normalizePositionCode(employee.position?.code || employee.positionCode || employee.jobTitle);
   const isCeo = positionCode === "CEO";
   const isCoo = positionCode === "COO";
+  const isSco = positionCode === "SCO";
+  const isMpo = positionCode === "MPO";
+  const isCto = positionCode === "CTO";
   const supervisesOperations = isCeo || isCoo;
+  const supervisesSupplyChain = isCeo || isCoo || isSco;
+  const supervisesProjects = isCeo || isCoo || isMpo;
+  const supervisesTechnology = isCeo || isCoo || isCto;
 
   const [
     tasks,
@@ -32,6 +38,15 @@ export default async function ActivitiesPage() {
     payrolls,
     ceoObjectives,
     ceoSupervisionLogs,
+    scoPurchaseRequests,
+    scoVendors,
+    scoInventory,
+    scoAssets,
+    scoLogistics,
+    mpoProjects,
+    mpoRecords,
+    ctoProjects,
+    ctoRecords,
     collaborators,
     operationOptions,
   ] = await Promise.all([
@@ -117,6 +132,91 @@ export default async function ActivitiesPage() {
         ],
       },
       orderBy: [{ logDate: "desc" }, { updatedAt: "desc" }],
+      take: 80,
+    }),
+    prisma.scoPurchaseRequest.findMany({
+      where: supervisesSupplyChain ? {} : {
+        OR: [
+          { requesterName: employee.fullName },
+          { sourceSection: positionCode },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.scoVendor.findMany({ orderBy: { updatedAt: "desc" }, take: supervisesSupplyChain ? 80 : 0 }),
+    prisma.scoInventoryItem.findMany({
+      where: supervisesSupplyChain ? {} : { ownerName: employee.fullName },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.scoAsset.findMany({
+      where: supervisesSupplyChain ? {} : { assignedTo: employee.fullName },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.scoLogisticsEvent.findMany({
+      where: supervisesSupplyChain ? {} : {
+        OR: [
+          { ownerName: employee.fullName },
+          { requesterName: employee.fullName },
+          { participants: { contains: employee.fullName, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.mpoProject.findMany({
+      where: supervisesProjects ? {} : {
+        OR: [
+          { responsibleMpoId: employee.id },
+          { ctoEmployeeId: employee.id },
+          { cooEmployeeId: employee.id },
+          { hrCfoEmployeeId: employee.id },
+          { scoEmployeeId: employee.id },
+          { ceoEmployeeId: employee.id },
+          { collaborators: { contains: employee.id } },
+          { collaborators: { contains: employee.fullName, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.mpoProjectRecord.findMany({
+      where: supervisesProjects ? {} : {
+        OR: [
+          { responsibleEmployeeId: employee.id },
+          { targetEmployeeId: employee.id },
+          { project: { OR: [{ responsibleMpoId: employee.id }, { ctoEmployeeId: employee.id }, { cooEmployeeId: employee.id }, { hrCfoEmployeeId: employee.id }, { scoEmployeeId: employee.id }, { ceoEmployeeId: employee.id }] } },
+        ],
+      },
+      include: { project: { select: { title: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.ctoTechnicalProject.findMany({
+      where: supervisesTechnology ? {} : {
+        OR: [
+          { responsibleCtoId: employee.id },
+          { technicalCollaborators: { contains: employee.id } },
+          { technicalCollaborators: { contains: employee.fullName, mode: "insensitive" } },
+          { mpoProject: { OR: [{ responsibleMpoId: employee.id }, { ctoEmployeeId: employee.id }, { scoEmployeeId: employee.id }, { ceoEmployeeId: employee.id }] } },
+        ],
+      },
+      include: { mpoProject: { select: { title: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.ctoTechnicalRecord.findMany({
+      where: supervisesTechnology ? {} : {
+        OR: [
+          { responsibleEmployeeId: employee.id },
+          { assigneeEmployeeId: employee.id },
+          { technicalProject: { OR: [{ responsibleCtoId: employee.id }, { technicalCollaborators: { contains: employee.id } }, { technicalCollaborators: { contains: employee.fullName, mode: "insensitive" } }] } },
+        ],
+      },
+      include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } },
+      orderBy: { updatedAt: "desc" },
       take: 80,
     }),
     prisma.hrcfoEmployee.findMany({
@@ -329,6 +429,119 @@ export default async function ActivitiesPage() {
         })),
       ],
     },
+    ...((isSco || isCeo || isCoo) ? [{
+      id: "sco",
+      title: "Activités SCO",
+      description: "Suivez les achats, fournisseurs, stocks, actifs, équipements et missions logistiques qui vous concernent.",
+      items: [
+        ...scoPurchaseRequests.map((request) => ({
+          id: request.id,
+          entityType: "SCO_PURCHASE_REQUEST" as const,
+          title: request.title,
+          status: request.status,
+          detail: [request.requesterName, request.requesterDepartmentName, request.sourceSection, request.neededBy ? formatDate(request.neededBy) : ""].filter(Boolean).join(" · "),
+          body: request.notes || request.justification,
+          date: toIso(request.neededBy || request.updatedAt),
+          priority: request.urgency,
+        })),
+        ...scoVendors.map((vendor) => ({
+          id: vendor.id,
+          entityType: "SCO_VENDOR" as const,
+          title: vendor.name,
+          status: vendor.status,
+          detail: [formatEnumLabel(vendor.vendorType || ""), vendor.category, `${vendor.avgLeadTimeDays} j`].filter(Boolean).join(" · "),
+          body: vendor.notes || vendor.productsServices,
+          date: toIso(vendor.updatedAt),
+          priority: vendor.criticality,
+        })),
+        ...scoInventory.map((item) => ({
+          id: item.id,
+          entityType: "SCO_INVENTORY" as const,
+          title: item.name,
+          status: item.status,
+          detail: [`${item.quantity} ${item.unit}`, item.location, item.ownerName].filter(Boolean).join(" · "),
+          body: item.notes,
+          date: toIso(item.updatedAt),
+          priority: item.status === "OUT_OF_STOCK" ? "CRITICAL" : item.status === "LOW_STOCK" ? "HIGH" : "NORMAL",
+        })),
+        ...scoAssets.map((asset) => ({
+          id: asset.id,
+          entityType: "SCO_ASSET" as const,
+          title: `${asset.tag} · ${asset.name}`,
+          status: asset.status,
+          detail: [asset.category, asset.assignedTo, asset.departmentName].filter(Boolean).join(" · "),
+          body: asset.notes || asset.maintenanceHistory || asset.assignmentHistory,
+          date: toIso(asset.updatedAt),
+          priority: asset.status === "LOST" || asset.status === "DAMAGED" ? "CRITICAL" : "NORMAL",
+        })),
+        ...scoLogistics.map((mission) => ({
+          id: mission.id,
+          entityType: "SCO_LOGISTICS" as const,
+          title: mission.title,
+          status: mission.status,
+          detail: [formatEnumLabel(mission.missionType || ""), mission.location, mission.eventDate ? formatDate(mission.eventDate) : "", mission.ownerName].filter(Boolean).join(" · "),
+          body: mission.notes || mission.logisticsNeeds || mission.requiredMaterial,
+          date: toIso(mission.eventDate || mission.updatedAt),
+          priority: mission.status === "WAITING_MATERIAL" || mission.status === "WAITING_BUDGET" ? "HIGH" : "NORMAL",
+        })),
+      ],
+    }] : []),
+    ...((isMpo || isCeo || isCoo || isCto || isSco) ? [{
+      id: "mpo-projects",
+      title: "Projets MPO",
+      description: "Consultez les projets, cahiers de charges, livrables, risques et demandes projet où vous êtes impliqué.",
+      items: [
+        ...mpoProjects.map((project) => ({
+          id: project.id,
+          entityType: "MPO_PROJECT" as const,
+          title: project.title,
+          status: project.status,
+          detail: [formatEnumLabel(project.projectType), project.requester, project.dueDate ? formatDate(project.dueDate) : ""].filter(Boolean).join(" · "),
+          body: project.comments || project.needDescription || project.expectedDeliverables,
+          date: toIso(project.dueDate || project.updatedAt),
+          priority: project.priority,
+        })),
+        ...mpoRecords.map((record) => ({
+          id: record.id,
+          entityType: "MPO_RECORD" as const,
+          title: record.title,
+          status: record.status,
+          detail: [formatEnumLabel(record.recordType), record.project?.title, record.dueDate ? formatDate(record.dueDate) : ""].filter(Boolean).join(" · "),
+          body: record.notes || record.description || record.content,
+          date: toIso(record.dueDate || record.updatedAt),
+          priority: record.priority,
+          progress: record.progress,
+        })),
+      ],
+    }] : []),
+    ...((isCto || isCeo || isCoo || isMpo || isSco) ? [{
+      id: "cto-tech",
+      title: "Technologie CTO",
+      description: "Suivez les projets techniques, tâches, bugs, incidents, déploiements, APIs, documentation et besoins matériels techniques.",
+      items: [
+        ...ctoProjects.map((project) => ({
+          id: project.id,
+          entityType: "CTO_PROJECT" as const,
+          title: project.title,
+          status: project.status,
+          detail: [formatEnumLabel(project.solutionType), project.mpoProject?.title, project.environment, project.dueDate ? formatDate(project.dueDate) : ""].filter(Boolean).join(" · "),
+          body: project.comments || project.technicalObjective || project.functionalSummary,
+          date: toIso(project.dueDate || project.updatedAt),
+          priority: project.priority,
+        })),
+        ...ctoRecords.map((record) => ({
+          id: record.id,
+          entityType: "CTO_RECORD" as const,
+          title: record.title,
+          status: record.status,
+          detail: [formatEnumLabel(record.recordType), record.technicalProject?.title, record.environment, record.dueDate ? formatDate(record.dueDate) : ""].filter(Boolean).join(" · "),
+          body: record.notes || record.description || record.content,
+          date: toIso(record.dueDate || record.updatedAt),
+          priority: record.priority,
+          progress: record.progress,
+        })),
+      ],
+    }] : []),
     {
       id: "workflows",
       title: "Workflows partagés",

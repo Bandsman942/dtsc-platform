@@ -17,8 +17,8 @@ export const defaultDtscPositions = [
   { id: "pos-ceo", title: "CEO", code: "CEO", hierarchyLevel: 1, permissions: "CEO_SUPERVISION", description: "Direction générale, supervision stratégique et arbitrage exécutif." },
   { id: "pos-coo", title: "COO", code: "COO", hierarchyLevel: 2, permissions: "COO_OPERATIONS", description: "Pilotage opérationnel, coordination interne, tâches, workflows et blocages." },
   { id: "pos-cto", title: "CTO", code: "CTO", hierarchyLevel: 3, permissions: "CTO_TECH", description: "Direction technique, architecture, cybersécurité et delivery technologique." },
-  { id: "pos-sco", title: "SCO", code: "SCO", hierarchyLevel: 3, permissions: "SCO_OPERATIONS", description: "Gestion commerciale, fournisseurs, achats, stocks, actifs et logistique." },
-  { id: "pos-mpo", title: "MPO", code: "MPO", hierarchyLevel: 4, permissions: "MPO_MARKETING", description: "Marketing, production de contenus, communication et performance digitale." },
+  { id: "pos-sco", title: "SCO", code: "SCO", hierarchyLevel: 3, permissions: "SCO_SUPPLY_CHAIN", description: "Supply Chain Officer: achats, fournisseurs, stocks, inventaires, matériels et logistique." },
+  { id: "pos-mpo", title: "MPO", code: "MPO", hierarchyLevel: 4, permissions: "MPO_PROJECTS", description: "Management & Projects Officer: portefeuille projets, cadrage, livrables, risques et coordination numérique." },
   { id: "pos-hr-cfo", title: "RH & CFO", code: "HR_CFO", hierarchyLevel: 3, permissions: "HR_CFO_FINANCE", description: "Ressources humaines, finances, budgets, transactions, paie et contrôle." },
   { id: "pos-hr-manager", title: "Responsable RH", code: "HR_MANAGER", hierarchyLevel: 5, permissions: "HR_MANAGEMENT", description: "Suivi administratif RH, conformité et dossiers collaborateurs." },
   { id: "pos-finance-manager", title: "Responsable Finance", code: "FINANCE_MANAGER", hierarchyLevel: 5, permissions: "FINANCE_MANAGEMENT", description: "Suivi financier, paiements, budgets et contrôle interne." },
@@ -93,22 +93,22 @@ export async function canAccessAdminBlockByPosition(userId: string, role: UserRo
   const context = await getCollaboratorBusinessContext(userId);
   const position = context.positionCode;
   if (position === "CEO") {
-    return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "activity" || blockId === "audits";
+    return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "audits";
   }
   if (position === "COO") {
-    return blockId === "coo" || blockId === "activity" || blockId === "overview";
+    return blockId === "coo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
   }
   if (position === "HR_CFO" || position === "HR_MANAGER" || position === "FINANCE_MANAGER") {
-    return blockId === "hrCfo" || blockId === "activity" || blockId === "overview" || blockId === "audits";
+    return blockId === "hrCfo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview" || blockId === "audits";
   }
-  if (position === "SCO" || position === "COMMERCIAL_MANAGER") {
-    return blockId === "sco" || blockId === "activity" || blockId === "overview";
+  if (position === "SCO") {
+    return blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
   }
   if (position === "CTO") {
-    return blockId === "coo" || blockId === "activity" || blockId === "overview";
+    return blockId === "cto" || blockId === "mpo" || blockId === "coo" || blockId === "activity" || blockId === "overview";
   }
-  if (position === "MPO" || position === "MARKETING_MANAGER") {
-    return blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
+  if (position === "MPO") {
+    return blockId === "mpo" || blockId === "cto" || blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
   }
   return false;
 }

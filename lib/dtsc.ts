@@ -52,9 +52,9 @@ export const dtsc = {
         "Sécurise les contrats, accompagne la conformité, protège les intérêts juridiques et réduit les risques administratifs.",
     },
     {
-      title: "Medical Projects Officer — MPO",
+      title: "Management & Projects Officer — MPO",
       mission:
-        "Cadre les projets santé, garantit la cohérence médicale et relie les besoins cliniques, pharmaceutiques et assurantiels aux solutions numériques.",
+        "Pilote le portefeuille des projets numériques, cadre les besoins, suit les cahiers de charges, livrables, risques et coordinations avec CTO, COO, HR & CFO, SCO et CEO.",
     },
     {
       title: "Supply Chain Officer — SCO",

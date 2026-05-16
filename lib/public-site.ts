@@ -289,7 +289,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
         heading: "Organisation fonctionnelle",
         text:
           "DTSC est structurée autour de rôles complémentaires: direction générale, opérations, technologie, finances et ressources humaines, juridique, projets médicaux et supply chain. Cette organisation permet de couvrir à la fois la stratégie, l'exécution, la conformité, la qualité métier et la logistique.",
-        bullets: ["CEO", "COO", "CTO", "HR & CFO", "Legal Advisor", "Medical Projects Officer", "Supply Chain Officer"],
+        bullets: ["CEO", "COO", "CTO", "HR & CFO", "Legal Advisor", "Management & Projects Officer", "Supply Chain Officer"],
       },
       {
         heading: "Roadmap et croissance",

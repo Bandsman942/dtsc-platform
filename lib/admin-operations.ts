@@ -15,11 +15,11 @@ const ceoStatus = {
 };
 
 const scoStatus = {
-  vendors: ["ACTIVE", "WATCHLIST", "SUSPENDED", "ARCHIVED"],
-  purchaseRequests: ["DRAFT", "SUBMITTED", "APPROVED", "ORDERED", "RECEIVED", "REJECTED", "CANCELED"],
+  vendors: ["ACTIVE", "WATCHLIST", "SUSPENDED", "ARCHIVED", "BLACKLISTED"],
+  purchaseRequests: ["DRAFT", "SUBMITTED", "SCO_REVIEW", "WAITING_BUDGET", "WAITING_HR_CFO_VALIDATION", "WAITING_CEO_VALIDATION", "APPROVED", "ORDERED", "RECEIVED", "REJECTED", "CANCELED"],
   inventory: ["AVAILABLE", "LOW_STOCK", "RESERVED", "OUT_OF_STOCK", "ARCHIVED"],
-  assets: ["ASSIGNED", "AVAILABLE", "MAINTENANCE", "LOST", "RETIRED"],
-  logistics: ["PLANNED", "READY", "IN_PROGRESS", "COMPLETED", "BLOCKED", "CANCELED"],
+  assets: ["ASSIGNED", "AVAILABLE", "MAINTENANCE", "DAMAGED", "LOST", "RETURNED", "RETIRED"],
+  logistics: ["PLANNED", "PREPARING", "WAITING_MATERIAL", "WAITING_BUDGET", "READY", "IN_PROGRESS", "COMPLETED", "CANCELED"],
 };
 
 const cooStatus = {
@@ -31,6 +31,16 @@ const cooStatus = {
   meetings: ["PLANNED", "HELD", "POSTPONED", "CANCELED"],
   workflows: ["DRAFT", "ACTIVE", "IN_PROGRESS", "COMPLETED", "BLOCKED", "ARCHIVED"],
   reports: ["DRAFT", "PUBLISHED", "ARCHIVED"],
+};
+
+const mpoStatus = {
+  projects: ["DRAFT", "SCOPING", "INTERNAL_VALIDATION", "WAITING_CTO", "WAITING_BUDGET", "WAITING_SCO_RESOURCES", "DEVELOPMENT", "TESTING", "WAITING_CLIENT", "BLOCKED", "DELIVERED", "CLOSED", "CANCELED"],
+  records: ["DRAFT", "IN_PROGRESS", "SUBMITTED", "WAITING", "VALIDATED", "DELIVERED", "BLOCKED", "ARCHIVED", "CANCELED"],
+};
+
+const ctoStatus = {
+  projects: ["DRAFT", "TECH_ANALYSIS", "WAITING_MPO", "WAITING_BUDGET", "WAITING_MATERIAL", "DEVELOPMENT", "REVIEW", "TESTING", "PREPRODUCTION", "PRODUCTION", "BLOCKED", "DELIVERED", "CLOSED", "CANCELED"],
+  records: ["DRAFT", "OPEN", "ANALYSIS", "IN_PROGRESS", "REVIEW", "TESTING", "RESOLVED", "VALIDATED", "BLOCKED", "ARCHIVED", "CANCELED"],
 };
 
 function statusOptions(values: string[]) {
@@ -307,6 +317,11 @@ export function buildScoDatasets(data: {
   inventory: Array<Record<string, unknown>>;
   assets: Array<Record<string, unknown>>;
   logistics: Array<Record<string, unknown>>;
+  departments?: Array<Record<string, unknown>>;
+  budgets?: Array<Record<string, unknown>>;
+  mpoProjects?: Array<Record<string, unknown>>;
+  ctoProjects?: Array<Record<string, unknown>>;
+  cooTasks?: Array<Record<string, unknown>>;
 }): OperationDataset[] {
   const activeVendorOptions = data.vendors
     .filter((vendor) => stringOf(vendor.status) === "ACTIVE" || stringOf(vendor.status) === "WATCHLIST")
@@ -317,6 +332,15 @@ export function buildScoDatasets(data: {
   const employeeNameOptions = data.employees
     .filter((employee) => stringOf(employee.status) !== "EXITED")
     .map((employee) => option(employee.fullName, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
+  const departmentOptions = (data.departments || [])
+    .filter((department) => stringOf(department.status) === "ACTIVE")
+    .map((department) => option(department.id, stringOf(department.name)));
+  const budgetOptions = (data.budgets || [])
+    .filter((budget) => stringOf(budget.status) !== "CLOSED")
+    .map((budget) => option(budget.id, `${stringOf(budget.name)} · ${stringOf(budget.ownerDepartment)}`));
+  const mpoProjectOptions = (data.mpoProjects || []).map((project) => option(project.id, `${stringOf(project.title)} · ${formatEnumLabel(stringOf(project.status))}`));
+  const ctoProjectOptions = (data.ctoProjects || []).map((project) => option(project.id, `${stringOf(project.title)} · ${formatEnumLabel(stringOf(project.status))}`));
+  const cooTaskOptions = (data.cooTasks || []).map((task) => option(task.id, `${stringOf(task.title)} · ${formatEnumLabel(stringOf(task.status))}`));
 
   return [
     {
@@ -330,8 +354,19 @@ export function buildScoDatasets(data: {
         { name: "category", label: "Catégorie", type: "text", required: true },
         selectField("itemType", "Type de bien", ["STOCK", "ASSET", "EQUIPMENT", "CONSUMABLE", "SERVICE_TOOL"]),
         { name: "unit", label: "Unité", type: "text", placeholder: "unité" },
+        { name: "quantity", label: "Quantité", type: "number" },
+        selectField("condition", "État", ["AVAILABLE", "ASSIGNED", "MAINTENANCE", "LOST", "DAMAGED", "RETIRED", "ARCHIVED"]),
+        { name: "location", label: "Localisation", type: "text" },
+        { name: "currentOwnerName", label: "Responsable actuel", type: "select", options: employeeNameOptions },
+        { name: "departmentId", label: "Département utilisateur", type: "select", options: departmentOptions },
+        { name: "relatedProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        { name: "relatedTechnicalProjectId", label: "Projet CTO lié", type: "select", options: ctoProjectOptions },
+        { name: "vendorName", label: "Fournisseur d'origine", type: "select", options: activeVendorOptions },
+        { name: "acquiredAt", label: "Date d'acquisition", type: "date" },
+        { name: "estimatedValue", label: "Valeur estimée", type: "number" },
         selectField("status", "Statut", ["ACTIVE", "INACTIVE", "ARCHIVED"]),
         { name: "description", label: "Description", type: "textarea" },
+        { name: "comments", label: "Commentaires", type: "textarea" },
       ],
       statusOptions: statusOptions(["ACTIVE", "INACTIVE", "ARCHIVED"]),
       records: data.materialItems.map((item) => ({
@@ -341,8 +376,8 @@ export function buildScoDatasets(data: {
         status: stringOf(item.status),
         notes: stringOrNull(item.description),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([stringOf(item.sku), `Unité: ${stringOf(item.unit)}`]),
-        values: fieldValues(item, ["name", "sku", "category", "itemType", "unit", "status", "description"]),
+        meta: compactStrings([stringOf(item.sku), `Qté: ${stringOf(item.quantity) || "0"} ${stringOf(item.unit)}`, stringOf(item.location), stringOf(item.currentOwnerName), stringOf(item.vendorName)]),
+        values: fieldValues(item, ["name", "sku", "category", "itemType", "unit", "quantity", "condition", "location", "currentOwnerName", "departmentId", "relatedProjectId", "relatedTechnicalProjectId", "vendorName", "acquiredAt", "estimatedValue", "status", "description", "comments"]),
       })),
     },
     {
@@ -353,10 +388,16 @@ export function buildScoDatasets(data: {
       fields: [
         { name: "name", label: "Fournisseur", type: "text", required: true },
         { name: "category", label: "Catégorie", type: "text", required: true },
+        selectField("vendorType", "Type fournisseur", ["IT_HARDWARE", "OFFICE_SUPPLIES", "CLOUD_SERVICES", "NETWORK_EQUIPMENT", "LOGISTICS", "TRANSPORT", "PRINTING", "MAINTENANCE", "TECHNICAL_PROVIDER", "OTHER"]),
         { name: "contactName", label: "Contact", type: "text" },
         { name: "email", label: "Email", type: "email" },
         { name: "phone", label: "Téléphone", type: "text" },
+        { name: "address", label: "Adresse", type: "text" },
+        { name: "productsServices", label: "Produits ou services fournis", type: "textarea" },
+        selectField("serviceQuality", "Qualité du service", ["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
         { name: "paymentTerms", label: "Conditions paiement", type: "text" },
+        { name: "documentUrl", label: "Documents associés", type: "file" },
+        selectField("criticality", "Criticité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
         { name: "reliabilityScore", label: "Score fiabilité", type: "number" },
         { name: "avgLeadTimeDays", label: "Délai moyen jours", type: "number" },
         selectField("status", "Statut", scoStatus.vendors),
@@ -370,8 +411,8 @@ export function buildScoDatasets(data: {
         status: stringOf(item.status),
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([`Score: ${stringOf(item.reliabilityScore)}/100`, `${stringOf(item.avgLeadTimeDays)} j`, stringOf(item.contactName)]),
-        values: fieldValues(item, ["name", "category", "contactName", "email", "phone", "paymentTerms", "reliabilityScore", "avgLeadTimeDays", "status", "notes"]),
+        meta: compactStrings([formatEnumLabel(stringOf(item.vendorType)), `Score: ${stringOf(item.reliabilityScore)}/100`, `${stringOf(item.avgLeadTimeDays)} j`, stringOf(item.contactName), formatEnumLabel(stringOf(item.criticality))]),
+        values: fieldValues(item, ["name", "category", "vendorType", "contactName", "email", "phone", "address", "productsServices", "serviceQuality", "paymentTerms", "documentUrl", "criticality", "reliabilityScore", "avgLeadTimeDays", "status", "notes"]),
       })),
     },
     {
@@ -382,14 +423,28 @@ export function buildScoDatasets(data: {
       fields: [
         { name: "title", label: "Besoin", type: "text", required: true },
         { name: "requesterName", label: "Demandeur", type: "select", required: true, options: employeeNameOptions },
+        { name: "requesterDepartmentId", label: "Département demandeur", type: "select", options: departmentOptions },
+        selectField("sourceSection", "Section source", ["SCO", "HR_CFO", "COO", "CTO", "MPO", "CEO", "ACTIVITIES"]),
+        { name: "sourceItemId", label: "ID objet source", type: "text" },
+        { name: "destinationSection", label: "Destination", type: "text", placeholder: "HR_CFO, CEO, COO..." },
         { name: "project", label: "Projet/mission", type: "text" },
-        selectField("urgency", "Urgence", ["LOW", "MEDIUM", "HIGH", "URGENT"]),
+        { name: "relatedProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        { name: "relatedBudgetId", label: "Budget HR & CFO lié", type: "select", options: budgetOptions },
+        { name: "relatedAssetId", label: "Actif lié", type: "select", options: data.assets.map((asset) => option(asset.id, `${stringOf(asset.tag)} · ${stringOf(asset.name)}`)) },
+        { name: "relatedTaskId", label: "Tâche COO liée", type: "select", options: cooTaskOptions },
+        { name: "relatedMissionId", label: "Mission liée", type: "select", options: data.logistics.map((mission) => option(mission.id, stringOf(mission.title))) },
+        { name: "requestedItemName", label: "Bien demandé", type: "text" },
+        { name: "requestedQuantity", label: "Quantité", type: "number" },
+        selectField("urgency", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
         { name: "estimatedAmount", label: "Montant estimé", type: "number" },
         { name: "currency", label: "Devise", type: "text", placeholder: "USD" },
         selectField("status", "Statut", scoStatus.purchaseRequests),
         selectField("budgetStatus", "Budget", ["PENDING_REVIEW", "AVAILABLE", "INSUFFICIENT", "APPROVED"]),
         { name: "selectedVendorName", label: "Fournisseur retenu", type: "select", options: activeVendorOptions, helperText: "Liste issue du formulaire Fournisseurs." },
+        { name: "proposedVendorName", label: "Fournisseur proposé", type: "select", options: activeVendorOptions },
+        { name: "requestedAt", label: "Date de demande", type: "date" },
         { name: "neededBy", label: "Besoin avant", type: "date" },
+        { name: "attachmentUrl", label: "Justificatif", type: "file" },
         { name: "justification", label: "Justification", type: "textarea", required: true },
         { name: "notes", label: "Notes", type: "textarea" },
       ],
@@ -403,8 +458,8 @@ export function buildScoDatasets(data: {
         currency: stringOf(item.currency) || "USD",
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([formatEnumLabel(stringOf(item.urgency)), `Budget: ${formatEnumLabel(stringOf(item.budgetStatus))}`, stringOf(item.selectedVendorName), formatDate(item.neededBy)]),
-        values: fieldValues(item, ["title", "requesterName", "project", "urgency", "estimatedAmount", "currency", "status", "budgetStatus", "selectedVendorName", "neededBy", "justification", "notes"]),
+        meta: compactStrings([formatEnumLabel(stringOf(item.urgency)), `Budget: ${formatEnumLabel(stringOf(item.budgetStatus))}`, stringOf(item.selectedVendorName), stringOf(item.sourceSection), formatDate(item.neededBy)]),
+        values: fieldValues(item, ["title", "requesterName", "requesterDepartmentId", "sourceSection", "sourceItemId", "destinationSection", "project", "relatedProjectId", "relatedBudgetId", "relatedAssetId", "relatedTaskId", "relatedMissionId", "requestedItemName", "requestedQuantity", "urgency", "estimatedAmount", "currency", "status", "budgetStatus", "selectedVendorName", "proposedVendorName", "requestedAt", "neededBy", "attachmentUrl", "justification", "notes"]),
       })),
     },
     {
@@ -421,7 +476,14 @@ export function buildScoDatasets(data: {
         { name: "minimumQuantity", label: "Seuil minimum", type: "number" },
         { name: "unit", label: "Unité", type: "text" },
         { name: "location", label: "Emplacement", type: "text" },
+        { name: "usualVendorName", label: "Fournisseur habituel", type: "select", options: activeVendorOptions },
         { name: "ownerName", label: "Responsable", type: "select", options: employeeNameOptions },
+        { name: "lastEntryAt", label: "Dernière entrée", type: "date" },
+        { name: "lastExitAt", label: "Dernière sortie", type: "date" },
+        selectField("movementType", "Mouvement", ["STOCK_IN", "STOCK_OUT", "RETURN", "LOSS", "DAMAGE", "ADJUSTMENT"]),
+        { name: "relatedProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        { name: "relatedTaskId", label: "Tâche COO liée", type: "select", options: cooTaskOptions },
+        { name: "relatedMissionId", label: "Mission liée", type: "select", options: data.logistics.map((mission) => option(mission.id, stringOf(mission.title))) },
         selectField("status", "Statut", scoStatus.inventory),
         { name: "lastInventoryAt", label: "Dernier inventaire", type: "date" },
         { name: "notes", label: "Notes", type: "textarea" },
@@ -434,8 +496,8 @@ export function buildScoDatasets(data: {
         status: stringOf(item.status),
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([`Qté: ${stringOf(item.quantity)} ${stringOf(item.unit)}`, `Seuil: ${stringOf(item.minimumQuantity)}`, stringOf(item.ownerName)]),
-        values: fieldValues(item, ["materialItemId", "name", "sku", "category", "quantity", "minimumQuantity", "unit", "location", "ownerName", "status", "lastInventoryAt", "notes"]),
+        meta: compactStrings([`Qté: ${stringOf(item.quantity)} ${stringOf(item.unit)}`, `Seuil: ${stringOf(item.minimumQuantity)}`, stringOf(item.ownerName), stringOf(item.usualVendorName), formatEnumLabel(stringOf(item.movementType))]),
+        values: fieldValues(item, ["materialItemId", "name", "sku", "category", "quantity", "minimumQuantity", "unit", "location", "usualVendorName", "ownerName", "lastEntryAt", "lastExitAt", "movementType", "relatedProjectId", "relatedTaskId", "relatedMissionId", "status", "lastInventoryAt", "notes"]),
       })),
     },
     {
@@ -448,11 +510,21 @@ export function buildScoDatasets(data: {
         { name: "tag", label: "Tag", type: "text", required: true },
         { name: "name", label: "Équipement", type: "text", required: true },
         { name: "category", label: "Catégorie", type: "text", required: true },
+        { name: "brandModel", label: "Marque / modèle", type: "text" },
+        { name: "serialNumber", label: "Numéro de série", type: "text" },
+        { name: "estimatedValue", label: "Valeur estimée", type: "number" },
+        { name: "vendorName", label: "Fournisseur", type: "select", options: activeVendorOptions },
         { name: "assignedTo", label: "Assigné à", type: "select", options: employeeNameOptions },
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "relatedProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        { name: "relatedTechnicalProjectId", label: "Projet CTO lié", type: "select", options: ctoProjectOptions },
+        { name: "purchaseRequestId", label: "Demande d'achat liée", type: "select", options: data.purchaseRequests.map((request) => option(request.id, stringOf(request.title))) },
         selectField("condition", "État", ["NEW", "GOOD", "FAIR", "DAMAGED", "REPAIR"]),
         selectField("status", "Statut", scoStatus.assets),
         { name: "purchaseDate", label: "Date achat", type: "date" },
         { name: "maintenanceDueAt", label: "Maintenance prévue", type: "date" },
+        { name: "assignmentHistory", label: "Historique d'affectation", type: "textarea" },
+        { name: "maintenanceHistory", label: "Historique maintenance", type: "textarea" },
         { name: "notes", label: "Notes", type: "textarea" },
       ],
       statusOptions: statusOptions(scoStatus.assets),
@@ -463,8 +535,8 @@ export function buildScoDatasets(data: {
         status: stringOf(item.status),
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([`État: ${formatEnumLabel(stringOf(item.condition))}`, stringOf(item.assignedTo), formatDate(item.maintenanceDueAt)]),
-        values: fieldValues(item, ["materialItemId", "tag", "name", "category", "assignedTo", "condition", "status", "purchaseDate", "maintenanceDueAt", "notes"]),
+        meta: compactStrings([`État: ${formatEnumLabel(stringOf(item.condition))}`, stringOf(item.assignedTo), stringOf(item.vendorName), stringOf(item.departmentName), formatDate(item.maintenanceDueAt)]),
+        values: fieldValues(item, ["materialItemId", "tag", "name", "category", "brandModel", "serialNumber", "estimatedValue", "vendorName", "assignedTo", "departmentId", "relatedProjectId", "relatedTechnicalProjectId", "purchaseRequestId", "condition", "status", "purchaseDate", "maintenanceDueAt", "assignmentHistory", "maintenanceHistory", "notes"]),
       })),
     },
     {
@@ -474,8 +546,18 @@ export function buildScoDatasets(data: {
       endpoint: "/api/admin/sco/logistics",
       fields: [
         { name: "title", label: "Mission/événement", type: "text", required: true },
+        selectField("missionType", "Type de mission", ["CLIENT_MISSION", "TRAINING", "EVENT", "TECHNICAL_INTERVENTION", "EXTERNAL_MEETING", "DELIVERY", "INSTALLATION", "FIELD_SUPPORT", "PROJECT_PRESENTATION", "OTHER"]),
         { name: "location", label: "Lieu", type: "text", required: true },
         { name: "eventDate", label: "Date", type: "date" },
+        { name: "requesterName", label: "Demandeur", type: "select", options: employeeNameOptions },
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "relatedProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        { name: "relatedTechnicalProjectId", label: "Projet CTO lié", type: "select", options: ctoProjectOptions },
+        { name: "relatedTaskId", label: "Tâche COO liée", type: "select", options: cooTaskOptions },
+        { name: "participants", label: "Participants", type: "textarea" },
+        { name: "logisticsNeeds", label: "Besoins logistiques", type: "textarea" },
+        { name: "requiredMaterial", label: "Matériel nécessaire", type: "textarea" },
+        { name: "estimatedBudget", label: "Budget estimé", type: "number" },
         { name: "ownerName", label: "Responsable", type: "select", required: true, options: employeeNameOptions },
         selectField("status", "Statut", scoStatus.logistics),
         { name: "transportPlan", label: "Transport", type: "textarea" },
@@ -491,8 +573,215 @@ export function buildScoDatasets(data: {
         status: stringOf(item.status),
         notes: stringOrNull(item.notes),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([formatDate(item.eventDate), stringOf(item.transportPlan) ? "Transport cadré" : "", stringOf(item.equipmentChecklist) ? "Checklist prête" : ""]),
-        values: fieldValues(item, ["title", "location", "eventDate", "ownerName", "status", "transportPlan", "equipmentChecklist", "riskNotes", "notes"]),
+        meta: compactStrings([formatEnumLabel(stringOf(item.missionType)), formatDate(item.eventDate), stringOf(item.departmentName), stringOf(item.transportPlan) ? "Transport cadré" : "", stringOf(item.equipmentChecklist) ? "Checklist prête" : ""]),
+        values: fieldValues(item, ["title", "missionType", "location", "eventDate", "requesterName", "departmentId", "relatedProjectId", "relatedTechnicalProjectId", "relatedTaskId", "participants", "logisticsNeeds", "requiredMaterial", "estimatedBudget", "ownerName", "status", "transportPlan", "equipmentChecklist", "riskNotes", "notes"]),
+      })),
+    },
+  ];
+}
+
+export function buildMpoDatasets(data: {
+  projects: Array<Record<string, unknown>>;
+  records: Array<Record<string, unknown>>;
+  departments: Array<Record<string, unknown>>;
+  employees: Array<Record<string, unknown>>;
+}): OperationDataset[] {
+  const departmentOptions = data.departments
+    .filter((department) => stringOf(department.status) === "ACTIVE")
+    .map((department) => option(department.id, stringOf(department.name)));
+  const employeeOptions = data.employees
+    .filter((employee) => stringOf(employee.status) !== "EXITED")
+    .map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
+  const projectOptions = data.projects.map((project) => option(project.id, `${stringOf(project.title)} · ${formatEnumLabel(stringOf(project.status))}`));
+
+  return [
+    {
+      id: "projects",
+      label: "Portefeuille de projets",
+      description: "Projets numériques DTSC: cadrage, responsables, CTO/COO/RH & CFO/SCO impliqués, risques, budget et livrables.",
+      endpoint: "/api/admin/mpo/projects",
+      fields: [
+        { name: "title", label: "Titre du projet", type: "text", required: true },
+        selectField("projectType", "Type de projet", ["WEB_APP", "MOBILE_APP", "SAAS_PLATFORM", "BI_DASHBOARD", "DATA_PROJECT", "AI_PROJECT", "AUTOMATION", "CHATBOT", "ERP", "CRM", "CLIENT_PORTAL", "DIGITAL_HEALTH", "INTERNAL_DTSC", "CLIENT_PROJECT", "DIGITAL_TRANSFORMATION", "OTHER"]),
+        { name: "requester", label: "Client ou département demandeur", type: "text" },
+        { name: "responsibleMpoId", label: "Responsable MPO", type: "select", options: employeeOptions },
+        { name: "ctoEmployeeId", label: "CTO impliqué", type: "select", options: employeeOptions },
+        { name: "cooEmployeeId", label: "COO impliqué", type: "select", options: employeeOptions },
+        { name: "hrCfoEmployeeId", label: "RH & CFO impliqué", type: "select", options: employeeOptions },
+        { name: "scoEmployeeId", label: "SCO impliqué", type: "select", options: employeeOptions },
+        { name: "ceoEmployeeId", label: "CEO impliqué", type: "select", options: employeeOptions },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        selectField("complexity", "Complexité", ["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+        selectField("riskLevel", "Niveau de risque", ["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+        { name: "estimatedBudget", label: "Budget estimé", type: "number" },
+        selectField("status", "Statut", mpoStatus.projects),
+        { name: "startDate", label: "Début", type: "date" },
+        { name: "dueDate", label: "Échéance", type: "date" },
+        { name: "needDescription", label: "Description du besoin", type: "textarea" },
+        { name: "businessObjective", label: "Objectif business", type: "textarea" },
+        { name: "technicalObjective", label: "Objectif technique", type: "textarea" },
+        { name: "collaborators", label: "Collaborateurs impliqués", type: "textarea" },
+        { name: "expectedDeliverables", label: "Livrables attendus", type: "textarea" },
+        { name: "associatedDocuments", label: "Documents associés", type: "textarea" },
+        { name: "healthDigitalCategory", label: "Catégorie santé digitale", type: "text" },
+        { name: "healthObjective", label: "Objectif médical", type: "textarea" },
+        { name: "medicalDataConcerned", label: "Données médicales concernées", type: "textarea" },
+        { name: "medicalRisk", label: "Risque médical", type: "textarea" },
+        { name: "confidentialityConstraint", label: "Contrainte confidentialité", type: "textarea" },
+        { name: "healthValidation", label: "Validation métier santé", type: "textarea" },
+        { name: "ethicalCompliance", label: "Conformité éthique", type: "textarea" },
+        { name: "comments", label: "Commentaires", type: "textarea" },
+      ],
+      statusOptions: statusOptions(mpoStatus.projects),
+      records: data.projects.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.projectType))} · ${stringOf(item.requester)}`,
+        status: stringOf(item.status),
+        amount: numberOf(item.estimatedBudget),
+        currency: "USD",
+        notes: stringOrNull(item.comments || item.needDescription),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), `Risque: ${formatEnumLabel(stringOf(item.riskLevel))}`, stringOf(item.responsibleMpoName), stringOf(item.ctoEmployeeName), formatDate(item.dueDate)]),
+        values: fieldValues(item, ["title", "projectType", "requester", "needDescription", "businessObjective", "technicalObjective", "responsibleMpoId", "ctoEmployeeId", "cooEmployeeId", "hrCfoEmployeeId", "scoEmployeeId", "ceoEmployeeId", "collaborators", "priority", "complexity", "riskLevel", "estimatedBudget", "status", "startDate", "dueDate", "expectedDeliverables", "associatedDocuments", "healthDigitalCategory", "healthObjective", "medicalDataConcerned", "medicalRisk", "confidentialityConstraint", "healthValidation", "ethicalCompliance", "comments"]),
+      })),
+    },
+    {
+      id: "records",
+      label: "Registres MPO",
+      description: "Cadrage, cahiers de charges, livrables, risques, rapports, workflows, documentation, besoins budgétaires et matériels.",
+      endpoint: "/api/admin/mpo/records",
+      fields: [
+        selectField("recordType", "Bloc MPO", ["NEEDS_ASSESSMENT", "SPECIFICATION", "DELIVERABLE", "RISK_BLOCKER", "CTO_COLLABORATION", "COO_COORDINATION", "BUDGET_REQUEST", "SCO_MATERIAL_REQUEST", "DIGITAL_HEALTH", "PROJECT_REPORT", "PROJECT_WORKFLOW", "PROJECT_DOCUMENTATION", "DIGITAL_OPPORTUNITY"]),
+        { name: "projectId", label: "Projet lié", type: "select", options: projectOptions },
+        { name: "title", label: "Titre", type: "text", required: true },
+        selectField("status", "Statut", mpoStatus.records),
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        { name: "category", label: "Catégorie", type: "text" },
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "responsibleEmployeeId", label: "Responsable", type: "select", options: employeeOptions },
+        { name: "targetEmployeeId", label: "Destinataire / collaborateur concerné", type: "select", options: employeeOptions },
+        { name: "amount", label: "Montant estimé", type: "number" },
+        { name: "startDate", label: "Début", type: "date" },
+        { name: "dueDate", label: "Échéance", type: "date" },
+        { name: "progress", label: "Progression %", type: "number" },
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "content", label: "Contenu détaillé", type: "textarea" },
+        { name: "attachmentUrl", label: "Document associé", type: "file" },
+        { name: "notes", label: "Notes", type: "textarea" },
+      ],
+      statusOptions: statusOptions(mpoStatus.records),
+      records: data.records.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.recordType))} · ${stringOf(item.projectTitle)}`,
+        status: stringOf(item.status),
+        amount: numberOf(item.amount),
+        currency: "USD",
+        notes: stringOrNull(item.notes || item.description || item.content),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), stringOf(item.responsibleName), stringOf(item.targetEmployeeName), formatDate(item.dueDate)]),
+        values: fieldValues(item, ["recordType", "projectId", "title", "status", "priority", "category", "departmentId", "responsibleEmployeeId", "targetEmployeeId", "amount", "startDate", "dueDate", "progress", "description", "content", "attachmentUrl", "notes"]),
+      })),
+    },
+  ];
+}
+
+export function buildCtoDatasets(data: {
+  projects: Array<Record<string, unknown>>;
+  records: Array<Record<string, unknown>>;
+  mpoProjects: Array<Record<string, unknown>>;
+  departments: Array<Record<string, unknown>>;
+  employees: Array<Record<string, unknown>>;
+}): OperationDataset[] {
+  const departmentOptions = data.departments
+    .filter((department) => stringOf(department.status) === "ACTIVE")
+    .map((department) => option(department.id, stringOf(department.name)));
+  const employeeOptions = data.employees
+    .filter((employee) => stringOf(employee.status) !== "EXITED")
+    .map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
+  const mpoProjectOptions = data.mpoProjects.map((project) => option(project.id, `${stringOf(project.title)} · ${formatEnumLabel(stringOf(project.status))}`));
+  const technicalProjectOptions = data.projects.map((project) => option(project.id, `${stringOf(project.title)} · ${formatEnumLabel(stringOf(project.status))}`));
+
+  return [
+    {
+      id: "projects",
+      label: "Projets techniques",
+      description: "Projets transmis ou créés par le CTO: analyse, développement, tests, production, stack, dépôt et livrables techniques.",
+      endpoint: "/api/admin/cto/projects",
+      fields: [
+        { name: "title", label: "Titre du projet technique", type: "text", required: true },
+        { name: "mpoProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        selectField("solutionType", "Type de solution", ["WEB_APP", "MOBILE_APP", "API", "BACKEND", "FRONTEND", "BI_DASHBOARD", "AUTOMATION", "AI_ML", "CHATBOT", "DATABASE", "EXTERNAL_INTEGRATION", "INFRASTRUCTURE", "SECURITY", "OTHER"]),
+        { name: "responsibleCtoId", label: "Responsable CTO", type: "select", options: employeeOptions },
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        selectField("complexity", "Complexité", ["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+        selectField("riskLevel", "Risque technique", ["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+        selectField("status", "Statut", ctoStatus.projects),
+        selectField("environment", "Environnement", ["DEVELOPMENT", "TEST", "PREPRODUCTION", "PRODUCTION"]),
+        { name: "startDate", label: "Début", type: "date" },
+        { name: "dueDate", label: "Échéance", type: "date" },
+        { name: "repositoryUrl", label: "Dépôt GitHub / repo", type: "text" },
+        { name: "documentationUrl", label: "Documentation associée", type: "text" },
+        { name: "functionalSummary", label: "Résumé fonctionnel", type: "textarea" },
+        { name: "technicalObjective", label: "Objectif technique", type: "textarea" },
+        { name: "technicalCollaborators", label: "Collaborateurs techniques", type: "textarea" },
+        { name: "techStack", label: "Stack technique", type: "textarea" },
+        { name: "expectedTechnicalDeliverables", label: "Livrables techniques attendus", type: "textarea" },
+        { name: "comments", label: "Commentaires", type: "textarea" },
+      ],
+      statusOptions: statusOptions(ctoStatus.projects),
+      records: data.projects.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.solutionType))} · ${stringOf(item.mpoProjectTitle)}`,
+        status: stringOf(item.status),
+        notes: stringOrNull(item.comments || item.technicalObjective || item.functionalSummary),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), `Risque: ${formatEnumLabel(stringOf(item.riskLevel))}`, stringOf(item.responsibleCtoName), stringOf(item.environment), formatDate(item.dueDate)]),
+        values: fieldValues(item, ["title", "mpoProjectId", "solutionType", "functionalSummary", "technicalObjective", "responsibleCtoId", "technicalCollaborators", "priority", "complexity", "riskLevel", "techStack", "status", "startDate", "dueDate", "environment", "repositoryUrl", "documentationUrl", "expectedTechnicalDeliverables", "comments"]),
+      })),
+    },
+    {
+      id: "records",
+      label: "Registres CTO",
+      description: "Architecture, tâches techniques, APIs, bases de données, déploiements, sécurité, bugs, documentation, qualité et rapports CTO.",
+      endpoint: "/api/admin/cto/records",
+      fields: [
+        selectField("recordType", "Bloc CTO", ["ARCHITECTURE", "TECH_TASK", "API_INTEGRATION", "DATABASE_MODEL", "DEPLOYMENT", "SECURITY_REVIEW", "BUG_INCIDENT", "TECH_DOCUMENTATION", "QUALITY_REVIEW", "MPO_COLLABORATION", "COO_COORDINATION", "BUDGET_NEED", "SCO_MATERIAL_NEED", "INNOVATION", "CTO_REPORT"]),
+        { name: "technicalProjectId", label: "Projet technique lié", type: "select", options: technicalProjectOptions },
+        { name: "mpoProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
+        { name: "title", label: "Titre", type: "text", required: true },
+        selectField("status", "Statut", ctoStatus.records),
+        selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
+        { name: "category", label: "Catégorie", type: "text" },
+        { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
+        { name: "responsibleEmployeeId", label: "Responsable", type: "select", options: employeeOptions },
+        { name: "assigneeEmployeeId", label: "Assigné à", type: "select", options: employeeOptions },
+        { name: "provider", label: "Fournisseur / service", type: "text" },
+        selectField("environment", "Environnement", ["DEVELOPMENT", "TEST", "PREPRODUCTION", "PRODUCTION"]),
+        { name: "repositoryUrl", label: "Branche, PR ou repo", type: "text" },
+        { name: "amount", label: "Budget estimé", type: "number" },
+        { name: "startDate", label: "Début", type: "date" },
+        { name: "dueDate", label: "Échéance", type: "date" },
+        { name: "progress", label: "Progression %", type: "number" },
+        { name: "description", label: "Description", type: "textarea" },
+        { name: "content", label: "Contenu détaillé", type: "textarea" },
+        { name: "attachmentUrl", label: "Document / preuve", type: "file" },
+        { name: "notes", label: "Notes", type: "textarea" },
+      ],
+      statusOptions: statusOptions(ctoStatus.records),
+      records: data.records.map((item) => ({
+        id: stringOf(item.id),
+        title: stringOf(item.title),
+        subtitle: `${formatEnumLabel(stringOf(item.recordType))} · ${stringOf(item.technicalProjectTitle)}`,
+        status: stringOf(item.status),
+        amount: numberOf(item.amount),
+        currency: "USD",
+        notes: stringOrNull(item.notes || item.description || item.content),
+        createdAt: stringOf(item.createdAt),
+        meta: compactStrings([formatEnumLabel(stringOf(item.priority)), stringOf(item.responsibleName), stringOf(item.assigneeName), stringOf(item.environment), formatDate(item.dueDate)]),
+        values: fieldValues(item, ["recordType", "technicalProjectId", "mpoProjectId", "title", "status", "priority", "category", "departmentId", "responsibleEmployeeId", "assigneeEmployeeId", "provider", "environment", "repositoryUrl", "amount", "startDate", "dueDate", "progress", "description", "content", "attachmentUrl", "notes"]),
       })),
     },
   ];

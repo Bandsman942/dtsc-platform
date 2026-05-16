@@ -7,7 +7,7 @@ import { normalizePositionCode } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
 
 const commentSchema = z.object({
-  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION"]),
+  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD"]),
   entityId: z.string().min(5),
   content: z.string().min(2).max(2000),
 });
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     },
     include: { author: { select: { name: true, role: true, avatarUrl: true } } },
   });
-  await notifyEntityParticipants(user.id, parsed.data.entityType, parsed.data.entityId, "Nouveau commentaire COO", parsed.data.content);
+  await notifyEntityParticipants(user.id, parsed.data.entityType, parsed.data.entityId, "Nouveau commentaire DTSC", parsed.data.content);
   await writeApiLog({ request: req, statusCode: 201, userId: user.id, startedAt, metadata: { entityType: parsed.data.entityType, entityId: parsed.data.entityId } });
   return NextResponse.json({ ok: true, comment }, { status: 201 });
 }
@@ -79,6 +79,15 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   }
   const positionCode = normalizePositionCode(employee.position?.code || employee.positionCode || employee.jobTitle);
   if (positionCode === "CEO") {
+    return true;
+  }
+  if (positionCode === "SCO" && entityType.startsWith("SCO_")) {
+    return true;
+  }
+  if (positionCode === "MPO" && (entityType.startsWith("MPO_") || entityType.startsWith("CTO_") || entityType.startsWith("SCO_"))) {
+    return true;
+  }
+  if (positionCode === "CTO" && (entityType.startsWith("CTO_") || entityType.startsWith("MPO_") || entityType.startsWith("SCO_"))) {
     return true;
   }
   if (positionCode === "COO" && entityType !== "PAYROLL" && entityType !== "CEO_OBJECTIVE" && entityType !== "CEO_SUPERVISION") {
@@ -111,6 +120,30 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   if (entityType === "CEO_SUPERVISION") {
     return Boolean(await prisma.ceoSupervisionLog.findFirst({ where: { id: entityId, OR: [{ employeeId: employee.id }, { followUpResponsibleId: employee.id }] }, select: { id: true } }));
   }
+  if (entityType === "SCO_PURCHASE_REQUEST") {
+    return Boolean(await prisma.scoPurchaseRequest.findFirst({ where: { id: entityId, OR: [{ requesterName: employee.fullName }, { selectedVendorName: { contains: employee.fullName, mode: "insensitive" } }] }, select: { id: true } }));
+  }
+  if (entityType === "SCO_ASSET") {
+    return Boolean(await prisma.scoAsset.findFirst({ where: { id: entityId, assignedTo: employee.fullName }, select: { id: true } }));
+  }
+  if (entityType === "SCO_LOGISTICS") {
+    return Boolean(await prisma.scoLogisticsEvent.findFirst({ where: { id: entityId, OR: [{ ownerName: employee.fullName }, { requesterName: employee.fullName }, { participants: { contains: employee.fullName, mode: "insensitive" } }] }, select: { id: true } }));
+  }
+  if (entityType === "SCO_VENDOR" || entityType === "SCO_MATERIAL" || entityType === "SCO_INVENTORY") {
+    return positionCode === "SCO";
+  }
+  if (entityType === "MPO_PROJECT") {
+    return Boolean(await prisma.mpoProject.findFirst({ where: { id: entityId, OR: [{ responsibleMpoId: employee.id }, { ctoEmployeeId: employee.id }, { cooEmployeeId: employee.id }, { hrCfoEmployeeId: employee.id }, { scoEmployeeId: employee.id }, { ceoEmployeeId: employee.id }, { collaborators: { contains: employee.id } }, { collaborators: { contains: employee.fullName, mode: "insensitive" } }] }, select: { id: true } }));
+  }
+  if (entityType === "MPO_RECORD") {
+    return Boolean(await prisma.mpoProjectRecord.findFirst({ where: { id: entityId, OR: [{ responsibleEmployeeId: employee.id }, { targetEmployeeId: employee.id }, { project: { OR: [{ responsibleMpoId: employee.id }, { ctoEmployeeId: employee.id }, { cooEmployeeId: employee.id }, { hrCfoEmployeeId: employee.id }, { scoEmployeeId: employee.id }, { ceoEmployeeId: employee.id }] } }] }, select: { id: true } }));
+  }
+  if (entityType === "CTO_PROJECT") {
+    return Boolean(await prisma.ctoTechnicalProject.findFirst({ where: { id: entityId, OR: [{ responsibleCtoId: employee.id }, { technicalCollaborators: { contains: employee.id } }, { technicalCollaborators: { contains: employee.fullName, mode: "insensitive" } }, { mpoProject: { OR: [{ responsibleMpoId: employee.id }, { ctoEmployeeId: employee.id }, { scoEmployeeId: employee.id }, { ceoEmployeeId: employee.id }] } }] }, select: { id: true } }));
+  }
+  if (entityType === "CTO_RECORD") {
+    return Boolean(await prisma.ctoTechnicalRecord.findFirst({ where: { id: entityId, OR: [{ responsibleEmployeeId: employee.id }, { assigneeEmployeeId: employee.id }, { technicalProject: { OR: [{ responsibleCtoId: employee.id }, { technicalCollaborators: { contains: employee.id } }, { technicalCollaborators: { contains: employee.fullName, mode: "insensitive" } }] } }] }, select: { id: true } }));
+  }
   return Boolean(await prisma.cooWorkflowShare.findFirst({ where: { workflowId: entityId, employeeId: employee.id }, select: { id: true } }));
 }
 
@@ -123,7 +156,7 @@ async function notifyEntityParticipants(senderId: string, entityType: string, en
         userId,
         title,
         body: content.slice(0, 220),
-        type: `COO_${entityType}`,
+        type: `ACTIVITY_${entityType}`,
         targetUrl: "/activities",
       },
     });
@@ -135,9 +168,21 @@ async function relatedUserIds(entityType: string, entityId: string) {
     const task = await prisma.cooTask.findUnique({ where: { id: entityId }, select: { assigneeEmployeeId: true, responsibleEmployeeId: true, createdById: true } });
     return employeesToUserIds([task?.assigneeEmployeeId, task?.responsibleEmployeeId], task?.createdById);
   }
+  if (entityType === "OPERATION") {
+    const operation = await prisma.cooOperation.findUnique({ where: { id: entityId }, select: { leadEmployeeId: true, collaborators: true, createdById: true } });
+    const collaboratorRefs = (operation?.collaborators || "").split(",").map((item) => item.trim()).filter(Boolean);
+    return uniqueUserIds([
+      ...(await employeesToUserIds([operation?.leadEmployeeId, ...collaboratorRefs], operation?.createdById)),
+      ...(await employeesByNames(collaboratorRefs)),
+    ]);
+  }
   if (entityType === "DEPARTMENT_REQUEST") {
     const request = await prisma.cooDepartmentRequest.findUnique({ where: { id: entityId }, select: { requesterEmployeeId: true, targetResponsibleEmployeeId: true, createdById: true } });
     return employeesToUserIds([request?.requesterEmployeeId, request?.targetResponsibleEmployeeId], request?.createdById);
+  }
+  if (entityType === "BLOCKER") {
+    const blocker = await prisma.cooBlocker.findUnique({ where: { id: entityId }, select: { responsibleEmployeeId: true, createdById: true } });
+    return employeesToUserIds([blocker?.responsibleEmployeeId], blocker?.createdById);
   }
   if (entityType === "MEETING") {
     const meeting = await prisma.cooMeeting.findUnique({ where: { id: entityId }, select: { reportOwnerEmployeeId: true, participants: true, createdById: true } });
@@ -163,12 +208,66 @@ async function relatedUserIds(entityType: string, entityId: string) {
     const shares = await prisma.cooWorkflowShare.findMany({ where: { workflowId: entityId }, select: { userId: true, createdById: true } });
     return shares.flatMap((share) => [share.userId, share.createdById]).filter((id): id is string => Boolean(id));
   }
-  const employees = await prisma.hrcfoEmployee.findMany({ where: { status: { not: "EXITED" } }, select: { userId: true } });
-  return employees.map((employee) => employee.userId).filter((id): id is string => Boolean(id));
+  if (entityType === "SCO_PURCHASE_REQUEST") {
+    const request = await prisma.scoPurchaseRequest.findUnique({ where: { id: entityId }, select: { requesterName: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("SCO")), ...(await employeesByNames([request?.requesterName], request?.createdById))]);
+  }
+  if (entityType === "SCO_VENDOR") {
+    const vendor = await prisma.scoVendor.findUnique({ where: { id: entityId }, select: { createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("SCO")), vendor?.createdById]);
+  }
+  if (entityType === "SCO_MATERIAL") {
+    const material = await prisma.materialItem.findUnique({ where: { id: entityId }, select: { currentOwnerName: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("SCO")), ...(await employeesByNames([material?.currentOwnerName], material?.createdById))]);
+  }
+  if (entityType === "SCO_INVENTORY") {
+    const item = await prisma.scoInventoryItem.findUnique({ where: { id: entityId }, select: { ownerName: true, createdById: true } });
+    return uniqueUserIds([...(await employeesByPosition("SCO")), ...(await employeesByNames([item?.ownerName], item?.createdById))]);
+  }
+  if (entityType === "SCO_ASSET") {
+    const asset = await prisma.scoAsset.findUnique({ where: { id: entityId }, select: { assignedTo: true, createdById: true } });
+    return employeesByNames([asset?.assignedTo], asset?.createdById);
+  }
+  if (entityType === "SCO_LOGISTICS") {
+    const mission = await prisma.scoLogisticsEvent.findUnique({ where: { id: entityId }, select: { ownerName: true, requesterName: true, participants: true, createdById: true } });
+    return employeesByNames([mission?.ownerName, mission?.requesterName, ...(mission?.participants || "").split(",")], mission?.createdById);
+  }
+  if (entityType === "MPO_PROJECT") {
+    const project = await prisma.mpoProject.findUnique({ where: { id: entityId }, select: { responsibleMpoId: true, ctoEmployeeId: true, cooEmployeeId: true, hrCfoEmployeeId: true, scoEmployeeId: true, ceoEmployeeId: true, createdById: true } });
+    return employeesToUserIds([project?.responsibleMpoId, project?.ctoEmployeeId, project?.cooEmployeeId, project?.hrCfoEmployeeId, project?.scoEmployeeId, project?.ceoEmployeeId], project?.createdById);
+  }
+  if (entityType === "MPO_RECORD") {
+    const record = await prisma.mpoProjectRecord.findUnique({ where: { id: entityId }, select: { responsibleEmployeeId: true, targetEmployeeId: true, createdById: true } });
+    return employeesToUserIds([record?.responsibleEmployeeId, record?.targetEmployeeId], record?.createdById);
+  }
+  if (entityType === "CTO_PROJECT") {
+    const project = await prisma.ctoTechnicalProject.findUnique({ where: { id: entityId }, select: { responsibleCtoId: true, createdById: true } });
+    return employeesToUserIds([project?.responsibleCtoId], project?.createdById);
+  }
+  if (entityType === "CTO_RECORD") {
+    const record = await prisma.ctoTechnicalRecord.findUnique({ where: { id: entityId }, select: { responsibleEmployeeId: true, assigneeEmployeeId: true, createdById: true } });
+    return employeesToUserIds([record?.responsibleEmployeeId, record?.assigneeEmployeeId], record?.createdById);
+  }
+  return [];
+}
+
+async function employeesByNames(names: Array<string | null | undefined>, createdById?: string | null) {
+  const values = names.map((name) => String(name || "").trim()).filter(Boolean);
+  const employees = values.length ? await prisma.hrcfoEmployee.findMany({ where: { fullName: { in: values } }, select: { userId: true } }) : [];
+  return [...employees.map((employee) => employee.userId), createdById].filter((id): id is string => Boolean(id));
 }
 
 async function employeesToUserIds(employeeIds: Array<string | null | undefined>, createdById?: string | null) {
   const ids = employeeIds.map((id) => String(id || "").trim()).filter(Boolean);
   const employees = ids.length ? await prisma.hrcfoEmployee.findMany({ where: { id: { in: ids } }, select: { userId: true } }) : [];
   return [...employees.map((employee) => employee.userId), createdById].filter((id): id is string => Boolean(id));
+}
+
+async function employeesByPosition(positionCode: string) {
+  const employees = await prisma.hrcfoEmployee.findMany({ where: { positionCode, status: { not: "EXITED" } }, select: { userId: true } });
+  return employees.map((employee) => employee.userId).filter((id): id is string => Boolean(id));
+}
+
+function uniqueUserIds(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((id): id is string => Boolean(id)))];
 }
