@@ -258,6 +258,7 @@ Modeles actifs:
 | `CooMeeting` | Reunions, comptes rendus, decisions et pieces jointes |
 | `CooWorkflow` | Workflows operationnels repetables et etapes |
 | `CooOperationalReport` | Rapports operationnels et KPI COO |
+| `CollaboratorRequest` | Demandes directes entre collaborateurs depuis Activites DTSC: demandeur, destinataire, type, priorite, statut, echeance, message et reponse |
 | `CeoObjective` | Objectifs executifs suivis par le CEO: type, departement, responsable, periode, cible, progression et statut |
 | `CeoSupervisionLog` | Journal de supervision CEO: observations, decisions, instructions, risques, actions attendues et responsable de suivi |
 | `MpoProject` | Portefeuille projets MPO: besoin, objectifs, responsables impliques, priorite, risque, budget estime, statut, livrables et donnees sante digitale |
@@ -1619,6 +1620,7 @@ Regles financieres appliquees:
 Nouveaux modeles et champs Prisma:
 
 - `CooComment`: commentaires securises rattaches a une tache, operation, demande, blocage, reunion, rapport, workflow, paie, objectif CEO ou suivi de supervision CEO;
+- `CollaboratorRequest`: demandes directes entre collaborateurs depuis `/activities`, visibles par le demandeur, le destinataire ou un admin autorise;
 - `CooWorkflowShare`: historique des workflows partages par le COO a des collaborateurs;
 - `CooOperationalReport.recipientEmployeeId`, `recipientName`, `priority`, `content`, `readAt`, `treatedAt`.
 
@@ -1628,6 +1630,8 @@ Routes API ajoutees ou modifiees:
 | --- | --- | --- | --- |
 | `GET` | `/api/activities/comments?entityType=&entityId=` | session collaborateur ou role autorise | Lire les commentaires d'un element operationnel autorise |
 | `POST` | `/api/activities/comments` | session collaborateur ou role autorise | Ajouter un commentaire et notifier les participants concernes |
+| `POST` | `/api/activities/requests` | collaborateur DTSC | Creer une demande directe vers un autre collaborateur avec notification ciblee |
+| `PATCH` | `/api/activities/requests/[id]` | demandeur, destinataire ou admin | Mettre a jour le statut ou la reponse d'une demande collaborateur |
 | `PATCH` | `/api/activities/tasks/[id]` | collaborateur assigne/responsable | Changer l'avancement d'une tache et declarer un blocage lie si necessaire |
 | `POST` | `/api/activities/blockers` | collaborateur DTSC | Declarer un blocage visible par le COO/admin |
 | `POST` | `/api/activities/reports` | collaborateur DTSC | Envoyer un rapport operationnel a un autre collaborateur |
@@ -1635,14 +1639,14 @@ Routes API ajoutees ou modifiees:
 | `POST/PATCH/DELETE` | `/api/admin/hr-cfo/[entity]` | bloc admin `hrCfo` | Appliquer les regles financieres centralisees |
 | `POST/PATCH` | `/api/admin/coo/[entity]` | bloc admin `coo` | Partager des workflows, renseigner destinataires de rapports et journaliser les operations |
 
-Les types de commentaires acceptes incluent `CEO_OBJECTIVE` et `CEO_SUPERVISION`; ces deux types limitent l'acces au CEO, aux roles admin autorises et aux collaborateurs directement references par l'objectif ou la supervision.
+Les types de commentaires acceptes incluent `COLLAB_REQUEST`, `CEO_OBJECTIVE` et `CEO_SUPERVISION`; ces types limitent l'acces aux personnes directement referencees ou aux roles strictement autorises.
 
 Interface:
 
 - les sous-modules HR & CFO, SCO et COO disposent d'un filtre de date immediate qui ajuste les listes et indicateurs visibles;
-- le module `/activities` dispose du meme filtre de periode et affiche les blocs interactifs: taches, operations, coordination, blocages/reunions, rapports, paie et workflows partages;
+- le module `/activities` dispose du meme filtre de periode et affiche les blocs interactifs: demandes collaboratives, taches, operations, coordination, blocages/reunions, rapports, paie et workflows partages;
 - le bloc `Suivi de la paie` permet au collaborateur de consulter ses remunerations dans le temps et de telecharger ses bulletins;
-- les collaborateurs peuvent commenter les elements operationnels autorises, declarer un blocage et envoyer un rapport operationnel.
+- les collaborateurs peuvent commenter les elements operationnels autorises, declarer un blocage, envoyer un rapport operationnel et formuler une demande directe a un autre collaborateur depuis chaque modale d'activite.
 
 Points de securite:
 

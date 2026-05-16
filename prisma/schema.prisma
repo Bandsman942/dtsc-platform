@@ -1335,6 +1335,34 @@ model CooComment {
   @@index([authorId])
 }
 
+model CollaboratorRequest {
+  id                  String   @id @default(cuid())
+  title               String
+  requestType         String   @default("INFORMATION")
+  requesterEmployeeId String
+  requesterName       String
+  requesterUserId     String?
+  targetEmployeeId    String
+  targetName          String
+  targetUserId        String?
+  priority            String   @default("NORMAL")
+  status              String   @default("SUBMITTED")
+  dueDate             DateTime?
+  relatedEntityType   String?
+  relatedEntityId     String?
+  message             String
+  response            String?
+  createdById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([requesterEmployeeId, createdAt])
+  @@index([targetEmployeeId, status])
+  @@index([requestType, priority])
+  @@index([relatedEntityType, relatedEntityId])
+  @@index([dueDate])
+}
+
 model CooWorkflowShare {
   id                 String    @id @default(cuid())
   workflowId         String

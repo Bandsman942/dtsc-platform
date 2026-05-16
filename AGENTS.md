@@ -45,6 +45,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les paiements d'abonnement confirmés doivent créer une transaction d'entrée idempotente sur le compte financier `Banque`, jamais sur un compte arbitraire côté client.
 - Le montant brut de paie doit provenir du dossier RH du collaborateur; le compte consommé vient du budget sélectionné. Le collaborateur ne doit voir dans `/activities` que ses propres paies et bulletins.
 - Les commentaires opérationnels transversaux (`CooComment`) et partages de workflows (`CooWorkflowShare`) doivent vérifier l'appartenance ou le rôle côté API avant lecture/écriture.
+- Les demandes collaboratives de `/activities` doivent utiliser `CollaboratorRequest`, rester visibles uniquement par le demandeur, le destinataire ou un admin autorisé, notifier le destinataire et rattacher les échanges à `CooComment` avec `entityType = COLLAB_REQUEST`.
 - Les filtres de dates HR & CFO, SCO, COO et Activités DTSC doivent filtrer les listes et KPIs visibles sans modifier les données source.
 - Les collaborateurs HR & CFO doivent référencer des `User` non-`CLIENT`; ne jamais créer, modifier ou supprimer un compte utilisateur depuis le dossier collaborateur. Les départements et comptes financiers doivent passer par leurs référentiels dédiés.
 - Les champs opérationnels visibles comme `Responsable`, `Demandeur` ou `Assigné à` dans HR & CFO/SCO doivent être des combobox alimentées par les collaborateurs enregistrés, pas des champs texte libres.

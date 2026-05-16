@@ -9,7 +9,7 @@ import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
-type EntityType = "TASK" | "OPERATION" | "DEPARTMENT_REQUEST" | "BLOCKER" | "MEETING" | "REPORT" | "WORKFLOW" | "PAYROLL" | "CEO_OBJECTIVE" | "CEO_SUPERVISION" | "SCO_PURCHASE_REQUEST" | "SCO_VENDOR" | "SCO_MATERIAL" | "SCO_INVENTORY" | "SCO_ASSET" | "SCO_LOGISTICS" | "MPO_PROJECT" | "MPO_RECORD" | "CTO_PROJECT" | "CTO_RECORD" | "LEGAL_CASE" | "LEGAL_CONTRACT" | "LEGAL_TEMPLATE" | "LEGAL_RISK" | "LEGAL_DOCUMENT" | "LEGAL_DISPUTE" | "LEGAL_REQUEST" | "LEGAL_REPORT";
+type EntityType = "TASK" | "OPERATION" | "DEPARTMENT_REQUEST" | "BLOCKER" | "MEETING" | "REPORT" | "WORKFLOW" | "PAYROLL" | "CEO_OBJECTIVE" | "CEO_SUPERVISION" | "COLLAB_REQUEST" | "SCO_PURCHASE_REQUEST" | "SCO_VENDOR" | "SCO_MATERIAL" | "SCO_INVENTORY" | "SCO_ASSET" | "SCO_LOGISTICS" | "MPO_PROJECT" | "MPO_RECORD" | "CTO_PROJECT" | "CTO_RECORD" | "LEGAL_CASE" | "LEGAL_CONTRACT" | "LEGAL_TEMPLATE" | "LEGAL_RISK" | "LEGAL_DOCUMENT" | "LEGAL_DISPUTE" | "LEGAL_REQUEST" | "LEGAL_REPORT";
 
 type ActivityItem = {
   id: string;
@@ -160,6 +160,7 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
           </div>
         </div>
         <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <RequestComposer collaborators={collaborators} selected={selected} />
           {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} />}
           {section.id === "blockers" && <BlockerComposer operations={operations} />}
           {selected ? <ActivityDetail item={selected} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
@@ -172,6 +173,7 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
 function ActivityDetail({ item }: { item: ActivityItem }) {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [message, setMessage] = useState("");
+  const [requestResponse, setRequestResponse] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
   const loadComments = useCallback(async () => {
@@ -210,6 +212,18 @@ function ActivityDetail({ item }: { item: ActivityItem }) {
     setStatusMessage(response.ok ? "Tâche mise à jour." : "Mise à jour impossible.");
   }
 
+  async function updateCollaboratorRequest(status: string) {
+    const response = await fetch(`/api/activities/requests/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, response: requestResponse }),
+    });
+    setStatusMessage(response.ok ? "Demande mise à jour." : "Mise à jour de la demande impossible.");
+    if (response.ok) {
+      setRequestResponse("");
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -231,6 +245,24 @@ function ActivityDetail({ item }: { item: ActivityItem }) {
         </div>
       )}
 
+      {item.entityType === "COLLAB_REQUEST" && (
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+          <h4 className="font-black text-dtsc-ink">Répondre ou faire avancer la demande</h4>
+          <textarea
+            value={requestResponse}
+            onChange={(event) => setRequestResponse(event.target.value)}
+            placeholder="Réponse, précision ou information transmise..."
+            className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink"
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => updateCollaboratorRequest("IN_PROGRESS")} className="rounded-xl bg-[#002b5b] text-white">Prendre en charge</Button>
+            <Button type="button" onClick={() => updateCollaboratorRequest("ANSWERED")} className="rounded-xl bg-cyan-500 text-[#001736]">Marquer répondue</Button>
+            <Button type="button" onClick={() => updateCollaboratorRequest("TREATED")} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">Marquer traitée</Button>
+            <Button type="button" onClick={() => updateCollaboratorRequest("REJECTED")} variant="outline" className="rounded-xl border-red-200 text-red-500">Rejeter</Button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <h4 className="flex items-center gap-2 font-black text-dtsc-ink"><MessageSquare className="h-4 w-4 text-cyan-500" /> Commentaires</h4>
         <div className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-1">
@@ -249,6 +281,55 @@ function ActivityDetail({ item }: { item: ActivityItem }) {
         {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
       </div>
     </div>
+  );
+}
+
+function RequestComposer({ collaborators, selected }: { collaborators: CollaboratorOption[]; selected: ActivityItem | null }) {
+  const [statusMessage, setStatusMessage] = useState("");
+
+  async function createRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const payload = Object.fromEntries(formData.entries());
+    const response = await fetch("/api/activities/requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    setStatusMessage(response.ok ? "Demande envoyée au collaborateur." : body?.message || "Impossible d'envoyer la demande.");
+    if (response.ok) {
+      form.reset();
+    }
+  }
+
+  return (
+    <form onSubmit={createRequest} className="mb-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+      <h4 className="font-black text-dtsc-ink">Formuler une demande à un collaborateur</h4>
+      <p className="mt-1 text-sm leading-6 text-dtsc-muted">
+        Envoyez une demande d'information, validation, document ou action. La discussion reste attachée à la demande et visible par les personnes concernées.
+      </p>
+      <input type="hidden" name="relatedEntityType" value={selected?.entityType || ""} />
+      <input type="hidden" name="relatedEntityId" value={selected?.id || ""} />
+      <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
+        <Input name="title" placeholder={selected ? `Demande liée à: ${selected.title}` : "Titre de la demande"} required className="rounded-xl bg-dtsc-page" />
+        <select name="targetEmployeeId" required className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+          <option value="">Collaborateur destinataire</option>
+          {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
+        </select>
+        <select name="requestType" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="INFORMATION">
+          {["INFORMATION", "DOCUMENT", "VALIDATION", "SUPPORT", "ACTION", "MEETING", "FOLLOW_UP", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
+        </select>
+        <select name="priority" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="NORMAL">
+          {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
+        </select>
+        <Input name="dueDate" type="date" className="rounded-xl bg-dtsc-page" />
+      </div>
+      <textarea name="message" required placeholder="Expliquez clairement ce que vous attendez du collaborateur..." className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer la demande</Button>
+      {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
+    </form>
   );
 }
 
@@ -370,7 +451,7 @@ function sectionIcon(id: string) {
   if (id === "operations" || id === "workflows") {
     return <GitBranch className="h-5 w-5" />;
   }
-  if (id === "requests" || id === "reports") {
+  if (id === "requests" || id === "reports" || id === "collab-requests") {
     return <Users className="h-5 w-5" />;
   }
   if (id === "payrolls") {

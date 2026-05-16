@@ -40,6 +40,7 @@ export default async function ActivitiesPage() {
     payrolls,
     ceoObjectives,
     ceoSupervisionLogs,
+    collaboratorRequests,
     scoPurchaseRequests,
     scoVendors,
     scoInventory,
@@ -143,6 +144,16 @@ export default async function ActivitiesPage() {
       },
       orderBy: [{ logDate: "desc" }, { updatedAt: "desc" }],
       take: 80,
+    }),
+    prisma.collaboratorRequest.findMany({
+      where: {
+        OR: [
+          { requesterEmployeeId: employee.id },
+          { targetEmployeeId: employee.id },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 120,
     }),
     prisma.scoPurchaseRequest.findMany({
       where: supervisesSupplyChain ? {} : {
@@ -330,6 +341,26 @@ export default async function ActivitiesPage() {
           })),
       ],
     }] : []),
+    {
+      id: "collab-requests",
+      title: "Demandes collaboratives",
+      description: "Formulez, recevez et suivez les demandes d'information, de validation, d'action ou de document entre collaborateurs DTSC.",
+      items: collaboratorRequests.map((request) => ({
+        id: request.id,
+        entityType: "COLLAB_REQUEST" as const,
+        title: request.title,
+        status: request.status,
+        detail: [
+          formatEnumLabel(request.requestType),
+          `De: ${request.requesterName}`,
+          `À: ${request.targetName}`,
+          request.dueDate ? formatDate(request.dueDate) : "",
+        ].filter(Boolean).join(" · "),
+        body: request.response ? `${request.message}\n\nRéponse: ${request.response}` : request.message,
+        date: toIso(request.dueDate || request.updatedAt),
+        priority: request.priority,
+      })),
+    },
     {
       id: "tasks",
       title: supervisesOperations ? "Tâches journalières" : "Mes tâches journalières",
