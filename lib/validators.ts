@@ -752,7 +752,7 @@ export const cooSchemas = {
     decisions: optionalText(1800),
     generatedTasks: optionalText(1200),
     reportOwnerEmployeeId: z.string().min(5),
-    status: z.enum(["PLANNED", "HELD", "POSTPONED", "CANCELED"]).default("PLANNED"),
+    status: z.enum(["PLANNED", "HELD", "POSTPONED", "CANCELED", "MINUTES_PUBLISHED", "CLOSED"]).default("PLANNED"),
     minutes: optionalText(2400),
     attachmentUrl: optionalText(600),
   }),
@@ -840,6 +840,14 @@ export const newsletterSubscriptionSchema = z.object({
   companyName: z.string().max(160).optional().or(z.literal("")),
   interest: z.string().max(240).optional().or(z.literal("")),
   consent: z.literal(true),
+});
+
+export const newsletterSubscriberAdminSchema = z.object({
+  id: z.string().min(5),
+  status: z.enum(["NEW", "TO_QUALIFY", "ACTIVE_PROSPECT", "CONTACTED", "INTERESTED", "CONVERTED", "UNSUBSCRIBED", "ARCHIVED"]),
+  internalNotes: z.string().max(2000).optional().or(z.literal("")),
+  convertedUserId: z.string().max(120).optional().or(z.literal("")),
+  action: z.enum(["UPDATE", "CONVERT_EXISTING", "ARCHIVE", "UNSUBSCRIBE"]).default("UPDATE"),
 });
 
 export const publicContactSchema = z.object({

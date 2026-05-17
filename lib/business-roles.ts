@@ -1,6 +1,6 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { AdminBlockId } from "@/lib/admin-access";
+import { canAccessAdminBlock, parseAdminRoleAccess, type AdminBlockId, type AdminRoleAccess } from "@/lib/admin-access";
 
 export const businessRoleCodes = {
   CEO: "CEO",
@@ -88,32 +88,52 @@ export async function canAccessAdminBlockByPosition(userId: string, role: UserRo
   if (role === UserRole.ADMIN) {
     return true;
   }
-  if (role === UserRole.CLIENT) {
+  const context = await getCollaboratorBusinessContext(userId);
+  return adminBlockMatchesOfficialPosition(blockId, context.positionCode);
+}
+
+const sensitiveAdminBlockPositions: Partial<Record<AdminBlockId, BusinessRoleCode>> = {
+  hrCfo: "HR_CFO",
+  sco: "SCO",
+  coo: "COO",
+  ceo: "CEO",
+  mpo: "MPO",
+  cto: "CTO",
+  la: "LA",
+};
+
+export function adminBlockMatchesOfficialPosition(blockId: AdminBlockId, positionCode: string | null) {
+  const requiredPosition = sensitiveAdminBlockPositions[blockId];
+  if (!requiredPosition) {
+    return true;
+  }
+
+  return normalizePositionCode(positionCode) === requiredPosition;
+}
+
+export function isSensitiveAdminBlock(blockId: AdminBlockId) {
+  return Boolean(sensitiveAdminBlockPositions[blockId]);
+}
+
+export async function canAccessAdminSection(user: { id: string; role: UserRole }, blockId: AdminBlockId, accessInput?: AdminRoleAccess | unknown) {
+  if (user.role === UserRole.ADMIN) {
+    return true;
+  }
+  if (user.role === UserRole.CLIENT) {
     return false;
   }
 
-  const context = await getCollaboratorBusinessContext(userId);
-  const position = context.positionCode;
-  if (position === "CEO") {
-    return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "la" || blockId === "activity" || blockId === "audits";
+  const access = accessInput && typeof accessInput === "object" && "MANAGER" in accessInput
+    ? accessInput as AdminRoleAccess
+    : parseAdminRoleAccess(accessInput);
+  const hasRoleAccess = canAccessAdminBlock(user.role, blockId, access);
+  if (!hasRoleAccess) {
+    return false;
   }
-  if (position === "LA" || position === "LEGAL_ADVISOR") {
-    return blockId === "la" || blockId === "activity" || blockId === "overview" || blockId === "audits";
+  if (!isSensitiveAdminBlock(blockId)) {
+    return true;
   }
-  if (position === "COO") {
-    return blockId === "coo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
-  }
-  if (position === "HR_CFO" || position === "HR_MANAGER" || position === "FINANCE_MANAGER") {
-    return blockId === "hrCfo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview" || blockId === "audits";
-  }
-  if (position === "SCO") {
-    return blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
-  }
-  if (position === "CTO") {
-    return blockId === "cto" || blockId === "mpo" || blockId === "coo" || blockId === "activity" || blockId === "overview";
-  }
-  if (position === "MPO") {
-    return blockId === "mpo" || blockId === "cto" || blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
-  }
-  return false;
+
+  const context = await getCollaboratorBusinessContext(user.id);
+  return adminBlockMatchesOfficialPosition(blockId, context.positionCode);
 }

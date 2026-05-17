@@ -467,7 +467,11 @@ Mesures présentes:
 - Erreurs publiques génériques côté client
 - Headers sécurité globaux via `next.config.ts`
 - Protection middleware contre les requêtes cross-origin mutantes et l'en-tête `x-middleware-subrequest`
+- Visibilité des sections Administration sensibles basée sur le poste officiel RH (`DtscPosition`) en plus du RBAC: HR_CFO, SCO, COO, CEO, MPO, CTO et LA
 - Administration COO avec RBAC configurable, suivi des opérations internes, tâches, blocages, réunions, workflows et rapports
+- Activités DTSC permet aux collaborateurs RH actifs de créer des réunions COO et de soumettre des dossiers, contrats, risques, litiges ou demandes juridiques vers LA sans accès direct aux sections Administration
+- Vue CEO consolidée enrichie pour MPO, CTO et LA avec filtres de période conservés dans l'URL
+- Bloc Administration > Utilisateurs > Inscrits newsletter pour qualifier, archiver, désabonner ou lier explicitement un prospect newsletter à un utilisateur existant
 - Pièces justificatives HR & CFO / SCO / COO importées depuis l'appareil et stockées côté serveur dans Supabase Storage
 - Boutons de téléchargement visibles pour les factures et les bulletins de paie imprimables/exportables en PDF
 - Module privé `Activités DTSC` pour les utilisateurs reliés à un dossier collaborateur HR & CFO

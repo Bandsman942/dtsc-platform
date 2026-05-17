@@ -157,22 +157,22 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
     return Boolean(await prisma.ctoTechnicalRecord.findFirst({ where: { id: entityId, OR: [{ responsibleEmployeeId: employee.id }, { assigneeEmployeeId: employee.id }, { technicalProject: { OR: [{ responsibleCtoId: employee.id }, { technicalCollaborators: { contains: employee.id } }, { technicalCollaborators: { contains: employee.fullName, mode: "insensitive" } }] } }] }, select: { id: true } }));
   }
   if (entityType === "LEGAL_CASE") {
-    return Boolean(await prisma.legalCase.findFirst({ where: { id: entityId, OR: [{ requesterEmployeeId: employee.id }, { responsibleLegalId: employee.id }] }, select: { id: true } }));
+    return Boolean(await prisma.legalCase.findFirst({ where: { id: entityId, OR: [{ requesterEmployeeId: employee.id }, { responsibleLegalId: employee.id }, { createdById: user.id }] }, select: { id: true } }));
   }
   if (entityType === "LEGAL_CONTRACT") {
-    return Boolean(await prisma.legalContract.findFirst({ where: { id: entityId, internalResponsibleId: employee.id }, select: { id: true } }));
+    return Boolean(await prisma.legalContract.findFirst({ where: { id: entityId, OR: [{ internalResponsibleId: employee.id }, { createdById: user.id }] }, select: { id: true } }));
   }
   if (entityType === "LEGAL_TEMPLATE") {
     return Boolean(await prisma.legalTemplate.findFirst({ where: { id: entityId, authorId: employee.id }, select: { id: true } }));
   }
   if (entityType === "LEGAL_RISK") {
-    return Boolean(await prisma.legalRisk.findFirst({ where: { id: entityId, responsibleEmployeeId: employee.id }, select: { id: true } }));
+    return Boolean(await prisma.legalRisk.findFirst({ where: { id: entityId, OR: [{ responsibleEmployeeId: employee.id }, { createdById: user.id }] }, select: { id: true } }));
   }
   if (entityType === "LEGAL_DISPUTE") {
-    return Boolean(await prisma.legalDispute.findFirst({ where: { id: entityId, followUpResponsibleId: employee.id }, select: { id: true } }));
+    return Boolean(await prisma.legalDispute.findFirst({ where: { id: entityId, OR: [{ followUpResponsibleId: employee.id }, { createdById: user.id }] }, select: { id: true } }));
   }
   if (entityType === "LEGAL_REQUEST") {
-    return Boolean(await prisma.legalRequest.findFirst({ where: { id: entityId, requesterEmployeeId: employee.id }, select: { id: true } }));
+    return Boolean(await prisma.legalRequest.findFirst({ where: { id: entityId, OR: [{ requesterEmployeeId: employee.id }, { createdById: user.id }] }, select: { id: true } }));
   }
   if (entityType === "LEGAL_REPORT") {
     return Boolean(await prisma.legalReport.findFirst({ where: { id: entityId, responsibleLegalId: employee.id }, select: { id: true } }));

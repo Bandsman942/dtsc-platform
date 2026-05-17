@@ -241,12 +241,12 @@ export default async function ActivitiesPage() {
       take: 80,
     }),
     prisma.legalCase.findMany({
-      where: supervisesLegal ? {} : { OR: [{ requesterEmployeeId: employee.id }, { responsibleLegalId: employee.id }] },
+      where: supervisesLegal ? {} : { OR: [{ requesterEmployeeId: employee.id }, { responsibleLegalId: employee.id }, { createdById: user.id }] },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
     prisma.legalContract.findMany({
-      where: supervisesLegal ? {} : { internalResponsibleId: employee.id },
+      where: supervisesLegal ? {} : { OR: [{ internalResponsibleId: employee.id }, { createdById: user.id }] },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
@@ -256,7 +256,7 @@ export default async function ActivitiesPage() {
       take: 80,
     }),
     prisma.legalRisk.findMany({
-      where: supervisesLegal ? {} : { responsibleEmployeeId: employee.id },
+      where: supervisesLegal ? {} : { OR: [{ responsibleEmployeeId: employee.id }, { createdById: user.id }] },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
@@ -266,12 +266,12 @@ export default async function ActivitiesPage() {
       take: 80,
     }),
     prisma.legalDispute.findMany({
-      where: supervisesLegal ? {} : { followUpResponsibleId: employee.id },
+      where: supervisesLegal ? {} : { OR: [{ followUpResponsibleId: employee.id }, { createdById: user.id }] },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
     prisma.legalRequest.findMany({
-      where: supervisesLegal ? {} : { requesterEmployeeId: employee.id },
+      where: supervisesLegal ? {} : { OR: [{ requesterEmployeeId: employee.id }, { createdById: user.id }] },
       orderBy: { updatedAt: "desc" },
       take: 80,
     }),
@@ -297,6 +297,12 @@ export default async function ActivitiesPage() {
   const completed = tasks.filter((task) => task.status === "COMPLETED" || task.status === "VALIDATED").length;
 
   const sections = [
+    {
+      id: "collaborator-forms",
+      title: "Formulaires collaborateur",
+      description: "Créez une réunion COO ou transmettez un dossier, contrat, risque, litige ou demande juridique au LA sans ouvrir les sections Administration sensibles.",
+      items: [],
+    },
     ...(isCeo ? [{
       id: "ceo",
       title: "Supervision CEO",

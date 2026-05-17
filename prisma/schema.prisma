@@ -422,15 +422,24 @@ model NewsletterSubscriber {
   id          String   @id @default(cuid())
   email       String   @unique
   name        String
+  phone       String?
   companyName String?
+  jobTitle    String?
   interest    String?
   source      String   @default("landing")
+  signupPage  String?
   consent     Boolean  @default(true)
+  commercialConsent Boolean @default(false)
   status      String   @default("ACTIVE")
+  internalNotes String?
+  convertedToUser Boolean @default(false)
+  convertedUserId String?
+  convertedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([status, createdAt])
+  @@index([convertedUserId])
 }
 
 model ContactMessage {
@@ -1256,6 +1265,9 @@ model CooMeeting {
   status                String   @default("PLANNED")
   minutes               String?
   attachmentUrl         String?
+  sourceModule          String?
+  targetSection         String?
+  confidentialityLevel  String   @default("INTERNAL")
   createdById           String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -1623,6 +1635,8 @@ model LegalCase {
   linkedEntityType      String?
   linkedEntityId        String?
   attachmentUrl         String?
+  sourceModule          String?
+  targetSection         String?
   legalDecision         String?
   ceoValidationRequired Boolean  @default(false)
   comments              String?
@@ -1655,6 +1669,8 @@ model LegalContract {
   status                  String   @default("DRAFT")
   version                 String?
   documentUrl             String?
+  sourceModule            String?
+  targetSection           String?
   legalCaseId             String?
   legalValidation         String?
   ceoValidationRequired   Boolean  @default(false)
@@ -1697,6 +1713,8 @@ model LegalRisk {
   departmentName        String?
   linkedEntityType      String?
   linkedEntityId        String?
+  sourceModule          String?
+  targetSection         String?
   description           String?
   potentialImpact       String?
   probability           String   @default("MEDIUM")
@@ -1760,6 +1778,8 @@ model LegalDispute {
   nextAction            String?
   dueDate               DateTime?
   documentUrl           String?
+  sourceModule          String?
+  targetSection         String?
   comments              String?
   createdById           String?
   createdAt             DateTime @default(now())
@@ -1786,6 +1806,8 @@ model LegalRequest {
   documentUrl             String?
   linkedEntityType        String?
   linkedEntityId          String?
+  sourceModule            String?
+  targetSection           String?
   status                  String   @default("SUBMITTED")
   legalResponse           String?
   comments                String?

@@ -10,14 +10,15 @@ import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
 import { CeoExecutiveSummary } from "@/components/admin/ceo-executive-summary";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
+import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
-import { canAccessAdminBlock, canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
+import { canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
 import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDatasets, buildLaDatasets, buildMpoDatasets, buildScoDatasets } from "@/lib/admin-operations";
-import { ensureDefaultPositions, getCollaboratorBusinessContext } from "@/lib/business-roles";
+import { canAccessAdminSection, ensureDefaultPositions } from "@/lib/business-roles";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { formatEnumLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
@@ -77,7 +78,6 @@ export default async function AdminPage({
   await ensureDefaultPositions();
   await syncPaidSubscriptionIncomeTransactions();
   await reconcileFinancialState();
-  const businessContext = await getCollaboratorBusinessContext(user.id);
 
   const [
     settings,
@@ -291,35 +291,14 @@ export default async function AdminPage({
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
   const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
-  const canViewByPosition = (blockId: AdminBlockId) => {
-    const positionCode = businessContext.positionCode;
-    if (user.role === UserRole.ADMIN) {
-      return true;
-    }
-    if (positionCode === "CEO") {
-      return blockId === "ceo" || blockId === "overview" || blockId === "hrCfo" || blockId === "coo" || blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "la" || blockId === "activity" || blockId === "audits";
-    }
-    if (positionCode === "LA" || positionCode === "LEGAL_ADVISOR") {
-      return blockId === "la" || blockId === "activity" || blockId === "overview" || blockId === "audits";
-    }
-    if (positionCode === "COO") {
-      return blockId === "coo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
-    }
-    if (positionCode === "HR_CFO" || positionCode === "HR_MANAGER" || positionCode === "FINANCE_MANAGER") {
-      return blockId === "hrCfo" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview" || blockId === "audits";
-    }
-    if (positionCode === "SCO") {
-      return blockId === "sco" || blockId === "mpo" || blockId === "cto" || blockId === "activity" || blockId === "overview";
-    }
-    if (positionCode === "CTO") {
-      return blockId === "cto" || blockId === "mpo" || blockId === "coo" || blockId === "activity" || blockId === "overview";
-    }
-    if (positionCode === "MPO") {
-      return blockId === "mpo" || blockId === "cto" || blockId === "publications" || blockId === "coo" || blockId === "activity" || blockId === "overview";
-    }
-    return false;
-  };
-  const canView = (blockId: AdminBlockId) => canAccessAdminBlock(user.role, blockId, adminRoleAccess) || canViewByPosition(blockId);
+  const allowedAdminBlocks = new Set(
+    (await Promise.all(
+      adminSections
+        .filter((item): item is { id: AdminBlockId; label: string; description: string; icon: typeof BarChart3 } => item.id !== "access")
+        .map(async (item) => (await canAccessAdminSection(user, item.id, adminRoleAccess)) ? item.id : null)
+    )).filter((item): item is AdminBlockId => Boolean(item))
+  );
+  const canView = (blockId: AdminBlockId) => allowedAdminBlocks.has(blockId);
   const canViewSection = (sectionId: AdminSectionId) => sectionId === "access" ? user.role === UserRole.ADMIN : canView(sectionId);
   const visibleSections = adminSections.filter((item) => canViewSection(item.id));
   const activeSection = visibleSections.some((item) => item.id === section)
@@ -598,6 +577,16 @@ export default async function AdminPage({
   const ceoPurchaseRequests = scoPurchaseRequests.filter((request) => isInCeoPeriod(request.neededBy || request.createdAt));
   const ceoInventory = scoInventory.filter((item) => isInCeoPeriod(item.updatedAt || item.createdAt));
   const ceoAssets = scoAssets.filter((asset) => isInCeoPeriod(asset.createdAt));
+  const ceoMpoProjects = mpoProjects.filter((project) => isInCeoPeriod(project.dueDate || project.updatedAt));
+  const ceoMpoRecords = mpoRecords.filter((record) => isInCeoPeriod(record.dueDate || record.updatedAt));
+  const ceoCtoProjects = ctoProjects.filter((project) => isInCeoPeriod(project.dueDate || project.updatedAt));
+  const ceoCtoRecords = ctoRecords.filter((record) => isInCeoPeriod(record.dueDate || record.updatedAt));
+  const ceoLegalCases = legalCases.filter((item) => isInCeoPeriod(item.dueDate || item.updatedAt));
+  const ceoLegalContracts = legalContracts.filter((item) => isInCeoPeriod(item.endDate || item.updatedAt));
+  const ceoLegalRisks = legalRisks.filter((item) => isInCeoPeriod(item.dueDate || item.updatedAt));
+  const ceoLegalDisputes = legalDisputes.filter((item) => isInCeoPeriod(item.dueDate || item.updatedAt));
+  const ceoLegalRequests = legalRequests.filter((item) => isInCeoPeriod(item.desiredDueDate || item.updatedAt));
+  const ceoLegalDocuments = legalDocuments.filter((item) => isInCeoPeriod(item.expirationDate || item.updatedAt));
   const financiallyImpacting = ceoTransactions.filter((transaction) => transaction.status === "VALIDATED" || transaction.status === "PAID");
   const revenue = financiallyImpacting
     .filter((transaction) => transaction.transactionCategory === "IN" && transaction.title.trim().toLocaleLowerCase("fr-FR") !== "capital de départ")
@@ -648,6 +637,42 @@ export default async function AdminPage({
         { label: "Achats ouverts", value: ceoPurchaseRequests.filter((request) => request.status !== "RECEIVED" && request.status !== "CANCELED" && request.status !== "REJECTED").length, detail: "Demandes d'achat à suivre." },
         { label: "Stocks faibles", value: ceoInventory.filter((item) => item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK").length, detail: "Risque opérationnel SCO." },
         { label: "Actifs suivis", value: ceoAssets.length, detail: "Biens matériels affectés ou disponibles." },
+      ],
+    },
+    {
+      title: "Vue consolidée MPO",
+      description: "Portefeuille projets, cadrage, livrables, risques et arbitrages CEO.",
+      metrics: [
+        { label: "Projets MPO", value: ceoMpoProjects.length, detail: "Projets filtrés sur la période CEO." },
+        { label: "En cadrage", value: ceoMpoProjects.filter((project) => project.status === "SCOPING").length, detail: "Besoins et cahiers de charges en préparation." },
+        { label: "Attente CTO / budget / SCO", value: ceoMpoProjects.filter((project) => ["WAITING_CTO", "WAITING_BUDGET", "WAITING_SCO_RESOURCES"].includes(project.status)).length, detail: "Dépendances nécessitant suivi." },
+        { label: "Bloqués ou en retard", value: ceoMpoProjects.filter((project) => project.status === "BLOCKED" || (project.dueDate && project.dueDate < now && !["DELIVERED", "CLOSED", "CANCELED"].includes(project.status))).length, detail: "Arbitrage ou relance possible." },
+        { label: "Livrables validés", value: ceoMpoRecords.filter((record) => record.recordType === "DELIVERABLE" && record.status === "VALIDATED").length, detail: "Livrables MPO validés." },
+        { label: "Risques critiques", value: ceoMpoProjects.filter((project) => project.riskLevel === "CRITICAL" || project.priority === "CRITICAL").length, detail: "Projets stratégiques ou critiques." },
+      ],
+    },
+    {
+      title: "Vue consolidée CTO",
+      description: "Delivery technique, incidents, sécurité, production, documentation et besoins techniques.",
+      metrics: [
+        { label: "Projets techniques", value: ceoCtoProjects.length, detail: "Projets CTO filtrés." },
+        { label: "Analyse / développement / test", value: ceoCtoProjects.filter((project) => ["TECH_ANALYSIS", "DEVELOPMENT", "TESTING", "REVIEW"].includes(project.status)).length, detail: "Pipeline technique actif." },
+        { label: "Production", value: ceoCtoProjects.filter((project) => project.status === "PRODUCTION").length, detail: "Solutions en production." },
+        { label: "Bloqués techniques", value: ceoCtoProjects.filter((project) => project.status === "BLOCKED").length + ceoCtoRecords.filter((record) => record.status === "BLOCKED").length, detail: "Blocages à arbitrer." },
+        { label: "Bugs / incidents critiques", value: ceoCtoRecords.filter((record) => record.recordType === "BUG_INCIDENT" && record.priority === "CRITICAL").length, detail: "Incidents techniques critiques." },
+        { label: "Documentation", value: ceoCtoRecords.filter((record) => record.recordType === "TECH_DOCUMENTATION").length, detail: "Documents techniques disponibles." },
+      ],
+    },
+    {
+      title: "Vue consolidée LA",
+      description: "Dossiers, contrats, risques, litiges, demandes internes et confidentialité juridique.",
+      metrics: [
+        { label: "Dossiers ouverts", value: ceoLegalCases.filter((item) => isLegalOpen(item.status)).length, detail: "Dossiers LA actifs." },
+        { label: "Contrats en relecture", value: ceoLegalContracts.filter((item) => item.status === "LEGAL_REVIEW" || item.status === "TO_CORRECT").length, detail: "Contrats à suivre." },
+        { label: "Risques élevés / critiques", value: ceoLegalRisks.filter((item) => item.riskLevel === "HIGH" || item.riskLevel === "CRITICAL").length, detail: "Exposition juridique importante." },
+        { label: "Litiges ouverts", value: ceoLegalDisputes.filter((item) => isLegalOpen(item.status)).length, detail: "Litiges et réclamations actifs." },
+        { label: "Demandes en retard", value: ceoLegalRequests.filter((item) => item.desiredDueDate && item.desiredDueDate < now && isLegalOpen(item.status)).length, detail: "Demandes juridiques dépassées." },
+        { label: "Documents sensibles", value: ceoLegalDocuments.filter((item) => item.confidentialityLevel === "CEO_ONLY" || item.confidentialityLevel === "LA_CEO_ONLY" || item.confidentialityLevel === "VERY_CONFIDENTIAL").length, detail: "Documents LA à confidentialité renforcée." },
       ],
     },
   ];
@@ -730,13 +755,16 @@ export default async function AdminPage({
         )}
 
         {activeSection === "users" && canView("users") && (
-          <section className="dtsc-card p-6">
-            <div className="mb-5">
-              <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
-              <p className="text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
-            </div>
-            {user.role === UserRole.ADMIN ? <CreateUserForm /> : <p className="text-sm text-dtsc-muted">Bloc visible en lecture, modification réservée au rôle ADMIN.</p>}
-          </section>
+          <div className="space-y-5">
+            <section className="dtsc-card p-6">
+              <div className="mb-5">
+                <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
+                <p className="text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
+              </div>
+              {user.role === UserRole.ADMIN ? <CreateUserForm /> : <p className="text-sm text-dtsc-muted">Bloc visible en lecture, modification réservée au rôle ADMIN.</p>}
+            </section>
+            <NewsletterSubscribersManager canManage={user.role === UserRole.ADMIN} />
+          </div>
         )}
 
         {activeSection === "hrCfo" && canView("hrCfo") && (

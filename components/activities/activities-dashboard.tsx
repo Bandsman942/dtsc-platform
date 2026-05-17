@@ -139,6 +139,9 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
 
   return (
     <Dialog open={true} title={section.title} description={section.description} onClose={onClose} className="max-w-6xl">
+      {section.id === "collaborator-forms" ? (
+        <CollaboratorWorkflowComposer collaborators={collaborators} operations={operations} />
+      ) : (
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="min-w-0">
           <ListControls
@@ -166,8 +169,165 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
           {selected ? <ActivityDetail item={selected} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
         </div>
       </div>
+      )}
     </Dialog>
   );
+}
+
+function CollaboratorWorkflowComposer({ collaborators, operations }: { collaborators: CollaboratorOption[]; operations: CollaboratorOption[] }) {
+  const [statusMessage, setStatusMessage] = useState("");
+  const [workflowType, setWorkflowType] = useState("COO_MEETING");
+
+  async function submitWorkflow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
+    payload.workflowType = workflowType;
+    payload.participantIds = formData.getAll("participantIds").map(String);
+    payload.strategic = formData.get("strategic") === "on";
+    const response = await fetch("/api/activities/collaborator-workflows", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    setStatusMessage(response.ok ? "Formulaire transmis. L'élément apparaît dans votre suivi." : body?.message || "Transmission impossible.");
+    if (response.ok) {
+      form.reset();
+    }
+  }
+
+  return (
+    <form onSubmit={submitWorkflow} className="space-y-5">
+      <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+        <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
+          Formulaire
+          <select value={workflowType} onChange={(event) => setWorkflowType(event.target.value)} className="rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm normal-case tracking-normal text-dtsc-ink">
+            <option value="COO_MEETING">Mes réunions & comptes rendus</option>
+            <option value="LEGAL_CASE">Soumettre un dossier juridique</option>
+            <option value="LEGAL_CONTRACT">Soumettre un contrat ou une convention</option>
+            <option value="LEGAL_RISK">Signaler un risque juridique</option>
+            <option value="LEGAL_DISPUTE">Soumettre un litige ou une réclamation</option>
+            <option value="LEGAL_REQUEST">Faire une demande juridique</option>
+          </select>
+        </label>
+      </div>
+
+      {workflowType === "COO_MEETING" && (
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+          <h4 className="font-black text-dtsc-ink">Mes réunions & comptes rendus</h4>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Input name="title" placeholder="Titre de la réunion" required className="rounded-xl bg-dtsc-page" />
+            <select name="meetingType" defaultValue="COORDINATION" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+              {["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
+            </select>
+            <Input name="meetingDate" type="date" className="rounded-xl bg-dtsc-page" />
+            <Input name="meetingTime" placeholder="Heure" className="rounded-xl bg-dtsc-page" />
+            <Input name="duration" placeholder="Durée prévue" className="rounded-xl bg-dtsc-page" />
+            <select name="confidentialityLevel" defaultValue="INTERNAL" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+              {["INTERNAL", "CONFIDENTIAL", "STRATEGIC"].map((level) => <option key={level} value={level}>{formatEnumLabel(level)}</option>)}
+            </select>
+            <select name="participantIds" multiple className="min-h-36 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+              {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
+            </select>
+            <select name="operationId" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+              <option value="">Opération liée</option>
+              {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
+            </select>
+          </div>
+          <textarea name="agenda" placeholder="Ordre du jour" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <textarea name="minutes" placeholder="Compte rendu" className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <textarea name="decisions" placeholder="Décisions prises" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <textarea name="generatedTasks" placeholder="Actions à suivre" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <textarea name="comments" placeholder="Commentaire initial" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        </div>
+      )}
+
+      {workflowType !== "COO_MEETING" && (
+        <LegalWorkflowFields workflowType={workflowType} />
+      )}
+
+      <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Transmettre</Button>
+      {statusMessage && <p className="text-sm font-bold text-cyan-600">{statusMessage}</p>}
+    </form>
+  );
+}
+
+function LegalWorkflowFields({ workflowType }: { workflowType: string }) {
+  const titlePlaceholder = workflowType === "LEGAL_REQUEST" ? "Objet de la demande" : workflowType === "LEGAL_RISK" ? "Titre du risque" : workflowType === "LEGAL_DISPUTE" ? "Titre du litige ou de la réclamation" : workflowType === "LEGAL_CONTRACT" ? "Titre du contrat" : "Titre du dossier";
+  return (
+    <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+      <h4 className="font-black text-dtsc-ink">{legalWorkflowTitle(workflowType)}</h4>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <Input name={workflowType === "LEGAL_REQUEST" ? "subject" : "title"} placeholder={titlePlaceholder} required className="rounded-xl bg-dtsc-page" />
+        <LegalTypeSelect workflowType={workflowType} />
+        {workflowType === "LEGAL_CONTRACT" && <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />}
+        {workflowType === "LEGAL_DISPUTE" && <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />}
+        {workflowType === "LEGAL_CONTRACT" && <Input name="desiredValidationDate" type="date" title="Date souhaitée de validation" className="rounded-xl bg-dtsc-page" />}
+        {workflowType === "LEGAL_REQUEST" && <Input name="desiredDueDate" type="date" title="Date limite souhaitée" className="rounded-xl bg-dtsc-page" />}
+        {workflowType === "LEGAL_DISPUTE" && <Input name="occurredAt" type="date" title="Date de survenue" className="rounded-xl bg-dtsc-page" />}
+        {(workflowType === "LEGAL_CASE" || workflowType === "LEGAL_REQUEST") && (
+          <select name="priority" defaultValue="NORMAL" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
+          </select>
+        )}
+        {workflowType === "LEGAL_RISK" && (
+          <select name="urgency" defaultValue="NORMAL" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((urgency) => <option key={urgency} value={urgency}>{formatEnumLabel(urgency)}</option>)}
+          </select>
+        )}
+        <Input name={workflowType === "LEGAL_CONTRACT" || workflowType === "LEGAL_DISPUTE" || workflowType === "LEGAL_REQUEST" ? "documentUrl" : "attachmentUrl"} placeholder="Document joint ou lien interne" className="rounded-xl bg-dtsc-page" />
+        <Input name="linkedEntityType" placeholder="Élément lié: projet, fournisseur, client..." className="rounded-xl bg-dtsc-page" />
+        <Input name="linkedEntityId" placeholder="Référence de l'élément lié" className="rounded-xl bg-dtsc-page" />
+      </div>
+      {workflowType === "LEGAL_CONTRACT" ? (
+        <textarea name="subject" required placeholder="Objet du contrat et instruction de relecture" className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      ) : (
+        <textarea name="description" required placeholder="Description" className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      )}
+      {workflowType === "LEGAL_CASE" && <textarea name="reason" placeholder="Raison de la demande" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />}
+      {(workflowType === "LEGAL_RISK" || workflowType === "LEGAL_DISPUTE") && <textarea name="potentialImpact" placeholder="Impact perçu ou estimé" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />}
+      {workflowType === "LEGAL_CONTRACT" && (
+        <label className="mt-3 flex items-center gap-2 text-sm font-bold text-dtsc-muted">
+          <input name="strategic" type="checkbox" className="h-4 w-4 rounded border-dtsc-border" />
+          Contrat stratégique ou nécessitant signature CEO
+        </label>
+      )}
+      <textarea name="comments" placeholder="Commentaire initial" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+    </div>
+  );
+}
+
+function LegalTypeSelect({ workflowType }: { workflowType: string }) {
+  const config = {
+    LEGAL_CASE: { name: "caseType", values: ["CLIENT_CONTRACT", "ADMINISTRATIVE_DOCUMENT", "DISPUTE", "COMPLIANCE", "SENSITIVE_DATA", "PARTNERSHIP", "SUPPLIER_CONTRACT", "EMPLOYMENT_CONTRACT", "OTHER"] },
+    LEGAL_CONTRACT: { name: "contractType", values: ["CLIENT_CONTRACT", "SUPPLIER_CONTRACT", "CONSULTING_CONTRACT", "SERVICE_CONTRACT", "PARTNERSHIP_AGREEMENT", "NDA", "MOU", "TECHNICAL_CONTRACT", "OTHER"] },
+    LEGAL_RISK: { name: "source", values: ["CONTRACT", "CLIENT", "SUPPLIER", "EMPLOYEE", "PROJECT", "SENSITIVE_DATA", "MEDICAL_DATA", "FINANCE", "OPERATION", "TECHNICAL", "OTHER"] },
+    LEGAL_DISPUTE: { name: "disputeType", values: ["CLIENT", "SUPPLIER", "EMPLOYEE", "PARTNER", "ADMINISTRATION", "TECHNICAL", "FINANCIAL", "OPERATIONAL", "PROJECT", "OTHER"] },
+    LEGAL_REQUEST: { name: "requestType", values: ["HR_CONTRACT", "PROJECT_CONTRACT", "SUPPLIER_CONTRACT", "CLIENT_CONTRACT", "OFFICIAL_NOTE", "NDA", "IP_DATA", "DISPUTE", "CONFIDENTIALITY", "SENSITIVE_DATA", "OTHER"] },
+  }[workflowType] || { name: "type", values: ["OTHER"] };
+  return (
+    <select name={config.name} className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+      {config.values.map((value) => <option key={value} value={value}>{formatEnumLabel(value)}</option>)}
+    </select>
+  );
+}
+
+function legalWorkflowTitle(workflowType: string) {
+  if (workflowType === "LEGAL_CONTRACT") {
+    return "Soumettre un contrat ou une convention";
+  }
+  if (workflowType === "LEGAL_RISK") {
+    return "Signaler un risque juridique";
+  }
+  if (workflowType === "LEGAL_DISPUTE") {
+    return "Soumettre un litige ou une réclamation";
+  }
+  if (workflowType === "LEGAL_REQUEST") {
+    return "Faire une demande juridique";
+  }
+  return "Soumettre un dossier juridique";
 }
 
 function ActivityDetail({ item }: { item: ActivityItem }) {

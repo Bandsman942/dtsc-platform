@@ -28,7 +28,7 @@ const cooStatus = {
   recurringTasks: ["ACTIVE", "INACTIVE"],
   departmentRequests: ["NEW", "ACCEPTED", "IN_PROGRESS", "WAITING_INFORMATION", "DONE", "REJECTED", "BLOCKED", "CANCELED"],
   blockers: ["OPEN", "IN_PROGRESS", "RESOLVED", "UNRESOLVED", "ESCALATED", "CANCELED"],
-  meetings: ["PLANNED", "HELD", "POSTPONED", "CANCELED"],
+  meetings: ["PLANNED", "HELD", "POSTPONED", "CANCELED", "MINUTES_PUBLISHED", "CLOSED"],
   workflows: ["DRAFT", "ACTIVE", "IN_PROGRESS", "COMPLETED", "BLOCKED", "ARCHIVED"],
   reports: ["DRAFT", "PUBLISHED", "ARCHIVED"],
 };

@@ -1641,6 +1641,42 @@ Routes API ajoutees ou modifiees:
 
 Les types de commentaires acceptes incluent `COLLAB_REQUEST`, `CEO_OBJECTIVE` et `CEO_SUPERVISION`; ces types limitent l'acces aux personnes directement referencees ou aux roles strictement autorises.
 
+## 20.2 Acces admin par poste RH, workflows collaborateur et prospects newsletter - 17 mai 2026
+
+Acces Administration:
+
+- la fonction centrale `canAccessAdminSection(user, blockId, access)` combine le role applicatif, `AppSetting.adminRoleAccess` et le poste officiel issu de `HrcfoEmployee.position` / `DtscPosition.code`;
+- `ADMIN` conserve tous les blocs;
+- les sections sensibles exigent le poste officiel exact: `HR_CFO` pour HR & CFO, `SCO`, `COO`, `CEO`, `MPO`, `CTO` et `LA`;
+- un RBAC coche sans poste officiel correspondant ne suffit plus pour afficher ou appeler les API sensibles;
+- `requireAdminBlockAccess()` applique la meme regle cote backend pour `/api/admin/hr-cfo`, `/api/admin/sco`, `/api/admin/coo`, `/api/admin/ceo`, `/api/admin/mpo`, `/api/admin/cto` et `/api/admin/la`.
+
+Workflows collaborateur depuis `/activities`:
+
+| Methode | Route | Acces | Payload principal | Reponse |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/activities/collaborator-workflows` | collaborateur RH actif | `workflowType`, champs du formulaire COO/LA, participants ou pieces liees | `{ ok, entityType, entityId, message }` |
+
+`workflowType` accepte `COO_MEETING`, `LEGAL_CASE`, `LEGAL_CONTRACT`, `LEGAL_RISK`, `LEGAL_DISPUTE` et `LEGAL_REQUEST`. La route cree les enregistrements dans les tables existantes (`CooMeeting`, `LegalCase`, `LegalContract`, `LegalRisk`, `LegalDispute`, `LegalRequest`) avec `sourceModule = ACTIVITES_DTSC`, `targetSection = COO` ou `LA`, `createdById`, statut initial coherent, commentaire initial via `CooComment`, notifications vers COO/LA et participants concernes. Les collaborateurs ne gagnent pas l'acces aux routes `/api/admin/...`.
+
+Vues CEO:
+
+- la synthese CEO ajoute des groupes consolides MPO, CTO et LA;
+- les filtres `ceoStart` / `ceoEnd` restent dans l'URL et filtrent les metriques sans modifier les donnees source;
+- les indicateurs LA tiennent compte des dossiers, contrats, risques, litiges, demandes et documents confidentiels.
+
+Newsletter:
+
+- `NewsletterSubscriber` est etendu avec `phone`, `jobTitle`, `signupPage`, `commercialConsent`, `internalNotes`, `convertedToUser`, `convertedUserId`, `convertedAt`;
+- la section Administration > Utilisateurs contient le bloc `Inscrits newsletter`;
+- `GET /api/admin/newsletter-subscribers` liste les prospects et les utilisateurs liables, acces `ADMIN`;
+- `PATCH /api/admin/newsletter-subscribers` modifie statut/notes, archive, desabonne ou lie explicitement un inscrit a un utilisateur existant, acces `ADMIN`, avec `AuditLog` et `ApiLog`;
+- aucune conversion automatique n'est effectuee depuis l'inscription publique.
+
+Migration:
+
+- `prisma/migrations/20260517193000_admin_access_collab_newsletter/migration.sql` ajoute les colonnes de tracabilite workflow et de qualification newsletter.
+
 Interface:
 
 - les sous-modules HR & CFO, SCO et COO disposent d'un filtre de date immediate qui ajuste les listes et indicateurs visibles;
