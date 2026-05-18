@@ -739,6 +739,7 @@ export default async function AdminPage({
               defaultDailyMessageLimit: settings.defaultDailyMessageLimit,
               defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
               chatbotEnabled: settings.chatbotEnabled,
+              publicAgentEnabled: settings.publicAgentEnabled,
               maintenanceMode: settings.maintenanceMode,
               supportAutoCloseDays: settings.supportAutoCloseDays,
               allowClientAnnouncements: settings.allowClientAnnouncements,

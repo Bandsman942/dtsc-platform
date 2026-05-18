@@ -12,6 +12,7 @@ type Settings = {
   defaultDailyMessageLimit: number;
   defaultDailyTokenLimit: number;
   chatbotEnabled: boolean;
+  publicAgentEnabled: boolean;
   maintenanceMode: boolean;
   supportAutoCloseDays: number;
   allowClientAnnouncements: boolean;
@@ -56,6 +57,7 @@ export function AdminSettingsPanel({
       commentEditWindowMinutes: form.get("commentEditWindowMinutes"),
       notificationRetentionDays: form.get("notificationRetentionDays"),
       chatbotEnabled: form.get("chatbotEnabled") === "on",
+      publicAgentEnabled: form.get("publicAgentEnabled") === "on",
       maintenanceMode: form.get("maintenanceMode") === "on",
       allowClientAnnouncements: form.get("allowClientAnnouncements") === "on",
       signUpOtpEnabled: form.get("signUpOtpEnabled") === "on",
@@ -150,6 +152,10 @@ export function AdminSettingsPanel({
           <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Chatbot actif
             <input name="chatbotEnabled" type="checkbox" defaultChecked={settings.chatbotEnabled} className="h-4 w-4 accent-cyan-500" />
+          </label>
+          <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
+            Assistant IA landing page
+            <input name="publicAgentEnabled" type="checkbox" defaultChecked={settings.publicAgentEnabled} className="h-4 w-4 accent-cyan-500" />
           </label>
           <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Mode maintenance

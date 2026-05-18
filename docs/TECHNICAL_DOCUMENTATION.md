@@ -1665,6 +1665,11 @@ Agent IA public:
 
 - le widget `DtscAgentWidget` est integre a la landing page publique et reste isole cote client;
 - la route `POST /api/public/dtsc-agent` recoit une conversation courte, applique un rate limit public, appelle OpenAI cote serveur avec le prompt de cadrage DTSC et ne renvoie jamais de cle API au client;
+- les reponses sont renvoyees en `application/x-ndjson` avec des evenements `delta` puis `done` afin que le widget affiche une progression type streaming;
+- `AppSetting.publicAgentEnabled` permet a l'admin d'activer ou desactiver l'agent depuis Parametres globaux;
+- lorsque l'agent est desactive, la route renvoie un fallback public sans appel OpenAI: resume des expertises DTSC et invitation a remplir manuellement le formulaire Contact/newsletter;
+- la route enrichit le prompt avec les publications publiques reellement publiees; l'agent ne doit citer que ces ressources et ne doit jamais inventer de guide, checklist, article, PDF ou etude de cas non redige par DTSC;
+- un filtre serveur refuse les messages manifestement hors perimetre DTSC avant l'appel OpenAI et renvoie la reponse officielle de recentrage;
 - l'agent est limite aux sujets DTSC: transformation numerique, data analytics, reporting, automatisation, IA appliquee, developpement web/applications metier, conseil technologique, gouvernance des donnees et prise de contact;
 - l'outil serveur `createLeadAndNotify` est appele uniquement apres confirmation du visiteur et exige les champs minimaux: nom complet, email, service recherche et description du besoin;
 - une conversation deja transmise envoie `leadSubmitted=true` afin d'eviter plusieurs notifications pour la meme demande dans le widget.
@@ -1675,16 +1680,18 @@ Prospects et email:
 - le statut `new_ai_lead` identifie les prospects issus de l'agent IA public;
 - `lib/public-ai-leads.ts` valide les donnees avec Zod, nettoie les champs, upsert par email et envoie une notification via `sendZohoOutboundMail`;
 - le destinataire est `CONTACT_EMAIL` si defini, sinon `DTSC_CONTACT_EMAIL`, par defaut `contact@dtsc-platform.com`.
+- les emails entrants prospects et newsletter utilisent le gabarit professionnel de `lib/zoho-mail.ts`, avec HTML nettoye, champs Zoho `bodyHtml`/`toText`/`ccText`/`bccText` et version texte structuree pour les clients qui n'affichent pas le HTML.
 
 Route API:
 
 | Methode | Route | Acces | Payload principal | Reponse |
 | --- | --- | --- | --- | --- |
-| `POST` | `/api/public/dtsc-agent` | public rate limite | `messages`, `leadSubmitted`, `conversationId` | `{ reply, leadCreated, lead?, newsletterPrompt? }` |
+| `POST` | `/api/public/dtsc-agent` | public rate limite | `messages`, `leadSubmitted`, `conversationId` | Flux `application/x-ndjson` avec evenements `delta` puis `done` |
 
 Migration:
 
 - `prisma/migrations/20260518120000_public_ai_agent_leads/migration.sql` ajoute les champs de qualification IA sur `NewsletterSubscriber` et l'index `NewsletterSubscriber_source_status_idx`.
+- `prisma/migrations/20260518143000_public_agent_setting/migration.sql` ajoute `AppSetting.publicAgentEnabled`.
 
 Confirmations applicatives:
 

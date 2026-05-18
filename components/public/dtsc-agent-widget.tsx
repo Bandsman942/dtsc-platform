@@ -47,6 +47,7 @@ export function DtscAgentWidget() {
 
     const userMessage: AgentMessage = { id: newId(), role: "user", content };
     const nextMessages = [...messages, userMessage];
+    const assistantId = newId();
     setMessages(nextMessages);
     setInput("");
     setPending(true);
@@ -63,19 +64,51 @@ export function DtscAgentWidget() {
             .map((message) => ({ role: message.role, content: message.content })),
         }),
       });
-      const body = (await response.json().catch(() => null)) as {
-        reply?: string;
-        leadCreated?: boolean;
-        lead?: LeadSnapshot | null;
-        newsletterPrompt?: string | null;
-      } | null;
-      const reply = body?.reply || "Je n'ai pas pu répondre correctement. Vous pouvez contacter DTSC via la page Contact.";
-      setMessages((current) => [...current, { id: newId(), role: "assistant", content: reply }]);
-      if (body?.leadCreated) {
-        setLeadSubmitted(true);
-        setLead(body.lead || null);
-        if (body.newsletterPrompt) {
-          setMessages((current) => [...current, { id: newId(), role: "assistant", content: body.newsletterPrompt || "" }]);
+      const contentType = response.headers.get("content-type") || "";
+      if (!response.body || !contentType.includes("application/x-ndjson")) {
+        const body = (await response.json().catch(() => null)) as { reply?: string } | null;
+        setMessages((current) => [...current, { id: assistantId, role: "assistant", content: body?.reply || "Je n'ai pas pu répondre correctement. Vous pouvez contacter DTSC via la page Contact." }]);
+        return;
+      }
+
+      setMessages((current) => [...current, { id: assistantId, role: "assistant", content: "" }]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamedContent = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) {
+            continue;
+          }
+          const event = JSON.parse(line) as {
+            type?: "delta" | "done";
+            content?: string;
+            leadCreated?: boolean;
+            lead?: LeadSnapshot | null;
+            newsletterPrompt?: string | null;
+          };
+          if (event.type === "delta" && event.content) {
+            streamedContent += event.content;
+            setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: streamedContent } : message));
+          }
+          if (event.type === "done") {
+            if (event.leadCreated) {
+              setLeadSubmitted(true);
+              setLead(event.lead || null);
+              if (event.newsletterPrompt) {
+                setMessages((current) => [...current, { id: newId(), role: "assistant", content: event.newsletterPrompt || "" }]);
+              }
+            }
+          }
         }
       }
     } catch {

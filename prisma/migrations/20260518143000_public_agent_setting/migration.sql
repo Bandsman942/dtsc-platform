@@ -1,0 +1,2 @@
+ALTER TABLE "AppSetting"
+  ADD COLUMN IF NOT EXISTS "publicAgentEnabled" BOOLEAN NOT NULL DEFAULT true;

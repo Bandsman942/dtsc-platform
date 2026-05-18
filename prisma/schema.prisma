@@ -620,6 +620,7 @@ model AppSetting {
   defaultDailyMessageLimit Int      @default(30)
   defaultDailyTokenLimit   Int      @default(100000)
   chatbotEnabled           Boolean  @default(true)
+  publicAgentEnabled       Boolean  @default(true)
   maintenanceMode          Boolean  @default(false)
   supportAutoCloseDays     Int      @default(7)
   allowClientAnnouncements Boolean  @default(false)

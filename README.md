@@ -38,6 +38,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
 - Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
 - Agent IA public sur la landing page pour répondre aux questions DTSC, qualifier les prospects, enregistrer les demandes dans les inscrits newsletter et notifier l'équipe par email après confirmation
+- Réponses progressives en streaming pour l'agent IA public, réglage admin permettant de l'activer/désactiver avec fallback informatif et garde-fous serveur contre les questions hors DTSC ou les ressources inventées
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -81,7 +82,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Diffusion globale: notifications internes + email groupé protégé avec destinataires en CCI
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`
 - Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
-- Inscription newsletter publique avec stockage en base et notification Zoho
+- Inscription newsletter publique avec stockage en base et notification Zoho au format professionnel DTSC
 - Prospects qualifiés par l'agent IA public: service demandé, description du besoin, urgence, budget facultatif, canal de contact préféré et résumé IA conservés dans les inscrits newsletter
 - Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter, avec personnalisation `{user}`, CCI confidentielle et éditeur riche pour conserver le format collé
 - Fondations audit log et historisation des webhooks entrants

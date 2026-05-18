@@ -220,27 +220,34 @@ export function buildProfessionalMailText({
   const recipients = uniqueEmails(to);
   const copy = uniqueEmails(cc);
   const blindCopy = uniqueEmails(bcc);
-
-  return [
-    "DTSC - Data and Tech Solutions Consulting",
-    "Le numérique au service de votre performance",
-    "",
-    `Objet : ${subject}`,
-    heading || null,
-    showRecipients && recipients.length ? `À : ${recipients.join(", ")}` : null,
+  const metaLines = [
+    showRecipients && recipients.length ? `Destinataire(s) : ${recipients.join(", ")}` : null,
     showRecipients && copy.length ? `Copie : ${copy.join(", ")}` : null,
     showRecipients && blindCopy.length ? `Copie cachée : ${blindCopy.join(", ")}` : null,
-    fromName ? `Expéditeur : ${fromName}` : null,
-    fromEmail ? `Email expéditeur : ${fromEmail}` : null,
+    fromName ? `Nom : ${fromName}` : null,
+    fromEmail ? `Email : ${fromEmail}` : null,
     replyTo ? `Répondre à : ${replyTo}` : null,
     showSource && source ? `Source : ${source}` : null,
+  ].filter(Boolean);
+
+  return [
+    "DTSC",
+    "Data and Tech Solutions Consulting",
+    "Le numérique au service de la performance.",
+    "",
+    "========================================",
+    subject.toUpperCase(),
+    "========================================",
+    heading ? `\n${heading}` : null,
+    metaLines.length ? ["", "Informations du contact", ...metaLines.map((line) => `- ${line}`)].join("\n") : null,
     "",
     normalizeMessage(message),
     "",
+    "----------------------------------------",
     "Coordonnées DTSC",
-    `Email : ${contactEmail()}`,
-    `WhatsApp : ${dtsc.whatsapp}`,
-    `Réseaux sociaux : ${dtsc.socialHandle}`,
+    `Email: ${contactEmail()}`,
+    `WhatsApp: ${dtsc.whatsapp}`,
+    `Réseaux sociaux: ${dtsc.socialHandle}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -327,6 +334,12 @@ export async function sendZohoMailWebhook(payload: ZohoMailPayload) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      to: payload.to || [contactEmail()],
+      toText: uniqueEmails(payload.to || [contactEmail()]).join(","),
+      cc: payload.cc || [],
+      ccText: uniqueEmails(payload.cc).join(","),
+      bcc: payload.bcc || [],
+      bccText: uniqueEmails(payload.bcc).join(","),
       message: textContent,
       subject: payload.subject,
       content: textContent,
