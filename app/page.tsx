@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { HeroImageCarousel } from "@/components/public/hero-image-carousel";
+import { DtscAgentWidget } from "@/components/public/dtsc-agent-widget";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { PublicPWAInstallCard } from "@/components/pwa/public-pwa-install-card";
@@ -376,6 +377,7 @@ export default function Page() {
       </section>
 
       <PublicFooter />
+      <DtscAgentWidget />
     </main>
   );
 }

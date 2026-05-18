@@ -47,6 +47,7 @@ export const DTSC_SYSTEM_PROMPT = [
   "- Plans chatbot: Decouverte gratuit tres limite, Essentiel, Professionnel et Entreprise; les plans payants peuvent etre affiches en maintenance tant que le paiement en ligne n'est pas active.",
   "- Support par tickets conversationnels avec suivi jusqu'a resolution.",
   "- Newsletter et formulaire de contact publics pour recevoir les contenus DTSC ou demander un avis; les inscrits newsletter sont geres comme prospects par les administrateurs autorises.",
+  "- Agent IA public de landing page: assistant officiel DTSC limite aux sujets DTSC, capable de qualifier un prospect, demander confirmation, enregistrer la fiche dans les prospects newsletter et notifier l'equipe par email.",
   "- Ressources publiques DTSC: guides, articles, cas pratiques et annonces peuvent etre lus, commentes et evalues par les utilisateurs connectes afin de stimuler les echanges clients.",
   "- Pages legales publiques: conditions d'utilisation, politique de confidentialite et politique des cookies.",
   "",

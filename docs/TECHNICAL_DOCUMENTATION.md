@@ -1659,6 +1659,46 @@ Documentation:
 
 - `docs/CHANGELOG.md` initialise le suivi chronologique des ameliorations par commit.
 
+## 20.4 Agent IA public DTSC et confirmations publications - 18 mai 2026
+
+Agent IA public:
+
+- le widget `DtscAgentWidget` est integre a la landing page publique et reste isole cote client;
+- la route `POST /api/public/dtsc-agent` recoit une conversation courte, applique un rate limit public, appelle OpenAI cote serveur avec le prompt de cadrage DTSC et ne renvoie jamais de cle API au client;
+- l'agent est limite aux sujets DTSC: transformation numerique, data analytics, reporting, automatisation, IA appliquee, developpement web/applications metier, conseil technologique, gouvernance des donnees et prise de contact;
+- l'outil serveur `createLeadAndNotify` est appele uniquement apres confirmation du visiteur et exige les champs minimaux: nom complet, email, service recherche et description du besoin;
+- une conversation deja transmise envoie `leadSubmitted=true` afin d'eviter plusieurs notifications pour la meme demande dans le widget.
+
+Prospects et email:
+
+- `NewsletterSubscriber` est reutilise pour eviter une table doublon et ajoute les champs `requestedService`, `needDescription`, `urgency`, `estimatedBudget`, `preferredContactChannel` et `aiSummary`;
+- le statut `new_ai_lead` identifie les prospects issus de l'agent IA public;
+- `lib/public-ai-leads.ts` valide les donnees avec Zod, nettoie les champs, upsert par email et envoie une notification via `sendZohoOutboundMail`;
+- le destinataire est `CONTACT_EMAIL` si defini, sinon `DTSC_CONTACT_EMAIL`, par defaut `contact@dtsc-platform.com`.
+
+Route API:
+
+| Methode | Route | Acces | Payload principal | Reponse |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/public/dtsc-agent` | public rate limite | `messages`, `leadSubmitted`, `conversationId` | `{ reply, leadCreated, lead?, newsletterPrompt? }` |
+
+Migration:
+
+- `prisma/migrations/20260518120000_public_ai_agent_leads/migration.sql` ajoute les champs de qualification IA sur `NewsletterSubscriber` et l'index `NewsletterSubscriber_source_status_idx`.
+
+Confirmations applicatives:
+
+- le gestionnaire des publications publiques demande une confirmation avant suppression definitive;
+- la sauvegarde d'une modification de publication ouvre aussi une confirmation applicative avant `PATCH`;
+- la gestion des inscrits newsletter demande une confirmation avant mise a jour, conversion, desabonnement ou archivage;
+- les actions sensibles restent journalisees cote API via `AuditLog`.
+
+Variables:
+
+- `OPENAI_API_KEY`: obligatoire pour l'agent IA public;
+- `CONTACT_EMAIL`: destinataire explicite des prospects IA, avec fallback sur `DTSC_CONTACT_EMAIL`;
+- `ZOHO_MAIL_*`: configuration email existante reutilisee pour l'envoi des notifications.
+
 ## 20.2 Acces admin par poste RH, workflows collaborateur et prospects newsletter - 17 mai 2026
 
 Acces Administration:

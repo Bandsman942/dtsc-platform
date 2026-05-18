@@ -426,6 +426,12 @@ model NewsletterSubscriber {
   companyName String?
   jobTitle    String?
   interest    String?
+  requestedService String?
+  needDescription String?
+  urgency     String?
+  estimatedBudget String?
+  preferredContactChannel String?
+  aiSummary   String?
   source      String   @default("landing")
   signupPage  String?
   consent     Boolean  @default(true)

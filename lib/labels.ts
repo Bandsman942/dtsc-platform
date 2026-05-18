@@ -349,6 +349,8 @@ export const statusLabels = {
   DISPUTES: "Litiges",
   EXPIRING_DOCUMENTS: "Documents expirant bientôt",
   REQUESTS_BY_DEPARTMENT: "Demandes par département",
+  new_ai_lead: "Prospect IA",
+  NEW_AI_LEAD: "Prospect IA",
 } as const;
 
 export const publicationCategoryLabels = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Edit3, Globe2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,9 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
   const [items, setItems] = useState(publications);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
+  const editingFormRef = useRef<HTMLFormElement | null>(null);
+  const [confirmEditSave, setConfirmEditSave] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Publication | null>(null);
   const [createPreviewHtml, setCreatePreviewHtml] = useState("");
   const [editingPreviewHtml, setEditingPreviewHtml] = useState("");
   const getPublicationSearchText = useCallback((publication: Publication) => {
@@ -92,6 +95,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
     setMessage(response.ok ? "Publication supprimée." : "Impossible de supprimer cette publication.");
     if (response.ok) {
       setItems((current) => current.filter((item) => item.id !== publication.id));
+      setPendingDelete(null);
       router.refresh();
     }
   }
@@ -175,7 +179,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
                   }} className="rounded-xl">
                     <Edit3 className="h-4 w-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => remove(publication)} className="rounded-xl text-red-400">
+                  <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => setPendingDelete(publication)} className="rounded-xl text-red-400">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -199,9 +203,17 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
       <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => {
         setEditing(null);
         setEditingPreviewHtml("");
+        setConfirmEditSave(false);
       }}>
         {editing && (
-          <form onSubmit={(event) => submit(event, editing.id)} className="grid gap-3">
+          <form
+            ref={editingFormRef}
+            onSubmit={(event) => {
+              event.preventDefault();
+              setConfirmEditSave(true);
+            }}
+            className="grid gap-3"
+          >
             <Input name="title" defaultValue={editing.title} required />
             <Input name="slug" defaultValue={editing.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
             <select name="category" defaultValue={editing.category} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
@@ -228,6 +240,56 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
           </form>
         )}
+      </Dialog>
+
+      <Dialog
+        open={confirmEditSave}
+        title="Confirmer la modification"
+        description="Cette action modifiera le contenu public visible ou préparé pour la page Ressources."
+        onClose={() => setConfirmEditSave(false)}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setConfirmEditSave(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl bg-[#002b5b] text-white"
+              onClick={() => {
+                if (editing && editingFormRef.current) {
+                  const submitEvent = { preventDefault() {}, currentTarget: editingFormRef.current } as FormEvent<HTMLFormElement>;
+                  submit(submitEvent, editing.id);
+                  setConfirmEditSave(false);
+                }
+              }}
+            >
+              Confirmer la modification
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">Vérifiez le titre, le statut publié/brouillon et le contenu avant de confirmer.</p>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDelete)}
+        title="Confirmer la suppression"
+        description="Cette action supprimera définitivement la publication publique sélectionnée."
+        onClose={() => setPendingDelete(null)}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setPendingDelete(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+              Annuler
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => pendingDelete && remove(pendingDelete)} className="rounded-xl">
+              Supprimer définitivement
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">
+          {pendingDelete ? `Vous allez supprimer "${pendingDelete.title}". Cette publication ne sera plus disponible dans les ressources publiques.` : ""}
+        </p>
       </Dialog>
     </section>
   );

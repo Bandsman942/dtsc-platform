@@ -37,6 +37,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
 - Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
 - Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
+- Agent IA public sur la landing page pour répondre aux questions DTSC, qualifier les prospects, enregistrer les demandes dans les inscrits newsletter et notifier l'équipe par email après confirmation
 - Inscription, connexion, déconnexion
 - Inscription sécurisée par OTP email configurable par l'admin
 - Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
@@ -81,6 +82,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`
 - Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
 - Inscription newsletter publique avec stockage en base et notification Zoho
+- Prospects qualifiés par l'agent IA public: service demandé, description du besoin, urgence, budget facultatif, canal de contact préféré et résumé IA conservés dans les inscrits newsletter
 - Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter, avec personnalisation `{user}`, CCI confidentielle et éditeur riche pour conserver le format collé
 - Fondations audit log et historisation des webhooks entrants
 - Logs API, audit des paiements et exports CSV/HTML imprimable PDF
@@ -115,6 +117,7 @@ DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
 DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!
 DEFAULT_ADMIN_BOOTSTRAP_ENABLED=false
 DTSC_CONTACT_EMAIL=contact@dtsc-platform.com
+CONTACT_EMAIL=contact@dtsc-platform.com
 ZOHO_MAIL_WEBHOOK_URL=
 ZOHO_OUTBOUND_MAIL_WEBHOOK_URL=
 ZOHO_OUTGOING_WEBHOOK_SECRET=
@@ -148,6 +151,7 @@ Notes:
 - `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL` doit pointer vers le webhook Zoho/Zoho Flow chargé d'envoyer les emails directs. En diffusion, l'application place `DTSC_CONTACT_EMAIL` en destinataire principal et les membres en CCI.
 - `ZOHO_OUTGOING_WEBHOOK_SECRET` protège l'URL applicative à configurer côté Zoho: `APP_URL/api/webhooks/zoho/outgoing-mail?secret=VOTRE_SECRET`.
 - `DTSC_CONTACT_EMAIL` est l'adresse professionnelle affichée sur le site et utilisée dans les messages serveur.
+- `CONTACT_EMAIL` peut pointer vers la même adresse et sert de destinataire explicite pour les notifications de prospects qualifiés par l'agent IA public.
 - Si `ZOHO_MAIL_ACCOUNT_ID`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont configurés, l'application envoie les diffusions directement par l'API Zoho Mail avant de tenter les fallbacks webhook. Les listes d'adresses ne sont jamais ajoutées dans le contenu du mail.
 - Dans les diffusions admin et newsletter, le placeholder `{user}` est remplacé par le nom de l'utilisateur ou de l'abonné. Lorsqu'il est présent, l'application envoie des mails personnalisés individuellement en CCI pour préserver la confidentialité.
 - `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont des secrets: ne jamais les commiter et les régénérer s'ils ont été partagés.

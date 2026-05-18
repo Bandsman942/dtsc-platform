@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -15,6 +15,12 @@ type Subscriber = {
   phone?: string | null;
   companyName?: string | null;
   jobTitle?: string | null;
+  requestedService?: string | null;
+  needDescription?: string | null;
+  urgency?: string | null;
+  estimatedBudget?: string | null;
+  preferredContactChannel?: string | null;
+  aiSummary?: string | null;
   source: string;
   signupPage?: string | null;
   interest?: string | null;
@@ -30,17 +36,19 @@ type Subscriber = {
 
 type UserOption = { id: string; name: string; email: string };
 
-const statuses = ["NEW", "TO_QUALIFY", "ACTIVE_PROSPECT", "CONTACTED", "INTERESTED", "CONVERTED", "UNSUBSCRIBED", "ARCHIVED"];
+const statuses = ["new_ai_lead", "NEW", "TO_QUALIFY", "ACTIVE_PROSPECT", "CONTACTED", "INTERESTED", "CONVERTED", "UNSUBSCRIBED", "ARCHIVED"];
 
 export function NewsletterSubscribersManager({ canManage }: { canManage: boolean }) {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [selected, setSelected] = useState<Subscriber | null>(null);
   const [message, setMessage] = useState("");
+  const [confirmSave, setConfirmSave] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const list = useSmartList({
     items: subscribers,
     pageSize: 8,
-    getSearchText: (subscriber) => `${subscriber.name} ${subscriber.email} ${subscriber.companyName || ""} ${subscriber.status} ${subscriber.interest || ""}`,
+    getSearchText: (subscriber) => `${subscriber.name} ${subscriber.email} ${subscriber.companyName || ""} ${subscriber.status} ${subscriber.interest || ""} ${subscriber.requestedService || ""} ${subscriber.needDescription || ""}`,
   });
 
   useEffect(() => {
@@ -55,7 +63,7 @@ export function NewsletterSubscribersManager({ canManage }: { canManage: boolean
 
   const metrics = useMemo(() => ({
     total: subscribers.length,
-    newOnes: subscribers.filter((subscriber) => subscriber.status === "NEW" || subscriber.status === "ACTIVE").length,
+    newOnes: subscribers.filter((subscriber) => subscriber.status === "NEW" || subscriber.status === "ACTIVE" || subscriber.status === "new_ai_lead").length,
     converted: subscribers.filter((subscriber) => subscriber.convertedToUser || subscriber.status === "CONVERTED").length,
   }), [subscribers]);
 
@@ -77,6 +85,7 @@ export function NewsletterSubscribersManager({ canManage }: { canManage: boolean
     if (response.ok && savedSubscriber) {
       setSubscribers((items) => items.map((item) => item.id === savedSubscriber.id ? savedSubscriber : item));
       setSelected(savedSubscriber);
+      setConfirmSave(false);
     }
   }
 
@@ -144,12 +153,32 @@ export function NewsletterSubscribersManager({ canManage }: { canManage: boolean
       {message && <p className="mt-3 text-sm font-bold text-cyan-600">{message}</p>}
 
       {selected && (
-        <Dialog open={true} title="Détail inscrit newsletter" onClose={() => setSelected(null)} className="max-w-3xl">
-          <form onSubmit={saveSubscriber} className="space-y-4">
+        <Dialog open={true} title="Détail inscrit newsletter" onClose={() => {
+          setSelected(null);
+          setConfirmSave(false);
+        }} className="max-w-3xl">
+          <form
+            ref={formRef}
+            onSubmit={(event) => {
+              event.preventDefault();
+              setConfirmSave(true);
+            }}
+            className="space-y-4"
+          >
             <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
               <p className="font-black text-dtsc-ink">{selected.name}</p>
               <p className="text-sm text-dtsc-muted">{selected.email}</p>
               <p className="mt-2 text-sm text-dtsc-muted">{[selected.phone, selected.companyName, selected.jobTitle, selected.interest].filter(Boolean).join(" · ") || "Informations complémentaires non renseignées."}</p>
+              {(selected.requestedService || selected.needDescription || selected.aiSummary) && (
+                <div className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm leading-6 text-dtsc-muted">
+                  {selected.requestedService && <p><strong className="text-dtsc-ink">Service demandé:</strong> {selected.requestedService}</p>}
+                  {selected.needDescription && <p><strong className="text-dtsc-ink">Besoin:</strong> {selected.needDescription}</p>}
+                  {selected.urgency && <p><strong className="text-dtsc-ink">Urgence:</strong> {selected.urgency}</p>}
+                  {selected.estimatedBudget && <p><strong className="text-dtsc-ink">Budget:</strong> {selected.estimatedBudget}</p>}
+                  {selected.preferredContactChannel && <p><strong className="text-dtsc-ink">Canal préféré:</strong> {selected.preferredContactChannel}</p>}
+                  {selected.aiSummary && <p><strong className="text-dtsc-ink">Résumé IA:</strong> {selected.aiSummary}</p>}
+                </div>
+              )}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <select name="status" defaultValue={selected.status === "ACTIVE" ? "NEW" : selected.status} disabled={!canManage} className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
@@ -170,6 +199,34 @@ export function NewsletterSubscribersManager({ canManage }: { canManage: boolean
           </form>
         </Dialog>
       )}
+
+      <Dialog
+        open={confirmSave}
+        title="Confirmer la modification"
+        description="Cette action mettra à jour le statut, les notes ou la conversion de ce prospect newsletter."
+        onClose={() => setConfirmSave(false)}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setConfirmSave(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl bg-[#002b5b] text-white"
+              onClick={() => {
+                if (formRef.current) {
+                  const submitEvent = { preventDefault() {}, currentTarget: formRef.current } as FormEvent<HTMLFormElement>;
+                  saveSubscriber(submitEvent);
+                }
+              }}
+            >
+              Confirmer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">Vérifiez les informations du prospect avant de confirmer cette action.</p>
+      </Dialog>
     </section>
   );
 }

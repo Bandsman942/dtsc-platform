@@ -844,7 +844,7 @@ export const newsletterSubscriptionSchema = z.object({
 
 export const newsletterSubscriberAdminSchema = z.object({
   id: z.string().min(5),
-  status: z.enum(["NEW", "TO_QUALIFY", "ACTIVE_PROSPECT", "CONTACTED", "INTERESTED", "CONVERTED", "UNSUBSCRIBED", "ARCHIVED"]),
+  status: z.enum(["new_ai_lead", "NEW", "TO_QUALIFY", "ACTIVE_PROSPECT", "CONTACTED", "INTERESTED", "CONVERTED", "UNSUBSCRIBED", "ARCHIVED"]),
   internalNotes: z.string().max(2000).optional().or(z.literal("")),
   convertedUserId: z.string().max(120).optional().or(z.literal("")),
   action: z.enum(["UPDATE", "CONVERT_EXISTING", "ARCHIVE", "UNSUBSCRIBE"]).default("UPDATE"),
@@ -858,6 +858,31 @@ export const publicContactSchema = z.object({
   subject: z.string().min(3).max(160),
   message: z.string().min(10).max(3_000),
   source: z.string().max(80).default("landing"),
+});
+
+const agentMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1).max(1_500),
+});
+
+export const publicDtscAgentSchema = z.object({
+  messages: z.array(agentMessageSchema).min(1).max(20),
+  leadSubmitted: z.boolean().default(false),
+  conversationId: z.string().max(120).optional().or(z.literal("")),
+});
+
+export const publicDtscLeadSchema = z.object({
+  fullName: z.string().min(2).max(120),
+  organization: z.string().max(160).optional().or(z.literal("")),
+  email: z.string().email().max(180).transform((email) => email.toLowerCase()),
+  phone: z.string().max(40).optional().or(z.literal("")),
+  role: z.string().max(120).optional().or(z.literal("")),
+  requestedService: z.string().min(2).max(180),
+  needDescription: z.string().min(10).max(2_500),
+  urgency: z.string().max(80).optional().or(z.literal("")),
+  estimatedBudget: z.string().max(120).optional().or(z.literal("")),
+  preferredContactChannel: z.string().max(120).optional().or(z.literal("")),
+  summary: z.string().max(1_000).optional().or(z.literal("")),
 });
 
 export const publicPublicationSchema = z.object({

@@ -30,6 +30,7 @@ const envSchema = z.object({
     .preprocess((value) => value === true || value === "true" || value === "1", z.boolean())
     .default(false),
   DTSC_CONTACT_EMAIL: optionalEmailWithDefault("contact@dtsc-platform.com"),
+  CONTACT_EMAIL: optionalEmailWithDefault("contact@dtsc-platform.com"),
   ZOHO_MAIL_WEBHOOK_URL: optionalUrl,
   ZOHO_OUTBOUND_MAIL_WEBHOOK_URL: optionalUrl,
   ZOHO_OUTGOING_WEBHOOK_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(24).optional()),
