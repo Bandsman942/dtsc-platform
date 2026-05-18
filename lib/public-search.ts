@@ -50,7 +50,7 @@ export const publicSearchIndex: PublicSearchItem[] = [
   },
   {
     title: "Contact DTSC",
-    description: "Demander un avis, une consultation, un cadrage ou un accompagnement numérique.",
+    description: "Contact, consultation, cadrage ou accompagnement numérique avec DTSC.",
     href: "/contact",
     category: "Contact",
   },

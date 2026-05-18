@@ -22,19 +22,19 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       <section className={cn("relative overflow-hidden bg-gradient-to-br text-white", toneClasses[page.tone])}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,194,255,0.24),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.16),transparent_28%)]" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:px-8 lg:py-24">
-          <div className="animate-slide-up">
+          <div className="dtsc-premium-reveal">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-black text-cyan-200 shadow-[0_12px_30px_rgba(0,194,255,0.12)]">
               <Sparkles className="h-4 w-4" />
               {page.eyebrow}
             </p>
-            <h1 className="dtsc-hero-heading mt-6 max-w-4xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+            <h1 className="dtsc-hero-heading dtsc-text-shimmer mt-6 max-w-4xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
               {page.title}
             </h1>
-            <p className="mt-6 max-w-3xl text-lg leading-8 text-blue-50 animate-slide-up">{page.intro}</p>
+            <p className="dtsc-premium-reveal-delay mt-6 max-w-3xl text-lg leading-8 text-blue-50">{page.intro}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
                 <Link href="/contact">
-                  Demander un avis
+                  Contacter DTSC
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -65,7 +65,11 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {page.cards.map((card, index) => (
-              <article key={card.title} className={cn(index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt", "dtsc-card-hover p-6")}>
+              <article
+                key={card.title}
+                className={cn(index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt", "dtsc-card-hover dtsc-premium-reveal p-6")}
+                style={{ animationDelay: `${index * 70}ms` }}
+              >
                 {card.icon && (
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
                     <card.icon className="h-6 w-6" />
@@ -82,10 +86,14 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       <section className="border-y border-dtsc-border dtsc-public-band-soft">
         <div className="mx-auto grid max-w-7xl gap-5 px-4 py-16 sm:px-6 lg:px-8">
           {page.sections.map((section, index) => (
-            <article key={section.heading} className={cn("grid overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] lg:grid-cols-[320px_1fr]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")}>
+            <article
+              key={section.heading}
+              className={cn("dtsc-premium-reveal grid overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] lg:grid-cols-[320px_1fr]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")}
+              style={{ animationDelay: `${index * 90}ms` }}
+            >
               <div className={cn("bg-gradient-to-br p-6 text-white", toneClasses[page.tone])}>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Partie {String(index + 1).padStart(2, "0")}</p>
-                <h3 className="mt-4 text-2xl font-black">{section.heading}</h3>
+                <h3 className="mt-4 text-2xl font-black"><span className="dtsc-line-reveal">{section.heading}</span></h3>
               </div>
               <div className="p-6">
                 <p className="text-base leading-8 text-dtsc-muted">{section.text}</p>

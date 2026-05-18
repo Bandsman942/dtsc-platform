@@ -88,13 +88,13 @@ export function AdminDataTables({
               <p className="text-sm text-dtsc-muted">Modifiez les rôles et suspendez les accès sans intervention technique.</p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
-              <Link href="/admin" className="rounded-full border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-muted hover:bg-dtsc-soft">
+              <Link href="/admin?section=users" className="rounded-full border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-muted hover:bg-dtsc-soft">
                 Tous
               </Link>
               {userRoles.map((userRole) => (
                 <Link
                   key={userRole}
-                  href={`/admin?role=${userRole}`}
+                  href={`/admin?section=users&role=${userRole}`}
                   className="rounded-full border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-muted hover:bg-dtsc-soft"
                 >
                   {formatEnumLabel(userRole)}

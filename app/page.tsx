@@ -118,7 +118,7 @@ const faqCategories = [
       {
         question: "Comment demander une démonstration ou un devis ?",
         answer:
-          "Vous pouvez passer par la page Contact, Demander un avis, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
+          "Vous pouvez passer par la page Contact, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
       },
       {
         question: "Quels délais prévoir pour un projet ?",
@@ -162,21 +162,21 @@ export default function Page() {
       <section className="relative overflow-hidden bg-gradient-to-br from-[#001736] via-[#002b5b] to-[#0057b8] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(0,194,255,0.24),transparent_32%),radial-gradient(circle_at_82%_6%,rgba(255,255,255,0.16),transparent_30%)]" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
-          <div className="animate-slide-up">
+          <div className="dtsc-premium-reveal">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-black text-cyan-200">
               <Sparkles className="h-4 w-4" />
               {dtsc.slogan}
             </p>
-            <h1 className="dtsc-hero-heading mt-6 max-w-5xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+            <h1 className="dtsc-hero-heading dtsc-text-shimmer mt-6 max-w-5xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
               Accélérez votre transformation numérique avec la data, l&apos;IA et des solutions technologiques sur mesure.
             </h1>
-            <p className="mt-6 max-w-3xl text-lg leading-8 text-cyan-50">
+            <p className="dtsc-premium-reveal-delay mt-6 max-w-3xl text-lg leading-8 text-cyan-50">
               DTSC accompagne les entreprises dans la conception, l&apos;automatisation et le déploiement de solutions digitales orientées performance.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] shadow-[0_16px_40px_rgba(0,194,255,0.2)] hover:bg-cyan-300">
                 <Link href="/contact">
-                  Demander un avis
+                  Contacter DTSC
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -243,7 +243,7 @@ export default function Page() {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8 max-w-3xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Explorer DTSC</p>
-            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">
+            <h2 className="dtsc-ink-shimmer mt-2 text-3xl font-black text-dtsc-ink">
               Découvrez nos <span className="text-dtsc-blue">expertises</span> à travers des pages dédiées.
             </h2>
             <p className="mt-4 leading-7 text-dtsc-muted">
@@ -252,7 +252,12 @@ export default function Page() {
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {gateways.map((item, index) => (
-              <Link key={item.href} href={item.href} className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover p-6`}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                style={{ animationDelay: `${index * 70}ms` }}
+              >
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
                   <item.icon className="h-6 w-6" />
                 </div>
@@ -303,7 +308,7 @@ export default function Page() {
                 Tout ce qu&apos;un client veut clarifier avant de démarrer avec DTSC.
               </h2>
               <p className="mt-5 max-w-2xl text-base leading-8 text-dtsc-muted">
-                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de Demander un avis.
+                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de prendre contact.
               </p>
               <div className="mt-7 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_18px_60px_rgba(0,43,91,0.08)]">
                 <div className="flex items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-muted">

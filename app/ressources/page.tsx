@@ -43,10 +43,10 @@ export default async function RessourcesPage() {
       <PublicHeader />
       <section className="relative overflow-hidden border-b border-dtsc-border bg-gradient-to-br from-[#0f172a] via-[#002b5b] to-[#0057b8] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(0,194,255,0.22),transparent_32%)]" />
-        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <div className="dtsc-premium-reveal relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Ressources & annonces</p>
-          <h1 className="mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre la data, l&apos;IA et la transformation numérique avant de lancer un projet.</h1>
-          <p className="mt-5 max-w-3xl text-lg leading-8 text-blue-50">
+          <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre la data, l&apos;IA et la transformation numérique avant de lancer un projet.</h1>
+          <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
             Cette page regroupe les contenus publics réguliers que DTSC peut publier depuis l&apos;administration: articles, guides, annonces, veille, cas pratiques et démonstrations.
           </p>
         </div>
@@ -56,7 +56,12 @@ export default async function RessourcesPage() {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="grid gap-4 md:grid-cols-3">
             {staticResources.map((resource, index) => (
-              <Link key={resource.href} href={resource.href} className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover p-6`}>
+              <Link
+                key={resource.href}
+                href={resource.href}
+                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                style={{ animationDelay: `${index * 70}ms` }}
+              >
                 <resource.icon className="h-6 w-6 text-cyan-500" />
                 <h2 className="mt-5 text-xl font-black text-dtsc-ink">{resource.title}</h2>
                 <p className="mt-3 text-sm leading-6 text-dtsc-muted">{resource.text}</p>
@@ -74,7 +79,7 @@ export default async function RessourcesPage() {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications DTSC</p>
-            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Contenus publiés depuis l&apos;administration</h2>
+            <h2 className="dtsc-ink-shimmer mt-2 text-3xl font-black text-dtsc-ink">Contenus publiés depuis l&apos;administration</h2>
           </div>
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="dtsc-card overflow-hidden">
@@ -136,7 +141,7 @@ export default async function RessourcesPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                 {latestPublications.map((publication) => (
-                  <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover p-6">
+                  <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover dtsc-premium-reveal p-6">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)}</p>
                     <h3 className="mt-3 text-xl font-black text-dtsc-ink">{publication.title}</h3>
                     <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>

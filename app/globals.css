@@ -291,6 +291,52 @@
     color: #ffffff;
   }
 
+  .dtsc-premium-reveal {
+    animation: premium-reveal 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .dtsc-premium-reveal-delay {
+    animation: premium-reveal 760ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  }
+
+  .dtsc-text-shimmer {
+    background: linear-gradient(90deg, #ffffff 0%, #bff4ff 38%, #ffffff 72%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: text-shimmer 5.8s ease-in-out infinite;
+  }
+
+  .dtsc-ink-shimmer {
+    background: linear-gradient(90deg, var(--dtsc-ink) 0%, var(--dtsc-blue) 42%, var(--dtsc-ink) 78%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: text-shimmer 6.2s ease-in-out infinite;
+  }
+
+  .dtsc-line-reveal {
+    position: relative;
+    display: inline-block;
+  }
+
+  .dtsc-line-reveal::after {
+    position: absolute;
+    right: 0;
+    bottom: -0.22rem;
+    left: 0;
+    height: 0.16rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(67, 217, 255, 0), rgba(67, 217, 255, 0.9), rgba(255, 255, 255, 0.5));
+    content: "";
+    transform-origin: left;
+    animation: line-sweep 720ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+  }
+
   .dtsc-assistant-markdown {
     color: var(--dtsc-ink);
   }
@@ -565,6 +611,40 @@
       filter: blur(0);
     }
   }
+
+  @keyframes premium-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(26px);
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes text-shimmer {
+    0%,
+    48% {
+      background-position: 120% 50%;
+    }
+    100% {
+      background-position: -80% 50%;
+    }
+  }
+
+  @keyframes line-sweep {
+    from {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+  }
   
   @media (prefers-reduced-motion: reduce) {
     .animate-fade-in,
@@ -572,8 +652,16 @@
     .animate-slide-down,
     .animate-scale-in,
     .animate-message-in,
-    .animate-hero-image {
+    .animate-hero-image,
+    .dtsc-premium-reveal,
+    .dtsc-premium-reveal-delay {
       animation: fade-in 200ms ease-out;
+    }
+
+    .dtsc-text-shimmer,
+    .dtsc-ink-shimmer,
+    .dtsc-line-reveal::after {
+      animation: none;
     }
   }
 

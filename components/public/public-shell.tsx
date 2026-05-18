@@ -25,6 +25,14 @@ const resourceLinks = [
   { href: "/secteurs", label: "Secteurs accompagnés" },
 ];
 
+const companyLinks = [
+  { href: "/a-propos", label: "À propos" },
+  { href: "/services", label: "Notre approche" },
+  { href: "/secteurs", label: "Secteurs accompagnés" },
+  { href: "/projets", label: "Réalisations" },
+  { href: "/contact", label: "Contact" },
+];
+
 export function PublicHeader() {
   return (
     <header className="sticky top-0 z-[90] overflow-visible border-b border-dtsc-border bg-dtsc-surface/95 shadow-[0_18px_55px_rgba(0,23,54,0.12)] backdrop-blur-xl">
@@ -49,10 +57,18 @@ export function PublicFooter() {
 
   return (
     <footer className="border-t border-dtsc-border bg-dtsc-surface">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-4 lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-2 lg:px-8 xl:grid-cols-[1.25fr_0.85fr_0.95fr_1fr_1.1fr]">
         <div>
           <DtscLogo />
           <p className="mt-4 max-w-md leading-6 text-dtsc-muted">{dtsc.summary}</p>
+        </div>
+        <div>
+          <p className="font-black text-dtsc-ink">Entreprise</p>
+          <div className="mt-3 grid gap-2">
+            {companyLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{link.label}</Link>
+            ))}
+          </div>
         </div>
         <div>
           <p className="font-black text-dtsc-ink">Ressources</p>
