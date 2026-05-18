@@ -199,11 +199,11 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
   }
 
   return (
-    <form onSubmit={submitWorkflow} className="space-y-5">
-      <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+    <form onSubmit={submitWorkflow} className="min-w-0 space-y-5 overflow-hidden">
+      <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
         <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
           Formulaire
-          <select value={workflowType} onChange={(event) => setWorkflowType(event.target.value)} className="rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm normal-case tracking-normal text-dtsc-ink">
+          <select value={workflowType} onChange={(event) => setWorkflowType(event.target.value)} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm normal-case tracking-normal text-dtsc-ink">
             <option value="COO_MEETING">Mes réunions & comptes rendus</option>
             <option value="LEGAL_CASE">Soumettre un dossier juridique</option>
             <option value="LEGAL_CONTRACT">Soumettre un contrat ou une convention</option>
@@ -215,23 +215,23 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
       </div>
 
       {workflowType === "COO_MEETING" && (
-        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
           <h4 className="font-black text-dtsc-ink">Mes réunions & comptes rendus</h4>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
             <Input name="title" placeholder="Titre de la réunion" required className="rounded-xl bg-dtsc-page" />
-            <select name="meetingType" defaultValue="COORDINATION" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <select name="meetingType" defaultValue="COORDINATION" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
               {["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
             </select>
             <Input name="meetingDate" type="date" className="rounded-xl bg-dtsc-page" />
             <Input name="meetingTime" placeholder="Heure" className="rounded-xl bg-dtsc-page" />
             <Input name="duration" placeholder="Durée prévue" className="rounded-xl bg-dtsc-page" />
-            <select name="confidentialityLevel" defaultValue="INTERNAL" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <select name="confidentialityLevel" defaultValue="INTERNAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
               {["INTERNAL", "CONFIDENTIAL", "STRATEGIC"].map((level) => <option key={level} value={level}>{formatEnumLabel(level)}</option>)}
             </select>
-            <select name="participantIds" multiple className="min-h-36 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <select name="participantIds" multiple className="min-h-36 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
               {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
             </select>
-            <select name="operationId" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <select name="operationId" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
               <option value="">Opération liée</option>
               {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
             </select>
@@ -257,9 +257,9 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
 function LegalWorkflowFields({ workflowType }: { workflowType: string }) {
   const titlePlaceholder = workflowType === "LEGAL_REQUEST" ? "Objet de la demande" : workflowType === "LEGAL_RISK" ? "Titre du risque" : workflowType === "LEGAL_DISPUTE" ? "Titre du litige ou de la réclamation" : workflowType === "LEGAL_CONTRACT" ? "Titre du contrat" : "Titre du dossier";
   return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+    <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">{legalWorkflowTitle(workflowType)}</h4>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
         <Input name={workflowType === "LEGAL_REQUEST" ? "subject" : "title"} placeholder={titlePlaceholder} required className="rounded-xl bg-dtsc-page" />
         <LegalTypeSelect workflowType={workflowType} />
         {workflowType === "LEGAL_CONTRACT" && <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />}
@@ -268,12 +268,12 @@ function LegalWorkflowFields({ workflowType }: { workflowType: string }) {
         {workflowType === "LEGAL_REQUEST" && <Input name="desiredDueDate" type="date" title="Date limite souhaitée" className="rounded-xl bg-dtsc-page" />}
         {workflowType === "LEGAL_DISPUTE" && <Input name="occurredAt" type="date" title="Date de survenue" className="rounded-xl bg-dtsc-page" />}
         {(workflowType === "LEGAL_CASE" || workflowType === "LEGAL_REQUEST") && (
-          <select name="priority" defaultValue="NORMAL" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+          <select name="priority" defaultValue="NORMAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
             {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
           </select>
         )}
         {workflowType === "LEGAL_RISK" && (
-          <select name="urgency" defaultValue="NORMAL" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+          <select name="urgency" defaultValue="NORMAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
             {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((urgency) => <option key={urgency} value={urgency}>{formatEnumLabel(urgency)}</option>)}
           </select>
         )}
@@ -308,7 +308,7 @@ function LegalTypeSelect({ workflowType }: { workflowType: string }) {
     LEGAL_REQUEST: { name: "requestType", values: ["HR_CONTRACT", "PROJECT_CONTRACT", "SUPPLIER_CONTRACT", "CLIENT_CONTRACT", "OFFICIAL_NOTE", "NDA", "IP_DATA", "DISPUTE", "CONFIDENTIALITY", "SENSITIVE_DATA", "OTHER"] },
   }[workflowType] || { name: "type", values: ["OTHER"] };
   return (
-    <select name={config.name} className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+    <select name={config.name} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
       {config.values.map((value) => <option key={value} value={value}>{formatEnumLabel(value)}</option>)}
     </select>
   );

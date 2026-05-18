@@ -1641,6 +1641,24 @@ Routes API ajoutees ou modifiees:
 
 Les types de commentaires acceptes incluent `COLLAB_REQUEST`, `CEO_OBJECTIVE` et `CEO_SUPERVISION`; ces types limitent l'acces aux personnes directement referencees ou aux roles strictement autorises.
 
+## 20.3 Responsive Activites, notifications lisibles et changelog - 18 mai 2026
+
+Interface Activites:
+
+- les modales applicatives imposent maintenant `min-w-0`, `overflow-x-hidden` et des marges mobiles plus compactes pour eviter les debordements horizontaux;
+- les formulaires collaborateur COO/LA de `/activities` contraignent les selecteurs et grilles avec `w-full min-w-0`, ce qui garde les champs dans leur conteneur sur mobile;
+- les titres et descriptions de modales utilisent des retours de ligne naturels pour conserver une lecture correcte sur petits ecrans.
+
+Notifications:
+
+- les badges de type utilisent `formatEnumLabel()` au lieu d'afficher la valeur technique brute;
+- les apercus et details remplacent les tokens techniques avec underscores, par exemple `COLLAB_REQUEST` ou `IN_PROGRESS`, par des libelles francais lisibles;
+- les notifications liees aux activites collaborateur pointent par defaut vers `/activities` si aucun lien cible explicite n'est fourni.
+
+Documentation:
+
+- `docs/CHANGELOG.md` initialise le suivi chronologique des ameliorations par commit.
+
 ## 20.2 Acces admin par poste RH, workflows collaborateur et prospects newsletter - 17 mai 2026
 
 Acces Administration:

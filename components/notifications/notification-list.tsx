@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatEnumLabel } from "@/lib/labels";
 
 type NotificationItem = {
   id: string;
@@ -26,12 +27,23 @@ function fallbackTarget(type: string) {
   if (type === "ANNOUNCEMENT") {
     return "/announcements";
   }
+  if (type === "COLLAB_REQUEST" || type.startsWith("ACTIVITY_") || type.startsWith("LEGAL_") || type === "COO_MEETING") {
+    return "/activities";
+  }
   return "/notifications";
 }
 
 function preview(body: string) {
-  const compact = body.replace(/\s+/g, " ").trim();
+  const compact = formatNotificationText(body).replace(/\s+/g, " ").trim();
   return compact.length > 190 ? `${compact.slice(0, 187)}...` : compact;
+}
+
+function formatNotificationType(type: string) {
+  return formatEnumLabel(type);
+}
+
+function formatNotificationText(value: string) {
+  return value.replace(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/g, (token) => formatEnumLabel(token));
 }
 
 export function NotificationList({ notifications }: { notifications: NotificationItem[] }) {
@@ -120,7 +132,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
               <button type="button" onClick={() => openNotification(notification)} className="text-left">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className={unread ? "font-black text-dtsc-ink" : "font-bold text-dtsc-ink"}>{notification.title}</h2>
-                  <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{notification.type}</span>
+                  <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{formatNotificationType(notification.type)}</span>
                   {unread && <span className="rounded-full bg-cyan-400 px-2.5 py-1 text-xs font-black text-[#001736]">Nouveau</span>}
                 </div>
                 <p className={unread ? "mt-2 text-sm font-bold leading-6 text-dtsc-muted" : "mt-2 text-sm leading-6 text-dtsc-muted"}>
@@ -146,7 +158,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
       <Dialog
         open={Boolean(selected)}
         title={selected?.title || "Notification"}
-        description={selected ? `${selected.type} · ${new Date(selected.createdAt).toLocaleString("fr-FR")}` : undefined}
+        description={selected ? `${formatNotificationType(selected.type)} · ${new Date(selected.createdAt).toLocaleString("fr-FR")}` : undefined}
         onClose={() => setSelected(null)}
         footer={
           selected && (
@@ -167,7 +179,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
       >
         {selected && (
           <div className="space-y-4">
-            <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{selected.body}</p>
+            <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{formatNotificationText(selected.body)}</p>
             {feedback && <div className="rounded-xl bg-dtsc-soft p-3 text-sm font-bold text-dtsc-blue">{feedback}</div>}
           </div>
         )}
