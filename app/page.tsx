@@ -49,6 +49,11 @@ const faqCategories = [
           "La première étape consiste à clarifier votre contexte, vos objectifs, vos contraintes et vos priorités. DTSC peut ensuite recommander une feuille de route, un prototype, un tableau de bord, une automatisation ou une solution complète selon le niveau de maturité de votre organisation.",
       },
       {
+        question: "Puis-je échanger avec l'assistant IA public avant de contacter DTSC ?",
+        answer:
+          "Oui. L'assistant IA public de DTSC peut répondre aux questions liées aux services DTSC, aider à préciser un besoin et transmettre une demande commerciale à l'équipe après confirmation. Il reste limité au périmètre DTSC et ne doit pas répondre aux sujets hors contexte.",
+      },
+      {
         question: "Faut-il déjà avoir un cahier des charges détaillé ?",
         answer:
           "Non. Vous pouvez venir avec une idée, un problème métier, un fichier Excel, un processus manuel ou un objectif de performance. DTSC aide à structurer le besoin avant de proposer une solution adaptée.",
@@ -70,6 +75,11 @@ const faqCategories = [
           "Non. Le chatbot aide à clarifier les besoins, répondre aux questions fréquentes, structurer les demandes et orienter vers l'équipe DTSC. Les décisions commerciales, techniques ou stratégiques doivent rester validées par une personne de l'équipe.",
       },
       {
+        question: "L'assistant IA public peut-il inventer des guides ou articles DTSC ?",
+        answer:
+          "Non. L'assistant public doit s'appuyer uniquement sur les informations DTSC disponibles et sur les publications réellement publiées. Si une ressource n'existe pas, il doit orienter vers la page Ressources, la FAQ ou l'inscription newsletter plutôt que créer un titre fictif.",
+      },
+      {
         question: "Le chatbot peut-il utiliser les informations de mon entreprise ?",
         answer:
           "Oui, dans l'espace privé, l'utilisateur peut renseigner un profil entreprise, ses activités, ses responsabilités, ses objectifs et certains documents selon son abonnement. Ces informations servent à contextualiser ses échanges sans les mélanger avec les données d'autres utilisateurs.",
@@ -83,6 +93,11 @@ const faqCategories = [
         question: "Pouvez-vous automatiser des processus internes ?",
         answer:
           "Oui. DTSC peut aider à réduire les doubles saisies, structurer les relances, centraliser les demandes, automatiser des validations, connecter des formulaires et produire des rapports plus fiables.",
+      },
+      {
+        question: "Le chatbot privé peut-il envoyer un message à DTSC ?",
+        answer:
+          "Oui. Dans l'espace privé, le chatbot peut aider à préparer un message avec un objet, un contexte et une description claire, puis l'envoyer à DTSC uniquement après confirmation explicite de l'utilisateur.",
       },
     ],
   },
@@ -99,6 +114,11 @@ const faqCategories = [
         question: "Mes documents sont-ils visibles par d'autres utilisateurs ?",
         answer:
           "Non. Les documents et le contexte entreprise sont isolés par utilisateur. Un utilisateur ne doit accéder qu'à ses propres informations, sauf cas d'administration ou de support strictement encadré.",
+      },
+      {
+        question: "Comment DTSC protège-t-il les données envoyées via l'assistant ou le chatbot ?",
+        answer:
+          "Les clés API restent côté serveur, les conversations privées sont rattachées au compte connecté, les actions sensibles demandent confirmation et les données prospects ou tickets sont traitées selon les règles de confidentialité de la plateforme.",
       },
       {
         question: "Quels sont les plans d'abonnement prévus ?",
@@ -122,6 +142,11 @@ const faqCategories = [
           "Vous pouvez passer par la page Contact, utiliser le chatbot pour structurer votre besoin ou créer un ticket lorsque vous êtes connecté. DTSC revient ensuite vers vous pour cadrer la demande.",
       },
       {
+        question: "Puis-je créer un ticket support depuis le chatbot privé ?",
+        answer:
+          "Oui. Le chatbot privé peut collecter l'objet, la description et la priorité du problème, puis créer un ticket support après confirmation explicite. Le ticket reste ensuite visible dans le module Support.",
+      },
+      {
         question: "Quels délais prévoir pour un projet ?",
         answer:
           "Le délai dépend du périmètre. Un cadrage ou prototype peut être rapide, alors qu'une application métier complète ou une intégration documentaire demande une phase d'analyse, de conception, de tests et d'accompagnement.",
@@ -135,6 +160,11 @@ const faqCategories = [
         question: "Quelles évolutions sont prévues pour la plateforme ?",
         answer:
           "La roadmap inclut l'amélioration du RAG documentaire, les intégrations métier, les exports, le support avancé, les paiements, les communications clients et les canaux comme WhatsApp Business selon les priorités de production.",
+      },
+      {
+        question: "Qui peut rédiger des publications publiques DTSC ?",
+        answer:
+          "Les administrateurs peuvent publier ou supprimer les contenus publics. Selon les paramètres globaux, certains utilisateurs non-client peuvent aussi préparer des brouillons sous leur nom, mais seul un administrateur peut les publier.",
       },
     ],
   },

@@ -29,9 +29,11 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 
 - Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
 - FAQ premium sur l'accueil avec composant Accordion accessible, catégories métier et données structurées SEO `FAQPage`
+- FAQ publique enrichie avec les questions sur l'assistant IA, le chatbot privé, les tickets, la sécurité, les ressources et les brouillons de publications
 - Sections publiques harmonisées avec bandes visuelles alternées et cartes contrastées pour éviter la confusion entre blocs et arrière-plan
 - Pages publiques dédiées avec onglet actif, contenus DTSC issus du business plan et sources vérifiables
 - Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
+- Contribution brouillon aux publications publiques pour rôles non-client autorisés, avec publication et suppression réservées aux administrateurs
 - Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
 - Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
 - Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
@@ -53,6 +55,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
+- Chatbot privé capable, après confirmation explicite, d'envoyer un message à DTSC ou de créer un ticket support à partir des informations collectées
 - Historique des conversations et messages en base, avec classement par dossier/projet et CRUD des dossiers
 - Préférences chatbot persistantes: modèle préféré, style de réponse et longueur de réponse par utilisateur
 - Renommage, classement et suppression de conversation
@@ -77,7 +80,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Pages publiques corporate: Services, Solutions, Secteurs, Projets, Ressources, À propos, Contact et politique des cookies
 - Analytics simples des visites publiques avec filtre par période dans `/admin`, agrégation journalière et total calculé en temps réel
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
-- Paramètres globaux admin: limites par défaut, activation chatbot, maintenance, règles annonces et support
+- Paramètres globaux admin: limites par défaut, activation chatbot, assistant public, contribution brouillon publications, maintenance, règles annonces et support
 - Paramètres OTP: activation et durée d'expiration des codes d'inscription
 - Diffusion globale: notifications internes + email groupé protégé avec destinataires en CCI
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`

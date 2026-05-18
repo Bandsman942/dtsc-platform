@@ -14,6 +14,7 @@ import { sanitizeRichHtml } from "@/lib/rich-content";
 
 type Publication = {
   id: string;
+  authorId: string | null;
   title: string;
   slug: string;
   category: string;
@@ -31,7 +32,19 @@ type Publication = {
 
 const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
 
-export function PublicPublicationsManager({ publications, canEdit = true }: { publications: Publication[]; canEdit?: boolean }) {
+export function PublicPublicationsManager({
+  publications,
+  currentUserId,
+  canCreateDrafts = false,
+  canPublish = false,
+  canDelete = false,
+}: {
+  publications: Publication[];
+  currentUserId: string;
+  canCreateDrafts?: boolean;
+  canPublish?: boolean;
+  canDelete?: boolean;
+}) {
   const router = useRouter();
   const [items, setItems] = useState(publications);
   const [message, setMessage] = useState("");
@@ -60,6 +73,9 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
     pageSize: 5,
     getSearchText: getPublicationSearchText,
   });
+  const canEditPublication = useCallback((publication: Publication) => {
+    return canPublish || (!publication.published && publication.authorId === currentUserId);
+  }, [canPublish, currentUserId]);
 
   async function submit(event: FormEvent<HTMLFormElement>, publicationId?: string) {
     event.preventDefault();
@@ -68,7 +84,7 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
     const response = await fetch(publicationId ? `/api/admin/publications/${publicationId}` : "/api/admin/publications", {
       method: publicationId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, published: payload.published === "on" }),
+      body: JSON.stringify({ ...payload, published: canPublish && payload.published === "on" }),
     });
 
     const body = (await response.json().catch(() => null)) as { publication?: Publication } | null;
@@ -110,21 +126,21 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             Réservez ici les articles, guides, annonces publiques, projets ou cas pratiques qui alimenteront la page Ressources. Les publications non publiées restent en brouillon.
           </p>
           <form onSubmit={(event) => submit(event)} className="mt-5 grid gap-3">
-            <Input name="title" placeholder="Titre de la publication" required disabled={!canEdit} />
-            <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canEdit} />
+            <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
+            <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canCreateDrafts} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <select name="category" disabled={!canEdit} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+              <select name="category" disabled={!canCreateDrafts} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
                 {categories.map((category) => (
                   <option key={category} value={category}>{formatEnumLabel(category)}</option>
                 ))}
               </select>
-              <Input name="coverLabel" placeholder="Label visuel court" disabled={!canEdit} />
+              <Input name="coverLabel" placeholder="Label visuel court" disabled={!canCreateDrafts} />
             </div>
-            <textarea name="excerpt" placeholder="Résumé court visible dans la carte publique" disabled={!canEdit} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <textarea name="excerpt" placeholder="Résumé court visible dans la carte publique" disabled={!canCreateDrafts} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <RichTextEditor
               textName="content"
               htmlName="contentHtml"
-              disabled={!canEdit}
+              disabled={!canCreateDrafts}
               allowImageUpload
               onContentChange={({ html }) => setCreatePreviewHtml(html)}
               placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
@@ -132,11 +148,16 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <PublicationPreview html={createPreviewHtml} />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publier sur la page Ressources
-              <input name="published" type="checkbox" disabled={!canEdit} className="h-4 w-4 accent-cyan-500" />
+              <input name="published" type="checkbox" disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
             </label>
-            <Button disabled={!canEdit} title={canEdit ? "Publier ou enregistrer un contenu public." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            {!canPublish && (
+              <p className="text-xs leading-5 text-dtsc-muted">
+                Votre contribution sera enregistrée en brouillon sous votre nom. Seul un administrateur peut la publier ou la supprimer.
+              </p>
+            )}
+            <Button disabled={!canCreateDrafts} title={canCreateDrafts ? "Enregistrer un brouillon public." : "Création de brouillon désactivée par l'administrateur."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <Globe2 className="h-4 w-4" />
-              Enregistrer la publication
+              {canPublish ? "Enregistrer la publication" : "Enregistrer en brouillon"}
             </Button>
           </form>
         </div>
@@ -173,13 +194,13 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => {
+                  <Button type="button" variant="outline" size="sm" disabled={!canEditPublication(publication)} onClick={() => {
                     setEditing(publication);
                     setEditingPreviewHtml(publication.content);
                   }} className="rounded-xl">
                     <Edit3 className="h-4 w-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => setPendingDelete(publication)} className="rounded-xl text-red-400">
+                  <Button type="button" variant="outline" size="sm" disabled={!canDelete} onClick={() => setPendingDelete(publication)} className="rounded-xl text-red-400">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -214,20 +235,21 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             }}
             className="grid gap-3"
           >
-            <Input name="title" defaultValue={editing.title} required />
-            <Input name="slug" defaultValue={editing.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
-            <select name="category" defaultValue={editing.category} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+            <Input name="title" defaultValue={editing.title} required disabled={!canEditPublication(editing)} />
+            <Input name="slug" defaultValue={editing.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canEditPublication(editing)} />
+            <select name="category" defaultValue={editing.category} disabled={!canEditPublication(editing)} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
               {categories.map((category) => (
                 <option key={category} value={category}>{formatEnumLabel(category)}</option>
               ))}
             </select>
-            <Input name="coverLabel" defaultValue={editing.coverLabel || ""} />
-            <textarea name="excerpt" defaultValue={editing.excerpt} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <Input name="coverLabel" defaultValue={editing.coverLabel || ""} disabled={!canEditPublication(editing)} />
+            <textarea name="excerpt" defaultValue={editing.excerpt} disabled={!canEditPublication(editing)} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <RichTextEditor
               key={editing.id}
               textName="content"
               htmlName="contentHtml"
               defaultValue={editing.content}
+              disabled={!canEditPublication(editing)}
               allowImageUpload
               onContentChange={({ html }) => setEditingPreviewHtml(html)}
               placeholder="Contenu long de la publication"
@@ -235,9 +257,9 @@ export function PublicPublicationsManager({ publications, canEdit = true }: { pu
             <PublicationPreview html={editingPreviewHtml} />
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publié
-              <input name="published" type="checkbox" defaultChecked={editing.published} className="h-4 w-4 accent-cyan-500" />
+              <input name="published" type="checkbox" defaultChecked={editing.published} disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
             </label>
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+            <Button disabled={!canEditPublication(editing)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
           </form>
         )}
       </Dialog>

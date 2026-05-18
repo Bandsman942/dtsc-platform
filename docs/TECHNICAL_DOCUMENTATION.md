@@ -427,6 +427,7 @@ Fichiers:
 - `app/api/chat/route.ts`
 - `lib/openai.ts`
 - `lib/openai-config.ts`
+- `lib/private-chat-actions.ts`
 
 Flux:
 
@@ -440,9 +441,17 @@ Flux:
    - total tokens depuis `UsageLog`.
 7. Creation ou recuperation de la conversation; l'historique peut etre classe par `projectName`.
 8. Sauvegarde du message utilisateur.
-9. Recuperation du contexte Entreprise prive via `lib/company-context.ts`, si renseigne.
-10. Selection du modele: modele explicite de la requete, sinon `User.preferredModel`, sinon modele par defaut serveur.
-11. Injection des preferences privees `chatResponseStyle` et `chatResponseLength` pour adapter le ton et le niveau de detail de la reponse.
+9. Detection d'une action privee explicitement confirmee: envoi d'un message a DTSC ou creation d'un ticket support.
+10. Si une action est prete, la route execute l'action cote serveur, journalise `AuditLog`, enregistre la reponse assistant et retourne un flux texte court sans exposer de secret.
+11. Sinon, recuperation du contexte Entreprise prive via `lib/company-context.ts`, si renseigne.
+12. Selection du modele: modele explicite de la requete, sinon `User.preferredModel`, sinon modele par defaut serveur.
+13. Injection des preferences privees `chatResponseStyle` et `chatResponseLength` pour adapter le ton et le niveau de detail de la reponse.
+
+Actions privees du chatbot:
+
+- `SEND_EMAIL`: apres confirmation explicite, cree un `ContactMessage` avec `source = private_chatbot` et envoie le message a `CONTACT_EMAIL` ou `DTSC_CONTACT_EMAIL` via le service email serveur;
+- `CREATE_TICKET`: apres confirmation explicite, cree un `SupportTicket`, applique une priorite validee et notifie les utilisateurs `ADMIN` ou `SUPPORT` actifs;
+- si l'objet, la description, la priorite ou la confirmation manquent, le chatbot demande les informations restantes au lieu d'executer l'action.
 12. Envoi des 24 derniers messages a OpenAI Responses API, avec contexte Entreprise et contexte documentaire lorsque pertinent.
 13. Streaming du texte vers le client.
 14. Sauvegarde de la reponse assistant, du `UsageLog` et du log API.
@@ -586,8 +595,8 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `PATCH` | `/api/admin/users/[id]/status` | `ADMIN` | Activation/suspension/statut |
 | `PATCH` | `/api/admin/users/[id]/limits` | `ADMIN` | Limites messages/tokens |
 | `PATCH` | `/api/admin/settings` | `ADMIN` | Parametres globaux |
-| `POST` | `/api/admin/publications` | `ADMIN` | Creation d'une publication publique |
-| `PATCH` | `/api/admin/publications/[id]` | `ADMIN` | Modification d'une publication publique |
+| `POST` | `/api/admin/publications` | bloc `publications` | Creation d'une publication publique; les non-admin autorises creent uniquement des brouillons si `allowNonClientPublicationDrafts` est actif |
+| `PATCH` | `/api/admin/publications/[id]` | bloc `publications` | Modification; admin pour tout, contributeur non-client uniquement sur ses brouillons |
 | `DELETE` | `/api/admin/publications/[id]` | `ADMIN` | Suppression d'une publication publique |
 | `PATCH` | `/api/admin/access` | `ADMIN` | Mise a jour des blocs Administration visibles par role non-client |
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
@@ -1188,7 +1197,9 @@ Regles:
 
 ## 12.3 Publications publiques interactives
 
-Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee en format web lisible, limitee a 960x540 et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie la session `ADMIN`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement. Le formulaire affiche aussi un apercu public avant publication pour verifier la taille, le texte et les images. Le catalogue admin affiche maintenant l'auteur, le statut et la date/heure de derniere publication ou mise en brouillon pour chaque contenu.
+Les publications publiques sont gerees depuis le bloc `Publications publiques` de `/admin`. L'editeur riche permet le collage d'images ou l'ajout par selection de fichier. Cote navigateur, l'image est redimensionnee en format web lisible, limitee a 960x540 et convertie en WebP avant envoi vers le serveur; cote serveur, la route verifie l'acces au bloc `publications`, le type MIME et la taille avant stockage dans Supabase. En creation ou modification, un clic sur une image affiche une icone de suppression directement sur le visuel afin de retirer l'image du contenu avant enregistrement. Le formulaire affiche aussi un apercu public avant publication pour verifier la taille, le texte et les images. Le catalogue admin affiche maintenant l'auteur, le statut et la date/heure de derniere publication ou mise en brouillon pour chaque contenu.
+
+`AppSetting.allowNonClientPublicationDrafts` permet a l'administrateur d'autoriser les roles non-client qui disposent du bloc `publications` a creer des brouillons sous leur nom. Ces contributeurs ne peuvent jamais publier, supprimer ni modifier une publication deja publiee; ils peuvent modifier uniquement leurs propres brouillons. L'auteur d'origine reste conserve quand un administrateur publie le contenu.
 
 Le catalogue admin des publications utilise `ListControls` et `useSmartList`: recherche accent-insensible sur titre, slug, resume, categorie et statut, puis pagination cote UI. Les creations, modifications et suppressions sont synchronisees dans l'etat client puis `router.refresh()` recharge les donnees serveur sans attendre un rechargement complet de la page.
 
@@ -1196,7 +1207,7 @@ Routes ajoutees:
 
 | Route | Methode | Acces | Payload | Reponse |
 | --- | --- | --- | --- | --- |
-| `/api/admin/publications/images` | `POST` | `ADMIN` | `multipart/form-data` avec `file` image JPEG/PNG/WebP optimisee | `{ ok, url, path }` |
+| `/api/admin/publications/images` | `POST` | bloc `publications` | `multipart/form-data` avec `file` image JPEG/PNG/WebP optimisee | `{ ok, url, path }` |
 | `/api/public/publication-images/[...path]` | `GET` | Public | chemin Supabase commencant par `publications/` | Blob image cacheable |
 | `/api/public/search` | `GET` | Public | query string `q` optionnelle, max 80 caracteres | `{ results: [{ title, description, href, category }] }` |
 | `/api/publications/[id]/comments` | `POST` | Utilisateur connecte | `{ content, parentId? }` | commentaire cree |
@@ -1206,7 +1217,8 @@ Routes ajoutees:
 
 Regles RBAC:
 
-- seuls les `ADMIN` creent, modifient et suppriment les publications publiques;
+- `ADMIN` cree, modifie, publie et supprime les publications publiques;
+- les contributeurs non-client autorises creent et modifient uniquement leurs brouillons;
 - les utilisateurs connectes peuvent commenter, repondre et reagir;
 - un utilisateur peut modifier son propre commentaire uniquement dans la fenetre `commentEditWindowMinutes`;
 - seul `ADMIN` supprime un commentaire public;
@@ -1668,6 +1680,8 @@ Agent IA public:
 - les reponses sont renvoyees en `application/x-ndjson` avec des evenements `delta` puis `done` afin que le widget affiche une progression type streaming;
 - `AppSetting.publicAgentEnabled` permet a l'admin d'activer ou desactiver l'agent depuis Parametres globaux;
 - lorsque l'agent est desactive, la route renvoie un fallback public sans appel OpenAI: resume des expertises DTSC et invitation a remplir manuellement le formulaire Contact/newsletter;
+- le fallback de l'agent desactive oriente aussi vers la FAQ de la landing page pour les questions frequentes;
+- la route injecte un contexte FAQ issu de la landing page afin d'orienter les visiteurs vers les reponses publiques existantes sur DTSC, l'assistant, les tickets, la securite, les abonnements et les publications;
 - la route enrichit le prompt avec les publications publiques reellement publiees; l'agent ne doit citer que ces ressources et ne doit jamais inventer de guide, checklist, article, PDF ou etude de cas non redige par DTSC;
 - un filtre serveur refuse les messages manifestement hors perimetre DTSC avant l'appel OpenAI et renvoie la reponse officielle de recentrage;
 - l'agent est limite aux sujets DTSC: transformation numerique, data analytics, reporting, automatisation, IA appliquee, developpement web/applications metier, conseil technologique, gouvernance des donnees et prise de contact;
@@ -1692,6 +1706,7 @@ Migration:
 
 - `prisma/migrations/20260518120000_public_ai_agent_leads/migration.sql` ajoute les champs de qualification IA sur `NewsletterSubscriber` et l'index `NewsletterSubscriber_source_status_idx`.
 - `prisma/migrations/20260518143000_public_agent_setting/migration.sql` ajoute `AppSetting.publicAgentEnabled`.
+- `prisma/migrations/20260518162000_publication_draft_contributors/migration.sql` ajoute `AppSetting.allowNonClientPublicationDrafts`.
 
 Confirmations applicatives:
 

@@ -13,6 +13,7 @@ import { truncate } from "@/lib/format";
 import { getAppSettings } from "@/lib/settings";
 import { retrieveKnowledgeContext } from "@/lib/rag";
 import { getCompanyContextForUser } from "@/lib/company-context";
+import { performPrivateChatActionFromHistory } from "@/lib/private-chat-actions";
 import { writeApiLog } from "@/lib/audit";
 
 export const maxDuration = 60;
@@ -170,6 +171,43 @@ export async function POST(req: Request) {
     orderBy: { createdAt: "asc" },
     take: 24,
   });
+
+  const privateAction = await performPrivateChatActionFromHistory({
+    history,
+    userId: session.userId,
+    request: req,
+  }).catch((error) => {
+    console.error("Private chat action failed", error);
+    return { handled: false as const };
+  });
+  if (privateAction.handled) {
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        role: "assistant",
+        content: privateAction.reply,
+        model,
+      },
+    });
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date() },
+    });
+    await writeApiLog({
+      request: req,
+      statusCode: 200,
+      userId: session.userId,
+      startedAt,
+      metadata: { model, conversationId: conversation.id, ...privateAction.metadata },
+    });
+    return new Response(privateAction.reply, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Conversation-Id": conversation.id,
+      },
+    });
+  }
 
   const [companyContext, ragContext] = await Promise.all([
     getCompanyContextForUser(session.userId).catch((error) => {

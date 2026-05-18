@@ -740,6 +740,7 @@ export default async function AdminPage({
               defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
               chatbotEnabled: settings.chatbotEnabled,
               publicAgentEnabled: settings.publicAgentEnabled,
+              allowNonClientPublicationDrafts: settings.allowNonClientPublicationDrafts,
               maintenanceMode: settings.maintenanceMode,
               supportAutoCloseDays: settings.supportAutoCloseDays,
               allowClientAnnouncements: settings.allowClientAnnouncements,
@@ -752,7 +753,16 @@ export default async function AdminPage({
         )}
 
         {activeSection === "publications" && canView("publications") && (
-          <PublicPublicationsManager publications={JSON.parse(JSON.stringify(publicPublications))} canEdit={user.role === UserRole.ADMIN} />
+          <PublicPublicationsManager
+            publications={JSON.parse(JSON.stringify(publicPublications))}
+            currentUserId={user.id}
+            canCreateDrafts={
+              user.role === UserRole.ADMIN ||
+              (settings.allowNonClientPublicationDrafts && (user.role === UserRole.MANAGER || user.role === UserRole.SUPPORT))
+            }
+            canPublish={user.role === UserRole.ADMIN}
+            canDelete={user.role === UserRole.ADMIN}
+          />
         )}
 
         {activeSection === "users" && canView("users") && (

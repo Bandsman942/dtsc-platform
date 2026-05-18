@@ -146,6 +146,7 @@ export const adminSettingsSchema = z.object({
   defaultDailyTokenLimit: z.coerce.number().int().min(1000).max(2_000_000),
   chatbotEnabled: z.coerce.boolean(),
   publicAgentEnabled: z.coerce.boolean(),
+  allowNonClientPublicationDrafts: z.coerce.boolean(),
   maintenanceMode: z.coerce.boolean(),
   supportAutoCloseDays: z.coerce.number().int().min(1).max(90),
   allowClientAnnouncements: z.coerce.boolean(),

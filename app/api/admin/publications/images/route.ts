@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { getSession } from "@/lib/auth";
+import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getAppSettings } from "@/lib/settings";
 import { uploadPublicPublicationImageToSupabase } from "@/lib/supabase-storage";
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -13,9 +14,16 @@ function toPublicPublicationImageUrl(path: string) {
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
-  const session = await getSession();
-  if (!session || session.role !== UserRole.ADMIN) {
+  const access = await requireAdminBlockAccess("publications");
+  if (access.response) {
     await writeApiLog({ request: req, statusCode: 403, startedAt });
+    return access.response;
+  }
+  const session = access.session;
+  const settings = await getAppSettings();
+  const canUpload = session.role === UserRole.ADMIN || (session.role !== UserRole.CLIENT && settings.allowNonClientPublicationDrafts);
+  if (!canUpload) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
