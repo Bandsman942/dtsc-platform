@@ -14,7 +14,7 @@ import { formatRelativeUserDateTime, type UserDatePreferences } from "@/lib/user
 import { cn } from "@/lib/utils";
 
 type UserOption = { id: string; name: string; email: string; avatarUrl?: string | null; jobTitle?: string | null; role: string };
-type GroupMember = { id: string; role: string; status: string; userId: string; user: UserOption };
+type GroupMember = { id: string; role: string; status: string; userId: string; joinedAt: string; user: UserOption };
 type Group = {
   id: string;
   name: string;
@@ -22,6 +22,7 @@ type Group = {
   groupType: string;
   status: string;
   ownerId: string;
+  visibility?: string | null;
   members: GroupMember[];
   invitations: Array<{ id: string; status: string; invitedEmail?: string | null; invitedUser?: { name: string; email: string } | null; invitedBy: { name: string } }>;
   messages: Array<{ id: string; content: string; createdAt: string; author: { name: string } }>;
@@ -80,6 +81,7 @@ export function CollaboratorsWorkspace({
   const [groupDialog, setGroupDialog] = useState<"create" | "edit" | null>(null);
   const [inviteDialog, setInviteDialog] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
+  const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
   const [editingMessage, setEditingMessage] = useState<GroupMessage | null>(null);
   const [inviteSearch, setInviteSearch] = useState("");
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<string[]>([]);
@@ -295,11 +297,17 @@ export function CollaboratorsWorkspace({
         {activeGroup ? (
           <>
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-dtsc-border p-4">
-              <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => setGroupDetailsOpen(true)}
+                className="min-w-0 flex-1 rounded-2xl p-2 text-left transition hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                aria-label={`Voir les détails du groupe ${activeGroup.name}`}
+              >
                 <h2 className="text-2xl font-black text-dtsc-ink">{activeGroup.name}</h2>
                 <p className="text-sm text-dtsc-muted">{activeGroup.description || "Groupe collaboratif DTSC."}</p>
                 <p className="mt-1 text-xs font-bold text-dtsc-blue">{activeGroup.members.map((member) => member.user.name).join(", ")}</p>
-              </div>
+                <p className="mt-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-500">Cliquer pour voir les détails du groupe</p>
+              </button>
               <div className="flex gap-2">
                 {canManage && <Button type="button" variant="outline" onClick={() => setInviteDialog(true)} className="rounded-xl"><UserPlus className="h-4 w-4" /> Inviter</Button>}
                 <ActionMenu
@@ -418,6 +426,11 @@ export function CollaboratorsWorkspace({
           />
         )}
       </Dialog>
+      <Dialog open={groupDetailsOpen} title="Détails du groupe" onClose={() => setGroupDetailsOpen(false)}>
+        {activeGroup && (
+          <GroupDetailsDialog group={activeGroup} currentUserId={currentUserId} userPreferences={userPreferences} />
+        )}
+      </Dialog>
       <Dialog open={Boolean(editingMessage)} title="Modifier le message" onClose={() => setEditingMessage(null)}>
         {editingMessage && activeGroup && (
           <MessageEditForm
@@ -436,22 +449,51 @@ export function CollaboratorsWorkspace({
       <Dialog open={Boolean(sharedSnapshot)} title={sharedSnapshot?.title || "Conversation partagée"} onClose={() => setSharedSnapshot(null)}>
         {sharedSnapshot && (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">
-              <p className="font-black text-dtsc-ink">{sharedSnapshot.title}</p>
-              <p className="mt-1 text-xs">
+            <div className="rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-white p-4 text-sm text-slate-700 shadow-[0_14px_40px_rgba(0,43,91,0.08)] dark:border-cyan-400/40 dark:from-[#08223a] dark:to-[#071427] dark:text-slate-200">
+              <p className="font-black text-slate-950 dark:text-white">{sharedSnapshot.title}</p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
                 Partagée par {sharedSnapshot.sharedBy.name} dans {sharedSnapshot.group.name} · {formatRelativeUserDateTime(sharedSnapshot.createdAt, userPreferences)}
               </p>
             </div>
             <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
               {(sharedSnapshot.snapshotJson.messages || []).map((message) => {
                 const color = getParticipantColor(message.role);
+                const isAssistant = message.role === "assistant";
+                const isUser = message.role === "user";
                 return (
-                  <div key={message.id} className={cn("rounded-2xl border p-3 text-sm", message.role === "user" ? "border-dtsc-border bg-dtsc-page" : "border-cyan-200 bg-cyan-50/60")}>
-                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: color.hex }}>
-                      {message.role === "assistant" ? "Assistant DTSC" : message.role === "user" ? "Utilisateur" : "Système"}
-                    </p>
-                    <p className="mt-2 whitespace-pre-wrap leading-7 text-dtsc-ink">{message.content}</p>
-                    <p className="mt-2 text-[0.68rem] font-semibold text-dtsc-muted">{formatRelativeUserDateTime(message.createdAt, userPreferences)}</p>
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "rounded-2xl border p-4 text-sm shadow-[0_10px_34px_rgba(0,23,54,0.10)]",
+                      isAssistant && "border-cyan-300 bg-[#f7fcff] text-slate-900 dark:border-cyan-300/70 dark:bg-[#eaf6ff] dark:text-[#06111f]",
+                      isUser && "border-slate-200 bg-white text-slate-900 dark:border-cyan-500/35 dark:bg-[#071427] dark:text-slate-100",
+                      !isAssistant && !isUser && "border-amber-200 bg-amber-50 text-slate-900 dark:border-amber-300/60 dark:bg-[#fff7df] dark:text-[#1f2937]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black",
+                            isAssistant ? "bg-cyan-600 text-white dark:bg-[#003b5c]" : isUser ? color.bgClassName : "bg-amber-200 text-amber-900"
+                          )}
+                        >
+                          {isAssistant ? "AI" : isUser ? "UT" : "SY"}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-black uppercase tracking-[0.12em]" style={{ color: isAssistant ? "#0e7490" : color.hex }}>
+                            {isAssistant ? "Assistant DTSC" : isUser ? "Utilisateur" : "Système"}
+                          </p>
+                          <p className={cn("text-[0.68rem] font-semibold", isAssistant ? "text-slate-500 dark:text-slate-700" : "text-slate-500 dark:text-slate-300")}>
+                            {formatRelativeUserDateTime(message.createdAt, userPreferences)}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em]", isAssistant ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-200 dark:text-cyan-950" : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100")}>
+                        Copie
+                      </span>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap leading-7">{message.content}</p>
                   </div>
                 );
               })}
@@ -610,11 +652,16 @@ function GroupMessageBubble({
             <button
               type="button"
               onClick={() => onOpenSharedSnapshot(message.sharedConversationSnapshot?.id || "")}
-              className={cn("mt-3 block w-full rounded-xl border p-3 text-left text-xs font-bold transition hover:border-cyan-300", message.authorId === currentUserId ? "border-white/20 bg-white/10 text-white" : "border-dtsc-border bg-dtsc-page text-dtsc-blue")}
+              className={cn(
+                "mt-3 block w-full rounded-xl border p-3 text-left text-xs font-bold shadow-[0_10px_26px_rgba(0,23,54,0.10)] transition hover:-translate-y-0.5 hover:border-cyan-300",
+                message.authorId === currentUserId
+                  ? "border-white/30 bg-white text-[#001736] dark:border-cyan-300/60 dark:bg-[#eaf6ff] dark:text-[#06111f]"
+                  : "border-cyan-200 bg-gradient-to-br from-cyan-50 to-white text-[#002b5b] dark:border-cyan-400/40 dark:from-[#0b2742] dark:to-[#071427] dark:text-cyan-100"
+              )}
             >
-              <span className="block text-[0.68rem] uppercase tracking-[0.14em] opacity-80">Conversation chatbot partagée</span>
+              <span className="block text-[0.68rem] uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300">Conversation chatbot partagée</span>
               <span className="mt-1 block">{message.sharedConversationSnapshot.title}</span>
-              <span className="mt-2 block underline underline-offset-4">Voir la copie consultable</span>
+              <span className="mt-2 inline-flex rounded-full bg-cyan-100 px-2.5 py-1 text-[0.68rem] font-black text-cyan-900 dark:bg-cyan-300 dark:text-cyan-950">Voir la copie consultable</span>
             </button>
           )}
           <p className={cn("mt-2 text-[0.68rem] font-semibold", message.authorId === currentUserId ? "text-white/70" : "text-dtsc-muted")}>
@@ -622,6 +669,104 @@ function GroupMessageBubble({
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function GroupDetailsDialog({
+  group,
+  currentUserId,
+  userPreferences,
+}: {
+  group: Group;
+  currentUserId: string;
+  userPreferences: UserDatePreferences;
+}) {
+  const owner = group.members.find((member) => member.userId === group.ownerId);
+  const activeMembers = group.members.filter((member) => member.status === "ACTIVE");
+  const pendingInvitations = group.invitations.filter((invitation) => invitation.status === "PENDING");
+  return (
+    <div className="space-y-5">
+      <div className="rounded-3xl border border-cyan-200 bg-gradient-to-br from-cyan-50 via-white to-slate-50 p-5 shadow-[0_18px_50px_rgba(0,43,91,0.10)] dark:border-cyan-400/40 dark:from-[#08223a] dark:via-[#071427] dark:to-[#0b1728]">
+        <p className="text-[0.7rem] font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-300">{formatEnumLabel(group.groupType)}</p>
+        <h3 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">{group.name}</h3>
+        <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{group.description || "Aucune description renseignée pour ce groupe."}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <GroupDetailMetric label="Membres actifs" value={String(activeMembers.length)} />
+          <GroupDetailMetric label="Messages" value={String(group._count?.messages ?? group.messages.length)} />
+          <GroupDetailMetric label="Statut" value={formatEnumLabel(group.status)} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <GroupInfoLine label="Propriétaire" value={owner?.user.name || "Non renseigné"} />
+        <GroupInfoLine label="Visibilité" value={formatEnumLabel(group.visibility || "PRIVATE")} />
+        <GroupInfoLine label="Rôle actuel" value={formatEnumLabel(group.members.find((member) => member.userId === currentUserId)?.role || "MEMBER")} />
+        <GroupInfoLine label="Invitations en attente" value={String(pendingInvitations.length)} />
+      </div>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="font-black text-dtsc-ink">Membres du groupe</h4>
+          <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-900 dark:bg-cyan-300 dark:text-cyan-950">{activeMembers.length} membre(s)</span>
+        </div>
+        <div className="max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-2 pr-1">
+          {activeMembers.map((member) => {
+            const color = getParticipantColor(member.userId);
+            return (
+              <div key={member.id} className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xs font-black", color.bgClassName, color.textClassName)}>
+                    {member.user.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-black text-dtsc-ink">{member.user.name}</p>
+                    <p className="truncate text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className={cn("rounded-full px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.1em]", member.role === "OWNER" ? "bg-cyan-100 text-cyan-900" : member.role === "ADMIN" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-700")}>
+                    {formatEnumLabel(member.role)}
+                  </span>
+                  <p className="mt-1 text-[0.68rem] font-semibold text-dtsc-muted">{formatRelativeUserDateTime(member.joinedAt, userPreferences)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {pendingInvitations.length > 0 && (
+        <section>
+          <h4 className="mb-3 font-black text-dtsc-ink">Invitations en attente</h4>
+          <div className="space-y-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-2">
+            {pendingInvitations.map((invitation) => (
+              <div key={invitation.id} className="rounded-xl bg-dtsc-surface p-3 text-sm">
+                <p className="font-bold text-dtsc-ink">{invitation.invitedUser?.name || invitation.invitedEmail || "Destinataire externe"}</p>
+                <p className="mt-1 text-xs text-dtsc-muted">Invité par {invitation.invitedBy.name}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function GroupDetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-[0_10px_26px_rgba(0,23,54,0.08)] dark:border-cyan-300/20 dark:bg-white/10">
+      <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">{label}</p>
+      <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+function GroupInfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words font-bold text-dtsc-ink">{value}</p>
     </div>
   );
 }
