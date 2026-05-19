@@ -312,17 +312,27 @@ export function ChatWorkspace({
   const activeConversationShareUrl = activeConversationId ? `/chat?conversationId=${activeConversationId}` : "/chat";
   const activeConversationAbsoluteUrl = typeof window === "undefined" ? activeConversationShareUrl : `${window.location.origin}${activeConversationShareUrl}`;
 
+  async function copyTextToClipboard(value: string) {
+    const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
+    if (!browserNavigator?.clipboard) {
+      setError("Copie indisponible dans ce navigateur.");
+      return;
+    }
+    await browserNavigator.clipboard.writeText(value);
+    setError("Contenu copié.");
+  }
+
   async function shareActiveConversationLink() {
-    if (typeof navigator !== "undefined" && "share" in navigator) {
-      await navigator.share({
+    const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
+    if (browserNavigator?.share) {
+      await browserNavigator.share({
         title: activeConversation?.title || "Conversation DTSC",
         text: "Conversation DTSC Platform",
         url: activeConversationAbsoluteUrl,
       }).catch(() => null);
       return;
     }
-    await navigator.clipboard.writeText(activeConversationAbsoluteUrl);
-    setError("Lien de la conversation copié.");
+    await copyTextToClipboard(activeConversationAbsoluteUrl);
   }
 
   const historyPanel = (
@@ -478,7 +488,7 @@ export function ChatWorkspace({
               label="Actions de la conversation"
               items={[
                 { key: "info", label: "Infos sur la conversation", icon: Info, onSelect: () => setInfoOpen(true), disabled: !activeConversation },
-                { key: "copy-link", label: "Copier le lien", icon: Copy, onSelect: () => navigator.clipboard.writeText(activeConversationAbsoluteUrl).then(() => setError("Lien de la conversation copié.")), disabled: !activeConversation },
+                { key: "copy-link", label: "Copier le lien", icon: Copy, onSelect: () => copyTextToClipboard(activeConversationAbsoluteUrl), disabled: !activeConversation },
                 { key: "share", label: "Partager", icon: Share2, onSelect: shareActiveConversationLink, disabled: !activeConversation },
                 { key: "share-group", label: "Transférer vers un groupe", icon: Share2, onSelect: () => setShareToGroupOpen(true), disabled: !activeConversation },
                 { key: "rename", label: "Renommer", icon: Pencil, onSelect: () => setRenameOpen(true), disabled: !activeConversation },
@@ -526,7 +536,7 @@ export function ChatWorkspace({
                       {message.content && (
                         <button
                           className="absolute -right-2 -top-2 hidden rounded-lg bg-white p-1 text-slate-500 shadow-md group-hover:block"
-                          onClick={() => navigator.clipboard.writeText(message.content)}
+                          onClick={() => copyTextToClipboard(message.content)}
                           aria-label="Copier"
                         >
                           <Copy className="h-3.5 w-3.5" />
