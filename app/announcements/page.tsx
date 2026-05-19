@@ -6,10 +6,11 @@ import { prisma } from "@/lib/prisma";
 
 export default async function AnnouncementsPage() {
   const user = await requireUser();
-  const [settings, announcements] = await Promise.all([
+  const [settings, announcements, users] = await Promise.all([
     getAppSettings(),
     prisma.announcement.findMany({
-      orderBy: { createdAt: "desc" },
+      where: { deletedAt: null },
+      orderBy: [{ pinnedAt: "desc" }, { createdAt: "desc" }],
       include: {
         author: { select: { id: true, name: true, role: true, avatarUrl: true, jobTitle: true } },
         comments: {
@@ -17,10 +18,24 @@ export default async function AnnouncementsPage() {
           include: { user: { select: { id: true, name: true, role: true, avatarUrl: true } } },
         },
         reactions: { select: { value: true } },
+        shares: { select: { id: true } },
+        reports: { select: { id: true, status: true } },
       },
       take: 200,
     }),
+    prisma.user.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true, email: true, role: true, avatarUrl: true },
+      orderBy: { name: "asc" },
+      take: 300,
+    }),
   ]);
+  if (announcements.length) {
+    await prisma.announcement.updateMany({
+      where: { id: { in: announcements.map((announcement) => announcement.id) } },
+      data: { viewCount: { increment: 1 }, lastAction: "Annonce consultée" },
+    });
+  }
 
   return (
     <AppShell user={user}>
@@ -38,6 +53,7 @@ export default async function AnnouncementsPage() {
           role={user.role}
           allowClientAnnouncements={settings.allowClientAnnouncements}
           commentEditWindowMinutes={settings.commentEditWindowMinutes}
+          transferRecipients={JSON.parse(JSON.stringify(users))}
         />
       </div>
     </AppShell>

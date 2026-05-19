@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User } from "lucide-react";
+import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
+import { translate } from "@/lib/i18n";
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, help: "Voir vos indicateurs, conversations récentes et accès rapides." },
   { href: "/chat", label: "Chatbot", icon: Bot, help: "Discuter avec l'assistant DTSC et exploiter votre contexte métier." },
   { href: "/billing", label: "Abonnement", icon: CreditCard, help: "Consulter votre plan, vos limites et vos factures." },
   { href: "/company", label: "Entreprise", icon: BriefcaseBusiness, help: "Renseigner votre entreprise, vos activités et vos documents métier." },
+  { href: "/collaborators", label: "Mes collaborateurs", icon: UsersRound, help: "Créer des groupes, inviter des membres et échanger autour de vos projets." },
   { href: "/notifications", label: "Notifications", icon: Bell, help: "Lire les alertes importantes liées à votre compte." },
   { href: "/announcements", label: "Annonces", icon: Megaphone, help: "Suivre les publications internes et échanger en commentaires." },
   { href: "/support", label: "Support", icon: Headphones, help: "Créer et suivre vos tickets avec l'équipe DTSC." },
@@ -24,11 +26,13 @@ export function NavLinks({
   mobile = false,
   unreadNotifications = 0,
   showEmployeeActivities = false,
+  locale = "fr",
 }: {
   role: UserRole;
   mobile?: boolean;
   unreadNotifications?: number;
   showEmployeeActivities?: boolean;
+  locale?: string | null;
 }) {
   const pathname = usePathname();
   const employeeItems = showEmployeeActivities
@@ -37,6 +41,20 @@ export function NavLinks({
   const navItems = canAccessAdministration(role)
     ? [...items, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...items, ...employeeItems];
+  const translationByHref: Record<string, string> = {
+    "/dashboard": "navigation.dashboard",
+    "/chat": "navigation.chat",
+    "/billing": "navigation.billing",
+    "/company": "navigation.company",
+    "/collaborators": "navigation.collaborators",
+    "/notifications": "navigation.notifications",
+    "/announcements": "navigation.announcements",
+    "/support": "navigation.support",
+    "/profile": "navigation.profile",
+    "/settings": "navigation.settings",
+    "/activities": "navigation.activities",
+    "/admin": "navigation.admin",
+  };
 
   return (
     <>
@@ -66,7 +84,7 @@ export function NavLinks({
                 </span>
               )}
             </span>
-            {mobile && item.href === "/admin" ? "Admin" : item.label}
+            {mobile && item.href === "/admin" ? "Admin" : translate(locale, translationByHref[item.href] || item.label)}
             {showNotificationSignal && (
               <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
                 {unreadNotifications > 99 ? "99+" : unreadNotifications}

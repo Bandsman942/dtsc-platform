@@ -48,8 +48,13 @@ export async function DELETE(_req: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const deleted = await prisma.announcement.deleteMany({
+  const deleted = await prisma.announcement.updateMany({
     where: { id },
+    data: {
+      status: "DELETED",
+      deletedAt: new Date(),
+      lastAction: "Annonce supprimée",
+    },
   });
 
   if (!deleted.count) {

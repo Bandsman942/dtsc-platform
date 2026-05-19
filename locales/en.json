@@ -1,0 +1,51 @@
+{
+  "common": {
+    "actions": "Actions",
+    "archive": "Archive",
+    "cancel": "Cancel",
+    "copy": "Copy",
+    "delete": "Delete",
+    "edit": "Edit",
+    "info": "Info",
+    "pin": "Pin",
+    "restore": "Restore",
+    "save": "Save",
+    "send": "Send",
+    "share": "Share",
+    "transfer": "Forward"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "chat": "Chatbot",
+    "billing": "Subscription",
+    "company": "Company",
+    "collaborators": "My collaborators",
+    "notifications": "Notifications",
+    "announcements": "Announcements",
+    "support": "Support",
+    "profile": "Profile",
+    "settings": "Settings",
+    "activities": "DTSC Activities",
+    "admin": "Administration"
+  },
+  "announcements": {
+    "actions": "Announcement actions",
+    "archive": "Archive",
+    "copy": "Create a copy",
+    "indicators": "View metrics",
+    "info": "Announcement info",
+    "report": "Report",
+    "transfer": "Forward"
+  },
+  "collaborators": {
+    "title": "My collaborators",
+    "groups": "Groups",
+    "invitations": "Invitations",
+    "messages": "Messages"
+  },
+  "settings": {
+    "language": "Language",
+    "timezone": "Time zone",
+    "dateFormat": "Date format"
+  }
+}

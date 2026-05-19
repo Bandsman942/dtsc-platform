@@ -25,6 +25,12 @@ export default async function ChatPage({
     include: { _count: { select: { conversations: true } } },
     take: 100,
   });
+  const collaborationGroups = await prisma.collaborationGroup.findMany({
+    where: { status: "ACTIVE", members: { some: { userId: user.id, status: "ACTIVE" } } },
+    select: { id: true, name: true },
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+  });
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const resetAt = new Date(today);
@@ -42,7 +48,13 @@ export default async function ChatPage({
       <ChatWorkspace
         initialConversations={JSON.parse(JSON.stringify(conversations))}
         initialProjects={JSON.parse(JSON.stringify(projects))}
+        collaborationGroups={JSON.parse(JSON.stringify(collaborationGroups))}
         initialConversationId={conversationId}
+        userPreferences={{
+          locale: user.locale,
+          timezone: user.timezone,
+          dateFormat: user.dateFormat,
+        }}
         usage={{
           messagesToday,
           dailyMessageLimit: user.dailyMessageLimit,

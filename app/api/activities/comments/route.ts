@@ -10,6 +10,7 @@ const commentSchema = z.object({
   entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "COLLAB_REQUEST", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD", "LEGAL_CASE", "LEGAL_CONTRACT", "LEGAL_TEMPLATE", "LEGAL_RISK", "LEGAL_DOCUMENT", "LEGAL_DISPUTE", "LEGAL_REQUEST", "LEGAL_REPORT"]),
   entityId: z.string().min(5),
   content: z.string().min(2).max(2000),
+  mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
 });
 
 export async function GET(req: Request) {
@@ -31,7 +32,10 @@ export async function GET(req: Request) {
   }
   const comments = await prisma.cooComment.findMany({
     where: parsed.data,
-    include: { author: { select: { name: true, role: true, avatarUrl: true } } },
+    include: {
+      author: { select: { name: true, role: true, avatarUrl: true } },
+      mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
+    },
     orderBy: { createdAt: "asc" },
     take: 200,
   });
@@ -52,16 +56,35 @@ export async function POST(req: Request) {
   if (!(await canAccessEntity(user, parsed.data.entityType, parsed.data.entityId))) {
     return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à commenter cet élément." }, { status: 403 });
   }
+  const allowedUserIds = await relatedUserIds(parsed.data.entityType, parsed.data.entityId);
+  const mentionedUserIds = [...new Set(parsed.data.mentionedUserIds.filter((id) => allowedUserIds.includes(id)))];
   const comment = await prisma.cooComment.create({
     data: {
       entityType: parsed.data.entityType,
       entityId: parsed.data.entityId,
       authorId: user.id,
       content: parsed.data.content,
+      mentions: { create: mentionedUserIds.map((mentionedUserId) => ({ mentionedUserId })) },
     },
-    include: { author: { select: { name: true, role: true, avatarUrl: true } } },
+    include: {
+      author: { select: { name: true, role: true, avatarUrl: true } },
+      mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
+    },
   });
   await notifyEntityParticipants(user.id, parsed.data.entityType, parsed.data.entityId, "Nouveau commentaire DTSC", parsed.data.content);
+  if (mentionedUserIds.length) {
+    for (const mentionedUserId of mentionedUserIds.filter((id) => id !== user.id)) {
+      await prisma.notification.create({
+        data: {
+          userId: mentionedUserId,
+          title: "Mention dans un commentaire DTSC",
+          body: parsed.data.content.slice(0, 220),
+          type: `MENTION_${parsed.data.entityType}`,
+          targetUrl: "/activities",
+        },
+      });
+    }
+  }
   await writeApiLog({ request: req, statusCode: 201, userId: user.id, startedAt, metadata: { entityType: parsed.data.entityType, entityId: parsed.data.entityId } });
   return NextResponse.json({ ok: true, comment }, { status: 201 });
 }

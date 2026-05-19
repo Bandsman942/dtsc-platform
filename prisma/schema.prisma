@@ -126,6 +126,17 @@ model User {
   hrcfoEmployee        HrcfoEmployee? @relation("EmployeeUser")
   managedHrcfoEmployees HrcfoEmployee[] @relation("EmployeeManager")
   cooComments          CooComment[]
+  cooCommentMentions   CooCommentMention[]
+  ownedCollaborationGroups CollaborationGroup[] @relation("CollaborationGroupOwner")
+  collaborationGroupMembers CollaborationGroupMember[]
+  sentCollaborationInvitations CollaborationGroupInvitation[] @relation("CollaborationInvitationSender")
+  receivedCollaborationInvitations CollaborationGroupInvitation[] @relation("CollaborationInvitationReceiver")
+  collaborationGroupMessages CollaborationGroupMessage[]
+  collaborationMessageMentions CollaborationMessageMention[]
+  collaborationAuditLogs CollaborationGroupAuditLog[]
+  announcementSharesSent AnnouncementShare[] @relation("AnnouncementShareSender")
+  announcementSharesReceived AnnouncementShare[] @relation("AnnouncementShareRecipient")
+  announcementReports AnnouncementReport[]
 
   @@index([role])
   @@index([status])
@@ -342,6 +353,7 @@ model Conversation {
   project   ConversationProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   messages  Message[]
   usageLogs UsageLog[]
+  collaborationMessages CollaborationGroupMessage[]
 
   @@index([userId, updatedAt])
   @@index([userId, projectName, updatedAt])
@@ -575,13 +587,26 @@ model Announcement {
   authorId  String
   title     String
   content   String
+  status    String                 @default("ACTIVE")
+  category  String                 @default("GENERAL")
+  visibility String                @default("INTERNAL")
+  viewCount Int                    @default(0)
+  shareCount Int                   @default(0)
+  reportCount Int                  @default(0)
+  lastAction String?
+  pinnedAt  DateTime?
+  archivedAt DateTime?
+  deletedAt DateTime?
   createdAt DateTime               @default(now())
   updatedAt DateTime               @updatedAt
   author    User                   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   comments  AnnouncementComment[]
   reactions AnnouncementReaction[]
+  shares    AnnouncementShare[]
+  reports   AnnouncementReport[]
 
-  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([deletedAt, archivedAt])
   @@index([authorId])
 }
 
@@ -613,6 +638,39 @@ model AnnouncementReaction {
 
   @@unique([announcementId, userId])
   @@index([userId])
+}
+
+model AnnouncementShare {
+  id             String       @id @default(cuid())
+  announcementId String
+  senderId       String
+  recipientId    String
+  message        String?
+  createdAt      DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  sender         User         @relation("AnnouncementShareSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient      User         @relation("AnnouncementShareRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, senderId, recipientId])
+  @@index([recipientId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model AnnouncementReport {
+  id             String       @id @default(cuid())
+  announcementId String
+  reporterId     String
+  reason         String
+  description    String?
+  priority       String       @default("NORMAL")
+  status         String       @default("OPEN")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  reporter       User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId, status])
+  @@index([reporterId, createdAt])
 }
 
 model AppSetting {
@@ -1350,9 +1408,133 @@ model CooComment {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   author              User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  mentions            CooCommentMention[]
 
   @@index([entityType, entityId, createdAt])
   @@index([authorId])
+}
+
+model CooCommentMention {
+  id              String     @id @default(cuid())
+  commentId       String
+  mentionedUserId String
+  createdAt       DateTime   @default(now())
+  comment         CooComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser   User       @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, mentionedUserId])
+  @@index([mentionedUserId, createdAt])
+}
+
+model CollaborationGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  groupType   String   @default("PROJECT")
+  ownerId     String
+  companyId   String?
+  visibility  String   @default("PRIVATE")
+  status      String   @default("ACTIVE")
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  owner       User     @relation("CollaborationGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     CollaborationGroupMember[]
+  invitations CollaborationGroupInvitation[]
+  messages    CollaborationGroupMessage[]
+  auditLogs   CollaborationGroupAuditLog[]
+
+  @@index([ownerId, status, updatedAt])
+  @@index([companyId])
+}
+
+model CollaborationGroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("MEMBER")
+  status    String   @default("ACTIVE")
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  group     CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId, status, updatedAt])
+  @@index([groupId, role])
+}
+
+model CollaborationGroupInvitation {
+  id                String   @id @default(cuid())
+  groupId           String
+  invitedById       String
+  invitedUserId     String?
+  invitedEmail      String?
+  status            String   @default("PENDING")
+  invitationMessage String?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  respondedAt       DateTime?
+  group             CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy         User     @relation("CollaborationInvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedUser       User?    @relation("CollaborationInvitationReceiver", fields: [invitedUserId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, status])
+  @@index([invitedUserId, status, createdAt])
+  @@index([invitedEmail, status])
+}
+
+model CollaborationGroupMessage {
+  id                          String   @id @default(cuid())
+  groupId                     String
+  authorId                    String
+  content                     String
+  messageType                 String   @default("TEXT")
+  replyToId                   String?
+  sharedChatbotConversationId String?
+  status                      String   @default("SENT")
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  deletedAt                   DateTime?
+  group                       CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author                      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo                     CollaborationGroupMessage? @relation("CollaborationMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies                     CollaborationGroupMessage[] @relation("CollaborationMessageReplies")
+  sharedChatbotConversation   Conversation? @relation(fields: [sharedChatbotConversationId], references: [id], onDelete: SetNull)
+  mentions                    CollaborationMessageMention[]
+
+  @@index([groupId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([sharedChatbotConversationId])
+}
+
+model CollaborationMessageMention {
+  id              String   @id @default(cuid())
+  messageId       String
+  mentionedUserId String
+  createdAt       DateTime @default(now())
+  message         CollaborationGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedUser   User     @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, mentionedUserId])
+  @@index([mentionedUserId, createdAt])
+}
+
+model CollaborationGroupAuditLog {
+  id         String   @id @default(cuid())
+  groupId    String
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  createdAt  DateTime @default(now())
+  group      CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model CollaboratorRequest {

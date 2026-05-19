@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, FolderKanban, FolderPlus, Loader2, Menu, Pencil, Plus, Send, Trash2, X } from "lucide-react";
+import { Copy, FolderKanban, FolderPlus, Loader2, Menu, Pencil, Plus, Send, Share2, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { ShareActionButton } from "@/components/ui/share-action-button";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { formatRelativeUserDateTime, formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
 type ConversationSummary = {
@@ -37,12 +38,16 @@ type ChatMessage = {
 export function ChatWorkspace({
   initialConversations,
   initialProjects,
+  collaborationGroups,
   initialConversationId,
+  userPreferences,
   usage,
 }: {
   initialConversations: ConversationSummary[];
   initialProjects: ConversationProject[];
+  collaborationGroups: Array<{ id: string; name: string }>;
   initialConversationId?: string;
+  userPreferences: UserDatePreferences;
   usage: {
     messagesToday: number;
     dailyMessageLimit: number;
@@ -63,6 +68,7 @@ export function ChatWorkspace({
   const [dailyUsage, setDailyUsage] = useState(usage);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [shareToGroupOpen, setShareToGroupOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);
   const [selectedProject, setSelectedProject] = useState<ConversationProject | null>(null);
@@ -195,6 +201,35 @@ export function ChatWorkspace({
     setActiveConversationId("");
   }
 
+  async function shareConversationToGroup(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeConversation) {
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const groupId = String(formData.get("groupId") || "");
+    if (!groupId) {
+      setError("Sélectionnez un groupe de destination.");
+      return;
+    }
+    const response = await fetch(`/api/collaborators/groups/${groupId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: String(formData.get("content") || `Conversation partagée: ${activeConversation.title}`),
+        messageType: "CHATBOT_SHARE",
+        sharedChatbotConversationId: activeConversation.id,
+        mentionedUserIds: [],
+      }),
+    });
+    if (response.ok) {
+      setShareToGroupOpen(false);
+      setError("Conversation partagée dans le groupe.");
+    } else {
+      setError("Impossible de partager cette conversation dans le groupe.");
+    }
+  }
+
   async function sendMessage(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!input.trim() || isStreaming) {
@@ -206,12 +241,13 @@ export function ChatWorkspace({
       id: crypto.randomUUID(),
       role: "user",
       content: input.trim(),
+      createdAt: new Date().toISOString(),
     };
     const assistantId = crypto.randomUUID();
     setMessages((current) => [
       ...current,
       userMessage,
-      { id: assistantId, role: "assistant", content: "" },
+      { id: assistantId, role: "assistant", content: "", createdAt: new Date().toISOString() },
     ]);
     setInput("");
     setIsStreaming(true);
@@ -358,7 +394,7 @@ export function ChatWorkspace({
                 >
                   <span className="block truncate font-medium">{conversation.title}</span>
                   <span className="text-xs text-slate-500">
-                    {conversation._count?.messages ?? 0} messages
+                    {conversation._count?.messages ?? 0} messages · {formatRelativeUserDateTime(conversation.updatedAt, userPreferences)}
                   </span>
                 </button>
               ))}
@@ -430,6 +466,9 @@ export function ChatWorkspace({
               size="icon"
               className="border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
             />
+            <Button variant="ghost" size="icon" onClick={() => setShareToGroupOpen(true)} disabled={!activeConversation} aria-label="Partager dans Mes collaborateurs">
+              <Share2 className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => setRenameOpen(true)} disabled={!activeConversation}>
               <Pencil className="h-4 w-4" />
             </Button>
@@ -481,6 +520,11 @@ export function ChatWorkspace({
                     </div>
                   ) : (
                     message.content
+                  )}
+                  {message.createdAt && (
+                    <p className={cn("mt-2 text-[0.68rem] font-semibold", message.role === "user" ? "text-white/70" : "text-slate-500")}>
+                      {formatRelativeUserDateTime(message.createdAt, userPreferences)}
+                    </p>
                   )}
                 </div>
                 {message.role === "user" && (
@@ -534,6 +578,21 @@ export function ChatWorkspace({
             ))}
           </select>
           <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+        </form>
+      </Dialog>
+      <Dialog open={shareToGroupOpen} title="Partager dans Mes collaborateurs" onClose={() => setShareToGroupOpen(false)}>
+        <form onSubmit={shareConversationToGroup} className="space-y-3">
+          <p className="text-sm leading-7 text-dtsc-muted">
+            Le partage est volontaire. Les membres du groupe verront le lien vers cette conversation.
+          </p>
+          <select name="groupId" required className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="">Choisir un groupe</option>
+            {collaborationGroups.map((group) => (
+              <option key={group.id} value={group.id}>{group.name}</option>
+            ))}
+          </select>
+          <textarea name="content" defaultValue={activeConversation ? `Conversation partagée: ${activeConversation.title} (${formatUserDateTime(activeConversation.updatedAt, userPreferences)})` : ""} className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Partager</Button>
         </form>
       </Dialog>
       <Dialog

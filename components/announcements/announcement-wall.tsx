@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { UserRole } from "@prisma/client";
-import { MessageCircle, Megaphone, Pencil, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Archive, BarChart3, Copy, Flag, Info, MessageCircle, Megaphone, Pencil, Pin, Send, ThumbsDown, ThumbsUp, Trash2, Undo2 } from "lucide-react";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,10 +18,22 @@ type Announcement = {
   id: string;
   title: string;
   content: string;
+  status?: string;
+  category?: string;
+  visibility?: string;
+  viewCount?: number;
+  shareCount?: number;
+  reportCount?: number;
+  lastAction?: string | null;
+  pinnedAt?: string | null;
+  archivedAt?: string | null;
+  updatedAt?: string;
   createdAt: string;
   author: { id: string; name: string; role: UserRole; avatarUrl?: string | null; jobTitle?: string | null };
   comments: Array<{ id: string; parentId: string | null; content: string; createdAt: string; user: { id: string; name: string; role: UserRole; avatarUrl?: string | null } }>;
   reactions: Array<{ value: number }>;
+  shares?: Array<{ id: string }>;
+  reports?: Array<{ id: string; status: string }>;
 };
 
 type AnnouncementCommentItem = Announcement["comments"][number];
@@ -39,12 +52,14 @@ export function AnnouncementWall({
   role,
   allowClientAnnouncements,
   commentEditWindowMinutes,
+  transferRecipients,
 }: {
   announcements: Announcement[];
   currentUserId: string;
   role: UserRole;
   allowClientAnnouncements: boolean;
   commentEditWindowMinutes: number;
+  transferRecipients: Array<{ id: string; name: string; email: string; role: UserRole; avatarUrl?: string | null }>;
 }) {
   const router = useRouter();
   const [feedback, setFeedback] = useState("");
@@ -53,6 +68,10 @@ export function AnnouncementWall({
   const [replyingTo, setReplyingTo] = useState<{ announcementId: string; comment: AnnouncementCommentItem } | null>(null);
   const [deletingAnnouncement, setDeletingAnnouncement] = useState<Announcement | null>(null);
   const [deletingComment, setDeletingComment] = useState<AnnouncementCommentItem | null>(null);
+  const [infoAnnouncement, setInfoAnnouncement] = useState<Announcement | null>(null);
+  const [metricsAnnouncement, setMetricsAnnouncement] = useState<Announcement | null>(null);
+  const [transferAnnouncement, setTransferAnnouncement] = useState<Announcement | null>(null);
+  const [reportAnnouncement, setReportAnnouncement] = useState<Announcement | null>(null);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
   const announcementList = useSmartList({
@@ -181,6 +200,67 @@ export function AnnouncementWall({
     }
   }
 
+  async function copyAnnouncement(announcement: Announcement) {
+    const response = await fetch(`/api/announcements/${announcement.id}/copy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titlePrefix: "Copie de" }),
+    });
+    setFeedback(response.ok ? "Copie créée en brouillon." : "Impossible de copier cette annonce.");
+    if (response.ok) {
+      router.refresh();
+    }
+  }
+
+  async function updateAnnouncementStatus(announcement: Announcement, action: "ARCHIVE" | "RESTORE" | "PIN" | "UNPIN") {
+    const response = await fetch(`/api/announcements/${announcement.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    setFeedback(response.ok ? "Action appliquée." : "Action non autorisée.");
+    if (response.ok) {
+      router.refresh();
+    }
+  }
+
+  async function transfer(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!transferAnnouncement) {
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const recipientIds = formData.getAll("recipientIds").map(String);
+    const response = await fetch(`/api/announcements/${transferAnnouncement.id}/transfer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipientIds, message: String(formData.get("message") || "") }),
+    });
+    setFeedback(response.ok ? "Annonce transférée." : "Impossible de transférer cette annonce.");
+    if (response.ok) {
+      setTransferAnnouncement(null);
+      router.refresh();
+    }
+  }
+
+  async function report(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reportAnnouncement) {
+      return;
+    }
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const response = await fetch(`/api/announcements/${reportAnnouncement.id}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setFeedback(response.ok ? "Signalement transmis." : "Impossible de transmettre le signalement.");
+    if (response.ok) {
+      setReportAnnouncement(null);
+      router.refresh();
+    }
+  }
+
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="min-w-0 space-y-4">
@@ -241,18 +321,22 @@ export function AnnouncementWall({
                   <h2 className="mt-3 break-words text-xl font-black leading-tight text-dtsc-ink sm:text-2xl">{announcement.title}</h2>
                   <RichAnnouncementContent content={announcement.content} />
                 </div>
-                {isAdmin && (
-                  <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
-                    <Button type="button" variant="outline" onClick={() => setEditingAnnouncement(announcement)} className="min-w-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
-                      <Pencil className="h-4 w-4" />
-                      Modifier
-                    </Button>
-                    <Button type="button" variant="destructive" onClick={() => setDeletingAnnouncement(announcement)} className="min-w-0 rounded-xl">
-                      <Trash2 className="h-4 w-4" />
-                      Supprimer
-                    </Button>
-                  </div>
-                )}
+                <ActionMenu
+                  label="Actions de l'annonce"
+                  items={[
+                    { key: "info", label: "Infos sur l'annonce", icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
+                    ...(isAdmin ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => setEditingAnnouncement(announcement) }] : []),
+                    ...(isAdmin ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
+                    { key: "copy", label: "Copier", icon: Copy, onSelect: () => copyAnnouncement(announcement) },
+                    { key: "transfer", label: "Transférer", icon: Send, onSelect: () => setTransferAnnouncement(announcement) },
+                    { key: "metrics", label: "Voir les indicateurs", icon: BarChart3, onSelect: () => setMetricsAnnouncement(announcement) },
+                    { key: "report", label: "Signaler", icon: Flag, onSelect: () => setReportAnnouncement(announcement) },
+                    ...(isAdmin && announcement.status !== "ARCHIVED" ? [{ key: "archive", label: "Archiver", icon: Archive, onSelect: () => updateAnnouncementStatus(announcement, "ARCHIVE") }] : []),
+                    ...(isAdmin && announcement.status === "ARCHIVED" ? [{ key: "restore", label: "Restaurer", icon: Undo2, onSelect: () => updateAnnouncementStatus(announcement, "RESTORE") }] : []),
+                    ...(isAdmin && !announcement.pinnedAt ? [{ key: "pin", label: "Épingler", icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "PIN") }] : []),
+                    ...(isAdmin && announcement.pinnedAt ? [{ key: "unpin", label: "Désépingler", icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "UNPIN") }] : []),
+                  ]}
+                />
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button onClick={() => react(announcement.id, 1)} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
@@ -321,6 +405,76 @@ export function AnnouncementWall({
             <p className="rounded-xl bg-dtsc-page p-3 text-sm leading-6 text-dtsc-muted">{replyingTo.comment.content}</p>
             <textarea name="content" className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" placeholder="Votre réponse..." required />
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Répondre</Button>
+          </form>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(infoAnnouncement)} title="Infos sur l'annonce" onClose={() => setInfoAnnouncement(null)}>
+        {infoAnnouncement && (
+          <div className="grid gap-3 text-sm text-dtsc-muted sm:grid-cols-2">
+            <InfoLine label="Titre" value={infoAnnouncement.title} />
+            <InfoLine label="Auteur" value={infoAnnouncement.author.name} />
+            <InfoLine label="Créée le" value={new Date(infoAnnouncement.createdAt).toLocaleString("fr-FR")} />
+            <InfoLine label="Modifiée le" value={infoAnnouncement.updatedAt ? new Date(infoAnnouncement.updatedAt).toLocaleString("fr-FR") : "Non renseigné"} />
+            <InfoLine label="Statut" value={formatEnumLabel(infoAnnouncement.status || "ACTIVE")} />
+            <InfoLine label="Catégorie" value={formatEnumLabel(infoAnnouncement.category || "GENERAL")} />
+            <InfoLine label="Visibilité" value={formatEnumLabel(infoAnnouncement.visibility || "INTERNAL")} />
+            <InfoLine label="Vues" value={String(infoAnnouncement.viewCount || 0)} />
+            <InfoLine label="Partages" value={String(infoAnnouncement.shareCount ?? infoAnnouncement.shares?.length ?? 0)} />
+            <InfoLine label="Signalements" value={String(infoAnnouncement.reportCount ?? infoAnnouncement.reports?.length ?? 0)} />
+            <InfoLine label="Dernière action" value={infoAnnouncement.lastAction || "Aucune action récente"} />
+          </div>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(metricsAnnouncement)} title="Indicateurs de l'annonce" onClose={() => setMetricsAnnouncement(null)}>
+        {metricsAnnouncement && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Metric label="Vues" value={metricsAnnouncement.viewCount || 0} />
+            <Metric label="Réactions" value={metricsAnnouncement.reactions.length} />
+            <Metric label="Commentaires" value={metricsAnnouncement.comments.length} />
+            <Metric label="Partages" value={metricsAnnouncement.shareCount ?? metricsAnnouncement.shares?.length ?? 0} />
+            <Metric label="Signalements ouverts" value={metricsAnnouncement.reports?.filter((reportItem) => reportItem.status === "OPEN").length ?? metricsAnnouncement.reportCount ?? 0} />
+            <Metric label="Engagement" value={metricsAnnouncement.reactions.length + metricsAnnouncement.comments.length + (metricsAnnouncement.shareCount || 0)} />
+          </div>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(transferAnnouncement)} title="Transférer l'annonce" onClose={() => setTransferAnnouncement(null)}>
+        {transferAnnouncement && (
+          <form onSubmit={transfer} className="space-y-4">
+            <p className="text-sm font-semibold text-dtsc-ink">{transferAnnouncement.title}</p>
+            <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+              {transferRecipients.filter((recipient) => recipient.id !== currentUserId).map((recipient) => (
+                <label key={recipient.id} className="flex items-center gap-3 rounded-xl bg-dtsc-surface px-3 py-2 text-sm text-dtsc-muted">
+                  <input type="checkbox" name="recipientIds" value={recipient.id} className="h-4 w-4 accent-cyan-500" />
+                  <span className="min-w-0">
+                    <span className="block font-bold text-dtsc-ink">{recipient.name}</span>
+                    <span className="block truncate text-xs">{recipient.email} · {formatEnumLabel(recipient.role)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <textarea name="message" placeholder="Message optionnel..." className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Transférer</Button>
+          </form>
+        )}
+      </Dialog>
+      <Dialog open={Boolean(reportAnnouncement)} title="Signaler l'annonce" onClose={() => setReportAnnouncement(null)}>
+        {reportAnnouncement && (
+          <form onSubmit={report} className="space-y-3">
+            <select name="reason" className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="ERROR">Information incorrecte</option>
+              <option value="CONFIDENTIAL">Information confidentielle</option>
+              <option value="SPAM">Spam</option>
+              <option value="INAPPROPRIATE">Contenu inapproprié</option>
+              <option value="OTHER">Autre</option>
+            </select>
+            <select name="priority" defaultValue="NORMAL" className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="LOW">Faible</option>
+              <option value="NORMAL">Normale</option>
+              <option value="HIGH">Élevée</option>
+              <option value="CRITICAL">Critique</option>
+            </select>
+            <textarea name="description" placeholder="Décrivez le problème..." className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer le signalement</Button>
           </form>
         )}
       </Dialog>
@@ -462,6 +616,24 @@ function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | 
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-sm font-black text-dtsc-blue">
       {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : name.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words font-bold text-dtsc-ink">{value}</p>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+      <p className="mt-2 text-2xl font-black text-dtsc-ink">{value}</p>
     </div>
   );
 }

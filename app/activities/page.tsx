@@ -283,7 +283,7 @@ export default async function ActivitiesPage() {
     prisma.hrcfoEmployee.findMany({
       where: { status: { not: "EXITED" } },
       orderBy: { fullName: "asc" },
-      select: { id: true, fullName: true, email: true },
+      select: { id: true, fullName: true, email: true, userId: true },
     }),
     prisma.cooOperation.findMany({
       orderBy: { title: "asc" },
@@ -741,7 +741,7 @@ export default async function ActivitiesPage() {
     <AppShell user={user}>
       <ActivitiesDashboard
         sections={sections}
-        collaborators={collaborators.map((collaborator) => ({ id: collaborator.id, label: `${collaborator.fullName} · ${collaborator.email}` }))}
+        collaborators={collaborators.map((collaborator) => ({ id: collaborator.id, userId: collaborator.userId, label: `${collaborator.fullName} · ${collaborator.email}` }))}
         operations={operationOptions.map((operation) => ({ id: operation.id, label: operation.title }))}
         metrics={{ openTasks, completed, blocked }}
       />

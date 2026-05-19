@@ -183,6 +183,7 @@ export function SettingsPanel({
                 <option value="/chat">Chatbot</option>
                 <option value="/billing">Abonnement</option>
                 <option value="/company">Entreprise</option>
+                <option value="/collaborators">Mes collaborateurs</option>
                 <option value="/activities">Activités DTSC</option>
                 <option value="/support">Support</option>
                 <option value="/notifications">Notifications</option>
@@ -216,6 +217,7 @@ export function SettingsPanel({
             <Field label="Format de date" icon={Globe2}>
               <select name="dateFormat" defaultValue={user.dateFormat || "FR"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
                 <option value="FR">JJ/MM/AAAA</option>
+                <option value="US">MM/DD/YYYY · 12h AM/PM</option>
                 <option value="LONG">Date longue</option>
                 <option value="ISO">AAAA-MM-JJ</option>
               </select>

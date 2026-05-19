@@ -37,9 +37,10 @@ type CommentItem = {
   content: string;
   createdAt: string;
   author: { name: string; role: string; avatarUrl?: string | null };
+  mentions?: Array<{ mentionedUser: { id: string; name: string } }>;
 };
 
-type CollaboratorOption = { id: string; label: string };
+type CollaboratorOption = { id: string; userId?: string | null; label: string };
 
 export function ActivitiesDashboard({
   sections,
@@ -166,7 +167,7 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
           <RequestComposer collaborators={collaborators} selected={selected} />
           {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} />}
           {section.id === "blockers" && <BlockerComposer operations={operations} />}
-          {selected ? <ActivityDetail item={selected} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
+          {selected ? <ActivityDetail item={selected} collaborators={collaborators} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
         </div>
       </div>
       )}
@@ -330,9 +331,10 @@ function legalWorkflowTitle(workflowType: string) {
   return "Soumettre un dossier juridique";
 }
 
-function ActivityDetail({ item }: { item: ActivityItem }) {
+function ActivityDetail({ item, collaborators }: { item: ActivityItem; collaborators: CollaboratorOption[] }) {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [message, setMessage] = useState("");
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [requestResponse, setRequestResponse] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
@@ -354,12 +356,30 @@ function ActivityDetail({ item }: { item: ActivityItem }) {
     const response = await fetch("/api/activities/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entityType: item.entityType, entityId: item.id, content: message }),
+      body: JSON.stringify({ entityType: item.entityType, entityId: item.id, content: message, mentionedUserIds }),
     });
     setStatusMessage(response.ok ? "Commentaire ajouté." : "Impossible d'ajouter le commentaire.");
     if (response.ok) {
       setMessage("");
+      setMentionedUserIds([]);
       await loadComments();
+    }
+  }
+
+  const mentionSuggestions = useMemo(() => {
+    const match = message.match(/@([\p{L}\p{N}\s._-]{0,40})$/u);
+    if (!match) {
+      return [];
+    }
+    const query = match[1].toLowerCase();
+    return collaborators.filter((collaborator) => collaborator.label.toLowerCase().includes(query)).slice(0, 6);
+  }, [collaborators, message]);
+
+  function insertMention(collaborator: CollaboratorOption) {
+    const name = collaborator.label.split(" · ")[0] || collaborator.label;
+    setMessage((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, `@${name} `));
+    if (collaborator.userId) {
+      setMentionedUserIds((current) => [...new Set([...current, collaborator.userId as string])]);
     }
   }
 
@@ -434,7 +454,16 @@ function ActivityDetail({ item }: { item: ActivityItem }) {
           ))}
           {comments.length === 0 && <p className="text-sm text-dtsc-muted">Aucun commentaire pour le moment.</p>}
         </div>
-        <form onSubmit={addComment} className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <form onSubmit={addComment} className="relative mt-3 flex flex-col gap-2 sm:flex-row">
+          {mentionSuggestions.length > 0 && (
+            <div className="absolute bottom-14 left-0 z-20 w-[min(26rem,100%)] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_18px_60px_rgba(0,23,54,0.18)]">
+              {mentionSuggestions.map((collaborator) => (
+                <button key={collaborator.id} type="button" onClick={() => insertMention(collaborator)} className="block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-dtsc-ink hover:bg-dtsc-soft">
+                  @{collaborator.label}
+                </button>
+              ))}
+            </div>
+          )}
           <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ajouter un commentaire..." className="rounded-xl bg-dtsc-page" />
           <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer</Button>
         </form>

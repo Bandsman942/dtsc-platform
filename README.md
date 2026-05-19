@@ -56,10 +56,10 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
 - Chatbot privé capable, après confirmation explicite, d'envoyer un message à DTSC ou de créer un ticket support à partir des informations collectées
-- Historique des conversations et messages en base, avec classement par dossier/projet et CRUD des dossiers
+- Historique des conversations et messages en base, avec dates/heures selon les préférences utilisateur, classement par dossier/projet et CRUD des dossiers
 - Préférences chatbot persistantes: modèle préféré, style de réponse et longueur de réponse par utilisateur
 - Renommage, classement et suppression de conversation
-- Partage fonctionnel des conversations via API native du navigateur ou copie du lien
+- Partage fonctionnel des conversations via API native du navigateur, copie du lien ou publication volontaire dans un groupe Mes collaborateurs
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
@@ -68,7 +68,8 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque
 - Sous-module COO avec opérations, tâches, réunions, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
 - Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO filtrable par période, objectifs stratégiques, alertes critiques et journal de supervision
-- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie et téléchargement des bulletins personnels
+- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie, mentions `@collaborateur` dans les commentaires et téléchargement des bulletins personnels
+- Module privé Mes collaborateurs: groupes, invitations acceptées/refusées, membres, rôles de groupe, messagerie avec menus `...`, mentions, notifications, partage de conversations chatbot et contact contrôlé de l'équipe DTSC
 - Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
@@ -93,7 +94,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
-- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires, réponses aux commentaires et réactions
+- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert, indicateurs, signalement, archivage et épinglage
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système, page de démarrage, densité d'interface, langue, fuseau horaire, format de date, synthèse email, modèle LLM préféré, style IA et préférences de notifications persistantes
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels

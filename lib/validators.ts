@@ -37,10 +37,10 @@ export const accountPreferencesSchema = z.object({
   notifyBroadcastEnabled: z.coerce.boolean().default(true),
   pushNotificationsEnabled: z.coerce.boolean().default(false),
   interfaceDensity: z.enum(["COMFORTABLE", "COMPACT"]).default("COMFORTABLE"),
-  startPage: z.enum(["/dashboard", "/chat", "/billing", "/company", "/activities", "/support", "/notifications", "/announcements", "/profile", "/settings"]).default("/dashboard"),
+  startPage: z.enum(["/dashboard", "/chat", "/billing", "/company", "/collaborators", "/activities", "/support", "/notifications", "/announcements", "/profile", "/settings"]).default("/dashboard"),
   locale: z.enum(["fr", "en"]).default("fr"),
   timezone: z.string().min(2).max(80).default("Africa/Kinshasa"),
-  dateFormat: z.enum(["FR", "ISO", "LONG"]).default("FR"),
+  dateFormat: z.enum(["FR", "US", "ISO", "LONG"]).default("FR"),
   emailDigestFrequency: z.enum(["NEVER", "DAILY", "WEEKLY", "MONTHLY"]).default("WEEKLY"),
   chatResponseStyle: z.enum(["PROFESSIONAL", "DIRECT", "DETAILED", "EXECUTIVE"]).default("PROFESSIONAL"),
   chatResponseLength: z.enum(["SHORT", "BALANCED", "DETAILED"]).default("BALANCED"),
@@ -139,6 +139,74 @@ export const announcementCommentUpdateSchema = z.object({
 
 export const announcementReactionSchema = z.object({
   value: z.union([z.literal(1), z.literal(-1)]),
+});
+
+export const announcementCopySchema = z.object({
+  titlePrefix: z.string().max(40).default("Copie de"),
+});
+
+export const announcementTransferSchema = z.object({
+  recipientIds: z.array(z.string().min(5)).min(1).max(25),
+  message: z.string().max(800).optional().or(z.literal("")),
+});
+
+export const announcementReportSchema = z.object({
+  reason: z.enum(["INAPPROPRIATE", "SPAM", "CONFIDENTIAL", "ERROR", "OTHER"]),
+  description: z.string().max(1200).optional().or(z.literal("")),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+});
+
+export const announcementStatusSchema = z.object({
+  action: z.enum(["ARCHIVE", "RESTORE", "PIN", "UNPIN"]),
+});
+
+export const collaborationGroupSchema = z.object({
+  name: z.string().min(2).max(120),
+  description: z.string().max(800).optional().or(z.literal("")),
+  groupType: z.enum(["COMPANY", "PROJECT", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "OTHER"]).default("PROJECT"),
+  visibility: z.enum(["PRIVATE", "COMPANY", "INTERNAL"]).default("PRIVATE"),
+});
+
+export const collaborationGroupUpdateSchema = collaborationGroupSchema.partial().extend({
+  status: z.enum(["ACTIVE", "ARCHIVED", "SUSPENDED"]).optional(),
+});
+
+export const collaborationInvitationSchema = z.object({
+  invitedUserId: z.string().min(5).optional().or(z.literal("")),
+  invitedEmail: z.string().email().max(180).optional().or(z.literal("")),
+  invitationMessage: z.string().max(800).optional().or(z.literal("")),
+  expiresAt: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .transform((value) => value ? new Date(value) : undefined),
+}).refine((value) => Boolean(value.invitedUserId || value.invitedEmail), {
+  message: "Un utilisateur ou un email est obligatoire.",
+});
+
+export const collaborationInvitationResponseSchema = z.object({
+  action: z.enum(["ACCEPT", "DECLINE", "CANCEL"]),
+});
+
+export const collaborationMessageSchema = z.object({
+  content: z.string().min(1).max(4000),
+  messageType: z.enum(["TEXT", "CHATBOT_SHARE", "SYSTEM", "FILE", "LINK"]).default("TEXT"),
+  replyToId: z.string().max(120).optional().or(z.literal("")),
+  sharedChatbotConversationId: z.string().max(120).optional().or(z.literal("")),
+  mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
+});
+
+export const collaborationMessageUpdateSchema = z.object({
+  content: z.string().min(1).max(4000).optional(),
+  status: z.enum(["SENT", "EDITED", "DELETED", "ARCHIVED"]).optional(),
+  mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
+});
+
+export const commentMentionSchema = z.object({
+  entityType: z.string().min(2).max(80),
+  entityId: z.string().min(5),
+  content: z.string().min(2).max(2000),
+  mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
 });
 
 export const adminSettingsSchema = z.object({

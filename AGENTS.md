@@ -113,6 +113,18 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs. Avant commit, scanner les nouveaux textes TSX visibles pour éviter `react/no-unescaped-entities`, surtout après ajout de phrases françaises comme `d'information`, `l'utilisateur`, `n'est`.
 - Les contenus publics sourcés doivent garder des liens vérifiables.
 
+## UX & Interaction Standards
+
+- Utiliser un menu d'actions à trois points `...` pour les actions CRUD ou contextuelles dans les cartes, listes et fils de messages; éviter les boutons nus `Modifier`/`Supprimer` lorsque plusieurs actions existent.
+- Les actions affichées dans un menu contextuel doivent dépendre des permissions, être fonctionnelles, persistées en base et ne jamais être des placeholders. Les actions destructives doivent demander confirmation ou utiliser un soft delete/archivage métier.
+- Toute nouvelle interface visible doit passer par le système i18n ou ajouter des clés dans `locales/fr.json` et `locales/en.json`; le français reste la langue par défaut et l'anglais doit retomber sur le français si une clé manque.
+- Les préférences privées `locale`, `timezone` et `dateFormat` doivent être persistées sur `User` et utilisées pour afficher messages, commentaires, notifications, historiques et dates métier via des helpers partagés comme `lib/user-format.ts`.
+- Les commentaires collaboratifs doivent supporter les mentions `@collaborateur` avec persistance dans `CooCommentMention` ou une table de mentions dédiée; ne notifier que des utilisateurs autorisés à voir l'objet concerné.
+- Les groupes et messages de `Mes collaborateurs` doivent vérifier l'appartenance au groupe côté API avant lecture/écriture. Les invitations, messages, suppressions, partages chatbot et demandes support doivent être journalisés et notifier uniquement les destinataires concernés.
+- Les messages collaboratifs et chatbot doivent afficher date/heure selon les préférences utilisateur et utiliser le menu `...` pour modifier, supprimer, archiver ou partager.
+- Tout menu, modale et formulaire ajouté doit rester mobile-first: conteneurs `min-w-0`, hauteur bornée, scroll interne si nécessaire, interactions tactiles et fermeture claire.
+- Masquer un bouton côté interface ne suffit jamais: chaque route sensible doit réappliquer RBAC, propriété ou appartenance côté serveur.
+
 ## Validation locale
 
 Dans cet environnement Codex Windows, `pnpm` peut être absent. Si `pnpm build` ne peut pas être lancé localement, le signal bloquant devient:

@@ -1,0 +1,51 @@
+{
+  "common": {
+    "actions": "Actions",
+    "archive": "Archiver",
+    "cancel": "Annuler",
+    "copy": "Copier",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "info": "Infos",
+    "pin": "Épingler",
+    "restore": "Restaurer",
+    "save": "Enregistrer",
+    "send": "Envoyer",
+    "share": "Partager",
+    "transfer": "Transférer"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "chat": "Chatbot",
+    "billing": "Abonnement",
+    "company": "Entreprise",
+    "collaborators": "Mes collaborateurs",
+    "notifications": "Notifications",
+    "announcements": "Annonces",
+    "support": "Support",
+    "profile": "Profil",
+    "settings": "Paramètres",
+    "activities": "Activités DTSC",
+    "admin": "Administration"
+  },
+  "announcements": {
+    "actions": "Actions de l’annonce",
+    "archive": "Archiver",
+    "copy": "Créer une copie",
+    "indicators": "Voir les indicateurs",
+    "info": "Infos sur l’annonce",
+    "report": "Signaler",
+    "transfer": "Transférer"
+  },
+  "collaborators": {
+    "title": "Mes collaborateurs",
+    "groups": "Groupes",
+    "invitations": "Invitations",
+    "messages": "Messages"
+  },
+  "settings": {
+    "language": "Langue",
+    "timezone": "Fuseau horaire",
+    "dateFormat": "Format de date"
+  }
+}

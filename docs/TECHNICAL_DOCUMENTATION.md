@@ -23,9 +23,10 @@ Objectifs couverts par le code actuel:
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
-- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
+- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, partage vers groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
-- annonces internes avec commentaires et reactions;
+- annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
+- module prive Mes collaborateurs avec groupes, invitations, membres, messagerie, mentions, partage de conversations chatbot, notifications et journal d'audit par groupe;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
@@ -231,6 +232,8 @@ Modeles actifs:
 | `Announcement` | Publication interne |
 | `AnnouncementComment` | Commentaire d'annonce |
 | `AnnouncementReaction` | Like/dislike d'annonce |
+| `AnnouncementShare` | Transfert persistant d'une annonce vers un autre utilisateur avec notification |
+| `AnnouncementReport` | Signalement persistant d'une annonce, motif, priorite et statut de traitement |
 | `AppSetting` | Parametres globaux admin, dont les acces aux blocs Administration par role |
 | `AuditLog` | Journalisation des actions sensibles |
 | `WebhookEvent` | Historisation des webhooks entrants |
@@ -259,6 +262,13 @@ Modeles actifs:
 | `CooWorkflow` | Workflows operationnels repetables et etapes |
 | `CooOperationalReport` | Rapports operationnels et KPI COO |
 | `CollaboratorRequest` | Demandes directes entre collaborateurs depuis Activites DTSC: demandeur, destinataire, type, priorite, statut, echeance, message et reponse |
+| `CooCommentMention` | Mentions persistantes dans les commentaires collaboratifs avec notification du collaborateur mentionne |
+| `CollaborationGroup` | Groupe prive Mes collaborateurs: nom, type, proprietaire, statut et visibilite |
+| `CollaborationGroupMember` | Appartenance au groupe, role, statut et date d'entree/sortie |
+| `CollaborationGroupInvitation` | Invitation a rejoindre un groupe, par utilisateur existant ou email |
+| `CollaborationGroupMessage` | Message de groupe, reponse, partage chatbot, statut, soft delete et auteur |
+| `CollaborationMessageMention` | Mentions persistantes dans les messages de groupe |
+| `CollaborationGroupAuditLog` | Journal d'audit propre aux groupes collaboratifs |
 | `CeoObjective` | Objectifs executifs suivis par le CEO: type, departement, responsable, periode, cible, progression et statut |
 | `CeoSupervisionLog` | Journal de supervision CEO: observations, decisions, instructions, risques, actions attendues et responsable de suivi |
 | `MpoProject` | Portefeuille projets MPO: besoin, objectifs, responsables impliques, priorite, risque, budget estime, statut, livrables et donnees sante digitale |
@@ -347,6 +357,17 @@ Routes API:
 | `POST` | `/api/admin/operation-files` | blocs `coo`, `hrCfo` ou `sco` | Importe une piece justificative dans Supabase Storage |
 | `GET` | `/api/admin/operation-files/[...path]` | blocs `coo`, `hrCfo` ou `sco` | Sert un fichier operationnel via route serveur privee |
 | `GET` | `/api/admin/payrolls/[id]/pdf` | bloc admin `hrCfo` ou collaborateur proprietaire | Affiche un bulletin de paie imprimable/exportable en PDF |
+| `GET` | `/api/collaborators/groups` | utilisateur connecte | Liste les groupes dont l'utilisateur est membre, ses invitations et les utilisateurs invitables |
+| `POST` | `/api/collaborators/groups` | utilisateur connecte | Cree un groupe et ajoute le createur comme proprietaire |
+| `PATCH` | `/api/collaborators/groups/[id]` | proprietaire, admin de groupe ou `ADMIN` | Met a jour nom, description, type, visibilite ou statut |
+| `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archive le groupe si gestionnaire, sinon fait quitter le membre |
+| `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin de groupe | Cree une invitation par utilisateur ou email, sans ajout automatique |
+| `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepte, refuse ou annule une invitation |
+| `GET` | `/api/collaborators/groups/[id]/messages` | membre actif | Lit le fil du groupe avec mentions et partages chatbot |
+| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoie un message, une mention ou un partage chatbot appartenant a l'utilisateur |
+| `PATCH` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Modifie/archive un message et reconstruit les mentions |
+| `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete du message |
+| `POST` | `/api/collaborators/groups/[id]/contact-support` | membre actif | Ajoute un message systeme et notifie l'equipe support DTSC |
 
 Les champs de pieces justificatives ne sont plus des champs texte libres dans l'UI operations: l'utilisateur selectionne un fichier depuis ordinateur ou mobile. Le fichier est valide cote serveur (type MIME, taille, session, RBAC), stocke dans Supabase Storage via la cle service role cote serveur, puis reference par une URL interne `/api/admin/operation-files/...`. Cette URL ne doit pas etre exposee comme un objet public Supabase.
 
@@ -381,6 +402,7 @@ Routes protegees par middleware:
 - `/billing`
 - `/company`
 - `/documents`
+- `/collaborators`
 - `/profile`
 - `/settings`
 - `/support`
@@ -549,6 +571,22 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `PATCH` | `/api/conversation-projects/[id]` | proprietaire | Renommer un dossier/projet |
 | `DELETE` | `/api/conversation-projects/[id]` | proprietaire | Supprimer un dossier et retirer le classement des conversations |
 
+### Mes collaborateurs
+
+| Methode | Route | Acces | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/collaborators/groups` | session | Groupes de l'utilisateur, invitations en attente et utilisateurs invitables |
+| `POST` | `/api/collaborators/groups` | session | Creation groupe et appartenance proprietaire |
+| `PATCH` | `/api/collaborators/groups/[id]` | proprietaire/admin groupe ou `ADMIN` | Modifier groupe |
+| `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archiver le groupe ou quitter selon role |
+| `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin groupe | Inviter un utilisateur ou un email |
+| `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepter, refuser ou annuler invitation |
+| `GET` | `/api/collaborators/groups/[id]/messages` | membre actif | Lire messages, mentions et partages chatbot |
+| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoyer message, mention ou partage chatbot |
+| `PATCH` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Modifier/archive un message |
+| `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete d'un message |
+| `POST` | `/api/collaborators/groups/[id]/contact-support` | membre actif | Notifie l'equipe support DTSC |
+
 ### Support
 
 | Methode | Route | Acces | Description |
@@ -579,6 +617,10 @@ Preferences:
 | `POST` | `/api/announcements` | roles autorises | Creer annonce |
 | `PATCH` | `/api/announcements/[id]` | `ADMIN` | Modifier annonce |
 | `DELETE` | `/api/announcements/[id]` | `ADMIN` | Supprimer annonce |
+| `POST` | `/api/announcements/[id]/copy` | session | Copier une annonce en brouillon avec nouvel auteur |
+| `POST` | `/api/announcements/[id]/transfer` | session | Transferer une annonce a des utilisateurs et notifier |
+| `POST` | `/api/announcements/[id]/report` | session | Signaler une annonce avec motif et priorite |
+| `PATCH` | `/api/announcements/[id]/status` | `ADMIN` | Archiver, restaurer, epingler ou desepingler |
 | `POST` | `/api/announcements/[id]/comments` | session | Commenter |
 | `PATCH` | `/api/announcements/comments/[id]` | auteur dans delai ou `ADMIN` | Modifier commentaire |
 | `DELETE` | `/api/announcements/comments/[id]` | `ADMIN` | Supprimer commentaire |
