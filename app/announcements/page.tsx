@@ -32,7 +32,7 @@ export default async function AnnouncementsPage() {
         role: true,
         avatarUrl: true,
         jobTitle: true,
-        hrcfoEmployee: { select: { departmentName: true, jobTitle: true, position: { select: { title: true } } } },
+        hrcfoEmployee: { select: { department: true, jobTitle: true, positionTitle: true, position: { select: { title: true } } } },
       },
       orderBy: { name: "asc" },
       take: 300,
@@ -68,8 +68,8 @@ export default async function AnnouncementsPage() {
             role: item.role,
             avatarUrl: item.avatarUrl,
             jobTitle: item.hrcfoEmployee?.jobTitle || item.jobTitle,
-            departmentName: item.hrcfoEmployee?.departmentName,
-            positionTitle: item.hrcfoEmployee?.position?.title,
+            departmentName: item.hrcfoEmployee?.department,
+            positionTitle: item.hrcfoEmployee?.position?.title || item.hrcfoEmployee?.positionTitle,
           }))}
         />
       </div>
