@@ -493,7 +493,17 @@ export function CollaboratorsWorkspace({
                         Copie
                       </span>
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap leading-7">{message.content}</p>
+                    <p
+                      className={cn(
+                        "mt-3 whitespace-pre-wrap leading-7",
+                        isAssistant && "!text-slate-950 dark:!text-slate-950",
+                        isUser && "text-slate-900 dark:text-slate-100",
+                        !isAssistant && !isUser && "text-slate-900 dark:text-slate-900"
+                      )}
+                      style={isAssistant ? { color: "#0f172a" } : undefined}
+                    >
+                      {message.content}
+                    </p>
                   </div>
                 );
               })}
