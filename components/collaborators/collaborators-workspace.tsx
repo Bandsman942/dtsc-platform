@@ -277,8 +277,8 @@ export function CollaboratorsWorkspace({
   }
 
   return (
-    <div className="grid min-h-[calc(100dvh-8rem)] min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <aside className={cn("dtsc-card min-w-0 p-4 xl:block", activeGroup && !mobileGroupListOpen ? "hidden" : "block")}>
+    <div className="grid h-[calc(100dvh-8rem)] min-w-0 gap-5 overflow-hidden xl:grid-cols-[360px_minmax(0,1fr)]">
+      <aside className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden p-4", activeGroup && !mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-black text-dtsc-ink">Groupes</h2>
@@ -316,7 +316,7 @@ export function CollaboratorsWorkspace({
             onPageChange={groupList.setPage}
           />
         </div>
-        <div className="mt-4 max-h-[65vh] space-y-2 overflow-y-auto pr-1">
+        <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {groupList.paginatedItems.map((group) => (
             <button
               key={group.id}
@@ -341,43 +341,45 @@ export function CollaboratorsWorkspace({
         </div>
       </aside>
 
-      <section className={cn("dtsc-card min-w-0 overflow-hidden", activeGroup && mobileGroupListOpen ? "hidden xl:flex" : "flex min-h-[calc(100dvh-8rem)] flex-col")}>
+      <section className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden", activeGroup && mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
         {activeGroup ? (
           <>
-            <div className="flex items-center justify-between gap-3 border-b border-dtsc-border p-3 sm:p-4">
-              <Button type="button" variant="outline" size="icon" onClick={() => setMobileGroupListOpen(true)} className="shrink-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue xl:hidden">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <button
-                type="button"
-                onClick={() => setGroupDetailsOpen(true)}
-                className="min-w-0 flex-1 rounded-2xl p-2 text-left transition hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300"
-                aria-label={`Voir les détails du groupe ${activeGroup.name}`}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/15 text-sm font-black text-cyan-500">
-                    {activeGroup.name.slice(0, 2).toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-xl font-black text-dtsc-ink sm:text-2xl">{activeGroup.name}</h2>
-                    <p className="truncate text-xs font-bold text-dtsc-muted">{activeGroup.members.length} membre(s) · {formatEnumLabel(activeGroup.status)} · Détails au clic</p>
+            <div className="shrink-0 border-b border-dtsc-border p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3">
+                <Button type="button" variant="outline" size="icon" onClick={() => setMobileGroupListOpen(true)} className="shrink-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue xl:hidden">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setGroupDetailsOpen(true)}
+                  className="min-w-0 flex-1 rounded-2xl p-2 text-left transition hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  aria-label={`Voir les détails du groupe ${activeGroup.name}`}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/15 text-sm font-black text-cyan-500">
+                      {activeGroup.name.slice(0, 2).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-xl font-black text-dtsc-ink sm:text-2xl">{activeGroup.name}</h2>
+                      <p className="truncate text-xs font-bold text-dtsc-muted">{activeGroup.members.length} membre(s) · {formatEnumLabel(activeGroup.status)} · Détails au clic</p>
+                    </div>
                   </div>
+                </button>
+                <div className="flex gap-2">
+                  {canManage && <Button type="button" variant="outline" onClick={() => setInviteDialog(true)} className="rounded-xl"><UserPlus className="h-4 w-4" /> Inviter</Button>}
+                  <ActionMenu
+                    items={[
+                      ...(canManage ? [{ key: "edit", label: "Modifier le groupe", icon: Pencil, onSelect: () => setGroupDialog("edit") }] : []),
+                      { key: "share", label: "Partager une conversation", icon: MessageSquare, onSelect: () => setShareDialog(true) },
+                      { key: "support", label: "Contacter l'équipe DTSC", icon: Send, onSelect: async () => {
+                        const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/contact-support`, { method: "POST" });
+                        setFeedback(response.ok ? "L'équipe DTSC a été notifiée." : "Impossible de contacter l'équipe DTSC.");
+                        if (response.ok) await loadMessages(activeGroup.id);
+                      } },
+                      { key: "archive", label: canManage ? "Archiver le groupe" : "Quitter le groupe", icon: Archive, destructive: canManage, onSelect: archiveOrLeaveGroup },
+                    ]}
+                  />
                 </div>
-              </button>
-              <div className="flex gap-2">
-                {canManage && <Button type="button" variant="outline" onClick={() => setInviteDialog(true)} className="rounded-xl"><UserPlus className="h-4 w-4" /> Inviter</Button>}
-                <ActionMenu
-                  items={[
-                    ...(canManage ? [{ key: "edit", label: "Modifier le groupe", icon: Pencil, onSelect: () => setGroupDialog("edit") }] : []),
-                    { key: "share", label: "Partager une conversation", icon: MessageSquare, onSelect: () => setShareDialog(true) },
-                    { key: "support", label: "Contacter l'équipe DTSC", icon: Send, onSelect: async () => {
-                      const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/contact-support`, { method: "POST" });
-                      setFeedback(response.ok ? "L'équipe DTSC a été notifiée." : "Impossible de contacter l'équipe DTSC.");
-                      if (response.ok) await loadMessages(activeGroup.id);
-                    } },
-                    { key: "archive", label: canManage ? "Archiver le groupe" : "Quitter le groupe", icon: Archive, destructive: canManage, onSelect: archiveOrLeaveGroup },
-                  ]}
-                />
               </div>
             </div>
             <MessageThread
@@ -657,8 +659,8 @@ function MessageThread({
   }
 
   return (
-    <>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-dtsc-page p-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-dtsc-page p-4">
         {hasOlderMessages && (
           <div className="flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={onLoadOlder} disabled={isLoadingOlderMessages} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
@@ -682,7 +684,7 @@ function MessageThread({
         ))}
         {!messages.length && <p className="rounded-xl bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun message dans ce groupe.</p>}
       </div>
-      <form onSubmit={sendMessage} className="relative border-t border-dtsc-border p-4">
+      <form onSubmit={sendMessage} className="relative shrink-0 border-t border-dtsc-border p-4">
         {replyTo && (
           <div className="mb-3 flex items-start justify-between gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
             <div className="min-w-0">
@@ -712,7 +714,7 @@ function MessageThread({
           <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /></Button>
         </div>
       </form>
-    </>
+    </div>
   );
 }
 
