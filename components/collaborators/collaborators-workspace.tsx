@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, ArrowLeft, Check, Copy, MessageSquare, Pencil, Plus, Reply, Send, Trash2, UserPlus, UserRound, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -383,6 +383,7 @@ export function CollaboratorsWorkspace({
               </div>
             </div>
             <MessageThread
+              key={activeGroup.id}
               currentUserId={currentUserId}
               userPreferences={userPreferences}
               group={activeGroup}
@@ -627,6 +628,10 @@ function MessageThread({
   const [content, setContent] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+  const previousGroupIdRef = useRef(group.id);
+  const previousLastMessageIdRef = useRef<string | null>(null);
+  const lastMessageId = messages.length ? messages[messages.length - 1].id : null;
   const mentionSuggestions = useMemo(() => {
     const match = content.match(/@([\p{L}\p{N}\s._-]{0,40})$/u);
     if (!match) {
@@ -658,9 +663,29 @@ function MessageThread({
     setMentionedUserIds((current) => [...new Set([...current, member.userId])]);
   }
 
+  useEffect(() => {
+    const groupChanged = previousGroupIdRef.current !== group.id;
+    const lastMessageChanged = previousLastMessageIdRef.current !== lastMessageId;
+    previousGroupIdRef.current = group.id;
+    previousLastMessageIdRef.current = lastMessageId;
+
+    if (!groupChanged && !lastMessageChanged) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const messageList = messageListRef.current;
+      if (messageList) {
+        messageList.scrollTop = messageList.scrollHeight;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [group.id, lastMessageId]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-dtsc-page p-4">
+      <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-dtsc-page p-4">
         {hasOlderMessages && (
           <div className="flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={onLoadOlder} disabled={isLoadingOlderMessages} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
