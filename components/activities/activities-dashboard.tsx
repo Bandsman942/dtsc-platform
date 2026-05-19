@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, CircleAlert, ClipboardList, GitBranch, MessageSquare, Send, Users } from "lucide-react";
+import { CalendarDays, CircleAlert, ClipboardList, Copy, GitBranch, MessageSquare, Send, Users } from "lucide-react";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -164,7 +165,7 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
           </div>
         </div>
         <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-          <RequestComposer collaborators={collaborators} selected={selected} />
+          {section.id === "collab-requests" && <RequestComposer collaborators={collaborators} selected={selected} />}
           {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} />}
           {section.id === "blockers" && <BlockerComposer operations={operations} />}
           {selected ? <ActivityDetail item={selected} collaborators={collaborators} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
@@ -469,8 +470,18 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
           )}
           {comments.map((comment) => (
             <div key={comment.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{comment.author.name} · {formatEnumLabel(comment.author.role)} · {new Date(comment.createdAt).toLocaleString("fr-FR")}</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{comment.content}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{comment.author.name} · {formatEnumLabel(comment.author.role)} · {new Date(comment.createdAt).toLocaleString("fr-FR")}</p>
+                <ActionMenu
+                  label="Actions du commentaire"
+                  items={[
+                    { key: "copy", label: "Copier le texte", icon: Copy, onSelect: () => copyText(comment.content) },
+                  ]}
+                />
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">
+                <ActivityMentionText content={comment.content} mentions={comment.mentions?.map((mention) => mention.mentionedUser) || []} />
+              </p>
             </div>
           ))}
           {comments.length === 0 && <p className="text-sm text-dtsc-muted">Aucun commentaire pour le moment.</p>}
@@ -541,6 +552,44 @@ function RequestComposer({ collaborators, selected }: { collaborators: Collabora
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
   );
+}
+
+function ActivityMentionText({ content, mentions }: { content: string; mentions: Array<{ id: string; name: string }> }) {
+  if (!mentions.length) {
+    return <>{content}</>;
+  }
+  const mentionByName = new Map(mentions.map((mention) => [`@${mention.name}`, mention]));
+  const pattern = new RegExp(`(${mentions.map((mention) => escapeRegExp(`@${mention.name}`)).join("|")})`, "g");
+  return (
+    <>
+      {content.split(pattern).map((part, index) => {
+        const mention = mentionByName.get(part);
+        if (!mention) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+        return (
+          <button
+            key={`${mention.id}-${index}`}
+            type="button"
+            onClick={() => copyText(mention.name)}
+            className="font-black text-cyan-600 underline decoration-cyan-300 underline-offset-4 transition hover:text-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+            title="Copier le nom du collaborateur mentionné"
+          >
+            @{mention.name}
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
+function copyText(value: string) {
+  const clipboard = typeof globalThis.navigator !== "undefined" ? globalThis.navigator.clipboard : null;
+  void clipboard?.writeText(value);
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function BlockerComposer({ operations }: { operations: CollaboratorOption[] }) {

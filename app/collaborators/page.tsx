@@ -50,6 +50,36 @@ export default async function CollaboratorsPage() {
       take: 100,
     }),
   ]);
+  const groupIds = groups.map((group) => group.id);
+  const unreadMentions = groupIds.length
+    ? await prisma.collaborationMessageMention.findMany({
+        where: {
+          mentionedUserId: user.id,
+          isRead: false,
+          message: { groupId: { in: groupIds }, deletedAt: null },
+        },
+        select: { message: { select: { groupId: true, content: true, createdAt: true } } },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const unreadMentionByGroup = new Map<string, { count: number; preview: string; createdAt: Date }>();
+  for (const mention of unreadMentions) {
+    const current = unreadMentionByGroup.get(mention.message.groupId);
+    unreadMentionByGroup.set(mention.message.groupId, {
+      count: (current?.count || 0) + 1,
+      preview: current?.preview || mention.message.content,
+      createdAt: current?.createdAt || mention.message.createdAt,
+    });
+  }
+  const groupsWithMentionState = groups.map((group) => {
+    const mention = unreadMentionByGroup.get(group.id);
+    return {
+      ...group,
+      unreadMentionCount: mention?.count || 0,
+      unreadMentionPreview: mention?.preview || null,
+      lastMentionAt: mention?.createdAt || null,
+    };
+  });
 
   return (
     <AppShell user={user}>
@@ -64,7 +94,7 @@ export default async function CollaboratorsPage() {
         <CollaboratorsWorkspace
           currentUserId={user.id}
           userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
-          initialGroups={JSON.parse(JSON.stringify(groups))}
+          initialGroups={JSON.parse(JSON.stringify(groupsWithMentionState))}
           initialInvitations={JSON.parse(JSON.stringify(invitations))}
           users={JSON.parse(JSON.stringify(users))}
           conversations={JSON.parse(JSON.stringify(conversations))}

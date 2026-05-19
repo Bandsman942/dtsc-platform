@@ -59,9 +59,39 @@ export async function GET(req: Request) {
       take: 300,
     }),
   ]);
+  const groupIds = groups.map((group) => group.id);
+  const unreadMentions = groupIds.length
+    ? await prisma.collaborationMessageMention.findMany({
+        where: {
+          mentionedUserId: session.userId,
+          isRead: false,
+          message: { groupId: { in: groupIds }, deletedAt: null },
+        },
+        select: { message: { select: { groupId: true, content: true, createdAt: true } } },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const unreadMentionByGroup = new Map<string, { count: number; preview: string; createdAt: Date }>();
+  for (const mention of unreadMentions) {
+    const current = unreadMentionByGroup.get(mention.message.groupId);
+    unreadMentionByGroup.set(mention.message.groupId, {
+      count: (current?.count || 0) + 1,
+      preview: current?.preview || mention.message.content,
+      createdAt: current?.createdAt || mention.message.createdAt,
+    });
+  }
+  const groupsWithMentionState = groups.map((group) => {
+    const mention = unreadMentionByGroup.get(group.id);
+    return {
+      ...group,
+      unreadMentionCount: mention?.count || 0,
+      unreadMentionPreview: mention?.preview || null,
+      lastMentionAt: mention?.createdAt || null,
+    };
+  });
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ groups, invitations, users });
+  return NextResponse.json({ groups: groupsWithMentionState, invitations, users });
 }
 
 export async function POST(req: Request) {

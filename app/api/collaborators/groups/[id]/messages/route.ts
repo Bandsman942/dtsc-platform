@@ -30,7 +30,8 @@ export async function GET(req: Request, { params }: Params) {
     take: limit + 1,
     include: {
       author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true } },
-      mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
+      replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
+      mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
       sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
       sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
     },
@@ -89,7 +90,7 @@ export async function POST(req: Request, { params }: Params) {
         messageType: parsed.data.messageType,
         replyToId: parsed.data.replyToId || null,
         sharedChatbotConversationId: parsed.data.sharedChatbotConversationId || null,
-        mentions: { create: mentionedUserIds.map((mentionedUserId) => ({ mentionedUserId })) },
+        mentions: { create: mentionedUserIds.map((mentionedUserId) => ({ mentionedUserId, isRead: mentionedUserId === session.userId })) },
       },
     });
     if (sharedConversation) {
@@ -118,16 +119,19 @@ export async function POST(req: Request, { params }: Params) {
       where: { id: savedMessage.id },
       include: {
         author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true } },
-        mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
+        replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
+        mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
         sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
         sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
       },
     });
   });
 
-  const recipients = [...new Set([...mentionedUserIds, ...memberUserIds.filter((userId) => userId !== session.userId)])];
+  const recipients = mentionedUserIds.length
+    ? mentionedUserIds.filter((userId) => userId !== session.userId)
+    : memberUserIds.filter((userId) => userId !== session.userId);
   await notifyUsers({
-    userIds: recipients,
+    userIds: [...new Set(recipients)],
     title: mentionedUserIds.length ? "Mention dans un groupe DTSC" : "Nouveau message de groupe",
     body: `${session.name}: ${parsed.data.content.slice(0, 160)}`,
     type: "COLLABORATION",

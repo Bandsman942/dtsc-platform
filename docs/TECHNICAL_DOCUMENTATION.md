@@ -267,7 +267,7 @@ Modeles actifs:
 | `CollaborationGroupMember` | Appartenance au groupe, role, statut et date d'entree/sortie |
 | `CollaborationGroupInvitation` | Invitation a rejoindre un groupe, par utilisateur existant ou email |
 | `CollaborationGroupMessage` | Message de groupe, reponse, partage chatbot, statut, soft delete et auteur |
-| `CollaborationMessageMention` | Mentions persistantes dans les messages de groupe |
+| `CollaborationMessageMention` | Mentions persistantes dans les messages de groupe, avec etat lu/non lu |
 | `CollaborationGroupAuditLog` | Journal d'audit propre aux groupes collaboratifs |
 | `CeoObjective` | Objectifs executifs suivis par le CEO: type, departement, responsable, periode, cible, progression et statut |
 | `CeoSupervisionLog` | Journal de supervision CEO: observations, decisions, instructions, risques, actions attendues et responsable de suivi |
@@ -576,14 +576,15 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 
 | Methode | Route | Acces | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/collaborators/groups` | session | Groupes de l'utilisateur, invitations en attente et utilisateurs invitables |
+| `GET` | `/api/collaborators/groups` | session | Groupes de l'utilisateur, invitations en attente, utilisateurs invitables et compteurs de mentions non lues |
 | `POST` | `/api/collaborators/groups` | session | Creation groupe et appartenance proprietaire |
 | `PATCH` | `/api/collaborators/groups/[id]` | proprietaire/admin groupe ou `ADMIN` | Modifier groupe |
 | `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archiver le groupe ou quitter selon role |
 | `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin groupe | Inviter plusieurs utilisateurs et/ou emails en un envoi |
 | `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepter, refuser ou annuler invitation |
 | `GET` | `/api/collaborators/groups/[id]/messages?limit=&cursor=` | membre actif | Lire messages, mentions et partages chatbot avec pagination |
-| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoyer message, mention ou snapshot de partage chatbot |
+| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoyer message, reponse `replyToId`, mention ou snapshot de partage chatbot |
+| `POST` | `/api/collaborators/groups/[id]/mentions/read` | membre actif | Marquer comme lues les mentions non lues du groupe pour l'utilisateur courant |
 | `PATCH` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Modifier/archive un message |
 | `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete d'un message et retrait d'acces au snapshot associe |
 | `GET` | `/api/collaborators/shared-conversations/[id]` | membre actif du groupe | Lire une copie partagee de conversation chatbot |
@@ -1311,11 +1312,12 @@ La configuration PWA est volontairement orientee vers l'espace prive:
 - `app/manifest.ts` expose `name: DTSC Platform`, `short_name: DTSC`, `start_url: /dashboard`, `display: standalone`, `theme_color: #0B1220` et les categories business/productivity/technology;
 - si un utilisateur non connecte ouvre `/dashboard`, le middleware d'authentification conserve la redirection vers la page de connexion;
 - `components/pwa/pwa-register.tsx` enregistre `/sw.js` uniquement en production depuis le layout global afin que la landing page puisse proposer l'installation;
+- `components/pwa/pwa-register.tsx` demande une mise a jour du service worker au retour en ligne, au focus, au retour de visibilite et toutes les six heures; si un worker en attente existe, il recoit `SKIP_WAITING` puis le client controle se recharge une seule fois via `controllerchange`;
 - `components/pwa/pwa-install-prompt.tsx` affiche une proposition discrete uniquement dans l'espace authentifie, avec les boutons `Installer l'application` et `Plus tard`;
 - `components/pwa/public-pwa-install-card.tsx` ajoute sur l'accueil une invitation publique a installer l'application, avec fallback d'instructions si le navigateur ne declenche pas le prompt natif;
 - `components/pwa/pwa-notification-bridge.tsx` affiche des notifications navigateur/PWA pour les dernieres notifications non lues lorsque l'utilisateur a active cette preference et que le navigateur a accorde la permission;
 - le choix `Plus tard` est conserve dans `localStorage` pendant sept jours;
-- `app/offline/page.tsx` affiche une page hors ligne neutre sans donnees utilisateur.
+- `app/offline/page.tsx` affiche une page hors ligne publique avec presentation DTSC, services, FAQ, contact essentiel et aucune donnee utilisateur.
 
 Fichiers PWA:
 
@@ -1338,7 +1340,8 @@ Regles de cache:
 - aucune page HTML privee n'est stockee en cache applicatif;
 - les navigations hors ligne peuvent tomber sur `/offline`, qui ne contient aucune donnee personnelle;
 - seuls les assets statiques Next.js, images publiques, icônes, polices, JS et CSS sont caches;
-- `/auth/*`, `/dashboard`, `/chat`, `/admin`, `/profile`, `/settings`, `/support`, `/notifications`, `/announcements`, `/billing`, `/company`, `/documents` et `/session-expired` restent exclus du cache de contenu.
+- `/auth/*`, `/dashboard`, `/chat`, `/activities`, `/collaborators`, `/admin`, `/profile`, `/settings`, `/support`, `/notifications`, `/announcements`, `/billing`, `/company`, `/documents` et `/session-expired` restent exclus du cache de contenu.
+- les PWA installees recuperent automatiquement la derniere version apres reconnexion Internet sans cacher de donnees privees supplementaires.
 
 ## 15. SEO et pages publiques
 

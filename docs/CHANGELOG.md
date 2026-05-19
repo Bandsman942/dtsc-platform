@@ -39,6 +39,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Notifications: les catégories et statuts techniques affichés avec underscores sont remplacés par des libellés français lisibles dans les badges, détails et aperçus.
 # 2026-05-19
 
+- Amélioration des groupes `Mes collaborateurs`: mentions interactives, badge de mentions non lues, marquage lu à l'ouverture, réponse à un message via `replyToId`, en-tête mobile sobre et conversation mieux isolée en plein écran mobile.
+- Centralisation du formulaire `Formuler une demande à un collaborateur` dans le bloc `Demandes collaboratives` du module Activités DTSC.
+- Enrichissement de `/offline` avec présentation DTSC, services, FAQ, contact essentiel et version de cache PWA excluant les pages privées sensibles.
+- Ajout d'une mise à jour automatique des PWA installées: vérification au retour en ligne, au focus, au retour de visibilité et activation du nouveau service worker avec rechargement unique du client.
 - Amélioration du contraste des conversations chatbot partagées dans les groupes: cartes de preview et modales de snapshot lisibles en mode sombre comme en mode clair, avec hiérarchie visuelle plus premium.
 - Ajout d'une modale professionnelle de détails de groupe accessible par clic sur l'en-tête du groupe dans `Mes collaborateurs`, avec métriques, propriétaire, rôle courant, membres et invitations en attente.
 - Ajout de snapshots persistants `CollaborationSharedConversation` pour partager une copie consultable des conversations chatbot dans les groupes sans exposer la conversation privée originale.

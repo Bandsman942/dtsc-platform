@@ -1540,12 +1540,15 @@ model CollaborationMessageMention {
   id              String   @id @default(cuid())
   messageId       String
   mentionedUserId String
+  isRead          Boolean  @default(false)
+  readAt          DateTime?
   createdAt       DateTime @default(now())
   message         CollaborationGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
   mentionedUser   User     @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, mentionedUserId])
   @@index([mentionedUserId, createdAt])
+  @@index([mentionedUserId, isRead, createdAt])
 }
 
 model CollaborationGroupAuditLog {

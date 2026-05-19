@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await tx.collaborationMessageMention.deleteMany({ where: { messageId: id } });
     if (mentionedUserIds.length) {
       await tx.collaborationMessageMention.createMany({
-        data: mentionedUserIds.map((mentionedUserId) => ({ messageId: id, mentionedUserId })),
+        data: mentionedUserIds.map((mentionedUserId) => ({ messageId: id, mentionedUserId, isRead: mentionedUserId === session.userId })),
         skipDuplicates: true,
       });
     }

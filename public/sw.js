@@ -1,4 +1,4 @@
-const STATIC_CACHE = "dtsc-static-v1";
+const STATIC_CACHE = "dtsc-static-v2-20260519";
 const OFFLINE_URL = "/offline";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];
@@ -8,6 +8,8 @@ const PRIVATE_PATH_PREFIXES = [
   "/auth/",
   "/dashboard",
   "/chat",
+  "/activities",
+  "/collaborators",
   "/admin",
   "/profile",
   "/settings",
@@ -36,6 +38,12 @@ self.addEventListener("activate", (event) => {
       .then((keys) => Promise.all(keys.filter((key) => key !== STATIC_CACHE).map((key) => caches.delete(key))))
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 function isPrivateOrApiPath(pathname) {
