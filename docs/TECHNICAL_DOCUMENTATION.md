@@ -1317,7 +1317,7 @@ La configuration PWA est volontairement orientee vers l'espace prive:
 - `components/pwa/public-pwa-install-card.tsx` ajoute sur l'accueil une invitation publique a installer l'application, avec fallback d'instructions si le navigateur ne declenche pas le prompt natif;
 - `components/pwa/pwa-notification-bridge.tsx` affiche des notifications navigateur/PWA pour les dernieres notifications non lues lorsque l'utilisateur a active cette preference et que le navigateur a accorde la permission;
 - le choix `Plus tard` est conserve dans `localStorage` pendant sept jours;
-- `app/offline/page.tsx` affiche une page hors ligne publique avec presentation DTSC, services, FAQ, contact essentiel et aucune donnee utilisateur.
+- `app/offline/page.tsx` affiche une page publique `/offline` en ligne; le fallback hors connexion utilise `public/offline.html`, fichier HTML autonome precache, afin d'eviter les erreurs de chunks Next.js indisponibles sur mobile.
 
 Fichiers PWA:
 
@@ -1325,6 +1325,7 @@ Fichiers PWA:
 | --- | --- |
 | `app/manifest.ts` | Manifest App Router, start URL privee `/dashboard` |
 | `public/sw.js` | Service worker prudent, cache assets statiques uniquement |
+| `public/offline.html` | Fallback hors ligne autonome sans JavaScript Next.js |
 | `public/icons/icon-192x192.png` | Icône PWA 192 |
 | `public/icons/icon-512x512.png` | Icône PWA 512 |
 | `public/icons/maskable-icon-512x512.png` | Icône maskable avec marge de securite |
@@ -1338,7 +1339,7 @@ Regles de cache:
 
 - aucune reponse `/api/*` n'est mise en cache;
 - aucune page HTML privee n'est stockee en cache applicatif;
-- les navigations hors ligne peuvent tomber sur `/offline`, qui ne contient aucune donnee personnelle;
+- les navigations hors ligne tombent sur `/offline.html`, qui ne contient aucune donnee personnelle et ne depend pas des bundles applicatifs;
 - seuls les assets statiques Next.js, images publiques, icônes, polices, JS et CSS sont caches;
 - `/auth/*`, `/dashboard`, `/chat`, `/activities`, `/collaborators`, `/admin`, `/profile`, `/settings`, `/support`, `/notifications`, `/announcements`, `/billing`, `/company`, `/documents` et `/session-expired` restent exclus du cache de contenu.
 - les PWA installees recuperent automatiquement la derniere version apres reconnexion Internet sans cacher de donnees privees supplementaires.

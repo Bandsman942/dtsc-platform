@@ -1,5 +1,5 @@
-const STATIC_CACHE = "dtsc-static-v2-20260519";
-const OFFLINE_URL = "/offline";
+const STATIC_CACHE = "dtsc-static-v3-20260519";
+const OFFLINE_URL = "/offline.html";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];
 const STATIC_FILE_PATTERN = /\.(?:js|css|png|jpg|jpeg|webp|avif|svg|ico|woff2?)$/i;
@@ -54,6 +54,15 @@ function isStaticAsset(pathname) {
   return STATIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix)) || STATIC_FILE_PATTERN.test(pathname);
 }
 
+function offlineFallback() {
+  return caches.match(OFFLINE_URL).then((cachedResponse) => {
+    return cachedResponse || new Response(
+      "<!doctype html><html lang=\"fr\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Hors ligne</title><body style=\"margin:0;display:grid;min-height:100vh;place-items:center;background:#071427;color:white;font-family:system-ui,sans-serif;padding:24px;text-align:center\"><main><h1>Vous êtes hors ligne.</h1><p>DTSC Platform nécessite une connexion pour charger cette page.</p></main></body></html>",
+      { headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
 
@@ -69,13 +78,13 @@ self.addEventListener("fetch", (event) => {
 
   if (isPrivateOrApiPath(url.pathname)) {
     if (request.mode === "navigate") {
-      event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+      event.respondWith(fetch(request).catch(() => offlineFallback()));
     }
     return;
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+    event.respondWith(fetch(request).catch(() => offlineFallback()));
     return;
   }
 
