@@ -171,17 +171,45 @@ export const collaborationGroupUpdateSchema = collaborationGroupSchema.partial()
   status: z.enum(["ACTIVE", "ARCHIVED", "SUSPENDED"]).optional(),
 });
 
+const optionalStringArray = z.preprocess(
+  (value) => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      return [value];
+    }
+    return [];
+  },
+  z.array(z.string().min(5)).max(50).default([])
+);
+
+const optionalEmailArray = z.preprocess(
+  (value) => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      return value.split(/[\n,;]+/).map((email) => email.trim()).filter(Boolean);
+    }
+    return [];
+  },
+  z.array(z.string().email().max(180)).max(50).default([])
+);
+
 export const collaborationInvitationSchema = z.object({
   invitedUserId: z.string().min(5).optional().or(z.literal("")),
+  invitedUserIds: optionalStringArray,
   invitedEmail: z.string().email().max(180).optional().or(z.literal("")),
+  invitedEmails: optionalEmailArray,
   invitationMessage: z.string().max(800).optional().or(z.literal("")),
   expiresAt: z
     .string()
     .optional()
     .or(z.literal(""))
     .transform((value) => value ? new Date(value) : undefined),
-}).refine((value) => Boolean(value.invitedUserId || value.invitedEmail), {
-  message: "Un utilisateur ou un email est obligatoire.",
+}).refine((value) => Boolean(value.invitedUserId || value.invitedUserIds.length || value.invitedEmail || value.invitedEmails.length), {
+  message: "Au moins un utilisateur ou un email est obligatoire.",
 });
 
 export const collaborationInvitationResponseSchema = z.object({

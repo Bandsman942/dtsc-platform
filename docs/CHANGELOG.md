@@ -39,7 +39,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Notifications: les catégories et statuts techniques affichés avec underscores sont remplacés par des libellés français lisibles dans les badges, détails et aperçus.
 # 2026-05-19
 
-- Ajout du module privé **Mes collaborateurs** avec groupes, invitations, membres, messagerie, mentions, partage de conversations chatbot, contact support DTSC, notifications et audit de groupe.
+- Ajout du module privé **Mes collaborateurs** avec groupes, invitations individuelles ou groupées, membres, messagerie, mentions, partage de conversations chatbot, contact support DTSC, notifications et audit de groupe.
 - Ajout d'un composant réutilisable `ActionMenu` pour les menus contextuels `...`, appliqué au fil des annonces et aux messages collaboratifs.
 - Enrichissement des annonces: soft delete, archivage, épinglage, copie persistée, transfert, signalement, indicateurs, informations détaillées et compteurs.
 - Ajout de la persistance des mentions collaboratives via `CooCommentMention` et des notifications de mention dans les commentaires d'activités.

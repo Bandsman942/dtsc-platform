@@ -361,7 +361,7 @@ Routes API:
 | `POST` | `/api/collaborators/groups` | utilisateur connecte | Cree un groupe et ajoute le createur comme proprietaire |
 | `PATCH` | `/api/collaborators/groups/[id]` | proprietaire, admin de groupe ou `ADMIN` | Met a jour nom, description, type, visibilite ou statut |
 | `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archive le groupe si gestionnaire, sinon fait quitter le membre |
-| `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin de groupe | Cree une invitation par utilisateur ou email, sans ajout automatique |
+| `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin de groupe | Cree des invitations en lot par utilisateurs et/ou emails, ignore les membres deja presents ou invitations actives, sans ajout automatique |
 | `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepte, refuse ou annule une invitation |
 | `GET` | `/api/collaborators/groups/[id]/messages` | membre actif | Lit le fil du groupe avec mentions et partages chatbot |
 | `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoie un message, une mention ou un partage chatbot appartenant a l'utilisateur |
@@ -579,7 +579,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `POST` | `/api/collaborators/groups` | session | Creation groupe et appartenance proprietaire |
 | `PATCH` | `/api/collaborators/groups/[id]` | proprietaire/admin groupe ou `ADMIN` | Modifier groupe |
 | `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archiver le groupe ou quitter selon role |
-| `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin groupe | Inviter un utilisateur ou un email |
+| `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin groupe | Inviter plusieurs utilisateurs et/ou emails en un envoi |
 | `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepter, refuser ou annuler invitation |
 | `GET` | `/api/collaborators/groups/[id]/messages` | membre actif | Lire messages, mentions et partages chatbot |
 | `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoyer message, mention ou partage chatbot |

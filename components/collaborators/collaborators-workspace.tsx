@@ -66,9 +66,33 @@ export function CollaboratorsWorkspace({
   const [inviteDialog, setInviteDialog] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
   const [editingMessage, setEditingMessage] = useState<GroupMessage | null>(null);
+  const [inviteSearch, setInviteSearch] = useState("");
+  const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<string[]>([]);
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMember = activeGroup?.members.find((member) => member.userId === currentUserId);
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
+  const availableInviteUsers = useMemo(() => {
+    const activeMemberIds = new Set(activeGroup?.members.map((member) => member.userId) || []);
+    const pendingInviteUserEmails = new Set(activeGroup?.invitations.flatMap((invitation) => [invitation.invitedUser?.email, invitation.invitedEmail]).filter(Boolean) || []);
+    const queryTokens = normalizeSearchText(inviteSearch).split(/\s+/).filter(Boolean);
+    return users
+      .filter((user) => !activeMemberIds.has(user.id) && !pendingInviteUserEmails.has(user.email))
+      .map((user) => ({
+        user,
+        searchable: normalizeSearchText(`${user.name} ${user.email} ${user.jobTitle || ""} ${user.role}`),
+      }))
+      .filter(({ user, searchable }) => selectedInviteUserIds.includes(user.id) || !queryTokens.length || queryTokens.every((token) => searchable.includes(token)))
+      .sort((left, right) => {
+        const leftSelected = selectedInviteUserIds.includes(left.user.id);
+        const rightSelected = selectedInviteUserIds.includes(right.user.id);
+        if (leftSelected !== rightSelected) {
+          return leftSelected ? -1 : 1;
+        }
+        return inviteSearchScore(right.searchable, queryTokens) - inviteSearchScore(left.searchable, queryTokens);
+      })
+      .map(({ user }) => user)
+      .slice(0, 80);
+  }, [activeGroup?.invitations, activeGroup?.members, inviteSearch, selectedInviteUserIds, users]);
   const groupList = useSmartList({
     items: groups,
     pageSize: 8,
@@ -133,13 +157,31 @@ export function CollaboratorsWorkspace({
     const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/invitations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(formData.entries())),
+      body: JSON.stringify({
+        invitedUserIds: selectedInviteUserIds,
+        invitedEmails: String(formData.get("invitedEmails") || ""),
+        invitationMessage: String(formData.get("invitationMessage") || ""),
+        expiresAt: String(formData.get("expiresAt") || ""),
+      }),
     });
-    setFeedback(response.ok ? "Invitation envoyée." : "Invitation impossible ou déjà active.");
+    const body = await response.json().catch(() => null);
+    setFeedback(response.ok ? `${body?.invitationCount || selectedInviteUserIds.length || 1} invitation(s) envoyée(s).` : body?.message || "Invitation impossible ou déjà active.");
     if (response.ok) {
-      setInviteDialog(false);
+      closeInviteDialog();
       await refresh();
     }
+  }
+
+  function closeInviteDialog() {
+    setInviteDialog(false);
+    setInviteSearch("");
+    setSelectedInviteUserIds([]);
+  }
+
+  function toggleInviteUser(userId: string) {
+    setSelectedInviteUserIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+    );
   }
 
   async function respondToInvitation(id: string, action: "ACCEPT" | "DECLINE") {
@@ -262,17 +304,60 @@ export function CollaboratorsWorkspace({
           <Button className="rounded-xl bg-[#002b5b] text-white">Enregistrer</Button>
         </form>
       </Dialog>
-      <Dialog open={inviteDialog} title="Inviter un collaborateur" onClose={() => setInviteDialog(false)}>
+      <Dialog open={inviteDialog} title="Inviter des collaborateurs" onClose={closeInviteDialog}>
         <form onSubmit={invite} className="space-y-3">
-          <select name="invitedUserId" className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="">Sélectionner un utilisateur existant</option>
-            {users.filter((user) => !activeGroup?.members.some((member) => member.userId === user.id)).map((user) => (
-              <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
+          <Input value={inviteSearch} onChange={(event) => setInviteSearch(event.target.value)} placeholder="Recherche intelligente: nom, email, poste ou rôle..." />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedInviteUserIds((current) => [...new Set([...current, ...availableInviteUsers.map((user) => user.id)])])}
+              className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"
+              disabled={!availableInviteUsers.length}
+            >
+              Tout sélectionner
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedInviteUserIds([])}
+              className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"
+              disabled={!selectedInviteUserIds.length}
+            >
+              Réinitialiser
+            </Button>
+          </div>
+          <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+            {availableInviteUsers.map((user) => (
+              <label key={user.id} className="flex cursor-pointer items-center gap-3 rounded-xl bg-dtsc-surface px-3 py-2 text-sm text-dtsc-muted transition hover:bg-dtsc-soft">
+                <input
+                  type="checkbox"
+                  checked={selectedInviteUserIds.includes(user.id)}
+                  onChange={() => toggleInviteUser(user.id)}
+                  className="h-4 w-4 shrink-0 accent-cyan-500"
+                />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-dtsc-soft text-xs font-black text-dtsc-blue">
+                  {user.name.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-bold text-dtsc-ink">{user.name}</span>
+                  <span className="block truncate text-xs">{user.jobTitle || user.role} · {user.email}</span>
+                </span>
+              </label>
             ))}
-          </select>
-          <Input name="invitedEmail" type="email" placeholder="Ou inviter par email" />
+            {!availableInviteUsers.length && (
+              <p className="rounded-xl bg-dtsc-surface p-3 text-sm text-dtsc-muted">Aucun utilisateur disponible avec ce filtre.</p>
+            )}
+          </div>
+          <p className="text-xs font-bold text-dtsc-blue">
+            {selectedInviteUserIds.length} utilisateur(s) sélectionné(s) · {availableInviteUsers.length} résultat(s) affiché(s).
+          </p>
+          <textarea name="invitedEmails" placeholder="Emails externes ou non inscrits, séparés par virgule ou ligne..." className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <Input name="expiresAt" type="date" />
           <textarea name="invitationMessage" placeholder="Message d'invitation..." className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-          <Button className="rounded-xl bg-[#002b5b] text-white">Envoyer l&apos;invitation</Button>
+          <Button className="rounded-xl bg-[#002b5b] text-white">Envoyer les invitations</Button>
         </form>
       </Dialog>
       <Dialog open={shareDialog} title="Partager une conversation chatbot" onClose={() => setShareDialog(false)}>
@@ -416,6 +501,29 @@ function renderMentions(content: string, names: string[]) {
     return content;
   }
   return names.reduce((text, name) => text.replaceAll(`@${name}`, `@${name}`), content);
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function inviteSearchScore(searchable: string, tokens: string[]) {
+  if (!tokens.length) {
+    return 0;
+  }
+  return tokens.reduce((score, token) => {
+    if (searchable.startsWith(token)) {
+      return score + 3;
+    }
+    if (searchable.includes(` ${token}`)) {
+      return score + 2;
+    }
+    return searchable.includes(token) ? score + 1 : score;
+  }, 0);
 }
 
 function MessageEditForm({ message, members, onDone }: { message: GroupMessage; members: GroupMember[]; onDone: (ok: boolean) => void }) {
