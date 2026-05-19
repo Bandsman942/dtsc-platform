@@ -1,14 +1,15 @@
 "use client";
 
-import { Copy, FolderKanban, FolderPlus, Loader2, Menu, Pencil, Plus, Send, Share2, Trash2, X } from "lucide-react";
+import { Copy, FolderKanban, FolderPlus, Info, Loader2, Menu, Pencil, Plus, Send, Share2, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
-import { ShareActionButton } from "@/components/ui/share-action-button";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { getParticipantColor } from "@/lib/participant-colors";
 import { formatRelativeUserDateTime, formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,7 @@ export function ChatWorkspace({
   const [dailyUsage, setDailyUsage] = useState(usage);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [shareToGroupOpen, setShareToGroupOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);
@@ -308,6 +310,20 @@ export function ChatWorkspace({
   const limitReached = dailyUsage.messagesToday >= dailyUsage.dailyMessageLimit || dailyUsage.tokensToday >= dailyUsage.dailyTokenLimit;
   const resetLabel = formatResetAt(dailyUsage.resetAt);
   const activeConversationShareUrl = activeConversationId ? `/chat?conversationId=${activeConversationId}` : "/chat";
+  const activeConversationAbsoluteUrl = typeof window === "undefined" ? activeConversationShareUrl : `${window.location.origin}${activeConversationShareUrl}`;
+
+  async function shareActiveConversationLink() {
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      await navigator.share({
+        title: activeConversation?.title || "Conversation DTSC",
+        text: "Conversation DTSC Platform",
+        url: activeConversationAbsoluteUrl,
+      }).catch(() => null);
+      return;
+    }
+    await navigator.clipboard.writeText(activeConversationAbsoluteUrl);
+    setError("Lien de la conversation copié.");
+  }
 
   const historyPanel = (
     <aside className="dtsc-card flex h-full min-h-0 flex-col overflow-hidden p-4">
@@ -458,23 +474,17 @@ export function ChatWorkspace({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <ShareActionButton
-              title={activeConversation?.title || "Conversation DTSC"}
-              text="Conversation DTSC Platform"
-              url={activeConversationShareUrl}
-              label="Partager"
-              size="icon"
-              className="border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
+            <ActionMenu
+              label="Actions de la conversation"
+              items={[
+                { key: "info", label: "Infos sur la conversation", icon: Info, onSelect: () => setInfoOpen(true), disabled: !activeConversation },
+                { key: "copy-link", label: "Copier le lien", icon: Copy, onSelect: () => navigator.clipboard.writeText(activeConversationAbsoluteUrl).then(() => setError("Lien de la conversation copié.")), disabled: !activeConversation },
+                { key: "share", label: "Partager", icon: Share2, onSelect: shareActiveConversationLink, disabled: !activeConversation },
+                { key: "share-group", label: "Transférer vers un groupe", icon: Share2, onSelect: () => setShareToGroupOpen(true), disabled: !activeConversation },
+                { key: "rename", label: "Renommer", icon: Pencil, onSelect: () => setRenameOpen(true), disabled: !activeConversation },
+                { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setDeleteOpen(true), disabled: !activeConversation },
+              ]}
             />
-            <Button variant="ghost" size="icon" onClick={() => setShareToGroupOpen(true)} disabled={!activeConversation} aria-label="Partager dans Mes collaborateurs">
-              <Share2 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setRenameOpen(true)} disabled={!activeConversation}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)} disabled={!activeConversation}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
@@ -488,10 +498,12 @@ export function ChatWorkspace({
             </div>
           )}
           <div className="space-y-5">
-            {messages.map((message) => (
+            {messages.map((message) => {
+              const participantColor = getParticipantColor(message.role === "assistant" ? "dtsc-assistant" : "current-user");
+              return (
               <div key={message.id} className={cn("flex gap-3", message.role === "user" && "justify-end")}>
                 {message.role === "assistant" && (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d5e3fd] text-[#002b5b]">
+                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", participantColor.bgClassName, participantColor.textClassName)}>
                     <BotIcon />
                   </div>
                 )}
@@ -503,6 +515,9 @@ export function ChatWorkspace({
                       : "rounded-tl-sm bg-white text-slate-800"
                   )}
                 >
+                  <p className="mb-1 text-xs font-black" style={{ color: message.role === "user" ? "#a5f3fc" : participantColor.hex }}>
+                    {message.role === "assistant" ? "Assistant DTSC" : "Vous"}
+                  </p>
                   {message.role === "assistant" ? (
                     <div className="relative">
                       <div className="dtsc-assistant-markdown">
@@ -528,12 +543,13 @@ export function ChatWorkspace({
                   )}
                 </div>
                 {message.role === "user" && (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[#002b5b] text-xs font-bold">
+                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold", participantColor.bgClassName, participantColor.textClassName)}>
                     VO
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
             {isStreaming && (
               <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -564,6 +580,16 @@ export function ChatWorkspace({
       <Dialog open={Boolean(error)} title="Message DTSC" onClose={() => setError("")}>
         <p className="text-sm leading-7 text-dtsc-muted">{error}</p>
       </Dialog>
+      <Dialog open={infoOpen} title="Infos sur la conversation" onClose={() => setInfoOpen(false)}>
+        {activeConversation && (
+          <div className="grid gap-3 text-sm text-dtsc-muted sm:grid-cols-2">
+            <InfoCard label="Titre" value={activeConversation.title} />
+            <InfoCard label="Dossier" value={activeConversation.project?.name || activeConversation.projectName || "Sans dossier"} />
+            <InfoCard label="Messages" value={String(activeConversation._count?.messages ?? messages.length)} />
+            <InfoCard label="Dernière activité" value={formatUserDateTime(activeConversation.updatedAt, userPreferences)} />
+          </div>
+        )}
+      </Dialog>
       <Dialog open={renameOpen} title="Renommer la conversation" onClose={() => setRenameOpen(false)}>
         <form onSubmit={renameConversation} className="space-y-3">
           <Input name="title" defaultValue={activeConversation?.title || ""} required placeholder="Titre de la conversation" />
@@ -583,7 +609,7 @@ export function ChatWorkspace({
       <Dialog open={shareToGroupOpen} title="Partager dans Mes collaborateurs" onClose={() => setShareToGroupOpen(false)}>
         <form onSubmit={shareConversationToGroup} className="space-y-3">
           <p className="text-sm leading-7 text-dtsc-muted">
-            Le partage est volontaire. Les membres du groupe verront le lien vers cette conversation.
+            Le partage est volontaire. Les membres du groupe verront une copie consultable, pas votre conversation privée originale.
           </p>
           <select name="groupId" required className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink">
             <option value="">Choisir un groupe</option>
@@ -668,6 +694,15 @@ function formatResetAt(resetAt?: string) {
 
 function BotIcon() {
   return <span className="text-sm font-black">AI</span>;
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words font-bold text-dtsc-ink">{value}</p>
+    </div>
+  );
 }
 
 function UsageBar({

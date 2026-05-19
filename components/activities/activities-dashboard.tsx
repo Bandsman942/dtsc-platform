@@ -333,15 +333,29 @@ function legalWorkflowTitle(workflowType: string) {
 
 function ActivityDetail({ item, collaborators }: { item: ActivityItem; collaborators: CollaboratorOption[] }) {
   const [comments, setComments] = useState<CommentItem[]>([]);
+  const [commentsCursor, setCommentsCursor] = useState<string | null>(null);
+  const [hasOlderComments, setHasOlderComments] = useState(false);
+  const [isLoadingOlderComments, setIsLoadingOlderComments] = useState(false);
   const [message, setMessage] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [requestResponse, setRequestResponse] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
-  const loadComments = useCallback(async () => {
-    const response = await fetch(`/api/activities/comments?entityType=${item.entityType}&entityId=${item.id}`);
-    const body = (await response.json().catch(() => null)) as { comments?: CommentItem[] } | null;
-    setComments(body?.comments || []);
+  const loadComments = useCallback(async (cursor?: string | null) => {
+    if (cursor) {
+      setIsLoadingOlderComments(true);
+    }
+    const query = new URLSearchParams({ entityType: item.entityType, entityId: item.id, limit: "20" });
+    if (cursor) {
+      query.set("cursor", cursor);
+    }
+    const response = await fetch(`/api/activities/comments?${query.toString()}`);
+    const body = (await response.json().catch(() => null)) as { comments?: CommentItem[]; nextCursor?: string | null; hasMore?: boolean } | null;
+    const nextComments = body?.comments || [];
+    setComments((current) => (cursor ? [...nextComments, ...current] : nextComments));
+    setCommentsCursor(body?.nextCursor || null);
+    setHasOlderComments(Boolean(body?.hasMore));
+    setIsLoadingOlderComments(false);
   }, [item.entityType, item.id]);
 
   useEffect(() => {
@@ -445,7 +459,14 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
 
       <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <h4 className="flex items-center gap-2 font-black text-dtsc-ink"><MessageSquare className="h-4 w-4 text-cyan-500" /> Commentaires</h4>
-        <div className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-1">
+        <div className="mt-3 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page/50 p-2 pr-1">
+          {hasOlderComments && (
+            <div className="flex justify-center">
+              <Button type="button" variant="outline" size="sm" onClick={() => loadComments(commentsCursor)} disabled={isLoadingOlderComments} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                {isLoadingOlderComments ? "Chargement..." : "Charger les précédents"}
+              </Button>
+            </div>
+          )}
           {comments.map((comment) => (
             <div key={comment.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{comment.author.name} · {formatEnumLabel(comment.author.role)} · {new Date(comment.createdAt).toLocaleString("fr-FR")}</p>

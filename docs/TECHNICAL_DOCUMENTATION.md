@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 16 mai 2026
+Derniere mise a jour: 19 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -23,11 +23,11 @@ Objectifs couverts par le code actuel:
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
-- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, partage vers groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
+- chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, snapshots consultables pour les groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
-- module prive Mes collaborateurs avec groupes, invitations, membres, messagerie, mentions, partage de conversations chatbot, notifications et journal d'audit par groupe;
-- editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces, numerotations, gras, italique, souligne, couleurs et collage de contenus riches;
+- module prive Mes collaborateurs avec groupes, invitations, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, notifications et journal d'audit par groupe;
+- editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces avancees, numerotations, checklist, tirets, gras, italique, souligne, palette de couleurs controlee et collage de contenus riches;
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
@@ -363,10 +363,11 @@ Routes API:
 | `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archive le groupe si gestionnaire, sinon fait quitter le membre |
 | `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin de groupe | Cree des invitations en lot par utilisateurs et/ou emails, ignore les membres deja presents ou invitations actives, sans ajout automatique |
 | `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepte, refuse ou annule une invitation |
-| `GET` | `/api/collaborators/groups/[id]/messages` | membre actif | Lit le fil du groupe avec mentions et partages chatbot |
-| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoie un message, une mention ou un partage chatbot appartenant a l'utilisateur |
+| `GET` | `/api/collaborators/groups/[id]/messages?limit=&cursor=` | membre actif | Lit le fil du groupe avec pagination cursor, mentions et partages chatbot |
+| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoie un message, une mention ou un partage chatbot appartenant a l'utilisateur; le partage chatbot cree un snapshot consultable par le groupe |
 | `PATCH` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Modifie/archive un message et reconstruit les mentions |
-| `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete du message |
+| `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete du message et archive le snapshot chatbot associe si applicable |
+| `GET` | `/api/collaborators/shared-conversations/[id]` | membre actif du groupe | Ouvre la copie/snapshot d'une conversation chatbot partagee sans exposer la conversation originale |
 | `POST` | `/api/collaborators/groups/[id]/contact-support` | membre actif | Ajoute un message systeme et notifie l'equipe support DTSC |
 
 Les champs de pieces justificatives ne sont plus des champs texte libres dans l'UI operations: l'utilisateur selectionne un fichier depuis ordinateur ou mobile. Le fichier est valide cote serveur (type MIME, taille, session, RBAC), stocke dans Supabase Storage via la cle service role cote serveur, puis reference par une URL interne `/api/admin/operation-files/...`. Cette URL ne doit pas etre exposee comme un objet public Supabase.
@@ -581,10 +582,11 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 | `DELETE` | `/api/collaborators/groups/[id]` | membre actif | Archiver le groupe ou quitter selon role |
 | `POST` | `/api/collaborators/groups/[id]/invitations` | proprietaire/admin groupe | Inviter plusieurs utilisateurs et/ou emails en un envoi |
 | `PATCH` | `/api/collaborators/invitations/[id]` | invite ou emetteur | Accepter, refuser ou annuler invitation |
-| `GET` | `/api/collaborators/groups/[id]/messages` | membre actif | Lire messages, mentions et partages chatbot |
-| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoyer message, mention ou partage chatbot |
+| `GET` | `/api/collaborators/groups/[id]/messages?limit=&cursor=` | membre actif | Lire messages, mentions et partages chatbot avec pagination |
+| `POST` | `/api/collaborators/groups/[id]/messages` | membre actif | Envoyer message, mention ou snapshot de partage chatbot |
 | `PATCH` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Modifier/archive un message |
-| `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete d'un message |
+| `DELETE` | `/api/collaborators/messages/[id]` | auteur ou gestionnaire | Soft delete d'un message et retrait d'acces au snapshot associe |
+| `GET` | `/api/collaborators/shared-conversations/[id]` | membre actif du groupe | Lire une copie partagee de conversation chatbot |
 | `POST` | `/api/collaborators/groups/[id]/contact-support` | membre actif | Notifie l'equipe support DTSC |
 
 ### Support

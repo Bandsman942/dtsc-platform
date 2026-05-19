@@ -12,7 +12,11 @@
     "save": "Enregistrer",
     "send": "Envoyer",
     "share": "Partager",
-    "transfer": "Transférer"
+    "transfer": "Transférer",
+    "loadMore": "Charger plus",
+    "loadPrevious": "Charger les précédents",
+    "reset": "Réinitialiser",
+    "selectAll": "Tout sélectionner"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -35,13 +39,39 @@
     "indicators": "Voir les indicateurs",
     "info": "Infos sur l’annonce",
     "report": "Signaler",
-    "transfer": "Transférer"
+    "transfer": "Transférer",
+    "transferSearch": "Rechercher par nom, email, poste ou département",
+    "transferEmpty": "Aucun destinataire ne correspond à cette recherche",
+    "selectedRecipients": "destinataire(s) sélectionné(s)"
   },
   "collaborators": {
     "title": "Mes collaborateurs",
     "groups": "Groupes",
     "invitations": "Invitations",
-    "messages": "Messages"
+    "messages": "Messages",
+    "loadOlderMessages": "Charger les anciens messages",
+    "sharedConversation": "Conversation chatbot partagée",
+    "viewSharedConversation": "Voir la copie consultable",
+    "noMessages": "Aucun message dans ce groupe"
+  },
+  "comments": {
+    "title": "Commentaires",
+    "empty": "Aucun commentaire pour le moment",
+    "writePlaceholder": "Ajouter un commentaire",
+    "loadPrevious": "Charger les précédents"
+  },
+  "chat": {
+    "actions": "Actions de la conversation",
+    "info": "Infos sur la conversation",
+    "copyLink": "Copier le lien",
+    "shareToGroup": "Transférer vers un groupe",
+    "sharedSnapshotNotice": "Le partage crée une copie consultable, pas un accès à la conversation privée originale"
+  },
+  "editor": {
+    "textColor": "Couleur",
+    "bulletStyle": "Type de liste",
+    "accentColor": "Accent DTSC",
+    "checklist": "Checklist"
   },
   "settings": {
     "language": "Langue",

@@ -25,7 +25,15 @@ export default async function AnnouncementsPage() {
     }),
     prisma.user.findMany({
       where: { status: "ACTIVE" },
-      select: { id: true, name: true, email: true, role: true, avatarUrl: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        avatarUrl: true,
+        jobTitle: true,
+        hrcfoEmployee: { select: { departmentName: true, jobTitle: true, position: { select: { title: true } } } },
+      },
       orderBy: { name: "asc" },
       take: 300,
     }),
@@ -53,7 +61,16 @@ export default async function AnnouncementsPage() {
           role={user.role}
           allowClientAnnouncements={settings.allowClientAnnouncements}
           commentEditWindowMinutes={settings.commentEditWindowMinutes}
-          transferRecipients={JSON.parse(JSON.stringify(users))}
+          transferRecipients={users.map((item) => ({
+            id: item.id,
+            name: item.name,
+            email: item.email,
+            role: item.role,
+            avatarUrl: item.avatarUrl,
+            jobTitle: item.hrcfoEmployee?.jobTitle || item.jobTitle,
+            departmentName: item.hrcfoEmployee?.departmentName,
+            positionTitle: item.hrcfoEmployee?.position?.title,
+          }))}
         />
       </div>
     </AppShell>

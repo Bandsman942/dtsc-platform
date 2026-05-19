@@ -39,6 +39,15 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Notifications: les catégories et statuts techniques affichés avec underscores sont remplacés par des libellés français lisibles dans les badges, détails et aperçus.
 # 2026-05-19
 
+- Ajout de snapshots persistants `CollaborationSharedConversation` pour partager une copie consultable des conversations chatbot dans les groupes sans exposer la conversation privée originale.
+- Ajout de la pagination/cursor et du scroll borné pour les messages de groupe et les commentaires transversaux Activités DTSC.
+- Amélioration du module Mes collaborateurs: chargement progressif des anciens messages, couleurs stables par intervenant et ouverture des conversations chatbot partagées en boîte de dialogue.
+- Remplacement des actions visibles du chatbot par un menu `...` avec infos, copie de lien, partage, transfert vers groupe, renommage et suppression.
+- Amélioration du transfert d'annonces avec recherche intelligente par nom, email, rôle, poste ou département, sélection multiple et résumé des destinataires.
+- Enrichissement de l'éditeur riche avec palette de couleurs contrôlée et types de listes avancés: puce simple, cercle, carré, numérotée, alphabétique, checklist et tirets.
+- Extension des dictionnaires i18n FR/EN pour les commentaires, conversations, annonces, chatbot, groupes et éditeur.
+- Documentation AGENTS mise à jour avec les standards permanents de commentaires, conversations, snapshots de partage, annonces, éditeur riche, i18n et mobile-first.
+
 - Ajout du module privé **Mes collaborateurs** avec groupes, invitations individuelles ou groupées, membres, messagerie, mentions, partage de conversations chatbot, contact support DTSC, notifications et audit de groupe.
 - Ajout d'un composant réutilisable `ActionMenu` pour les menus contextuels `...`, appliqué au fil des annonces et aux messages collaboratifs.
 - Enrichissement des annonces: soft delete, archivage, épinglage, copie persistée, transfert, signalement, indicateurs, informations détaillées et compteurs.

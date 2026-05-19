@@ -665,6 +665,20 @@
     }
   }
 
+  .dtsc-publication-content ul.dtsc-checklist,
+  .dtsc-feed-content ul.dtsc-checklist,
+  [contenteditable] ul.dtsc-checklist {
+    list-style: none;
+    padding-left: 1.25rem;
+  }
+
+  .dtsc-publication-content ul.dtsc-dash-list,
+  .dtsc-feed-content ul.dtsc-dash-list,
+  [contenteditable] ul.dtsc-dash-list {
+    list-style: "- ";
+    padding-left: 1.25rem;
+  }
+
   @keyframes hero-image {
     from {
       opacity: 0;

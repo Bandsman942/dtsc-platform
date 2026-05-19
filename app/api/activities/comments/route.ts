@@ -30,17 +30,23 @@ export async function GET(req: Request) {
   if (!(await canAccessEntity(user, parsed.data.entityType, parsed.data.entityId))) {
     return NextResponse.json({ error: "Forbidden", message: "Vous n'avez pas accès à ces commentaires." }, { status: 403 });
   }
-  const comments = await prisma.cooComment.findMany({
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 20), 1), 50);
+  const cursor = url.searchParams.get("cursor") || undefined;
+  const records = await prisma.cooComment.findMany({
     where: parsed.data,
     include: {
       author: { select: { name: true, role: true, avatarUrl: true } },
       mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
     },
-    orderBy: { createdAt: "asc" },
-    take: 200,
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
+  const hasMore = records.length > limit;
+  const comments = records.slice(0, limit).reverse();
+  const nextCursor = hasMore ? records[limit - 1]?.id : null;
   await writeApiLog({ request: req, statusCode: 200, userId: user.id, startedAt, metadata: parsed.data });
-  return NextResponse.json({ comments });
+  return NextResponse.json({ comments, nextCursor, hasMore });
 }
 
 export async function POST(req: Request) {

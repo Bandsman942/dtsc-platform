@@ -38,6 +38,29 @@ const fontSizes = [
   { label: "Titre", value: "6" },
 ];
 
+const textColors = [
+  { label: "Accent DTSC", value: "#00a7c7" },
+  { label: "Bleu", value: "#1d4ed8" },
+  { label: "Vert", value: "#047857" },
+  { label: "Rouge", value: "#b91c1c" },
+  { label: "Orange", value: "#c2410c" },
+  { label: "Violet", value: "#6d28d9" },
+  { label: "Gris", value: "#475569" },
+  { label: "Noir", value: "#111827" },
+  { label: "Cyan", value: "#0e7490" },
+  { label: "Amber", value: "#b45309" },
+];
+
+const listStyles = [
+  { label: "Puce simple", value: "disc" },
+  { label: "Puce cercle", value: "circle" },
+  { label: "Puce carré", value: "square" },
+  { label: "Numérotée", value: "decimal" },
+  { label: "Alphabétique", value: "lower-alpha" },
+  { label: "Checklist", value: "checklist" },
+  { label: "Tirets", value: "dash" },
+];
+
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
   { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, onContentChange },
   ref
@@ -163,6 +186,25 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
       return;
     }
     command(name, value);
+  }
+
+  function applyListStyle(value: string) {
+    if (!value) {
+      return;
+    }
+    if (value === "checklist") {
+      insertHtml('<ul class="dtsc-checklist"><li>☐ Élément à compléter</li></ul>');
+      return;
+    }
+    if (value === "dash") {
+      insertHtml('<ul class="dtsc-dash-list"><li>Élément de liste</li></ul>');
+      return;
+    }
+    if (value === "decimal" || value === "lower-alpha") {
+      insertHtml(`<ol style="list-style-type: ${value};"><li>Élément de liste</li></ol>`);
+      return;
+    }
+    insertHtml(`<ul style="list-style-type: ${value};"><li>Élément de liste</li></ul>`);
   }
 
   function setRefs(node: HTMLDivElement | null) {
@@ -359,12 +401,48 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("foreColor", "#00a7c7")} title="Appliquer la couleur d'accent DTSC." className="rounded-lg">
           <Palette className="h-4 w-4" />
         </Button>
+        <select
+          disabled={disabled}
+          defaultValue=""
+          onMouseDown={() => rememberSelection()}
+          onChange={(event) => {
+            selectCommand("foreColor", event.target.value);
+            event.currentTarget.value = "";
+          }}
+          title="Appliquer une couleur contrôlée au texte sélectionné."
+          className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"
+        >
+          <option value="">Couleur</option>
+          {textColors.map((color) => (
+            <option key={color.value} value={color.value}>
+              {color.label}
+            </option>
+          ))}
+        </select>
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("insertUnorderedList")} title="Créer une liste à puces professionnelle." className="rounded-lg">
           <List className="h-4 w-4" />
         </Button>
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("insertOrderedList")} title="Créer une numérotation." className="rounded-lg">
           <ListOrdered className="h-4 w-4" />
         </Button>
+        <select
+          disabled={disabled}
+          defaultValue=""
+          onMouseDown={() => rememberSelection()}
+          onChange={(event) => {
+            applyListStyle(event.target.value);
+            event.currentTarget.value = "";
+          }}
+          title="Insérer un type de liste avancé."
+          className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"
+        >
+          <option value="">Type de liste</option>
+          {listStyles.map((style) => (
+            <option key={style.value} value={style.value}>
+              {style.label}
+            </option>
+          ))}
+        </select>
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyLeft")} title="Aligner à gauche." className="rounded-lg">
           <AlignLeft className="h-4 w-4" />
         </Button>

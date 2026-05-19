@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { UserRole } from "@prisma/client";
 import { Archive, BarChart3, Copy, Flag, Info, MessageCircle, Megaphone, Pencil, Pin, Send, ThumbsDown, ThumbsUp, Trash2, Undo2 } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -59,7 +59,7 @@ export function AnnouncementWall({
   role: UserRole;
   allowClientAnnouncements: boolean;
   commentEditWindowMinutes: number;
-  transferRecipients: Array<{ id: string; name: string; email: string; role: UserRole; avatarUrl?: string | null }>;
+  transferRecipients: Array<{ id: string; name: string; email: string; role: UserRole; avatarUrl?: string | null; jobTitle?: string | null; departmentName?: string | null; positionTitle?: string | null }>;
 }) {
   const router = useRouter();
   const [feedback, setFeedback] = useState("");
@@ -71,9 +71,31 @@ export function AnnouncementWall({
   const [infoAnnouncement, setInfoAnnouncement] = useState<Announcement | null>(null);
   const [metricsAnnouncement, setMetricsAnnouncement] = useState<Announcement | null>(null);
   const [transferAnnouncement, setTransferAnnouncement] = useState<Announcement | null>(null);
+  const [transferSearch, setTransferSearch] = useState("");
+  const [selectedTransferRecipientIds, setSelectedTransferRecipientIds] = useState<string[]>([]);
   const [reportAnnouncement, setReportAnnouncement] = useState<Announcement | null>(null);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
+  const filteredTransferRecipients = useMemo(() => {
+    const queryTokens = normalizeSearchText(transferSearch).split(/\s+/).filter(Boolean);
+    return transferRecipients
+      .filter((recipient) => recipient.id !== currentUserId)
+      .map((recipient) => ({
+        recipient,
+        searchable: normalizeSearchText(`${recipient.name} ${recipient.email} ${recipient.role} ${recipient.jobTitle || ""} ${recipient.departmentName || ""} ${recipient.positionTitle || ""}`),
+      }))
+      .filter(({ recipient, searchable }) => selectedTransferRecipientIds.includes(recipient.id) || !queryTokens.length || queryTokens.every((token) => searchable.includes(token)))
+      .sort((left, right) => {
+        const leftSelected = selectedTransferRecipientIds.includes(left.recipient.id);
+        const rightSelected = selectedTransferRecipientIds.includes(right.recipient.id);
+        if (leftSelected !== rightSelected) {
+          return leftSelected ? -1 : 1;
+        }
+        return transferSearchScore(right.searchable, queryTokens) - transferSearchScore(left.searchable, queryTokens);
+      })
+      .map(({ recipient }) => recipient)
+      .slice(0, 100);
+  }, [currentUserId, selectedTransferRecipientIds, transferRecipients, transferSearch]);
   const announcementList = useSmartList({
     items: announcements,
     pageSize: 6,
@@ -230,17 +252,24 @@ export function AnnouncementWall({
       return;
     }
     const formData = new FormData(event.currentTarget);
-    const recipientIds = formData.getAll("recipientIds").map(String);
     const response = await fetch(`/api/announcements/${transferAnnouncement.id}/transfer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipientIds, message: String(formData.get("message") || "") }),
+      body: JSON.stringify({ recipientIds: selectedTransferRecipientIds, message: String(formData.get("message") || "") }),
     });
     setFeedback(response.ok ? "Annonce transférée." : "Impossible de transférer cette annonce.");
     if (response.ok) {
       setTransferAnnouncement(null);
+      setTransferSearch("");
+      setSelectedTransferRecipientIds([]);
       router.refresh();
     }
+  }
+
+  function toggleTransferRecipient(userId: string) {
+    setSelectedTransferRecipientIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+    );
   }
 
   async function report(event: React.FormEvent<HTMLFormElement>) {
@@ -437,23 +466,62 @@ export function AnnouncementWall({
           </div>
         )}
       </Dialog>
-      <Dialog open={Boolean(transferAnnouncement)} title="Transférer l'annonce" onClose={() => setTransferAnnouncement(null)}>
+      <Dialog open={Boolean(transferAnnouncement)} title="Transférer l'annonce" onClose={() => {
+        setTransferAnnouncement(null);
+        setTransferSearch("");
+        setSelectedTransferRecipientIds([]);
+      }}>
         {transferAnnouncement && (
           <form onSubmit={transfer} className="space-y-4">
             <p className="text-sm font-semibold text-dtsc-ink">{transferAnnouncement.title}</p>
+            <Input
+              value={transferSearch}
+              onChange={(event) => setTransferSearch(event.target.value)}
+              placeholder="Rechercher par nom, email, poste ou département..."
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedTransferRecipientIds((current) => [...new Set([...current, ...filteredTransferRecipients.map((recipient) => recipient.id)])])}
+                disabled={!filteredTransferRecipients.length}
+                className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"
+              >
+                Tout sélectionner
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedTransferRecipientIds([])}
+                disabled={!selectedTransferRecipientIds.length}
+                className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"
+              >
+                Réinitialiser
+              </Button>
+            </div>
             <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
-              {transferRecipients.filter((recipient) => recipient.id !== currentUserId).map((recipient) => (
-                <label key={recipient.id} className="flex items-center gap-3 rounded-xl bg-dtsc-surface px-3 py-2 text-sm text-dtsc-muted">
-                  <input type="checkbox" name="recipientIds" value={recipient.id} className="h-4 w-4 accent-cyan-500" />
-                  <span className="min-w-0">
+              {filteredTransferRecipients.map((recipient) => (
+                <label key={recipient.id} className="flex cursor-pointer items-center gap-3 rounded-xl bg-dtsc-surface px-3 py-2 text-sm text-dtsc-muted transition hover:bg-dtsc-soft">
+                  <input type="checkbox" checked={selectedTransferRecipientIds.includes(recipient.id)} onChange={() => toggleTransferRecipient(recipient.id)} className="h-4 w-4 shrink-0 accent-cyan-500" />
+                  <AuthorAvatar name={recipient.name} avatarUrl={recipient.avatarUrl} />
+                  <span className="min-w-0 flex-1">
                     <span className="block font-bold text-dtsc-ink">{recipient.name}</span>
-                    <span className="block truncate text-xs">{recipient.email} · {formatEnumLabel(recipient.role)}</span>
+                    <span className="block truncate text-xs">
+                      {recipient.email} · {recipient.positionTitle || recipient.jobTitle || formatEnumLabel(recipient.role)}
+                      {recipient.departmentName ? ` · ${recipient.departmentName}` : ""}
+                    </span>
                   </span>
                 </label>
               ))}
+              {!filteredTransferRecipients.length && (
+                <p className="rounded-xl bg-dtsc-surface p-3 text-sm text-dtsc-muted">Aucun destinataire ne correspond à cette recherche.</p>
+              )}
             </div>
+            <p className="text-xs font-bold text-dtsc-blue">{selectedTransferRecipientIds.length} destinataire(s) sélectionné(s).</p>
             <textarea name="message" placeholder="Message optionnel..." className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Transférer</Button>
+            <Button disabled={!selectedTransferRecipientIds.length} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Transférer</Button>
           </form>
         )}
       </Dialog>
@@ -548,7 +616,7 @@ function AnnouncementComments({
   const rootComments = commentsByParent.get("root") || [];
   const commentList = useSmartList({
     items: rootComments,
-    pageSize: 5,
+    pageSize: 20,
     getSearchText: (commentItem) => {
       const replies = commentsByParent.get(commentItem.id) || [];
       return `${commentItem.content} ${commentItem.user.name} ${commentItem.user.role} ${commentItem.createdAt} ${replies.map((reply) => `${reply.content} ${reply.user.name}`).join(" ")}`;
@@ -591,7 +659,7 @@ function AnnouncementComments({
 
   return (
     <div className="mt-5 space-y-3">
-      {rootComments.length > 5 && (
+      {rootComments.length > 20 && (
         <ListControls
           query={commentList.query}
           onQueryChange={commentList.setQuery}
@@ -604,10 +672,15 @@ function AnnouncementComments({
         />
       )}
       <span className="sr-only">Fil de commentaires de l&apos;annonce {announcementId}</span>
-      {commentList.paginatedItems.map((commentItem) => renderComment(commentItem))}
-      {!commentList.filteredCount && rootComments.length > 0 && (
-        <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">Aucun commentaire ne correspond à votre recherche.</p>
-      )}
+      <div className="max-h-[28rem] space-y-3 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-surface/40 p-2 pr-1">
+        {commentList.paginatedItems.map((commentItem) => renderComment(commentItem))}
+        {!commentList.filteredCount && rootComments.length > 0 && (
+          <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">Aucun commentaire ne correspond à votre recherche.</p>
+        )}
+        {!rootComments.length && (
+          <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">Aucun commentaire pour le moment.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -636,6 +709,29 @@ function Metric({ label, value }: { label: string; value: number }) {
       <p className="mt-2 text-2xl font-black text-dtsc-ink">{value}</p>
     </div>
   );
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function transferSearchScore(searchable: string, tokens: string[]) {
+  if (!tokens.length) {
+    return 0;
+  }
+  return tokens.reduce((score, token) => {
+    if (searchable.startsWith(token)) {
+      return score + 3;
+    }
+    if (searchable.includes(` ${token}`)) {
+      return score + 2;
+    }
+    return searchable.includes(token) ? score + 1 : score;
+  }, 0);
 }
 
 function RichAnnouncementContent({ content }: { content: string }) {

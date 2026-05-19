@@ -35,7 +35,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
 - Contribution brouillon aux publications publiques pour rôles non-client autorisés, avec publication et suppression réservées aux administrateurs
 - Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
-- Éditeur riche pour les publications publiques: gras, italique, soulignement, couleur, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
+- Éditeur riche pour les publications publiques et annonces: gras, italique, soulignement, palette de couleurs contrôlée, listes avancées, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
 - Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
 - Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
 - Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
@@ -59,7 +59,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Historique des conversations et messages en base, avec dates/heures selon les préférences utilisateur, classement par dossier/projet et CRUD des dossiers
 - Préférences chatbot persistantes: modèle préféré, style de réponse et longueur de réponse par utilisateur
 - Renommage, classement et suppression de conversation
-- Partage fonctionnel des conversations via API native du navigateur, copie du lien ou publication volontaire dans un groupe Mes collaborateurs
+- Partage fonctionnel des conversations via API native du navigateur, copie du lien ou snapshot consultable dans un groupe Mes collaborateurs sans exposer la conversation privée originale
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
 - Tickets support
@@ -69,7 +69,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Sous-module COO avec opérations, tâches, réunions, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
 - Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO filtrable par période, objectifs stratégiques, alertes critiques et journal de supervision
 - Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie, mentions `@collaborateur` dans les commentaires et téléchargement des bulletins personnels
-- Module privé Mes collaborateurs: groupes, invitations individuelles ou groupées acceptées/refusées, membres, rôles de groupe, messagerie avec menus `...`, mentions, notifications, partage de conversations chatbot et contact contrôlé de l'équipe DTSC
+- Module privé Mes collaborateurs: groupes, invitations individuelles ou groupées acceptées/refusées, membres, rôles de groupe, messagerie paginée avec menus `...`, couleurs stables par intervenant, mentions, notifications, snapshots de conversations chatbot et contact contrôlé de l'équipe DTSC
 - Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
 - Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
@@ -94,7 +94,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
-- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert, indicateurs, signalement, archivage et épinglage
+- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires scrollables, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert intelligent multi-destinataires, indicateurs, signalement, archivage et épinglage
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système, page de démarrage, densité d'interface, langue, fuseau horaire, format de date, synthèse email, modèle LLM préféré, style IA et préférences de notifications persistantes
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels

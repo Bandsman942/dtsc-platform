@@ -12,7 +12,11 @@
     "save": "Save",
     "send": "Send",
     "share": "Share",
-    "transfer": "Forward"
+    "transfer": "Forward",
+    "loadMore": "Load more",
+    "loadPrevious": "Load previous",
+    "reset": "Reset",
+    "selectAll": "Select all"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -35,13 +39,39 @@
     "indicators": "View metrics",
     "info": "Announcement info",
     "report": "Report",
-    "transfer": "Forward"
+    "transfer": "Forward",
+    "transferSearch": "Search by name, email, position or department",
+    "transferEmpty": "No recipient matches this search",
+    "selectedRecipients": "selected recipient(s)"
   },
   "collaborators": {
     "title": "My collaborators",
     "groups": "Groups",
     "invitations": "Invitations",
-    "messages": "Messages"
+    "messages": "Messages",
+    "loadOlderMessages": "Load older messages",
+    "sharedConversation": "Shared chatbot conversation",
+    "viewSharedConversation": "View the readable copy",
+    "noMessages": "No messages in this group"
+  },
+  "comments": {
+    "title": "Comments",
+    "empty": "No comments yet",
+    "writePlaceholder": "Add a comment",
+    "loadPrevious": "Load previous"
+  },
+  "chat": {
+    "actions": "Conversation actions",
+    "info": "Conversation info",
+    "copyLink": "Copy link",
+    "shareToGroup": "Forward to a group",
+    "sharedSnapshotNotice": "Sharing creates a readable copy, not access to the original private conversation"
+  },
+  "editor": {
+    "textColor": "Color",
+    "bulletStyle": "List type",
+    "accentColor": "DTSC accent",
+    "checklist": "Checklist"
   },
   "settings": {
     "language": "Language",

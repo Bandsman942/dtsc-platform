@@ -125,6 +125,20 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Tout menu, modale et formulaire ajouté doit rester mobile-first: conteneurs `min-w-0`, hauteur bornée, scroll interne si nécessaire, interactions tactiles et fermeture claire.
 - Masquer un bouton côté interface ne suffit jamais: chaque route sensible doit réappliquer RBAC, propriété ou appartenance côté serveur.
 
+## Conversation, comments and content UX standards
+
+- Tous les fils de commentaires doivent avoir une hauteur bornée, un scroll vertical et une pagination/cursor ou un bouton `Charger les précédents`; ne jamais laisser les commentaires étirer indéfiniment une page ou une modale.
+- La pagination des commentaires doit préserver les permissions, la confidentialité LA et les mentions `@`; l'API ne doit retourner que les commentaires visibles par l'utilisateur courant.
+- Les conversations de groupe et chatbot doivent être scrollables, afficher date/heure selon les préférences utilisateur et regrouper les actions contextuelles dans un menu `...`.
+- Les anciens messages de groupe doivent être chargés progressivement côté API (`limit` + cursor) et l'utilisateur doit rester membre du groupe pour lire ou écrire.
+- Les noms/intervenants dans les conversations et copies partagées doivent utiliser une couleur stable et lisible dérivée d'un identifiant déterministe (`userId`, email ou rôle système), pas un random recalculé à chaque rendu.
+- Le partage d'une conversation chatbot vers un groupe ne doit jamais exposer directement la conversation privée originale: créer une copie/snapshot persistant et limiter sa lecture aux membres du groupe.
+- La suppression ou l'archivage d'un message de partage chatbot doit supprimer ou archiver l'accès à la copie partagée associée.
+- Les annonces doivent garder leurs actions dans le menu `...`; le transfert doit proposer une recherche intelligente par nom, email, poste et département, accepter plusieurs destinataires et créer une notification persistée.
+- Les éditeurs de publications publiques et annonces doivent supporter une palette de couleurs contrôlée et des types de listes avancés, tout en conservant le nettoyage serveur contre XSS.
+- Toute nouvelle interface visible doit être entièrement compatible i18n: ajouter les clés FR/EN pour labels, boutons, statuts, erreurs, modales, menus, notifications, filtres, contenus de modules et états vides.
+- Les fils de commentaires, conversations, menus et modales doivent être vérifiés mobile-first avec `min-w-0`, scroll interne et zone de saisie accessible.
+
 ## Validation locale
 
 Dans cet environnement Codex Windows, `pnpm` peut être absent. Si `pnpm build` ne peut pas être lancé localement, le signal bloquant devient:

@@ -133,6 +133,7 @@ model User {
   receivedCollaborationInvitations CollaborationGroupInvitation[] @relation("CollaborationInvitationReceiver")
   collaborationGroupMessages CollaborationGroupMessage[]
   collaborationMessageMentions CollaborationMessageMention[]
+  sharedConversationSnapshots CollaborationSharedConversation[] @relation("SharedConversationSharer")
   collaborationAuditLogs CollaborationGroupAuditLog[]
   announcementSharesSent AnnouncementShare[] @relation("AnnouncementShareSender")
   announcementSharesReceived AnnouncementShare[] @relation("AnnouncementShareRecipient")
@@ -354,6 +355,7 @@ model Conversation {
   messages  Message[]
   usageLogs UsageLog[]
   collaborationMessages CollaborationGroupMessage[]
+  sharedConversationSnapshots CollaborationSharedConversation[]
 
   @@index([userId, updatedAt])
   @@index([userId, projectName, updatedAt])
@@ -1442,6 +1444,7 @@ model CollaborationGroup {
   members     CollaborationGroupMember[]
   invitations CollaborationGroupInvitation[]
   messages    CollaborationGroupMessage[]
+  sharedConversationSnapshots CollaborationSharedConversation[]
   auditLogs   CollaborationGroupAuditLog[]
 
   @@index([ownerId, status, updatedAt])
@@ -1503,11 +1506,34 @@ model CollaborationGroupMessage {
   replyTo                     CollaborationGroupMessage? @relation("CollaborationMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies                     CollaborationGroupMessage[] @relation("CollaborationMessageReplies")
   sharedChatbotConversation   Conversation? @relation(fields: [sharedChatbotConversationId], references: [id], onDelete: SetNull)
+  sharedConversationSnapshot  CollaborationSharedConversation?
   mentions                    CollaborationMessageMention[]
 
   @@index([groupId, createdAt])
   @@index([authorId, createdAt])
   @@index([sharedChatbotConversationId])
+}
+
+model CollaborationSharedConversation {
+  id                     String   @id @default(cuid())
+  originalConversationId String?
+  sharedById             String
+  groupId                String
+  messageId              String?  @unique
+  title                  String
+  snapshotJson           Json
+  visibility             String   @default("GROUP")
+  status                 String   @default("ACTIVE")
+  createdAt              DateTime @default(now())
+  deletedAt              DateTime?
+  originalConversation   Conversation? @relation(fields: [originalConversationId], references: [id], onDelete: SetNull)
+  sharedBy               User     @relation("SharedConversationSharer", fields: [sharedById], references: [id], onDelete: Cascade)
+  group                  CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  message                CollaborationGroupMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, status, createdAt])
+  @@index([sharedById, createdAt])
+  @@index([originalConversationId])
 }
 
 model CollaborationMessageMention {

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
+import { getParticipantColor } from "@/lib/participant-colors";
 import { formatRelativeUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,17 @@ type GroupMessage = {
   author: UserOption;
   mentions: Array<{ mentionedUser: { id: string; name: string } }>;
   sharedChatbotConversation?: { id: string; title: string; updatedAt: string } | null;
+  sharedConversationSnapshot?: { id: string; title: string; status: string; createdAt: string; deletedAt?: string | null } | null;
+};
+type SharedConversationSnapshot = {
+  id: string;
+  title: string;
+  createdAt: string;
+  group: { id: string; name: string };
+  sharedBy: { id: string; name: string; email: string; avatarUrl?: string | null };
+  snapshotJson: {
+    messages?: Array<{ id: string; role: string; content: string; createdAt: string }>;
+  };
 };
 
 export function CollaboratorsWorkspace({
@@ -61,6 +73,9 @@ export function CollaboratorsWorkspace({
   const [invitations, setInvitations] = useState(initialInvitations);
   const [activeGroupId, setActiveGroupId] = useState(initialGroups[0]?.id || "");
   const [messages, setMessages] = useState<GroupMessage[]>([]);
+  const [messagesCursor, setMessagesCursor] = useState<string | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [groupDialog, setGroupDialog] = useState<"create" | "edit" | null>(null);
   const [inviteDialog, setInviteDialog] = useState(false);
@@ -68,6 +83,7 @@ export function CollaboratorsWorkspace({
   const [editingMessage, setEditingMessage] = useState<GroupMessage | null>(null);
   const [inviteSearch, setInviteSearch] = useState("");
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<string[]>([]);
+  const [sharedSnapshot, setSharedSnapshot] = useState<SharedConversationSnapshot | null>(null);
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMember = activeGroup?.members.find((member) => member.userId === currentUserId);
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
@@ -106,19 +122,42 @@ export function CollaboratorsWorkspace({
     setInvitations(body.invitations || []);
   }
 
-  async function loadMessages(groupId: string) {
+  async function loadMessages(groupId: string, cursor?: string | null) {
     if (!groupId) {
       setMessages([]);
+      setMessagesCursor(null);
+      setHasOlderMessages(false);
       return;
     }
-    const response = await fetch(`/api/collaborators/groups/${groupId}/messages`);
+    if (cursor) {
+      setIsLoadingOlderMessages(true);
+    }
+    const query = new URLSearchParams({ limit: "30" });
+    if (cursor) {
+      query.set("cursor", cursor);
+    }
+    const response = await fetch(`/api/collaborators/groups/${groupId}/messages?${query.toString()}`);
     const body = await response.json();
-    setMessages(body.messages || []);
+    const nextMessages = body.messages || [];
+    setMessages((current) => (cursor ? [...nextMessages, ...current] : nextMessages));
+    setMessagesCursor(body.nextCursor || null);
+    setHasOlderMessages(Boolean(body.hasMore));
+    setIsLoadingOlderMessages(false);
   }
 
   useEffect(() => {
     loadMessages(activeGroupId);
   }, [activeGroupId]);
+
+  async function openSharedSnapshot(snapshotId: string) {
+    const response = await fetch(`/api/collaborators/shared-conversations/${snapshotId}`);
+    const body = await response.json().catch(() => null);
+    if (response.ok && body?.snapshot) {
+      setSharedSnapshot(body.snapshot);
+    } else {
+      setFeedback(body?.message || "Conversation partagée indisponible.");
+    }
+  }
 
   async function saveGroup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -286,6 +325,10 @@ export function CollaboratorsWorkspace({
                 await loadMessages(activeGroup.id);
                 await refresh();
               }}
+              hasOlderMessages={hasOlderMessages}
+              isLoadingOlderMessages={isLoadingOlderMessages}
+              onLoadOlder={() => loadMessages(activeGroup.id, messagesCursor)}
+              onOpenSharedSnapshot={openSharedSnapshot}
               onEdit={setEditingMessage}
             />
           </>
@@ -390,6 +433,35 @@ export function CollaboratorsWorkspace({
           />
         )}
       </Dialog>
+      <Dialog open={Boolean(sharedSnapshot)} title={sharedSnapshot?.title || "Conversation partagée"} onClose={() => setSharedSnapshot(null)}>
+        {sharedSnapshot && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">
+              <p className="font-black text-dtsc-ink">{sharedSnapshot.title}</p>
+              <p className="mt-1 text-xs">
+                Partagée par {sharedSnapshot.sharedBy.name} dans {sharedSnapshot.group.name} · {formatRelativeUserDateTime(sharedSnapshot.createdAt, userPreferences)}
+              </p>
+            </div>
+            <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+              {(sharedSnapshot.snapshotJson.messages || []).map((message) => {
+                const color = getParticipantColor(message.role);
+                return (
+                  <div key={message.id} className={cn("rounded-2xl border p-3 text-sm", message.role === "user" ? "border-dtsc-border bg-dtsc-page" : "border-cyan-200 bg-cyan-50/60")}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: color.hex }}>
+                      {message.role === "assistant" ? "Assistant DTSC" : message.role === "user" ? "Utilisateur" : "Système"}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap leading-7 text-dtsc-ink">{message.content}</p>
+                    <p className="mt-2 text-[0.68rem] font-semibold text-dtsc-muted">{formatRelativeUserDateTime(message.createdAt, userPreferences)}</p>
+                  </div>
+                );
+              })}
+              {!sharedSnapshot.snapshotJson.messages?.length && (
+                <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">Cette copie ne contient aucun message consultable.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </Dialog>
       <Dialog open={Boolean(feedback)} title="Message DTSC" onClose={() => setFeedback("")}>
         <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
       </Dialog>
@@ -402,6 +474,10 @@ function MessageThread({
   userPreferences,
   group,
   messages,
+  hasOlderMessages,
+  isLoadingOlderMessages,
+  onLoadOlder,
+  onOpenSharedSnapshot,
   onChanged,
   onEdit,
 }: {
@@ -409,6 +485,10 @@ function MessageThread({
   userPreferences: UserDatePreferences;
   group: Group;
   messages: GroupMessage[];
+  hasOlderMessages: boolean;
+  isLoadingOlderMessages: boolean;
+  onLoadOlder: () => void;
+  onOpenSharedSnapshot: (snapshotId: string) => void;
   onChanged: () => Promise<void>;
   onEdit: (message: GroupMessage) => void;
 }) {
@@ -447,44 +527,38 @@ function MessageThread({
   return (
     <>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-dtsc-page p-4">
-        {messages.map((message) => (
-          <div key={message.id} className={cn("flex", message.authorId === currentUserId ? "justify-end" : "justify-start")}>
-            <div className={cn("max-w-[88%] rounded-2xl border p-3 text-sm shadow-[0_4px_20px_rgba(0,43,91,0.05)]", message.authorId === currentUserId ? "border-[#002b5b] bg-[#002b5b] text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink")}>
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <p className="text-xs font-black">{message.author.name}</p>
-                <ActionMenu
-                  items={[
-                    ...(message.authorId === currentUserId ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => onEdit(message) }] : []),
-                    ...(message.authorId === currentUserId ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: async () => {
-                      await fetch(`/api/collaborators/messages/${message.id}`, { method: "DELETE" });
-                      await onChanged();
-                    } }] : []),
-                  ]}
-                />
-              </div>
-              <p className="whitespace-pre-wrap leading-6">{message.deletedAt ? "Message supprimé." : renderMentions(message.content, message.mentions.map((mention) => mention.mentionedUser.name))}</p>
-              {message.sharedChatbotConversation && (
-                <a href={`/chat?conversationId=${message.sharedChatbotConversation.id}`} className="mt-2 block rounded-xl bg-white/10 p-3 text-xs font-bold underline underline-offset-4">
-                  Conversation chatbot: {message.sharedChatbotConversation.title}
-                </a>
-              )}
-              <p className={cn("mt-2 text-[0.68rem] font-semibold", message.authorId === currentUserId ? "text-white/70" : "text-dtsc-muted")}>
-                {formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · modifié" : ""}
-              </p>
-            </div>
+        {hasOlderMessages && (
+          <div className="flex justify-center">
+            <Button type="button" variant="outline" size="sm" onClick={onLoadOlder} disabled={isLoadingOlderMessages} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+              {isLoadingOlderMessages ? "Chargement..." : "Charger les anciens messages"}
+            </Button>
           </div>
+        )}
+        {messages.map((message) => (
+          <GroupMessageBubble
+            key={message.id}
+            message={message}
+            currentUserId={currentUserId}
+            userPreferences={userPreferences}
+            onChanged={onChanged}
+            onEdit={onEdit}
+            onOpenSharedSnapshot={onOpenSharedSnapshot}
+          />
         ))}
         {!messages.length && <p className="rounded-xl bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun message dans ce groupe.</p>}
       </div>
       <form onSubmit={sendMessage} className="relative border-t border-dtsc-border p-4">
         {mentionSuggestions.length > 0 && (
           <div className="absolute bottom-20 left-4 z-20 w-[min(28rem,calc(100%-2rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_18px_60px_rgba(0,23,54,0.18)]">
-            {mentionSuggestions.map((member) => (
-              <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-dtsc-soft">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-dtsc-soft font-black text-dtsc-blue">{member.user.name.slice(0, 2).toUpperCase()}</span>
-                <span><span className="block font-bold text-dtsc-ink">{member.user.name}</span><span className="text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span>
-              </button>
-            ))}
+            {mentionSuggestions.map((member) => {
+              const color = getParticipantColor(member.userId);
+              return (
+                <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-dtsc-soft">
+                  <span className={cn("flex h-8 w-8 items-center justify-center rounded-full font-black", color.bgClassName, color.textClassName)}>{member.user.name.slice(0, 2).toUpperCase()}</span>
+                  <span><span className="block font-bold text-dtsc-ink">{member.user.name}</span><span className="text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span>
+                </button>
+              );
+            })}
           </div>
         )}
         <div className="flex gap-3">
@@ -493,6 +567,62 @@ function MessageThread({
         </div>
       </form>
     </>
+  );
+}
+
+function GroupMessageBubble({
+  message,
+  currentUserId,
+  userPreferences,
+  onChanged,
+  onEdit,
+  onOpenSharedSnapshot,
+}: {
+  message: GroupMessage;
+  currentUserId: string;
+  userPreferences: UserDatePreferences;
+  onChanged: () => Promise<void>;
+  onEdit: (message: GroupMessage) => void;
+  onOpenSharedSnapshot: (snapshotId: string) => void;
+}) {
+  const participantColor = getParticipantColor(message.authorId || message.author.email);
+  return (
+    <div className={cn("flex", message.authorId === currentUserId ? "justify-end" : "justify-start")}>
+      <div className={cn("flex max-w-[88%] gap-2", message.authorId === currentUserId && "flex-row-reverse")}>
+        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-xs font-black", participantColor.bgClassName, participantColor.textClassName, participantColor.borderClassName)}>
+          {message.author.name.slice(0, 2).toUpperCase()}
+        </span>
+        <div className={cn("min-w-0 rounded-2xl border p-3 text-sm shadow-[0_4px_20px_rgba(0,43,91,0.05)]", message.authorId === currentUserId ? "border-[#002b5b] bg-[#002b5b] text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink")}>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-xs font-black" style={{ color: message.authorId === currentUserId ? "#a5f3fc" : participantColor.hex }}>{message.author.name}</p>
+            <ActionMenu
+              items={[
+                ...(message.authorId === currentUserId ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => onEdit(message) }] : []),
+                ...(message.authorId === currentUserId ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: async () => {
+                  await fetch(`/api/collaborators/messages/${message.id}`, { method: "DELETE" });
+                  await onChanged();
+                } }] : []),
+              ]}
+            />
+          </div>
+          <p className="whitespace-pre-wrap leading-6">{message.deletedAt ? "Message supprimé." : renderMentions(message.content, message.mentions.map((mention) => mention.mentionedUser.name))}</p>
+          {message.sharedConversationSnapshot && !message.deletedAt && (
+            <button
+              type="button"
+              onClick={() => onOpenSharedSnapshot(message.sharedConversationSnapshot?.id || "")}
+              className={cn("mt-3 block w-full rounded-xl border p-3 text-left text-xs font-bold transition hover:border-cyan-300", message.authorId === currentUserId ? "border-white/20 bg-white/10 text-white" : "border-dtsc-border bg-dtsc-page text-dtsc-blue")}
+            >
+              <span className="block text-[0.68rem] uppercase tracking-[0.14em] opacity-80">Conversation chatbot partagée</span>
+              <span className="mt-1 block">{message.sharedConversationSnapshot.title}</span>
+              <span className="mt-2 block underline underline-offset-4">Voir la copie consultable</span>
+            </button>
+          )}
+          <p className={cn("mt-2 text-[0.68rem] font-semibold", message.authorId === currentUserId ? "text-white/70" : "text-dtsc-muted")}>
+            {formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · modifié" : ""}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

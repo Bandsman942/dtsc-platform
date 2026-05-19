@@ -47,6 +47,12 @@ export async function PATCH(req: Request, { params }: Params) {
         skipDuplicates: true,
       });
     }
+    if (parsed.data.status === "DELETED" || parsed.data.status === "ARCHIVED") {
+      await tx.collaborationSharedConversation.updateMany({
+        where: { messageId: id },
+        data: { status: parsed.data.status, deletedAt: parsed.data.status === "DELETED" ? new Date() : null },
+      });
+    }
     return saved;
   });
   if (mentionedUserIds.length) {
@@ -80,9 +86,16 @@ export async function DELETE(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  await prisma.collaborationGroupMessage.update({
-    where: { id },
-    data: { status: "DELETED", deletedAt: new Date() },
+  const deletedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.collaborationGroupMessage.update({
+      where: { id },
+      data: { status: "DELETED", deletedAt },
+    });
+    await tx.collaborationSharedConversation.updateMany({
+      where: { messageId: id },
+      data: { status: "DELETED", deletedAt },
+    });
   });
   await writeGroupAudit({ groupId: message.groupId, actorId: session.userId, action: "message.delete", entityType: "CollaborationGroupMessage", entityId: id });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
