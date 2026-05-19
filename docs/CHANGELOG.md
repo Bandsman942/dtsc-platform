@@ -39,6 +39,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Notifications: les catégories et statuts techniques affichés avec underscores sont remplacés par des libellés français lisibles dans les badges, détails et aperçus.
 # 2026-05-19
 
+- Encapsulation des actions de commentaires des annonces et publications publiques dans les menus `...`, avec `Répondre`, `Copier le texte`, `Modifier` et `Supprimer` affichés selon les permissions.
 - Amélioration des groupes `Mes collaborateurs`: mentions interactives, badge de mentions non lues, marquage lu à l'ouverture, réponse à un message via `replyToId`, en-tête mobile sobre et conversation mieux isolée en plein écran mobile.
 - Centralisation du formulaire `Formuler une demande à un collaborateur` dans le bloc `Demandes collaboratives` du module Activités DTSC.
 - Enrichissement de `/offline` avec présentation DTSC, services, FAQ, contact essentiel et version de cache PWA excluant les pages privées sensibles.

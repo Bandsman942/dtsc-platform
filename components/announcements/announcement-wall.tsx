@@ -635,21 +635,15 @@ function AnnouncementComments({
               <p className="break-words text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
               <p className="mt-1 break-words text-sm text-dtsc-muted">{commentItem.content}</p>
             </div>
-            <div className="flex flex-wrap gap-2 sm:justify-end">
-              <button type="button" onClick={() => onReply(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
-                Répondre
-              </button>
-              {canEditComment && (
-                <button type="button" onClick={() => onEdit(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
-                  Modifier
-                </button>
-              )}
-              {isAdmin && (
-                <button type="button" onClick={() => onDelete(commentItem)} className="rounded-lg px-2 py-1 text-xs font-black text-red-600 underline underline-offset-4 hover:bg-red-50">
-                  Supprimer
-                </button>
-              )}
-            </div>
+            <ActionMenu
+              label="Actions du commentaire"
+              items={[
+                { key: "reply", label: "Répondre", icon: MessageCircle, onSelect: () => onReply(commentItem) },
+                { key: "copy", label: "Copier le texte", icon: Copy, onSelect: () => copyText(commentItem.content) },
+                ...(canEditComment ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => onEdit(commentItem) }] : []),
+                ...(isAdmin ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => onDelete(commentItem) }] : []),
+              ]}
+            />
           </div>
         </div>
         {replies.length > 0 && <div className="mt-3 space-y-3">{replies.map((reply) => renderComment(reply, depth + 1))}</div>}
@@ -683,6 +677,11 @@ function AnnouncementComments({
       </div>
     </div>
   );
+}
+
+function copyText(value: string) {
+  const clipboard = typeof globalThis.navigator !== "undefined" ? globalThis.navigator.clipboard : null;
+  void clipboard?.writeText(value);
 }
 
 function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {

@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { UserRole } from "@prisma/client";
-import { MessageCircle, Pencil, Reply, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Copy, MessageCircle, Pencil, Reply, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -169,26 +170,15 @@ export function PublicationEngagement({
                 <p className="mt-2 text-xs font-bold text-dtsc-muted">{new Date(comment.createdAt).toLocaleString("fr-FR")}</p>
               </div>
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              {currentUser && (
-                <button type="button" onClick={() => setReplyingTo(comment)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
-                  <Reply className="h-3.5 w-3.5" />
-                  Répondre
-                </button>
-              )}
-              {canEdit && (
-                <button type="button" onClick={() => setEditingComment(comment)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-black text-dtsc-blue underline underline-offset-4 hover:bg-dtsc-soft">
-                  <Pencil className="h-3.5 w-3.5" />
-                  Modifier
-                </button>
-              )}
-              {isAdmin && (
-                <button type="button" onClick={() => setDeletingComment(comment)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-black text-red-600 underline underline-offset-4 hover:bg-red-50">
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Supprimer
-                </button>
-              )}
-            </div>
+            <ActionMenu
+              label="Actions du commentaire"
+              items={[
+                ...(currentUser ? [{ key: "reply", label: "Répondre", icon: Reply, onSelect: () => setReplyingTo(comment) }] : []),
+                { key: "copy", label: "Copier le texte", icon: Copy, onSelect: () => copyText(comment.content) },
+                ...(canEdit ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => setEditingComment(comment) }] : []),
+                ...(isAdmin ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setDeletingComment(comment) }] : []),
+              ]}
+            />
           </div>
         </div>
         {replies.length > 0 && <div className="mt-3 space-y-3">{replies.map((reply) => renderComment(reply, depth + 1))}</div>}
@@ -292,4 +282,9 @@ export function PublicationEngagement({
       </Dialog>
     </section>
   );
+}
+
+function copyText(value: string) {
+  const clipboard = typeof globalThis.navigator !== "undefined" ? globalThis.navigator.clipboard : null;
+  void clipboard?.writeText(value);
 }
