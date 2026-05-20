@@ -4,6 +4,18 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-05-20
 
+### Ajouté
+
+- Ajout d'une architecture persistée d'appels audio/vidéo pour les groupes `Mes collaborateurs`, avec sessions d'appel, participants, événements, messages système, notifications et audit de groupe.
+- Ajout du service backend `lib/livekit-service.ts` pour générer des tokens LiveKit temporaires côté serveur sans exposer les clés LiveKit au frontend.
+- Ajout du mode de tenue des réunions COO: commentaires uniquement, audio ou vidéo. Les réunions audio/vidéo créent automatiquement un groupe de réunion dédié ou lient un groupe existant.
+- Ajout des modèles et routes pour comptes rendus de réunion COO, décisions et création de tâches de suivi liées à une décision.
+
+### Sécurisé
+
+- Les routes d'appels vérifient la session, l'appartenance active au groupe, le statut de l'appel et les droits de gestion avant de démarrer, rejoindre, quitter ou terminer une session.
+- Les variables `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` et `LIVEKIT_URL` sont documentées comme strictement serveur; seul un token participant temporaire peut être renvoyé à un membre autorisé.
+
 ### Amélioré
 
 - Demandes collaboratives dans Activités DTSC: la demande initiale et la réponse du destinataire sont désormais affichées dans deux blocs visuels distincts, avec le nom du collaborateur répondant en petit libellé coloré.

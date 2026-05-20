@@ -16,6 +16,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 - Neon PostgreSQL
 - Prisma ORM
 - OpenAI Responses API côté serveur
+- LiveKit optionnel pour les appels audio/vidéo de groupes et réunions COO
 - Auth maison par cookie signé HTTP-only
 - PWA privée installable côté espace client
 - Déploiement Vercel
@@ -66,10 +67,10 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, HR & CFO, SCO, COO, CEO, MPO, CTO, LA, visites, activité et audits
 - Sous-modules admin HR & CFO, SCO, MPO, CTO et LA avec RBAC et permissions métier par poste officiel: collaborateurs liés aux membres internes, départements, postes DTSC, comptes financiers, budgets contrôlés, transactions, paie, factures automatiques, fournisseurs, achats, stocks, actifs, logistique, projets numériques, pilotage technique, dossiers juridiques, contrats, conformité, litiges et archivage confidentiel
 - Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque
-- Sous-module COO avec opérations, tâches, réunions, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
+- Sous-module COO avec opérations, tâches, réunions en mode commentaires/audio/vidéo, groupes de réunion liés, décisions, tâches de suivi, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
 - Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO filtrable par période, objectifs stratégiques, alertes critiques et journal de supervision
 - Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie, mentions `@collaborateur` dans les commentaires et téléchargement des bulletins personnels
-- Module privé Mes collaborateurs: groupes avec en-tête sobre et détails consultables au clic, invitations individuelles ou groupées acceptées/refusées, badges de mentions non lues, réponses à messages, membres, rôles de groupe, messagerie paginée avec menus `...`, couleurs stables par intervenant, mentions interactives, notifications, snapshots de conversations chatbot et contact contrôlé de l'équipe DTSC
+- Module privé Mes collaborateurs: groupes avec en-tête sobre et détails consultables au clic, invitations individuelles ou groupées acceptées/refusées, badges de mentions non lues, réponses à messages, membres, rôles de groupe, messagerie paginée avec menus `...`, couleurs stables par intervenant, mentions interactives, appels audio/vidéo LiveKit sécurisés, notifications, snapshots de conversations chatbot et contact contrôlé de l'équipe DTSC
 - Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
 - Page PWA `/offline` et fallback statique `public/offline.html` avec informations publiques DTSC, services, FAQ et contact essentiel consultables hors connexion sans cache de données privées, avec vérification automatique des mises à jour au retour en ligne pour les applications installées
 - Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
@@ -118,6 +119,9 @@ OPENAI_MODEL=gpt-5-nano
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
 NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+LIVEKIT_URL=
 ADMIN_EMAIL=
 DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
 DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!

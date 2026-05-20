@@ -1,6 +1,7 @@
 "use client";
 
-import { Archive, ArrowLeft, Check, Copy, Eye, MessageSquare, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, Check, Copy, Eye, Mic, MicOff, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
+import { LiveKitRoom, RoomAudioRenderer, VideoConference } from "@livekit/components-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ type Group = {
   name: string;
   description?: string | null;
   groupType: string;
+  meetingId?: string | null;
+  autoCreated?: boolean;
   status: string;
   ownerId: string;
   visibility?: string | null;
@@ -31,7 +34,36 @@ type Group = {
   members: GroupMember[];
   invitations: Array<{ id: string; status: string; invitedEmail?: string | null; invitedUser?: { name: string; email: string } | null; invitedBy: { name: string } }>;
   messages: Array<{ id: string; content: string; createdAt: string; author: { name: string } }>;
+  calls?: GroupCall[];
   _count?: { messages: number; members: number };
+};
+type GroupCallParticipant = {
+  id: string;
+  userId: string;
+  status: string;
+  joinedAt?: string | null;
+  leftAt?: string | null;
+  microphoneEnabled: boolean;
+  cameraEnabled: boolean;
+};
+type GroupCall = {
+  id: string;
+  groupId: string;
+  meetingId?: string | null;
+  callType: "AUDIO" | "VIDEO";
+  provider: string;
+  roomName: string;
+  status: string;
+  startedById: string;
+  startedAt: string;
+  endedAt?: string | null;
+  participants?: GroupCallParticipant[];
+};
+type JoinedCall = {
+  call: GroupCall;
+  token: string;
+  livekitUrl: string;
+  roomName: string;
 };
 type Invitation = { id: string; group: { id: string; name: string; description?: string | null }; invitedBy: { name: string }; invitationMessage?: string | null; createdAt: string };
 type ConversationOption = { id: string; title: string; updatedAt: string; _count?: { messages: number } };
@@ -100,10 +132,13 @@ export function CollaboratorsWorkspace({
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<string[]>([]);
   const [sharedSnapshot, setSharedSnapshot] = useState<SharedConversationSnapshot | null>(null);
   const [readInfo, setReadInfo] = useState<MessageReadInfo | null>(null);
+  const [joinedCall, setJoinedCall] = useState<JoinedCall | null>(null);
+  const [callJoining, setCallJoining] = useState(false);
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMember = activeGroup?.members.find((member) => member.userId === currentUserId);
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
   const isGroupOwner = activeMember?.role === "OWNER";
+  const activeCall = activeGroup?.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE") || null;
   const availableInviteUsers = useMemo(() => {
     const activeMemberIds = new Set(activeGroup?.members.map((member) => member.userId) || []);
     const pendingInviteUserEmails = new Set(activeGroup?.invitations.flatMap((invitation) => [invitation.invitedUser?.email, invitation.invitedEmail]).filter(Boolean) || []);
@@ -254,6 +289,75 @@ export function CollaboratorsWorkspace({
     );
   }
 
+  async function startGroupCall(callType: "AUDIO" | "VIDEO") {
+    if (!activeGroup) {
+      return;
+    }
+    const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/calls`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callType, meetingId: "" }),
+    });
+    const body = await response.json().catch(() => null) as { call?: GroupCall; activeCall?: GroupCall; message?: string } | null;
+    if (!response.ok) {
+      setFeedback(body?.message || "Impossible de démarrer l'appel.");
+      return;
+    }
+    const nextCall = body?.call || body?.activeCall;
+    setFeedback(callType === "VIDEO" ? "Appel vidéo démarré." : "Appel audio démarré.");
+    await refresh();
+    if (nextCall) {
+      await joinGroupCall(nextCall);
+    }
+    await loadMessages(activeGroup.id);
+  }
+
+  async function joinGroupCall(call: GroupCall) {
+    setCallJoining(true);
+    const response = await fetch(`/api/collaborators/calls/${call.id}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ microphoneEnabled: true, cameraEnabled: call.callType === "VIDEO" }),
+    });
+    const body = await response.json().catch(() => null) as { token?: string; livekitUrl?: string; roomName?: string; message?: string } | null;
+    setCallJoining(false);
+    if (!response.ok || !body?.token || !body.livekitUrl || !body.roomName) {
+      setFeedback(body?.message || "Impossible de rejoindre l'appel.");
+      return;
+    }
+    setJoinedCall({ call, token: body.token, livekitUrl: body.livekitUrl, roomName: body.roomName });
+    setFeedback("Accès à l'appel généré.");
+    await refresh();
+    if (activeGroup) {
+      await loadMessages(activeGroup.id);
+    }
+  }
+
+  async function leaveJoinedCall() {
+    if (!joinedCall) {
+      return;
+    }
+    await fetch(`/api/collaborators/calls/${joinedCall.call.id}/leave`, { method: "POST" }).catch(() => null);
+    setJoinedCall(null);
+    await refresh();
+    if (activeGroup) {
+      await loadMessages(activeGroup.id);
+    }
+  }
+
+  async function endGroupCall(call: GroupCall) {
+    const response = await fetch(`/api/collaborators/calls/${call.id}/end`, { method: "POST" });
+    const body = await response.json().catch(() => null) as { message?: string } | null;
+    setFeedback(response.ok ? "Appel terminé." : body?.message || "Impossible de terminer l'appel.");
+    if (response.ok) {
+      setJoinedCall(null);
+      await refresh();
+      if (activeGroup) {
+        await loadMessages(activeGroup.id);
+      }
+    }
+  }
+
   async function createMentionGroup(user: MentionedUser) {
     const response = await fetch("/api/collaborators/groups", {
       method: "POST",
@@ -383,9 +487,35 @@ export function CollaboratorsWorkspace({
                   </div>
                 </button>
                 <div className="flex gap-2">
+                  {activeCall ? (
+                    <Button type="button" onClick={() => joinGroupCall(activeCall)} disabled={callJoining} className="rounded-xl bg-cyan-500 text-[#001736] hover:bg-cyan-300">
+                      <PhoneCall className="h-4 w-4" />
+                      Rejoindre l&apos;appel
+                    </Button>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" onClick={() => startGroupCall("AUDIO")} className="hidden rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex">
+                        <Phone className="h-4 w-4" />
+                        Audio
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => startGroupCall("VIDEO")} className="hidden rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex">
+                        <Video className="h-4 w-4" />
+                        Vidéo
+                      </Button>
+                    </>
+                  )}
                   {canManage && <Button type="button" variant="outline" onClick={() => setInviteDialog(true)} className="rounded-xl"><UserPlus className="h-4 w-4" /> Inviter</Button>}
                   <ActionMenu
                     items={[
+                      ...(activeCall
+                        ? [
+                            { key: "join-call", label: "Rejoindre l'appel", icon: PhoneCall, onSelect: () => joinGroupCall(activeCall) },
+                            { key: "end-call", label: "Terminer l'appel", icon: PhoneOff, destructive: true, onSelect: () => endGroupCall(activeCall) },
+                          ]
+                        : [
+                            { key: "start-audio", label: "Démarrer un appel audio", icon: Phone, onSelect: () => startGroupCall("AUDIO") },
+                            { key: "start-video", label: "Démarrer un appel vidéo", icon: Video, onSelect: () => startGroupCall("VIDEO") },
+                          ]),
                       ...(canManage ? [{ key: "edit", label: "Modifier le groupe", icon: Pencil, onSelect: () => setGroupDialog("edit") }] : []),
                       { key: "share", label: "Partager une conversation", icon: MessageSquare, onSelect: () => setShareDialog(true) },
                       { key: "support", label: "Contacter l'équipe DTSC", icon: Send, onSelect: async () => {
@@ -401,6 +531,37 @@ export function CollaboratorsWorkspace({
                 </div>
               </div>
             </div>
+            {activeCall && (
+              <div className="border-b border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-700 dark:text-cyan-200">
+                Appel en cours · {activeCall.callType === "VIDEO" ? "vidéo" : "audio"} · {activeCall.participants?.filter((participant) => participant.status === "JOINED").length || 0} participant(s) connecté(s)
+              </div>
+            )}
+            {activeGroup.groupType === "MEETING" && (
+              <div className="border-b border-dtsc-border bg-dtsc-surface px-4 py-3">
+                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
+                  <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300">Réunion COO liée</p>
+                  <p className="mt-1 font-black">{activeGroup.name}</p>
+                  <p className="mt-1 text-xs opacity-80">Préparation, discussion, appel, compte rendu et décisions restent attachés à ce groupe de réunion.</p>
+                  {activeCall ? (
+                    <Button type="button" size="sm" onClick={() => joinGroupCall(activeCall)} className="mt-3 rounded-xl bg-cyan-500 text-[#001736] hover:bg-cyan-300">
+                      <PhoneCall className="h-4 w-4" />
+                      Rejoindre l&apos;appel
+                    </Button>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => startGroupCall("AUDIO")} className="rounded-xl border-cyan-300 bg-white text-[#002b5b]">
+                        <Phone className="h-4 w-4" />
+                        Démarrer audio
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => startGroupCall("VIDEO")} className="rounded-xl border-cyan-300 bg-white text-[#002b5b]">
+                        <Video className="h-4 w-4" />
+                        Démarrer vidéo
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <MessageThread
               key={activeGroup.id}
               currentUserId={currentUserId}
@@ -525,6 +686,16 @@ export function CollaboratorsWorkspace({
       </Dialog>
       <Dialog open={Boolean(readInfo)} title="Infos de lecture" onClose={() => setReadInfo(null)}>
         {readInfo && <ReadInfoPanel info={readInfo} userPreferences={userPreferences} />}
+      </Dialog>
+      <Dialog open={Boolean(joinedCall)} title={joinedCall?.call.callType === "VIDEO" ? "Appel vidéo DTSC" : "Appel audio DTSC"} onClose={() => { void leaveJoinedCall(); }} className="max-w-4xl">
+        {joinedCall && (
+          <GroupCallRoom
+            joinedCall={joinedCall}
+            group={activeGroup}
+            onLeave={leaveJoinedCall}
+            onEnd={() => endGroupCall(joinedCall.call)}
+          />
+        )}
       </Dialog>
       <Dialog open={Boolean(editingMessage)} title="Modifier le message" onClose={() => setEditingMessage(null)}>
         {editingMessage && activeGroup && (
@@ -1008,6 +1179,106 @@ function ReadInfoPanel({ info, userPreferences }: { info: MessageReadInfo; userP
       }))} />
     </div>
   );
+}
+
+function GroupCallRoom({
+  joinedCall,
+  group,
+  onLeave,
+  onEnd,
+}: {
+  joinedCall: JoinedCall;
+  group: Group | null;
+  onLeave: () => Promise<void>;
+  onEnd: () => Promise<void>;
+}) {
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(joinedCall.call.callType === "VIDEO");
+  const connectedParticipants = group?.calls
+    ?.find((call) => call.id === joinedCall.call.id)
+    ?.participants?.filter((participant) => participant.status === "JOINED") || joinedCall.call.participants?.filter((participant) => participant.status === "JOINED") || [];
+  const liveKitHost = safeHostLabel(joinedCall.livekitUrl);
+
+  return (
+    <div className="grid min-h-[70vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
+      <section className="flex min-h-0 flex-col">
+        <div className="border-b border-white/10 p-4">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">{joinedCall.call.callType === "VIDEO" ? "Réunion vidéo DTSC" : "Réunion audio DTSC"}</p>
+          <h3 className="mt-2 text-2xl font-black">{group?.name || "Groupe DTSC"}</h3>
+          <p className="mt-1 text-sm text-slate-300">Room LiveKit sécurisée · {liveKitHost}</p>
+        </div>
+        <div className="min-h-0 flex-1 p-3">
+          <LiveKitRoom
+            token={joinedCall.token}
+            serverUrl={joinedCall.livekitUrl}
+            connect
+            audio={microphoneEnabled}
+            video={joinedCall.call.callType === "VIDEO" && cameraEnabled}
+            data-lk-theme="default"
+            className="h-full min-h-[30rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950"
+            onDisconnected={() => { void onLeave(); }}
+          >
+            {joinedCall.call.callType === "VIDEO" ? (
+              <VideoConference />
+            ) : (
+              <div className="grid h-full place-items-center p-5">
+                <RoomAudioRenderer />
+                <div className="rounded-full border border-cyan-300/30 bg-cyan-400/10 p-10 text-center">
+                  <PhoneCall className="mx-auto h-14 w-14 text-cyan-300" />
+                  <p className="mt-4 text-xl font-black">Appel audio en cours</p>
+                  <p className="mt-2 text-sm text-slate-300">{connectedParticipants.length || 1} participant(s) connecté(s)</p>
+                </div>
+              </div>
+            )}
+          </LiveKitRoom>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 border-t border-white/10 p-4">
+          <Button type="button" variant="outline" onClick={() => setMicrophoneEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+            {microphoneEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+            {microphoneEnabled ? "Micro actif" : "Micro coupé"}
+          </Button>
+          {joinedCall.call.callType === "VIDEO" && (
+            <Button type="button" variant="outline" onClick={() => setCameraEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+              {cameraEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+              {cameraEnabled ? "Caméra active" : "Caméra coupée"}
+            </Button>
+          )}
+          <Button type="button" onClick={() => { void onLeave(); }} className="rounded-full bg-red-600 text-white hover:bg-red-700">
+            <PhoneOff className="h-4 w-4" />
+            Quitter
+          </Button>
+          <Button type="button" variant="outline" onClick={() => { void onEnd(); }} className="rounded-full border-red-300 bg-red-50 text-red-700 hover:bg-red-100">
+            Terminer
+          </Button>
+        </div>
+      </section>
+      <aside className="min-h-0 border-t border-white/10 bg-white/5 p-4 md:border-l md:border-t-0">
+        <h4 className="font-black">Participants connectés</h4>
+        <div className="mt-3 max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+          {(connectedParticipants.length ? connectedParticipants : [{ userId: joinedCall.call.startedById, status: "JOINED" } as GroupCallParticipant]).map((participant) => {
+            const member = group?.members.find((item) => item.userId === participant.userId);
+            return (
+              <div key={participant.userId} className="rounded-2xl bg-white/10 p-3 text-sm">
+                <p className="font-black">{member?.user.name || "Participant DTSC"}</p>
+                <p className="mt-1 text-xs text-slate-300">{formatEnumLabel(participant.status)}</p>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-4 break-all rounded-2xl border border-cyan-300/30 bg-cyan-300/10 p-3 text-xs text-cyan-100">
+          Token LiveKit généré côté serveur. Les secrets ne sont jamais exposés au client.
+        </p>
+      </aside>
+    </div>
+  );
+}
+
+function safeHostLabel(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "LiveKit";
+  }
 }
 
 function ReadInfoList({ title, empty, users }: { title: string; empty: string; users: Array<{ user: UserOption; detail: string }> }) {

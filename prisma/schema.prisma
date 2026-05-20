@@ -1219,6 +1219,8 @@ model CooTask {
   proofUrl              String?
   lateReason            String?
   blockerReason         String?
+  sourceMeetingId       String?
+  sourceDecisionId      String?
   closedAt              DateTime?
   createdById           String?
   createdAt             DateTime @default(now())
@@ -1232,6 +1234,7 @@ model CooTask {
   @@index([responsibleEmployeeId])
   @@index([assigneeEmployeeId])
   @@index([operationId])
+  @@index([sourceMeetingId])
 }
 
 model CooRecurringTask {
@@ -1323,6 +1326,7 @@ model CooMeeting {
   id                    String   @id @default(cuid())
   title                 String
   meetingType           String   @default("COORDINATION")
+  meetingMode           String   @default("COMMENTS_ONLY")
   meetingDate           DateTime?
   meetingTime           String?
   departmentId          String?
@@ -1338,13 +1342,52 @@ model CooMeeting {
   attachmentUrl         String?
   sourceModule          String?
   targetSection         String?
+  linkedEntityType      String?
+  linkedEntityId        String?
+  collaborationGroupId  String?
+  activeCallId          String?
   confidentialityLevel  String   @default("INTERNAL")
   createdById           String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  decisionsList         CooMeetingDecision[]
+  minutesList           CooMeetingMinutes[]
 
   @@index([status, meetingDate])
   @@index([departmentId])
+  @@index([meetingMode, status])
+  @@index([collaborationGroupId])
+}
+
+model CooMeetingDecision {
+  id                String   @id @default(cuid())
+  meetingId         String
+  decisionText      String
+  responsibleUserId String?
+  dueDate           DateTime?
+  status            String   @default("PENDING")
+  linkedTaskId      String?
+  createdAt         DateTime @default(now())
+  meeting           CooMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, status])
+  @@index([responsibleUserId, status])
+  @@index([linkedTaskId])
+}
+
+model CooMeetingMinutes {
+  id          String   @id @default(cuid())
+  meetingId   String
+  content     String
+  createdById String
+  validatedById String?
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  meeting     CooMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, status])
+  @@index([createdById, createdAt])
 }
 
 model CooWorkflow {
@@ -1436,6 +1479,9 @@ model CollaborationGroup {
   name        String
   description String?
   groupType   String   @default("PROJECT")
+  meetingId   String?
+  autoCreated Boolean  @default(false)
+  archived    Boolean  @default(false)
   ownerId     String
   companyId   String?
   visibility  String   @default("PRIVATE")
@@ -1447,11 +1493,13 @@ model CollaborationGroup {
   members     CollaborationGroupMember[]
   invitations CollaborationGroupInvitation[]
   messages    CollaborationGroupMessage[]
+  calls       CollaborationGroupCall[]
   sharedConversationSnapshots CollaborationSharedConversation[]
   auditLogs   CollaborationGroupAuditLog[]
 
   @@index([ownerId, status, updatedAt])
   @@index([companyId])
+  @@index([meetingId])
 }
 
 model CollaborationGroupMember {
@@ -1516,6 +1564,62 @@ model CollaborationGroupMessage {
   @@index([groupId, createdAt])
   @@index([authorId, createdAt])
   @@index([sharedChatbotConversationId])
+}
+
+model CollaborationGroupCall {
+  id          String   @id @default(cuid())
+  groupId     String
+  meetingId   String?
+  callType    String
+  provider    String   @default("LIVEKIT")
+  roomName    String
+  status      String   @default("RINGING")
+  startedById String
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  group       CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  participants CollaborationGroupCallParticipant[]
+  events      CollaborationGroupCallEvent[]
+
+  @@index([groupId, status, startedAt])
+  @@index([meetingId, status])
+  @@index([roomName])
+  @@index([startedById, startedAt])
+}
+
+model CollaborationGroupCallParticipant {
+  id                String   @id @default(cuid())
+  callId            String
+  userId            String
+  joinedAt          DateTime?
+  leftAt            DateTime?
+  status            String   @default("INVITED")
+  microphoneEnabled Boolean  @default(true)
+  cameraEnabled     Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  call              CollaborationGroupCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@index([userId, status])
+  @@index([callId, status])
+}
+
+model CollaborationGroupCallEvent {
+  id        String   @id @default(cuid())
+  callId    String
+  groupId   String
+  meetingId String?
+  userId    String?
+  eventType String
+  message   String
+  createdAt DateTime @default(now())
+  call      CollaborationGroupCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId, createdAt])
+  @@index([groupId, createdAt])
+  @@index([meetingId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model CollaborationGroupMessageRead {

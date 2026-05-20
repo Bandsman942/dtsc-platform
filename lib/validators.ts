@@ -141,6 +141,16 @@ export const announcementReactionSchema = z.object({
   value: z.union([z.literal(1), z.literal(-1)]),
 });
 
+export const collaborationCallStartSchema = z.object({
+  callType: z.enum(["AUDIO", "VIDEO"]),
+  meetingId: z.string().max(120).optional().nullable().or(z.literal("")),
+});
+
+export const collaborationCallParticipantSchema = z.object({
+  microphoneEnabled: z.coerce.boolean().optional(),
+  cameraEnabled: z.coerce.boolean().optional(),
+});
+
 export const announcementCopySchema = z.object({
   titlePrefix: z.string().max(40).default("Copie de"),
 });
@@ -842,6 +852,7 @@ export const cooSchemas = {
   meetings: z.object({
     title: z.string().min(2).max(180),
     meetingType: z.enum(["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"]).default("COORDINATION"),
+    meetingMode: z.enum(["COMMENTS_ONLY", "AUDIO", "VIDEO"]).default("COMMENTS_ONLY"),
     meetingDate: optionalDate,
     meetingTime: optionalText(20),
     departmentId: optionalText(120),
@@ -853,6 +864,9 @@ export const cooSchemas = {
     status: z.enum(["PLANNED", "HELD", "POSTPONED", "CANCELED", "MINUTES_PUBLISHED", "CLOSED"]).default("PLANNED"),
     minutes: optionalText(2400),
     attachmentUrl: optionalText(600),
+    linkedEntityType: optionalText(120),
+    linkedEntityId: optionalText(120),
+    collaborationGroupId: optionalText(120),
   }),
   workflows: z.object({
     name: z.string().min(2).max(180),

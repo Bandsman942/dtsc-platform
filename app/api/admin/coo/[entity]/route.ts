@@ -98,7 +98,7 @@ async function createRecord(entity: CooEntity, data: Record<string, unknown>) {
     return prisma.cooBlocker.create({ data: enriched as never });
   }
   if (entity === "meetings") {
-    return prisma.cooMeeting.create({ data: enriched as never });
+    return createCooMeeting(enriched, String(data.createdById || ""));
   }
   if (entity === "workflows") {
     const { shareEmployeeIds, shareInstruction, ...workflowData } = enriched;
@@ -107,6 +107,114 @@ async function createRecord(entity: CooEntity, data: Record<string, unknown>) {
     return { ...workflow, shareCount: countIds(shareEmployeeIds) };
   }
   return prisma.cooOperationalReport.create({ data: enriched as never });
+}
+
+async function createCooMeeting(data: Record<string, unknown>, createdById: string) {
+  const meetingMode = typeof data.meetingMode === "string" ? data.meetingMode : "COMMENTS_ONLY";
+  const requestedGroupId = typeof data.collaborationGroupId === "string" ? data.collaborationGroupId : "";
+  const meeting = await prisma.cooMeeting.create({ data: { ...data, meetingMode } as never });
+  if (meetingMode === "COMMENTS_ONLY") {
+    return meeting;
+  }
+
+  const participantUserIds = await meetingParticipantUserIds(data);
+  const uniqueUserIds = [...new Set([createdById, ...participantUserIds].filter(Boolean))];
+  const groupId = requestedGroupId || await createMeetingGroup({ meeting, createdById, userIds: uniqueUserIds });
+  if (requestedGroupId) {
+    await syncMeetingGroupMembers({ groupId, meeting, createdById, userIds: uniqueUserIds });
+  }
+  const updated = await prisma.cooMeeting.update({
+    where: { id: meeting.id },
+    data: { collaborationGroupId: groupId },
+  });
+  await prisma.collaborationGroup.updateMany({ where: { id: groupId }, data: { meetingId: meeting.id, groupType: "MEETING" } });
+  return updated;
+}
+
+async function meetingParticipantUserIds(data: Record<string, unknown>) {
+  const employeeIds = [
+    ...String(data.participants || "").split(",").map((id) => id.trim()).filter(Boolean),
+    typeof data.reportOwnerEmployeeId === "string" ? data.reportOwnerEmployeeId : "",
+  ].filter(Boolean);
+  if (!employeeIds.length) {
+    return [];
+  }
+  const employees = await prisma.hrcfoEmployee.findMany({
+    where: { id: { in: employeeIds }, status: { not: "EXITED" }, userId: { not: null } },
+    select: { userId: true },
+  });
+  return employees.map((employee) => employee.userId).filter((userId): userId is string => Boolean(userId));
+}
+
+async function createMeetingGroup({
+  meeting,
+  createdById,
+  userIds,
+}: {
+  meeting: { id: string; title: string; meetingDate: Date | null };
+  createdById: string;
+  userIds: string[];
+}) {
+  const dateLabel = meeting.meetingDate ? meeting.meetingDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const group = await prisma.collaborationGroup.create({
+    data: {
+      name: `Réunion COO - ${meeting.title} - ${dateLabel}`.slice(0, 180),
+      description: "Groupe de préparation, appel, compte rendu et décisions lié à une réunion COO.",
+      groupType: "MEETING",
+      meetingId: meeting.id,
+      autoCreated: true,
+      visibility: "PRIVATE",
+      ownerId: createdById,
+      members: {
+        create: userIds.map((userId) => ({
+          userId,
+          role: userId === createdById ? "OWNER" : "MEMBER",
+          status: "ACTIVE",
+        })),
+      },
+    },
+  });
+  await prisma.collaborationGroupMessage.create({
+    data: {
+      groupId: group.id,
+      authorId: createdById,
+      messageType: "SYSTEM",
+      content: `Groupe de réunion COO créé pour « ${meeting.title} ».`,
+    },
+  });
+  return group.id;
+}
+
+async function syncMeetingGroupMembers({
+  groupId,
+  meeting,
+  createdById,
+  userIds,
+}: {
+  groupId: string;
+  meeting: { id: string; title: string };
+  createdById: string;
+  userIds: string[];
+}) {
+  const group = await prisma.collaborationGroup.findFirst({ where: { id: groupId, status: "ACTIVE" }, select: { id: true, ownerId: true } });
+  if (!group) {
+    throw new Error("Le groupe de réunion sélectionné est introuvable ou inactif.");
+  }
+  for (const userId of userIds) {
+    await prisma.collaborationGroupMember.upsert({
+      where: { groupId_userId: { groupId, userId } },
+      update: { status: "ACTIVE", leftAt: null },
+      create: { groupId, userId, role: userId === group.ownerId ? "OWNER" : userId === createdById ? "ADMIN" : "MEMBER", status: "ACTIVE" },
+    });
+  }
+  await prisma.collaborationGroupMessage.create({
+    data: {
+      groupId,
+      authorId: createdById,
+      messageType: "SYSTEM",
+      content: `Le groupe a été lié à la réunion COO « ${meeting.title} ».`,
+    },
+  });
 }
 
 async function enrichCooData(entity: CooEntity, data: Record<string, unknown>) {

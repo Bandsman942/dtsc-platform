@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       {
         key: "Permissions-Policy",
-        value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        value: "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()",
       },
       {
         key: "Content-Security-Policy",
@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data:",
-          "connect-src 'self' https://api.openai.com https://*.supabase.co https://*.upstash.io https://*.zoho.com https://*.maishapay.online https://marchand.maishapay.online",
+          "connect-src 'self' https://api.openai.com https://*.supabase.co https://*.upstash.io https://*.zoho.com https://*.maishapay.online https://marchand.maishapay.online https://*.livekit.cloud wss://*.livekit.cloud https://*.livekit.io wss://*.livekit.io",
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",

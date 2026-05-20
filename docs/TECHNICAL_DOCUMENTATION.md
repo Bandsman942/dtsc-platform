@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 19 mai 2026
+Derniere mise a jour: 20 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -26,7 +26,7 @@ Objectifs couverts par le code actuel:
 - chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, snapshots consultables pour les groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
-- module prive Mes collaborateurs avec groupes, invitations, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, notifications et journal d'audit par groupe;
+- module prive Mes collaborateurs avec groupes, invitations, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, appels audio/vidéo LiveKit sécurisés par groupe, notifications et journal d'audit par groupe;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces avancees, numerotations, checklist, tirets, gras, italique, souligne, palette de couleurs controlee et collage de contenus riches;
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
@@ -44,11 +44,39 @@ Objectifs couverts par le code actuel:
 - Base de donnees: Neon PostgreSQL
 - ORM: Prisma
 - IA: OpenAI Responses API cote serveur
+- Appels audio/video: LiveKit optionnel, tokens participants generes cote serveur
 - Email: Zoho Mail API directe + fallbacks webhook Zoho
 - Validation: Zod
 - Deploiement: Vercel
 - CI: GitHub Actions avec `pnpm type-check`
 - PWA: manifest App Router, service worker statique et prompt d'installation prive
+
+### Appels de groupes et réunions COO audio/vidéo
+
+Les appels audio/vidéo sont persistés dans `CollaborationGroupCall`, `CollaborationGroupCallParticipant` et `CollaborationGroupCallEvent`. Chaque appel appartient à un groupe `CollaborationGroup`; un appel peut aussi être lié à une réunion COO via `meetingId`.
+
+Routes principales:
+
+- `GET /api/collaborators/groups/[id]/calls`: retourne l'appel actif et l'historique récent du groupe. Accès réservé aux membres actifs du groupe.
+- `POST /api/collaborators/groups/[id]/calls`: démarre un appel `AUDIO` ou `VIDEO`, crée les participants invités, notifie le groupe, écrit un message système et journalise l'action.
+- `POST /api/collaborators/calls/[id]/join`: vérifie l'appartenance au groupe, génère un token LiveKit temporaire côté serveur et marque le participant comme connecté.
+- `POST /api/collaborators/calls/[id]/leave`: marque le participant comme sorti et historise l'événement.
+- `POST /api/collaborators/calls/[id]/end`: réservé au lanceur de l'appel, propriétaire/admin du groupe ou admin plateforme; termine l'appel et libère la réunion liée.
+
+Variables requises pour rejoindre réellement une room:
+
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_URL`
+
+Ces secrets ne doivent jamais être exposés côté client. `lib/livekit-service.ts` génère uniquement des JWT participants temporaires pour les membres autorisés. Si LiveKit n'est pas configuré, la route de jonction retourne une erreur explicite `503` sans exposer de secret.
+
+Les réunions COO disposent de `meetingMode`:
+
+- `COMMENTS_ONLY`: fonctionnement historique par commentaires/messages, sans groupe automatique ni appel.
+- `AUDIO` ou `VIDEO`: création automatique d'un groupe de réunion `groupType = MEETING` si aucun `collaborationGroupId` n'est fourni; synchronisation des participants COO ayant un compte utilisateur; liaison `CooMeeting.collaborationGroupId`.
+
+Les décisions et comptes rendus sont historisés dans `CooMeetingDecision` et `CooMeetingMinutes`. Une décision peut créer une tâche COO liée avec `CooTask.sourceMeetingId` et `sourceDecisionId`.
 
 Scripts importants:
 

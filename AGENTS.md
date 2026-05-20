@@ -195,3 +195,21 @@ Conserver une hiérarchie visible pour:
 - Les fichiers sensibles doivent être servis par route privée avec contrôle RBAC; ne jamais exposer d'URL privée sans vérification. Les téléchargements sensibles doivent être journalisés.
 - La section Administration `Audits` doit rester recherchable, filtrable, paginée et utiliser des badges de sévérité `INFO`, `SUCCESS`, `WARNING`, `ERROR`, `CRITICAL`. Ne jamais exposer secrets, tokens, mots de passe ou stack traces à des rôles non techniques.
 - Les paramètres privés doivent utiliser une UX accordéon sur mobile; tous les changements visibles doivent être persistés et respecter les préférences utilisateur/i18n.
+
+## Règles DTSC — Appels, réunions COO et groupes de réunion
+
+- Les appels audio/vidéo de DTSC Platform doivent utiliser une architecture sécurisée liée aux groupes `CollaborationGroup`; aucun appel ne doit exister sans groupe propriétaire et tout appel lié à une réunion COO doit garder `meetingId`.
+- LiveKit est le fournisseur recommandé pour les rooms audio/vidéo. Les variables `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` et `LIVEKIT_URL` restent strictement serveur; ne jamais les exposer dans un composant client, une réponse API non nécessaire ou une variable `NEXT_PUBLIC_*`.
+- Les tokens LiveKit doivent être générés uniquement côté backend via un service serveur dédié comme `lib/livekit-service.ts`. Une route client peut recevoir un token participant temporaire, mais jamais le secret API.
+- Les routes sensibles d'appels (`start`, `join`, `leave`, `end`) doivent vérifier la session, l'appartenance active au groupe, le statut du groupe, le statut de l'appel et les droits de gestion pour terminer un appel. Masquer un bouton côté UI ne suffit jamais.
+- Une réunion COO peut être tenue en `COMMENTS_ONLY`, `AUDIO` ou `VIDEO`. Le mode commentaires/messages uniquement reste le comportement stable sans groupe automatique ni appel.
+- Une réunion COO audio ou vidéo doit créer automatiquement un groupe de réunion dédié si aucun groupe existant n'est choisi. Le groupe doit être `groupType = MEETING`, `autoCreated = true`, lié à `CooMeeting.collaborationGroupId` et synchronisé avec les participants COO disposant d'un `User`.
+- L'utilisation d'un groupe existant pour une réunion COO doit lier le groupe à la réunion, synchroniser les membres autorisés et ajouter un message système discret. Ne jamais ajouter des utilisateurs non concernés.
+- Les participants d'une réunion COO doivent rester synchronisés avec les membres du groupe de réunion autant que possible: organisateur, responsable CR, collaborateurs sélectionnés et responsables explicitement impliqués.
+- Seuls les participants autorisés, membres actifs du groupe, CEO/ADMIN/COO autorisés ou postes métiers explicitement impliqués peuvent voir la réunion, rejoindre le groupe ou entrer dans l'appel.
+- Les messages système liés aux appels (`CALL_STARTED`, `USER_JOINED`, `USER_LEFT`, `CALL_ENDED`) doivent être persistés, discrets, non intrusifs et journalisés dans les audit logs de groupe.
+- Les appels doivent conserver un historique persistant dans `CollaborationGroupCall`, `CollaborationGroupCallParticipant` et `CollaborationGroupCallEvent`: type audio/vidéo, provider, room, statut, démarrage, fin, participants et événements.
+- Les réunions COO doivent pouvoir produire des comptes rendus (`CooMeetingMinutes`), décisions (`CooMeetingDecision`) et tâches de suivi COO liées (`CooTask.sourceMeetingId` / `sourceDecisionId`). Toute création de tâche depuis une décision doit être journalisée et notifier le responsable si disponible.
+- L'UX mobile des appels et détails de réunion doit être plein écran ou en modale haute, avec actions principales accessibles, participant list visible, état d'appel clair et bouton quitter/terminer sans surcharger le fil.
+- Aucun bouton d'appel, de réunion, de décision ou de tâche ne doit être un placeholder: toute action affichée doit appeler une route réelle, persister l'effet, notifier si nécessaire et gérer les erreurs de configuration comme LiveKit absent.
+- Toute évolution future des appels/réunions doit mettre à jour Prisma, migration SQL, validateurs Zod, documentation technique, `AGENTS.md`, et exécuter au minimum `git diff --check`, `git diff --cached --check` et `pnpm build` si disponible.

@@ -1111,6 +1111,7 @@ export function buildCooDatasets(data: {
   departmentRequests: Array<Record<string, unknown>>;
   blockers: Array<Record<string, unknown>>;
   meetings: Array<Record<string, unknown>>;
+  meetingGroups?: Array<Record<string, unknown>>;
   workflows: Array<Record<string, unknown>>;
   reports: Array<Record<string, unknown>>;
   departments: Array<Record<string, unknown>>;
@@ -1122,6 +1123,7 @@ export function buildCooDatasets(data: {
   const employeeOptions = activeEmployees.map((employee) => option(employee.id, `${stringOf(employee.fullName)} · ${stringOf(employee.email)}`));
   const operationOptions = data.operations.map((operation) => option(operation.id, stringOf(operation.title)));
   const taskOptions = data.tasks.map((task) => option(task.id, stringOf(task.title)));
+  const meetingGroupOptions = (data.meetingGroups || []).map((group) => option(group.id, `${stringOf(group.name)} · ${formatEnumLabel(stringOf(group.groupType))}`));
 
   return [
     {
@@ -1303,12 +1305,16 @@ export function buildCooDatasets(data: {
       fields: [
         { name: "title", label: "Réunion", type: "text", required: true },
         selectField("meetingType", "Type", ["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"]),
+        selectField("meetingMode", "Mode de tenue", ["COMMENTS_ONLY", "AUDIO", "VIDEO"]),
         { name: "meetingDate", label: "Date", type: "date" },
         { name: "meetingTime", label: "Heure", type: "text" },
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "reportOwnerEmployeeId", label: "Responsable CR", type: "select", required: true, options: employeeOptions },
         selectField("status", "Statut", cooStatus.meetings),
         { name: "participants", label: "Participants", type: "select-multiple", options: employeeOptions, helperText: "Maintenez Ctrl ou Cmd pour sélectionner plusieurs collaborateurs." },
+        { name: "collaborationGroupId", label: "Groupe existant optionnel", type: "select", options: meetingGroupOptions, helperText: "Laissez vide pour créer automatiquement un groupe de réunion audio/vidéo dédié." },
+        selectField("linkedEntityType", "Élément lié", ["TASK", "OPERATION", "BLOCKER", "DEPARTMENT_REQUEST", "MPO_PROJECT", "CTO_PROJECT", "LEGAL_CASE", "HR_CFO_REQUEST", "SCO_NEED", "OTHER"]),
+        { name: "linkedEntityId", label: "Identifiant de l'élément lié", type: "text" },
         { name: "agenda", label: "Ordre du jour", type: "textarea" },
         { name: "decisions", label: "Décisions prises", type: "textarea" },
         { name: "generatedTasks", label: "Tâches générées", type: "textarea" },
@@ -1319,12 +1325,12 @@ export function buildCooDatasets(data: {
       records: data.meetings.map((item) => ({
         id: stringOf(item.id),
         title: stringOf(item.title),
-        subtitle: `${formatEnumLabel(stringOf(item.meetingType))} · ${stringOf(item.departmentName)}`,
+        subtitle: `${formatEnumLabel(stringOf(item.meetingType))} · ${formatEnumLabel(stringOf(item.meetingMode || "COMMENTS_ONLY"))} · ${stringOf(item.departmentName)}`,
         status: stringOf(item.status),
         notes: stringOrNull(item.minutes || item.decisions),
         createdAt: stringOf(item.createdAt),
-        meta: compactStrings([formatDate(item.meetingDate), stringOf(item.meetingTime), stringOf(item.reportOwnerName)]),
-        values: fieldValues(item, ["title", "meetingType", "meetingDate", "meetingTime", "departmentId", "reportOwnerEmployeeId", "status", "participants", "agenda", "decisions", "generatedTasks", "minutes", "attachmentUrl"]),
+        meta: compactStrings([formatDate(item.meetingDate), stringOf(item.meetingTime), stringOf(item.reportOwnerName), stringOf(item.collaborationGroupId) ? "Groupe lié" : "Commentaires uniquement"]),
+        values: fieldValues(item, ["title", "meetingType", "meetingMode", "meetingDate", "meetingTime", "departmentId", "reportOwnerEmployeeId", "status", "participants", "collaborationGroupId", "linkedEntityType", "linkedEntityId", "agenda", "decisions", "generatedTasks", "minutes", "attachmentUrl"]),
       })),
     },
     {

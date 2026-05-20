@@ -40,6 +40,11 @@ export async function GET(req: Request) {
           take: 1,
           include: { author: { select: { name: true } } },
         },
+        calls: {
+          orderBy: { startedAt: "desc" },
+          take: 5,
+          include: { participants: true },
+        },
         _count: { select: { messages: true, members: true } },
       },
       orderBy: { updatedAt: "desc" },
