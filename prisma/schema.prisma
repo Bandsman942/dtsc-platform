@@ -97,6 +97,7 @@ model User {
   emailDigestFrequency String @default("WEEKLY")
   chatResponseStyle String @default("PROFESSIONAL")
   chatResponseLength String @default("BALANCED")
+  lastSeenAt    DateTime?
   status        UserStatus      @default(ACTIVE)
   dailyMessageLimit Int         @default(30)
   dailyTokenLimit   Int         @default(100000)
@@ -132,6 +133,7 @@ model User {
   sentCollaborationInvitations CollaborationGroupInvitation[] @relation("CollaborationInvitationSender")
   receivedCollaborationInvitations CollaborationGroupInvitation[] @relation("CollaborationInvitationReceiver")
   collaborationGroupMessages CollaborationGroupMessage[]
+  collaborationGroupMessageReads CollaborationGroupMessageRead[]
   collaborationMessageMentions CollaborationMessageMention[]
   sharedConversationSnapshots CollaborationSharedConversation[] @relation("SharedConversationSharer")
   collaborationAuditLogs CollaborationGroupAuditLog[]
@@ -142,6 +144,7 @@ model User {
   @@index([role])
   @@index([status])
   @@index([createdAt])
+  @@index([lastSeenAt])
 }
 
 model BillingPlan {
@@ -1508,10 +1511,26 @@ model CollaborationGroupMessage {
   sharedChatbotConversation   Conversation? @relation(fields: [sharedChatbotConversationId], references: [id], onDelete: SetNull)
   sharedConversationSnapshot  CollaborationSharedConversation?
   mentions                    CollaborationMessageMention[]
+  reads                       CollaborationGroupMessageRead[]
 
   @@index([groupId, createdAt])
   @@index([authorId, createdAt])
   @@index([sharedChatbotConversationId])
+}
+
+model CollaborationGroupMessageRead {
+  id        String   @id @default(cuid())
+  messageId String
+  groupId   String
+  userId    String
+  readAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+  message   CollaborationGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([groupId, userId, readAt])
+  @@index([messageId, readAt])
 }
 
 model CollaborationSharedConversation {

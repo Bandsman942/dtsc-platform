@@ -28,6 +28,22 @@ function isUserRole(value: string | undefined): value is UserRole {
   return value === UserRole.ADMIN || value === UserRole.MANAGER || value === UserRole.CLIENT || value === UserRole.SUPPORT;
 }
 
+function classifyAuditSeverity(action: string) {
+  if (/delete|access_denied|forbidden|security|secret|unauthorized/i.test(action)) {
+    return "CRITICAL";
+  }
+  if (/error|failed|reject|cancel/i.test(action)) {
+    return "ERROR";
+  }
+  if (/update|change|role|permission|position|download|archive/i.test(action)) {
+    return "WARNING";
+  }
+  if (/validate|paid|success|accept/i.test(action)) {
+    return "SUCCESS";
+  }
+  return "INFO";
+}
+
 type AdminSectionId = AdminBlockId | "access";
 type RawMetricRow = { date: Date | string; count: number | bigint };
 type RawModelRow = { model: string; count: number | bigint; tokens: number | bigint };
@@ -111,6 +127,7 @@ export default async function AdminPage({
     paymentBreakdown,
     topModels,
     payments,
+    auditLogs,
     apiLogs,
     webhookEvents,
     publicPublications,
@@ -224,6 +241,11 @@ export default async function AdminPage({
         orderBy: { createdAt: "desc" },
         include: { user: true, subscription: { include: { plan: true } } },
         take: 200,
+      }),
+      prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { id: true, name: true, email: true, role: true } } },
+        take: 300,
       }),
       prisma.apiLog.findMany({
         orderBy: { createdAt: "desc" },
@@ -400,6 +422,14 @@ export default async function AdminPage({
     createdAt: payment.createdAt.toISOString(),
   }));
   const logAuditItems = [
+    ...auditLogs.map((event) => ({
+      id: event.id,
+      source: "Audit" as const,
+      title: `${event.action} · ${event.entity}`,
+      detail: event.user ? `${event.user.name} · ${event.user.email}` : "Action système ou utilisateur supprimé",
+      status: classifyAuditSeverity(event.action),
+      createdAt: event.createdAt.toISOString(),
+    })),
     ...apiLogs.map((event) => ({
       id: event.id,
       source: "API" as const,

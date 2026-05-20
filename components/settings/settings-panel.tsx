@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, Bot, Globe2, LayoutDashboard, Lock, Monitor, Moon, Save, SlidersHorizontal, Sun, UserCog, type LucideIcon } from "lucide-react";
+import { Bell, Bot, ChevronDown, Globe2, LayoutDashboard, Lock, Monitor, Moon, Save, SlidersHorizontal, Sun, UserCog, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { cn } from "@/lib/utils";
 
 export function SettingsPanel({
   user,
@@ -40,6 +41,7 @@ export function SettingsPanel({
   const [passwordMessage, setPasswordMessage] = useState("");
   const [preferencesMessage, setPreferencesMessage] = useState("");
   const [pushEnabled, setPushEnabled] = useState(Boolean(user.pushNotificationsEnabled));
+  const [openMobileSection, setOpenMobileSection] = useState("profile");
 
   useEffect(() => setMounted(true), []);
   useEffect(() => setPushEnabled(Boolean(user.pushNotificationsEnabled)), [user.pushNotificationsEnabled]);
@@ -121,13 +123,8 @@ export function SettingsPanel({
     <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
       <div className="space-y-6">
         <section className="dtsc-card p-6">
-          <div className="flex items-center gap-3">
-            <UserCog className="h-5 w-5 text-cyan-500" />
-            <div>
-              <h2 className="font-black text-dtsc-ink">Identité professionnelle</h2>
-              <p className="text-sm text-dtsc-muted">Informations utilisées par DTSC pour qualifier vos demandes.</p>
-            </div>
-          </div>
+          <SettingsSectionHeader id="profile" icon={UserCog} title="Identité professionnelle" description="Informations utilisées par DTSC pour qualifier vos demandes." openId={openMobileSection} onToggle={setOpenMobileSection} />
+          <div className={cn(openMobileSection === "profile" ? "block" : "hidden", "md:block")}>
           <form onSubmit={updateProfile} className="mt-5 grid gap-4 md:grid-cols-2">
             <Input name="name" defaultValue={user.name} placeholder="Nom complet" required />
             <Input name="email" defaultValue={user.email} disabled className="opacity-70" />
@@ -141,16 +138,12 @@ export function SettingsPanel({
               {profileMessage && <p className="text-sm font-semibold text-dtsc-blue">{profileMessage}</p>}
             </div>
           </form>
+          </div>
         </section>
 
         <section className="dtsc-card p-6">
-          <div className="flex items-center gap-3">
-            <Lock className="h-5 w-5 text-cyan-500" />
-            <div>
-              <h2 className="font-black text-dtsc-ink">Sécurité du compte</h2>
-              <p className="text-sm text-dtsc-muted">Changez le mot de passe après réception du compte admin par défaut.</p>
-            </div>
-          </div>
+          <SettingsSectionHeader id="security" icon={Lock} title="Sécurité du compte" description="Changez le mot de passe après réception du compte admin par défaut." openId={openMobileSection} onToggle={setOpenMobileSection} />
+          <div className={cn(openMobileSection === "security" ? "block" : "hidden", "md:block")}>
           <form onSubmit={updatePassword} className="mt-5 grid gap-4 md:grid-cols-2">
             <PasswordInput name="currentPassword" placeholder="Mot de passe actuel" autoComplete="current-password" required />
             <PasswordInput name="newPassword" placeholder="Nouveau mot de passe sécurisé" autoComplete="new-password" required />
@@ -161,16 +154,12 @@ export function SettingsPanel({
               {passwordMessage && <p className="text-sm font-semibold text-dtsc-blue">{passwordMessage}</p>}
             </div>
           </form>
+          </div>
         </section>
 
         <section className="dtsc-card p-6">
-          <div className="flex items-center gap-3">
-            <SlidersHorizontal className="h-5 w-5 text-cyan-500" />
-            <div>
-              <h2 className="font-black text-dtsc-ink">Préférences privées</h2>
-              <p className="text-sm text-dtsc-muted">Réglages persistés sur votre compte pour personnaliser votre espace.</p>
-            </div>
-          </div>
+          <SettingsSectionHeader id="preferences" icon={SlidersHorizontal} title="Préférences privées" description="Réglages persistés sur votre compte pour personnaliser votre espace." openId={openMobileSection} onToggle={setOpenMobileSection} />
+          <div className={cn(openMobileSection === "preferences" ? "block" : "hidden", "md:block")}>
           <form id="account-preferences-form" onSubmit={updatePreferences} className="mt-5 grid gap-4 md:grid-cols-2">
             <input type="hidden" name="preferredModel" value={user.preferredModel || ""} />
             {user.notifySupportEnabled ?? true ? <input type="hidden" name="notifySupportEnabled" value="on" /> : null}
@@ -253,18 +242,14 @@ export function SettingsPanel({
               {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
             </div>
           </form>
+          </div>
         </section>
       </div>
 
       <aside className="space-y-6">
         <section className="dtsc-card p-6">
-          <div className="flex items-center gap-3">
-            <Monitor className="h-5 w-5 text-cyan-500" />
-            <div>
-              <h2 className="font-black text-dtsc-ink">Apparence</h2>
-              <p className="text-sm text-dtsc-muted">Mode clair, sombre ou système.</p>
-            </div>
-          </div>
+          <SettingsSectionHeader id="appearance" icon={Monitor} title="Apparence" description="Mode clair, sombre ou système." openId={openMobileSection} onToggle={setOpenMobileSection} />
+          <div className={cn(openMobileSection === "appearance" ? "block" : "hidden", "md:block")}>
           <div className="mt-5 grid gap-2">
             {[
               { value: "light", label: "Clair", icon: Sun },
@@ -285,16 +270,12 @@ export function SettingsPanel({
               </button>
             ))}
           </div>
+          </div>
         </section>
 
         <section className="dtsc-card p-6">
-          <div className="flex items-center gap-3">
-            <Bell className="h-5 w-5 text-cyan-500" />
-            <div>
-              <h2 className="font-black text-dtsc-ink">Notifications</h2>
-              <p className="text-sm text-dtsc-muted">Alertes applicatives, usage IA et notifications visibles en PWA.</p>
-            </div>
-          </div>
+          <SettingsSectionHeader id="notifications" icon={Bell} title="Notifications" description="Alertes applicatives, usage IA et notifications visibles en PWA." openId={openMobileSection} onToggle={setOpenMobileSection} />
+          <div className={cn(openMobileSection === "notifications" ? "block" : "hidden", "md:block")}>
           <form onSubmit={updatePreferences} className="mt-5 space-y-3 text-sm text-dtsc-muted">
             <input type="hidden" name="interfaceDensity" value={user.interfaceDensity || "COMFORTABLE"} />
             <input type="hidden" name="startPage" value={user.startPage || "/dashboard"} />
@@ -349,6 +330,7 @@ export function SettingsPanel({
             </Button>
             {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
           </form>
+          </div>
         </section>
       </aside>
     </div>
@@ -372,5 +354,40 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function SettingsSectionHeader({
+  id,
+  icon: Icon,
+  title,
+  description,
+  openId,
+  onToggle,
+}: {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  openId: string;
+  onToggle: (id: string) => void;
+}) {
+  const open = openId === id;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(open ? "" : id)}
+      className="flex w-full items-center justify-between gap-3 text-left md:pointer-events-none"
+      aria-expanded={open}
+    >
+      <span className="flex min-w-0 items-center gap-3">
+        <Icon className="h-5 w-5 shrink-0 text-cyan-500" />
+        <span className="min-w-0">
+          <span className="block font-black text-dtsc-ink">{title}</span>
+          <span className="mt-1 block text-sm text-dtsc-muted">{description}</span>
+        </span>
+      </span>
+      <ChevronDown className={cn("h-5 w-5 shrink-0 text-dtsc-muted transition md:hidden", open && "rotate-180")} />
+    </button>
   );
 }

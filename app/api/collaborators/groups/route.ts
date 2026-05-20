@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { writeGroupAudit } from "@/lib/collaboration";
+import { createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { collaborationGroupSchema } from "@/lib/validators";
@@ -14,17 +14,19 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await touchUserPresence(session.userId);
 
   const [groups, invitations, users] = await Promise.all([
     prisma.collaborationGroup.findMany({
       where: {
+        status: "ACTIVE",
         members: { some: { userId: session.userId, status: "ACTIVE" } },
       },
       include: {
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
         members: {
           where: { status: "ACTIVE" },
-          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true } } },
+          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } } },
           orderBy: { joinedAt: "asc" },
         },
         invitations: {
@@ -122,6 +124,7 @@ export async function POST(req: Request) {
     include: { members: true },
   });
 
+  await createGroupSystemMessage({ groupId: group.id, actorId: session.userId, content: `${session.name} a créé le groupe.` });
   await writeGroupAudit({ groupId: group.id, actorId: session.userId, action: "group.create", entityType: "CollaborationGroup", entityId: group.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.group.create", entity: "CollaborationGroup", entityId: group.id, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

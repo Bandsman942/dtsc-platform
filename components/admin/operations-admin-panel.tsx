@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, ClipboardList, Download, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarDays, ClipboardList, Download, Eye, FileText, Plus, Save, Trash2 } from "lucide-react";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -303,10 +304,12 @@ function DatasetCard({
     return [record.title, record.subtitle, record.status, record.notes, ...record.meta].join(" ");
   }, []);
   const list = useSmartList({ items: records, pageSize: 5, getSearchText });
+  const [createOpen, setCreateOpen] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onCreate(dataset, event.currentTarget);
+    setCreateOpen(false);
   }
 
   return (
@@ -321,7 +324,13 @@ function DatasetCard({
         </div>
       </div>
 
-      <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel="Ajouter" submitIcon="plus" />
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+        <p className="text-sm font-bold text-dtsc-muted">Le formulaire est ouvert dans une fenêtre dédiée pour garder une liste mobile propre.</p>
+        <Button type="button" disabled={!canEdit} onClick={() => setCreateOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          <Plus className="h-4 w-4" />
+          Nouveau
+        </Button>
+      </div>
 
       <div className="mt-5">
         <ListControls
@@ -342,6 +351,9 @@ function DatasetCard({
           {records.length > 0 && list.filteredCount === 0 && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucun résultat pour cette recherche.</p>}
         </div>
       </div>
+      <Dialog open={createOpen} title={`Nouveau: ${dataset.label}`} description="Remplissez le formulaire puis enregistrez l'élément." onClose={() => setCreateOpen(false)} className="max-w-4xl">
+        <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel="Ajouter" submitIcon="plus" />
+      </Dialog>
     </article>
   );
 }
@@ -388,21 +400,15 @@ function RecordCard({
         )}
       </div>
       {record.notes && <p className="mt-3 text-sm leading-6 text-dtsc-muted">{record.notes}</p>}
-      {record.href && (
-        <a href={record.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-3 py-2 text-xs font-black text-white shadow-[0_10px_30px_rgba(0,43,91,0.18)] transition hover:-translate-y-0.5 hover:bg-[#001736]">
-          <Download className="h-4 w-4" />
-          {record.hrefLabel || "Ouvrir le document"}
-        </a>
-      )}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" disabled={!canEdit} variant="outline" onClick={() => setEditOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
-          <Save className="h-4 w-4" />
-          Modifier
-        </Button>
-        <Button type="button" disabled={!canEdit} variant="outline" onClick={() => setConfirmDelete(true)} className="rounded-xl border-red-200 text-red-500">
-          <Trash2 className="h-4 w-4" />
-          Supprimer
-        </Button>
+      {record.href && <FileAttachmentPreview href={record.href} label={record.hrefLabel || "Document joint"} />}
+      <div className="mt-4 flex justify-end">
+        <ActionMenu
+          items={[
+            ...(canEdit ? [{ key: "edit", label: "Modifier", icon: Save, onSelect: () => setEditOpen(true) }] : []),
+            ...(record.href ? [{ key: "download", label: "Télécharger le fichier", icon: Download, onSelect: () => window.open(record.href, "_blank", "noopener,noreferrer") }] : []),
+            ...(canEdit ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setConfirmDelete(true) }] : []),
+          ]}
+        />
       </div>
       <Dialog
         open={editOpen}
@@ -606,6 +612,45 @@ function FieldInput({
       <Input name={field.name} type={field.type} required={field.required} disabled={disabled || field.readOnly} defaultValue={defaultValue} placeholder={field.placeholder} />
       {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
     </label>
+  );
+}
+
+function FileAttachmentPreview({ href, label }: { href: string; label: string }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const lowerHref = href.toLowerCase();
+  const canPreviewImage = /\.(png|jpe?g|webp)(\?|$)/i.test(lowerHref);
+  const canPreviewPdf = /\.pdf(\?|$)/i.test(lowerHref) || lowerHref.includes("application/pdf");
+  return (
+    <div className="mt-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink">
+          <FileText className="h-4 w-4 shrink-0 text-cyan-500" />
+          <span className="truncate">{label}</span>
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {(canPreviewImage || canPreviewPdf) && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setPreviewOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-page text-dtsc-blue">
+              <Eye className="h-4 w-4" />
+              Aperçu
+            </Button>
+          )}
+          <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-3 py-2 text-xs font-black text-white shadow-[0_10px_30px_rgba(0,43,91,0.18)] transition hover:-translate-y-0.5 hover:bg-[#001736]">
+            <Download className="h-4 w-4" />
+            Télécharger
+          </a>
+        </div>
+      </div>
+      <Dialog open={previewOpen} title={`Aperçu: ${label}`} onClose={() => setPreviewOpen(false)} className="max-w-5xl">
+        {canPreviewImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={href} alt={label} className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-dtsc-border object-contain" />
+        ) : canPreviewPdf ? (
+          <iframe src={href} title={label} className="h-[70vh] w-full rounded-2xl border border-dtsc-border bg-white" />
+        ) : (
+          <p className="text-sm text-dtsc-muted">Aperçu non disponible pour ce type de fichier. Utilisez le téléchargement.</p>
+        )}
+      </Dialog>
+    </div>
   );
 }
 

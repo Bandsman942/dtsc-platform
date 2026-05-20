@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, CircleAlert, ClipboardList, Copy, GitBranch, MessageSquare, Send, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, GitBranch, MessageSquare, Send, Users } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -132,6 +132,7 @@ export function ActivitiesDashboard({
 
 function SectionDialog({ section, onClose, collaborators, operations }: { section: ActivitySection; onClose: () => void; collaborators: CollaboratorOption[]; operations: CollaboratorOption[] }) {
   const [selected, setSelected] = useState<ActivityItem | null>(section.items[0] || null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const getSearchText = useCallback((item: ActivityItem) => [item.title, item.status, item.detail, item.body].join(" "), []);
   const list = useSmartList({ items: section.items, pageSize: 8, getSearchText });
 
@@ -140,12 +141,12 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
   }, [section]);
 
   return (
-    <Dialog open={true} title={section.title} description={section.description} onClose={onClose} className="max-w-6xl">
+    <Dialog open={true} title={section.title} description={section.description} onClose={onClose} className="h-[92dvh] max-w-6xl sm:h-auto">
       {section.id === "collaborator-forms" ? (
         <CollaboratorWorkflowComposer collaborators={collaborators} operations={operations} />
       ) : (
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="min-w-0">
+      <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className={`min-w-0 ${detailOpen ? "hidden lg:block" : "block"}`}>
           <ListControls
             query={list.query}
             onQueryChange={list.setQuery}
@@ -156,18 +157,24 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
             placeholder="Rechercher dans ces activités..."
             onPageChange={list.setPage}
           />
-          <div className="max-h-[58vh] space-y-3 overflow-y-auto pr-1">
+          <div className="max-h-[62dvh] space-y-3 overflow-y-auto pr-1 lg:max-h-[58vh]">
             {list.paginatedItems.map((item) => (
-              <button key={`${item.entityType}-${item.id}`} type="button" onClick={() => setSelected(item)} className={`w-full rounded-2xl border p-4 text-left ${selected?.id === item.id && selected.entityType === item.entityType ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
+              <button key={`${item.entityType}-${item.id}`} type="button" onClick={() => { setSelected(item); setDetailOpen(true); }} className={`w-full rounded-2xl border p-4 text-left ${selected?.id === item.id && selected.entityType === item.entityType ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
                 <MiniItem item={item} />
               </button>
             ))}
           </div>
         </div>
-        <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-          {section.id === "collab-requests" && <RequestComposer collaborators={collaborators} selected={selected} />}
-          {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} />}
-          {section.id === "blockers" && <BlockerComposer operations={operations} />}
+        <div className={`min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 ${detailOpen ? "block" : "hidden lg:block"}`}>
+          <Button type="button" variant="outline" onClick={() => setDetailOpen(false)} className="mb-3 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden">
+            <ArrowLeft className="h-4 w-4" />
+            Retour à la liste
+          </Button>
+          <div className="mb-4 flex justify-end">
+            {section.id === "collab-requests" && <RequestComposer collaborators={collaborators} selected={selected} compact />}
+            {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} compact />}
+            {section.id === "blockers" && <BlockerComposer operations={operations} compact />}
+          </div>
           {selected ? <ActivityDetail item={selected} collaborators={collaborators} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
         </div>
       </div>
@@ -505,8 +512,9 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
   );
 }
 
-function RequestComposer({ collaborators, selected }: { collaborators: CollaboratorOption[]; selected: ActivityItem | null }) {
+function RequestComposer({ collaborators, selected, compact = false }: { collaborators: CollaboratorOption[]; selected: ActivityItem | null; compact?: boolean }) {
   const [statusMessage, setStatusMessage] = useState("");
+  const [open, setOpen] = useState(!compact);
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -525,8 +533,8 @@ function RequestComposer({ collaborators, selected }: { collaborators: Collabora
     }
   }
 
-  return (
-    <form onSubmit={createRequest} className="mb-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+  const form = (
+    <form onSubmit={createRequest} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">Formuler une demande à un collaborateur</h4>
       <p className="mt-1 text-sm leading-6 text-dtsc-muted">
         Envoyez une demande d&apos;information, validation, document ou action. La discussion reste attachée à la demande et visible par les personnes concernées.
@@ -551,6 +559,20 @@ function RequestComposer({ collaborators, selected }: { collaborators: Collabora
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer la demande</Button>
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
+  );
+  if (!compact) {
+    return <div className="mb-5">{form}</div>;
+  }
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+        <Send className="h-4 w-4" />
+        Formuler une demande
+      </Button>
+      <Dialog open={open} title="Formuler une demande" onClose={() => setOpen(false)} className="max-w-4xl">
+        {form}
+      </Dialog>
+    </>
   );
 }
 
@@ -592,8 +614,9 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function BlockerComposer({ operations }: { operations: CollaboratorOption[] }) {
+function BlockerComposer({ operations, compact = false }: { operations: CollaboratorOption[]; compact?: boolean }) {
   const [statusMessage, setStatusMessage] = useState("");
+  const [open, setOpen] = useState(!compact);
 
   async function createBlocker(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -611,8 +634,8 @@ function BlockerComposer({ operations }: { operations: CollaboratorOption[] }) {
     }
   }
 
-  return (
-    <form onSubmit={createBlocker} className="mb-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+  const form = (
+    <form onSubmit={createBlocker} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">Déclarer un blocage</h4>
       <p className="mt-1 text-sm leading-6 text-dtsc-muted">Signalez un obstacle opérationnel pour le faire remonter au COO avec contexte et criticité.</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -635,10 +658,25 @@ function BlockerComposer({ operations }: { operations: CollaboratorOption[] }) {
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
   );
+  if (!compact) {
+    return <div className="mb-5">{form}</div>;
+  }
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+        <CircleAlert className="h-4 w-4" />
+        Signaler un blocage
+      </Button>
+      <Dialog open={open} title="Déclarer un blocage" onClose={() => setOpen(false)} className="max-w-4xl">
+        {form}
+      </Dialog>
+    </>
+  );
 }
 
-function ReportComposer({ collaborators, operations }: { collaborators: CollaboratorOption[]; operations: CollaboratorOption[] }) {
+function ReportComposer({ collaborators, operations, compact = false }: { collaborators: CollaboratorOption[]; operations: CollaboratorOption[]; compact?: boolean }) {
   const [statusMessage, setStatusMessage] = useState("");
+  const [open, setOpen] = useState(!compact);
 
   async function createReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -655,8 +693,8 @@ function ReportComposer({ collaborators, operations }: { collaborators: Collabor
     }
   }
 
-  return (
-    <form onSubmit={createReport} className="mb-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+  const form = (
+    <form onSubmit={createReport} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">Envoyer un rapport opérationnel</h4>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <Input name="title" placeholder="Titre du rapport" required className="rounded-xl bg-dtsc-page" />
@@ -676,6 +714,20 @@ function ReportComposer({ collaborators, operations }: { collaborators: Collabor
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer</Button>
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
+  );
+  if (!compact) {
+    return <div className="mb-5">{form}</div>;
+  }
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+        <Send className="h-4 w-4" />
+        Nouveau rapport
+      </Button>
+      <Dialog open={open} title="Envoyer un rapport" onClose={() => setOpen(false)} className="max-w-4xl">
+        {form}
+      </Dialog>
+    </>
   );
 }
 

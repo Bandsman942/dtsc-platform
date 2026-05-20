@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArrowLeft, Check, Copy, MessageSquare, Pencil, Plus, Reply, Send, Trash2, UserPlus, UserRound, X } from "lucide-react";
+import { Archive, ArrowLeft, Check, Copy, Eye, MessageSquare, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { getParticipantColor } from "@/lib/participant-colors";
 import { formatRelativeUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
-type UserOption = { id: string; name: string; email: string; avatarUrl?: string | null; jobTitle?: string | null; role: string };
+type UserOption = { id: string; name: string; email: string; avatarUrl?: string | null; jobTitle?: string | null; role?: string; lastSeenAt?: string | null };
 type GroupMember = { id: string; role: string; status: string; userId: string; joinedAt: string; user: UserOption };
 type MentionedUser = { id: string; name: string; email?: string | null; jobTitle?: string | null };
 type Group = {
@@ -49,6 +49,11 @@ type GroupMessage = {
   mentions: Array<{ mentionedUser: MentionedUser }>;
   sharedChatbotConversation?: { id: string; title: string; updatedAt: string } | null;
   sharedConversationSnapshot?: { id: string; title: string; status: string; createdAt: string; deletedAt?: string | null } | null;
+};
+type MessageReadInfo = {
+  messageId: string;
+  readBy: Array<{ user: UserOption; readAt: string }>;
+  unreadBy: Array<{ user: UserOption }>;
 };
 type SharedConversationSnapshot = {
   id: string;
@@ -94,9 +99,11 @@ export function CollaboratorsWorkspace({
   const [inviteSearch, setInviteSearch] = useState("");
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<string[]>([]);
   const [sharedSnapshot, setSharedSnapshot] = useState<SharedConversationSnapshot | null>(null);
+  const [readInfo, setReadInfo] = useState<MessageReadInfo | null>(null);
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMember = activeGroup?.members.find((member) => member.userId === currentUserId);
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
+  const isGroupOwner = activeMember?.role === "OWNER";
   const availableInviteUsers = useMemo(() => {
     const activeMemberIds = new Set(activeGroup?.members.map((member) => member.userId) || []);
     const pendingInviteUserEmails = new Set(activeGroup?.invitations.flatMap((invitation) => [invitation.invitedUser?.email, invitation.invitedEmail]).filter(Boolean) || []);
@@ -170,6 +177,16 @@ export function CollaboratorsWorkspace({
       setSharedSnapshot(body.snapshot);
     } else {
       setFeedback(body?.message || "Conversation partagée indisponible.");
+    }
+  }
+
+  async function openReadInfo(messageId: string) {
+    const response = await fetch(`/api/collaborators/messages/${messageId}/reads`);
+    const body = await response.json().catch(() => null) as Omit<MessageReadInfo, "messageId"> & { message?: string } | null;
+    if (response.ok && body) {
+      setReadInfo({ messageId, readBy: body.readBy || [], unreadBy: body.unreadBy || [] });
+    } else {
+      setFeedback(body?.message || "Infos de lecture indisponibles.");
     }
   }
 
@@ -376,7 +393,9 @@ export function CollaboratorsWorkspace({
                         setFeedback(response.ok ? "L'équipe DTSC a été notifiée." : "Impossible de contacter l'équipe DTSC.");
                         if (response.ok) await loadMessages(activeGroup.id);
                       } },
-                      { key: "archive", label: canManage ? "Archiver le groupe" : "Quitter le groupe", icon: Archive, destructive: canManage, onSelect: archiveOrLeaveGroup },
+                      ...(isGroupOwner
+                        ? [{ key: "delete-group", label: "Supprimer le groupe", icon: Trash2, destructive: true, onSelect: archiveOrLeaveGroup }]
+                        : [{ key: "leave-group", label: "Quitter le groupe", icon: Archive, onSelect: archiveOrLeaveGroup }]),
                     ]}
                   />
                 </div>
@@ -396,6 +415,7 @@ export function CollaboratorsWorkspace({
               isLoadingOlderMessages={isLoadingOlderMessages}
               onLoadOlder={() => loadMessages(activeGroup.id, messagesCursor)}
               onOpenSharedSnapshot={openSharedSnapshot}
+              onOpenReadInfo={openReadInfo}
               onEdit={setEditingMessage}
               onMentionProfile={setMentionedProfile}
               onCreateMentionGroup={createMentionGroup}
@@ -489,8 +509,22 @@ export function CollaboratorsWorkspace({
       </Dialog>
       <Dialog open={groupDetailsOpen} title="Détails du groupe" onClose={() => setGroupDetailsOpen(false)}>
         {activeGroup && (
-          <GroupDetailsDialog group={activeGroup} currentUserId={currentUserId} userPreferences={userPreferences} />
+          <GroupDetailsDialog
+            group={activeGroup}
+            currentUserId={currentUserId}
+            userPreferences={userPreferences}
+            onChanged={async () => {
+              await refresh();
+              if (activeGroup) {
+                await loadMessages(activeGroup.id);
+              }
+            }}
+            onFeedback={setFeedback}
+          />
         )}
+      </Dialog>
+      <Dialog open={Boolean(readInfo)} title="Infos de lecture" onClose={() => setReadInfo(null)}>
+        {readInfo && <ReadInfoPanel info={readInfo} userPreferences={userPreferences} />}
       </Dialog>
       <Dialog open={Boolean(editingMessage)} title="Modifier le message" onClose={() => setEditingMessage(null)}>
         {editingMessage && activeGroup && (
@@ -607,6 +641,7 @@ function MessageThread({
   isLoadingOlderMessages,
   onLoadOlder,
   onOpenSharedSnapshot,
+  onOpenReadInfo,
   onChanged,
   onEdit,
   onMentionProfile,
@@ -620,6 +655,7 @@ function MessageThread({
   isLoadingOlderMessages: boolean;
   onLoadOlder: () => void;
   onOpenSharedSnapshot: (snapshotId: string) => void;
+  onOpenReadInfo: (messageId: string) => void;
   onChanged: () => Promise<void>;
   onEdit: (message: GroupMessage) => void;
   onMentionProfile: (user: MentionedUser) => void;
@@ -702,6 +738,7 @@ function MessageThread({
             onChanged={onChanged}
             onEdit={onEdit}
             onOpenSharedSnapshot={onOpenSharedSnapshot}
+            onOpenReadInfo={onOpenReadInfo}
             onReply={setReplyTo}
             onMentionProfile={onMentionProfile}
             onCreateMentionGroup={onCreateMentionGroup}
@@ -750,6 +787,7 @@ function GroupMessageBubble({
   onChanged,
   onEdit,
   onOpenSharedSnapshot,
+  onOpenReadInfo,
   onReply,
   onMentionProfile,
   onCreateMentionGroup,
@@ -760,11 +798,22 @@ function GroupMessageBubble({
   onChanged: () => Promise<void>;
   onEdit: (message: GroupMessage) => void;
   onOpenSharedSnapshot: (snapshotId: string) => void;
+  onOpenReadInfo: (messageId: string) => void;
   onReply: (message: GroupMessage) => void;
   onMentionProfile: (user: MentionedUser) => void;
   onCreateMentionGroup: (user: MentionedUser) => void;
 }) {
   const participantColor = getParticipantColor(message.authorId || message.author.email);
+  if (message.messageType === "SYSTEM") {
+    return (
+      <div className="flex justify-center">
+        <div className="max-w-[92%] rounded-full border border-dtsc-border bg-dtsc-soft px-4 py-2 text-center text-xs font-bold text-dtsc-muted">
+          {message.content}
+          <span className="ml-2 font-semibold opacity-70">{formatRelativeUserDateTime(message.createdAt, userPreferences)}</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={cn("flex", message.authorId === currentUserId ? "justify-end" : "justify-start")}>
       <div className={cn("flex max-w-[88%] gap-2", message.authorId === currentUserId && "flex-row-reverse")}>
@@ -777,6 +826,7 @@ function GroupMessageBubble({
             <ActionMenu
               items={[
                 { key: "reply", label: "Répondre", icon: Reply, onSelect: () => onReply(message) },
+                { key: "reads", label: "Infos de lecture", icon: Eye, onSelect: () => onOpenReadInfo(message.id) },
                 { key: "copy", label: "Copier le texte", icon: Copy, onSelect: () => copyText(message.content) },
                 ...(message.authorId === currentUserId ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => onEdit(message) }] : []),
                 ...(message.authorId === currentUserId ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: async () => {
@@ -831,14 +881,34 @@ function GroupDetailsDialog({
   group,
   currentUserId,
   userPreferences,
+  onChanged,
+  onFeedback,
 }: {
   group: Group;
   currentUserId: string;
   userPreferences: UserDatePreferences;
+  onChanged: () => Promise<void>;
+  onFeedback: (message: string) => void;
 }) {
   const owner = group.members.find((member) => member.userId === group.ownerId);
   const activeMembers = group.members.filter((member) => member.status === "ACTIVE");
   const pendingInvitations = group.invitations.filter((invitation) => invitation.status === "PENDING");
+  const currentMember = group.members.find((member) => member.userId === currentUserId);
+  const canManageMembers = currentMember?.role === "OWNER";
+
+  async function updateMember(member: GroupMember, action: "PROMOTE_ADMIN" | "DEMOTE_ADMIN" | "REMOVE") {
+    const response = await fetch(`/api/collaborators/groups/${group.id}/members/${member.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const body = await response.json().catch(() => null) as { message?: string } | null;
+    onFeedback(response.ok ? "Gestion du membre appliquée." : body?.message || "Action membre impossible.");
+    if (response.ok) {
+      await onChanged();
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="rounded-3xl border border-cyan-200 bg-gradient-to-br from-cyan-50 via-white to-slate-50 p-5 shadow-[0_18px_50px_rgba(0,43,91,0.10)] dark:border-cyan-400/40 dark:from-[#08223a] dark:via-[#071427] dark:to-[#0b1728]">
@@ -868,6 +938,7 @@ function GroupDetailsDialog({
         <div className="max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-2 pr-1">
           {activeMembers.map((member) => {
             const color = getParticipantColor(member.userId);
+            const online = isUserOnline(member.user.lastSeenAt);
             return (
               <div key={member.id} className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3">
                 <div className="flex min-w-0 items-center gap-3">
@@ -877,13 +948,29 @@ function GroupDetailsDialog({
                   <div className="min-w-0">
                     <p className="truncate font-black text-dtsc-ink">{member.user.name}</p>
                     <p className="truncate text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</p>
+                    <p className={cn("mt-1 flex items-center gap-1 text-[0.68rem] font-black", online ? "text-emerald-600" : "text-red-500")}>
+                      <span className={cn("h-2 w-2 rounded-full", online ? "bg-emerald-500" : "bg-red-500")} />
+                      {online ? "En ligne" : "Hors ligne"}
+                    </p>
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="flex shrink-0 items-center gap-2 text-right">
+                  <div>
                   <span className={cn("rounded-full px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.1em]", member.role === "OWNER" ? "bg-cyan-100 text-cyan-900" : member.role === "ADMIN" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-700")}>
                     {formatEnumLabel(member.role)}
                   </span>
                   <p className="mt-1 text-[0.68rem] font-semibold text-dtsc-muted">{formatRelativeUserDateTime(member.joinedAt, userPreferences)}</p>
+                  </div>
+                  {canManageMembers && member.userId !== group.ownerId && (
+                    <ActionMenu
+                      items={[
+                        member.role === "ADMIN"
+                          ? { key: "demote", label: "Retirer le rôle admin", icon: ShieldOff, onSelect: () => { void updateMember(member, "DEMOTE_ADMIN"); } }
+                          : { key: "promote", label: "Nommer admin", icon: Shield, onSelect: () => { void updateMember(member, "PROMOTE_ADMIN"); } },
+                        { key: "remove", label: "Retirer du groupe", icon: UserMinus, destructive: true, onSelect: () => { void updateMember(member, "REMOVE"); } },
+                      ]}
+                    />
+                  )}
                 </div>
               </div>
             );
@@ -905,6 +992,50 @@ function GroupDetailsDialog({
         </section>
       )}
     </div>
+  );
+}
+
+function ReadInfoPanel({ info, userPreferences }: { info: MessageReadInfo; userPreferences: UserDatePreferences }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <ReadInfoList title="Lu par" empty="Aucun membre n'a encore confirmé la lecture." users={info.readBy.map((entry) => ({
+        user: entry.user,
+        detail: formatRelativeUserDateTime(entry.readAt, userPreferences),
+      }))} />
+      <ReadInfoList title="Non lu" empty="Tous les membres actifs ont lu ce message." users={info.unreadBy.map((entry) => ({
+        user: entry.user,
+        detail: isUserOnline(entry.user.lastSeenAt) ? "En ligne" : "Hors ligne",
+      }))} />
+    </div>
+  );
+}
+
+function ReadInfoList({ title, empty, users }: { title: string; empty: string; users: Array<{ user: UserOption; detail: string }> }) {
+  return (
+    <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+      <h3 className="font-black text-dtsc-ink">{title}</h3>
+      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+        {users.map(({ user, detail }) => {
+          const color = getParticipantColor(user.id);
+          const online = isUserOnline(user.lastSeenAt);
+          return (
+            <div key={user.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-dtsc-surface p-3">
+              <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black", color.bgClassName, color.textClassName)}>
+                {user.name.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-bold text-dtsc-ink">{user.name}</span>
+                <span className="flex items-center gap-1 text-xs text-dtsc-muted">
+                  <span className={cn("h-2 w-2 rounded-full", online ? "bg-emerald-500" : "bg-red-500")} />
+                  {detail}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+        {!users.length && <p className="rounded-xl bg-dtsc-surface p-3 text-sm text-dtsc-muted">{empty}</p>}
+      </div>
+    </section>
   );
 }
 
@@ -995,6 +1126,14 @@ function normalizeSearchText(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function isUserOnline(lastSeenAt?: string | null) {
+  if (!lastSeenAt) {
+    return false;
+  }
+  const seenAt = new Date(lastSeenAt).getTime();
+  return Number.isFinite(seenAt) && Date.now() - seenAt <= 5 * 60 * 1000;
 }
 
 function inviteSearchScore(searchable: string, tokens: string[]) {

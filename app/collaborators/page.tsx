@@ -1,18 +1,20 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
 import { requireUser } from "@/lib/auth";
+import { touchUserPresence } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 
 export default async function CollaboratorsPage() {
   const user = await requireUser();
+  await touchUserPresence(user.id);
   const [groups, invitations, users, conversations] = await Promise.all([
     prisma.collaborationGroup.findMany({
-      where: { members: { some: { userId: user.id, status: "ACTIVE" } } },
+      where: { status: "ACTIVE", members: { some: { userId: user.id, status: "ACTIVE" } } },
       include: {
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
         members: {
           where: { status: "ACTIVE" },
-          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true } } },
+          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } } },
           orderBy: { joinedAt: "asc" },
         },
         invitations: {

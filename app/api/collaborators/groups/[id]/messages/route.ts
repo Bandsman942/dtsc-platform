@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { assertGroupMember, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMember, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { collaborationMessageSchema } from "@/lib/validators";
@@ -15,6 +15,7 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await touchUserPresence(session.userId);
   const { id } = await params;
   const member = await assertGroupMember(id, session.userId);
   if (!member) {
@@ -29,7 +30,7 @@ export async function GET(req: Request, { params }: Params) {
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     include: {
-      author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true } },
+      author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
       replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
       mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
       sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
@@ -39,6 +40,7 @@ export async function GET(req: Request, { params }: Params) {
   const hasMore = records.length > limit;
   const messages = records.slice(0, limit).reverse();
   const nextCursor = hasMore ? records[limit - 1]?.createdAt.toISOString() : null;
+  await markGroupMessagesRead({ groupId: id, userId: session.userId, messageIds: messages.map((message) => message.id) });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ messages, nextCursor, hasMore });
 }
@@ -50,6 +52,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await touchUserPresence(session.userId);
   const { id } = await params;
   const member = await assertGroupMember(id, session.userId);
   if (!member || member.group.status !== "ACTIVE") {
@@ -118,7 +121,7 @@ export async function POST(req: Request, { params }: Params) {
     return tx.collaborationGroupMessage.findUniqueOrThrow({
       where: { id: savedMessage.id },
       include: {
-        author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true } },
+        author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
         replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
         mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
         sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
@@ -126,6 +129,7 @@ export async function POST(req: Request, { params }: Params) {
       },
     });
   });
+  await markGroupMessagesRead({ groupId: id, userId: session.userId, messageIds: [message.id] });
 
   const recipients = mentionedUserIds.length
     ? mentionedUserIds.filter((userId) => userId !== session.userId)

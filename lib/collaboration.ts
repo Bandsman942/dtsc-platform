@@ -56,3 +56,58 @@ export async function writeGroupAudit({
     },
   }).catch(() => null);
 }
+
+export async function createGroupSystemMessage({
+  groupId,
+  actorId,
+  content,
+}: {
+  groupId: string;
+  actorId: string;
+  content: string;
+}) {
+  return prisma.collaborationGroupMessage
+    .create({
+      data: {
+        groupId,
+        authorId: actorId,
+        content,
+        messageType: "SYSTEM",
+        status: "SENT",
+      },
+    })
+    .catch(() => null);
+}
+
+export async function markGroupMessagesRead({
+  groupId,
+  userId,
+  messageIds,
+}: {
+  groupId: string;
+  userId: string;
+  messageIds: string[];
+}) {
+  const uniqueMessageIds = [...new Set(messageIds)].filter(Boolean);
+  if (!uniqueMessageIds.length) {
+    return null;
+  }
+  const now = new Date();
+  return prisma.collaborationGroupMessageRead
+    .createMany({
+      data: uniqueMessageIds.map((messageId) => ({
+        groupId,
+        userId,
+        messageId,
+        readAt: now,
+      })),
+      skipDuplicates: true,
+    })
+    .catch(() => null);
+}
+
+export async function touchUserPresence(userId: string) {
+  return prisma.user
+    .update({ where: { id: userId }, data: { lastSeenAt: new Date() } })
+    .catch(() => null);
+}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { assertGroupMember, canManageGroup, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMember, canManageGroup, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 import { collaborationGroupUpdateSchema } from "@/lib/validators";
 
@@ -56,14 +56,25 @@ export async function DELETE(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (canManageGroup(member, session.role)) {
-    await prisma.collaborationGroup.update({ where: { id }, data: { status: "ARCHIVED", archivedAt: new Date() } });
-    await writeGroupAudit({ groupId: id, actorId: session.userId, action: "group.archive", entityType: "CollaborationGroup", entityId: id });
+  if (member.role === "OWNER") {
+    const activeMemberCount = await prisma.collaborationGroupMember.count({ where: { groupId: id, status: "ACTIVE" } });
+    if (activeMemberCount > 1) {
+      await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
+      return NextResponse.json({ message: "Retirez d'abord les autres membres avant de supprimer le groupe." }, { status: 409 });
+    }
+    await createGroupSystemMessage({ groupId: id, actorId: session.userId, content: `${session.name} a supprimé le groupe.` });
+    await prisma.collaborationGroup.update({ where: { id }, data: { status: "DELETED", archivedAt: new Date() } });
+    await writeAuditLog({ userId: session.userId, action: "collaboration.group.delete", entity: "CollaborationGroup", entityId: id, request: req });
+    await writeGroupAudit({ groupId: id, actorId: session.userId, action: "group.delete", entityType: "CollaborationGroup", entityId: id });
+  } else if (canManageGroup(member, session.role)) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ message: "Seul le propriétaire peut supprimer ce groupe." }, { status: 403 });
   } else {
     await prisma.collaborationGroupMember.updateMany({
       where: { groupId: id, userId: session.userId },
       data: { status: "LEFT", leftAt: new Date() },
     });
+    await createGroupSystemMessage({ groupId: id, actorId: session.userId, content: `${session.name} a quitté le groupe.` });
     await writeGroupAudit({ groupId: id, actorId: session.userId, action: "group.leave", entityType: "CollaborationGroupMember", entityId: member.id });
   }
 

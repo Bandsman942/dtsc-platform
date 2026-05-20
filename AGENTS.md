@@ -175,3 +175,20 @@ Conserver une hiérarchie visible pour:
 - citations
 - tableaux
 - code inline et blocs de code
+
+## Advanced Mobile UX, Activities, Groups, Files and Audit Standards
+
+- Tous les blocs Administration qui listent des données doivent rester utilisables sur mobile avec une logique liste -> détail: recherche intelligente, pagination, conteneurs scrollables, détails en modale ou plein écran et actions dans menus `...`.
+- Les formulaires Administration longs ne doivent pas être empilés directement dans les cartes mobiles; les ouvrir via bouton clair, modale, panneau ou vue dédiée. Le desktop peut garder une vue split-panel ou table confortable.
+- Tous les blocs Activités DTSC doivent suivre la même logique mobile: liste filtrable et paginée, puis détail plein écran/mobile avec commentaires, fichiers, statuts et actions autorisées.
+- Le formulaire `Formuler une demande à un collaborateur` reste centralisé dans les demandes collaboratives; les autres blocs peuvent seulement l'ouvrir avec contexte prérempli.
+- Les conversations de groupe doivent être bornées en hauteur, scrollables, chargées par pagination et positionnées sur les derniers messages à l'ouverture sans casser le chargement des anciens messages.
+- Les entrées/sorties de membres, retraits, suppressions de groupe et changements de rôle admin doivent créer des messages système persistés et des audit logs.
+- Les détails de groupe doivent afficher une présence légère en ligne/hors ligne quand `User.lastSeenAt` est disponible. Le seuil recommandé est `ONLINE_THRESHOLD_MINUTES = 5`.
+- Seul le propriétaire peut supprimer un groupe, et seulement après révocation ou départ des autres membres actifs. Les suppressions doivent rester logiques ou archivées selon la stratégie du projet et être journalisées.
+- Les propriétaires gèrent les admins et retraits de membres via routes API protégées. Un admin ne doit jamais retirer ou rétrograder le propriétaire.
+- Les messages de groupe doivent supporter les accusés de lecture via `CollaborationGroupMessageRead`; l'auteur, le propriétaire ou un admin peuvent consulter `Lu` / `Non lu` selon permissions.
+- Tout fichier joint affiché dans une interface doit proposer téléchargement et aperçu quand le type le permet: image, PDF, texte/CSV si supporté. Les fichiers non prévisualisables doivent garder un téléchargement clair.
+- Les fichiers sensibles doivent être servis par route privée avec contrôle RBAC; ne jamais exposer d'URL privée sans vérification. Les téléchargements sensibles doivent être journalisés.
+- La section Administration `Audits` doit rester recherchable, filtrable, paginée et utiliser des badges de sévérité `INFO`, `SUCCESS`, `WARNING`, `ERROR`, `CRITICAL`. Ne jamais exposer secrets, tokens, mots de passe ou stack traces à des rôles non techniques.
+- Les paramètres privés doivent utiliser une UX accordéon sur mobile; tous les changements visibles doivent être persistés et respecter les préférences utilisateur/i18n.

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { writeGroupAudit } from "@/lib/collaboration";
+import { createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { collaborationInvitationResponseSchema } from "@/lib/validators";
@@ -46,6 +46,7 @@ export async function PATCH(req: Request, { params }: Params) {
         create: { groupId: invitation.groupId, userId: session.userId, role: "MEMBER", status: "ACTIVE" },
       }),
     ]);
+    await createGroupSystemMessage({ groupId: invitation.groupId, actorId: session.userId, content: `${session.name} a rejoint le groupe.` });
     await notifyUser({ userId: invitation.invitedById, title: "Invitation acceptée", body: `${session.name} a rejoint ${invitation.group.name}.`, type: "COLLABORATION", targetUrl: "/collaborators" });
   } else {
     await prisma.collaborationGroupInvitation.update({
