@@ -354,8 +354,8 @@ Routes API:
 | `POST` | `/api/admin/coo/[entity]` | bloc admin `coo` | Cree une operation COO validee par `cooSchemas` |
 | `PATCH` | `/api/admin/coo/[entity]/[id]` | bloc admin `coo` | Met a jour une operation COO avec enrichissement departement/collaborateur |
 | `DELETE` | `/api/admin/coo/[entity]/[id]` | bloc admin `coo` | Supprime avec controles de relations sensibles |
-| `POST` | `/api/admin/operation-files` | blocs `coo`, `hrCfo` ou `sco` | Importe une piece justificative dans Supabase Storage |
-| `GET` | `/api/admin/operation-files/[...path]` | blocs `coo`, `hrCfo` ou `sco` | Sert un fichier operationnel via route serveur privee |
+| `POST` | `/api/admin/operation-files` | blocs `coo`, `hrCfo`, `sco`, `mpo`, `cto`, `la` ou `ceo` | Importe une piece justificative dans Supabase Storage |
+| `GET` | `/api/admin/operation-files/[...path]` | blocs `coo`, `hrCfo`, `sco`, `mpo`, `cto`, `la` ou `ceo` | Sert un fichier operationnel via route serveur privee |
 | `GET` | `/api/admin/payrolls/[id]/pdf` | bloc admin `hrCfo` ou collaborateur proprietaire | Affiche un bulletin de paie imprimable/exportable en PDF |
 | `GET` | `/api/collaborators/groups` | utilisateur connecte | Liste les groupes dont l'utilisateur est membre, ses invitations et les utilisateurs invitables |
 | `POST` | `/api/collaborators/groups` | utilisateur connecte | Cree un groupe et ajoute le createur comme proprietaire |
@@ -1784,8 +1784,12 @@ Workflows collaborateur depuis `/activities`:
 | Methode | Route | Acces | Payload principal | Reponse |
 | --- | --- | --- | --- | --- |
 | `POST` | `/api/activities/collaborator-workflows` | collaborateur RH actif | `workflowType`, champs du formulaire COO/LA, participants ou pieces liees | `{ ok, entityType, entityId, message }` |
+| `POST` | `/api/activities/files` | collaborateur RH actif ou `ADMIN` | `multipart/form-data` avec `file` | `{ ok, url, path }` |
+| `GET` | `/api/activities/files/[...path]` | auteur du fichier, `ADMIN`, poste officiel `LA` ou `CEO` | chemin interne Supabase `operations/...` | fichier servi par route privee |
 
 `workflowType` accepte `COO_MEETING`, `LEGAL_CASE`, `LEGAL_CONTRACT`, `LEGAL_RISK`, `LEGAL_DISPUTE` et `LEGAL_REQUEST`. La route cree les enregistrements dans les tables existantes (`CooMeeting`, `LegalCase`, `LegalContract`, `LegalRisk`, `LegalDispute`, `LegalRequest`) avec `sourceModule = ACTIVITES_DTSC`, `targetSection = COO` ou `LA`, `createdById`, statut initial coherent, commentaire initial via `CooComment`, notifications vers COO/LA et participants concernes. Les collaborateurs ne gagnent pas l'acces aux routes `/api/admin/...`.
+
+Les champs de piece jointe des formulaires Activites DTSC ne sont plus des zones de texte libre. Le navigateur selectionne un fichier local, affiche un apercu local pour les images et PDF, puis envoie le fichier a `/api/activities/files`. Le serveur valide session, dossier collaborateur actif, taille maximale 10 Mo, extension et type MIME autorises (PDF, images, Word, Excel, PowerPoint, CSV, TXT), stocke via Supabase Storage service role et renvoie une URL interne `/api/activities/files/...`. La route `/api/activities/collaborator-workflows` rejette les liens arbitraires dans `attachmentUrl` ou `documentUrl`: ces champs doivent provenir d'un upload autorise. Les telechargements sont journalises et restent limites a l'auteur du fichier, aux admins et aux postes LA/CEO concernes par le workflow juridique.
 
 Vues CEO:
 

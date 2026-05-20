@@ -13,23 +13,20 @@ const allowedTypes = new Set([
   "text/plain",
 ]);
 const maxFileSize = 6_000_000;
+const operationFileBlocks = ["coo", "hrCfo", "sco", "mpo", "cto", "la", "ceo"] as const;
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
-  const { session, response } = await requireAdminBlockAccess("coo");
-  if (!session) {
-    const fallback = await requireAdminBlockAccess("hrCfo");
-    if (!fallback.session) {
-      const secondFallback = await requireAdminBlockAccess("sco");
-      if (!secondFallback.session) {
-        await writeApiLog({ request: req, statusCode: 403, startedAt });
-        return response || fallback.response || secondFallback.response || NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return uploadForSession(req, secondFallback.session.userId, startedAt);
+  let lastResponse: NextResponse | undefined;
+  for (const blockId of operationFileBlocks) {
+    const { session, response } = await requireAdminBlockAccess(blockId);
+    if (session) {
+      return uploadForSession(req, session.userId, startedAt);
     }
-    return uploadForSession(req, fallback.session.userId, startedAt);
+    lastResponse = response;
   }
-  return uploadForSession(req, session.userId, startedAt);
+  await writeApiLog({ request: req, statusCode: 403, startedAt });
+  return lastResponse || NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
 async function uploadForSession(req: Request, userId: string, startedAt: number) {

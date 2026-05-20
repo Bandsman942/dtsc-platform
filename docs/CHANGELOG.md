@@ -8,10 +8,14 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - Demandes collaboratives dans Activités DTSC: la demande initiale et la réponse du destinataire sont désormais affichées dans deux blocs visuels distincts, avec le nom du collaborateur répondant en petit libellé coloré.
 - Le bloc de réponse et d'avancement d'une demande collaborative est visible uniquement pour le collaborateur destinataire.
+- Les formulaires juridiques du module Activités DTSC remplacent le champ texte libre `Document joint ou lien interne` par un vrai téléversement de fichier depuis l'appareil, avec aperçu local image/PDF et téléchargement avant envoi.
+- Les routes de fichiers opérationnels Administration acceptent maintenant les blocs qui utilisent déjà des champs fichier (`MPO`, `CTO`, `LA`, `CEO`) en plus de `COO`, `HR & CFO` et `SCO`.
 
 ### Sécurisé
 
 - La route `PATCH /api/activities/requests/[id]` bloque l'ajout d'une réponse ou l'avancement métier si l'utilisateur courant n'est pas le collaborateur destinataire; l'annulation reste réservée au demandeur.
+- Ajout des routes privées `POST /api/activities/files` et `GET /api/activities/files/[...path]` pour stocker les pièces jointes Activités DTSC dans Supabase Storage, valider taille/type, journaliser uploads/téléchargements et limiter la lecture à l'auteur, ADMIN, LA ou CEO.
+- La route `POST /api/activities/collaborator-workflows` refuse désormais les liens arbitraires dans les champs `documentUrl` et `attachmentUrl`; ces valeurs doivent provenir d'un téléversement autorisé.
 
 ## 2026-05-18
 

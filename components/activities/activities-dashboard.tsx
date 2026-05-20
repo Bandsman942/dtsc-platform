@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, GitBranch, MessageSquare, Send, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, Download, Eye, FileText, GitBranch, MessageSquare, Send, Users } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -191,24 +191,27 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
 function CollaboratorWorkflowComposer({ collaborators, operations }: { collaborators: CollaboratorOption[]; operations: CollaboratorOption[] }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [workflowType, setWorkflowType] = useState("COO_MEETING");
+  const [formVersion, setFormVersion] = useState(0);
 
   async function submitWorkflow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const formData = new FormData(form);
-    const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
-    payload.workflowType = workflowType;
-    payload.participantIds = formData.getAll("participantIds").map(String);
-    payload.strategic = formData.get("strategic") === "on";
-    const response = await fetch("/api/activities/collaborator-workflows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setStatusMessage(response.ok ? "Formulaire transmis. L'élément apparaît dans votre suivi." : body?.message || "Transmission impossible.");
-    if (response.ok) {
-      form.reset();
+    try {
+      const formData = new FormData(form);
+      const payload = await buildActivityWorkflowPayload(formData, workflowType);
+      const response = await fetch("/api/activities/collaborator-workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      setStatusMessage(response.ok ? "Formulaire transmis. L'élément apparaît dans votre suivi." : body?.message || "Transmission impossible.");
+      if (response.ok) {
+        form.reset();
+        setFormVersion((current) => current + 1);
+      }
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Import du fichier impossible.");
     }
   }
 
@@ -259,7 +262,7 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
       )}
 
       {workflowType !== "COO_MEETING" && (
-        <LegalWorkflowFields workflowType={workflowType} />
+        <LegalWorkflowFields key={`${workflowType}-${formVersion}`} workflowType={workflowType} />
       )}
 
       <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Transmettre</Button>
@@ -291,7 +294,7 @@ function LegalWorkflowFields({ workflowType }: { workflowType: string }) {
             {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((urgency) => <option key={urgency} value={urgency}>{formatEnumLabel(urgency)}</option>)}
           </select>
         )}
-        <Input name={workflowType === "LEGAL_CONTRACT" || workflowType === "LEGAL_DISPUTE" || workflowType === "LEGAL_REQUEST" ? "documentUrl" : "attachmentUrl"} placeholder="Document joint ou lien interne" className="rounded-xl bg-dtsc-page" />
+        <ActivityFileField name={workflowType === "LEGAL_CONTRACT" || workflowType === "LEGAL_DISPUTE" || workflowType === "LEGAL_REQUEST" ? "documentUrl" : "attachmentUrl"} label="Document joint" />
         <Input name="linkedEntityType" placeholder="Élément lié: projet, fournisseur, client..." className="rounded-xl bg-dtsc-page" />
         <Input name="linkedEntityId" placeholder="Référence de l'élément lié" className="rounded-xl bg-dtsc-page" />
       </div>
@@ -311,6 +314,112 @@ function LegalWorkflowFields({ workflowType }: { workflowType: string }) {
       <textarea name="comments" placeholder="Commentaire initial" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
     </div>
   );
+}
+
+function ActivityFileField({ name, label }: { name: string; label: string }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [objectUrl, setObjectUrl] = useState("");
+
+  useEffect(() => {
+    if (!file) {
+      setObjectUrl("");
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setObjectUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [file]);
+
+  const lowerName = file?.name.toLowerCase() || "";
+  const canPreviewImage = Boolean(file?.type.startsWith("image/"));
+  const canPreviewPdf = file?.type === "application/pdf" || lowerName.endsWith(".pdf");
+  const readableSize = file ? `${(file.size / 1024 / 1024).toFixed(2)} Mo` : "";
+
+  return (
+    <div className="grid min-w-0 gap-2 md:col-span-2">
+      <label className="grid min-w-0 gap-1">
+        <span className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{label}</span>
+        <input type="hidden" name={name} value="" />
+        <input
+          name={`${name}__file`}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.txt,application/pdf,image/png,image/jpeg,image/webp,text/plain,text/csv"
+          onChange={(event) => setFile(event.currentTarget.files?.[0] || null)}
+          className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink file:mr-3 file:rounded-lg file:border-0 file:bg-dtsc-blue file:px-3 file:py-1 file:text-xs file:font-black file:text-white"
+        />
+        <span className="text-xs leading-5 text-dtsc-muted">Importez un fichier depuis votre appareil. PDF, Word, Excel, PowerPoint, image, CSV ou texte.</span>
+      </label>
+      {file && (
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink">
+              <FileText className="h-4 w-4 shrink-0 text-cyan-500" />
+              <span className="min-w-0 truncate">{file.name}</span>
+              <span className="shrink-0 text-xs text-dtsc-muted">{readableSize}</span>
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {(canPreviewImage || canPreviewPdf) && (
+                <Button type="button" size="sm" variant="outline" onClick={() => setPreviewOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                  <Eye className="h-4 w-4" />
+                  Aperçu
+                </Button>
+              )}
+              {objectUrl && (
+                <a href={objectUrl} download={file.name} className="inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-3 py-2 text-xs font-black text-white shadow-[0_10px_30px_rgba(0,43,91,0.18)] transition hover:-translate-y-0.5 hover:bg-[#001736]">
+                  <Download className="h-4 w-4" />
+                  Télécharger
+                </a>
+              )}
+            </div>
+          </div>
+          <Dialog open={previewOpen} title={`Aperçu: ${file.name}`} onClose={() => setPreviewOpen(false)} className="max-w-5xl">
+            {canPreviewImage && objectUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={objectUrl} alt={file.name} className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-dtsc-border object-contain" />
+            ) : canPreviewPdf && objectUrl ? (
+              <iframe src={objectUrl} title={file.name} className="h-[70vh] w-full rounded-2xl border border-dtsc-border bg-white" />
+            ) : (
+              <p className="text-sm text-dtsc-muted">Aperçu non disponible pour ce type de fichier. Utilisez le téléchargement.</p>
+            )}
+          </Dialog>
+        </div>
+      )}
+    </div>
+  );
+}
+
+async function buildActivityWorkflowPayload(formData: FormData, workflowType: string) {
+  const payload: Record<string, unknown> = {};
+  const fileEntries = Array.from(formData.entries()).filter(([key, value]) => key.endsWith("__file") && value instanceof File && value.size > 0);
+
+  for (const [key, value] of formData.entries()) {
+    if (key.endsWith("__file")) {
+      continue;
+    }
+    if (key === "participantIds") {
+      continue;
+    }
+    payload[key] = String(value);
+  }
+
+  payload.workflowType = workflowType;
+  payload.participantIds = formData.getAll("participantIds").map(String);
+  payload.strategic = formData.get("strategic") === "on";
+
+  for (const [key, value] of fileEntries) {
+    const targetName = key.replace(/__file$/, "");
+    const uploadData = new FormData();
+    uploadData.set("file", value);
+    const response = await fetch("/api/activities/files", { method: "POST", body: uploadData });
+    const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+    if (!response.ok || !body?.url) {
+      throw new Error(body?.error || "Import du document joint impossible.");
+    }
+    payload[targetName] = body.url;
+  }
+
+  return payload;
 }
 
 function LegalTypeSelect({ workflowType }: { workflowType: string }) {

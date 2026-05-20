@@ -7,6 +7,11 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
 const optionalText = (max = 1200) => z.string().max(max).optional().or(z.literal(""));
 const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal(""));
+const optionalActivityFileUrl = z.string()
+  .max(600)
+  .refine((value) => value === "" || value.startsWith("/api/activities/files/"), "Le document joint doit provenir d'un téléversement autorisé.")
+  .optional()
+  .or(z.literal(""));
 
 const workflowSchema = z.discriminatedUnion("workflowType", [
   z.object({
@@ -33,7 +38,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     description: z.string().min(5).max(2400),
     reason: optionalText(1600),
     priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
-    attachmentUrl: optionalText(600),
+    attachmentUrl: optionalActivityFileUrl,
     linkedEntityType: optionalText(120),
     linkedEntityId: optionalText(120),
     comments: optionalText(1800),
@@ -46,7 +51,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     departmentId: optionalText(120),
     subject: z.string().min(5).max(1800),
     desiredValidationDate: optionalDate,
-    documentUrl: optionalText(600),
+    documentUrl: optionalActivityFileUrl,
     linkedEntityType: optionalText(120),
     linkedEntityId: optionalText(120),
     comments: optionalText(1800),
@@ -62,7 +67,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     urgency: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
     linkedEntityType: optionalText(120),
     linkedEntityId: optionalText(120),
-    attachmentUrl: optionalText(600),
+    attachmentUrl: optionalActivityFileUrl,
     comments: optionalText(1800),
   }),
   z.object({
@@ -74,7 +79,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     description: z.string().min(5).max(2400),
     occurredAt: optionalDate,
     potentialImpact: optionalText(1200),
-    documentUrl: optionalText(600),
+    documentUrl: optionalActivityFileUrl,
     comments: optionalText(1800),
   }),
   z.object({
@@ -84,7 +89,7 @@ const workflowSchema = z.discriminatedUnion("workflowType", [
     description: z.string().min(5).max(2400),
     priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
     desiredDueDate: optionalDate,
-    documentUrl: optionalText(600),
+    documentUrl: optionalActivityFileUrl,
     linkedEntityType: optionalText(120),
     linkedEntityId: optionalText(120),
     comments: optionalText(1800),
