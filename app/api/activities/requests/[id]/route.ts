@@ -44,6 +44,24 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid request update", message: "La mise à jour de la demande est invalide." }, { status: 400 });
   }
 
+  const isTargetEmployee = collaboratorRequest.targetEmployeeId === employee.id;
+  const isRequesterEmployee = collaboratorRequest.requesterEmployeeId === employee.id;
+  const submittedResponse = typeof parsed.data.response === "string" && parsed.data.response.trim().length > 0;
+  const targetOnlyStatuses = ["IN_PROGRESS", "WAITING_RESPONSE", "ANSWERED", "TREATED", "REJECTED"];
+  const requestedStatus = parsed.data.status;
+  if (submittedResponse && !isTargetEmployee) {
+    await writeApiLog({ request: req, statusCode: 403, userId: user.id, startedAt, metadata: { requestId: id, reason: "response_not_target" } });
+    return NextResponse.json({ error: "Forbidden", message: "Seul le collaborateur destinataire peut répondre à cette demande." }, { status: 403 });
+  }
+  if (requestedStatus && targetOnlyStatuses.includes(requestedStatus) && !isTargetEmployee) {
+    await writeApiLog({ request: req, statusCode: 403, userId: user.id, startedAt, metadata: { requestId: id, status: requestedStatus, reason: "status_not_target" } });
+    return NextResponse.json({ error: "Forbidden", message: "Seul le collaborateur destinataire peut faire avancer cette demande." }, { status: 403 });
+  }
+  if (requestedStatus === "CANCELED" && !isRequesterEmployee) {
+    await writeApiLog({ request: req, statusCode: 403, userId: user.id, startedAt, metadata: { requestId: id, status: requestedStatus, reason: "cancel_not_requester" } });
+    return NextResponse.json({ error: "Forbidden", message: "Seul le demandeur peut annuler cette demande." }, { status: 403 });
+  }
+
   const nextStatus = parsed.data.status || collaboratorRequest.status;
   const updated = await prisma.collaboratorRequest.update({
     where: { id },

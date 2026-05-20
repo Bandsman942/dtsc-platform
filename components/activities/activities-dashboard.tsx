@@ -19,6 +19,11 @@ type ActivityItem = {
   status: string;
   detail: string;
   body?: string | null;
+  requestMessage?: string | null;
+  requestResponse?: string | null;
+  requesterName?: string | null;
+  targetName?: string | null;
+  canRespond?: boolean;
   date: string;
   href?: string | null;
   hrefLabel?: string | null;
@@ -347,7 +352,13 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
   const [message, setMessage] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [requestResponse, setRequestResponse] = useState("");
+  const [visibleRequestResponse, setVisibleRequestResponse] = useState(item.requestResponse || "");
   const [statusMessage, setStatusMessage] = useState("");
+
+  useEffect(() => {
+    setRequestResponse("");
+    setVisibleRequestResponse(item.requestResponse || "");
+  }, [item.id, item.requestResponse]);
 
   const loadComments = useCallback(async (cursor?: string | null) => {
     if (cursor) {
@@ -422,6 +433,9 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
     });
     setStatusMessage(response.ok ? "Demande mise à jour." : "Mise à jour de la demande impossible.");
     if (response.ok) {
+      if (requestResponse.trim()) {
+        setVisibleRequestResponse(requestResponse);
+      }
       setRequestResponse("");
     }
   }
@@ -432,7 +446,11 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
         <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(item.entityType)} · {formatEnumLabel(item.status)}</p>
         <h3 className="mt-2 text-2xl font-black text-dtsc-ink">{item.title}</h3>
         <p className="mt-2 text-sm text-dtsc-muted">{item.detail}</p>
-        {item.body && <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{item.body}</p>}
+        {item.entityType === "COLLAB_REQUEST" ? (
+          <CollaboratorRequestConversation item={item} response={visibleRequestResponse} />
+        ) : (
+          item.body && <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{item.body}</p>
+        )}
         {item.href && (
           <a href={item.href} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-xl bg-[#002b5b] px-4 py-2 text-sm font-black text-white transition hover:bg-[#001736]">
             {item.hrefLabel || "Ouvrir le document"}
@@ -447,9 +465,10 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
         </div>
       )}
 
-      {item.entityType === "COLLAB_REQUEST" && (
+      {item.entityType === "COLLAB_REQUEST" && item.canRespond && (
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
           <h4 className="font-black text-dtsc-ink">Répondre ou faire avancer la demande</h4>
+          <p className="mt-1 text-xs font-bold text-dtsc-muted">Ce bloc est réservé au collaborateur destinataire de la demande.</p>
           <textarea
             value={requestResponse}
             onChange={(event) => setRequestResponse(event.target.value)}
@@ -508,6 +527,34 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
         </form>
         {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
       </div>
+    </div>
+  );
+}
+
+function CollaboratorRequestConversation({ item, response }: { item: ActivityItem; response: string }) {
+  const requestMessage = item.requestMessage || item.body || "";
+  const responseMessage = response || "";
+
+  return (
+    <div className="mt-5 space-y-3">
+      <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm">
+        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-dtsc-muted">
+          Demande de {item.requesterName || "collaborateur"} vers {item.targetName || "destinataire"}
+        </p>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-dtsc-ink">{requestMessage}</p>
+      </div>
+      {responseMessage ? (
+        <div className="ml-0 rounded-2xl border border-cyan-300/70 bg-cyan-400/10 p-4 shadow-[0_18px_45px_rgba(0,186,217,0.10)] sm:ml-8">
+          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-700">
+            Réponse de {item.targetName || "collaborateur destinataire"}
+          </p>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-dtsc-ink">{responseMessage}</p>
+        </div>
+      ) : (
+        <div className="ml-0 rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-4 sm:ml-8">
+          <p className="text-xs font-bold text-dtsc-muted">Aucune réponse enregistrée pour cette demande.</p>
+        </div>
+      )}
     </div>
   );
 }

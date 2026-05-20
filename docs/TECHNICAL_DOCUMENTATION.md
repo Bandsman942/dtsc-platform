@@ -261,7 +261,7 @@ Modeles actifs:
 | `CooMeeting` | Reunions, comptes rendus, decisions et pieces jointes |
 | `CooWorkflow` | Workflows operationnels repetables et etapes |
 | `CooOperationalReport` | Rapports operationnels et KPI COO |
-| `CollaboratorRequest` | Demandes directes entre collaborateurs depuis Activites DTSC: demandeur, destinataire, type, priorite, statut, echeance, message et reponse |
+| `CollaboratorRequest` | Demandes directes entre collaborateurs depuis Activites DTSC: demandeur, destinataire, type, priorite, statut, echeance, message et reponse. La reponse est affichee separement de la demande et ne peut etre saisie que par le destinataire |
 | `CooCommentMention` | Mentions persistantes dans les commentaires collaboratifs avec notification du collaborateur mentionne |
 | `CollaborationGroup` | Groupe prive Mes collaborateurs: nom, type, proprietaire, statut et visibilite |
 | `CollaborationGroupMember` | Appartenance au groupe, role, statut et date d'entree/sortie |
@@ -1680,7 +1680,7 @@ Regles financieres appliquees:
 Nouveaux modeles et champs Prisma:
 
 - `CooComment`: commentaires securises rattaches a une tache, operation, demande, blocage, reunion, rapport, workflow, paie, objectif CEO ou suivi de supervision CEO;
-- `CollaboratorRequest`: demandes directes entre collaborateurs depuis `/activities`, visibles par le demandeur, le destinataire ou un admin autorise;
+- `CollaboratorRequest`: demandes directes entre collaborateurs depuis `/activities`, visibles par le demandeur, le destinataire ou un admin autorise; la reponse est portee visuellement par le destinataire et l'API interdit a un autre collaborateur de la saisir;
 - `CooWorkflowShare`: historique des workflows partages par le COO a des collaborateurs;
 - `CooOperationalReport.recipientEmployeeId`, `recipientName`, `priority`, `content`, `readAt`, `treatedAt`.
 
@@ -1691,7 +1691,7 @@ Routes API ajoutees ou modifiees:
 | `GET` | `/api/activities/comments?entityType=&entityId=` | session collaborateur ou role autorise | Lire les commentaires d'un element operationnel autorise |
 | `POST` | `/api/activities/comments` | session collaborateur ou role autorise | Ajouter un commentaire et notifier les participants concernes |
 | `POST` | `/api/activities/requests` | collaborateur DTSC | Creer une demande directe vers un autre collaborateur avec notification ciblee |
-| `PATCH` | `/api/activities/requests/[id]` | demandeur, destinataire ou admin | Mettre a jour le statut ou la reponse d'une demande collaborateur |
+| `PATCH` | `/api/activities/requests/[id]` | demandeur ou destinataire implique | Mettre a jour une demande collaborateur: le destinataire peut repondre et faire avancer le statut, le demandeur peut annuler |
 | `PATCH` | `/api/activities/tasks/[id]` | collaborateur assigne/responsable | Changer l'avancement d'une tache et declarer un blocage lie si necessaire |
 | `POST` | `/api/activities/blockers` | collaborateur DTSC | Declarer un blocage visible par le COO/admin |
 | `POST` | `/api/activities/reports` | collaborateur DTSC | Envoyer un rapport operationnel a un autre collaborateur |

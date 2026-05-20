@@ -2,6 +2,17 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-05-20
+
+### Amélioré
+
+- Demandes collaboratives dans Activités DTSC: la demande initiale et la réponse du destinataire sont désormais affichées dans deux blocs visuels distincts, avec le nom du collaborateur répondant en petit libellé coloré.
+- Le bloc de réponse et d'avancement d'une demande collaborative est visible uniquement pour le collaborateur destinataire.
+
+### Sécurisé
+
+- La route `PATCH /api/activities/requests/[id]` bloque l'ajout d'une réponse ou l'avancement métier si l'utilisateur courant n'est pas le collaborateur destinataire; l'annulation reste réservée au demandeur.
+
 ## 2026-05-18
 
 ### Ajouté
