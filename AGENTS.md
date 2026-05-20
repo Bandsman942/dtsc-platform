@@ -214,3 +214,16 @@ Conserver une hiérarchie visible pour:
 - Ne pas importer directement une feuille CSS globale tierce LiveKit dans `app/globals.css` si elle peut casser le rendu global; préférer des styles DTSC scopés sur une classe locale comme `.dtsc-livekit-room`.
 - Aucun bouton d'appel, de réunion, de décision ou de tâche ne doit être un placeholder: toute action affichée doit appeler une route réelle, persister l'effet, notifier si nécessaire et gérer les erreurs de configuration comme LiveKit absent.
 - Toute évolution future des appels/réunions doit mettre à jour Prisma, migration SQL, validateurs Zod, documentation technique, `AGENTS.md`, et exécuter au minimum `git diff --check`, `git diff --cached --check` et `pnpm build` si disponible.
+
+## Règles DTSC — UX avancée des appels
+
+- L'interface finale ne doit jamais afficher de termes techniques comme `LiveKit`, `room`, `token`, `provider`, `server` ou des états de connexion bruts. Les erreurs techniques doivent être traduites en messages humains: `Appel connecté`, `Connexion instable`, `Impossible de rejoindre l'appel`, etc.
+- Le bouton micro doit agir sur la piste audio locale réelle du fournisseur d'appel, pas seulement sur l'icône. Si le navigateur refuse le micro, afficher un message humain et garder l'état visuel cohérent.
+- `Quitter` et `Terminer` sont deux actions distinctes: `Quitter` sort seulement l'utilisateur courant, `Terminer` clôt l'appel pour tout le groupe et reste réservé au lanceur, propriétaire/admin du groupe ou rôle explicitement autorisé.
+- Les appels actifs doivent se propager aux membres autorisés sans rechargement manuel. Si aucune infrastructure temps réel dédiée n'existe, utiliser un polling léger et documenté en fallback en conservant les vérifications backend.
+- Les événements d'appel peuvent déclencher une animation flottante globale uniquement pour les membres autorisés du groupe. Les alertes ne doivent pas afficher de détails privés à un non-membre et doivent respecter les préférences utilisateur.
+- Les paramètres d'appel sont persistés par utilisateur: sons, notifications, alertes flottantes, événements participants, démarrage micro/caméra et durée d'affichage des alertes.
+- Les sons d'appel doivent rester courts, professionnels, non agressifs et respecter les permissions navigateur; si l'autoplay est bloqué, l'appel doit continuer sans erreur bloquante.
+- La durée d'appel doit être calculée depuis `startedAt`, affichée pendant l'appel, et persistée à la fin via `durationSeconds` pour l'historique.
+- Les appels liés aux réunions COO doivent suivre les mêmes règles UX: pas de jargon technique, durée, boutons `Quitter`/`Terminer`, préférences utilisateur, propagation d'état et historique persistant.
+- Toute route d'appel doit continuer à vérifier auth, RBAC, appartenance active au groupe/réunion et droit de gestion côté serveur; un événement temps réel reçu côté frontend ne donne jamais accès à l'appel sans vérification API.

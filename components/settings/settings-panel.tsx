@@ -3,35 +3,51 @@
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, Bot, ChevronDown, Globe2, LayoutDashboard, Lock, Monitor, Moon, Save, SlidersHorizontal, Sun, UserCog, type LucideIcon } from "lucide-react";
+import { Bell, Bot, ChevronDown, Globe2, LayoutDashboard, Lock, Monitor, Moon, PhoneCall, Save, SlidersHorizontal, Sun, UserCog, Volume2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { cn } from "@/lib/utils";
 
+type SettingsUser = {
+  name: string;
+  email: string;
+  companyName: string | null;
+  phone: string | null;
+  preferredModel?: string | null;
+  notifySupportEnabled?: boolean;
+  notifyUsageEnabled?: boolean;
+  notifyBroadcastEnabled?: boolean;
+  pushNotificationsEnabled?: boolean;
+  interfaceDensity?: string | null;
+  startPage?: string | null;
+  locale?: string | null;
+  timezone?: string | null;
+  dateFormat?: string | null;
+  callSoundsEnabled?: boolean;
+  callNotificationsEnabled?: boolean;
+  floatingCallAlertsEnabled?: boolean;
+  participantEventAlertsEnabled?: boolean;
+  callAlertSoundEnabled?: boolean;
+  incomingCallBannerEnabled?: boolean;
+  connectionIssueSoundsEnabled?: boolean;
+  startMutedByDefault?: boolean;
+  startCameraOffByDefault?: boolean;
+  callSoundVolume?: number | null;
+  callAlertDisplayDuration?: number | null;
+  preferredAudioInputId?: string | null;
+  preferredVideoInputId?: string | null;
+  preferredAudioOutputId?: string | null;
+  emailDigestFrequency?: string | null;
+  chatResponseStyle?: string | null;
+  chatResponseLength?: string | null;
+};
+
 export function SettingsPanel({
   user,
   models,
 }: {
-  user: {
-    name: string;
-    email: string;
-    companyName: string | null;
-    phone: string | null;
-    preferredModel?: string | null;
-    notifySupportEnabled?: boolean;
-    notifyUsageEnabled?: boolean;
-    notifyBroadcastEnabled?: boolean;
-    pushNotificationsEnabled?: boolean;
-    interfaceDensity?: string | null;
-    startPage?: string | null;
-    locale?: string | null;
-    timezone?: string | null;
-    dateFormat?: string | null;
-    emailDigestFrequency?: string | null;
-    chatResponseStyle?: string | null;
-    chatResponseLength?: string | null;
-  };
+  user: SettingsUser;
   models: { id: string; label: string }[];
 }) {
   const router = useRouter();
@@ -103,6 +119,20 @@ export function SettingsPanel({
       locale: String(formData.get("locale") || "fr"),
       timezone: String(formData.get("timezone") || "Africa/Kinshasa"),
       dateFormat: String(formData.get("dateFormat") || "FR"),
+      callSoundsEnabled: formData.get("callSoundsEnabled") === "on",
+      callNotificationsEnabled: formData.get("callNotificationsEnabled") === "on",
+      floatingCallAlertsEnabled: formData.get("floatingCallAlertsEnabled") === "on",
+      participantEventAlertsEnabled: formData.get("participantEventAlertsEnabled") === "on",
+      callAlertSoundEnabled: formData.get("callAlertSoundEnabled") === "on",
+      incomingCallBannerEnabled: formData.get("incomingCallBannerEnabled") === "on",
+      connectionIssueSoundsEnabled: formData.get("connectionIssueSoundsEnabled") === "on",
+      startMutedByDefault: formData.get("startMutedByDefault") === "on",
+      startCameraOffByDefault: formData.get("startCameraOffByDefault") === "on",
+      callSoundVolume: Number(formData.get("callSoundVolume") || user.callSoundVolume || 45),
+      callAlertDisplayDuration: Number(formData.get("callAlertDisplayDuration") || user.callAlertDisplayDuration || 6000),
+      preferredAudioInputId: String(formData.get("preferredAudioInputId") || ""),
+      preferredVideoInputId: String(formData.get("preferredVideoInputId") || ""),
+      preferredAudioOutputId: String(formData.get("preferredAudioOutputId") || ""),
       emailDigestFrequency: String(formData.get("emailDigestFrequency") || "WEEKLY"),
       chatResponseStyle: String(formData.get("chatResponseStyle") || "PROFESSIONAL"),
       chatResponseLength: String(formData.get("chatResponseLength") || "BALANCED"),
@@ -166,6 +196,7 @@ export function SettingsPanel({
             {user.notifyUsageEnabled ?? true ? <input type="hidden" name="notifyUsageEnabled" value="on" /> : null}
             {user.notifyBroadcastEnabled ?? true ? <input type="hidden" name="notifyBroadcastEnabled" value="on" /> : null}
             {user.pushNotificationsEnabled ? <input type="hidden" name="pushNotificationsEnabled" value="on" /> : null}
+            <CallPreferenceHiddenFields user={user} />
             <Field label="Page après connexion" icon={LayoutDashboard}>
               <select name="startPage" defaultValue={user.startPage || "/dashboard"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
                 <option value="/dashboard">Dashboard</option>
@@ -285,6 +316,7 @@ export function SettingsPanel({
             <input type="hidden" name="emailDigestFrequency" value={user.emailDigestFrequency || "WEEKLY"} />
             <input type="hidden" name="chatResponseStyle" value={user.chatResponseStyle || "PROFESSIONAL"} />
             <input type="hidden" name="chatResponseLength" value={user.chatResponseLength || "BALANCED"} />
+            <CallPreferenceHiddenFields user={user} />
             <label className="grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
               <span className="font-bold text-dtsc-ink">Modèle LLM préféré</span>
               <select
@@ -332,8 +364,101 @@ export function SettingsPanel({
           </form>
           </div>
         </section>
+
+        <section className="dtsc-card p-6">
+          <SettingsSectionHeader id="calls" icon={PhoneCall} title="Paramètres des appels" description="Sons, alertes flottantes et comportement par défaut des appels DTSC." openId={openMobileSection} onToggle={setOpenMobileSection} />
+          <div className={cn(openMobileSection === "calls" ? "block" : "hidden", "md:block")}>
+          <form onSubmit={updatePreferences} className="mt-5 space-y-3 text-sm text-dtsc-muted">
+            <input type="hidden" name="preferredModel" value={user.preferredModel || ""} />
+            {user.notifySupportEnabled ?? true ? <input type="hidden" name="notifySupportEnabled" value="on" /> : null}
+            {user.notifyUsageEnabled ?? true ? <input type="hidden" name="notifyUsageEnabled" value="on" /> : null}
+            {user.notifyBroadcastEnabled ?? true ? <input type="hidden" name="notifyBroadcastEnabled" value="on" /> : null}
+            {pushEnabled ? <input type="hidden" name="pushNotificationsEnabled" value="on" /> : null}
+            <input type="hidden" name="interfaceDensity" value={user.interfaceDensity || "COMFORTABLE"} />
+            <input type="hidden" name="startPage" value={user.startPage || "/dashboard"} />
+            <input type="hidden" name="locale" value={user.locale || "fr"} />
+            <input type="hidden" name="timezone" value={user.timezone || "Africa/Kinshasa"} />
+            <input type="hidden" name="dateFormat" value={user.dateFormat || "FR"} />
+            <input type="hidden" name="emailDigestFrequency" value={user.emailDigestFrequency || "WEEKLY"} />
+            <input type="hidden" name="chatResponseStyle" value={user.chatResponseStyle || "PROFESSIONAL"} />
+            <input type="hidden" name="chatResponseLength" value={user.chatResponseLength || "BALANCED"} />
+            <CallToggle name="callSoundsEnabled" label="Sons d'appel" description="Jouer des sons courts lors des événements importants." checked={user.callSoundsEnabled ?? true} />
+            <CallToggle name="callNotificationsEnabled" label="Notifications d'appel" description="Afficher les alertes liées aux appels de vos groupes." checked={user.callNotificationsEnabled ?? true} />
+            <CallToggle name="floatingCallAlertsEnabled" label="Alertes flottantes d'appel" description="Afficher une carte discrète quand un appel démarre ou se termine." checked={user.floatingCallAlertsEnabled ?? true} />
+            <CallToggle name="participantEventAlertsEnabled" label="Entrées et sorties de participants" description="Signaler quand un collaborateur rejoint ou quitte un appel." checked={user.participantEventAlertsEnabled ?? true} />
+            <CallToggle name="callAlertSoundEnabled" label="Son avec les alertes flottantes" description="Associer un son discret aux cartes d'appel." checked={user.callAlertSoundEnabled ?? true} />
+            <CallToggle name="incomingCallBannerEnabled" label="Bannière d'appel entrant" description="Mettre en avant les appels en cours dans les conversations." checked={user.incomingCallBannerEnabled ?? true} />
+            <CallToggle name="connectionIssueSoundsEnabled" label="Son de problème de connexion" description="Prévenir discrètement en cas d'instabilité." checked={user.connectionIssueSoundsEnabled ?? true} />
+            <CallToggle name="startMutedByDefault" label="Démarrer avec micro coupé" description="Rejoindre les appels sans transmettre votre micro." checked={user.startMutedByDefault ?? false} />
+            <CallToggle name="startCameraOffByDefault" label="Démarrer avec caméra désactivée" description="Rejoindre les appels vidéo avec la caméra coupée." checked={user.startCameraOffByDefault ?? true} />
+            <label className="grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+              <span className="flex items-center gap-2 font-bold text-dtsc-ink"><Volume2 className="h-4 w-4 text-cyan-500" /> Volume des sons</span>
+              <input name="callSoundVolume" type="range" min={0} max={100} defaultValue={user.callSoundVolume ?? 45} className="accent-cyan-500" />
+            </label>
+            <label className="grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+              <span className="font-bold text-dtsc-ink">Durée des alertes flottantes</span>
+              <select name="callAlertDisplayDuration" defaultValue={user.callAlertDisplayDuration || 6000} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value={3500}>3,5 secondes</option>
+                <option value={6000}>6 secondes</option>
+                <option value={9000}>9 secondes</option>
+                <option value={12000}>12 secondes</option>
+              </select>
+            </label>
+            <input type="hidden" name="preferredAudioInputId" value={user.preferredAudioInputId || ""} />
+            <input type="hidden" name="preferredVideoInputId" value={user.preferredVideoInputId || ""} />
+            <input type="hidden" name="preferredAudioOutputId" value={user.preferredAudioOutputId || ""} />
+            <Button variant="outline" className="w-full rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              Enregistrer les paramètres d&apos;appel
+            </Button>
+            {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
+          </form>
+          </div>
+        </section>
       </aside>
     </div>
+  );
+}
+
+function CallPreferenceHiddenFields({ user }: { user: SettingsUser }) {
+  return (
+    <>
+      {user.callSoundsEnabled ?? true ? <input type="hidden" name="callSoundsEnabled" value="on" /> : null}
+      {user.callNotificationsEnabled ?? true ? <input type="hidden" name="callNotificationsEnabled" value="on" /> : null}
+      {user.floatingCallAlertsEnabled ?? true ? <input type="hidden" name="floatingCallAlertsEnabled" value="on" /> : null}
+      {user.participantEventAlertsEnabled ?? true ? <input type="hidden" name="participantEventAlertsEnabled" value="on" /> : null}
+      {user.callAlertSoundEnabled ?? true ? <input type="hidden" name="callAlertSoundEnabled" value="on" /> : null}
+      {user.incomingCallBannerEnabled ?? true ? <input type="hidden" name="incomingCallBannerEnabled" value="on" /> : null}
+      {user.connectionIssueSoundsEnabled ?? true ? <input type="hidden" name="connectionIssueSoundsEnabled" value="on" /> : null}
+      {user.startMutedByDefault ? <input type="hidden" name="startMutedByDefault" value="on" /> : null}
+      {user.startCameraOffByDefault ?? true ? <input type="hidden" name="startCameraOffByDefault" value="on" /> : null}
+      <input type="hidden" name="callSoundVolume" value={user.callSoundVolume ?? 45} />
+      <input type="hidden" name="callAlertDisplayDuration" value={user.callAlertDisplayDuration ?? 6000} />
+      <input type="hidden" name="preferredAudioInputId" value={user.preferredAudioInputId || ""} />
+      <input type="hidden" name="preferredVideoInputId" value={user.preferredVideoInputId || ""} />
+      <input type="hidden" name="preferredAudioOutputId" value={user.preferredAudioOutputId || ""} />
+    </>
+  );
+}
+
+function CallToggle({
+  name,
+  label,
+  description,
+  checked,
+}: {
+  name: string;
+  label: string;
+  description: string;
+  checked: boolean;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+      <span>
+        <span className="block font-bold text-dtsc-ink">{label}</span>
+        <span className="text-xs">{description}</span>
+      </span>
+      <input name={name} type="checkbox" defaultChecked={checked} className="h-4 w-4 shrink-0 accent-cyan-500" />
+    </label>
   );
 }
 

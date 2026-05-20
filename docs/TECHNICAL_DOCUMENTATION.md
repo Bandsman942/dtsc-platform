@@ -55,6 +55,8 @@ Objectifs couverts par le code actuel:
 
 Les appels audio/vidéo sont persistés dans `CollaborationGroupCall`, `CollaborationGroupCallParticipant` et `CollaborationGroupCallEvent`. Chaque appel appartient à un groupe `CollaborationGroup`; un appel peut aussi être lié à une réunion COO via `meetingId`.
 
+L'UX d'appel masque le fournisseur technique aux utilisateurs finaux: l'UI affiche uniquement des états humains comme `Appel connecté`, `Connexion à l'appel`, `Micro coupé` ou `Appel terminé`. Les erreurs du fournisseur sont conservées côté logs/API, mais ne doivent pas être rendues brutes dans les composants React.
+
 Routes principales:
 
 - `GET /api/collaborators/groups/[id]/calls`: retourne l'appel actif et l'historique récent du groupe. Accès réservé aux membres actifs du groupe.
@@ -62,6 +64,7 @@ Routes principales:
 - `POST /api/collaborators/calls/[id]/join`: vérifie l'appartenance au groupe, génère un token LiveKit temporaire côté serveur et marque le participant comme connecté.
 - `POST /api/collaborators/calls/[id]/leave`: marque le participant comme sorti et historise l'événement.
 - `POST /api/collaborators/calls/[id]/end`: réservé au lanceur de l'appel, propriétaire/admin du groupe ou admin plateforme; termine l'appel et libère la réunion liée.
+- `GET /api/collaborators/calls/events`: retourne les événements récents d'appels des groupes dont l'utilisateur est membre actif. Cette route alimente l'alerte flottante globale avec un polling léger, en fallback à une infrastructure temps réel dédiée.
 
 Variables requises pour rejoindre réellement une room:
 
@@ -70,6 +73,16 @@ Variables requises pour rejoindre réellement une room:
 - `LIVEKIT_URL`
 
 Ces secrets ne doivent jamais être exposés côté client. `lib/livekit-service.ts` génère uniquement des JWT participants temporaires pour les membres autorisés. Si LiveKit n'est pas configuré, la route de jonction retourne une erreur explicite `503` sans exposer de secret.
+
+Préférences utilisateur d'appel persistées sur `User`:
+
+- `callSoundsEnabled`, `callNotificationsEnabled`, `floatingCallAlertsEnabled`, `participantEventAlertsEnabled`, `callAlertSoundEnabled`;
+- `incomingCallBannerEnabled`, `connectionIssueSoundsEnabled`;
+- `startMutedByDefault`, `startCameraOffByDefault`;
+- `callSoundVolume`, `callAlertDisplayDuration`;
+- préférences de périphériques `preferredAudioInputId`, `preferredVideoInputId`, `preferredAudioOutputId` lorsque le navigateur les permet.
+
+`CollaborationGroupCall.durationSeconds` est renseigné lors de la fin globale d'un appel et sert à afficher l'historique sobre du groupe. Le bouton `Quitter` appelle uniquement la sortie participant, tandis que `Terminer` clôt l'appel pour tous et reste protégé côté API.
 
 Les réunions COO disposent de `meetingMode`:
 

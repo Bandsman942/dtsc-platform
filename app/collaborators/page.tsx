@@ -4,8 +4,9 @@ import { requireUser } from "@/lib/auth";
 import { touchUserPresence } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 
-export default async function CollaboratorsPage() {
+export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string }> }) {
   const user = await requireUser();
+  const params = await searchParams;
   await touchUserPresence(user.id);
   const [groups, invitations, users, conversations] = await Promise.all([
     prisma.collaborationGroup.findMany({
@@ -100,11 +101,25 @@ export default async function CollaboratorsPage() {
         </section>
         <CollaboratorsWorkspace
           currentUserId={user.id}
+          initialActiveGroupId={params?.groupId || null}
           userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
           initialGroups={JSON.parse(JSON.stringify(groupsWithMentionState))}
           initialInvitations={JSON.parse(JSON.stringify(invitations))}
           users={JSON.parse(JSON.stringify(users))}
           conversations={JSON.parse(JSON.stringify(conversations))}
+          callPreferences={{
+            callSoundsEnabled: user.callSoundsEnabled,
+            callNotificationsEnabled: user.callNotificationsEnabled,
+            floatingCallAlertsEnabled: user.floatingCallAlertsEnabled,
+            participantEventAlertsEnabled: user.participantEventAlertsEnabled,
+            callAlertSoundEnabled: user.callAlertSoundEnabled,
+            incomingCallBannerEnabled: user.incomingCallBannerEnabled,
+            connectionIssueSoundsEnabled: user.connectionIssueSoundsEnabled,
+            startMutedByDefault: user.startMutedByDefault,
+            startCameraOffByDefault: user.startCameraOffByDefault,
+            callSoundVolume: user.callSoundVolume,
+            callAlertDisplayDuration: user.callAlertDisplayDuration,
+          }}
         />
       </div>
     </AppShell>

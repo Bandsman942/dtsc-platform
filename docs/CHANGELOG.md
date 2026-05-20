@@ -7,9 +7,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Corrigé
 
 - Correction d'une régression de rendu global causée par l'import direct des styles LiveKit dans `app/globals.css`; les styles d'appel sont maintenant scoped via `.dtsc-livekit-room` afin de préserver le design premium global.
+- Amélioration de l'UX des appels audio/vidéo: suppression des libellés techniques visibles, messages d'état humains, bouton micro relié à la piste audio réelle, séparation stricte entre `Quitter` et `Terminer`, durée d'appel affichée et durée finale persistée.
 
 ### Ajouté
 
+- Ajout de préférences d'appel persistées par utilisateur: sons, notifications, alertes flottantes, événements participants, volume, durée des alertes et démarrage micro/caméra.
+- Ajout d'une alerte flottante globale d'événements d'appel alimentée par une route sécurisée avec polling léger pour les groupes dont l'utilisateur est membre.
 - Ajout d'une architecture persistée d'appels audio/vidéo pour les groupes `Mes collaborateurs`, avec sessions d'appel, participants, événements, messages système, notifications et audit de groupe.
 - Ajout du service backend `lib/livekit-service.ts` pour générer des tokens LiveKit temporaires côté serveur sans exposer les clés LiveKit au frontend.
 - Ajout du mode de tenue des réunions COO: commentaires uniquement, audio ou vidéo. Les réunions audio/vidéo créent automatiquement un groupe de réunion dédié ou lient un groupe existant.

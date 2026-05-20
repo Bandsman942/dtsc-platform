@@ -29,7 +29,7 @@ export async function POST(req: Request, { params }: Params) {
   }
   if (!isLiveKitConfigured()) {
     await writeApiLog({ request: req, statusCode: 503, userId: session.userId, startedAt });
-    return NextResponse.json({ message: "LiveKit n'est pas configuré. Ajoutez LIVEKIT_API_KEY, LIVEKIT_API_SECRET et LIVEKIT_URL côté Vercel." }, { status: 503 });
+    return NextResponse.json({ message: "Les appels ne sont pas encore configurés pour cet environnement." }, { status: 503 });
   }
 
   const parsed = collaborationCallParticipantSchema.safeParse(await req.json().catch(() => ({})));

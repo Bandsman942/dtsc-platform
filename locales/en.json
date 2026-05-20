@@ -76,6 +76,32 @@
   "settings": {
     "language": "Language",
     "timezone": "Time zone",
-    "dateFormat": "Date format"
+    "dateFormat": "Date format",
+    "callSettings": "Call settings",
+    "callSounds": "Call sounds",
+    "callNotifications": "Call notifications",
+    "floatingCallAlerts": "Floating call alerts",
+    "startMuted": "Start muted",
+    "startCameraOff": "Start with camera off"
+  },
+  "calls": {
+    "connected": "Call connected",
+    "connecting": "Connecting to call...",
+    "reconnecting": "Reconnecting...",
+    "unstable": "Unstable connection",
+    "interrupted": "Call interrupted",
+    "ended": "Call ended",
+    "join": "Join call",
+    "viewGroup": "View group",
+    "dismiss": "Dismiss",
+    "leave": "Leave",
+    "end": "End",
+    "microphoneMuted": "Microphone muted",
+    "microphoneOn": "Microphone on",
+    "cameraOff": "Camera off",
+    "audioStarted": "Audio call started",
+    "videoStarted": "Video call started",
+    "joined": "joined the call",
+    "left": "left the call"
   }
 }

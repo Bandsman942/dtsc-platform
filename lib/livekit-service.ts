@@ -40,7 +40,7 @@ export function generateLiveKitParticipantToken({
   const apiKey = process.env.LIVEKIT_API_KEY;
   const apiSecret = process.env.LIVEKIT_API_SECRET;
   if (!apiKey || !apiSecret) {
-    throw new Error("LiveKit n'est pas configuré pour DTSC Platform.");
+    throw new Error("Les appels ne sont pas configurés pour cet environnement.");
   }
 
   const now = Math.floor(Date.now() / 1000);

@@ -26,11 +26,13 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const endedAt = new Date();
+  const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - call.startedAt.getTime()) / 1000));
   await prisma.$transaction(async (tx) => {
-    await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ENDED", endedAt: new Date() } });
+    await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ENDED", endedAt, durationSeconds } });
     await tx.collaborationGroupCallParticipant.updateMany({
       where: { callId: call.id, status: { in: ["INVITED", "JOINED"] } },
-      data: { status: "LEFT", leftAt: new Date() },
+      data: { status: "LEFT", leftAt: endedAt },
     });
     await tx.collaborationGroupCallEvent.create({
       data: {

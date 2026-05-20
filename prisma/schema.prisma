@@ -94,6 +94,20 @@ model User {
   locale String @default("fr")
   timezone String @default("Africa/Kinshasa")
   dateFormat String @default("FR")
+  callSoundsEnabled Boolean @default(true)
+  callNotificationsEnabled Boolean @default(true)
+  floatingCallAlertsEnabled Boolean @default(true)
+  participantEventAlertsEnabled Boolean @default(true)
+  callAlertSoundEnabled Boolean @default(true)
+  incomingCallBannerEnabled Boolean @default(true)
+  connectionIssueSoundsEnabled Boolean @default(true)
+  startMutedByDefault Boolean @default(false)
+  startCameraOffByDefault Boolean @default(true)
+  callSoundVolume Int @default(45)
+  callAlertDisplayDuration Int @default(6000)
+  preferredAudioInputId String?
+  preferredVideoInputId String?
+  preferredAudioOutputId String?
   emailDigestFrequency String @default("WEEKLY")
   chatResponseStyle String @default("PROFESSIONAL")
   chatResponseLength String @default("BALANCED")
@@ -1577,6 +1591,7 @@ model CollaborationGroupCall {
   startedById String
   startedAt   DateTime @default(now())
   endedAt     DateTime?
+  durationSeconds Int?
   createdAt   DateTime @default(now())
   group       CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   participants CollaborationGroupCallParticipant[]
