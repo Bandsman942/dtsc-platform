@@ -373,6 +373,7 @@ function RecordCard({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const attachmentHref = typeof record.href === "string" && record.href.length > 0 ? record.href : undefined;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -400,12 +401,12 @@ function RecordCard({
         )}
       </div>
       {record.notes && <p className="mt-3 text-sm leading-6 text-dtsc-muted">{record.notes}</p>}
-      {record.href && <FileAttachmentPreview href={record.href} label={record.hrefLabel || "Document joint"} />}
+      {attachmentHref && <FileAttachmentPreview href={attachmentHref} label={record.hrefLabel || "Document joint"} />}
       <div className="mt-4 flex justify-end">
         <ActionMenu
           items={[
             ...(canEdit ? [{ key: "edit", label: "Modifier", icon: Save, onSelect: () => setEditOpen(true) }] : []),
-            ...(record.href ? [{ key: "download", label: "Télécharger le fichier", icon: Download, onSelect: () => window.open(record.href, "_blank", "noopener,noreferrer") }] : []),
+            ...(attachmentHref ? [{ key: "download", label: "Télécharger le fichier", icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
             ...(canEdit ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setConfirmDelete(true) }] : []),
           ]}
         />
