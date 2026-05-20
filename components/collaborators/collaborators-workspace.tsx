@@ -1215,7 +1215,7 @@ function GroupCallRoom({
             audio={microphoneEnabled}
             video={joinedCall.call.callType === "VIDEO" && cameraEnabled}
             data-lk-theme="default"
-            className="h-full min-h-[30rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950"
+            className="dtsc-livekit-room h-full min-h-[30rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950"
             onDisconnected={() => { void onLeave(); }}
           >
             {joinedCall.call.callType === "VIDEO" ? (

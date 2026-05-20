@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@livekit/components-styles";
 @source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
@@ -43,6 +42,37 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer components {
+  .dtsc-livekit-room {
+    --lk-bg: #06111f;
+    --lk-fg: #f8fafc;
+    --lk-accent-bg: #22d3ee;
+    --lk-accent-fg: #001736;
+    --lk-control-bg: rgba(255, 255, 255, 0.12);
+    --lk-control-fg: #f8fafc;
+  }
+
+  .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout, .lk-participant-tile) {
+    min-width: 0;
+    background: #06111f;
+    color: #f8fafc;
+  }
+
+  .dtsc-livekit-room :where(.lk-button, button[class*="lk-"]) {
+    border-radius: 999px;
+    border: 1px solid rgba(34, 211, 238, 0.28);
+    background: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+    font-weight: 800;
+  }
+
+  .dtsc-livekit-room :where(.lk-control-bar) {
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(6, 17, 31, 0.92);
+    backdrop-filter: blur(14px);
+  }
 }
 
 :root {

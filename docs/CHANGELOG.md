@@ -4,6 +4,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-05-20
 
+### Corrigé
+
+- Correction d'une régression de rendu global causée par l'import direct des styles LiveKit dans `app/globals.css`; les styles d'appel sont maintenant scoped via `.dtsc-livekit-room` afin de préserver le design premium global.
+
 ### Ajouté
 
 - Ajout d'une architecture persistée d'appels audio/vidéo pour les groupes `Mes collaborateurs`, avec sessions d'appel, participants, événements, messages système, notifications et audit de groupe.
