@@ -73,7 +73,11 @@ function normalizedNotificationText(notification: NotificationItem) {
   return `${notification.title} ${notification.body}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 }
 
-function filterNotification(notification: NotificationItem, filterId: string) {
+function isCallNotification(type: string, searchable: string) {
+  return type.includes("CALL") || /\b(APPEL|AUDIO|VIDEO)\b/.test(searchable);
+}
+
+function filterNotification(notification: NotificationItem, filterId: string): boolean {
   const type = notification.type.toUpperCase();
   const targetUrl = notification.targetUrl || fallbackTarget(type);
   const searchable = normalizedNotificationText(notification);
@@ -84,10 +88,10 @@ function filterNotification(notification: NotificationItem, filterId: string) {
     return type.includes("MENTION") || /(^|\s)@[\w.-]+/.test(`${notification.title} ${notification.body}`) || /\bMENTION(?:NE|NEE|S)?\b/.test(searchable);
   }
   if (filterId === "calls") {
-    return type.includes("CALL") || /\b(APPEL|AUDIO|VIDEO)\b/.test(searchable);
+    return isCallNotification(type, searchable);
   }
   if (filterId === "groups") {
-    return type === "COLLABORATION" && targetUrl.startsWith("/collaborators") && !filterNotification(notification, "calls");
+    return type === "COLLABORATION" && targetUrl.startsWith("/collaborators") && !isCallNotification(type, searchable);
   }
   if (filterId === "announcements") {
     return type === "ANNOUNCEMENT" || targetUrl.startsWith("/announcements");
