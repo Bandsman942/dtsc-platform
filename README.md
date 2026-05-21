@@ -57,6 +57,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.
+- Conversations mobiles optimisées: dialogs hauts, fils de groupe/chatbot plus immersifs, cartes de groupes plus lisibles et chat texte disponible pendant les appels de groupe.
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
 - Chatbot privé capable, après confirmation explicite, d'envoyer un message à DTSC ou de créer un ticket support à partir des informations collectées
 - Historique des conversations et messages en base, avec dates/heures selon les préférences utilisateur, classement par dossier/projet et CRUD des dossiers

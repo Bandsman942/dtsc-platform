@@ -232,6 +232,12 @@ Conserver une hiérarchie visible pour:
 
 - Le design mobile/PWA premium intégré depuis `dtsc-platform-redesign.zip` devient la référence visuelle des espaces privés: header compact, navigation bottom, cartes glass/premium, safe-area mobile, ombres douces et animations sobres.
 - Toute nouvelle interface mobile doit suivre la logique liste -> recherche/filtres -> pagination -> détail plein écran -> commentaires/fichiers/actions; ne jamais empiler liste, détail, formulaire et commentaires dans une longue page mobile.
+- Les modales mobiles doivent exploiter davantage la hauteur réelle de l'écran (`90-95dvh` quand pertinent), avec header/footer fixes, contenu scrollable interne, safe-area respectée et sans double scroll du body.
+- Les conversations, commentaires et messages sont prioritaires sur mobile: réduire les composants secondaires, historiques systèmes, cartes de contexte et éléments décoratifs pour donner plus d'espace utile au fil principal.
+- Les cartes de réunion liée, historiques d'appels et résumés opérationnels affichés au-dessus d'un fil doivent rester compacts ou collapsibles par défaut; le détail complet doit aller en modale, drawer ou panneau secondaire.
+- Les messages systèmes d'appels doivent rester discrets, courts et peu hauts, sur le modèle WhatsApp/Discord, tout en restant persistés et lisibles.
+- Pendant un appel audio/vidéo, les participants doivent pouvoir écrire dans un chat léger relié au groupe; ces messages doivent utiliser la route de messagerie de groupe, rester persistés, supporter les mentions et respecter l'appartenance/RBAC côté API.
+- Les zones messages des conversations de groupe et du chatbot doivent rester scrollables avec la saisie accessible en bas, et maximiser la largeur utile des bulles/cartes sur petits écrans sans casser tablette/desktop.
 - Les composants issus d'un prototype ou d'un ZIP de design ne doivent jamais remplacer aveuglément les modules existants. Les écrans mockés sont interdits dans les modules connectés au backend; ils doivent être remplacés par les données réelles, routes API, hooks et services existants.
 - Les formulaires longs doivent être encapsulés dans une modale, sheet, accordion ou vue dédiée mobile; les menus `...` restent le standard des actions contextuelles et destructives.
 - La navigation mobile principale doit privilégier `Accueil`, `IA`, `Activités`, `Collaborateurs` et `Notifications`; les autres modules restent accessibles via actions rapides, menu secondaire, profil, paramètres ou administration selon permissions.

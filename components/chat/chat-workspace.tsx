@@ -336,7 +336,7 @@ export function ChatWorkspace({
   }
 
   const historyPanel = (
-    <aside className="dtsc-card flex h-full min-h-0 flex-col overflow-hidden p-4">
+    <aside className="dtsc-card flex h-full min-h-0 flex-col overflow-hidden p-3 sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <Button onClick={createConversation} className="h-11 flex-1 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <Plus className="h-4 w-4" />
@@ -353,7 +353,7 @@ export function ChatWorkspace({
           <FolderPlus className="h-4 w-4" />
         </Button>
       </div>
-      <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 sm:mt-4 sm:space-y-3">
         {conversations.length > 0 && (
           <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
             <ListControls
@@ -454,7 +454,7 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className="relative grid h-[calc(100dvh-8.5rem)] min-h-[620px] gap-4 lg:h-[calc(100vh-7rem)] lg:min-h-0 lg:grid-cols-[320px_1fr]">
+    <div className="relative grid h-[calc(100dvh-7.25rem)] min-h-0 gap-3 sm:h-[calc(100dvh-8rem)] lg:h-[calc(100vh-7rem)] lg:grid-cols-[320px_1fr]">
       <div className="hidden min-h-0 lg:block">{historyPanel}</div>
       {historyOpen && (
         <div className="fixed inset-0 z-40 bg-[#001736]/55 backdrop-blur-sm lg:hidden" onClick={() => setHistoryOpen(false)}>
@@ -469,13 +469,13 @@ export function ChatWorkspace({
         </div>
       )}
 
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4">
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-4">
           <Button type="button" variant="outline" size="icon" onClick={() => setHistoryOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden" aria-label="Ouvrir les conversations">
             <Menu className="h-4 w-4" />
           </Button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-[#001736]">
+            <h1 className="truncate text-lg font-bold text-[#001736] sm:text-xl">
               {activeConversation?.title || "Assistant DTSC"}
             </h1>
             <div className="mt-1 flex items-center gap-2">
@@ -498,7 +498,7 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[#faf9fe] px-4 py-6 lg:px-8">
+        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#faf9fe] px-3 py-3 sm:px-4 sm:py-5 lg:px-8">
           {!messages.length && (
             <div className="mx-auto flex h-full max-w-2xl flex-col justify-center text-center">
               <p className="text-3xl font-bold text-[#001736]">Comment DTSC peut vous aider ?</p>
@@ -507,7 +507,7 @@ export function ChatWorkspace({
               </p>
             </div>
           )}
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-5">
             {messages.map((message) => {
               const participantColor = getParticipantColor(message.role === "assistant" ? "dtsc-assistant" : "current-user");
               return (
@@ -519,7 +519,7 @@ export function ChatWorkspace({
                 )}
                 <div
                   className={cn(
-                    "group max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-[0_4px_20px_rgba(0,43,91,0.05)]",
+                    "group max-w-[92%] rounded-2xl px-3 py-2.5 text-sm leading-6 shadow-[0_4px_20px_rgba(0,43,91,0.05)] sm:max-w-[88%] sm:px-4 sm:py-3",
                     message.role === "user"
                       ? "rounded-tr-sm bg-[#002b5b] text-white"
                       : "rounded-tl-sm bg-white text-slate-800"
@@ -569,11 +569,11 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        <form onSubmit={sendMessage} className="border-t border-slate-200 bg-white p-4">
-          <p className="mb-2 text-center text-[0.72rem] font-medium text-slate-500">
+        <form onSubmit={sendMessage} className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
+          <p className="mb-2 hidden text-center text-[0.72rem] font-medium text-slate-500 sm:block">
             Le chatbot DTSC peut se tromper. Vérifiez les informations importantes avant toute décision.
           </p>
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)] sm:gap-3 sm:p-2">
             <Input
               value={input}
               onChange={(event) => setInput(event.target.value)}

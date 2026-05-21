@@ -163,6 +163,7 @@ export function CollaboratorsWorkspace({
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
   const isGroupOwner = activeMember?.role === "OWNER";
   const activeCall = activeGroup?.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE") || null;
+  const activeCallId = activeCall?.id || "";
   const canEndActiveCall = Boolean(activeCall && (activeCall.startedById === currentUserId || canManage));
   const availableInviteUsers = useMemo(() => {
     const activeMemberIds = new Set(activeGroup?.members.map((member) => member.userId) || []);
@@ -235,7 +236,7 @@ export function CollaboratorsWorkspace({
     }
   }, [callPreferences.callSoundVolume, callPreferences.callSoundsEnabled, groups, joinedCall]);
 
-  async function loadMessages(groupId: string, cursor?: string | null) {
+  const loadMessages = useCallback(async (groupId: string, cursor?: string | null) => {
     if (!groupId) {
       setMessages([]);
       setMessagesCursor(null);
@@ -260,11 +261,23 @@ export function CollaboratorsWorkspace({
       await fetch(`/api/collaborators/groups/${groupId}/mentions/read`, { method: "POST" }).catch(() => null);
       setGroups((current) => current.map((group) => group.id === groupId ? { ...group, unreadMentionCount: 0, unreadMentionPreview: null, lastMentionAt: null } : group));
     }
-  }
+  }, []);
 
   useEffect(() => {
-    loadMessages(activeGroupId);
-  }, [activeGroupId]);
+    void loadMessages(activeGroupId);
+  }, [activeGroupId, loadMessages]);
+
+  useEffect(() => {
+    if (!activeGroupId || !activeCallId) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadMessages(activeGroupId);
+      }
+    }, 4500);
+    return () => window.clearInterval(interval);
+  }, [activeCallId, activeGroupId, loadMessages]);
 
   async function openSharedSnapshot(snapshotId: string) {
     const response = await fetch(`/api/collaborators/shared-conversations/${snapshotId}`);
@@ -465,8 +478,8 @@ export function CollaboratorsWorkspace({
   }
 
   return (
-    <div className="grid h-[calc(100dvh-8rem)] min-w-0 gap-5 overflow-hidden xl:grid-cols-[360px_minmax(0,1fr)]">
-      <aside className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden p-4", activeGroup && !mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
+    <div className="grid h-[calc(100dvh-7.25rem)] min-w-0 gap-3 overflow-hidden sm:h-[calc(100dvh-8rem)] xl:grid-cols-[360px_minmax(0,1fr)]">
+      <aside className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden p-3 sm:p-4", activeGroup && !mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-black text-dtsc-ink">Groupes</h2>
@@ -492,7 +505,7 @@ export function CollaboratorsWorkspace({
             ))}
           </div>
         )}
-        <div className="mt-4">
+        <div className="mt-3 sm:mt-4">
           <ListControls
             query={groupList.query}
             onQueryChange={groupList.setQuery}
@@ -504,8 +517,11 @@ export function CollaboratorsWorkspace({
             onPageChange={groupList.setPage}
           />
         </div>
-        <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-          {groupList.paginatedItems.map((group) => (
+        <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5 sm:mt-4 sm:pr-1">
+          {groupList.paginatedItems.map((group) => {
+            const groupActiveCall = group.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE");
+            const activeParticipantCount = groupActiveCall?.participants?.filter((participant) => participant.status === "JOINED").length || 0;
+            return (
             <button
               key={group.id}
               type="button"
@@ -514,25 +530,35 @@ export function CollaboratorsWorkspace({
                 setMobileGroupListOpen(false);
               }}
               className={cn(
-                "w-full rounded-2xl border p-4 text-left transition",
+                "w-full rounded-[1.35rem] border p-3 text-left transition sm:p-4",
                 group.unreadMentionCount ? "border-cyan-300 bg-cyan-400/10 shadow-[0_14px_40px_rgba(0,186,217,0.12)]" : activeGroupId === group.id ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page hover:border-cyan-300"
               )}
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate font-black text-dtsc-ink">{group.name}</span>
-                {Boolean(group.unreadMentionCount) && <span className="shrink-0 rounded-full bg-cyan-300 px-2 py-0.5 text-[0.68rem] font-black text-[#001736]">@ {group.unreadMentionCount}</span>}
+                <span className="flex shrink-0 items-center gap-1">
+                  {groupActiveCall && <span className="rounded-full bg-emerald-400/18 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-emerald-600">Live</span>}
+                  {Boolean(group.unreadMentionCount) && <span className="rounded-full bg-cyan-300 px-2 py-0.5 text-[0.68rem] font-black text-[#001736]">@ {group.unreadMentionCount}</span>}
+                </span>
               </span>
               <span className="mt-1 block text-xs text-dtsc-muted">{formatEnumLabel(group.groupType)} · {group._count?.members ?? group.members.length} membres · {group._count?.messages ?? 0} messages</span>
+              {groupActiveCall && (
+                <span className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-400/10 px-2.5 py-1.5 text-[0.68rem] font-black text-emerald-700 dark:text-emerald-200">
+                  {groupActiveCall.callType === "VIDEO" ? <Video className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+                  Appel {groupActiveCall.callType === "VIDEO" ? "vidéo" : "audio"} · {activeParticipantCount} en ligne
+                </span>
+              )}
               <span className={cn("mt-2 block truncate text-xs", group.unreadMentionCount ? "font-bold text-cyan-600" : "text-dtsc-muted")}>{group.unreadMentionPreview || group.messages[0]?.content || group.description || "Aucun message récent."}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
       </aside>
 
       <section className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden", activeGroup && mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
         {activeGroup ? (
           <>
-            <div className="shrink-0 border-b border-dtsc-border p-3 sm:p-4">
+            <div className="shrink-0 border-b border-dtsc-border p-2.5 sm:p-4">
               <div className="flex items-center justify-between gap-3">
                 <Button type="button" variant="outline" size="icon" onClick={() => setMobileGroupListOpen(true)} className="shrink-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue xl:hidden">
                   <ArrowLeft className="h-4 w-4" />
@@ -540,15 +566,15 @@ export function CollaboratorsWorkspace({
                 <button
                   type="button"
                   onClick={() => setGroupDetailsOpen(true)}
-                  className="min-w-0 flex-1 rounded-2xl p-2 text-left transition hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  className="min-w-0 flex-1 rounded-2xl p-1.5 text-left transition hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300 sm:p-2"
                   aria-label={`Voir les détails du groupe ${activeGroup.name}`}
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/15 text-sm font-black text-cyan-500">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/15 text-sm font-black text-cyan-500 sm:h-11 sm:w-11">
                       {activeGroup.name.slice(0, 2).toUpperCase()}
                     </span>
                     <div className="min-w-0">
-                      <h2 className="truncate text-xl font-black text-dtsc-ink sm:text-2xl">{activeGroup.name}</h2>
+                      <h2 className="truncate text-lg font-black text-dtsc-ink sm:text-2xl">{activeGroup.name}</h2>
                       <p className="truncate text-xs font-bold text-dtsc-muted">{activeGroup.members.length} membre(s) · {formatEnumLabel(activeGroup.status)} · Détails au clic</p>
                     </div>
                   </div>
@@ -599,24 +625,32 @@ export function CollaboratorsWorkspace({
               </div>
             </div>
             {activeCall && (
-              <div className="border-b border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-700 dark:text-cyan-200">
-                Appel en cours · {activeCall.callType === "VIDEO" ? "vidéo" : "audio"} · {formatCallDurationFromStart(activeCall.startedAt)} · {activeCall.participants?.filter((participant) => participant.status === "JOINED").length || 0} participant(s) connecté(s)
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-black text-cyan-700 dark:text-cyan-200 sm:px-4">
+                <span className="min-w-0 truncate">Appel {activeCall.callType === "VIDEO" ? "vidéo" : "audio"} · {formatCallDurationFromStart(activeCall.startedAt)} · {activeCall.participants?.filter((participant) => participant.status === "JOINED").length || 0} connecté(s)</span>
+                <Button type="button" size="sm" onClick={() => joinGroupCall(activeCall)} className="h-7 shrink-0 rounded-full bg-cyan-500 px-3 text-[0.68rem] font-black text-[#001736] hover:bg-cyan-300">
+                  Rejoindre
+                </Button>
               </div>
             )}
             <CallHistoryStrip group={activeGroup} userPreferences={userPreferences} />
             {activeGroup.groupType === "MEETING" && (
-              <div className="border-b border-dtsc-border bg-dtsc-surface px-4 py-3">
-                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
-                  <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300">Réunion COO liée</p>
-                  <p className="mt-1 font-black">{activeGroup.name}</p>
-                  <p className="mt-1 text-xs opacity-80">Préparation, discussion, appel, compte rendu et décisions restent attachés à ce groupe de réunion.</p>
+              <details className="shrink-0 border-b border-dtsc-border bg-dtsc-surface px-3 py-2 sm:px-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
+                  <span className="min-w-0">
+                    <span className="block text-[0.62rem] font-black uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300">Réunion COO liée</span>
+                    <span className="block truncate font-black">{activeGroup.name}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-[0.66rem] font-black text-cyan-800 dark:bg-white/10 dark:text-cyan-100">Voir plus</span>
+                </summary>
+                <div className="mt-2 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
+                  <p className="text-xs opacity-80">Préparation, discussion, appel, compte rendu et décisions restent attachés à ce groupe de réunion.</p>
                   {activeCall ? (
-                    <Button type="button" size="sm" onClick={() => joinGroupCall(activeCall)} className="mt-3 rounded-xl bg-cyan-500 text-[#001736] hover:bg-cyan-300">
+                    <Button type="button" size="sm" onClick={() => joinGroupCall(activeCall)} className="mt-2 rounded-xl bg-cyan-500 text-[#001736] hover:bg-cyan-300">
                       <PhoneCall className="h-4 w-4" />
                       Rejoindre l&apos;appel
                     </Button>
                   ) : (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                       <Button type="button" size="sm" variant="outline" onClick={() => startGroupCall("AUDIO")} className="rounded-xl border-cyan-300 bg-white text-[#002b5b]">
                         <Phone className="h-4 w-4" />
                         Démarrer audio
@@ -628,7 +662,7 @@ export function CollaboratorsWorkspace({
                     </div>
                   )}
                 </div>
-              </div>
+              </details>
             )}
             <MessageThread
               key={activeGroup.id}
@@ -760,10 +794,19 @@ export function CollaboratorsWorkspace({
           <GroupCallRoom
             joinedCall={joinedCall}
             group={activeGroup}
+            messages={messages}
+            currentUserId={currentUserId}
+            userPreferences={userPreferences}
             callPreferences={callPreferences}
             canEnd={joinedCall.call.startedById === currentUserId || canManage}
             onLeave={leaveJoinedCall}
             onEnd={() => endGroupCall(joinedCall.call)}
+            onMessageSent={async () => {
+              if (activeGroup) {
+                await loadMessages(activeGroup.id);
+                await refresh();
+              }
+            }}
           />
         )}
       </Dialog>
@@ -962,7 +1005,7 @@ function MessageThread({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-dtsc-page p-4">
+      <div ref={messageListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-dtsc-page p-3 sm:space-y-3 sm:p-4">
         {hasOlderMessages && (
           <div className="flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={onLoadOlder} disabled={isLoadingOlderMessages} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
@@ -987,7 +1030,7 @@ function MessageThread({
         ))}
         {!messages.length && <p className="rounded-xl bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun message dans ce groupe.</p>}
       </div>
-      <form onSubmit={sendMessage} className="relative shrink-0 border-t border-dtsc-border p-4">
+      <form onSubmit={sendMessage} className="relative shrink-0 border-t border-dtsc-border p-3 sm:p-4">
         {replyTo && (
           <div className="mb-3 flex items-start justify-between gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
             <div className="min-w-0">
@@ -1012,7 +1055,7 @@ function MessageThread({
             })}
           </div>
         )}
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3">
           <Input value={content} onChange={(event) => setContent(event.target.value)} placeholder="Écrire un message ou mentionner @collaborateur..." className="rounded-xl bg-dtsc-page" required />
           <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /></Button>
         </div>
@@ -1048,20 +1091,20 @@ function GroupMessageBubble({
   if (message.messageType === "SYSTEM") {
     return (
       <div className="flex justify-center">
-        <div className="max-w-[92%] rounded-full border border-dtsc-border bg-dtsc-soft px-4 py-2 text-center text-xs font-bold text-dtsc-muted">
+        <div className="max-w-[92%] rounded-full border border-dtsc-border bg-dtsc-soft px-2.5 py-1 text-center text-[0.68rem] font-bold leading-4 text-dtsc-muted sm:px-3">
           {message.content}
-          <span className="ml-2 font-semibold opacity-70">{formatRelativeUserDateTime(message.createdAt, userPreferences)}</span>
+          <span className="ml-1.5 font-semibold opacity-70">{formatRelativeUserDateTime(message.createdAt, userPreferences)}</span>
         </div>
       </div>
     );
   }
   return (
     <div className={cn("flex", message.authorId === currentUserId ? "justify-end" : "justify-start")}>
-      <div className={cn("flex max-w-[88%] gap-2", message.authorId === currentUserId && "flex-row-reverse")}>
-        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-xs font-black", participantColor.bgClassName, participantColor.textClassName, participantColor.borderClassName)}>
+      <div className={cn("flex max-w-[92%] gap-2 sm:max-w-[88%]", message.authorId === currentUserId && "flex-row-reverse")}>
+        <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[0.68rem] font-black sm:h-9 sm:w-9", participantColor.bgClassName, participantColor.textClassName, participantColor.borderClassName)}>
           {message.author.name.slice(0, 2).toUpperCase()}
         </span>
-        <div className={cn("min-w-0 rounded-2xl border p-3 text-sm shadow-[0_4px_20px_rgba(0,43,91,0.05)]", message.authorId === currentUserId ? "border-[#002b5b] bg-[#002b5b] text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink")}>
+        <div className={cn("min-w-0 rounded-2xl border p-2.5 text-sm shadow-[0_4px_20px_rgba(0,43,91,0.05)] sm:p-3", message.authorId === currentUserId ? "border-[#002b5b] bg-[#002b5b] text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink")}>
           <div className="mb-1 flex items-center justify-between gap-3">
             <p className="min-w-0 truncate text-xs font-black" style={{ color: message.authorId === currentUserId ? "#a5f3fc" : participantColor.hex }}>{message.author.name}</p>
             <ActionMenu
@@ -1257,16 +1300,15 @@ function CallHistoryStrip({ group, userPreferences }: { group: Group; userPrefer
     return null;
   }
   return (
-    <div className="border-b border-dtsc-border bg-dtsc-page px-4 py-3">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="shrink-0 border-b border-dtsc-border bg-dtsc-page px-3 py-1.5 sm:px-4">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {endedCalls.map((call) => {
           const starter = group.members.find((member) => member.userId === call.startedById)?.user.name || "Collaborateur DTSC";
           const participantCount = call.participants?.filter((participant) => participant.status === "LEFT" || participant.status === "JOINED").length || 1;
           return (
-            <div key={call.id} className="min-w-[15rem] rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 text-xs text-dtsc-muted">
-              <p className="font-black text-dtsc-ink">Appel {call.callType === "VIDEO" ? "vidéo" : "audio"} terminé · {formatCallDuration(call.durationSeconds ?? callDurationBetween(call.startedAt, call.endedAt))}</p>
-              <p className="mt-1">Lancé par {starter} · {participantCount} participant(s)</p>
-              <p className="mt-1">{formatRelativeUserDateTime(call.startedAt, userPreferences)}</p>
+            <div key={call.id} className="min-w-[12rem] rounded-full border border-dtsc-border bg-dtsc-surface px-3 py-1.5 text-[0.68rem] text-dtsc-muted">
+              <p className="truncate font-black text-dtsc-ink">Appel {call.callType === "VIDEO" ? "vidéo" : "audio"} · {formatCallDuration(call.durationSeconds ?? callDurationBetween(call.startedAt, call.endedAt))}</p>
+              <p className="truncate">Par {starter} · {participantCount} · {formatRelativeUserDateTime(call.startedAt, userPreferences)}</p>
             </div>
           );
         })}
@@ -1278,23 +1320,32 @@ function CallHistoryStrip({ group, userPreferences }: { group: Group; userPrefer
 function GroupCallRoom({
   joinedCall,
   group,
+  messages,
+  currentUserId,
+  userPreferences,
   callPreferences,
   canEnd,
   onLeave,
   onEnd,
+  onMessageSent,
 }: {
   joinedCall: JoinedCall;
   group: Group | null;
+  messages: GroupMessage[];
+  currentUserId: string;
+  userPreferences: UserDatePreferences;
   callPreferences: CallPreferences;
   canEnd: boolean;
   onLeave: () => Promise<void>;
   onEnd: () => Promise<void>;
+  onMessageSent: () => Promise<void>;
 }) {
   const [room] = useState(() => new Room());
   const [microphoneEnabled, setMicrophoneEnabled] = useState(callPreferences.startMutedByDefault !== true);
   const [cameraEnabled, setCameraEnabled] = useState(joinedCall.call.callType === "VIDEO" && callPreferences.startCameraOffByDefault !== true);
   const [connectionLabel, setConnectionLabel] = useState("Connexion à l'appel...");
   const [callError, setCallError] = useState("");
+  const [callChatOpen, setCallChatOpen] = useState(false);
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
   const connectedParticipants = group?.calls
     ?.find((call) => call.id === joinedCall.call.id)
@@ -1332,15 +1383,15 @@ function GroupCallRoom({
   }, [callPreferences.callSoundVolume, callPreferences.callSoundsEnabled, callPreferences.connectionIssueSoundsEnabled, cameraEnabled, joinedCall.call.callType, room]);
 
   return (
-    <div className="grid min-h-[70vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="relative grid min-h-[78vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
       <section className="flex min-h-0 flex-col">
-        <div className="border-b border-white/10 p-4">
+        <div className="shrink-0 border-b border-white/10 p-3 sm:p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">{joinedCall.call.callType === "VIDEO" ? "Réunion vidéo DTSC" : "Réunion audio DTSC"}</p>
           <h3 className="mt-2 text-2xl font-black">{group?.name || "Groupe DTSC"}</h3>
           <p className="mt-1 text-sm text-slate-300">{connectionLabel} · {formatCallDuration(duration)}</p>
           {callError && <p className="mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100">{callError}</p>}
         </div>
-        <div className="min-h-0 flex-1 p-3">
+        <div className="min-h-0 flex-1 p-2 sm:p-3">
           <LiveKitRoom
             room={room}
             token={joinedCall.token}
@@ -1349,7 +1400,7 @@ function GroupCallRoom({
             audio={microphoneEnabled}
             video={joinedCall.call.callType === "VIDEO" && cameraEnabled}
             data-lk-theme="default"
-            className="dtsc-livekit-room h-full min-h-[30rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950"
+            className="dtsc-livekit-room h-full min-h-[24rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950 sm:min-h-[30rem]"
             onConnected={() => {
               setConnectionLabel("Appel connecté");
               if (callPreferences.callSoundsEnabled !== false) {
@@ -1379,7 +1430,11 @@ function GroupCallRoom({
             )}
           </LiveKitRoom>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 border-t border-white/10 p-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 p-3 sm:gap-3 sm:p-4">
+          <Button type="button" variant="outline" onClick={() => setCallChatOpen((value) => !value)} className="rounded-full border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20">
+            <MessageSquare className="h-4 w-4" />
+            Chat
+          </Button>
           <Button type="button" variant="outline" onClick={() => setMicrophoneEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
             {microphoneEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
             {microphoneEnabled ? "Micro actif" : "Micro coupé"}
@@ -1401,9 +1456,9 @@ function GroupCallRoom({
           )}
         </div>
       </section>
-      <aside className="min-h-0 border-t border-white/10 bg-white/5 p-4 md:border-l md:border-t-0">
+      <aside className="min-h-0 border-t border-white/10 bg-white/5 p-3 md:border-l md:border-t-0 md:p-4">
         <h4 className="font-black">Participants connectés</h4>
-        <div className="mt-3 max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+        <div className="mt-3 max-h-[32vh] space-y-2 overflow-y-auto pr-1 md:max-h-[42vh]">
           {(connectedParticipants.length ? connectedParticipants : [{ userId: joinedCall.call.startedById, status: "JOINED" } as GroupCallParticipant]).map((participant) => {
             const member = group?.members.find((item) => item.userId === participant.userId);
             return (
@@ -1417,8 +1472,162 @@ function GroupCallRoom({
         <p className="mt-4 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 p-3 text-xs text-cyan-100">
           Connexion protégée. Les accès sont vérifiés automatiquement pour les membres autorisés.
         </p>
+        <div className="mt-3 hidden md:block">
+          <Button type="button" variant="outline" onClick={() => setCallChatOpen((value) => !value)} className="w-full rounded-2xl border-cyan-300/30 bg-white/10 text-cyan-100 hover:bg-white/15">
+            <MessageSquare className="h-4 w-4" />
+            {callChatOpen ? "Masquer le chat" : "Ouvrir le chat"}
+          </Button>
+        </div>
       </aside>
+      {callChatOpen && group && (
+        <div className="absolute inset-x-2 bottom-[5.25rem] top-20 z-20 md:bottom-4 md:left-auto md:right-4 md:top-4 md:w-[22rem]">
+          <CallChatPanel
+            group={group}
+            callId={joinedCall.call.id}
+            messages={messages}
+            currentUserId={currentUserId}
+            userPreferences={userPreferences}
+            onClose={() => setCallChatOpen(false)}
+            onMessageSent={onMessageSent}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+function CallChatPanel({
+  group,
+  callId,
+  messages,
+  currentUserId,
+  userPreferences,
+  onClose,
+  onMessageSent,
+}: {
+  group: Group;
+  callId: string;
+  messages: GroupMessage[];
+  currentUserId: string;
+  userPreferences: UserDatePreferences;
+  onClose: () => void;
+  onMessageSent: () => Promise<void>;
+}) {
+  const [content, setContent] = useState("");
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const visibleMessages = messages.filter((message) => message.messageType !== "SYSTEM").slice(-24);
+  const visibleMessageCount = visibleMessages.length;
+  const mentionSuggestions = useMemo(() => {
+    const match = content.match(/@([\p{L}\p{N}\s._-]{0,40})$/u);
+    if (!match) {
+      return [];
+    }
+    const query = match[1].toLowerCase();
+    return group.members
+      .filter((member) => member.user.name.toLowerCase().includes(query) || member.user.email.toLowerCase().includes(query))
+      .slice(0, 5);
+  }, [content, group.members]);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const list = listRef.current;
+      if (list) {
+        list.scrollTop = list.scrollHeight;
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [visibleMessageCount]);
+
+  function insertMention(member: GroupMember) {
+    setContent((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, `@${member.user.name} `));
+    setMentionedUserIds((current) => [...new Set([...current, member.userId])]);
+  }
+
+  async function sendCallMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedContent = content.trim();
+    if (!trimmedContent || sending) {
+      return;
+    }
+    setSending(true);
+    const response = await fetch(`/api/collaborators/groups/${group.id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: trimmedContent,
+        messageType: "TEXT",
+        mentionedUserIds,
+      }),
+    });
+    setSending(false);
+    if (response.ok) {
+      setContent("");
+      setMentionedUserIds([]);
+      await onMessageSent();
+    }
+  }
+
+  return (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.35rem] border border-cyan-300/30 bg-[#071427]/96 text-white shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black">Chat pendant l&apos;appel</p>
+          <p className="truncate text-[0.68rem] font-semibold text-slate-300">Messages persistés dans {group.name}</p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-300 hover:bg-white/10" aria-label="Fermer le chat d'appel">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">
+        {visibleMessages.map((message) => {
+          const isCurrentUser = message.authorId === currentUserId;
+          return (
+            <div key={`${callId}-${message.id}`} className={cn("flex", isCurrentUser ? "justify-end" : "justify-start")}>
+              <div className={cn("max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-5", isCurrentUser ? "bg-cyan-400 text-[#001736]" : "bg-white/10 text-slate-100")}>
+                <p className={cn("mb-1 font-black", isCurrentUser ? "text-[#002b5b]" : "text-cyan-200")}>{isCurrentUser ? "Vous" : message.author.name}</p>
+                <p className="whitespace-pre-wrap">{message.deletedAt ? "Message supprimé." : message.content}</p>
+                <p className={cn("mt-1 text-[0.62rem] font-semibold", isCurrentUser ? "text-[#002b5b]/70" : "text-slate-400")}>
+                  {formatRelativeUserDateTime(message.createdAt, userPreferences)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        {!visibleMessages.length && (
+          <p className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs font-semibold text-slate-300">
+            Aucun message texte pendant cet appel. Écrivez ici pour alimenter directement la conversation du groupe.
+          </p>
+        )}
+      </div>
+      <form onSubmit={sendCallMessage} className="relative shrink-0 border-t border-white/10 p-2.5">
+        {mentionSuggestions.length > 0 && (
+          <div className="absolute bottom-[4.5rem] left-2 right-2 z-20 rounded-2xl border border-white/10 bg-[#0b1f35] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+            {mentionSuggestions.map((member) => (
+              <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs hover:bg-white/10">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-300 text-[0.62rem] font-black text-[#001736]">{member.user.name.slice(0, 2).toUpperCase()}</span>
+                <span className="min-w-0">
+                  <span className="block truncate font-black">{member.user.name}</span>
+                  <span className="block truncate text-slate-400">{member.user.jobTitle || member.user.email}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/8 p-1.5">
+          <Input
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Message pendant l'appel..."
+            className="h-10 border-0 bg-transparent text-white placeholder:text-slate-400 focus-visible:ring-0"
+          />
+          <Button type="submit" size="icon" disabled={!content.trim() || sending} className="h-10 w-10 shrink-0 rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </form>
+    </section>
   );
 }
 

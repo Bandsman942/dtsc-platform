@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import type { ElementType } from "react";
@@ -54,8 +55,8 @@ export function MobilePwaHeader({
     >
       <div className="flex items-center justify-between gap-3">
         <Link href="/dashboard" className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
-          <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#002b5b] via-cyan-600 to-emerald-500 text-lg font-black text-white shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
-            D
+          <span className="relative flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
+            <Image src="/dtsc-logo.png" alt="Logo DTSC" fill sizes="44px" className="object-cover" priority />
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-dtsc-surface bg-emerald-400" />
           </span>
           <span className="min-w-0">

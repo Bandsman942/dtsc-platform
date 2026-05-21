@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 20 mai 2026
+Derniere mise a jour: 21 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -45,6 +45,14 @@ La couche mobile authentifiée reprend les principes du redesign fourni dans `dt
 - styles mobiles dans `app/globals.css`: fond mesh, cartes glass pour `dtsc-card`/`dtsc-panel`, safe-area et scrollbar masquée.
 
 La navigation mobile principale expose Accueil, IA, Activités DTSC quand disponible, Collaborateurs et Notifications. Les autres modules restent accessibles par les actions rapides et liens secondaires, avec Administration visible uniquement selon les droits existants. Les modules continuent d'utiliser leurs données réelles: aucune donnée mockée du prototype ne doit être introduite dans les écrans connectés.
+
+Les dialogs partagés via `components/ui/dialog.tsx` sont optimisés mobile/PWA avec une hauteur visible jusqu'à `95dvh`, un contenu interne scrollable et des header/footer non noyés dans le scroll. Les zones conversationnelles privées privilégient le contenu utile:
+
+- `components/collaborators/collaborators-workspace.tsx`: cartes de groupes plus larges sur mobile, badges d'appel actif, historique d'appel condensé, carte réunion COO liée collapsible et fil de messages plus haut;
+- `components/chat/chat-workspace.tsx`: viewport mobile plus immersif, paddings réduits, bulles plus larges et composer fixe plus compact;
+- les messages systèmes d'appel restent visibles mais ne doivent pas voler l'espace du fil principal.
+
+Pendant un appel de groupe, le composant d'appel expose un panneau chat léger. L'envoi passe par `POST /api/collaborators/groups/[id]/messages`, donc les messages restent des messages de groupe normaux: persistés, visibles après l'appel, protégés par appartenance au groupe et compatibles avec les mentions déjà validées par l'API.
 
 ## 2. Stack technique
 

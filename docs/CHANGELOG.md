@@ -26,6 +26,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- UX mobile/PWA des échanges: les modales partagées utilisent davantage la hauteur écran avec scroll interne, les conversations de groupes et le chatbot gagnent en espace utile, les cartes de groupes affichent mieux appels actifs/badges/aperçus et les historiques systèmes d'appels sont plus compacts.
+- Appels de groupe: ajout d'un panneau chat léger pendant appel audio/vidéo. Les messages saisis pendant l'appel sont envoyés via la messagerie de groupe existante, persistés, compatibles mentions et visibles dans l'historique normal du groupe.
 - Demandes collaboratives dans Activités DTSC: la demande initiale et la réponse du destinataire sont désormais affichées dans deux blocs visuels distincts, avec le nom du collaborateur répondant en petit libellé coloré.
 - Le bloc de réponse et d'avancement d'une demande collaborative est visible uniquement pour le collaborateur destinataire.
 - Les formulaires juridiques du module Activités DTSC remplacent le champ texte libre `Document joint ou lien interne` par un vrai téléversement de fichier depuis l'appareil, avec aperçu local image/PDF et téléchargement avant envoi.
