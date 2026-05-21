@@ -159,8 +159,8 @@ export function PublicationEngagement({
 
     return (
       <div key={comment.id} className={`${depth > 0 ? "ml-6 border-l border-dtsc-border pl-4" : ""}`}>
-        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-          <div className="flex items-start justify-between gap-3">
+        <div className="relative rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 pr-16">
+          <div className="flex items-start gap-3">
             <div className="flex gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-xs font-black text-dtsc-blue">
                 {comment.user.avatarUrl ? <img src={comment.user.avatarUrl} alt="" className="h-full w-full object-cover" /> : comment.user.name.slice(0, 2).toUpperCase()}
@@ -172,6 +172,7 @@ export function PublicationEngagement({
               </div>
             </div>
             <ActionMenu
+              className="absolute right-3 top-3"
               label="Actions du commentaire"
               items={[
                 ...(currentUser ? [{ key: "reply", label: "Répondre", icon: Reply, onSelect: () => setReplyingTo(comment) }] : []),

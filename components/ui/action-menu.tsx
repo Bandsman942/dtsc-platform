@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, type LucideIcon } from "lucide-react";
+import { MoreVertical, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -17,10 +17,12 @@ export function ActionMenu({
   label = "Actions",
   items,
   align = "right",
+  className,
 }: {
   label?: string;
   items: ActionMenuItem[];
   align?: "left" | "right";
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,7 +55,7 @@ export function ActionMenu({
   }
 
   return (
-    <div ref={rootRef} className="relative inline-flex">
+    <div ref={rootRef} className={cn("relative inline-flex", className)}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -62,13 +64,13 @@ export function ActionMenu({
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <MoreHorizontal className="h-5 w-5" />
+        <MoreVertical className="h-5 w-5" />
       </button>
       {open && (
         <div
           role="menu"
           className={cn(
-            "absolute top-12 z-50 min-w-56 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface p-1 shadow-[0_18px_60px_rgba(0,23,54,0.18)]",
+            "absolute top-12 z-50 min-w-56 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-1 shadow-[0_18px_60px_rgba(0,23,54,0.18)] backdrop-blur-xl",
             align === "right" ? "right-0" : "left-0"
           )}
         >

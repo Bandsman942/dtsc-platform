@@ -341,9 +341,9 @@ export function AnnouncementWall({
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
           const dislikes = announcement.reactions.filter((reaction) => reaction.value === -1).length;
           return (
-            <article key={announcement.id} className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
-              <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0 flex-1">
+            <article key={announcement.id} className="dtsc-card relative min-w-0 overflow-visible p-4 pr-16 sm:p-6 sm:pr-20">
+              <div className="min-w-0">
+                <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-3">
                     <AuthorAvatar name={announcement.author.name} avatarUrl={announcement.author.avatarUrl} />
                     <div className="min-w-0">
@@ -357,6 +357,7 @@ export function AnnouncementWall({
                   <RichAnnouncementContent content={announcement.content} />
                 </div>
                 <ActionMenu
+                  className="absolute right-4 top-4 sm:right-5 sm:top-5"
                   label="Actions de l'annonce"
                   items={[
                     { key: "info", label: "Infos sur l'annonce", icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
@@ -649,13 +650,14 @@ function AnnouncementComments({
 
     return (
       <div key={commentItem.id} className={depth > 0 ? "ml-3 min-w-0 border-l border-dtsc-border pl-3 sm:ml-5 sm:pl-4" : "min-w-0"}>
-        <div className="rounded-2xl bg-dtsc-page p-3">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div className="relative rounded-2xl bg-dtsc-page p-3 pr-14">
+          <div className="min-w-0">
             <div className="min-w-0">
               <p className="break-words text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
               <p className="mt-1 break-words text-sm text-dtsc-muted">{commentItem.content}</p>
             </div>
             <ActionMenu
+              className="absolute right-2 top-2"
               label="Actions du commentaire"
               items={[
                 { key: "reply", label: "Répondre", icon: MessageCircle, onSelect: () => onReply(commentItem) },

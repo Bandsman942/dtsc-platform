@@ -48,8 +48,8 @@ export function PwaNotificationBridge({
     const showNotification = async (notification: BrowserNotification) => {
       const options = {
         body: excerpt(notification.body),
-        icon: "/icons/icon-192x192.png",
-        badge: "/icons/icon-192x192.png",
+        icon: "/dtsc-logo.png",
+        badge: "/icons/notification-badge.png",
         tag: notification.id,
         data: { url: notification.targetUrl || "/notifications" },
       };

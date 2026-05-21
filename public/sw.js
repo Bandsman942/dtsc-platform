@@ -1,4 +1,4 @@
-const STATIC_CACHE = "dtsc-static-v3-20260519";
+const STATIC_CACHE = "dtsc-static-v4-20260521";
 const OFFLINE_URL = "/offline.html";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];
@@ -26,7 +26,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(STATIC_CACHE)
-      .then((cache) => cache.addAll([OFFLINE_URL, "/icons/icon-192x192.png", "/icons/icon-512x512.png"]))
+      .then((cache) => cache.addAll([OFFLINE_URL, "/dtsc-logo.png", "/icons/icon-192x192.png", "/icons/icon-512x512.png", "/icons/notification-badge.png"]))
   );
   self.skipWaiting();
 });

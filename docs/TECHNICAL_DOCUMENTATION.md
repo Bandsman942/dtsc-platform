@@ -56,6 +56,8 @@ Pendant un appel de groupe, le composant d'appel expose un panneau chat léger. 
 
 Les préférences utilisateur mobiles/PWA sont sauvegardées via `PATCH /api/account/preferences`. Le composant client capture les erreurs de permission de notifications propres aux navigateurs mobiles et conserve l'application affichable. Les notifications visibles en PWA passent par `ServiceWorkerRegistration.showNotification()` quand disponible; le constructeur `Notification` n'est qu'un fallback protégé.
 
+Les filtres de notifications dans `components/notifications/notification-list.tsx` sont volontairement stricts: les catégories principales utilisent `Notification.type` et `targetUrl`, avec des règles ciblées uniquement pour les mentions et appels lorsque les anciennes notifications n'ont pas encore de type dédié. Les notifications PWA utilisent `/dtsc-logo.png` comme grande icône et `/icons/notification-badge.png` comme badge monochrome Android; toute modification d'icône doit aussi incrémenter le cache `STATIC_CACHE` du service worker.
+
 La couche mobile/PWA compacte ajoute aussi:
 
 - accordéons premium réutilisables via `components/ui/accordion.tsx` pour Dashboard, Entreprise, Abonnement et Profil;

@@ -52,6 +52,10 @@ const notificationFilters = [
   { id: "mentions", label: "Mentions" },
   { id: "calls", label: "Appels" },
   { id: "groups", label: "Groupes" },
+  { id: "announcements", label: "Annonces" },
+  { id: "publications", label: "Publications" },
+  { id: "support", label: "Support" },
+  { id: "activities", label: "Activités" },
   { id: "admin", label: "Administration" },
   { id: "workflows", label: "Workflows" },
   { id: "legal", label: "Juridique" },
@@ -60,38 +64,60 @@ const notificationFilters = [
   { id: "critical", label: "Critiques" },
 ] as const;
 
+const activityTypes = new Set(["COLLAB_REQUEST", "COO_TASK", "COO_BLOCKER", "COO_REPORT", "COO_MEETING", "COO_WORKFLOW"]);
+const legalTypePrefixes = ["LEGAL_", "LA_"];
+const hrTypePrefixes = ["HR_", "HR_CFO", "PAYROLL", "BUDGET", "TRANSACTION"];
+const adminTypes = new Set(["BROADCAST", "ADMIN", "AUDIT", "API_ERROR", "ACCESS_DENIED", "ROLE_CHANGE", "PERMISSION_CHANGE"]);
+
+function normalizedNotificationText(notification: NotificationItem) {
+  return `${notification.title} ${notification.body}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+}
+
 function filterNotification(notification: NotificationItem, filterId: string) {
   const type = notification.type.toUpperCase();
-  const searchable = `${type} ${notification.title} ${notification.body}`.toUpperCase();
+  const targetUrl = notification.targetUrl || fallbackTarget(type);
+  const searchable = normalizedNotificationText(notification);
   if (filterId === "unread") {
     return !notification.readAt;
   }
   if (filterId === "mentions") {
-    return searchable.includes("MENTION") || searchable.includes("@");
+    return type.includes("MENTION") || /(^|\s)@[\w.-]+/.test(`${notification.title} ${notification.body}`) || /\bMENTION(?:NE|NEE|S)?\b/.test(searchable);
   }
   if (filterId === "calls") {
-    return searchable.includes("CALL") || searchable.includes("APPEL") || searchable.includes("MEETING");
+    return type.includes("CALL") || /\b(APPEL|AUDIO|VIDEO)\b/.test(searchable);
   }
   if (filterId === "groups") {
-    return searchable.includes("GROUP") || searchable.includes("COLLABORATOR");
+    return type === "COLLABORATION" && targetUrl.startsWith("/collaborators") && !filterNotification(notification, "calls");
+  }
+  if (filterId === "announcements") {
+    return type === "ANNOUNCEMENT" || targetUrl.startsWith("/announcements");
+  }
+  if (filterId === "publications") {
+    return type === "PUBLICATION" || targetUrl.startsWith("/ressources");
+  }
+  if (filterId === "support") {
+    return type === "SUPPORT" || targetUrl.startsWith("/support");
+  }
+  if (filterId === "activities") {
+    return activityTypes.has(type) || targetUrl.startsWith("/activities");
   }
   if (filterId === "admin") {
-    return searchable.includes("ADMIN") || searchable.includes("RBAC") || searchable.includes("AUDIT");
+    return adminTypes.has(type) || type.startsWith("ADMIN_") || type.startsWith("AUDIT_") || targetUrl.startsWith("/admin");
   }
   if (filterId === "workflows") {
-    return searchable.includes("WORKFLOW") || searchable.includes("TASK") || searchable.includes("COO");
+    return type === "COO_WORKFLOW" || type.endsWith("_WORKFLOW");
   }
   if (filterId === "legal") {
-    return searchable.includes("LEGAL") || searchable.includes("LA") || searchable.includes("CONTRACT");
+    return legalTypePrefixes.some((prefix) => type.startsWith(prefix)) || type.includes("LEGAL");
   }
   if (filterId === "hr") {
-    return searchable.includes("HR") || searchable.includes("CFO") || searchable.includes("PAYROLL");
+    return hrTypePrefixes.some((prefix) => type.startsWith(prefix));
   }
   if (filterId === "system") {
-    return searchable.includes("SYSTEM") || searchable.includes("SECURITY") || searchable.includes("PWA");
+    return type === "INFO" || type === "USAGE" || type === "SYSTEM" || type.startsWith("SYSTEM_") || type.includes("SECURITY") || type.includes("PWA");
   }
   if (filterId === "critical") {
-    return searchable.includes("CRITICAL") || searchable.includes("URGENT") || searchable.includes("ERROR");
+    return type.includes("CRITICAL") || type.includes("ERROR") || /\b(CRITIQUE|URGENT|ERREUR|ECHEC|BLOQUE)\b/.test(searchable);
   }
   return true;
 }

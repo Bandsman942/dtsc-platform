@@ -90,6 +90,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les réponses `429 DAILY_LIMIT_REACHED` de `/api/chat` doivent inclure un `usage.resetAt` ISO pour afficher l'heure exacte de réinitialisation côté UI.
 - Ne pas importer un module `"use client"` dans un composant serveur uniquement pour partager des constantes: extraire les constantes dans un fichier sans directive client.
 - Les confirmations, erreurs et messages importants doivent passer par une boîte de dialogue applicative, pas par `alert`, `confirm` ou `prompt`.
+- Les menus d'actions `...` des cartes de contenu, annonces, publications, commentaires, messages et listes doivent être positionnés en haut à droite quand le contenu peut grandir, avec un menu aligné à droite pour éviter qu'il soit coupé sur mobile.
 - RBAC annonces/notifications: seul `ADMIN` modifie ou supprime les annonces; `ADMIN` modifie ou supprime tous les commentaires; un utilisateur peut seulement modifier son propre commentaire dans la fenêtre configurée; chaque utilisateur peut supprimer ou vider ses propres notifications.
 - Les blocs de données qui peuvent grandir doivent utiliser la barre réutilisable `ListControls` avec `useSmartList` pour recherche accent-insensible et pagination côté UI.
 - Les layouts publics mobiles doivent rester `overflow-x-hidden` avec des conteneurs `min-w-0`; vérifier en particulier le header public, le logo et les CTA pour éviter un rendu en deux largeurs sur navigateurs mobiles.
@@ -101,6 +102,8 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les notifications utilisateur doivent respecter `notifySupportEnabled`, `notifyUsageEnabled`, `notifyBroadcastEnabled` et `pushNotificationsEnabled`.
 - Les notifications navigateur/PWA ne doivent pas contourner l'authentification et ne doivent afficher que des extraits non sensibles.
 - Sur mobile/PWA, ne pas appeler `new Notification()` sans garde-fou: privilégier `serviceWorker.ready.showNotification()`, encapsuler les erreurs navigateur et ne jamais laisser une notification casser le rendu client.
+- Les filtres de notifications doivent correspondre à des catégories réellement déterminées par `Notification.type`, `targetUrl` ou une règle ciblée documentée; éviter les filtres trop larges basés sur tout le texte qui mélangent des notifications sans relation.
+- Les notifications PWA doivent utiliser une grande icône DTSC lisible et un badge monochrome dédié compatible Android; mettre à jour le cache du service worker lorsqu'une icône offline/PWA change.
 - Toute évolution fonctionnelle importante doit être reflétée dans `DTSC_SYSTEM_PROMPT` dans `lib/openai.ts`, en distinguant clairement les fonctionnalités actives de la roadmap.
 - Toute évolution publique, commerciale, FAQ, service DTSC, workflow client, agent IA public ou capacité chatbot doit aussi mettre à jour le contexte de l'assistant concerné et la FAQ de la landing page lorsque cela aide les visiteurs ou clients à comprendre la fonctionnalité.
 - Toute évolution fonctionnelle, API, schéma Prisma, variable d'environnement, intégration externe, règle de sécurité, workflow CI/CD ou comportement admin/client doit être documentée dans le même travail.
@@ -112,6 +115,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les constantes partagées avec le client doivent rester dans un fichier neutre sans logique serveur, par exemple `lib/session-config.ts`.
 - Les pages publiques importantes doivent rester dans `app/sitemap.ts`, `app/robots.ts` et avoir des métadonnées SEO cohérentes.
 - Le service worker PWA ne doit jamais mettre en cache les réponses `/api/*`, les pages privées HTML, les routes d'authentification ou des données utilisateur; limiter le cache aux assets statiques et au fallback autonome `public/offline.html`.
+- Les pages offline (`/offline` et `public/offline.html`) doivent rester alignées avec le design mobile/PWA premium courant, sans dépendre de données privées ni de scripts nécessaires à l'affichage hors ligne.
 - Les contenus publics administrables doivent passer par `PublicPublication`, des routes API `ADMIN` uniquement, une validation Zod et une journalisation `AuditLog`.
 - Les contenus publics riches doivent être nettoyés avec `sanitizeRichHtml` avant stockage ou rendu; ne jamais rendre un HTML admin sans nettoyage serveur.
 - Les onglets de la landing page doivent correspondre à des routes publiques dédiées; l'état actif doit se baser sur le `pathname`, pas sur un scroll de sections.

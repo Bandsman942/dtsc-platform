@@ -10,14 +10,18 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout d'un historique d'activité compact dans le Profil à partir des notifications, conversations, tickets support et messages de groupe réels de l'utilisateur.
 - Ajout de filtres avancés dans les notifications: toutes, non lues, mentions, appels, groupes, administration, workflows, juridique, RH, système et critiques.
 - Ajout d'une navigation flottante mobile pour les sections Administration autorisées.
+- Ajout d'un badge monochrome DTSC dédié aux notifications PWA Android afin que l'icône système reste professionnelle et lisible.
 
 ### Corrigé
 
 - Correction de l'enregistrement des préférences utilisateur sur mobile/PWA: les notifications navigateur sont désormais déclenchées via le service worker quand disponible et toutes les erreurs de permission/API mobile sont capturées sans casser l'application.
 - Correction du bloc Abonnement afin que les surfaces de paiement et cartes de plans restent lisibles en mode clair comme en mode sombre.
+- Correction des filtres de notifications pour qu'ils s'appuient sur les vrais `type`/`targetUrl` au lieu d'une recherche texte trop large qui mélangeait les catégories.
+- Correction du positionnement des menus `...` des annonces et commentaires liés: actions en haut à droite avec icône verticale et menu glass aligné.
 
 ### Amélioré
 
+- La route `/offline` et le fallback statique `public/offline.html` reprennent le design mobile/PWA premium actuel avec surfaces glass, logo DTSC et safe-area mobile.
 - Harmonisation du rendu clair/sombre des accordéons, listes premium et menu flottant Administration avec des surfaces glass basées sur les variables DTSC.
 - Les blocs de données des sections Administration sont désormais affichés comme accordéons premium, avec cartes de liste cohérentes et lisibles en mode sombre.
 - Accordéons premium appliqués aux zones Dashboard, Entreprise, Abonnement et Profil pour réduire le scroll mobile/PWA.
