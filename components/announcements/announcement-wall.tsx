@@ -74,6 +74,7 @@ export function AnnouncementWall({
   const [transferSearch, setTransferSearch] = useState("");
   const [selectedTransferRecipientIds, setSelectedTransferRecipientIds] = useState<string[]>([]);
   const [reportAnnouncement, setReportAnnouncement] = useState<Announcement | null>(null);
+  const [openCommentIds, setOpenCommentIds] = useState<string[]>([]);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
   const filteredTransferRecipients = useMemo(() => {
@@ -304,16 +305,21 @@ export function AnnouncementWall({
             </div>
           </div>
           {canPost && (
-            <form onSubmit={createAnnouncement} className="mt-5 space-y-3">
-              <Input name="title" placeholder="Titre de l'annonce" required />
-              <RichTextEditor
-                textName="content"
-                htmlName="contentHtml"
-                placeholder="Contenu de l'annonce. Vous pouvez utiliser la mise en forme ou coller un texte déjà décoré."
-                minHeightClassName="min-h-40"
-              />
-              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Publier</Button>
-            </form>
+            <details className="mt-5 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-black text-dtsc-blue [&::-webkit-details-marker]:hidden">
+                Créer une nouvelle annonce
+              </summary>
+              <form onSubmit={createAnnouncement} className="space-y-3 border-t border-dtsc-border p-4">
+                <Input name="title" placeholder="Titre de l'annonce" required />
+                <RichTextEditor
+                  textName="content"
+                  htmlName="contentHtml"
+                  placeholder="Contenu de l'annonce. Vous pouvez utiliser la mise en forme ou coller un texte déjà décoré."
+                  minHeightClassName="min-h-40"
+                />
+                <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Publier</Button>
+              </form>
+            </details>
           )}
         </section>
       </aside>
@@ -376,25 +382,39 @@ export function AnnouncementWall({
                   <ThumbsDown className="h-4 w-4" />
                   {dislikes}
                 </Button>
-                <span className="inline-flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-bold text-dtsc-blue">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenCommentIds((current) =>
+                      current.includes(announcement.id)
+                        ? current.filter((id) => id !== announcement.id)
+                        : [...current, announcement.id]
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-bold text-dtsc-blue transition hover:bg-cyan-100"
+                >
                   <MessageCircle className="h-4 w-4" />
-                  {announcement.comments.length} commentaires
-                </span>
+                  {openCommentIds.includes(announcement.id) ? "Masquer" : `${announcement.comments.length} commentaires`}
+                </button>
               </div>
-              <AnnouncementComments
-                announcementId={announcement.id}
-                comments={announcement.comments}
-                currentUserId={currentUserId}
-                isAdmin={isAdmin}
-                commentEditWindowMinutes={commentEditWindowMinutes}
-                onEdit={setEditingComment}
-                onDelete={setDeletingComment}
-                onReply={(commentItem) => setReplyingTo({ announcementId: announcement.id, comment: commentItem })}
-              />
-              <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <Input name="content" placeholder="Ajouter un commentaire..." required />
-                <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
-              </form>
+              {openCommentIds.includes(announcement.id) && (
+                <div className="mt-4">
+                  <AnnouncementComments
+                    announcementId={announcement.id}
+                    comments={announcement.comments}
+                    currentUserId={currentUserId}
+                    isAdmin={isAdmin}
+                    commentEditWindowMinutes={commentEditWindowMinutes}
+                    onEdit={setEditingComment}
+                    onDelete={setDeletingComment}
+                    onReply={(commentItem) => setReplyingTo({ announcementId: announcement.id, comment: commentItem })}
+                  />
+                  <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <Input name="content" placeholder="Ajouter un commentaire..." required />
+                    <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
+                  </form>
+                </div>
+              )}
             </article>
           );
         })}

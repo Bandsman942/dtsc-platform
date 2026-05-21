@@ -58,7 +58,9 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.
 - Conversations mobiles optimisées: dialogs hauts, fils de groupe/chatbot plus immersifs, cartes de groupes plus lisibles et chat texte disponible pendant les appels de groupe.
+- UI mobile/PWA compacte: accordéons premium pour Dashboard, Entreprise, Abonnement et Profil, navigation flottante Administration, formulaires support/annonces repliables, commentaires repliés par défaut et filtres avancés des notifications.
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
+- Réactions persistées Like/Dislike et copie compacte sous chaque réponse assistant du chatbot privé.
 - Chatbot privé capable, après confirmation explicite, d'envoyer un message à DTSC ou de créer un ticket support à partir des informations collectées
 - Historique des conversations et messages en base, avec dates/heures selon les préférences utilisateur, classement par dossier/projet et CRUD des dossiers
 - Préférences chatbot persistantes: modèle préféré, style de réponse et longueur de réponse par utilisateur
@@ -101,6 +103,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires scrollables, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert intelligent multi-destinataires, indicateurs, signalement, archivage et épinglage
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
+- Discussions de tickets support contenues dans un fil scrollable pour éviter les pages mobiles infinies.
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système, page de démarrage, densité d'interface, langue, fuseau horaire, format de date, synthèse email, modèle LLM préféré, style IA et préférences de notifications persistantes
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels
 - Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local

@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-05-21
+
+### Ajouté
+
+- Ajout de réactions persistées `Like`/`Dislike` sur les réponses assistant du chatbot privé, avec migration `20260521113000_message_feedback` et route sécurisée `PATCH /api/conversations/messages/[id]/feedback`.
+- Ajout d'un historique d'activité compact dans le Profil à partir des notifications, conversations, tickets support et messages de groupe réels de l'utilisateur.
+- Ajout de filtres avancés dans les notifications: toutes, non lues, mentions, appels, groupes, administration, workflows, juridique, RH, système et critiques.
+- Ajout d'une navigation flottante mobile pour les sections Administration autorisées.
+
+### Amélioré
+
+- Accordéons premium appliqués aux zones Dashboard, Entreprise, Abonnement et Profil pour réduire le scroll mobile/PWA.
+- Module Abonnement rendu plus premium avec cartes glass, badges de plan actif et états de paiement connectés aux données backend existantes.
+- Commentaires des annonces internes et publications publiques repliés par défaut, avec ouverture volontaire, pagination et scroll interne.
+- Formulaire de création d'annonce et formulaire de ticket support repliés pour libérer l'espace mobile.
+- Discussions de tickets support contenues dans un fil scrollable avec saisie accessible.
+- Dropdowns Radix stylés en combobox premium partagée.
+
 ## 2026-05-20
 
 ### Corrigé

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
+import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
@@ -721,7 +722,17 @@ export default async function AdminPage({
           </p>
         </section>
 
-        <nav className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Sous-modules Administration">
+        <AdminFloatingNav
+          activeSection={activeSection}
+          sections={visibleSections.map((item) => ({
+            id: item.id,
+            label: item.label,
+            description: item.description,
+            href: sectionHref(item.id),
+          }))}
+        />
+
+        <nav className="hidden gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:grid" aria-label="Sous-modules Administration">
           {visibleSections.map((item) => {
             const Icon = item.icon;
             const active = activeSection === item.id;

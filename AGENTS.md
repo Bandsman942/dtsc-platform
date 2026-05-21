@@ -179,6 +179,19 @@ Conserver une hiérarchie visible pour:
 - tableaux
 - code inline et blocs de code
 
+## Règles DTSC — UI mobile/PWA premium compacte
+
+- Les blocs importants des modules privés doivent privilégier les accordéons sur mobile/PWA afin d'éviter les pages verticales interminables.
+- Les sections Administration doivent rester accessibles par une navigation mobile flottante, avec affichage strictement limité aux sections autorisées par RBAC et poste RH officiel.
+- Les formulaires longs ou fréquents doivent être pliables, en modale, sheet ou accordéon; ne pas afficher plusieurs formulaires ouverts par défaut sur mobile.
+- Les commentaires d'annonces, publications publiques et discussions longues doivent être repliables par défaut, scrollables, paginés et ne jamais étendre indéfiniment la page.
+- Les conversations chatbot, groupes, appels et tickets support sont prioritaires visuellement: leur fil doit garder un conteneur scrollable avec saisie accessible.
+- Les dropdowns/combobox doivent utiliser le style premium partagé, rester tactiles, lisibles, scrollables et compatibles recherche quand les listes peuvent grandir.
+- Les historiques d'activité affichés côté profil doivent être bornés et respecter une stratégie de rétention; la rétention des notifications reste pilotée par `AppSetting.notificationRetentionDays`.
+- Les réactions chatbot Like/Dislike doivent être persistées côté serveur sur le message assistant propriétaire de la conversation; une action UI visible ne doit jamais être seulement locale.
+- Les notifications doivent supporter des filtres avancés côté UI à partir des vrais types/statuts existants, sans remplacer les données backend par des mocks.
+- Toute modification UI mobile/PWA doit préserver i18n, accessibilité clavier, safe-area, PWA standalone, RBAC et permissions côté API.
+
 ## Advanced Mobile UX, Activities, Groups, Files and Audit Standards
 
 - Tous les blocs Administration qui listent des données doivent rester utilisables sur mobile avec une logique liste -> détail: recherche intelligente, pagination, conteneurs scrollables, détails en modale ou plein écran et actions dans menus `...`.

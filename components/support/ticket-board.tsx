@@ -93,10 +93,12 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
             </div>
             <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{formatEnumLabel(ticket.status)}</span>
           </div>
-          <div className="mt-5 space-y-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <div className="mt-5 flex max-h-[34rem] flex-col rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">Discussion</p>
-            <TicketMessages messages={ticket.messages || []} />
-            <form onSubmit={(event) => sendMessage(event, ticket.id)} className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+              <TicketMessages messages={ticket.messages || []} />
+            </div>
+            <form onSubmit={(event) => sendMessage(event, ticket.id)} className="mt-3 grid shrink-0 gap-3 md:grid-cols-[1fr_auto]">
               <input name="content" placeholder="Répondre dans la discussion du ticket..." className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" required />
               <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={activeId === ticket.id}>
                 Envoyer

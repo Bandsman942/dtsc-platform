@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, FolderKanban, FolderPlus, Info, Loader2, Menu, Pencil, Plus, Send, Share2, Trash2, X } from "lucide-react";
+import { Copy, FolderKanban, FolderPlus, Info, Loader2, Menu, Pencil, Plus, Send, Share2, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -34,6 +34,7 @@ type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt?: string;
+  feedbackValue?: number | null;
 };
 
 export function ChatWorkspace({
@@ -72,6 +73,7 @@ export function ChatWorkspace({
   const [infoOpen, setInfoOpen] = useState(false);
   const [shareToGroupOpen, setShareToGroupOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState("");
   const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);
   const [selectedProject, setSelectedProject] = useState<ConversationProject | null>(null);
   const messageScrollRef = useRef<HTMLDivElement>(null);
@@ -302,7 +304,12 @@ export function ChatWorkspace({
       ...current,
       messagesToday: Math.min(current.dailyMessageLimit, current.messagesToday + 1),
     }));
-    await refreshConversations(createdConversationId || activeConversationId);
+    const persistedConversationId = createdConversationId || activeConversationId;
+    await refreshConversations(persistedConversationId);
+    if (persistedConversationId) {
+      const refreshed = await fetch(`/api/conversations/${persistedConversationId}`).then((result) => result.json()).catch(() => null);
+      setMessages(refreshed?.conversation?.messages ?? []);
+    }
   }
 
   const messagePercent = Math.min(100, Math.round((dailyUsage.messagesToday / dailyUsage.dailyMessageLimit) * 100));
@@ -320,6 +327,39 @@ export function ChatWorkspace({
     }
     await browserNavigator.clipboard.writeText(value);
     setError("Contenu copié.");
+  }
+
+  async function copyAssistantResponse(message: ChatMessage) {
+    const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
+    if (!browserNavigator?.clipboard) {
+      setError("Copie indisponible dans ce navigateur.");
+      return;
+    }
+    await browserNavigator.clipboard.writeText(message.content);
+    setCopiedMessageId(message.id);
+    window.setTimeout(() => setCopiedMessageId((current) => (current === message.id ? "" : current)), 1600);
+  }
+
+  async function reactToAssistantMessage(message: ChatMessage, value: 1 | -1) {
+    const nextValue = message.feedbackValue === value ? null : value;
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === message.id ? { ...item, feedbackValue: nextValue } : item
+      )
+    );
+    const response = await fetch(`/api/conversations/messages/${message.id}/feedback`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: nextValue }),
+    });
+    if (!response.ok) {
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id ? { ...item, feedbackValue: message.feedbackValue ?? null } : item
+        )
+      );
+      setError("Impossible d'enregistrer cette réaction.");
+    }
   }
 
   async function shareActiveConversationLink() {
@@ -498,7 +538,7 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#faf9fe] px-3 py-3 sm:px-4 sm:py-5 lg:px-8">
+        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#faf9fe] px-2.5 py-2.5 sm:px-4 sm:py-4 lg:px-7">
           {!messages.length && (
             <div className="mx-auto flex h-full max-w-2xl flex-col justify-center text-center">
               <p className="text-3xl font-bold text-[#001736]">Comment DTSC peut vous aider ?</p>
@@ -533,15 +573,6 @@ export function ChatWorkspace({
                       <div className="dtsc-assistant-markdown">
                         <Streamdown>{message.content || "..."}</Streamdown>
                       </div>
-                      {message.content && (
-                        <button
-                          className="absolute -right-2 -top-2 hidden rounded-lg bg-white p-1 text-slate-500 shadow-md group-hover:block"
-                          onClick={() => copyTextToClipboard(message.content)}
-                          aria-label="Copier"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
-                      )}
                     </div>
                   ) : (
                     message.content
@@ -550,6 +581,43 @@ export function ChatWorkspace({
                     <p className={cn("mt-2 text-[0.68rem] font-semibold", message.role === "user" ? "text-white/70" : "text-slate-500")}>
                       {formatRelativeUserDateTime(message.createdAt, userPreferences)}
                     </p>
+                  )}
+                  {message.role === "assistant" && message.content && !isStreaming && (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => reactToAssistantMessage(message, 1)}
+                        className={cn(
+                          "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-black transition",
+                          message.feedbackValue === 1 ? "bg-cyan-100 text-[#002b5b]" : "bg-slate-50 text-slate-500 hover:bg-cyan-50 hover:text-[#002b5b]"
+                        )}
+                        aria-label="Aimer la réponse"
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                        Like
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reactToAssistantMessage(message, -1)}
+                        className={cn(
+                          "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-black transition",
+                          message.feedbackValue === -1 ? "bg-rose-100 text-rose-700" : "bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-700"
+                        )}
+                        aria-label="Ne pas aimer la réponse"
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                        Dislike
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyAssistantResponse(message)}
+                        className="inline-flex h-8 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-xs font-black text-slate-500 transition hover:bg-cyan-50 hover:text-[#002b5b]"
+                        aria-label="Copier la réponse"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {copiedMessageId === message.id ? "Copié" : "Copier"}
+                      </button>
+                    </div>
                   )}
                 </div>
                 {message.role === "user" && (

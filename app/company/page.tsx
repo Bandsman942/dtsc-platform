@@ -3,6 +3,7 @@ import { SubscriptionStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { CompanyManager } from "@/components/company/company-manager";
 import { DocumentManager } from "@/components/documents/document-manager";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -49,34 +50,38 @@ export default async function CompanyPage() {
           </div>
         </section>
 
-        <CompanyManager
-          initialProfile={profile ? JSON.parse(JSON.stringify(profile)) : null}
-          initialActivities={JSON.parse(JSON.stringify(activities))}
-        />
-
-        <section className="space-y-4">
-          <div className="dtsc-card p-6">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">Documents</p>
-            <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Base documentaire du chatbot</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
-              Ajoutez les fichiers métier autorisés par votre abonnement. Ils restent dans votre périmètre privé et complètent le contexte entreprise renseigné ci-dessus.
-            </p>
-          </div>
-          <DocumentManager
-            maxDocuments={activeSubscription?.plan.maxDocuments ?? 0}
-            initialDocuments={documents.map((document) => ({
-              id: document.id,
-              title: document.title,
-              fileName: document.fileName,
-              mimeType: document.mimeType,
-              sizeBytes: document.sizeBytes,
-              status: document.status,
-              errorMessage: document.errorMessage,
-              createdAt: document.createdAt.toISOString(),
-              _count: document._count,
-            }))}
-          />
-        </section>
+        <Accordion>
+          <AccordionItem title="Profil et activités entreprise" defaultOpen>
+            <CompanyManager
+              initialProfile={profile ? JSON.parse(JSON.stringify(profile)) : null}
+              initialActivities={JSON.parse(JSON.stringify(activities))}
+            />
+          </AccordionItem>
+          <AccordionItem title="Base documentaire du chatbot">
+            <section className="space-y-4">
+              <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
+                <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">Documents</p>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
+                  Ajoutez les fichiers métier autorisés par votre abonnement. Ils restent dans votre périmètre privé et complètent le contexte entreprise renseigné ci-dessus.
+                </p>
+              </div>
+              <DocumentManager
+                maxDocuments={activeSubscription?.plan.maxDocuments ?? 0}
+                initialDocuments={documents.map((document) => ({
+                  id: document.id,
+                  title: document.title,
+                  fileName: document.fileName,
+                  mimeType: document.mimeType,
+                  sizeBytes: document.sizeBytes,
+                  status: document.status,
+                  errorMessage: document.errorMessage,
+                  createdAt: document.createdAt.toISOString(),
+                  _count: document._count,
+                }))}
+              />
+            </section>
+          </AccordionItem>
+        </Accordion>
       </div>
     </AppShell>
   );

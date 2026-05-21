@@ -54,6 +54,17 @@ Les dialogs partagés via `components/ui/dialog.tsx` sont optimisés mobile/PWA 
 
 Pendant un appel de groupe, le composant d'appel expose un panneau chat léger. L'envoi passe par `POST /api/collaborators/groups/[id]/messages`, donc les messages restent des messages de groupe normaux: persistés, visibles après l'appel, protégés par appartenance au groupe et compatibles avec les mentions déjà validées par l'API.
 
+La couche mobile/PWA compacte ajoute aussi:
+
+- accordéons premium réutilisables via `components/ui/accordion.tsx` pour Dashboard, Entreprise, Abonnement et Profil;
+- menu flottant Administration via `components/admin/admin-floating-nav.tsx`, alimenté uniquement par les sections autorisées côté serveur;
+- commentaires d'annonces internes et publications publiques repliés par défaut, avec ouverture volontaire, pagination et scroll interne;
+- filtres avancés dans `/notifications` basés sur les vrais types de notifications;
+- discussion support par ticket contenue dans un fil scrollable;
+- combobox Radix stylées premium via `components/ui/select.tsx`.
+
+Les réponses du chatbot privé supportent une réaction persistée `Like` ou `Dislike` et une action `Copier` sous chaque réponse assistant. Les champs `Message.feedbackValue` et `Message.feedbackUpdatedAt` sont ajoutés par la migration `20260521113000_message_feedback`. La route `PATCH /api/conversations/messages/[id]/feedback` vérifie la session, la propriété de la conversation et le rôle `assistant` avant d'écrire la réaction.
+
 ## 2. Stack technique
 
 - Framework: Next.js 15 App Router

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bell, CheckCircle2, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -46,13 +46,68 @@ function formatNotificationText(value: string) {
   return value.replace(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/g, (token) => formatEnumLabel(token));
 }
 
+const notificationFilters = [
+  { id: "all", label: "Toutes" },
+  { id: "unread", label: "Non lues" },
+  { id: "mentions", label: "Mentions" },
+  { id: "calls", label: "Appels" },
+  { id: "groups", label: "Groupes" },
+  { id: "admin", label: "Administration" },
+  { id: "workflows", label: "Workflows" },
+  { id: "legal", label: "Juridique" },
+  { id: "hr", label: "RH" },
+  { id: "system", label: "Système" },
+  { id: "critical", label: "Critiques" },
+] as const;
+
+function filterNotification(notification: NotificationItem, filterId: string) {
+  const type = notification.type.toUpperCase();
+  const searchable = `${type} ${notification.title} ${notification.body}`.toUpperCase();
+  if (filterId === "unread") {
+    return !notification.readAt;
+  }
+  if (filterId === "mentions") {
+    return searchable.includes("MENTION") || searchable.includes("@");
+  }
+  if (filterId === "calls") {
+    return searchable.includes("CALL") || searchable.includes("APPEL") || searchable.includes("MEETING");
+  }
+  if (filterId === "groups") {
+    return searchable.includes("GROUP") || searchable.includes("COLLABORATOR");
+  }
+  if (filterId === "admin") {
+    return searchable.includes("ADMIN") || searchable.includes("RBAC") || searchable.includes("AUDIT");
+  }
+  if (filterId === "workflows") {
+    return searchable.includes("WORKFLOW") || searchable.includes("TASK") || searchable.includes("COO");
+  }
+  if (filterId === "legal") {
+    return searchable.includes("LEGAL") || searchable.includes("LA") || searchable.includes("CONTRACT");
+  }
+  if (filterId === "hr") {
+    return searchable.includes("HR") || searchable.includes("CFO") || searchable.includes("PAYROLL");
+  }
+  if (filterId === "system") {
+    return searchable.includes("SYSTEM") || searchable.includes("SECURITY") || searchable.includes("PWA");
+  }
+  if (filterId === "critical") {
+    return searchable.includes("CRITICAL") || searchable.includes("URGENT") || searchable.includes("ERROR");
+  }
+  return true;
+}
+
 export function NotificationList({ notifications }: { notifications: NotificationItem[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<NotificationItem | null>(null);
   const [feedback, setFeedback] = useState("");
   const [clearOpen, setClearOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<(typeof notificationFilters)[number]["id"]>("all");
+  const filteredNotifications = useMemo(
+    () => notifications.filter((notification) => filterNotification(notification, activeFilter)),
+    [activeFilter, notifications]
+  );
   const notificationList = useSmartList({
-    items: notifications,
+    items: filteredNotifications,
     pageSize: 8,
     getSearchText: (notification) => `${notification.title} ${notification.body} ${notification.type} ${notification.createdAt}`,
   });
@@ -106,6 +161,30 @@ export function NotificationList({ notifications }: { notifications: Notificatio
             <Trash2 className="h-4 w-4" />
             Vider les notifications
           </Button>
+        </div>
+      )}
+      {notifications.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {notificationFilters.map((filter) => {
+            const count = notifications.filter((notification) => filterNotification(notification, filter.id)).length;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => {
+                  setActiveFilter(filter.id);
+                  notificationList.setPage(1);
+                }}
+                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black transition ${
+                  activeFilter === filter.id
+                    ? "border-cyan-300 bg-[#001736] text-white"
+                    : "border-dtsc-border bg-white text-dtsc-blue hover:bg-dtsc-soft"
+                }`}
+              >
+                {filter.label} · {count}
+              </button>
+            );
+          })}
         </div>
       )}
       {notifications.length > 0 && (

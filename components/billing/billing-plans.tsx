@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, CreditCard } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CreditCard, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -64,7 +64,7 @@ export function BillingPlans({
 
   return (
     <div className="space-y-5">
-      <div className="dtsc-card p-5">
+      <div className="overflow-hidden rounded-[1.6rem] border border-cyan-200/60 bg-gradient-to-br from-white via-cyan-50/80 to-[#d5e3fd]/70 p-5 shadow-[0_18px_55px_rgba(0,43,91,0.10)]">
         {!paymentAvailable && (
           <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-sm leading-6 text-dtsc-ink">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
@@ -91,25 +91,37 @@ export function BillingPlans({
         {plans.map((plan) => {
           const active = activePlanId === plan.id;
           return (
-            <article key={plan.id} className="dtsc-card flex flex-col p-5">
+            <article
+              key={plan.id}
+              className={`relative flex min-h-full flex-col overflow-hidden rounded-[1.6rem] border p-5 shadow-[0_18px_55px_rgba(0,43,91,0.10)] transition hover:-translate-y-1 ${
+                active
+                  ? "border-cyan-300 bg-[#001736] text-white"
+                  : "border-white/70 bg-white/90 text-dtsc-ink backdrop-blur-xl"
+              }`}
+            >
+              <div className={`absolute inset-x-0 top-0 h-1 ${active ? "bg-cyan-300" : "bg-gradient-to-r from-cyan-300 via-[#002b5b] to-emerald-300"}`} />
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-black text-dtsc-ink">{plan.name}</h2>
-                  <p className="mt-2 text-sm leading-6 text-dtsc-muted">{plan.description}</p>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.12em] ${active ? "bg-white/10 text-cyan-200" : "bg-dtsc-soft text-dtsc-blue"}`}>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {active ? "Plan actif" : "Offre DTSC"}
+                  </span>
+                  <h2 className={`mt-3 text-xl font-black ${active ? "text-white" : "text-dtsc-ink"}`}>{plan.name}</h2>
+                  <p className={`mt-2 text-sm leading-6 ${active ? "text-slate-300" : "text-dtsc-muted"}`}>{plan.description}</p>
                 </div>
                 {active && <CheckCircle2 className="h-5 w-5 text-cyan-400" />}
               </div>
-              <p className="mt-5 text-3xl font-black text-dtsc-ink">
+              <p className={`mt-5 text-3xl font-black ${active ? "text-white" : "text-dtsc-ink"}`}>
                 {plan.priceUsd === 0 ? "Gratuit" : `${plan.priceUsd}$`}
-                {plan.priceUsd > 0 && <span className="text-sm font-semibold text-dtsc-muted"> / mois</span>}
+                {plan.priceUsd > 0 && <span className={`text-sm font-semibold ${active ? "text-slate-300" : "text-dtsc-muted"}`}> / mois</span>}
               </p>
-              <ul className="mt-5 space-y-2 text-sm text-dtsc-muted">
+              <ul className={`mt-5 space-y-2 text-sm ${active ? "text-slate-300" : "text-dtsc-muted"}`}>
                 <li>{plan.dailyMessageLimit} messages / jour</li>
                 <li>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens / jour</li>
                 <li>{plan.maxDocuments} document(s) autorisé(s)</li>
               </ul>
               <Button
-                className="mt-6 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]"
+                className={`mt-auto rounded-xl ${active ? "bg-cyan-300 text-[#001736] hover:bg-cyan-200" : "bg-[#002b5b] text-white hover:bg-[#001736]"}`}
                 disabled={isPending || active || (plan.priceUsd > 0 && !paymentAvailable)}
                 onClick={() => checkout(plan.id, plan.priceUsd)}
               >

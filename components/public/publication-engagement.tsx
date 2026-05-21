@@ -53,6 +53,7 @@ export function PublicationEngagement({
   const [replyingTo, setReplyingTo] = useState<PublicationComment | null>(null);
   const [editingComment, setEditingComment] = useState<PublicationComment | null>(null);
   const [deletingComment, setDeletingComment] = useState<PublicationComment | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const isAdmin = currentUser?.role === "ADMIN";
   const likes = reactions.filter((reaction) => reaction.value === 1).length;
   const dislikes = reactions.filter((reaction) => reaction.value === -1).length;
@@ -202,42 +203,46 @@ export function PublicationEngagement({
             <ThumbsDown className="h-4 w-4" />
             {dislikes}
           </Button>
-          <span className="inline-flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-bold text-dtsc-blue">
+          <Button type="button" onClick={() => setCommentsOpen((value) => !value)} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
             <MessageCircle className="h-4 w-4" />
-            {comments.length} commentaires
-          </span>
+            {commentsOpen ? "Masquer" : `${comments.length} commentaires`}
+          </Button>
         </div>
       </div>
 
-      <div className="mt-5 space-y-3">
-        {rootComments.length > 6 && (
-          <ListControls
-            query={commentList.query}
-            onQueryChange={commentList.setQuery}
-            page={commentList.page}
-            pageCount={commentList.pageCount}
-            totalCount={commentList.totalCount}
-            filteredCount={commentList.filteredCount}
-            placeholder="Rechercher dans les commentaires..."
-            onPageChange={commentList.setPage}
-          />
-        )}
-        {commentList.paginatedItems.map((comment) => renderComment(comment))}
-        {!commentList.filteredCount && rootComments.length > 0 && (
-          <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun commentaire ne correspond à votre recherche.</p>
-        )}
-        {!comments.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun commentaire pour le moment.</p>}
-      </div>
+      {commentsOpen && (
+        <>
+          <div className="mt-5 max-h-[34rem] space-y-3 overflow-y-auto pr-1">
+            {rootComments.length > 6 && (
+              <ListControls
+                query={commentList.query}
+                onQueryChange={commentList.setQuery}
+                page={commentList.page}
+                pageCount={commentList.pageCount}
+                totalCount={commentList.totalCount}
+                filteredCount={commentList.filteredCount}
+                placeholder="Rechercher dans les commentaires..."
+                onPageChange={commentList.setPage}
+              />
+            )}
+            {commentList.paginatedItems.map((comment) => renderComment(comment))}
+            {!commentList.filteredCount && rootComments.length > 0 && (
+              <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun commentaire ne correspond à votre recherche.</p>
+            )}
+            {!comments.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun commentaire pour le moment.</p>}
+          </div>
 
-      {currentUser ? (
-        <form onSubmit={(event) => createComment(event)} className="mt-5 flex flex-col gap-2 sm:flex-row">
-          <Input name="content" placeholder="Ajouter un commentaire professionnel..." required />
-          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Commenter</Button>
-        </form>
-      ) : (
-        <p className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm font-bold text-dtsc-muted">
-          Connectez-vous à DTSC Platform pour commenter, répondre ou réagir.
-        </p>
+          {currentUser ? (
+            <form onSubmit={(event) => createComment(event)} className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <Input name="content" placeholder="Ajouter un commentaire professionnel..." required />
+              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Commenter</Button>
+            </form>
+          ) : (
+            <p className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm font-bold text-dtsc-muted">
+              Connectez-vous à DTSC Platform pour commenter, répondre ou réagir.
+            </p>
+          )}
+        </>
       )}
 
       <Dialog open={Boolean(replyingTo)} title="Répondre au commentaire" onClose={() => setReplyingTo(null)}>

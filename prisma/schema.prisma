@@ -414,6 +414,8 @@ model Message {
   content        String
   model          String?
   tokensUsed     Int?
+  feedbackValue  Int?
+  feedbackUpdatedAt DateTime?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
