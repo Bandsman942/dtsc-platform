@@ -36,6 +36,16 @@ Objectifs couverts par le code actuel:
 - experience PWA orientee espace prive avec manifest, service worker prudent, page hors ligne, prompt d'installation authentifie et carte publique d'installation sur l'accueil;
 - integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
 
+### Design mobile/PWA premium
+
+La couche mobile authentifiée reprend les principes du redesign fourni dans `dtsc-platform-redesign.zip` sans importer les écrans mockés comme source de données. Le shell privé conserve `AppShell`, l'authentification, RBAC, notifications, routes API et modules existants, puis ajoute:
+
+- `components/dtsc/mobile-shell.tsx`: header mobile compact, quick chips et bottom navigation PWA;
+- `components/dtsc/ui-components.tsx`: primitives visuelles premium réutilisables (`PremiumCard`, `GlassCard`, `MobileStatCard`, `MobileBadge`, `MobileAvatar`);
+- styles mobiles dans `app/globals.css`: fond mesh, cartes glass pour `dtsc-card`/`dtsc-panel`, safe-area et scrollbar masquée.
+
+La navigation mobile principale expose Accueil, IA, Activités DTSC quand disponible, Collaborateurs et Notifications. Les autres modules restent accessibles par les actions rapides et liens secondaires, avec Administration visible uniquement selon les droits existants. Les modules continuent d'utiliser leurs données réelles: aucune donnée mockée du prototype ne doit être introduite dans les écrans connectés.
+
 ## 2. Stack technique
 
 - Framework: Next.js 15 App Router

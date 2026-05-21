@@ -16,7 +16,8 @@
     "loadMore": "Load more",
     "loadPrevious": "Load previous",
     "reset": "Reset",
-    "selectAll": "Select all"
+    "selectAll": "Select all",
+    "signOut": "Sign out"
   },
   "navigation": {
     "dashboard": "Dashboard",

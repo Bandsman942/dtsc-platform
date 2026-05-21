@@ -227,3 +227,14 @@ Conserver une hiérarchie visible pour:
 - La durée d'appel doit être calculée depuis `startedAt`, affichée pendant l'appel, et persistée à la fin via `durationSeconds` pour l'historique.
 - Les appels liés aux réunions COO doivent suivre les mêmes règles UX: pas de jargon technique, durée, boutons `Quitter`/`Terminer`, préférences utilisateur, propagation d'état et historique persistant.
 - Toute route d'appel doit continuer à vérifier auth, RBAC, appartenance active au groupe/réunion et droit de gestion côté serveur; un événement temps réel reçu côté frontend ne donne jamais accès à l'appel sans vérification API.
+
+## Règles DTSC — Design mobile/PWA premium
+
+- Le design mobile/PWA premium intégré depuis `dtsc-platform-redesign.zip` devient la référence visuelle des espaces privés: header compact, navigation bottom, cartes glass/premium, safe-area mobile, ombres douces et animations sobres.
+- Toute nouvelle interface mobile doit suivre la logique liste -> recherche/filtres -> pagination -> détail plein écran -> commentaires/fichiers/actions; ne jamais empiler liste, détail, formulaire et commentaires dans une longue page mobile.
+- Les composants issus d'un prototype ou d'un ZIP de design ne doivent jamais remplacer aveuglément les modules existants. Les écrans mockés sont interdits dans les modules connectés au backend; ils doivent être remplacés par les données réelles, routes API, hooks et services existants.
+- Les formulaires longs doivent être encapsulés dans une modale, sheet, accordion ou vue dédiée mobile; les menus `...` restent le standard des actions contextuelles et destructives.
+- La navigation mobile principale doit privilégier `Accueil`, `IA`, `Activités`, `Collaborateurs` et `Notifications`; les autres modules restent accessibles via actions rapides, menu secondaire, profil, paramètres ou administration selon permissions.
+- Le design ne doit jamais contourner RBAC, poste RH officiel, appartenance aux groupes, confidentialité LA/CEO, protections fichier, notifications ou audit logs. Masquer ou afficher un élément côté UI n'est jamais une règle de sécurité suffisante.
+- La PWA doit conserver le fallback offline public, ne pas cacher de données privées et respecter les safe areas Android/iOS. Toute nouvelle couche visuelle mobile doit rester compatible avec le service worker existant.
+- Toute nouvelle copie visible du design doit respecter i18n FR/EN et éviter les textes hardcodés lorsque l'interface est réutilisable.

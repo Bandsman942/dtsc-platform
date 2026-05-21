@@ -11,6 +11,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Intégration de la base visuelle mobile/PWA premium issue du redesign: header compact, navigation bottom, composants glass/premium réutilisables et safe-area mobile pour les espaces privés sans remplacer les modules backend existants.
 - Ajout de préférences d'appel persistées par utilisateur: sons, notifications, alertes flottantes, événements participants, volume, durée des alertes et démarrage micro/caméra.
 - Ajout d'une alerte flottante globale d'événements d'appel alimentée par une route sécurisée avec polling léger pour les groupes dont l'utilisateur est membre.
 - Ajout d'une architecture persistée d'appels audio/vidéo pour les groupes `Mes collaborateurs`, avec sessions d'appel, participants, événements, messages système, notifications et audit de groupe.

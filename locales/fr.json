@@ -16,7 +16,8 @@
     "loadMore": "Charger plus",
     "loadPrevious": "Charger les précédents",
     "reset": "Réinitialiser",
-    "selectAll": "Tout sélectionner"
+    "selectAll": "Tout sélectionner",
+    "signOut": "Déconnexion"
   },
   "navigation": {
     "dashboard": "Dashboard",

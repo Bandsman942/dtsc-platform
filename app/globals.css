@@ -720,4 +720,45 @@
       transform: scale(1);
     }
   }
+
+  .dtsc-mobile-mesh {
+    background:
+      radial-gradient(ellipse 82% 46% at 48% -12%, color-mix(in oklch, var(--dtsc-cyan) 18%, transparent), transparent 64%),
+      radial-gradient(ellipse 54% 36% at 100% 34%, rgba(16, 185, 129, 0.10), transparent 68%),
+      var(--dtsc-page);
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (max-width: 1023px) {
+    .dtsc-panel,
+    .dtsc-card {
+      border-color: color-mix(in oklch, var(--dtsc-border) 68%, transparent);
+      background: color-mix(in oklch, var(--dtsc-surface) 84%, transparent);
+      border-radius: 1.75rem;
+      box-shadow: 0 18px 60px rgba(0, 23, 54, 0.10);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+    }
+
+    .dtsc-panel h1 {
+      font-size: clamp(1.75rem, 9vw, 2.55rem);
+      line-height: 1.03;
+      letter-spacing: 0;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font-size: 16px;
+    }
+  }
 }

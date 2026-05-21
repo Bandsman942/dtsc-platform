@@ -10,6 +10,7 @@ import { NavLinks } from "@/components/layout/nav-links";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
+import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -53,9 +54,10 @@ export async function AppShell({
   ]);
 
   return (
-    <div className="min-h-screen bg-dtsc-page text-dtsc-ink">
+    <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
       <SessionTimeoutGuard />
       <GlobalCallToast />
+      <MobilePwaHeader user={user} unreadNotifications={unreadNotifications} />
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
         <DtscLogo href="/dashboard" />
 
@@ -74,7 +76,7 @@ export async function AppShell({
       </aside>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl">
+        <header className="sticky top-0 z-30 hidden border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl lg:block">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             <Link href="/dashboard" className="font-extrabold text-dtsc-ink lg:hidden">
               DTSC
@@ -98,11 +100,9 @@ export async function AppShell({
               <SignOutButton />
             </div>
           </div>
-          <nav className="flex gap-2 overflow-x-auto border-t border-dtsc-border px-4 py-2 lg:hidden">
-            <NavLinks role={user.role} mobile unreadNotifications={unreadNotifications} showEmployeeActivities={Boolean(employeeRecord)} locale={user.locale} />
-          </nav>
         </header>
-        <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
+        <MobileBottomNavigation user={user} unreadNotifications={unreadNotifications} showEmployeeActivities={Boolean(employeeRecord)} />
         <PWAInstallPrompt />
         <PwaNotificationBridge notifications={latestUnreadNotifications} enabled={Boolean(user.pushNotificationsEnabled)} />
         <DtscFooter />
