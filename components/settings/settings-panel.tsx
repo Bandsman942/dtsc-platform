@@ -218,6 +218,7 @@ export function SettingsPanel({
                 <option value="/chat">Chatbot</option>
                 <option value="/billing">Abonnement</option>
                 <option value="/company">Entreprise</option>
+                <option value="/calendar">Calendrier interne</option>
                 <option value="/collaborators">Mes collaborateurs</option>
                 <option value="/activities">Activités DTSC</option>
                 <option value="/support">Support</option>

@@ -111,6 +111,7 @@ export function MobileBottomNavigation({
   const overflowItems = [
     { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
     { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
+    { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" },
     { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
     { href: "/support", labelKey: "navigation.support", fallback: "Support" },
   ];

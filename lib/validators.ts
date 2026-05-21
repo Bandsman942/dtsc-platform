@@ -37,7 +37,7 @@ export const accountPreferencesSchema = z.object({
   notifyBroadcastEnabled: z.coerce.boolean().default(true),
   pushNotificationsEnabled: z.coerce.boolean().default(false),
   interfaceDensity: z.enum(["COMFORTABLE", "COMPACT"]).default("COMFORTABLE"),
-  startPage: z.enum(["/dashboard", "/chat", "/billing", "/company", "/collaborators", "/activities", "/support", "/notifications", "/announcements", "/profile", "/settings"]).default("/dashboard"),
+  startPage: z.enum(["/dashboard", "/chat", "/billing", "/company", "/calendar", "/collaborators", "/activities", "/support", "/notifications", "/announcements", "/profile", "/settings"]).default("/dashboard"),
   locale: z.enum(["fr", "en"]).default("fr"),
   timezone: z.string().min(2).max(80).default("Africa/Kinshasa"),
   dateFormat: z.enum(["FR", "US", "ISO", "LONG"]).default("FR"),
@@ -78,6 +78,50 @@ export const supportTicketUpdateSchema = z.object({
   status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   resolution: z.string().max(2_000).optional().or(z.literal("")),
+});
+
+export const internalCalendarAvailabilitySchema = z.object({
+  collaboratorId: z.string().min(1),
+  dayOfWeek: z.coerce.number().int().min(0).max(6),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  availabilityStatus: z.enum(["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"]).default("Disponible"),
+  recurrenceType: z.enum(["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"]).default("Hebdomadaire"),
+  recurrenceUntil: z.coerce.date().optional().nullable(),
+  locationMode: z.enum(["Site DTSC", "Télétravail", "Externe", "Mission", "Non défini"]).default("Non défini"),
+  notes: z.string().max(800).optional().or(z.literal("")),
+}).refine((data) => data.endTime > data.startTime, {
+  message: "L'heure de fin doit être après l'heure de début.",
+  path: ["endTime"],
+});
+
+export const internalCalendarEventSchema = z.object({
+  title: z.string().min(3).max(180),
+  description: z.string().max(2000).optional().or(z.literal("")),
+  eventType: z.enum(["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"]).default("Tâche"),
+  startDateTime: z.coerce.date(),
+  endDateTime: z.coerce.date(),
+  status: z.enum(["Planifié", "En cours", "Terminé", "Reporté", "Annulé"]).default("Planifié"),
+  priority: z.enum(["Faible", "Normale", "Élevée", "Critique"]).default("Normale"),
+  locationMode: z.enum(["Site DTSC", "Télétravail", "Externe", "Mission", "Non défini"]).default("Non défini"),
+  physicalLocation: z.string().max(180).optional().or(z.literal("")),
+  meetingLink: z.string().url().max(500).optional().or(z.literal("")),
+  sourceModule: z.string().max(80).optional().or(z.literal("")),
+  sourceEntityType: z.string().max(80).optional().or(z.literal("")),
+  sourceEntityId: z.string().max(120).optional().or(z.literal("")),
+  ownerCollaboratorId: z.string().optional().or(z.literal("")),
+  departmentId: z.string().optional().or(z.literal("")),
+  visibility: z.enum(["Privé", "Département", "Participants", "Direction", "Public interne"]).default("Participants"),
+  participantIds: z.array(z.string().min(1)).max(50).default([]),
+  allowConflicts: z.coerce.boolean().default(false),
+}).refine((data) => data.endDateTime > data.startDateTime, {
+  message: "La fin doit être après le début.",
+  path: ["endDateTime"],
+});
+
+export const internalCalendarEventUpdateSchema = internalCalendarEventSchema.partial().extend({
+  participantIds: z.array(z.string().min(1)).max(50).optional(),
+  allowConflicts: z.coerce.boolean().default(false),
 });
 
 export const userStatusSchema = z.object({

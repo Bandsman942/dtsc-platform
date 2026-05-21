@@ -274,3 +274,13 @@ Conserver une hiérarchie visible pour:
 - La PWA privée doit autoriser portrait et paysage quand l'expérience métier le justifie, notamment pour les appels vidéo; ne pas verrouiller `orientation` sur portrait si cela dégrade les appels.
 - Toute nouvelle copie visible du design doit respecter i18n FR/EN et éviter les textes hardcodés lorsque l'interface est réutilisable.
 - Quand un module privé reçoit de nouveaux libellés visibles, ajouter les clés dans `locales/fr.json` et `locales/en.json`, puis utiliser `translate(locale, key)` avec la préférence utilisateur quand elle est disponible.
+
+## Règles DTSC — Calendrier interne
+
+- Le calendrier interne DTSC doit rester une fonctionnalité privée, protégée par session, middleware, RBAC, poste RH officiel et appartenance aux événements; ne jamais dépendre d'une API externe pour connaître les disponibilités.
+- Les disponibilités des collaborateurs sont persistées dans `CollaboratorAvailability`; les événements sont persistés dans `InternalCalendarEvent`, avec participants dans `InternalCalendarEventParticipant` et conflits dans `InternalCalendarConflict`.
+- Toute création ou modification d'événement doit vérifier les conflits de créneau, absences, congés, missions, indisponibilités et plages hors horaires disponibles avant persistance. Les conflits bloquants ne peuvent être ignorés que par un rôle autorisé.
+- Un collaborateur peut voir son propre planning; CEO/COO/HR & CFO/ADMIN ou rôle autorisé peuvent voir et gérer des vues plus larges selon les règles métier.
+- Les événements créés depuis COO, réunions, tâches, missions ou appels doivent renseigner `sourceModule`, `sourceEntityType` et `sourceEntityId` pour garder la traçabilité sans dupliquer inutilement les données source.
+- Toute action calendrier critique doit journaliser `AuditLog` et notifier les participants autorisés quand l'action les concerne.
+- L'UX mobile du calendrier suit le standard premium: filtres horizontaux, liste scrollable, détail plein écran ou panneau, actions dans menu `...`, formulaires en modale et aucune page mobile infinie.

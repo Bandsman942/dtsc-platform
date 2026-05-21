@@ -1,4 +1,4 @@
-const STATIC_CACHE = "dtsc-static-v4-20260521";
+const STATIC_CACHE = "dtsc-static-v5-20260521";
 const OFFLINE_URL = "/offline.html";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];
@@ -8,6 +8,7 @@ const PRIVATE_PATH_PREFIXES = [
   "/auth/",
   "/dashboard",
   "/chat",
+  "/calendar",
   "/activities",
   "/collaborators",
   "/admin",

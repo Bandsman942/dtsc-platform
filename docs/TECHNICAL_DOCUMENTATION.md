@@ -27,6 +27,7 @@ Objectifs couverts par le code actuel:
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
 - module prive Mes collaborateurs avec groupes, invitations, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, appels audio/vidéo LiveKit sécurisés par groupe, notifications et journal d'audit par groupe;
+- calendrier interne prive pour suivre disponibilites, evenements, participants, missions, absences, reunions, conflits de planning et synchronisations COO sans API calendrier externe;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces avancees, numerotations, checklist, tirets, gras, italique, souligne, palette de couleurs controlee et collage de contenus riches;
 - support sous forme de tickets conversationnels;
 - administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
@@ -119,6 +120,25 @@ Variables requises pour rejoindre réellement une room:
 - `LIVEKIT_URL`
 
 Ces secrets ne doivent jamais être exposés côté client. `lib/livekit-service.ts` génère uniquement des JWT participants temporaires pour les membres autorisés. Si LiveKit n'est pas configuré, la route de jonction retourne une erreur explicite `503` sans exposer de secret.
+
+### Calendrier interne DTSC
+
+Le module prive `/calendar` fournit un calendrier interne sans dependance a Google Calendar, Cal.com ou autre fournisseur externe. Il s'appuie sur les modeles Prisma suivants:
+
+- `CollaboratorAvailability`: plages de disponibilite, absence, conge, mission, teletravail ou presence sur site par collaborateur.
+- `InternalCalendarEvent`: evenement interne planifie avec type, statut, priorite, source metier, proprietaire, departement et visibilite.
+- `InternalCalendarEventParticipant`: participants d'un evenement avec statut et reponse.
+- `InternalCalendarConflict`: conflits detectes et historises sur un evenement.
+
+Routes principales:
+
+- `GET /api/calendar`: liste les evenements, disponibilites et collaborateurs visibles par l'utilisateur courant.
+- `POST /api/calendar`: cree un evenement, detecte les conflits, bloque les conflits non autorises, notifie les participants et journalise l'action.
+- `GET /api/calendar/availabilities`: liste les disponibilites accessibles.
+- `POST /api/calendar/availabilities`: cree une plage de disponibilite apres verification de propriete/RBAC.
+- `GET/PATCH/DELETE /api/calendar/events/[id]`: lit, modifie ou annule logiquement un evenement visible et autorise.
+
+La detection de conflits dans `lib/internal-calendar.ts` verifie les chevauchements avec d'autres evenements, les absences/conges/indisponibilites et les creneaux hors disponibilite. Les evenements COO crees via `POST /api/admin/coo/tasks` ou `POST /api/admin/coo/meetings` creent aussi un evenement calendrier source `COO` quand une date existe.
 
 Préférences utilisateur d'appel persistées sur `User`:
 

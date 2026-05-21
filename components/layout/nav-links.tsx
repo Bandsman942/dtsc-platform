@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
+import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
@@ -13,6 +13,7 @@ const items = [
   { href: "/chat", label: "Chatbot", icon: Bot, help: "Discuter avec l'assistant DTSC et exploiter votre contexte métier." },
   { href: "/billing", label: "Abonnement", icon: CreditCard, help: "Consulter votre plan, vos limites et vos factures." },
   { href: "/company", label: "Entreprise", icon: BriefcaseBusiness, help: "Renseigner votre entreprise, vos activités et vos documents métier." },
+  { href: "/calendar", label: "Calendrier interne", icon: CalendarDays, help: "Voir disponibilités, réunions, missions et conflits de planning." },
   { href: "/collaborators", label: "Mes collaborateurs", icon: UsersRound, help: "Créer des groupes, inviter des membres et échanger autour de vos projets." },
   { href: "/notifications", label: "Notifications", icon: Bell, help: "Lire les alertes importantes liées à votre compte." },
   { href: "/announcements", label: "Annonces", icon: Megaphone, help: "Suivre les publications internes et échanger en commentaires." },
@@ -46,6 +47,7 @@ export function NavLinks({
     "/chat": "navigation.chat",
     "/billing": "navigation.billing",
     "/company": "navigation.company",
+    "/calendar": "navigation.calendar",
     "/collaborators": "navigation.collaborators",
     "/notifications": "navigation.notifications",
     "/announcements": "navigation.announcements",

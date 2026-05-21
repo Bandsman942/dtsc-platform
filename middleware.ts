@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/documents", "/activities", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
+const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
@@ -78,6 +78,7 @@ export const config = {
     "/chat/:path*",
     "/billing/:path*",
     "/company/:path*",
+    "/calendar/:path*",
     "/documents/:path*",
     "/activities/:path*",
     "/collaborators/:path*",

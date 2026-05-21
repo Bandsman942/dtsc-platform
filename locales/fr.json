@@ -31,6 +31,7 @@
     "profile": "Profil",
     "settings": "Paramètres",
     "activities": "Activités DTSC",
+    "calendar": "Calendrier interne",
     "admin": "Administration"
   },
   "announcements": {
@@ -106,6 +107,54 @@
     "floatingCallAlerts": "Alertes flottantes d'appel",
     "startMuted": "Démarrer avec micro coupé",
     "startCameraOff": "Démarrer avec caméra désactivée"
+  },
+  "calendar": {
+    "eyebrow": "Planning collaboratif DTSC",
+    "title": "Calendrier interne",
+    "description": "Suivez disponibilités, tâches, réunions, missions, absences, télétravail et conflits avant d'assigner un collaborateur.",
+    "newEvent": "Nouvel événement",
+    "availability": "Disponibilité",
+    "availabilityDescription": "Définissez une plage de disponibilité, absence, congé, mission ou télétravail.",
+    "refresh": "Actualiser",
+    "upcoming": "À venir",
+    "conflicts": "Conflits",
+    "availabilities": "Disponibilités",
+    "collaborators": "Collaborateurs",
+    "events": "Événements",
+    "searchPlaceholder": "Rechercher par événement, statut, priorité ou collaborateur...",
+    "empty": "Aucun événement ne correspond à cette vue.",
+    "selectEvent": "Sélectionnez un événement pour voir les détails.",
+    "participants": "Participants",
+    "visibility": "Visibilité",
+    "cancelEvent": "Annuler l'événement",
+    "cancelConfirm": "Cette action annule l'événement et le retire des vues actives. Elle est journalisée.",
+    "eventFormDescription": "Créez un événement interne avec détection de conflits et notifications aux participants.",
+    "allowConflicts": "Créer malgré les avertissements autorisés",
+    "noConflicts": "Aucun conflit actif.",
+    "fields": {
+      "title": "Titre de l'événement",
+      "description": "Description, agenda ou consignes",
+      "location": "Lieu physique ou précision",
+      "notes": "Notes internes"
+    },
+    "views": {
+      "today": "Aujourd'hui",
+      "week": "Semaine",
+      "month": "Mois",
+      "collaborator": "Collaborateur",
+      "department": "Département",
+      "conflicts": "Conflits",
+      "availability": "Disponibilités"
+    },
+    "days": {
+      "sunday": "Dimanche",
+      "monday": "Lundi",
+      "tuesday": "Mardi",
+      "wednesday": "Mercredi",
+      "thursday": "Jeudi",
+      "friday": "Vendredi",
+      "saturday": "Samedi"
+    }
   },
   "calls": {
     "connected": "Appel connecté",

@@ -27,6 +27,9 @@ function fallbackTarget(type: string) {
   if (type === "ANNOUNCEMENT") {
     return "/announcements";
   }
+  if (type === "CALENDAR" || type.startsWith("CALENDAR_")) {
+    return "/calendar";
+  }
   if (type === "COLLAB_REQUEST" || type.startsWith("ACTIVITY_") || type.startsWith("LEGAL_") || type === "COO_MEETING") {
     return "/activities";
   }
@@ -55,6 +58,7 @@ const notificationFilters = [
   { id: "announcements", label: "Annonces" },
   { id: "publications", label: "Publications" },
   { id: "support", label: "Support" },
+  { id: "calendar", label: "Calendrier" },
   { id: "activities", label: "Activités" },
   { id: "admin", label: "Administration" },
   { id: "workflows", label: "Workflows" },
@@ -101,6 +105,9 @@ function filterNotification(notification: NotificationItem, filterId: string): b
   }
   if (filterId === "support") {
     return type === "SUPPORT" || targetUrl.startsWith("/support");
+  }
+  if (filterId === "calendar") {
+    return type === "CALENDAR" || type.startsWith("CALENDAR_") || targetUrl.startsWith("/calendar");
   }
   if (filterId === "activities") {
     return activityTypes.has(type) || targetUrl.startsWith("/activities");

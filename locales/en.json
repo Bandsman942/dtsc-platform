@@ -31,6 +31,7 @@
     "profile": "Profile",
     "settings": "Settings",
     "activities": "DTSC Activities",
+    "calendar": "Internal calendar",
     "admin": "Administration"
   },
   "announcements": {
@@ -106,6 +107,54 @@
     "floatingCallAlerts": "Floating call alerts",
     "startMuted": "Start muted",
     "startCameraOff": "Start with camera off"
+  },
+  "calendar": {
+    "eyebrow": "DTSC collaborative schedule",
+    "title": "Internal calendar",
+    "description": "Track availability, tasks, meetings, missions, absences, remote work and conflicts before assigning a collaborator.",
+    "newEvent": "New event",
+    "availability": "Availability",
+    "availabilityDescription": "Define an availability, absence, leave, mission or remote-work slot.",
+    "refresh": "Refresh",
+    "upcoming": "Upcoming",
+    "conflicts": "Conflicts",
+    "availabilities": "Availabilities",
+    "collaborators": "Collaborators",
+    "events": "Events",
+    "searchPlaceholder": "Search by event, status, priority or collaborator...",
+    "empty": "No event matches this view.",
+    "selectEvent": "Select an event to view details.",
+    "participants": "Participants",
+    "visibility": "Visibility",
+    "cancelEvent": "Cancel event",
+    "cancelConfirm": "This action cancels the event and removes it from active views. It is audited.",
+    "eventFormDescription": "Create an internal event with conflict detection and participant notifications.",
+    "allowConflicts": "Create despite authorized warnings",
+    "noConflicts": "No active conflict.",
+    "fields": {
+      "title": "Event title",
+      "description": "Description, agenda or instructions",
+      "location": "Physical location or detail",
+      "notes": "Internal notes"
+    },
+    "views": {
+      "today": "Today",
+      "week": "Week",
+      "month": "Month",
+      "collaborator": "Collaborator",
+      "department": "Department",
+      "conflicts": "Conflicts",
+      "availability": "Availabilities"
+    },
+    "days": {
+      "sunday": "Sunday",
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday"
+    }
   },
   "calls": {
     "connected": "Call connected",

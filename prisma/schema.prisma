@@ -1406,6 +1406,97 @@ model CooMeetingMinutes {
   @@index([createdById, createdAt])
 }
 
+model CollaboratorAvailability {
+  id                 String    @id @default(cuid())
+  collaboratorId     String
+  dayOfWeek          Int
+  startTime          String
+  endTime            String
+  availabilityStatus String    @default("Disponible")
+  recurrenceType     String    @default("Aucune")
+  recurrenceUntil    DateTime?
+  locationMode       String    @default("Non défini")
+  notes              String?
+  createdBy          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  @@index([collaboratorId, dayOfWeek, deletedAt])
+  @@index([availabilityStatus, locationMode])
+  @@index([createdBy, createdAt])
+}
+
+model InternalCalendarEvent {
+  id                    String   @id @default(cuid())
+  title                 String
+  description           String?
+  eventType             String   @default("Tâche")
+  startDateTime         DateTime
+  endDateTime           DateTime
+  status                String   @default("Planifié")
+  priority              String   @default("Normale")
+  locationMode          String   @default("Non défini")
+  physicalLocation      String?
+  meetingLink           String?
+  sourceModule          String?
+  sourceEntityType      String?
+  sourceEntityId        String?
+  createdBy             String?
+  ownerCollaboratorId   String?
+  departmentId          String?
+  visibility            String   @default("Participants")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  deletedAt             DateTime?
+  participants          InternalCalendarEventParticipant[]
+  conflicts             InternalCalendarConflict[]
+
+  @@index([startDateTime, endDateTime])
+  @@index([status, eventType])
+  @@index([ownerCollaboratorId, startDateTime])
+  @@index([departmentId, startDateTime])
+  @@index([sourceModule, sourceEntityType, sourceEntityId])
+  @@index([createdBy, createdAt])
+}
+
+model InternalCalendarEventParticipant {
+  id                String   @id @default(cuid())
+  eventId           String
+  collaboratorId    String
+  participantStatus String   @default("Actif")
+  responseStatus    String   @default("En attente")
+  role              String   @default("Participant")
+  joinedAt          DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  event             InternalCalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, collaboratorId])
+  @@index([collaboratorId, responseStatus])
+  @@index([eventId, participantStatus])
+}
+
+model InternalCalendarConflict {
+  id                         String   @id @default(cuid())
+  eventId                    String
+  collaboratorId             String
+  conflictType               String
+  conflictWithEventId        String?
+  conflictWithAvailabilityId String?
+  severity                   String   @default("Avertissement")
+  message                    String
+  resolved                   Boolean  @default(false)
+  resolvedBy                 String?
+  resolvedAt                 DateTime?
+  createdAt                  DateTime @default(now())
+  event                      InternalCalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, resolved])
+  @@index([collaboratorId, resolved, createdAt])
+  @@index([severity, createdAt])
+}
+
 model CooWorkflow {
   id             String   @id @default(cuid())
   name           String

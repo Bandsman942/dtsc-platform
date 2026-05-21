@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { detectCalendarConflicts } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
 import { cooSchemas } from "@/lib/validators";
 
@@ -86,7 +87,9 @@ async function createRecord(entity: CooEntity, data: Record<string, unknown>) {
     return prisma.cooOperation.create({ data: enriched as never });
   }
   if (entity === "tasks") {
-    return prisma.cooTask.create({ data: withClosedAt(enriched) as never });
+    const task = await prisma.cooTask.create({ data: withClosedAt(enriched) as never });
+    await createCalendarEventFromCooTask(task, String(data.createdById || ""));
+    return task;
   }
   if (entity === "recurringTasks") {
     return prisma.cooRecurringTask.create({ data: enriched as never });
@@ -98,7 +101,9 @@ async function createRecord(entity: CooEntity, data: Record<string, unknown>) {
     return prisma.cooBlocker.create({ data: enriched as never });
   }
   if (entity === "meetings") {
-    return createCooMeeting(enriched, String(data.createdById || ""));
+    const meeting = await createCooMeeting(enriched, String(data.createdById || ""));
+    await createCalendarEventFromCooMeeting(meeting, String(data.createdById || ""));
+    return meeting;
   }
   if (entity === "workflows") {
     const { shareEmployeeIds, shareInstruction, ...workflowData } = enriched;
@@ -301,6 +306,196 @@ async function shareWorkflow(workflowId: string, employeeIds: unknown, instructi
       });
     }
   }
+}
+
+type CooTaskCalendarRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  plannedDate: Date | null;
+  plannedStartTime: string | null;
+  deadlineTime: string | null;
+  priority: string;
+  status: string;
+  assigneeEmployeeId: string | null;
+  responsibleEmployeeId: string | null;
+  departmentId: string | null;
+};
+
+type CooMeetingCalendarRecord = {
+  id: string;
+  title: string;
+  agenda: string | null;
+  meetingDate: Date | null;
+  meetingTime: string | null;
+  meetingMode: string;
+  status: string;
+  participants: string | null;
+  reportOwnerEmployeeId: string | null;
+  departmentId: string | null;
+  collaborationGroupId: string | null;
+};
+
+async function createCalendarEventFromCooTask(task: CooTaskCalendarRecord, createdById: string) {
+  if (!task.plannedDate) {
+    return;
+  }
+  const startDateTime = dateWithTime(task.plannedDate, task.plannedStartTime || "08:00");
+  const endDateTime = task.deadlineTime ? dateWithTime(task.plannedDate, task.deadlineTime) : new Date(startDateTime.getTime() + 60 * 60 * 1000);
+  const participantIds = [...new Set([task.assigneeEmployeeId, task.responsibleEmployeeId].filter((id): id is string => Boolean(id)))];
+  await createCalendarEventFromCooSource({
+    title: task.title,
+    description: task.description,
+    eventType: "Tâche",
+    startDateTime,
+    endDateTime: endDateTime > startDateTime ? endDateTime : new Date(startDateTime.getTime() + 60 * 60 * 1000),
+    status: cooStatusToCalendarStatus(task.status),
+    priority: cooPriorityToCalendarPriority(task.priority),
+    sourceEntityType: "COO_TASK",
+    sourceEntityId: task.id,
+    ownerCollaboratorId: task.assigneeEmployeeId || task.responsibleEmployeeId,
+    departmentId: task.departmentId,
+    participantIds,
+    createdById,
+  });
+}
+
+async function createCalendarEventFromCooMeeting(meeting: CooMeetingCalendarRecord, createdById: string) {
+  if (!meeting.meetingDate) {
+    return;
+  }
+  const startDateTime = dateWithTime(meeting.meetingDate, meeting.meetingTime || "09:00");
+  const participantIds = [
+    ...String(meeting.participants || "").split(",").map((id) => id.trim()).filter(Boolean),
+    meeting.reportOwnerEmployeeId || "",
+  ].filter(Boolean);
+  await createCalendarEventFromCooSource({
+    title: meeting.title,
+    description: meeting.agenda,
+    eventType: meeting.meetingMode === "VIDEO" ? "Appel vidéo" : meeting.meetingMode === "AUDIO" ? "Appel audio" : "Réunion",
+    startDateTime,
+    endDateTime: new Date(startDateTime.getTime() + 60 * 60 * 1000),
+    status: cooStatusToCalendarStatus(meeting.status),
+    priority: "Normale",
+    sourceEntityType: "COO_MEETING",
+    sourceEntityId: meeting.id,
+    ownerCollaboratorId: meeting.reportOwnerEmployeeId,
+    departmentId: meeting.departmentId,
+    participantIds: [...new Set(participantIds)],
+    createdById,
+    meetingLink: meeting.collaborationGroupId ? `/collaborators?group=${meeting.collaborationGroupId}` : null,
+  });
+}
+
+async function createCalendarEventFromCooSource({
+  title,
+  description,
+  eventType,
+  startDateTime,
+  endDateTime,
+  status,
+  priority,
+  sourceEntityType,
+  sourceEntityId,
+  ownerCollaboratorId,
+  departmentId,
+  participantIds,
+  createdById,
+  meetingLink,
+}: {
+  title: string;
+  description: string | null;
+  eventType: string;
+  startDateTime: Date;
+  endDateTime: Date;
+  status: string;
+  priority: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  ownerCollaboratorId?: string | null;
+  departmentId?: string | null;
+  participantIds: string[];
+  createdById: string;
+  meetingLink?: string | null;
+}) {
+  const existing = await prisma.internalCalendarEvent.findFirst({
+    where: { sourceModule: "COO", sourceEntityType, sourceEntityId, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) {
+    return;
+  }
+  const allParticipantIds = [...new Set([ownerCollaboratorId || "", ...participantIds].filter(Boolean))];
+  const conflicts = await detectCalendarConflicts({ participantIds: allParticipantIds, startDateTime, endDateTime });
+  await prisma.internalCalendarEvent.create({
+    data: {
+      title,
+      description,
+      eventType,
+      startDateTime,
+      endDateTime,
+      status,
+      priority,
+      locationMode: "Non défini",
+      sourceModule: "COO",
+      sourceEntityType,
+      sourceEntityId,
+      createdBy: createdById,
+      ownerCollaboratorId: ownerCollaboratorId || null,
+      departmentId: departmentId || null,
+      meetingLink: meetingLink || null,
+      visibility: "Participants",
+      participants: {
+        create: allParticipantIds.map((collaboratorId) => ({
+          collaboratorId,
+          role: collaboratorId === ownerCollaboratorId ? "Organisateur" : "Participant",
+        })),
+      },
+      conflicts: {
+        create: conflicts.map((conflict) => ({
+          collaboratorId: conflict.collaboratorId,
+          conflictType: conflict.conflictType,
+          conflictWithEventId: conflict.conflictWithEventId || null,
+          conflictWithAvailabilityId: conflict.conflictWithAvailabilityId || null,
+          severity: conflict.severity,
+          message: conflict.message,
+        })),
+      },
+    },
+  });
+}
+
+function dateWithTime(date: Date, time: string) {
+  const [hours = "0", minutes = "0"] = time.split(":");
+  const next = new Date(date);
+  next.setHours(Number(hours), Number(minutes), 0, 0);
+  return next;
+}
+
+function cooStatusToCalendarStatus(status: string) {
+  if (status === "COMPLETED" || status === "VALIDATED" || status === "HELD" || status === "CLOSED") {
+    return "Terminé";
+  }
+  if (status === "CANCELED") {
+    return "Annulé";
+  }
+  if (status === "IN_PROGRESS") {
+    return "En cours";
+  }
+  return "Planifié";
+}
+
+function cooPriorityToCalendarPriority(priority: string) {
+  if (priority === "LOW") {
+    return "Faible";
+  }
+  if (priority === "HIGH" || priority === "URGENT") {
+    return "Élevée";
+  }
+  if (priority === "CRITICAL") {
+    return "Critique";
+  }
+  return "Normale";
 }
 
 function countIds(value: unknown) {

@@ -6,6 +6,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module privé `Calendrier interne` avec page `/calendar`, navigation privée, vues mobiles premium, événements, disponibilités, participants et conflits.
+- Ajout des modèles Prisma `CollaboratorAvailability`, `InternalCalendarEvent`, `InternalCalendarEventParticipant` et `InternalCalendarConflict` avec migration `20260521193000_internal_calendar`.
+- Ajout des routes sécurisées `GET/POST /api/calendar`, `GET/POST /api/calendar/availabilities` et `GET/PATCH/DELETE /api/calendar/events/[id]`.
+- Ajout d'une synchronisation COO vers le calendrier interne pour les tâches datées et réunions datées créées depuis l'Administration COO.
 - Ajout d'une route sécurisée `POST /api/announcements/images` pour téléverser les images d'annonces via Supabase Storage, avec validation type/taille, rate limiting, audit log et URL publique contrôlée.
 - Ajout de pièces jointes persistées sur les demandes collaboratives (`CollaboratorRequest.attachments`) avec migration `20260521152000_collaborator_request_attachments`.
 - Ajout de réactions persistées `Like`/`Dislike` sur les réponses assistant du chatbot privé, avec migration `20260521113000_message_feedback` et route sécurisée `PATCH /api/conversations/messages/[id]/feedback`.
@@ -25,6 +29,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Le calendrier interne détecte les chevauchements, absences, congés, missions, indisponibilités et créneaux hors horaires disponibles avant création ou modification d'événement.
 - Les messages sortants des groupes `Mes collaborateurs` affichent un accusé compact: une coche quand le message est envoyé et deux coches vertes lorsque tous les autres membres actifs ont confirmé la lecture.
 - Sur mobile/PWA, le sélecteur de vue plein écran d'appel disparaît automatiquement après le choix d'un participant ou du partage d'écran, puis réapparaît au toucher de la scène.
 - Le plein écran des appels vidéo gagne un sélecteur premium permettant de focaliser la vue automatique, un partage d'écran ou un participant précis sur desktop/mobile, avec un fond de scène uniformisé autour des tuiles arrondies.
