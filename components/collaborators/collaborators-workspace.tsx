@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArrowLeft, Check, Copy, Eye, Mic, MicOff, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
+import { Archive, ArrowLeft, Check, Copy, Eye, Maximize2, Mic, MicOff, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
 import { LiveKitRoom, RoomAudioRenderer, VideoConference } from "@livekit/components-react";
 import { ConnectionState, Room } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { playCallSound } from "@/components/calls/call-sounds";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { translate } from "@/lib/i18n";
 import { formatEnumLabel } from "@/lib/labels";
 import { getParticipantColor } from "@/lib/participant-colors";
 import { formatRelativeUserDateTime, type UserDatePreferences } from "@/lib/user-format";
@@ -1346,7 +1347,9 @@ function GroupCallRoom({
   const [connectionLabel, setConnectionLabel] = useState("Connexion à l'appel...");
   const [callError, setCallError] = useState("");
   const [callChatOpen, setCallChatOpen] = useState(false);
+  const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
+  const t = (key: string) => translate(userPreferences.locale, key);
   const connectedParticipants = group?.calls
     ?.find((call) => call.id === joinedCall.call.id)
     ?.participants?.filter((participant) => participant.status === "JOINED") || joinedCall.call.participants?.filter((participant) => participant.status === "JOINED") || [];
@@ -1382,8 +1385,32 @@ function GroupCallRoom({
     });
   }, [callPreferences.callSoundVolume, callPreferences.callSoundsEnabled, callPreferences.connectionIssueSoundsEnabled, cameraEnabled, joinedCall.call.callType, room]);
 
+  async function toggleScreenShare() {
+    const nextValue = !screenShareEnabled;
+    try {
+      await room.localParticipant.setScreenShareEnabled(nextValue);
+      setScreenShareEnabled(nextValue);
+      setCallError("");
+    } catch {
+      setCallError("Le partage d'écran n'est pas disponible sur cet appareil ou ce navigateur.");
+    }
+  }
+
+  async function openFullscreen() {
+    try {
+      const element = document.querySelector(".dtsc-call-shell");
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if (element instanceof HTMLElement) {
+        await element.requestFullscreen();
+      }
+    } catch {
+      setCallError("Le plein écran n'est pas disponible sur cet appareil.");
+    }
+  }
+
   return (
-    <div className="relative grid min-h-[78vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="dtsc-call-shell relative grid min-h-[78vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
       <section className="flex min-h-0 flex-col">
         <div className="shrink-0 border-b border-white/10 p-3 sm:p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">{joinedCall.call.callType === "VIDEO" ? "Réunion vidéo DTSC" : "Réunion audio DTSC"}</p>
@@ -1392,6 +1419,11 @@ function GroupCallRoom({
           {callError && <p className="mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100">{callError}</p>}
         </div>
         <div className="min-h-0 flex-1 p-2 sm:p-3">
+          {callChatOpen && (
+            <div className="mb-2 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-bold text-cyan-100">
+              {t("calls.activeWhileChatOpen")}
+            </div>
+          )}
           <LiveKitRoom
             room={room}
             token={joinedCall.token}
@@ -1433,25 +1465,33 @@ function GroupCallRoom({
         <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 p-3 sm:gap-3 sm:p-4">
           <Button type="button" variant="outline" onClick={() => setCallChatOpen((value) => !value)} className="rounded-full border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20">
             <MessageSquare className="h-4 w-4" />
-            Chat
+            {t("calls.chat")}
           </Button>
           <Button type="button" variant="outline" onClick={() => setMicrophoneEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
             {microphoneEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-            {microphoneEnabled ? "Micro actif" : "Micro coupé"}
+            {microphoneEnabled ? t("calls.microphoneOn") : t("calls.microphoneMuted")}
           </Button>
           {joinedCall.call.callType === "VIDEO" && (
             <Button type="button" variant="outline" onClick={() => setCameraEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
               {cameraEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
-              {cameraEnabled ? "Caméra active" : "Caméra coupée"}
+              {cameraEnabled ? t("calls.cameraOn") : t("calls.cameraOff")}
             </Button>
           )}
+          <Button type="button" variant="outline" onClick={() => { void toggleScreenShare(); }} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+            {screenShareEnabled ? <MonitorOff className="h-4 w-4" /> : <MonitorUp className="h-4 w-4" />}
+            {screenShareEnabled ? t("calls.stopScreenShare") : t("calls.shareScreen")}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => { void openFullscreen(); }} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+            <Maximize2 className="h-4 w-4" />
+            {t("calls.fullscreen")}
+          </Button>
           <Button type="button" onClick={() => { void onLeave(); }} className="rounded-full bg-red-600 text-white hover:bg-red-700">
             <PhoneOff className="h-4 w-4" />
-            Quitter
+            {t("calls.leave")}
           </Button>
           {canEnd && (
             <Button type="button" variant="outline" onClick={() => { void onEnd(); }} className="rounded-full border-red-300 bg-red-50 text-red-700 hover:bg-red-100">
-              Terminer
+              {t("calls.end")}
             </Button>
           )}
         </div>

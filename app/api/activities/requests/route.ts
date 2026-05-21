@@ -14,6 +14,14 @@ const requestSchema = z.object({
   relatedEntityType: z.string().max(80).optional().or(z.literal("")),
   relatedEntityId: z.string().max(120).optional().or(z.literal("")),
   message: z.string().min(5).max(2500),
+  attachments: z.array(z.object({
+    name: z.string().min(1).max(220),
+    url: z.string().regex(/^\/api\/activities\/files\/.+/).max(900),
+    type: z.string().max(160).optional().or(z.literal("")),
+    size: z.number().int().min(0).max(10_000_000),
+    uploadedAt: z.string().datetime(),
+    uploadedBy: z.string().max(160).optional().or(z.literal("")),
+  })).max(8).default([]),
 });
 
 export async function POST(req: Request) {
@@ -50,6 +58,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid recipient", message: "Destinataire collaborateur introuvable." }, { status: 400 });
   }
 
+  const attachments = parsed.data.attachments.map((attachment) => ({
+    name: attachment.name,
+    url: attachment.url,
+    type: attachment.type || "",
+    size: attachment.size,
+    uploadedAt: attachment.uploadedAt,
+    ...(attachment.uploadedBy ? { uploadedBy: attachment.uploadedBy } : {}),
+  }));
+
   const collaboratorRequest = await prisma.collaboratorRequest.create({
     data: {
       title: parsed.data.title,
@@ -65,6 +82,7 @@ export async function POST(req: Request) {
       relatedEntityType: parsed.data.relatedEntityType || null,
       relatedEntityId: parsed.data.relatedEntityId || null,
       message: parsed.data.message,
+      attachments,
       status: "SUBMITTED",
       createdById: user.id,
     },
@@ -88,7 +106,7 @@ export async function POST(req: Request) {
     entity: "CollaboratorRequest",
     entityId: collaboratorRequest.id,
     request: req,
-    metadata: { targetEmployeeId: target.id, priority: parsed.data.priority },
+    metadata: { targetEmployeeId: target.id, priority: parsed.data.priority, attachmentCount: attachments.length },
   });
   await writeApiLog({ request: req, statusCode: 201, userId: user.id, startedAt, metadata: { requestId: collaboratorRequest.id } });
   return NextResponse.json({ ok: true, request: collaboratorRequest }, { status: 201 });

@@ -52,26 +52,44 @@
     --lk-accent-fg: #001736;
     --lk-control-bg: rgba(255, 255, 255, 0.12);
     --lk-control-fg: #f8fafc;
+    isolation: isolate;
   }
 
-  .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout, .lk-participant-tile) {
+  .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout) {
     min-width: 0;
-    background: #06111f;
+    height: 100%;
+    background:
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.18), transparent 32rem),
+      linear-gradient(135deg, #06111f, #0f172a 60%, #06111f);
     color: #f8fafc;
   }
 
-  .dtsc-livekit-room :where(.lk-button, button[class*="lk-"]) {
+  .dtsc-livekit-room :where(.lk-participant-tile) {
+    overflow: hidden;
+    border: 1px solid rgba(34, 211, 238, 0.22);
+    border-radius: 1.5rem;
+    background: rgba(15, 23, 42, 0.72);
+    box-shadow: 0 24px 70px rgba(0, 23, 54, 0.32);
+  }
+
+  .dtsc-livekit-room :where(.lk-participant-tile video) {
+    object-fit: cover;
+  }
+
+  .dtsc-livekit-room :where(.lk-participant-name, .lk-participant-metadata) {
     border-radius: 999px;
-    border: 1px solid rgba(34, 211, 238, 0.28);
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(6, 17, 31, 0.68);
     color: #f8fafc;
     font-weight: 800;
+    backdrop-filter: blur(14px);
   }
 
   .dtsc-livekit-room :where(.lk-control-bar) {
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(6, 17, 31, 0.92);
-    backdrop-filter: blur(14px);
+    display: none;
+  }
+
+  .dtsc-livekit-room :where(.lk-button, button[class*="lk-"]) {
+    min-width: 0;
   }
 }
 
@@ -558,14 +576,22 @@
   .dtsc-publication-content img {
     display: block;
     width: 100%;
-    height: auto;
-    max-height: 420px;
+    height: clamp(220px, 42vw, 420px);
+    max-height: 460px;
     max-width: 100%;
-    object-fit: contain;
+    object-fit: cover;
+    object-position: center;
     border-radius: 1rem;
     border: 1px solid var(--dtsc-border);
-    background: var(--dtsc-page);
+    background: color-mix(in srgb, var(--dtsc-surface) 82%, transparent);
     box-shadow: 0 18px 48px rgba(0, 43, 91, 0.12);
+  }
+
+  @media (max-width: 640px) {
+    .dtsc-publication-content img {
+      height: clamp(190px, 62vw, 320px);
+      border-radius: 1.25rem;
+    }
   }
 
   .dtsc-publication-content figure {

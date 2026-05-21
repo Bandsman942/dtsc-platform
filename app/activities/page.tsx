@@ -368,6 +368,7 @@ export default async function ActivitiesPage() {
         requesterName: request.requesterName,
         targetName: request.targetName,
         canRespond: request.targetEmployeeId === employee.id,
+        attachments: normalizeRequestAttachments(request.attachments, request.requesterName),
         date: toIso(request.dueDate || request.updatedAt),
         priority: request.priority,
       })),
@@ -756,6 +757,30 @@ export default async function ActivitiesPage() {
 
 function toIso(value: Date) {
   return value.toISOString();
+}
+
+function normalizeRequestAttachments(value: unknown, fallbackAuthor?: string | null) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const attachment = item as Record<string, unknown>;
+    const url = typeof attachment.url === "string" ? attachment.url : "";
+    if (!url.startsWith("/api/activities/files/")) {
+      return [];
+    }
+    return [{
+      name: typeof attachment.name === "string" ? attachment.name : "Document DTSC",
+      url,
+      type: typeof attachment.type === "string" ? attachment.type : "",
+      size: typeof attachment.size === "number" ? attachment.size : 0,
+      uploadedAt: typeof attachment.uploadedAt === "string" ? attachment.uploadedAt : new Date().toISOString(),
+      uploadedBy: typeof attachment.uploadedBy === "string" ? attachment.uploadedBy : fallbackAuthor || "",
+    }];
+  });
 }
 
 function formatDate(value: Date) {

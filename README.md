@@ -37,7 +37,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
 - Contribution brouillon aux publications publiques pour rôles non-client autorisés, avec publication et suppression réservées aux administrateurs
 - Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
-- Éditeur riche pour les publications publiques et annonces: gras, italique, soulignement, palette de couleurs contrôlée, listes avancées, liens, emojis, collage d'images et upload d'images optimisées en WebP via Supabase Storage
+- Éditeur riche pour les publications publiques et annonces: gras, italique, soulignement, palette de couleurs contrôlée, listes avancées, liens, emojis, collage/dépôt d'images, upload d'images optimisées via Supabase Storage et aperçu mobile/desktop avant publication
 - Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
 - Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
 - Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
@@ -57,7 +57,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.
-- Conversations mobiles optimisées: dialogs hauts, fils de groupe/chatbot plus immersifs, cartes de groupes plus lisibles et chat texte disponible pendant les appels de groupe.
+- Conversations mobiles optimisées: dialogs hauts, fils de groupe/chatbot plus immersifs, cartes de groupes plus lisibles, chat texte disponible pendant les appels de groupe, partage d'écran et contrôles d'appel DTSC premium.
 - UI mobile/PWA compacte: accordéons premium pour Dashboard, Entreprise, Abonnement et Profil, navigation flottante Administration, formulaires support/annonces repliables, commentaires repliés par défaut et filtres avancés des notifications.
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
 - Réactions persistées Like/Dislike et copie compacte sous chaque réponse assistant du chatbot privé.
@@ -74,7 +74,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque
 - Sous-module COO avec opérations, tâches, réunions en mode commentaires/audio/vidéo, groupes de réunion liés, décisions, tâches de suivi, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
 - Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO filtrable par période, objectifs stratégiques, alertes critiques et journal de supervision
-- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie, mentions `@collaborateur` dans les commentaires et téléchargement des bulletins personnels
+- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes avec pièces jointes privées, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie, mentions `@collaborateur` dans les commentaires et téléchargement des bulletins personnels
 - Module privé Mes collaborateurs: groupes avec en-tête sobre et détails consultables au clic, invitations individuelles ou groupées acceptées/refusées, badges de mentions non lues, réponses à messages, membres, rôles de groupe, messagerie paginée avec menus `...`, couleurs stables par intervenant, mentions interactives, appels audio/vidéo LiveKit sécurisés, notifications, snapshots de conversations chatbot et contact contrôlé de l'équipe DTSC
 - Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
 - Page PWA `/offline` et fallback statique `public/offline.html` avec informations publiques DTSC, services, FAQ et contact essentiel consultables hors connexion sans cache de données privées, avec vérification automatique des mises à jour au retour en ligne pour les applications installées

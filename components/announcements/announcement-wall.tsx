@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { translate } from "@/lib/i18n";
 import { formatEnumLabel } from "@/lib/labels";
 import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
 
@@ -53,16 +54,22 @@ export function AnnouncementWall({
   allowClientAnnouncements,
   commentEditWindowMinutes,
   transferRecipients,
+  locale = "fr",
 }: {
   announcements: Announcement[];
   currentUserId: string;
   role: UserRole;
   allowClientAnnouncements: boolean;
   commentEditWindowMinutes: number;
+  locale?: string | null;
   transferRecipients: Array<{ id: string; name: string; email: string; role: UserRole; avatarUrl?: string | null; jobTitle?: string | null; departmentName?: string | null; positionTitle?: string | null }>;
 }) {
   const router = useRouter();
+  const t = (key: string) => translate(locale, key);
   const [feedback, setFeedback] = useState("");
+  const [composerTitle, setComposerTitle] = useState("");
+  const [composerContent, setComposerContent] = useState({ text: "", html: "" });
+  const [previewMode, setPreviewMode] = useState<"mobile" | "desktop" | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [editingComment, setEditingComment] = useState<AnnouncementCommentItem | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ announcementId: string; comment: AnnouncementCommentItem } | null>(null);
@@ -116,6 +123,8 @@ export function AnnouncementWall({
     setFeedback(response.ok ? "Annonce publiée." : "Publication non autorisée ou invalide.");
     if (response.ok) {
       event.currentTarget.reset();
+      setComposerTitle("");
+      setComposerContent({ text: "", html: "" });
       router.refresh();
     }
   }
@@ -298,26 +307,37 @@ export function AnnouncementWall({
           <div className="flex items-center gap-3">
             <Megaphone className="h-5 w-5 text-cyan-500" />
             <div>
-              <h2 className="font-black text-dtsc-ink">Publication</h2>
+              <h2 className="font-black text-dtsc-ink">{t("announcements.publisher")}</h2>
               <p className="text-sm text-dtsc-muted">
-                {canPost ? "Votre rôle permet de publier sur le mur DTSC." : "Les clients peuvent lire, commenter et réagir aux annonces."}
+                {canPost ? t("announcements.publisherAllowed") : t("announcements.publisherReadonly")}
               </p>
             </div>
           </div>
           {canPost && (
             <details className="mt-5 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface">
               <summary className="cursor-pointer list-none px-4 py-3 text-sm font-black text-dtsc-blue [&::-webkit-details-marker]:hidden">
-                Créer une nouvelle annonce
+                {t("announcements.createNew")}
               </summary>
               <form onSubmit={createAnnouncement} className="space-y-3 border-t border-dtsc-border p-4">
-                <Input name="title" placeholder="Titre de l'annonce" required />
+                <Input name="title" value={composerTitle} onChange={(event) => setComposerTitle(event.target.value)} placeholder={t("announcements.titlePlaceholder")} required />
                 <RichTextEditor
                   textName="content"
                   htmlName="contentHtml"
-                  placeholder="Contenu de l'annonce. Vous pouvez utiliser la mise en forme ou coller un texte déjà décoré."
+                  placeholder={t("announcements.contentPlaceholder")}
                   minHeightClassName="min-h-40"
+                  allowImageUpload
+                  imageUploadUrl="/api/announcements/images"
+                  onContentChange={setComposerContent}
                 />
-                <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Publier</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">{t("announcements.publish")}</Button>
+                  <Button type="button" variant="outline" onClick={() => setPreviewMode("mobile")} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                    {t("announcements.previewMobile")}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setPreviewMode("desktop")} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                    {t("announcements.previewDesktop")}
+                  </Button>
+                </div>
               </form>
             </details>
           )}
@@ -333,7 +353,7 @@ export function AnnouncementWall({
             pageCount={announcementList.pageCount}
             totalCount={announcementList.totalCount}
             filteredCount={announcementList.filteredCount}
-            placeholder="Rechercher dans les annonces, auteurs et commentaires..."
+            placeholder={t("announcements.searchPlaceholder")}
             onPageChange={announcementList.setPage}
           />
         )}
@@ -360,17 +380,17 @@ export function AnnouncementWall({
                   className="absolute right-4 top-4 sm:right-5 sm:top-5"
                   label="Actions de l'annonce"
                   items={[
-                    { key: "info", label: "Infos sur l'annonce", icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
-                    ...(isAdmin ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => setEditingAnnouncement(announcement) }] : []),
-                    ...(isAdmin ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
-                    { key: "copy", label: "Copier", icon: Copy, onSelect: () => copyAnnouncement(announcement) },
-                    { key: "transfer", label: "Transférer", icon: Send, onSelect: () => setTransferAnnouncement(announcement) },
-                    { key: "metrics", label: "Voir les indicateurs", icon: BarChart3, onSelect: () => setMetricsAnnouncement(announcement) },
-                    { key: "report", label: "Signaler", icon: Flag, onSelect: () => setReportAnnouncement(announcement) },
-                    ...(isAdmin && announcement.status !== "ARCHIVED" ? [{ key: "archive", label: "Archiver", icon: Archive, onSelect: () => updateAnnouncementStatus(announcement, "ARCHIVE") }] : []),
-                    ...(isAdmin && announcement.status === "ARCHIVED" ? [{ key: "restore", label: "Restaurer", icon: Undo2, onSelect: () => updateAnnouncementStatus(announcement, "RESTORE") }] : []),
-                    ...(isAdmin && !announcement.pinnedAt ? [{ key: "pin", label: "Épingler", icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "PIN") }] : []),
-                    ...(isAdmin && announcement.pinnedAt ? [{ key: "unpin", label: "Désépingler", icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "UNPIN") }] : []),
+                    { key: "info", label: t("announcements.info"), icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
+                    ...(isAdmin ? [{ key: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => setEditingAnnouncement(announcement) }] : []),
+                    ...(isAdmin ? [{ key: "delete", label: t("common.delete"), icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
+                    { key: "copy", label: t("common.copy"), icon: Copy, onSelect: () => copyAnnouncement(announcement) },
+                    { key: "transfer", label: t("common.transfer"), icon: Send, onSelect: () => setTransferAnnouncement(announcement) },
+                    { key: "metrics", label: t("announcements.indicators"), icon: BarChart3, onSelect: () => setMetricsAnnouncement(announcement) },
+                    { key: "report", label: t("announcements.report"), icon: Flag, onSelect: () => setReportAnnouncement(announcement) },
+                    ...(isAdmin && announcement.status !== "ARCHIVED" ? [{ key: "archive", label: t("common.archive"), icon: Archive, onSelect: () => updateAnnouncementStatus(announcement, "ARCHIVE") }] : []),
+                    ...(isAdmin && announcement.status === "ARCHIVED" ? [{ key: "restore", label: t("common.restore"), icon: Undo2, onSelect: () => updateAnnouncementStatus(announcement, "RESTORE") }] : []),
+                    ...(isAdmin && !announcement.pinnedAt ? [{ key: "pin", label: t("common.pin"), icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "PIN") }] : []),
+                    ...(isAdmin && announcement.pinnedAt ? [{ key: "unpin", label: t("announcements.unpin"), icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "UNPIN") }] : []),
                   ]}
                 />
               </div>
@@ -395,7 +415,7 @@ export function AnnouncementWall({
                   className="inline-flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-bold text-dtsc-blue transition hover:bg-cyan-100"
                 >
                   <MessageCircle className="h-4 w-4" />
-                  {openCommentIds.includes(announcement.id) ? "Masquer" : `${announcement.comments.length} commentaires`}
+                  {openCommentIds.includes(announcement.id) ? t("announcements.hideComments") : `${announcement.comments.length} ${t("announcements.comments")}`}
                 </button>
               </div>
               {openCommentIds.includes(announcement.id) && (
@@ -421,7 +441,7 @@ export function AnnouncementWall({
         })}
         {!announcementList.filteredCount && (
           <div className="dtsc-card p-8 text-center text-dtsc-muted">
-            {announcements.length ? "Aucune annonce ne correspond à votre recherche." : "Aucune annonce publiée."}
+            {announcements.length ? t("announcements.noSearchResults") : t("announcements.empty")}
           </div>
         )}
       </section>
@@ -434,12 +454,27 @@ export function AnnouncementWall({
               textName="content"
               htmlName="contentHtml"
               defaultValue={editingAnnouncement.content}
-              placeholder="Contenu de l'annonce"
+              placeholder={t("announcements.contentPlaceholder")}
               minHeightClassName="min-h-48"
+              allowImageUpload
+              imageUploadUrl="/api/announcements/images"
             />
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">{t("common.save")}</Button>
           </form>
         )}
+      </Dialog>
+      <Dialog open={Boolean(previewMode)} title={t("announcements.previewTitle")} onClose={() => setPreviewMode(null)} className="max-w-6xl">
+        <div className={`mx-auto rounded-[2rem] border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_24px_80px_rgba(0,43,91,0.16)] ${previewMode === "mobile" ? "max-w-sm" : "max-w-4xl"}`}>
+          <div className="rounded-[1.5rem] border border-dtsc-border bg-dtsc-page p-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-600">DTSC</p>
+            <h2 className="mt-2 break-words text-2xl font-black text-dtsc-ink">{composerTitle || t("announcements.titlePlaceholder")}</h2>
+            {composerContent.html ? (
+              <RichAnnouncementContent content={composerContent.html} />
+            ) : (
+              <p className="mt-3 text-sm leading-7 text-dtsc-muted">{composerContent.text || t("announcements.previewEmpty")}</p>
+            )}
+          </div>
+        </div>
       </Dialog>
       <Dialog open={Boolean(editingComment)} title="Modifier le commentaire" onClose={() => setEditingComment(null)}>
         {editingComment && (

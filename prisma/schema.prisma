@@ -1723,6 +1723,7 @@ model CollaboratorRequest {
   relatedEntityId     String?
   message             String
   response            String?
+  attachments         Json?
   createdById         String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

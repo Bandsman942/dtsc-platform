@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, Download, Eye, FileText, GitBranch, MessageSquare, Send, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, Download, Eye, FileText, GitBranch, MessageSquare, Send, UploadCloud, Users, X } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -27,8 +27,18 @@ type ActivityItem = {
   date: string;
   href?: string | null;
   hrefLabel?: string | null;
+  attachments?: ActivityAttachment[];
   priority?: string | null;
   progress?: number | null;
+};
+
+type ActivityAttachment = {
+  name: string;
+  url: string;
+  type?: string;
+  size: number;
+  uploadedAt: string;
+  uploadedBy?: string;
 };
 
 type ActivitySection = {
@@ -651,6 +661,7 @@ function CollaboratorRequestConversation({ item, response }: { item: ActivityIte
           Demande de {item.requesterName || "collaborateur"} vers {item.targetName || "destinataire"}
         </p>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-dtsc-ink">{requestMessage}</p>
+        {item.attachments?.length ? <AttachmentList attachments={item.attachments} className="mt-4" /> : null}
       </div>
       {responseMessage ? (
         <div className="ml-0 rounded-2xl border border-cyan-300/70 bg-cyan-400/10 p-4 shadow-[0_18px_45px_rgba(0,186,217,0.10)] sm:ml-8">
@@ -668,24 +679,161 @@ function CollaboratorRequestConversation({ item, response }: { item: ActivityIte
   );
 }
 
+function RequestAttachmentField() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+
+  function syncInput(nextFiles: File[]) {
+    setFiles(nextFiles);
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+    const transfer = new DataTransfer();
+    nextFiles.forEach((file) => transfer.items.add(file));
+    input.files = transfer.files;
+  }
+
+  function addFiles(fileList: FileList | File[]) {
+    const incoming = Array.from(fileList).filter((file) => file.size > 0);
+    const existingKeys = new Set(files.map(fileKey));
+    const merged = [...files];
+    for (const file of incoming) {
+      const key = fileKey(file);
+      if (!existingKeys.has(key)) {
+        merged.push(file);
+        existingKeys.add(key);
+      }
+    }
+    syncInput(merged.slice(0, 8));
+  }
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    addFiles(event.currentTarget.files || []);
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    addFiles(event.dataTransfer.files);
+  }
+
+  function removeFile(file: File) {
+    syncInput(files.filter((item) => fileKey(item) !== fileKey(file)));
+  }
+
+  return (
+    <div className="mt-3 grid gap-2">
+      <label
+        onDrop={handleDrop}
+        onDragOver={(event) => event.preventDefault()}
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-cyan-300/70 bg-cyan-400/10 px-4 py-5 text-center transition hover:bg-cyan-400/15"
+      >
+        <UploadCloud className="h-5 w-5 text-cyan-500" />
+        <span className="text-sm font-black text-dtsc-ink">Joindre des fichiers</span>
+        <span className="text-xs leading-5 text-dtsc-muted">PDF, images, Office, CSV ou texte. Glissez-déposez ou sélectionnez depuis votre appareil.</span>
+        <input
+          ref={inputRef}
+          name="attachments__file"
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.txt,application/pdf,image/png,image/jpeg,image/webp,text/plain,text/csv"
+          onChange={handleChange}
+          className="sr-only"
+        />
+      </label>
+      {files.length > 0 && (
+        <div className="grid gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+          {files.map((file) => (
+            <div key={fileKey(file)} className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-dtsc-surface px-3 py-2">
+              <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink">
+                <FileText className="h-4 w-4 shrink-0 text-cyan-500" />
+                <span className="truncate">{file.name}</span>
+                <span className="shrink-0 text-xs text-dtsc-muted">{formatFileSize(file.size)}</span>
+              </span>
+              <Button type="button" size="icon" variant="ghost" onClick={() => removeFile(file)} className="h-8 w-8 rounded-xl text-dtsc-muted hover:text-red-500">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AttachmentList({ attachments, className = "" }: { attachments: ActivityAttachment[]; className?: string }) {
+  const [preview, setPreview] = useState<ActivityAttachment | null>(null);
+  return (
+    <div className={`grid gap-2 ${className}`}>
+      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-dtsc-muted">Pièces jointes</p>
+      {attachments.map((attachment) => {
+        const canPreviewImage = attachment.type?.startsWith("image/") || /\.(png|jpe?g|webp)(\?|$)/i.test(attachment.url);
+        const canPreviewPdf = attachment.type === "application/pdf" || /\.pdf(\?|$)/i.test(attachment.url);
+        return (
+          <div key={`${attachment.url}-${attachment.name}`} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink">
+              <FileText className="h-4 w-4 shrink-0 text-cyan-500" />
+              <span className="min-w-0 truncate">{attachment.name}</span>
+              <span className="shrink-0 text-xs text-dtsc-muted">{formatFileSize(attachment.size)}</span>
+            </span>
+            <span className="flex flex-wrap gap-2">
+              {(canPreviewImage || canPreviewPdf) && (
+                <Button type="button" size="sm" variant="outline" onClick={() => setPreview(attachment)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                  <Eye className="h-4 w-4" />
+                  Aperçu
+                </Button>
+              )}
+              <a href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-3 py-2 text-xs font-black text-white transition hover:bg-[#001736]">
+                <Download className="h-4 w-4" />
+                Télécharger
+              </a>
+            </span>
+          </div>
+        );
+      })}
+      <Dialog open={Boolean(preview)} title={preview ? `Aperçu: ${preview.name}` : "Aperçu"} onClose={() => setPreview(null)} className="max-w-5xl">
+        {preview && (preview.type?.startsWith("image/") || /\.(png|jpe?g|webp)(\?|$)/i.test(preview.url)) ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview.url} alt={preview.name} className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-dtsc-border object-contain" />
+        ) : preview ? (
+          <iframe src={preview.url} title={preview.name} className="h-[70vh] w-full rounded-2xl border border-dtsc-border bg-white" />
+        ) : null}
+      </Dialog>
+    </div>
+  );
+}
+
 function RequestComposer({ collaborators, selected, compact = false }: { collaborators: CollaboratorOption[]; selected: ActivityItem | null; compact?: boolean }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [open, setOpen] = useState(!compact);
+  const [formVersion, setFormVersion] = useState(0);
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const payload = Object.fromEntries(formData.entries());
-    const response = await fetch("/api/activities/requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setStatusMessage(response.ok ? "Demande envoyée au collaborateur." : body?.message || "Impossible d'envoyer la demande.");
-    if (response.ok) {
-      form.reset();
+    const payload: Record<string, unknown> = {};
+    for (const [key, value] of formData.entries()) {
+      if (key === "attachments__file") {
+        continue;
+      }
+      payload[key] = String(value);
+    }
+    try {
+      payload.attachments = await uploadRequestAttachments(formData.getAll("attachments__file"));
+      const response = await fetch("/api/activities/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      setStatusMessage(response.ok ? "Demande envoyée au collaborateur." : body?.message || "Impossible d'envoyer la demande.");
+      if (response.ok) {
+        form.reset();
+        setFormVersion((current) => current + 1);
+      }
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Import des pièces jointes impossible.");
     }
   }
 
@@ -712,6 +860,7 @@ function RequestComposer({ collaborators, selected, compact = false }: { collabo
         <Input name="dueDate" type="date" className="rounded-xl bg-dtsc-page" />
       </div>
       <textarea name="message" required placeholder="Expliquez clairement ce que vous attendez du collaborateur..." className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      <RequestAttachmentField key={formVersion} />
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer la demande</Button>
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
@@ -730,6 +879,42 @@ function RequestComposer({ collaborators, selected, compact = false }: { collabo
       </Dialog>
     </>
   );
+}
+
+async function uploadRequestAttachments(values: FormDataEntryValue[]): Promise<ActivityAttachment[]> {
+  const files = values.filter((value): value is File => value instanceof File && value.size > 0).slice(0, 8);
+  const attachments: ActivityAttachment[] = [];
+  for (const file of files) {
+    const uploadData = new FormData();
+    uploadData.set("file", file);
+    const response = await fetch("/api/activities/files", { method: "POST", body: uploadData });
+    const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+    if (!response.ok || !body?.url) {
+      throw new Error(body?.error || `Import impossible pour ${file.name}.`);
+    }
+    attachments.push({
+      name: file.name,
+      url: body.url,
+      type: file.type,
+      size: file.size,
+      uploadedAt: new Date().toISOString(),
+    });
+  }
+  return attachments;
+}
+
+function fileKey(file: File) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} o`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} Ko`;
+  }
+  return `${(size / 1024 / 1024).toFixed(2)} Mo`;
 }
 
 function ActivityMentionText({ content, mentions }: { content: string; mentions: Array<{ id: string; name: string }> }) {

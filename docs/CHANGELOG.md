@@ -6,6 +6,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout d'une route sécurisée `POST /api/announcements/images` pour téléverser les images d'annonces via Supabase Storage, avec validation type/taille, rate limiting, audit log et URL publique contrôlée.
+- Ajout de pièces jointes persistées sur les demandes collaboratives (`CollaboratorRequest.attachments`) avec migration `20260521152000_collaborator_request_attachments`.
 - Ajout de réactions persistées `Like`/`Dislike` sur les réponses assistant du chatbot privé, avec migration `20260521113000_message_feedback` et route sécurisée `PATCH /api/conversations/messages/[id]/feedback`.
 - Ajout d'un historique d'activité compact dans le Profil à partir des notifications, conversations, tickets support et messages de groupe réels de l'utilisateur.
 - Ajout de filtres avancés dans les notifications: toutes, non lues, mentions, appels, groupes, administration, workflows, juridique, RH, système et critiques.
@@ -21,6 +23,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- L'éditeur des annonces internes supporte désormais l'ajout de plusieurs images par sélection ou glisser-déposer, l'optimisation client et un aperçu mobile/desktop avant publication.
+- Les demandes collaboratives acceptent des fichiers joints depuis l'appareil; le demandeur et le destinataire peuvent les prévisualiser ou télécharger via route privée.
+- L'expérience d'appel de groupe masque les contrôles LiveKit bruts, ajoute des contrôles DTSC pour le partage d'écran et le plein écran, et conserve explicitement l'appel actif pendant l'ouverture du chat.
+- Les nouveaux libellés visibles des annonces et appels sont raccordés aux dictionnaires FR/EN afin de suivre la langue choisie dans les paramètres.
 - La route `/offline` et le fallback statique `public/offline.html` reprennent le design mobile/PWA premium actuel avec surfaces glass, logo DTSC et safe-area mobile.
 - Harmonisation du rendu clair/sombre des accordéons, listes premium et menu flottant Administration avec des surfaces glass basées sur les variables DTSC.
 - Les blocs de données des sections Administration sont désormais affichés comme accordéons premium, avec cartes de liste cohérentes et lisibles en mode sombre.

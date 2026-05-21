@@ -1,11 +1,13 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { AnnouncementWall } from "@/components/announcements/announcement-wall";
 import { requireUser } from "@/lib/auth";
+import { translate } from "@/lib/i18n";
 import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 
 export default async function AnnouncementsPage() {
   const user = await requireUser();
+  const t = (key: string) => translate(user.locale, key);
   const [settings, announcements, users] = await Promise.all([
     getAppSettings(),
     prisma.announcement.findMany({
@@ -49,16 +51,17 @@ export default async function AnnouncementsPage() {
     <AppShell user={user}>
       <div className="space-y-6">
         <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">Fil d&apos;actualités</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Annonces DTSC</h1>
+          <p className="text-sm font-bold text-cyan-600">{t("announcements.feedEyebrow")}</p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">{t("announcements.pageTitle")}</h1>
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            Consultez les annonces internes, réagissez et échangez en commentaires. Les rôles ADMIN, MANAGER et SUPPORT peuvent publier.
+            {t("announcements.pageDescription")}
           </p>
         </section>
         <AnnouncementWall
           announcements={JSON.parse(JSON.stringify(announcements))}
           currentUserId={user.id}
           role={user.role}
+          locale={user.locale}
           allowClientAnnouncements={settings.allowClientAnnouncements}
           commentEditWindowMinutes={settings.commentEditWindowMinutes}
           transferRecipients={users.map((item) => ({

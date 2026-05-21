@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type MouseEvent, type MutableRefObject } from "react";
+import { forwardRef, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type MouseEvent, type MutableRefObject } from "react";
 import { AlignCenter, AlignLeft, Bold, ImagePlus, Italic, List, ListOrdered, Palette, Trash2, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +12,7 @@ type RichTextEditorProps = {
   defaultValue?: string;
   minHeightClassName?: string;
   allowImageUpload?: boolean;
+  imageUploadUrl?: string;
   onContentChange?: (content: { text: string; html: string }) => void;
 };
 
@@ -62,7 +63,7 @@ const listStyles = [
 ];
 
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
-  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, onContentChange },
+  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, imageUploadUrl = "/api/admin/publications/images", onContentChange },
   ref
 ) {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -266,7 +267,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     const formData = new FormData();
     formData.append("file", optimizedFile);
 
-    const response = await fetch("/api/admin/publications/images", {
+    const response = await fetch(imageUploadUrl, {
       method: "POST",
       body: formData,
     });
@@ -377,13 +378,30 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!file) {
+    if (!files.length) {
       return;
     }
 
-    await insertUploadedImage(file, selectionRef.current);
+    for (const file of files) {
+      await insertUploadedImage(file, selectionRef.current);
+    }
+  }
+
+  async function handleDrop(event: DragEvent<HTMLDivElement>) {
+    if (disabled || !allowImageUpload) {
+      return;
+    }
+    const files = Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) {
+      return;
+    }
+    event.preventDefault();
+    const range = rememberSelection();
+    for (const file of files) {
+      await insertUploadedImage(file, range);
+    }
   }
 
   return (
@@ -463,7 +481,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
             >
               <ImagePlus className="h-4 w-4" />
             </Button>
-            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFileChange} />
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={handleFileChange} />
           </>
         )}
         <select
@@ -508,6 +526,8 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         contentEditable={!disabled}
         suppressContentEditableWarning
         onPaste={handlePaste}
+        onDrop={handleDrop}
+        onDragOver={allowImageUpload ? (event) => event.preventDefault() : undefined}
         onInput={handleInput}
         onClick={handleEditorClick}
         onKeyUp={rememberSelection}

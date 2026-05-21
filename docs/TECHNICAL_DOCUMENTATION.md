@@ -54,6 +54,8 @@ Les dialogs partagés via `components/ui/dialog.tsx` sont optimisés mobile/PWA 
 
 Pendant un appel de groupe, le composant d'appel expose un panneau chat léger. L'envoi passe par `POST /api/collaborators/groups/[id]/messages`, donc les messages restent des messages de groupe normaux: persistés, visibles après l'appel, protégés par appartenance au groupe et compatibles avec les mentions déjà validées par l'API.
 
+Les demandes collaboratives de `/activities` peuvent contenir des pièces jointes dans `CollaboratorRequest.attachments` (JSON). Le formulaire téléverse chaque fichier via `POST /api/activities/files` avant création de la demande, puis stocke uniquement des métadonnées contrôlées (`name`, `url`, `type`, `size`, `uploadedAt`). La lecture passe par `GET /api/activities/files/[...path]`; cette route autorise l'auteur du fichier, `ADMIN`, LA/CEO selon les règles existantes, ainsi que le demandeur ou le destinataire d'une demande collaborative qui référence explicitement l'URL du fichier.
+
 Les préférences utilisateur mobiles/PWA sont sauvegardées via `PATCH /api/account/preferences`. Le composant client capture les erreurs de permission de notifications propres aux navigateurs mobiles et conserve l'application affichable. Les notifications visibles en PWA passent par `ServiceWorkerRegistration.showNotification()` quand disponible; le constructeur `Notification` n'est qu'un fallback protégé.
 
 Les filtres de notifications dans `components/notifications/notification-list.tsx` sont volontairement stricts: les catégories principales utilisent `Notification.type` et `targetUrl`, avec des règles ciblées uniquement pour les mentions et appels lorsque les anciennes notifications n'ont pas encore de type dédié. Les notifications PWA utilisent `/dtsc-logo.png` comme grande icône et `/icons/notification-badge.png` comme badge monochrome Android; toute modification d'icône doit aussi incrémenter le cache `STATIC_CACHE` du service worker.
@@ -63,6 +65,7 @@ La couche mobile/PWA compacte ajoute aussi:
 - accordéons premium réutilisables via `components/ui/accordion.tsx` pour Dashboard, Entreprise, Abonnement et Profil;
 - menu flottant Administration via `components/admin/admin-floating-nav.tsx`, alimenté uniquement par les sections autorisées côté serveur;
 - commentaires d'annonces internes et publications publiques repliés par défaut, avec ouverture volontaire, pagination et scroll interne;
+- annonces internes avec upload d'images via `POST /api/announcements/images`, validation MIME/taille, stockage Supabase Storage dans `publications/{userId}/...`, URL servie par `GET /api/public/publication-images/[...path]` et aperçu mobile/desktop avant publication;
 - filtres avancés dans `/notifications` basés sur les vrais types de notifications;
 - discussion support par ticket contenue dans un fil scrollable;
 - combobox Radix stylées premium via `components/ui/select.tsx`.
@@ -89,6 +92,8 @@ Les réponses du chatbot privé supportent une réaction persistée `Like` ou `D
 Les appels audio/vidéo sont persistés dans `CollaborationGroupCall`, `CollaborationGroupCallParticipant` et `CollaborationGroupCallEvent`. Chaque appel appartient à un groupe `CollaborationGroup`; un appel peut aussi être lié à une réunion COO via `meetingId`.
 
 L'UX d'appel masque le fournisseur technique aux utilisateurs finaux: l'UI affiche uniquement des états humains comme `Appel connecté`, `Connexion à l'appel`, `Micro coupé` ou `Appel terminé`. Les erreurs du fournisseur sont conservées côté logs/API, mais ne doivent pas être rendues brutes dans les composants React.
+
+Le composant d'appel DTSC masque la barre de contrôle LiveKit par défaut dans `.dtsc-livekit-room` afin d'éviter les boutons doublons ou libellés techniques. Les contrôles visibles sont ceux de DTSC: chat, micro, caméra, partage d'écran, plein écran, quitter et terminer. Le partage d'écran utilise `room.localParticipant.setScreenShareEnabled(...)` et affiche un message humain lorsque le navigateur ou l'appareil ne le permet pas.
 
 Routes principales:
 
