@@ -53,6 +53,8 @@
     --lk-control-bg: rgba(255, 255, 255, 0.12);
     --lk-control-fg: #f8fafc;
     isolation: isolate;
+    border-radius: 1.5rem;
+    padding: 0.35rem;
   }
 
   .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout) {
@@ -90,6 +92,45 @@
 
   .dtsc-livekit-room :where(.lk-button, button[class*="lk-"]) {
     min-width: 0;
+  }
+
+  .dtsc-call-shell:fullscreen {
+    border-radius: 0;
+    min-height: 100dvh;
+    width: 100vw;
+  }
+
+  @media (max-width: 640px) {
+    .dtsc-livekit-room {
+      border-radius: 1.75rem;
+      padding: 0.45rem;
+    }
+
+    .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout) {
+      gap: 0.5rem;
+      padding: 0.35rem;
+    }
+
+    .dtsc-livekit-room :where(.lk-participant-tile) {
+      border-radius: 1.55rem;
+      outline: 1px solid rgba(34, 211, 238, 0.16);
+      outline-offset: -3px;
+    }
+
+    .dtsc-livekit-room :where(.lk-participant-name, .lk-participant-metadata) {
+      max-width: calc(100% - 1rem);
+      font-size: 0.78rem;
+    }
+  }
+
+  @media (orientation: landscape) and (max-height: 620px) {
+    .dtsc-call-shell {
+      min-height: 92dvh;
+    }
+
+    .dtsc-livekit-room {
+      min-height: 64dvh !important;
+    }
   }
 }
 

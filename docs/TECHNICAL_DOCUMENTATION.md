@@ -95,6 +95,10 @@ L'UX d'appel masque le fournisseur technique aux utilisateurs finaux: l'UI affic
 
 Le composant d'appel DTSC masque la barre de contrôle LiveKit par défaut dans `.dtsc-livekit-room` afin d'éviter les boutons doublons ou libellés techniques. Les contrôles visibles sont ceux de DTSC: chat, micro, caméra, partage d'écran, plein écran, quitter et terminer. Le partage d'écran utilise `room.localParticipant.setScreenShareEnabled(...)` et affiche un message humain lorsque le navigateur ou l'appareil ne le permet pas.
 
+Sur mobile, les tuiles vidéo LiveKit sont forcées à conserver un rayon visible et un contour interne pour éviter les coins visuellement carrés dans les PWA Android. Les placeholders LiveKit sont réduits et remplacés par la photo de profil du membre quand `User.avatarUrl` est disponible via un style scopé sur `data-lk-participant-identity`. Le bouton plein écran observe `fullscreenchange` et affiche `Réduire l'écran` lorsque le document est déjà en plein écran.
+
+Le manifest PWA utilise `orientation: "any"` pour autoriser portrait et paysage, ce qui améliore l'expérience des appels vidéo en mode application installée.
+
 Routes principales:
 
 - `GET /api/collaborators/groups/[id]/calls`: retourne l'appel actif et l'historique récent du groupe. Accès réservé aux membres actifs du groupe.

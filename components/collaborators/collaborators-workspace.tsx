@@ -1,9 +1,9 @@
 "use client";
 
-import { Archive, ArrowLeft, Check, Copy, Eye, Maximize2, Mic, MicOff, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
+import { Archive, ArrowLeft, Check, Copy, Eye, Maximize2, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
 import { LiveKitRoom, RoomAudioRenderer, VideoConference } from "@livekit/components-react";
 import { ConnectionState, Room } from "livekit-client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -1348,8 +1348,10 @@ function GroupCallRoom({
   const [callError, setCallError] = useState("");
   const [callChatOpen, setCallChatOpen] = useState(false);
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
   const t = (key: string) => translate(userPreferences.locale, key);
+  const starterMember = group?.members.find((member) => member.userId === joinedCall.call.startedById);
   const connectedParticipants = group?.calls
     ?.find((call) => call.id === joinedCall.call.id)
     ?.participants?.filter((participant) => participant.status === "JOINED") || joinedCall.call.participants?.filter((participant) => participant.status === "JOINED") || [];
@@ -1358,6 +1360,14 @@ function GroupCallRoom({
     const interval = window.setInterval(() => setDuration(callDurationFromStart(joinedCall.call.startedAt)), 1000);
     return () => window.clearInterval(interval);
   }, [joinedCall.call.startedAt]);
+
+  useEffect(() => {
+    function syncFullscreenState() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
 
   useEffect(() => {
     if (room.state === ConnectionState.Disconnected) {
@@ -1396,7 +1406,7 @@ function GroupCallRoom({
     }
   }
 
-  async function openFullscreen() {
+  async function toggleFullscreen() {
     try {
       const element = document.querySelector(".dtsc-call-shell");
       if (document.fullscreenElement) {
@@ -1448,13 +1458,14 @@ function GroupCallRoom({
               }
             }}
           >
+            <CallParticipantAvatarStyles group={group} />
             {joinedCall.call.callType === "VIDEO" ? (
               <VideoConference />
             ) : (
               <div className="grid h-full place-items-center p-5">
                 <RoomAudioRenderer />
-                <div className="rounded-full border border-cyan-300/30 bg-cyan-400/10 p-10 text-center">
-                  <PhoneCall className="mx-auto h-14 w-14 text-cyan-300" />
+                <div className="rounded-[2rem] border border-cyan-300/30 bg-cyan-400/10 p-6 text-center shadow-[0_24px_70px_rgba(0,23,54,0.30)]">
+                  <CallMemberAvatar member={starterMember} fallbackIcon={<PhoneCall className="h-9 w-9 text-cyan-200" />} className="mx-auto h-24 w-24 sm:h-28 sm:w-28" />
                   <p className="mt-4 text-xl font-black">Appel audio en cours</p>
                   <p className="mt-2 text-sm text-slate-300">{connectedParticipants.length || 1} participant(s) connecté(s)</p>
                 </div>
@@ -1481,9 +1492,9 @@ function GroupCallRoom({
             {screenShareEnabled ? <MonitorOff className="h-4 w-4" /> : <MonitorUp className="h-4 w-4" />}
             {screenShareEnabled ? t("calls.stopScreenShare") : t("calls.shareScreen")}
           </Button>
-          <Button type="button" variant="outline" onClick={() => { void openFullscreen(); }} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
-            <Maximize2 className="h-4 w-4" />
-            {t("calls.fullscreen")}
+          <Button type="button" variant="outline" onClick={() => { void toggleFullscreen(); }} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {isFullscreen ? t("calls.exitFullscreen") : t("calls.fullscreen")}
           </Button>
           <Button type="button" onClick={() => { void onLeave(); }} className="rounded-full bg-red-600 text-white hover:bg-red-700">
             <PhoneOff className="h-4 w-4" />
@@ -1503,8 +1514,13 @@ function GroupCallRoom({
             const member = group?.members.find((item) => item.userId === participant.userId);
             return (
               <div key={participant.userId} className="rounded-2xl bg-white/10 p-3 text-sm">
-                <p className="font-black">{member?.user.name || "Participant DTSC"}</p>
-                <p className="mt-1 text-xs text-slate-300">{formatEnumLabel(participant.status)}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <CallMemberAvatar member={member} className="h-9 w-9" />
+                  <div className="min-w-0">
+                    <p className="truncate font-black">{member?.user.name || "Participant DTSC"}</p>
+                    <p className="mt-0.5 text-xs text-slate-300">{formatEnumLabel(participant.status)}</p>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -1534,6 +1550,57 @@ function GroupCallRoom({
       )}
     </div>
   );
+}
+
+function CallMemberAvatar({
+  member,
+  className = "h-10 w-10",
+  fallbackIcon,
+}: {
+  member?: GroupMember;
+  className?: string;
+  fallbackIcon?: ReactNode;
+}) {
+  const initials = member?.user.name ? member.user.name.slice(0, 2).toUpperCase() : "DT";
+  return (
+    <span className={cn("grid shrink-0 place-items-center overflow-hidden rounded-full border border-cyan-300/40 bg-cyan-300/15 text-xs font-black text-cyan-100", className)}>
+      {member?.user.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={member.user.avatarUrl} alt="" className="h-full w-full object-cover" />
+      ) : fallbackIcon ? (
+        fallbackIcon
+      ) : (
+        initials
+      )}
+    </span>
+  );
+}
+
+function CallParticipantAvatarStyles({ group }: { group: Group | null }) {
+  const avatarRules = (group?.members || [])
+    .filter((member) => Boolean(member.user.avatarUrl))
+    .map((member) => {
+      const identity = cssAttributeValue(member.userId);
+      const avatarUrl = JSON.stringify(member.user.avatarUrl || "");
+      return `.dtsc-livekit-room [data-lk-participant-identity="${identity}"] .lk-participant-placeholder{background-image:url(${avatarUrl});background-size:cover;background-position:center;}`;
+    })
+    .join("\n");
+
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `
+          .dtsc-livekit-room .lk-participant-placeholder svg{display:none!important;}
+          .dtsc-livekit-room .lk-participant-placeholder{width:clamp(4.25rem,18vw,8rem)!important;height:clamp(4.25rem,18vw,8rem)!important;max-width:42%!important;max-height:42%!important;border-radius:999px!important;border:1px solid rgba(34,211,238,.34)!important;background-color:rgba(34,211,238,.14)!important;box-shadow:0 18px 54px rgba(0,23,54,.28)!important;}
+          ${avatarRules}
+        `,
+      }}
+    />
+  );
+}
+
+function cssAttributeValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
 }
 
 function CallChatPanel({

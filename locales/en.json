@@ -126,6 +126,7 @@
     "shareScreen": "Share screen",
     "stopScreenShare": "Stop sharing",
     "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
     "audioStarted": "Audio call started",
     "videoStarted": "Video call started",
     "joined": "joined the call",
