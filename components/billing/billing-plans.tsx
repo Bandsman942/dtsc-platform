@@ -64,10 +64,10 @@ export function BillingPlans({
 
   return (
     <div className="space-y-5">
-      <div className="overflow-hidden rounded-[1.6rem] border border-cyan-200/60 bg-gradient-to-br from-white via-cyan-50/80 to-[#d5e3fd]/70 p-5 shadow-[0_18px_55px_rgba(0,43,91,0.10)]">
+      <div className="dtsc-glass-card overflow-hidden rounded-[1.6rem] p-5">
         {!paymentAvailable && (
-          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-sm leading-6 text-dtsc-ink">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-300/45 bg-amber-300/10 p-4 text-sm leading-6 text-dtsc-ink backdrop-blur-xl">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500 dark:text-amber-300" />
             <div>
               <p className="font-black">Abonnements payants en préparation</p>
               <p className="text-dtsc-muted">
@@ -96,7 +96,7 @@ export function BillingPlans({
               className={`relative flex min-h-full flex-col overflow-hidden rounded-[1.6rem] border p-5 shadow-[0_18px_55px_rgba(0,43,91,0.10)] transition hover:-translate-y-1 ${
                 active
                   ? "border-cyan-300 bg-[#001736] text-white"
-                  : "border-white/70 bg-white/90 text-dtsc-ink backdrop-blur-xl"
+                  : "dtsc-glass-card text-dtsc-ink"
               }`}
             >
               <div className={`absolute inset-x-0 top-0 h-1 ${active ? "bg-cyan-300" : "bg-gradient-to-r from-cyan-300 via-[#002b5b] to-emerald-300"}`} />

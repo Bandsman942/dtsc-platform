@@ -97,14 +97,22 @@ export function SettingsPanel({
     event.preventDefault();
     setPreferencesMessage("");
     const formData = new FormData(event.currentTarget);
-    const wantsPush = formData.get("pushNotificationsEnabled") === "on";
+    let wantsPush = formData.get("pushNotificationsEnabled") === "on";
 
-    if (wantsPush && "Notification" in window && Notification.permission !== "granted") {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setPreferencesMessage("Autorisation navigateur refusée. Les autres préférences peuvent être enregistrées sans notifications téléphone.");
+    if (wantsPush && typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted") {
+      try {
+        const permission = typeof Notification.requestPermission === "function"
+          ? await Notification.requestPermission()
+          : "denied";
+        if (permission !== "granted") {
+          wantsPush = false;
+          setPushEnabled(false);
+          setPreferencesMessage("Notifications téléphone non activées. Les autres préférences sont enregistrées.");
+        }
+      } catch {
+        wantsPush = false;
         setPushEnabled(false);
-        return;
+        setPreferencesMessage("Notifications téléphone indisponibles sur cet appareil. Les autres préférences sont enregistrées.");
       }
     }
 
@@ -137,15 +145,22 @@ export function SettingsPanel({
       chatResponseStyle: String(formData.get("chatResponseStyle") || "PROFESSIONAL"),
       chatResponseLength: String(formData.get("chatResponseLength") || "BALANCED"),
     };
-    const response = await fetch("/api/account/preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    setPreferencesMessage(response.ok ? "Préférences enregistrées." : "Impossible d'enregistrer les préférences.");
-    if (response.ok) {
+    try {
+      const response = await fetch("/api/account/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setPreferencesMessage(body?.error || "Impossible d'enregistrer les préférences.");
+        return;
+      }
       setPushEnabled(wantsPush);
+      setPreferencesMessage("Préférences enregistrées.");
       router.refresh();
+    } catch {
+      setPreferencesMessage("Connexion instable. Réessayez l'enregistrement des préférences.");
     }
   }
 

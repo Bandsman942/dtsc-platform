@@ -11,6 +11,11 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout de filtres avancés dans les notifications: toutes, non lues, mentions, appels, groupes, administration, workflows, juridique, RH, système et critiques.
 - Ajout d'une navigation flottante mobile pour les sections Administration autorisées.
 
+### Corrigé
+
+- Correction de l'enregistrement des préférences utilisateur sur mobile/PWA: les notifications navigateur sont désormais déclenchées via le service worker quand disponible et toutes les erreurs de permission/API mobile sont capturées sans casser l'application.
+- Correction du bloc Abonnement afin que les surfaces de paiement et cartes de plans restent lisibles en mode clair comme en mode sombre.
+
 ### Amélioré
 
 - Harmonisation du rendu clair/sombre des accordéons, listes premium et menu flottant Administration avec des surfaces glass basées sur les variables DTSC.

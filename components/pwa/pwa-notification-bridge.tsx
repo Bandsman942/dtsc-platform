@@ -41,24 +41,39 @@ export function PwaNotificationBridge({
     const seen = getSeenNotifications(storageKey);
     const nextSeen = new Set(seen);
 
-    notifications
+    const nextNotifications = notifications
       .filter((notification) => !seen.has(notification.id))
-      .slice(0, 3)
-      .forEach((notification) => {
-        const browserNotification = new Notification(notification.title, {
-          body: excerpt(notification.body),
-          icon: "/icons/icon-192x192.png",
-          badge: "/icons/icon-192x192.png",
-          tag: notification.id,
-        });
-        browserNotification.onclick = () => {
-          window.focus();
-          window.location.href = notification.targetUrl || "/notifications";
-        };
-        nextSeen.add(notification.id);
-      });
+      .slice(0, 3);
 
-    localStorage.setItem(storageKey, JSON.stringify(Array.from(nextSeen).slice(-80)));
+    const showNotification = async (notification: BrowserNotification) => {
+      const options = {
+        body: excerpt(notification.body),
+        icon: "/icons/icon-192x192.png",
+        badge: "/icons/icon-192x192.png",
+        tag: notification.id,
+        data: { url: notification.targetUrl || "/notifications" },
+      };
+      try {
+        if ("serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.showNotification(notification.title, options);
+        } else {
+          const browserNotification = new Notification(notification.title, options);
+          browserNotification.onclick = () => {
+            window.focus();
+            window.location.href = notification.targetUrl || "/notifications";
+          };
+        }
+        nextSeen.add(notification.id);
+        localStorage.setItem(storageKey, JSON.stringify(Array.from(nextSeen).slice(-80)));
+      } catch {
+        nextSeen.add(notification.id);
+      }
+    };
+
+    nextNotifications.forEach((notification) => {
+      void showNotification(notification);
+    });
   }, [enabled, notifications]);
 
   return null;

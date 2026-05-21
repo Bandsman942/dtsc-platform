@@ -54,6 +54,8 @@ Les dialogs partagés via `components/ui/dialog.tsx` sont optimisés mobile/PWA 
 
 Pendant un appel de groupe, le composant d'appel expose un panneau chat léger. L'envoi passe par `POST /api/collaborators/groups/[id]/messages`, donc les messages restent des messages de groupe normaux: persistés, visibles après l'appel, protégés par appartenance au groupe et compatibles avec les mentions déjà validées par l'API.
 
+Les préférences utilisateur mobiles/PWA sont sauvegardées via `PATCH /api/account/preferences`. Le composant client capture les erreurs de permission de notifications propres aux navigateurs mobiles et conserve l'application affichable. Les notifications visibles en PWA passent par `ServiceWorkerRegistration.showNotification()` quand disponible; le constructeur `Notification` n'est qu'un fallback protégé.
+
 La couche mobile/PWA compacte ajoute aussi:
 
 - accordéons premium réutilisables via `components/ui/accordion.tsx` pour Dashboard, Entreprise, Abonnement et Profil;
