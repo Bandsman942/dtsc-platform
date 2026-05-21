@@ -1393,6 +1393,8 @@ function GroupCallRoom({
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenFocus, setFullscreenFocus] = useState<FullscreenFocusTarget>("auto");
+  const [focusControlsVisible, setFocusControlsVisible] = useState(true);
+  const [compactFullscreenUi, setCompactFullscreenUi] = useState(false);
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
   const t = (key: string) => translate(userPreferences.locale, key);
   const starterMember = group?.members.find((member) => member.userId === joinedCall.call.startedById);
@@ -1416,8 +1418,46 @@ function GroupCallRoom({
   useEffect(() => {
     if (!isFullscreen) {
       setFullscreenFocus("auto");
+      setFocusControlsVisible(true);
+    } else {
+      setFocusControlsVisible(true);
     }
   }, [isFullscreen]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 700px), (pointer: coarse)");
+    const syncCompactState = () => setCompactFullscreenUi(mediaQuery.matches);
+    syncCompactState();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncCompactState);
+      return () => mediaQuery.removeEventListener("change", syncCompactState);
+    }
+    mediaQuery.addListener(syncCompactState);
+    return () => mediaQuery.removeListener(syncCompactState);
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen || joinedCall.call.callType !== "VIDEO") {
+      return;
+    }
+    const fullscreenRoot = document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : document;
+    const root = fullscreenRoot.querySelector<HTMLElement>(".dtsc-livekit-room");
+    if (!root) {
+      return;
+    }
+
+    const applyFocus = () => applyLiveKitFullscreenFocus(root, fullscreenFocus, group);
+    applyFocus();
+    const observer = new MutationObserver(applyFocus);
+    observer.observe(root, { attributes: true, childList: true, subtree: true });
+    const interval = window.setInterval(applyFocus, 800);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+      root.removeAttribute("data-dtsc-focus-ready");
+      root.querySelectorAll(".dtsc-focus-selected").forEach((node) => node.classList.remove("dtsc-focus-selected"));
+    };
+  }, [fullscreenFocus, group, isFullscreen, joinedCall.call.callType]);
 
   useEffect(() => {
     if (room.state === ConnectionState.Disconnected) {
@@ -1469,28 +1509,46 @@ function GroupCallRoom({
     }
   }
 
+  function handleFullscreenFocusChange(nextFocus: FullscreenFocusTarget) {
+    setFullscreenFocus(nextFocus);
+    if (compactFullscreenUi) {
+      setFocusControlsVisible(false);
+    }
+  }
+
+  function handleCallStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!isFullscreen || !compactFullscreenUi) {
+      return;
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("[data-call-focus-controls], .dtsc-call-controls, .dtsc-call-chat-panel")) {
+      return;
+    }
+    setFocusControlsVisible((visible) => !visible);
+  }
+
   return (
     <div className="dtsc-call-shell relative grid min-h-[78vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
-      <section className="flex min-h-0 flex-col">
-        <div className="shrink-0 border-b border-white/10 p-3 sm:p-4">
+      <section className="dtsc-call-main flex min-h-0 flex-col">
+        <div className="dtsc-call-header shrink-0 border-b border-white/10 p-3 sm:p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">{joinedCall.call.callType === "VIDEO" ? "Réunion vidéo DTSC" : "Réunion audio DTSC"}</p>
           <h3 className="mt-2 text-2xl font-black">{group?.name || "Groupe DTSC"}</h3>
           <p className="mt-1 text-sm text-slate-300">{connectionLabel} · {formatCallDuration(duration)}</p>
           {callError && <p className="mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100">{callError}</p>}
         </div>
-        <div className="relative min-h-0 flex-1 p-2 sm:p-3">
+        <div className="dtsc-call-stage relative min-h-0 flex-1 p-2 sm:p-3" onPointerDown={handleCallStagePointerDown}>
           {callChatOpen && (
             <div className="mb-2 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-bold text-cyan-100">
               {t("calls.activeWhileChatOpen")}
             </div>
           )}
-          {isFullscreen && joinedCall.call.callType === "VIDEO" && (
+          {isFullscreen && joinedCall.call.callType === "VIDEO" && (!compactFullscreenUi || focusControlsVisible) && (
             <CallFullscreenFocusControls
               focus={fullscreenFocus}
               participants={connectedParticipants}
               group={group}
               t={t}
-              onFocusChange={setFullscreenFocus}
+              onFocusChange={handleFullscreenFocusChange}
             />
           )}
           <LiveKitRoom
@@ -1522,7 +1580,6 @@ function GroupCallRoom({
             }}
           >
             <CallParticipantAvatarStyles group={group} />
-            <CallFullscreenFocusStyles focus={fullscreenFocus} />
             {joinedCall.call.callType === "VIDEO" ? (
               <VideoConference />
             ) : (
@@ -1537,7 +1594,7 @@ function GroupCallRoom({
             )}
           </LiveKitRoom>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 p-3 sm:gap-3 sm:p-4">
+        <div className="dtsc-call-controls flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 p-3 sm:gap-3 sm:p-4">
           <Button type="button" variant="outline" onClick={() => setCallChatOpen((value) => !value)} className="rounded-full border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20">
             <MessageSquare className="h-4 w-4" />
             {t("calls.chat")}
@@ -1571,7 +1628,7 @@ function GroupCallRoom({
           )}
         </div>
       </section>
-      <aside className="min-h-0 border-t border-white/10 bg-white/5 p-3 md:border-l md:border-t-0 md:p-4">
+      <aside className="dtsc-call-sidebar min-h-0 border-t border-white/10 bg-white/5 p-3 md:border-l md:border-t-0 md:p-4">
         <h4 className="font-black">Participants connectés</h4>
         <div className="mt-3 max-h-[32vh] space-y-2 overflow-y-auto pr-1 md:max-h-[42vh]">
           {(connectedParticipants.length ? connectedParticipants : [{ userId: joinedCall.call.startedById, status: "JOINED" } as GroupCallParticipant]).map((participant) => {
@@ -1600,7 +1657,7 @@ function GroupCallRoom({
         </div>
       </aside>
       {callChatOpen && group && (
-        <div className="pointer-events-none absolute inset-0 z-20">
+        <div className="dtsc-call-chat-panel pointer-events-none absolute inset-0 z-20">
           <CallChatPanel
             group={group}
             callId={joinedCall.call.id}
@@ -1634,7 +1691,7 @@ function CallFullscreenFocusControls({
     : group?.members.filter((member) => member.status === "ACTIVE").map((member) => ({ userId: member.userId, status: "JOINED" } as GroupCallParticipant)) || [];
 
   return (
-    <div className="pointer-events-auto absolute left-3 right-3 top-3 z-30 rounded-2xl border border-cyan-300/30 bg-[#06111f]/82 p-2 shadow-[0_18px_60px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
+    <div data-call-focus-controls className="pointer-events-auto absolute left-3 right-3 top-3 z-30 rounded-2xl border border-cyan-300/30 bg-[#06111f]/82 p-2 shadow-[0_18px_60px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
       <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
         <span className="shrink-0 px-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-200">
           {t("calls.fullscreenFocus")}
@@ -1675,31 +1732,75 @@ function CallFullscreenFocusControls({
   );
 }
 
-function CallFullscreenFocusStyles({ focus }: { focus: FullscreenFocusTarget }) {
+function applyLiveKitFullscreenFocus(root: HTMLElement, focus: FullscreenFocusTarget, group: Group | null) {
+  root.removeAttribute("data-dtsc-focus-ready");
+  const tiles = Array.from(root.querySelectorAll<HTMLElement>(".lk-participant-tile"));
+  tiles.forEach((tile) => tile.classList.remove("dtsc-focus-selected"));
+
   if (focus === "auto") {
+    return;
+  }
+
+  const selectedTile = focus === "screen"
+    ? findLiveKitScreenShareTile(root, tiles)
+    : findLiveKitParticipantTile(tiles, focus.slice("participant:".length), group);
+
+  if (!selectedTile) {
+    return;
+  }
+
+  selectedTile.classList.add("dtsc-focus-selected");
+  root.setAttribute("data-dtsc-focus-ready", "true");
+}
+
+function findLiveKitScreenShareTile(root: HTMLElement, tiles: HTMLElement[]) {
+  const sourceNode = Array.from(root.querySelectorAll<HTMLElement>("[data-lk-source]")).find((node) => {
+    const source = node.getAttribute("data-lk-source") || "";
+    return normalizeSearchText(source).includes("screen") || normalizeSearchText(source).includes("share");
+  });
+  const tileFromSource = sourceNode?.closest<HTMLElement>(".lk-participant-tile");
+  if (tileFromSource) {
+    return tileFromSource;
+  }
+
+  return tiles.find((tile) => {
+    const text = normalizeSearchText(tile.textContent || "");
+    return text.includes("screen") || text.includes("share") || text.includes("partage");
+  }) || null;
+}
+
+function findLiveKitParticipantTile(tiles: HTMLElement[], userId: string, group: Group | null) {
+  const member = group?.members.find((item) => item.userId === userId);
+  const candidates = [userId, member?.user.id, member?.user.email, member?.user.name]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => normalizeSearchText(value))
+    .filter(Boolean);
+
+  if (!candidates.length) {
     return null;
   }
-  const participantIdentity = focus.startsWith("participant:") ? cssAttributeValue(focus.slice("participant:".length)) : "";
-  const participantRule = participantIdentity
-    ? `
-      .dtsc-livekit-focus-mode :where(.lk-participant-tile){display:none!important;}
-      .dtsc-livekit-focus-mode :where([data-lk-participant-identity="${participantIdentity}"], [data-lk-participant-identity="${participantIdentity}"] .lk-participant-tile, .lk-participant-tile[data-lk-participant-identity="${participantIdentity}"], .lk-participant-tile:has([data-lk-participant-identity="${participantIdentity}"])){display:flex!important;min-height:100%!important;}
-    `
-    : "";
-  const screenRule = focus === "screen"
-    ? `
-      .dtsc-livekit-focus-screen :where(.lk-participant-tile){display:none!important;}
-      .dtsc-livekit-focus-screen :where([data-lk-source*="screen"], [data-lk-source*="screen"] .lk-participant-tile, .lk-participant-tile[data-lk-source*="screen"], .lk-participant-tile:has([data-lk-source*="screen"])){display:flex!important;min-height:100%!important;}
-    `
-    : "";
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: `${participantRule}${screenRule}`,
-      }}
-    />
-  );
+  return tiles.find((tile) => {
+    const attributeValues = collectLiveKitTileAttributeValues(tile);
+    const text = normalizeSearchText(tile.textContent || "");
+    return candidates.some((candidate) => attributeValues.includes(candidate) || (candidate.length > 2 && text.includes(candidate)));
+  }) || null;
+}
+
+function collectLiveKitTileAttributeValues(tile: HTMLElement) {
+  const values = new Set<string>();
+  const nodes = [tile, ...Array.from(tile.querySelectorAll<HTMLElement>("*"))];
+  nodes.forEach((node) => {
+    Array.from(node.attributes).forEach((attribute) => {
+      if (attribute.name.startsWith("data-lk-") || attribute.name === "aria-label" || attribute.name === "title") {
+        const normalized = normalizeSearchText(attribute.value);
+        if (normalized) {
+          values.add(normalized);
+        }
+      }
+    });
+  });
+  return Array.from(values);
 }
 
 function CallMemberAvatar({

@@ -16,6 +16,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du focus plein écran des appels vidéo: la sélection d'un participant ne peut plus masquer toute la scène si la tuile LiveKit n'est pas encore identifiable; l'affichage retombe sur la grille normale au lieu d'un écran vide.
+- Correction du plein écran mobile des appels vidéo afin que la scène occupe réellement tout le viewport PWA, sans être réduite par la liste des participants ou les contrôles secondaires.
 - Correction de l'enregistrement des préférences utilisateur sur mobile/PWA: les notifications navigateur sont désormais déclenchées via le service worker quand disponible et toutes les erreurs de permission/API mobile sont capturées sans casser l'application.
 - Correction du bloc Abonnement afin que les surfaces de paiement et cartes de plans restent lisibles en mode clair comme en mode sombre.
 - Correction des filtres de notifications pour qu'ils s'appuient sur les vrais `type`/`targetUrl` au lieu d'une recherche texte trop large qui mélangeait les catégories.
@@ -24,6 +26,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Amélioré
 
 - Les messages sortants des groupes `Mes collaborateurs` affichent un accusé compact: une coche quand le message est envoyé et deux coches vertes lorsque tous les autres membres actifs ont confirmé la lecture.
+- Sur mobile/PWA, le sélecteur de vue plein écran d'appel disparaît automatiquement après le choix d'un participant ou du partage d'écran, puis réapparaît au toucher de la scène.
 - Le plein écran des appels vidéo gagne un sélecteur premium permettant de focaliser la vue automatique, un partage d'écran ou un participant précis sur desktop/mobile, avec un fond de scène uniformisé autour des tuiles arrondies.
 - Le chat pendant appel devient une boîte flottante autonome, déplaçable, redimensionnable et dotée d'un scroll vertical interne borné avec saisie fixe.
 - Les appels vidéo sont mieux adaptés mobile/desktop: tuiles plus arrondies et visibles sur mobile, avatars fournisseur réduits/remplacés par la photo de profil quand disponible, bouton plein écran renommé en `Réduire l'écran` une fois actif et PWA autorisée en portrait/paysage.

@@ -99,6 +99,8 @@ Le composant d'appel DTSC masque la barre de contrôle LiveKit par défaut dans 
 
 Sur mobile, les tuiles vidéo LiveKit sont forcées à conserver un rayon visible et un contour interne pour éviter les coins visuellement carrés dans les PWA Android. Les placeholders LiveKit sont réduits et remplacés par la photo de profil du membre quand `User.avatarUrl` est disponible via un style scopé sur `data-lk-participant-identity`. Le bouton plein écran observe `fullscreenchange` et affiche `Réduire l'écran` lorsque le document est déjà en plein écran.
 
+Le focus plein écran des appels vidéo est appliqué côté client sans injection CSS fragile par identité brute. Le composant marque d'abord la tuile LiveKit réellement trouvée (`.dtsc-focus-selected`) puis active le masquage des autres tuiles seulement si cette sélection existe. Si le fournisseur ne rend pas l'attribut attendu ou si la cible n'est pas encore montée, l'UI conserve la grille normale au lieu d'afficher un écran vide. Sur mobile/PWA, le plein écran utilise toute la hauteur du viewport, masque la colonne participants et superpose les contrôles DTSC; le sélecteur de focus disparaît après un choix et réapparaît au toucher de la scène.
+
 Le manifest PWA utilise `orientation: "any"` pour autoriser portrait et paysage, ce qui améliore l'expérience des appels vidéo en mode application installée.
 
 Routes principales:
