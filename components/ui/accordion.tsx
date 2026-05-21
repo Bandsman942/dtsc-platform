@@ -22,14 +22,14 @@ export function AccordionItem({ title, children, defaultOpen = false, className 
   return (
     <details
       className={cn(
-        "group overflow-hidden rounded-[1.35rem] border border-white/60 bg-white/85 shadow-[0_14px_40px_rgba(0,43,91,0.08)] backdrop-blur-xl transition open:border-cyan-300/60 open:bg-white",
+        "dtsc-glass-card group overflow-hidden rounded-[1.35rem] transition open:border-cyan-300/60",
         className
       )}
       open={defaultOpen}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-left text-base font-black text-dtsc-ink transition hover:bg-cyan-50/70 focus:outline-none focus-visible:bg-cyan-50 focus-visible:ring-2 focus-visible:ring-cyan-300 sm:px-5 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-left text-base font-black text-dtsc-ink transition hover:bg-[color-mix(in_srgb,var(--dtsc-soft)_72%,transparent)] focus:outline-none focus-visible:bg-[color-mix(in_srgb,var(--dtsc-soft)_72%,transparent)] focus-visible:ring-2 focus-visible:ring-cyan-300 sm:px-5 [&::-webkit-details-marker]:hidden">
         <span>{title}</span>
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-dtsc-page text-dtsc-blue shadow-inner transition group-open:rotate-180 group-open:bg-cyan-400 group-open:text-[#001736]">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-dtsc-border bg-dtsc-page text-dtsc-blue shadow-inner transition group-open:rotate-180 group-open:border-cyan-300 group-open:bg-[#001736] group-open:text-cyan-300 dark:group-open:bg-cyan-400 dark:group-open:text-[#001736]">
           <ChevronDown className="h-4 w-4" aria-hidden="true" />
         </span>
       </summary>

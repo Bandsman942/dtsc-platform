@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { CalendarDays, ClipboardList, Download, Eye, FileText, Plus, Save, Trash2 } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -232,19 +233,23 @@ export function OperationsAdminPanel({
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <Accordion>
         {datasets.map((dataset) => (
-          <DatasetCard
+          <AccordionItem
             key={dataset.id}
-            dataset={dataset}
-            records={visibleItemsByDataset[dataset.id] || []}
-            canEdit={canEdit}
-            onCreate={createRecord}
-            onUpdate={updateRecord}
-            onRemove={removeRecord}
-          />
+            title={`${dataset.label} · ${(visibleItemsByDataset[dataset.id] || []).length}`}
+          >
+            <DatasetCard
+              dataset={dataset}
+              records={visibleItemsByDataset[dataset.id] || []}
+              canEdit={canEdit}
+              onCreate={createRecord}
+              onUpdate={updateRecord}
+              onRemove={removeRecord}
+            />
+          </AccordionItem>
         ))}
-      </div>
+      </Accordion>
 
       <Dialog open={Boolean(message)} title={title} onClose={() => setMessage("")}>
         <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
@@ -313,7 +318,7 @@ function DatasetCard({
   }
 
   return (
-    <article className="dtsc-card min-w-0 overflow-hidden p-5">
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_72%,transparent)] p-4 backdrop-blur-xl sm:p-5">
       <div className="flex items-start gap-3">
         <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-500">
           <ClipboardList className="h-5 w-5" />
@@ -382,7 +387,7 @@ function RecordCard({
   }
 
   return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+    <div className="dtsc-glass-list-item rounded-2xl p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(record.status)}</p>
@@ -527,7 +532,7 @@ function FieldInput({
   previewValue: string;
   onSelectPreview: (fieldName: string, email: string) => void;
 }) {
-  const className = "w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink";
+  const className = "w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_82%,transparent)] px-3 py-2 text-sm text-dtsc-ink backdrop-blur-xl";
   const label = (
     <span className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">
       {field.label}

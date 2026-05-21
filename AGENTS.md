@@ -182,6 +182,7 @@ Conserver une hiérarchie visible pour:
 ## Règles DTSC — UI mobile/PWA premium compacte
 
 - Les blocs importants des modules privés doivent privilégier les accordéons sur mobile/PWA afin d'éviter les pages verticales interminables.
+- Les accordéons, listes premium, menus flottants et overlays mobiles doivent utiliser les variables DTSC (`--dtsc-surface`, `--dtsc-page`, `--dtsc-ink`, `--dtsc-muted`) ou les classes glass partagées; éviter les fonds fixes `bg-white/*` qui cassent le mode sombre.
 - Les sections Administration doivent rester accessibles par une navigation mobile flottante, avec affichage strictement limité aux sections autorisées par RBAC et poste RH officiel.
 - Les formulaires longs ou fréquents doivent être pliables, en modale, sheet ou accordéon; ne pas afficher plusieurs formulaires ouverts par défaut sur mobile.
 - Les commentaires d'annonces, publications publiques et discussions longues doivent être repliables par défaut, scrollables, paginés et ne jamais étendre indéfiniment la page.

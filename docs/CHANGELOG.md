@@ -13,6 +13,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Harmonisation du rendu clair/sombre des accordéons, listes premium et menu flottant Administration avec des surfaces glass basées sur les variables DTSC.
+- Les blocs de données des sections Administration sont désormais affichés comme accordéons premium, avec cartes de liste cohérentes et lisibles en mode sombre.
 - Accordéons premium appliqués aux zones Dashboard, Entreprise, Abonnement et Profil pour réduire le scroll mobile/PWA.
 - Module Abonnement rendu plus premium avec cartes glass, badges de plan actif et états de paiement connectés aux données backend existantes.
 - Commentaires des annonces internes et publications publiques repliés par défaut, avec ouverture volontaire, pagination et scroll interne.

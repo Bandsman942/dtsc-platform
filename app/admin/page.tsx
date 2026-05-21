@@ -9,6 +9,7 @@ import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { CeoExecutiveSummary } from "@/components/admin/ceo-executive-summary";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
@@ -761,65 +762,82 @@ export default async function AdminPage({
         </nav>
 
         {activeSection === "overview" && canView("overview") && (
-          <AdminOverviewMetrics
-            selectedPeriod={selectedPeriod}
-            selectedDate={selectedDate}
-            totals={overviewMetrics.totals}
-            period={overviewMetrics.period}
-            series={overviewMetrics.series}
-            breakdowns={overviewMetrics.breakdowns}
-            topModels={overviewMetrics.topModels}
-          />
+          <Accordion>
+            <AccordionItem title="Vue générale Administration" defaultOpen>
+              <AdminOverviewMetrics
+                selectedPeriod={selectedPeriod}
+                selectedDate={selectedDate}
+                totals={overviewMetrics.totals}
+                period={overviewMetrics.period}
+                series={overviewMetrics.series}
+                breakdowns={overviewMetrics.breakdowns}
+                topModels={overviewMetrics.topModels}
+              />
+            </AccordionItem>
+          </Accordion>
         )}
 
         {activeSection === "access" && user.role === UserRole.ADMIN && (
-          <AdminAccessPanel access={adminRoleAccess} />
+          <Accordion>
+            <AccordionItem title="Accès RBAC" defaultOpen>
+              <AdminAccessPanel access={adminRoleAccess} />
+            </AccordionItem>
+          </Accordion>
         )}
 
         {activeSection === "settings" && canView("settings") && (
-          <AdminSettingsPanel
-            canEdit={user.role === UserRole.ADMIN}
-            settings={{
-              defaultDailyMessageLimit: settings.defaultDailyMessageLimit,
-              defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
-              chatbotEnabled: settings.chatbotEnabled,
-              publicAgentEnabled: settings.publicAgentEnabled,
-              allowNonClientPublicationDrafts: settings.allowNonClientPublicationDrafts,
-              maintenanceMode: settings.maintenanceMode,
-              supportAutoCloseDays: settings.supportAutoCloseDays,
-              allowClientAnnouncements: settings.allowClientAnnouncements,
-              commentEditWindowMinutes: settings.commentEditWindowMinutes,
-              notificationRetentionDays: settings.notificationRetentionDays,
-              signUpOtpEnabled: settings.signUpOtpEnabled,
-              signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
-            }}
-          />
+          <Accordion>
+            <AccordionItem title="Paramètres globaux" defaultOpen>
+              <AdminSettingsPanel
+                canEdit={user.role === UserRole.ADMIN}
+                settings={{
+                  defaultDailyMessageLimit: settings.defaultDailyMessageLimit,
+                  defaultDailyTokenLimit: settings.defaultDailyTokenLimit,
+                  chatbotEnabled: settings.chatbotEnabled,
+                  publicAgentEnabled: settings.publicAgentEnabled,
+                  allowNonClientPublicationDrafts: settings.allowNonClientPublicationDrafts,
+                  maintenanceMode: settings.maintenanceMode,
+                  supportAutoCloseDays: settings.supportAutoCloseDays,
+                  allowClientAnnouncements: settings.allowClientAnnouncements,
+                  commentEditWindowMinutes: settings.commentEditWindowMinutes,
+                  notificationRetentionDays: settings.notificationRetentionDays,
+                  signUpOtpEnabled: settings.signUpOtpEnabled,
+                  signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
+                }}
+              />
+            </AccordionItem>
+          </Accordion>
         )}
 
         {activeSection === "publications" && canView("publications") && (
-          <PublicPublicationsManager
-            publications={JSON.parse(JSON.stringify(publicPublications))}
-            currentUserId={user.id}
-            canCreateDrafts={
-              user.role === UserRole.ADMIN ||
-              (settings.allowNonClientPublicationDrafts && (user.role === UserRole.MANAGER || user.role === UserRole.SUPPORT))
-            }
-            canPublish={user.role === UserRole.ADMIN}
-            canDelete={user.role === UserRole.ADMIN}
-          />
+          <Accordion>
+            <AccordionItem title="Publications publiques" defaultOpen>
+              <PublicPublicationsManager
+                publications={JSON.parse(JSON.stringify(publicPublications))}
+                currentUserId={user.id}
+                canCreateDrafts={
+                  user.role === UserRole.ADMIN ||
+                  (settings.allowNonClientPublicationDrafts && (user.role === UserRole.MANAGER || user.role === UserRole.SUPPORT))
+                }
+                canPublish={user.role === UserRole.ADMIN}
+                canDelete={user.role === UserRole.ADMIN}
+              />
+            </AccordionItem>
+          </Accordion>
         )}
 
         {activeSection === "users" && canView("users") && (
-          <div className="space-y-5">
-            <section className="dtsc-card p-6">
-              <div className="mb-5">
-                <h2 className="font-black text-dtsc-ink">Créer un compte utilisateur</h2>
-                <p className="text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
-              </div>
-              {user.role === UserRole.ADMIN ? <CreateUserForm /> : <p className="text-sm text-dtsc-muted">Bloc visible en lecture, modification réservée au rôle ADMIN.</p>}
-            </section>
-            <NewsletterSubscribersManager canManage={user.role === UserRole.ADMIN} />
-          </div>
+          <Accordion>
+            <AccordionItem title="Créer un compte utilisateur">
+              <section className="rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_72%,transparent)] p-4 backdrop-blur-xl sm:p-5">
+                <p className="mb-5 text-sm text-dtsc-muted">L&apos;admin peut créer un compte avec n&apos;importe quel rôle et définir les limites journalières.</p>
+                {user.role === UserRole.ADMIN ? <CreateUserForm /> : <p className="text-sm text-dtsc-muted">Bloc visible en lecture, modification réservée au rôle ADMIN.</p>}
+              </section>
+            </AccordionItem>
+            <AccordionItem title="Newsletter et prospects">
+              <NewsletterSubscribersManager canManage={user.role === UserRole.ADMIN} />
+            </AccordionItem>
+          </Accordion>
         )}
 
         {activeSection === "hrCfo" && canView("hrCfo") && (
@@ -905,31 +923,51 @@ export default async function AdminPage({
           </div>
         )}
 
-        {activeSection === "visits" && canView("visits") && <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />}
+        {activeSection === "visits" && canView("visits") && (
+          <Accordion>
+            <AccordionItem title="Visites du site public" defaultOpen>
+              <SiteVisitsChart points={visitPoints} selectedPeriod={selectedPeriod} selectedDate={selectedDate} totalVisits={visitTotal} />
+            </AccordionItem>
+          </Accordion>
+        )}
 
         {activeSection === "users" && canView("users") && (
-          <AdminDataTables
-            users={JSON.parse(JSON.stringify(users))}
-            conversations={JSON.parse(JSON.stringify(conversations))}
-            tickets={JSON.parse(JSON.stringify(tickets))}
-            showUsers={true}
-            showActivity={false}
-            canManageUsers={user.role === UserRole.ADMIN}
-          />
+          <Accordion>
+            <AccordionItem title="Utilisateurs, conversations et tickets" defaultOpen>
+              <AdminDataTables
+                users={JSON.parse(JSON.stringify(users))}
+                conversations={JSON.parse(JSON.stringify(conversations))}
+                tickets={JSON.parse(JSON.stringify(tickets))}
+                showUsers={true}
+                showActivity={false}
+                canManageUsers={user.role === UserRole.ADMIN}
+              />
+            </AccordionItem>
+          </Accordion>
         )}
 
         {activeSection === "activity" && canView("activity") && (
-          <AdminDataTables
-            users={JSON.parse(JSON.stringify(users))}
-            conversations={JSON.parse(JSON.stringify(conversations))}
-            tickets={JSON.parse(JSON.stringify(tickets))}
-            showUsers={false}
-            showActivity={true}
-            canManageUsers={false}
-          />
+          <Accordion>
+            <AccordionItem title="Activité plateforme" defaultOpen>
+              <AdminDataTables
+                users={JSON.parse(JSON.stringify(users))}
+                conversations={JSON.parse(JSON.stringify(conversations))}
+                tickets={JSON.parse(JSON.stringify(tickets))}
+                showUsers={false}
+                showActivity={true}
+                canManageUsers={false}
+              />
+            </AccordionItem>
+          </Accordion>
         )}
 
-        {activeSection === "audits" && canView("audits") && <AdminAuditTables payments={paymentAuditItems} logs={logAuditItems} />}
+        {activeSection === "audits" && canView("audits") && (
+          <Accordion>
+            <AccordionItem title="Journaux d'audit" defaultOpen>
+              <AdminAuditTables payments={paymentAuditItems} logs={logAuditItems} />
+            </AccordionItem>
+          </Accordion>
+        )}
 
         {activeSection === "overview" && (
           <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">

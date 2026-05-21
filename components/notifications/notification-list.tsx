@@ -203,7 +203,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
         const unread = !notification.readAt;
 
         return (
-          <article key={notification.id} className="dtsc-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+          <article key={notification.id} className="dtsc-glass-list-item flex flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-cyan-500">
                 <Bell className="h-5 w-5" />

@@ -69,18 +69,18 @@ export function AdminFloatingNav({
       {open && (
         <div className="fixed inset-0 z-50 bg-[#001736]/55 p-3 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>
           <div
-            className="ml-auto flex h-[min(88dvh,42rem)] w-full max-w-md flex-col overflow-hidden rounded-[1.75rem] border border-white/20 bg-white/95 shadow-[0_24px_80px_rgba(0,23,54,0.35)]"
+            className="dtsc-glass-card ml-auto flex h-[min(88dvh,42rem)] w-full max-w-md flex-col overflow-hidden rounded-[1.75rem]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-dtsc-border px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_72%,transparent)] px-4 py-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Administration</p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-dtsc-blue">Administration</p>
                 <h2 className="text-lg font-black text-dtsc-ink">Sections autorisées</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="grid h-10 w-10 place-items-center rounded-xl bg-dtsc-page text-dtsc-blue"
+                className="grid h-10 w-10 place-items-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-blue"
                 aria-label="Fermer le menu Administration"
               >
                 <X className="h-4 w-4" />
@@ -96,18 +96,18 @@ export function AdminFloatingNav({
                     href={section.href}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 rounded-2xl border p-3 transition",
+                      "flex items-center gap-3 rounded-2xl p-3 transition hover:-translate-y-0.5",
                       active
-                        ? "border-cyan-300 bg-cyan-50 text-[#001736]"
-                        : "border-dtsc-border bg-white text-dtsc-muted hover:border-cyan-200 hover:bg-dtsc-page"
+                        ? "dtsc-glass-list-item-active"
+                        : "dtsc-glass-list-item text-dtsc-muted"
                     )}
                   >
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#001736] text-cyan-300">
                       <Icon className="h-5 w-5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-black text-dtsc-ink">{section.label}</span>
-                      <span className="line-clamp-1 text-xs font-semibold text-dtsc-muted">{section.description}</span>
+                      <span className={cn("block truncate text-sm font-black", active ? "text-white" : "text-dtsc-ink")}>{section.label}</span>
+                      <span className={cn("line-clamp-1 text-xs font-semibold", active ? "text-slate-200" : "text-dtsc-muted")}>{section.description}</span>
                     </span>
                   </Link>
                 );

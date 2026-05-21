@@ -77,7 +77,7 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
         />
       )}
       {ticketList.paginatedItems.map((ticket) => (
-        <article key={ticket.id} className="dtsc-card p-5">
+        <article key={ticket.id} className="dtsc-glass-list-item rounded-2xl p-5">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">
