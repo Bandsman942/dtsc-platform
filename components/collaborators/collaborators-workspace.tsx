@@ -3,7 +3,7 @@
 import { Archive, ArrowLeft, Check, Copy, Eye, Maximize2, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
 import { LiveKitRoom, RoomAudioRenderer, VideoConference } from "@livekit/components-react";
 import { ConnectionState, Room } from "livekit-client";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -1536,7 +1536,7 @@ function GroupCallRoom({
         </div>
       </aside>
       {callChatOpen && group && (
-        <div className="absolute inset-x-2 bottom-[5.25rem] top-20 z-20 md:bottom-4 md:left-auto md:right-4 md:top-4 md:w-[22rem]">
+        <div className="pointer-events-none absolute inset-0 z-20">
           <CallChatPanel
             group={group}
             callId={joinedCall.call.id}
@@ -1623,9 +1623,18 @@ function CallChatPanel({
   const [content, setContent] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  const [panelRect, setPanelRect] = useState({ x: 12, y: 76, width: 340, height: 520 });
+  const panelRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const interactionRef = useRef<{
+    mode: "drag" | "resize";
+    startX: number;
+    startY: number;
+    initial: { x: number; y: number; width: number; height: number };
+  } | null>(null);
   const visibleMessages = messages.filter((message) => message.messageType !== "SYSTEM").slice(-24);
   const visibleMessageCount = visibleMessages.length;
+  const t = (key: string) => translate(userPreferences.locale, key);
   const mentionSuggestions = useMemo(() => {
     const match = content.match(/@([\p{L}\p{N}\s._-]{0,40})$/u);
     if (!match) {
@@ -1646,6 +1655,68 @@ function CallChatPanel({
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [visibleMessageCount]);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const bounds = chatPanelBounds(panelRef.current);
+      setPanelRect(clampChatPanelRect(initialChatPanelRect(bounds), bounds));
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const interaction = interactionRef.current;
+      if (!interaction) {
+        return;
+      }
+      const bounds = chatPanelBounds(panelRef.current);
+      const deltaX = event.clientX - interaction.startX;
+      const deltaY = event.clientY - interaction.startY;
+      if (interaction.mode === "drag") {
+        setPanelRect(clampChatPanelRect({
+          ...interaction.initial,
+          x: interaction.initial.x + deltaX,
+          y: interaction.initial.y + deltaY,
+        }, bounds));
+      } else {
+        setPanelRect(clampChatPanelRect({
+          ...interaction.initial,
+          width: interaction.initial.width + deltaX,
+          height: interaction.initial.height + deltaY,
+        }, bounds));
+      }
+    }
+
+    function handlePointerUp() {
+      interactionRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, []);
+
+  function startPanelInteraction(event: ReactPointerEvent<HTMLElement>, mode: "drag" | "resize") {
+    event.preventDefault();
+    interactionRef.current = {
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      initial: panelRect,
+    };
+    document.body.style.cursor = mode === "drag" ? "grabbing" : "nwse-resize";
+    document.body.style.userSelect = "none";
+  }
 
   function insertMention(member: GroupMember) {
     setContent((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, `@${member.user.name} `));
@@ -1677,23 +1748,35 @@ function CallChatPanel({
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.35rem] border border-cyan-300/30 bg-[#071427]/96 text-white shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
+    <section
+      ref={panelRef}
+      className="pointer-events-auto absolute flex min-h-0 flex-col overflow-hidden rounded-[1.35rem] border border-cyan-300/30 bg-[#071427]/96 text-white shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
+      style={{
+        left: panelRect.x,
+        top: panelRect.y,
+        width: panelRect.width,
+        height: panelRect.height,
+      }}
+    >
+      <div
+        onPointerDown={(event) => startPanelInteraction(event, "drag")}
+        className="flex shrink-0 cursor-grab touch-none items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5 active:cursor-grabbing"
+      >
         <div className="min-w-0">
-          <p className="truncate text-sm font-black">Chat pendant l&apos;appel</p>
-          <p className="truncate text-[0.68rem] font-semibold text-slate-300">Messages persistés dans {group.name}</p>
+          <p className="truncate text-sm font-black">{t("calls.callChatTitle")}</p>
+          <p className="truncate text-[0.68rem] font-semibold text-slate-300">{t("calls.chatPersistedIn")} {group.name}</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-300 hover:bg-white/10" aria-label="Fermer le chat d'appel">
+        <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={onClose} className="rounded-full p-2 text-slate-300 hover:bg-white/10" aria-label={t("calls.closeCallChat")}>
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-gutter:stable]">
         {visibleMessages.map((message) => {
           const isCurrentUser = message.authorId === currentUserId;
           return (
             <div key={`${callId}-${message.id}`} className={cn("flex", isCurrentUser ? "justify-end" : "justify-start")}>
               <div className={cn("max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-5", isCurrentUser ? "bg-cyan-400 text-[#001736]" : "bg-white/10 text-slate-100")}>
-                <p className={cn("mb-1 font-black", isCurrentUser ? "text-[#002b5b]" : "text-cyan-200")}>{isCurrentUser ? "Vous" : message.author.name}</p>
+                <p className={cn("mb-1 font-black", isCurrentUser ? "text-[#002b5b]" : "text-cyan-200")}>{isCurrentUser ? t("calls.you") : message.author.name}</p>
                 <p className="whitespace-pre-wrap">{message.deletedAt ? "Message supprimé." : message.content}</p>
                 <p className={cn("mt-1 text-[0.62rem] font-semibold", isCurrentUser ? "text-[#002b5b]/70" : "text-slate-400")}>
                   {formatRelativeUserDateTime(message.createdAt, userPreferences)}
@@ -1704,7 +1787,7 @@ function CallChatPanel({
         })}
         {!visibleMessages.length && (
           <p className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs font-semibold text-slate-300">
-            Aucun message texte pendant cet appel. Écrivez ici pour alimenter directement la conversation du groupe.
+            {t("calls.emptyCallChat")}
           </p>
         )}
       </div>
@@ -1726,7 +1809,7 @@ function CallChatPanel({
           <Input
             value={content}
             onChange={(event) => setContent(event.target.value)}
-            placeholder="Message pendant l'appel..."
+            placeholder={t("calls.callChatPlaceholder")}
             className="h-10 border-0 bg-transparent text-white placeholder:text-slate-400 focus-visible:ring-0"
           />
           <Button type="submit" size="icon" disabled={!content.trim() || sending} className="h-10 w-10 shrink-0 rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
@@ -1734,8 +1817,53 @@ function CallChatPanel({
           </Button>
         </div>
       </form>
+      <button
+        type="button"
+        onPointerDown={(event) => startPanelInteraction(event, "resize")}
+        className="absolute bottom-1.5 right-1.5 h-5 w-5 cursor-nwse-resize touch-none rounded-br-[1rem] border-b-2 border-r-2 border-cyan-200/70 opacity-80"
+        aria-label={t("calls.resizeCallChat")}
+      />
     </section>
   );
+}
+
+function initialChatPanelRect(bounds: { width: number; height: number }) {
+  const isCompact = bounds.width < 720;
+  const width = Math.min(isCompact ? bounds.width - 24 : 380, Math.max(280, bounds.width - 24));
+  const height = Math.min(isCompact ? bounds.height - 116 : 560, Math.max(320, bounds.height - 96));
+  return {
+    x: isCompact ? 12 : Math.max(12, bounds.width - width - 16),
+    y: isCompact ? 76 : 16,
+    width,
+    height,
+  };
+}
+
+function chatPanelBounds(panel: HTMLElement | null) {
+  const parent = panel?.parentElement;
+  const rect = parent?.getBoundingClientRect();
+  return {
+    width: Math.max(rect?.width || 360, 320),
+    height: Math.max(rect?.height || 620, 360),
+  };
+}
+
+function clampChatPanelRect(
+  rect: { x: number; y: number; width: number; height: number },
+  bounds: { width: number; height: number }
+) {
+  const minWidth = Math.min(280, bounds.width - 24);
+  const minHeight = Math.min(300, bounds.height - 24);
+  const maxWidth = Math.max(minWidth, bounds.width - 24);
+  const maxHeight = Math.max(minHeight, bounds.height - 24);
+  const width = Math.min(Math.max(rect.width, minWidth), maxWidth);
+  const height = Math.min(Math.max(rect.height, minHeight), maxHeight);
+  return {
+    x: Math.min(Math.max(rect.x, 12), Math.max(12, bounds.width - width - 12)),
+    y: Math.min(Math.max(rect.y, 12), Math.max(12, bounds.height - height - 12)),
+    width,
+    height,
+  };
 }
 
 function ReadInfoList({ title, empty, users }: { title: string; empty: string; users: Array<{ user: UserOption; detail: string }> }) {
