@@ -73,7 +73,9 @@
     "loadOlderMessages": "Load older messages",
     "sharedConversation": "Shared chatbot conversation",
     "viewSharedConversation": "View the readable copy",
-    "noMessages": "No messages in this group"
+    "noMessages": "No messages in this group",
+    "messageSent": "Message sent",
+    "readByAll": "Read by all members"
   },
   "comments": {
     "title": "Comments",
@@ -134,6 +136,10 @@
     "stopScreenShare": "Stop sharing",
     "fullscreen": "Full screen",
     "exitFullscreen": "Exit full screen",
+    "fullscreenFocus": "Full-screen view",
+    "autoView": "Auto",
+    "screenShareView": "Screen share",
+    "focusParticipant": "View full screen",
     "audioStarted": "Audio call started",
     "videoStarted": "Video call started",
     "joined": "joined the call",

@@ -73,7 +73,9 @@
     "loadOlderMessages": "Charger les anciens messages",
     "sharedConversation": "Conversation chatbot partagée",
     "viewSharedConversation": "Voir la copie consultable",
-    "noMessages": "Aucun message dans ce groupe"
+    "noMessages": "Aucun message dans ce groupe",
+    "messageSent": "Message envoyé",
+    "readByAll": "Lu par tous les membres"
   },
   "comments": {
     "title": "Commentaires",
@@ -134,6 +136,10 @@
     "stopScreenShare": "Arrêter partage",
     "fullscreen": "Plein écran",
     "exitFullscreen": "Réduire l'écran",
+    "fullscreenFocus": "Vue plein écran",
+    "autoView": "Auto",
+    "screenShareView": "Partage écran",
+    "focusParticipant": "Voir en plein écran",
     "audioStarted": "Appel audio lancé",
     "videoStarted": "Appel vidéo lancé",
     "joined": "a rejoint l'appel",

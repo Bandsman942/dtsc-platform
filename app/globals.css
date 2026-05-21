@@ -55,14 +55,13 @@
     isolation: isolate;
     border-radius: 1.5rem;
     padding: 0.35rem;
+    background: #06111f;
   }
 
   .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout) {
     min-width: 0;
     height: 100%;
-    background:
-      radial-gradient(circle at top left, rgba(34, 211, 238, 0.18), transparent 32rem),
-      linear-gradient(135deg, #06111f, #0f172a 60%, #06111f);
+    background: #06111f !important;
     color: #f8fafc;
   }
 
@@ -70,11 +69,15 @@
     overflow: hidden;
     border: 1px solid rgba(34, 211, 238, 0.22);
     border-radius: 1.5rem;
-    background: rgba(15, 23, 42, 0.72);
+    background: #06111f;
     box-shadow: 0 24px 70px rgba(0, 23, 54, 0.32);
   }
 
   .dtsc-livekit-room :where(.lk-participant-tile video) {
+    display: block;
+    min-height: 100%;
+    border-radius: inherit;
+    background: #06111f;
     object-fit: cover;
   }
 
@@ -96,11 +99,40 @@
 
   .dtsc-call-shell:fullscreen {
     border-radius: 0;
+    height: 100dvh;
+    max-height: 100dvh;
     min-height: 100dvh;
     width: 100vw;
+    max-width: 100vw;
+    background: #06111f;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .dtsc-call-shell:fullscreen .dtsc-livekit-room {
+    min-height: 0 !important;
+  }
+
+  .dtsc-call-shell:fullscreen .dtsc-livekit-room :where(.lk-video-conference, .lk-grid-layout, .lk-focus-layout) {
+    min-height: 0;
   }
 
   @media (max-width: 640px) {
+    .dtsc-call-shell:fullscreen {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .dtsc-call-shell:fullscreen > section {
+      min-height: 0;
+      flex: 1 1 auto;
+    }
+
+    .dtsc-call-shell:fullscreen > aside {
+      max-height: 18dvh;
+      overflow-y: auto;
+    }
+
     .dtsc-livekit-room {
       border-radius: 1.75rem;
       padding: 0.45rem;
@@ -113,6 +145,7 @@
 
     .dtsc-livekit-room :where(.lk-participant-tile) {
       border-radius: 1.55rem;
+      background: #06111f;
       outline: 1px solid rgba(34, 211, 238, 0.16);
       outline-offset: -3px;
     }

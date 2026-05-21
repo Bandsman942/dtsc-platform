@@ -126,7 +126,9 @@ Préférences utilisateur d'appel persistées sur `User`:
 - `callSoundVolume`, `callAlertDisplayDuration`;
 - préférences de périphériques `preferredAudioInputId`, `preferredVideoInputId`, `preferredAudioOutputId` lorsque le navigateur les permet.
 
-`CollaborationGroupCall.durationSeconds` est renseigné lors de la fin globale d'un appel et sert à afficher l'historique sobre du groupe. Le bouton `Quitter` appelle uniquement la sortie participant, tandis que `Terminer` clôt l'appel pour tous et reste protégé côté API.
+`CollaborationGroupCall.durationSeconds` est renseigné lors de la fin globale d'un appel et sert à afficher l'historique sobre du groupe. Le bouton `Quitter` appelle uniquement la sortie participant, tandis que `Terminer` clôt l'appel pour tous et reste protégé côté API. En plein écran vidéo, `components/collaborators/collaborators-workspace.tsx` expose un sélecteur de focus qui applique une vue automatique, un focus partage d'écran ou un focus participant via les attributs LiveKit scopés; l'interface reste responsive mobile/PWA et le fond de la scène vidéo est uniformisé en `#06111f` pour éviter une rupture visuelle autour des tuiles arrondies.
+
+Les messages de groupe retournés par `GET /api/collaborators/groups/[id]/messages` incluent maintenant les lectures compactes (`reads: [{ userId, readAt }]`) afin que le client puisse afficher l'accusé de réception directement dans le fil. L'UI affiche une coche pour un message envoyé par l'utilisateur courant, puis deux coches vertes uniquement lorsque tous les autres membres actifs du groupe sont présents dans `CollaborationGroupMessageRead`.
 
 Les réunions COO disposent de `meetingMode`:
 

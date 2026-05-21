@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArrowLeft, Check, Copy, Eye, Maximize2, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
+import { Archive, ArrowLeft, Check, CheckCheck, Copy, Eye, Maximize2, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
 import { LiveKitRoom, RoomAudioRenderer, VideoConference } from "@livekit/components-react";
 import { ConnectionState, Room } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
@@ -96,9 +96,11 @@ type GroupMessage = {
   author: UserOption;
   replyTo?: { id: string; content: string; createdAt: string; deletedAt?: string | null; author: { id: string; name: string } } | null;
   mentions: Array<{ mentionedUser: MentionedUser }>;
+  reads?: Array<{ userId: string; readAt: string }>;
   sharedChatbotConversation?: { id: string; title: string; updatedAt: string } | null;
   sharedConversationSnapshot?: { id: string; title: string; status: string; createdAt: string; deletedAt?: string | null } | null;
 };
+type FullscreenFocusTarget = "auto" | "screen" | `participant:${string}`;
 type MessageReadInfo = {
   messageId: string;
   readBy: Array<{ user: UserOption; readAt: string }>;
@@ -164,7 +166,6 @@ export function CollaboratorsWorkspace({
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
   const isGroupOwner = activeMember?.role === "OWNER";
   const activeCall = activeGroup?.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE") || null;
-  const activeCallId = activeCall?.id || "";
   const canEndActiveCall = Boolean(activeCall && (activeCall.startedById === currentUserId || canManage));
   const availableInviteUsers = useMemo(() => {
     const activeMemberIds = new Set(activeGroup?.members.map((member) => member.userId) || []);
@@ -269,16 +270,16 @@ export function CollaboratorsWorkspace({
   }, [activeGroupId, loadMessages]);
 
   useEffect(() => {
-    if (!activeGroupId || !activeCallId) {
+    if (!activeGroupId) {
       return;
     }
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         void loadMessages(activeGroupId);
       }
-    }, 4500);
+    }, 7000);
     return () => window.clearInterval(interval);
-  }, [activeCallId, activeGroupId, loadMessages]);
+  }, [activeGroupId, loadMessages]);
 
   async function openSharedSnapshot(snapshotId: string) {
     const response = await fetch(`/api/collaborators/shared-conversations/${snapshotId}`);
@@ -1018,6 +1019,7 @@ function MessageThread({
           <GroupMessageBubble
             key={message.id}
             message={message}
+            group={group}
             currentUserId={currentUserId}
             userPreferences={userPreferences}
             onChanged={onChanged}
@@ -1067,6 +1069,7 @@ function MessageThread({
 
 function GroupMessageBubble({
   message,
+  group,
   currentUserId,
   userPreferences,
   onChanged,
@@ -1078,6 +1081,7 @@ function GroupMessageBubble({
   onCreateMentionGroup,
 }: {
   message: GroupMessage;
+  group: Group;
   currentUserId: string;
   userPreferences: UserDatePreferences;
   onChanged: () => Promise<void>;
@@ -1089,6 +1093,7 @@ function GroupMessageBubble({
   onCreateMentionGroup: (user: MentionedUser) => void;
 }) {
   const participantColor = getParticipantColor(message.authorId || message.author.email);
+  const receiptStatus = getMessageReadReceiptStatus(message, group, currentUserId);
   if (message.messageType === "SYSTEM") {
     return (
       <div className="flex justify-center">
@@ -1153,13 +1158,51 @@ function GroupMessageBubble({
               <span className="mt-2 inline-flex rounded-full bg-cyan-100 px-2.5 py-1 text-[0.68rem] font-black text-cyan-900 dark:bg-cyan-300 dark:text-cyan-950">Voir la copie consultable</span>
             </button>
           )}
-          <p className={cn("mt-2 text-[0.68rem] font-semibold", message.authorId === currentUserId ? "text-white/70" : "text-dtsc-muted")}>
-            {formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · modifié" : ""}
-          </p>
+          <div className={cn("mt-2 flex items-center gap-1.5 text-[0.68rem] font-semibold", message.authorId === currentUserId ? "justify-end text-white/70" : "justify-start text-dtsc-muted")}>
+            <span>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · modifié" : ""}</span>
+            {receiptStatus && <MessageReadReceipt status={receiptStatus} locale={userPreferences.locale} />}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+type MessageReadReceiptStatus = "sent" | "readByAll";
+
+function MessageReadReceipt({ status, locale, compact = false }: { status: MessageReadReceiptStatus; locale: UserDatePreferences["locale"]; compact?: boolean }) {
+  const isReadByAll = status === "readByAll";
+  const label = isReadByAll ? translate(locale, "collaborators.readByAll") : translate(locale, "collaborators.messageSent");
+  const Icon = isReadByAll ? CheckCheck : Check;
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center font-black",
+        compact ? "translate-y-[1px]" : "",
+        isReadByAll ? "text-emerald-300 dark:text-emerald-300" : "text-white/70 dark:text-slate-300"
+      )}
+      title={label}
+      aria-label={label}
+    >
+      <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} strokeWidth={3} />
+    </span>
+  );
+}
+
+function getMessageReadReceiptStatus(message: GroupMessage, group: Group, currentUserId: string): MessageReadReceiptStatus | null {
+  if (message.authorId !== currentUserId || message.messageType === "SYSTEM" || message.deletedAt) {
+    return null;
+  }
+  const expectedReaders = group.members
+    .filter((member) => member.userId !== message.authorId && isActiveGroupMember(member))
+    .map((member) => member.userId);
+  const readUserIds = new Set((message.reads || []).map((read) => read.userId));
+  const allReadersConfirmed = expectedReaders.length === 0 || expectedReaders.every((userId) => readUserIds.has(userId));
+  return allReadersConfirmed ? "readByAll" : "sent";
+}
+
+function isActiveGroupMember(member: GroupMember) {
+  return member.status === "ACTIVE" || member.status === "JOINED" || member.status === "OWNER" || member.status === "ADMIN";
 }
 
 function GroupDetailsDialog({
@@ -1349,6 +1392,7 @@ function GroupCallRoom({
   const [callChatOpen, setCallChatOpen] = useState(false);
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenFocus, setFullscreenFocus] = useState<FullscreenFocusTarget>("auto");
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
   const t = (key: string) => translate(userPreferences.locale, key);
   const starterMember = group?.members.find((member) => member.userId === joinedCall.call.startedById);
@@ -1368,6 +1412,12 @@ function GroupCallRoom({
     document.addEventListener("fullscreenchange", syncFullscreenState);
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      setFullscreenFocus("auto");
+    }
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (room.state === ConnectionState.Disconnected) {
@@ -1428,11 +1478,20 @@ function GroupCallRoom({
           <p className="mt-1 text-sm text-slate-300">{connectionLabel} · {formatCallDuration(duration)}</p>
           {callError && <p className="mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100">{callError}</p>}
         </div>
-        <div className="min-h-0 flex-1 p-2 sm:p-3">
+        <div className="relative min-h-0 flex-1 p-2 sm:p-3">
           {callChatOpen && (
             <div className="mb-2 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-bold text-cyan-100">
               {t("calls.activeWhileChatOpen")}
             </div>
+          )}
+          {isFullscreen && joinedCall.call.callType === "VIDEO" && (
+            <CallFullscreenFocusControls
+              focus={fullscreenFocus}
+              participants={connectedParticipants}
+              group={group}
+              t={t}
+              onFocusChange={setFullscreenFocus}
+            />
           )}
           <LiveKitRoom
             room={room}
@@ -1442,7 +1501,11 @@ function GroupCallRoom({
             audio={microphoneEnabled}
             video={joinedCall.call.callType === "VIDEO" && cameraEnabled}
             data-lk-theme="default"
-            className="dtsc-livekit-room h-full min-h-[24rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950 sm:min-h-[30rem]"
+            className={cn(
+              "dtsc-livekit-room h-full min-h-[24rem] overflow-hidden rounded-3xl border border-cyan-300/30 bg-slate-950 sm:min-h-[30rem]",
+              isFullscreen && fullscreenFocus !== "auto" && "dtsc-livekit-focus-mode",
+              isFullscreen && fullscreenFocus === "screen" && "dtsc-livekit-focus-screen"
+            )}
             onConnected={() => {
               setConnectionLabel("Appel connecté");
               if (callPreferences.callSoundsEnabled !== false) {
@@ -1459,6 +1522,7 @@ function GroupCallRoom({
             }}
           >
             <CallParticipantAvatarStyles group={group} />
+            <CallFullscreenFocusStyles focus={fullscreenFocus} />
             {joinedCall.call.callType === "VIDEO" ? (
               <VideoConference />
             ) : (
@@ -1549,6 +1613,92 @@ function GroupCallRoom({
         </div>
       )}
     </div>
+  );
+}
+
+function CallFullscreenFocusControls({
+  focus,
+  participants,
+  group,
+  t,
+  onFocusChange,
+}: {
+  focus: FullscreenFocusTarget;
+  participants: GroupCallParticipant[];
+  group: Group | null;
+  t: (key: string) => string;
+  onFocusChange: (focus: FullscreenFocusTarget) => void;
+}) {
+  const participantTargets = participants.length
+    ? participants
+    : group?.members.filter((member) => member.status === "ACTIVE").map((member) => ({ userId: member.userId, status: "JOINED" } as GroupCallParticipant)) || [];
+
+  return (
+    <div className="pointer-events-auto absolute left-3 right-3 top-3 z-30 rounded-2xl border border-cyan-300/30 bg-[#06111f]/82 p-2 shadow-[0_18px_60px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
+      <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
+        <span className="shrink-0 px-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-cyan-200">
+          {t("calls.fullscreenFocus")}
+        </span>
+        <button
+          type="button"
+          onClick={() => onFocusChange("auto")}
+          className={cn("shrink-0 rounded-full px-3 py-1.5 text-xs font-black transition", focus === "auto" ? "bg-cyan-300 text-[#001736]" : "bg-white/10 text-slate-100 hover:bg-white/15")}
+        >
+          {t("calls.autoView")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onFocusChange("screen")}
+          className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black transition", focus === "screen" ? "bg-cyan-300 text-[#001736]" : "bg-white/10 text-slate-100 hover:bg-white/15")}
+        >
+          <MonitorUp className="h-3.5 w-3.5" />
+          {t("calls.screenShareView")}
+        </button>
+        {participantTargets.map((participant) => {
+          const member = group?.members.find((item) => item.userId === participant.userId);
+          const target = `participant:${participant.userId}` as FullscreenFocusTarget;
+          return (
+            <button
+              key={participant.userId}
+              type="button"
+              onClick={() => onFocusChange(target)}
+              className={cn("inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-1.5 text-xs font-black transition", focus === target ? "bg-cyan-300 text-[#001736]" : "bg-white/10 text-slate-100 hover:bg-white/15")}
+              title={`${t("calls.focusParticipant")} ${member?.user.name || "DTSC"}`}
+            >
+              <CallMemberAvatar member={member} className="h-6 w-6 border-white/20 text-[0.58rem]" />
+              <span className="max-w-32 truncate">{member?.user.name || "Participant DTSC"}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CallFullscreenFocusStyles({ focus }: { focus: FullscreenFocusTarget }) {
+  if (focus === "auto") {
+    return null;
+  }
+  const participantIdentity = focus.startsWith("participant:") ? cssAttributeValue(focus.slice("participant:".length)) : "";
+  const participantRule = participantIdentity
+    ? `
+      .dtsc-livekit-focus-mode :where(.lk-participant-tile){display:none!important;}
+      .dtsc-livekit-focus-mode :where([data-lk-participant-identity="${participantIdentity}"], [data-lk-participant-identity="${participantIdentity}"] .lk-participant-tile, .lk-participant-tile[data-lk-participant-identity="${participantIdentity}"], .lk-participant-tile:has([data-lk-participant-identity="${participantIdentity}"])){display:flex!important;min-height:100%!important;}
+    `
+    : "";
+  const screenRule = focus === "screen"
+    ? `
+      .dtsc-livekit-focus-screen :where(.lk-participant-tile){display:none!important;}
+      .dtsc-livekit-focus-screen :where([data-lk-source*="screen"], [data-lk-source*="screen"] .lk-participant-tile, .lk-participant-tile[data-lk-source*="screen"], .lk-participant-tile:has([data-lk-source*="screen"])){display:flex!important;min-height:100%!important;}
+    `
+    : "";
+
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `${participantRule}${screenRule}`,
+      }}
+    />
   );
 }
 
@@ -1773,6 +1923,7 @@ function CallChatPanel({
       <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-gutter:stable]">
         {visibleMessages.map((message) => {
           const isCurrentUser = message.authorId === currentUserId;
+          const receiptStatus = getMessageReadReceiptStatus(message, group, currentUserId);
           return (
             <div key={`${callId}-${message.id}`} className={cn("flex", isCurrentUser ? "justify-end" : "justify-start")}>
               <div className={cn("max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-5", isCurrentUser ? "bg-cyan-400 text-[#001736]" : "bg-white/10 text-slate-100")}>
@@ -1780,6 +1931,11 @@ function CallChatPanel({
                 <p className="whitespace-pre-wrap">{message.deletedAt ? "Message supprimé." : message.content}</p>
                 <p className={cn("mt-1 text-[0.62rem] font-semibold", isCurrentUser ? "text-[#002b5b]/70" : "text-slate-400")}>
                   {formatRelativeUserDateTime(message.createdAt, userPreferences)}
+                  {receiptStatus && (
+                    <span className="ml-1 inline-flex align-middle">
+                      <MessageReadReceipt status={receiptStatus} locale={userPreferences.locale} compact />
+                    </span>
+                  )}
                 </p>
               </div>
             </div>

@@ -23,6 +23,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les messages sortants des groupes `Mes collaborateurs` affichent un accusé compact: une coche quand le message est envoyé et deux coches vertes lorsque tous les autres membres actifs ont confirmé la lecture.
+- Le plein écran des appels vidéo gagne un sélecteur premium permettant de focaliser la vue automatique, un partage d'écran ou un participant précis sur desktop/mobile, avec un fond de scène uniformisé autour des tuiles arrondies.
 - Le chat pendant appel devient une boîte flottante autonome, déplaçable, redimensionnable et dotée d'un scroll vertical interne borné avec saisie fixe.
 - Les appels vidéo sont mieux adaptés mobile/desktop: tuiles plus arrondies et visibles sur mobile, avatars fournisseur réduits/remplacés par la photo de profil quand disponible, bouton plein écran renommé en `Réduire l'écran` une fois actif et PWA autorisée en portrait/paysage.
 - L'éditeur des annonces internes supporte désormais l'ajout de plusieurs images par sélection ou glisser-déposer, l'optimisation client et un aperçu mobile/desktop avant publication.
