@@ -123,7 +123,7 @@ Ces secrets ne doivent jamais être exposés côté client. `lib/livekit-service
 
 ### Calendrier interne DTSC
 
-Le module prive `/calendar` fournit un calendrier interne sans dependance a Google Calendar, Cal.com ou autre fournisseur externe. Il s'appuie sur les modeles Prisma suivants:
+Le module prive `/calendar` fournit un calendrier interne sans dependance a Google Calendar, Cal.com ou autre fournisseur externe. Il est reserve aux collaborateurs internes: les utilisateurs `CLIENT` ne voient pas le lien, sont rediriges hors de `/calendar` par le middleware/page et recoivent `403` sur les routes `/api/calendar*`. Il s'appuie sur les modeles Prisma suivants:
 
 - `CollaboratorAvailability`: plages de disponibilite, absence, conge, mission, teletravail ou presence sur site par collaborateur.
 - `InternalCalendarEvent`: evenement interne planifie avec type, statut, priorite, source metier, proprietaire, departement et visibilite.

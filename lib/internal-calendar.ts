@@ -1,9 +1,13 @@
-import type { Prisma, UserRole } from "@prisma/client";
+import { UserRole, type Prisma } from "@prisma/client";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
 export type CalendarContext = Awaited<ReturnType<typeof getCalendarContext>>;
+
+export function canAccessInternalCalendar(user: { role: UserRole }) {
+  return user.role !== UserRole.CLIENT;
+}
 
 export async function getCalendarContext(user: { id: string; role: UserRole }) {
   const employee = await prisma.hrcfoEmployee.findFirst({

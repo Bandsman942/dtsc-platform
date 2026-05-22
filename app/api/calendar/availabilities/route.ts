@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canManageCollaboratorCalendar, getCalendarContext } from "@/lib/internal-calendar";
+import { canAccessInternalCalendar, canManageCollaboratorCalendar, getCalendarContext } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
 import { internalCalendarAvailabilitySchema } from "@/lib/validators";
 
@@ -11,6 +11,10 @@ export async function GET(req: Request) {
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canAccessInternalCalendar({ role: session.role })) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs DTSC autorisés." }, { status: 403 });
   }
 
   const context = await getCalendarContext({ id: session.userId, role: session.role });
@@ -34,6 +38,10 @@ export async function POST(req: Request) {
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canAccessInternalCalendar({ role: session.role })) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs DTSC autorisés." }, { status: 403 });
   }
 
   const context = await getCalendarContext({ id: session.userId, role: session.role });

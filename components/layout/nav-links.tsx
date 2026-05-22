@@ -39,9 +39,10 @@ export function NavLinks({
   const employeeItems = showEmployeeActivities
     ? [{ href: "/activities", label: "Activités DTSC", icon: CalendarCheck, help: "Voir les tâches, opérations, réunions et blocages internes qui vous concernent." }]
     : [];
+  const visibleBaseItems = items.filter((item) => item.href !== "/calendar" || role !== "CLIENT");
   const navItems = canAccessAdministration(role)
-    ? [...items, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
-    : [...items, ...employeeItems];
+    ? [...visibleBaseItems, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
+    : [...visibleBaseItems, ...employeeItems];
   const translationByHref: Record<string, string> = {
     "/dashboard": "navigation.dashboard",
     "/chat": "navigation.chat",

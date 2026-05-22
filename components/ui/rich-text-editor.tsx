@@ -71,6 +71,8 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectionRef = useRef<Range | null>(null);
   const selectedImageRef = useRef<HTMLImageElement | null>(null);
+  const initializedRef = useRef(false);
+  const htmlRef = useRef(defaultValue);
   const [plainText, setPlainText] = useState(defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
   const [html, setHtml] = useState(defaultValue);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -78,9 +80,14 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
   const [imageDeletePosition, setImageDeletePosition] = useState<ImageDeletePosition>(null);
 
   useEffect(() => {
+    if (defaultValue === htmlRef.current || defaultValue === editorRef.current?.innerHTML) {
+      return;
+    }
+
     const nextText = defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     setPlainText(nextText);
     setHtml(defaultValue);
+    htmlRef.current = defaultValue;
     selectedImageRef.current = null;
     setImageDeletePosition(null);
     if (editorRef.current && editorRef.current.innerHTML !== defaultValue) {
@@ -94,6 +101,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     const nextHtml = editor?.innerHTML || "";
     setPlainText(nextText);
     setHtml(nextHtml);
+    htmlRef.current = nextHtml;
     onContentChange?.({ text: nextText, html: nextHtml });
   }
 
@@ -210,6 +218,10 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
 
   function setRefs(node: HTMLDivElement | null) {
     editorRef.current = node;
+    if (node && !initializedRef.current) {
+      node.innerHTML = defaultValue;
+      initializedRef.current = true;
+    }
     if (typeof ref === "function") {
       ref(node);
     } else if (ref) {
@@ -535,7 +547,6 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:mx-auto [&_figure]:my-4 [&_figure]:max-w-[640px] [&_img]:max-h-[320px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:bg-dtsc-page [&_img]:object-contain [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
-        dangerouslySetInnerHTML={defaultValue ? { __html: defaultValue } : undefined}
       />
       {allowImageUpload && imageDeletePosition && (
         <button

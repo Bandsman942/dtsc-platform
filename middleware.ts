@@ -45,6 +45,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  if (isPathMatch(pathname, ["/calendar"]) && session?.role === "CLIENT") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
   if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") && session) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

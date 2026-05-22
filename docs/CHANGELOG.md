@@ -2,6 +2,14 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-05-22
+
+### Corrigé
+
+- Masquage complet du module `Calendrier interne` pour les utilisateurs `CLIENT`: navigation desktop/mobile, page `/calendar`, middleware et routes `/api/calendar*` bloquent désormais cet accès.
+- Correction du clipping desktop des formulaires Administration dans les accordéons: les cartes et contenus accordéon ne gardent plus un `overflow` qui empêche d'atteindre les extrémités des formulaires sur grand écran.
+- Correction de l'éditeur riche des annonces et publications publiques: la saisie sur brouillon local ne réapplique plus le HTML à chaque frappe, le curseur reste à l'endroit modifié et la suppression immédiate d'image fonctionne avant l'enregistrement.
+
 ## 2026-05-21
 
 ### Ajouté

@@ -3,11 +3,15 @@ import type { CollaboratorAvailability, Prisma } from "@prisma/client";
 import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
-import { calendarEventInclude, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
+import { canAccessInternalCalendar, calendarEventInclude, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
 
 export default async function CalendarPage() {
   const user = await requireUser();
+  if (!canAccessInternalCalendar(user)) {
+    redirect("/dashboard");
+  }
+
   const context = await getCalendarContext({ id: user.id, role: user.role });
 
   if (!context.employee && user.role === "CLIENT") {

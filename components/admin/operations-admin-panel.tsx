@@ -318,7 +318,7 @@ function DatasetCard({
   }
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_72%,transparent)] p-4 backdrop-blur-xl sm:p-5">
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_72%,transparent)] p-4 backdrop-blur-xl sm:p-5 lg:overflow-visible">
       <div className="flex items-start gap-3">
         <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-500">
           <ClipboardList className="h-5 w-5" />

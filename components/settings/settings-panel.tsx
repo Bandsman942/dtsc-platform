@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 type SettingsUser = {
   name: string;
   email: string;
+  role: string;
   companyName: string | null;
   phone: string | null;
   preferredModel?: string | null;
@@ -58,6 +59,8 @@ export function SettingsPanel({
   const [preferencesMessage, setPreferencesMessage] = useState("");
   const [pushEnabled, setPushEnabled] = useState(Boolean(user.pushNotificationsEnabled));
   const [openMobileSection, setOpenMobileSection] = useState("profile");
+  const canUseInternalCalendar = user.role !== "CLIENT";
+  const startPageValue = !canUseInternalCalendar && user.startPage === "/calendar" ? "/dashboard" : user.startPage || "/dashboard";
 
   useEffect(() => setMounted(true), []);
   useEffect(() => setPushEnabled(Boolean(user.pushNotificationsEnabled)), [user.pushNotificationsEnabled]);
@@ -213,12 +216,12 @@ export function SettingsPanel({
             {user.pushNotificationsEnabled ? <input type="hidden" name="pushNotificationsEnabled" value="on" /> : null}
             <CallPreferenceHiddenFields user={user} />
             <Field label="Page après connexion" icon={LayoutDashboard}>
-              <select name="startPage" defaultValue={user.startPage || "/dashboard"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <select name="startPage" defaultValue={startPageValue} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
                 <option value="/dashboard">Dashboard</option>
                 <option value="/chat">Chatbot</option>
                 <option value="/billing">Abonnement</option>
                 <option value="/company">Entreprise</option>
-                <option value="/calendar">Calendrier interne</option>
+                {canUseInternalCalendar && <option value="/calendar">Calendrier interne</option>}
                 <option value="/collaborators">Mes collaborateurs</option>
                 <option value="/activities">Activités DTSC</option>
                 <option value="/support">Support</option>

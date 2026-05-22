@@ -153,10 +153,11 @@ export function MobileBottomNavigation({
   const pathname = usePathname();
   const locale = user.locale || "fr";
   const visibleItems = primaryItems.filter((item) => !item.employeeOnly || showEmployeeActivities);
+  const canUseInternalCalendar = user.role !== "CLIENT";
   const overflowItems = [
     { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
     { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
-    { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" },
+    ...(canUseInternalCalendar ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
     { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
     { href: "/support", labelKey: "navigation.support", fallback: "Support" },
   ];

@@ -22,7 +22,7 @@ export function AccordionItem({ title, children, defaultOpen = false, className 
   return (
     <details
       className={cn(
-        "dtsc-glass-card group overflow-hidden rounded-[1.35rem] transition open:border-cyan-300/60",
+        "dtsc-glass-card group overflow-hidden rounded-[1.35rem] transition open:border-cyan-300/60 lg:overflow-visible",
         className
       )}
       open={defaultOpen}
