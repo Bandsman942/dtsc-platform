@@ -95,7 +95,7 @@ export const internalCalendarAvailabilitySchema = z.object({
   path: ["endTime"],
 });
 
-export const internalCalendarEventSchema = z.object({
+const internalCalendarEventBaseSchema = z.object({
   title: z.string().min(3).max(180),
   description: z.string().max(2000).optional().or(z.literal("")),
   eventType: z.enum(["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"]).default("Tâche"),
@@ -114,15 +114,27 @@ export const internalCalendarEventSchema = z.object({
   visibility: z.enum(["Privé", "Département", "Participants", "Direction", "Public interne"]).default("Participants"),
   participantIds: z.array(z.string().min(1)).max(50).default([]),
   allowConflicts: z.coerce.boolean().default(false),
-}).refine((data) => data.endDateTime > data.startDateTime, {
+});
+
+function hasValidInternalCalendarRange(data: { startDateTime?: Date; endDateTime?: Date }) {
+  return !data.startDateTime || !data.endDateTime || data.endDateTime > data.startDateTime;
+}
+
+export const internalCalendarEventSchema = internalCalendarEventBaseSchema.refine(hasValidInternalCalendarRange, {
   message: "La fin doit être après le début.",
   path: ["endDateTime"],
 });
 
-export const internalCalendarEventUpdateSchema = internalCalendarEventSchema.partial().extend({
-  participantIds: z.array(z.string().min(1)).max(50).optional(),
-  allowConflicts: z.coerce.boolean().default(false),
-});
+export const internalCalendarEventUpdateSchema = internalCalendarEventBaseSchema
+  .partial()
+  .extend({
+    participantIds: z.array(z.string().min(1)).max(50).optional(),
+    allowConflicts: z.coerce.boolean().default(false),
+  })
+  .refine(hasValidInternalCalendarRange, {
+    message: "La fin doit être après le début.",
+    path: ["endDateTime"],
+  });
 
 export const userStatusSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED", "PENDING"]),

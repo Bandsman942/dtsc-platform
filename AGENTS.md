@@ -13,6 +13,8 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
   TypeScript infère alors `"ADMIN" | "SUPPORT"` et Vercel peut échouer si `session.role` est `UserRole`.
   Préférer une fonction explicite:
   `role === UserRole.ADMIN || role === UserRole.SUPPORT`.
+- Ne pas appeler `.partial()`, `.pick()`, `.omit()` ou `.extend()` sur un schéma Zod déjà raffiné avec `.refine()`/`.superRefine()` quand ce schéma est importé par les routes Next.js: Vercel peut échouer au build avec `.partial() cannot be used on object schemas containing refinements`.
+  Créer d'abord un schéma objet de base non raffiné, dériver les variantes create/update depuis cette base, puis appliquer les raffinements sur chaque variante finale.
 - Après modification de `prisma/schema.prisma`, ajouter une migration SQL dans `prisma/migrations/.../migration.sql`.
 - Les migrations Vercel sont exécutées par `pnpm prisma migrate deploy && pnpm build`.
 - Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.
