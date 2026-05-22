@@ -138,7 +138,9 @@ Routes principales:
 - `POST /api/calendar/availabilities`: cree une plage de disponibilite apres verification de propriete/RBAC.
 - `GET/PATCH/DELETE /api/calendar/events/[id]`: lit, modifie ou annule logiquement un evenement visible et autorise.
 
-La detection de conflits dans `lib/internal-calendar.ts` verifie les chevauchements avec d'autres evenements, les absences/conges/indisponibilites et les creneaux hors disponibilite. Les evenements COO crees via `POST /api/admin/coo/tasks` ou `POST /api/admin/coo/meetings` creent aussi un evenement calendrier source `COO` quand une date existe.
+La detection de conflits dans `lib/internal-calendar.ts` verifie les chevauchements avec d'autres evenements, les absences/conges/indisponibilites et les creneaux hors disponibilite. Les conflits retournes indiquent le collaborateur concerne et une raison lisible issue de son planning ou de l'evenement chevauchant.
+
+La visibilite est appliquee cote backend par `internalCalendarAccessWhere`: `Prive` reste limite au createur/proprietaire et aux roles globaux autorises, `Participants` est limite aux participants actifs, `Departement` au departement et `Public interne` aux collaborateurs internes autorises. Les evenements COO crees via `POST /api/admin/coo/tasks` ou `POST /api/admin/coo/meetings` creent aussi un evenement calendrier source `COO` quand une date existe. Depuis `POST /api/calendar`, les types `Tache`, `Reunion`, `Blocage`, `Mission`, `Appel audio` et `Appel video` creent aussi une source metier correspondante: COO task/meeting/blocker, mission SCO ou groupe collaboratif preparatoire pour un appel planifie.
 
 Préférences utilisateur d'appel persistées sur `User`:
 

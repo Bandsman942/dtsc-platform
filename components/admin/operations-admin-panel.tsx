@@ -356,7 +356,7 @@ function DatasetCard({
           {records.length > 0 && list.filteredCount === 0 && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucun résultat pour cette recherche.</p>}
         </div>
       </div>
-      <Dialog open={createOpen} title={`Nouveau: ${dataset.label}`} description="Remplissez le formulaire puis enregistrez l'élément." onClose={() => setCreateOpen(false)} className="max-w-4xl">
+      <Dialog open={createOpen} title={`Nouveau: ${dataset.label}`} description="Remplissez le formulaire puis enregistrez l'élément." onClose={() => setCreateOpen(false)} className="h-[92dvh] max-w-5xl">
         <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel="Ajouter" submitIcon="plus" />
       </Dialog>
     </article>
@@ -421,6 +421,7 @@ function RecordCard({
         title={`Modifier: ${record.title}`}
         description="Mettez à jour les informations de l'opération puis envoyez la modification au serveur."
         onClose={() => setEditOpen(false)}
+        className="h-[92dvh] max-w-5xl"
       >
         <OperationForm
           fields={dataset.fields}
@@ -498,7 +499,7 @@ function OperationForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-5 grid min-w-0 gap-3 md:grid-cols-2">
+    <form onSubmit={onSubmit} className="grid min-w-0 gap-3 md:grid-cols-2">
       {fields.map((field) => (
         <FieldInput
           key={field.name}

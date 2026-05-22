@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
-import { Clock, Filter, Plus, RefreshCcw, Search, Trash2, Users, type LucideIcon } from "lucide-react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { ArrowLeft, Clock, Filter, Pencil, Plus, RefreshCcw, Search, Trash2, Users, type LucideIcon } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -87,8 +88,10 @@ export function InternalCalendarModule({
   const [availabilities, setAvailabilities] = useState(initialAvailabilities);
   const [activeView, setActiveView] = useState("today");
   const [eventFormOpen, setEventFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEventItem | null>(null);
   const [availabilityFormOpen, setAvailabilityFormOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventItem | null>(initialEvents[0] || null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [eventToCancel, setEventToCancel] = useState<CalendarEventItem | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const locale = userPreferences.locale || "fr";
@@ -121,8 +124,22 @@ export function InternalCalendarModule({
     }
     setEvents((current) => current.filter((item) => item.id !== event.id));
     setSelectedEvent(null);
+    setMobileDetailOpen(false);
     setEventToCancel(null);
     setStatusMessage("Événement annulé.");
+  }
+
+  function upsertEvent(event: CalendarEventItem) {
+    setEvents((current) => {
+      const exists = current.some((item) => item.id === event.id);
+      return exists ? current.map((item) => item.id === event.id ? event : item) : [event, ...current];
+    });
+    setSelectedEvent(event);
+  }
+
+  function selectEvent(event: CalendarEventItem) {
+    setSelectedEvent(event);
+    setMobileDetailOpen(true);
   }
 
   return (
@@ -152,12 +169,16 @@ export function InternalCalendarModule({
         {statusMessage && <p className="mt-4 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-700 dark:text-cyan-100">{statusMessage}</p>}
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={translate(locale, "calendar.upcoming")} value={events.filter((event) => new Date(event.startDateTime).getTime() >= Date.now()).length} />
-        <MetricCard label={translate(locale, "calendar.conflicts")} value={conflicts.length} tone={conflicts.length ? "warning" : "success"} />
-        <MetricCard label={translate(locale, "calendar.availabilities")} value={availabilities.length} />
-        <MetricCard label={translate(locale, "calendar.collaborators")} value={collaborators.length} />
-      </section>
+      <Accordion>
+        <AccordionItem title={translate(locale, "calendar.kpis")} defaultOpen>
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label={translate(locale, "calendar.upcoming")} value={events.filter((event) => new Date(event.startDateTime).getTime() >= Date.now()).length} onClick={() => setActiveView("week")} />
+            <MetricCard label={translate(locale, "calendar.conflicts")} value={conflicts.length} tone={conflicts.length ? "warning" : "success"} onClick={() => setActiveView("conflicts")} />
+            <MetricCard label={translate(locale, "calendar.availabilities")} value={availabilities.length} onClick={() => setActiveView("availability")} />
+            <MetricCard label={translate(locale, "calendar.collaborators")} value={collaborators.length} onClick={() => setActiveView("collaborator")} />
+          </section>
+        </AccordionItem>
+      </Accordion>
 
       <section className="dtsc-card p-4">
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -197,7 +218,8 @@ export function InternalCalendarModule({
                 event={event}
                 ownerName={collaboratorName(collaborators, event.ownerCollaboratorId)}
                 selected={selectedEvent?.id === event.id}
-                onSelect={() => setSelectedEvent(event)}
+                onSelect={() => selectEvent(event)}
+                onEdit={() => setEditingEvent(event)}
                 onCancel={() => setEventToCancel(event)}
               />
             ))}
@@ -205,13 +227,13 @@ export function InternalCalendarModule({
           </div>
         </section>
 
-        <section className="dtsc-card min-w-0 p-4">
+        <section className="dtsc-card hidden min-w-0 p-4 xl:block">
           {activeView === "availability" ? (
             <AvailabilityList availabilities={availabilities} collaborators={collaborators} locale={locale} />
           ) : activeView === "conflicts" ? (
-            <ConflictList conflicts={conflicts} locale={locale} />
+            <ConflictList conflicts={conflicts} collaborators={collaborators} locale={locale} />
           ) : selectedEvent ? (
-            <EventDetail event={selectedEvent} collaborators={collaborators} locale={locale} />
+            <EventDetail event={selectedEvent} collaborators={collaborators} locale={locale} onEdit={() => setEditingEvent(selectedEvent)} onCancel={() => setEventToCancel(selectedEvent)} />
           ) : (
             <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">{translate(locale, "calendar.selectEvent")}</p>
           )}
@@ -224,11 +246,25 @@ export function InternalCalendarModule({
           context={context}
           locale={locale}
           onClose={() => setEventFormOpen(false)}
-          onCreated={(event) => {
-            setEvents((current) => [event, ...current]);
-            setSelectedEvent(event);
+          onSaved={(event) => {
+            upsertEvent(event);
             setEventFormOpen(false);
             setStatusMessage("Événement créé.");
+          }}
+        />
+      )}
+
+      {editingEvent && (
+        <EventFormDialog
+          event={editingEvent}
+          collaborators={collaborators}
+          context={context}
+          locale={locale}
+          onClose={() => setEditingEvent(null)}
+          onSaved={(event) => {
+            upsertEvent(event);
+            setEditingEvent(null);
+            setStatusMessage("Événement modifié.");
           }}
         />
       )}
@@ -260,27 +296,49 @@ export function InternalCalendarModule({
           </div>
         </Dialog>
       )}
+
+      {selectedEvent && mobileDetailOpen && (
+        <div className="fixed inset-0 z-[90] overflow-hidden bg-dtsc-page xl:hidden">
+          <div className="flex h-dvh flex-col">
+            <div className="flex shrink-0 items-center gap-3 border-b border-dtsc-border bg-dtsc-surface px-4 py-3">
+              <Button type="button" variant="ghost" size="icon" onClick={() => setMobileDetailOpen(false)} className="rounded-xl text-dtsc-ink">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{selectedEvent.eventType}</p>
+                <h2 className="truncate text-lg font-black text-dtsc-ink">{selectedEvent.title}</h2>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <EventDetail event={selectedEvent} collaborators={collaborators} locale={locale} onEdit={() => setEditingEvent(selectedEvent)} onCancel={() => setEventToCancel(selectedEvent)} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function EventFormDialog({
+  event,
   collaborators,
   context,
   locale,
   onClose,
-  onCreated,
+  onSaved,
 }: {
+  event?: CalendarEventItem;
   collaborators: CollaboratorOption[];
   context: { employeeId?: string | null; canManagePeople: boolean; canOverrideConflicts: boolean };
   locale: string;
   onClose: () => void;
-  onCreated: (event: CalendarEventItem) => void;
+  onSaved: (event: CalendarEventItem) => void;
 }) {
   const [message, setMessage] = useState("");
   const [conflicts, setConflicts] = useState<Array<{ message: string; severity: string }>>([]);
   const [allowConflicts, setAllowConflicts] = useState(false);
-  const defaultOwner = context.employeeId || collaborators[0]?.id || "";
+  const defaultOwner = event?.ownerCollaboratorId || context.employeeId || collaborators[0]?.id || "";
+  const selectedParticipants = new Set(event?.participants.map((participant) => participant.collaboratorId) || [defaultOwner]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -301,8 +359,9 @@ function EventFormDialog({
       participantIds,
       allowConflicts,
     };
-    const response = await fetch("/api/calendar", {
-      method: "POST",
+    const endpoint = event.currentTarget.dataset.eventId ? `/api/calendar/events/${event.currentTarget.dataset.eventId}` : "/api/calendar";
+    const response = await fetch(endpoint, {
+      method: event.currentTarget.dataset.eventId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -316,40 +375,60 @@ function EventFormDialog({
       setMessage(body?.message || "Création impossible.");
       return;
     }
-    onCreated(body.event);
+    onSaved(body.event);
   }
 
   return (
-    <Dialog open title={translate(locale, "calendar.newEvent")} description={translate(locale, "calendar.eventFormDescription")} onClose={onClose} className="h-[92dvh] max-w-4xl">
-      <form onSubmit={submit} className="grid min-h-0 gap-4 overflow-y-auto pr-1">
+    <Dialog open title={event ? translate(locale, "calendar.editEvent") : translate(locale, "calendar.newEvent")} description={translate(locale, "calendar.eventFormDescription")} onClose={onClose} className="h-[92dvh] max-w-4xl">
+      <form onSubmit={submit} data-event-id={event?.id || ""} className="grid min-h-0 gap-4 overflow-y-auto pr-1">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Input name="title" required placeholder={translate(locale, "calendar.fields.title")} className="h-12 rounded-2xl bg-dtsc-page" />
-          <select name="eventType" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <FieldShell label={translate(locale, "calendar.fields.title")} hint="Nom lisible de l'événement dans votre calendrier DTSC.">
+            <Input name="title" required defaultValue={event?.title || ""} placeholder={translate(locale, "calendar.fields.title")} className="h-12 rounded-2xl bg-dtsc-page" />
+          </FieldShell>
+          <FieldShell label="Type d'événement" hint="Le type peut créer un objet lié dans COO, SCO ou Mes collaborateurs.">
+          <select name="eventType" defaultValue={event?.eventType || "Tâche"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"].map((type) => <option key={type}>{type}</option>)}
           </select>
-          <Input name="startDateTime" required type="datetime-local" className="h-12 rounded-2xl bg-dtsc-page" />
-          <Input name="endDateTime" required type="datetime-local" className="h-12 rounded-2xl bg-dtsc-page" />
+          </FieldShell>
+          <FieldShell label="Début" hint="Date et heure de démarrage prévues.">
+            <Input name="startDateTime" required type="datetime-local" defaultValue={toDateTimeInput(event?.startDateTime)} className="h-12 rounded-2xl bg-dtsc-page" />
+          </FieldShell>
+          <FieldShell label="Fin" hint="Date et heure de fin prévues.">
+            <Input name="endDateTime" required type="datetime-local" defaultValue={toDateTimeInput(event?.endDateTime)} className="h-12 rounded-2xl bg-dtsc-page" />
+          </FieldShell>
+          <FieldShell label="Responsable" hint="Collaborateur propriétaire du planning concerné.">
           <select name="ownerCollaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.fullName}</option>)}
           </select>
-          <select name="priority" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          </FieldShell>
+          <FieldShell label="Priorité" hint="Importance opérationnelle de l'événement.">
+          <select name="priority" defaultValue={event?.priority || "Normale"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Faible", "Normale", "Élevée", "Critique"].map((priority) => <option key={priority}>{priority}</option>)}
           </select>
-          <select name="locationMode" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          </FieldShell>
+          <FieldShell label="Mode de lieu" hint="Site, télétravail, mission ou lieu externe.">
+          <select name="locationMode" defaultValue={event?.locationMode || "Non défini"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Non défini", "Site DTSC", "Télétravail", "Externe", "Mission"].map((mode) => <option key={mode}>{mode}</option>)}
           </select>
-          <Input name="physicalLocation" placeholder={translate(locale, "calendar.fields.location")} className="h-12 rounded-2xl bg-dtsc-page" />
-          <select name="visibility" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          </FieldShell>
+          <FieldShell label={translate(locale, "calendar.fields.location")} hint="Salle, adresse, lien interne ou précision utile.">
+            <Input name="physicalLocation" defaultValue={event?.physicalLocation || ""} placeholder={translate(locale, "calendar.fields.location")} className="h-12 rounded-2xl bg-dtsc-page" />
+          </FieldShell>
+          <FieldShell label={translate(locale, "calendar.visibility")} hint="Privé limite l'accès au créateur/propriétaire; Participants limite aux membres sélectionnés.">
+          <select name="visibility" defaultValue={event?.visibility || "Participants"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Participants", "Privé", "Département", "Direction", "Public interne"].map((visibility) => <option key={visibility}>{visibility}</option>)}
           </select>
+          </FieldShell>
         </div>
-        <textarea name="description" placeholder={translate(locale, "calendar.fields.description")} className="min-h-28 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+        <FieldShell label={translate(locale, "calendar.fields.description")} hint="Contexte, ordre du jour, consignes ou détails utiles pour les participants.">
+          <textarea name="description" defaultValue={event?.description || ""} placeholder={translate(locale, "calendar.fields.description")} className="min-h-28 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+        </FieldShell>
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
           <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{translate(locale, "calendar.participants")}</p>
           <div className="grid max-h-44 gap-2 overflow-y-auto sm:grid-cols-2">
             {collaborators.map((collaborator) => (
               <label key={collaborator.id} className="flex items-center gap-2 rounded-xl bg-dtsc-surface px-3 py-2 text-sm font-bold text-dtsc-ink">
-                <input name="participantIds" type="checkbox" value={collaborator.id} defaultChecked={collaborator.id === defaultOwner} />
+                <input name="participantIds" type="checkbox" value={collaborator.id} defaultChecked={selectedParticipants.has(collaborator.id)} />
                 <span className="min-w-0 truncate">{collaborator.fullName}</span>
               </label>
             ))}
@@ -456,11 +535,31 @@ function AvailabilityFormDialog({
   );
 }
 
-function EventCard({ event, ownerName, selected, onSelect, onCancel }: { event: CalendarEventItem; ownerName: string; selected: boolean; onSelect: () => void; onCancel: () => void }) {
+function EventCard({
+  event,
+  ownerName,
+  selected,
+  onSelect,
+  onEdit,
+  onCancel,
+}: {
+  event: CalendarEventItem;
+  ownerName: string;
+  selected: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+  onCancel: () => void;
+}) {
   return (
     <div className={`relative rounded-3xl border p-4 transition ${selected ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
       <div className="absolute right-3 top-3">
-        <ActionMenu label="Actions événement" items={[{ key: "cancel", label: "Annuler", icon: Trash2, destructive: true, onSelect: onCancel }]} />
+        <ActionMenu
+          label="Actions événement"
+          items={[
+            { key: "edit", label: "Modifier", icon: Pencil, onSelect: onEdit },
+            { key: "cancel", label: "Annuler", icon: Trash2, destructive: true, onSelect: onCancel },
+          ]}
+        />
       </div>
       <button type="button" onClick={onSelect} className="block w-full pr-12 text-left">
         <div className="flex flex-wrap items-center gap-2">
@@ -476,35 +575,62 @@ function EventCard({ event, ownerName, selected, onSelect, onCancel }: { event: 
   );
 }
 
-function EventDetail({ event, collaborators, locale }: { event: CalendarEventItem; collaborators: CollaboratorOption[]; locale: string }) {
+function EventDetail({
+  event,
+  collaborators,
+  locale,
+  onEdit,
+  onCancel,
+}: {
+  event: CalendarEventItem;
+  collaborators: CollaboratorOption[];
+  locale: string;
+  onEdit: () => void;
+  onCancel: () => void;
+}) {
   return (
     <div className="min-h-0 space-y-4">
       <div className="rounded-3xl border border-dtsc-border bg-dtsc-page p-5">
-        <div className="flex flex-wrap gap-2">
-          <StatusBadge value={event.status} />
-          <StatusBadge value={event.eventType} />
-          <StatusBadge value={event.locationMode} />
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge value={event.status} />
+            <StatusBadge value={event.eventType} />
+            <StatusBadge value={event.locationMode} />
+          </div>
+          <ActionMenu
+            label="Actions événement"
+            items={[
+              { key: "edit", label: "Modifier", icon: Pencil, onSelect: onEdit },
+              { key: "cancel", label: "Annuler", icon: Trash2, destructive: true, onSelect: onCancel },
+            ]}
+          />
         </div>
         <h2 className="mt-3 text-2xl font-black text-dtsc-ink">{event.title}</h2>
         <p className="mt-2 text-sm text-dtsc-muted">{formatDateTime(event.startDateTime)} - {formatDateTime(event.endDateTime)}</p>
         {event.description && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{event.description}</p>}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <DetailCard icon={Users} label={translate(locale, "calendar.participants")} value={`${event.participants.length}`} />
-        <DetailCard icon={Filter} label={translate(locale, "calendar.visibility")} value={event.visibility} />
-      </div>
-      <div className="rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
-        <h3 className="font-black text-dtsc-ink">{translate(locale, "calendar.participants")}</h3>
-        <div className="mt-3 space-y-2">
-          {event.participants.map((participant) => (
-            <div key={participant.id} className="flex items-center justify-between rounded-2xl bg-dtsc-surface px-3 py-2 text-sm">
-              <span className="font-bold text-dtsc-ink">{collaboratorName(collaborators, participant.collaboratorId)}</span>
-              <span className="text-xs font-black text-cyan-600">{participant.responseStatus}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      {event.conflicts.length > 0 && <ConflictList conflicts={event.conflicts.map((conflict) => ({ ...conflict, eventTitle: event.title }))} locale={locale} />}
+      <Accordion>
+        <AccordionItem title="Informations clés" defaultOpen>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailCard icon={Users} label={translate(locale, "calendar.participants")} value={`${event.participants.length}`} />
+            <DetailCard icon={Filter} label={translate(locale, "calendar.visibility")} value={event.visibility} />
+          </div>
+        </AccordionItem>
+        <AccordionItem title={translate(locale, "calendar.participants")}>
+          <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+            {event.participants.map((participant) => (
+              <div key={participant.id} className="flex items-center justify-between rounded-2xl bg-dtsc-surface px-3 py-2 text-sm">
+                <span className="font-bold text-dtsc-ink">{collaboratorName(collaborators, participant.collaboratorId)}</span>
+                <span className="text-xs font-black text-cyan-600">{participant.responseStatus}</span>
+              </div>
+            ))}
+            {event.participants.length === 0 && <p className="text-sm text-dtsc-muted">Aucun participant sélectionné.</p>}
+          </div>
+        </AccordionItem>
+        <AccordionItem title={translate(locale, "calendar.conflicts")} defaultOpen={event.conflicts.length > 0}>
+          <ConflictList conflicts={event.conflicts.map((conflict) => ({ ...conflict, eventTitle: event.title }))} collaborators={collaborators} locale={locale} />
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
@@ -529,7 +655,15 @@ function AvailabilityList({ availabilities, collaborators, locale }: { availabil
   );
 }
 
-function ConflictList({ conflicts, locale }: { conflicts: Array<CalendarConflict & { eventTitle: string }>; locale: string }) {
+function ConflictList({
+  conflicts,
+  collaborators = [],
+  locale,
+}: {
+  conflicts: Array<CalendarConflict & { eventTitle: string }>;
+  collaborators?: CollaboratorOption[];
+  locale: string;
+}) {
   return (
     <div>
       <h2 className="font-black text-dtsc-ink">{translate(locale, "calendar.conflicts")}</h2>
@@ -537,6 +671,7 @@ function ConflictList({ conflicts, locale }: { conflicts: Array<CalendarConflict
         {conflicts.map((conflict) => (
           <div key={conflict.id} className="rounded-3xl border border-amber-300/40 bg-amber-300/10 p-4 text-sm">
             <p className="font-black text-dtsc-ink">{conflict.eventTitle}</p>
+            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-cyan-600">{collaboratorName(collaborators, conflict.collaboratorId)}</p>
             <p className="mt-1 font-bold text-amber-700 dark:text-amber-100">{conflict.severity} · {conflict.conflictType}</p>
             <p className="mt-2 text-dtsc-muted">{conflict.message}</p>
           </div>
@@ -547,13 +682,13 @@ function ConflictList({ conflicts, locale }: { conflicts: Array<CalendarConflict
   );
 }
 
-function MetricCard({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "warning" | "success" }) {
+function MetricCard({ label, value, tone = "default", onClick }: { label: string; value: number; tone?: "default" | "warning" | "success"; onClick?: () => void }) {
   const toneClass = tone === "warning" ? "text-amber-500" : tone === "success" ? "text-emerald-500" : "text-cyan-500";
   return (
-    <div className="dtsc-card p-5">
+    <button type="button" onClick={onClick} className="dtsc-card p-5 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300">
       <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
       <p className={`mt-3 text-3xl font-black ${toneClass}`}>{value}</p>
-    </div>
+    </button>
   );
 }
 
@@ -564,6 +699,16 @@ function DetailCard({ icon: Icon, label, value }: { icon: LucideIcon; label: str
       <p className="mt-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{label}</p>
       <p className="mt-1 font-black text-dtsc-ink">{value}</p>
     </div>
+  );
+}
+
+function FieldShell({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+  return (
+    <label className="grid min-w-0 gap-1">
+      <span className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{label}</span>
+      {children}
+      <span className="text-xs leading-5 text-dtsc-muted">{hint}</span>
+    </label>
   );
 }
 
@@ -604,6 +749,19 @@ function collaboratorName(collaborators: CollaboratorOption[], collaboratorId?: 
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function toDateTimeInput(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function startOfDay(date: Date) {

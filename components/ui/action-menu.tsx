@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreVertical, type LucideIcon } from "lucide-react";
+import { MoreHorizontal, MoreVertical, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -18,11 +18,13 @@ export function ActionMenu({
   items,
   align = "right",
   className,
+  orientation = "vertical",
 }: {
   label?: string;
   items: ActionMenuItem[];
   align?: "left" | "right";
   className?: string;
+  orientation?: "vertical" | "horizontal";
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -64,7 +66,7 @@ export function ActionMenu({
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <MoreVertical className="h-5 w-5" />
+        {orientation === "horizontal" ? <MoreHorizontal className="h-5 w-5" /> : <MoreVertical className="h-5 w-5" />}
       </button>
       {open && (
         <div

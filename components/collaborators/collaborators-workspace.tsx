@@ -1425,6 +1425,14 @@ function GroupCallRoom({
   }, [isFullscreen]);
 
   useEffect(() => {
+    if (!isFullscreen || !compactFullscreenUi || !focusControlsVisible) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setFocusControlsVisible(false), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [compactFullscreenUi, focusControlsVisible, isFullscreen]);
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 700px), (pointer: coarse)");
     const syncCompactState = () => setCompactFullscreenUi(mediaQuery.matches);
     syncCompactState();
@@ -1594,7 +1602,10 @@ function GroupCallRoom({
             )}
           </LiveKitRoom>
         </div>
-        <div className="dtsc-call-controls flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 p-3 sm:gap-3 sm:p-4">
+        <div className={cn(
+          "dtsc-call-controls flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 p-3 sm:gap-3 sm:p-4",
+          isFullscreen && compactFullscreenUi && !focusControlsVisible && "dtsc-call-controls-hidden"
+        )}>
           <Button type="button" variant="outline" onClick={() => setCallChatOpen((value) => !value)} className="rounded-full border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20">
             <MessageSquare className="h-4 w-4" />
             {t("calls.chat")}

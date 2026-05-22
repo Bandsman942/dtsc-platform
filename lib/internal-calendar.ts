@@ -11,7 +11,7 @@ export async function getCalendarContext(user: { id: string; role: UserRole }) {
     include: { position: true },
   });
   const positionCode = normalizePositionCode(employee?.position?.code || employee?.positionCode || employee?.jobTitle || "");
-  const canViewGlobal = user.role === "ADMIN" || user.role === "MANAGER" || user.role === "SUPPORT" || positionCode === "CEO" || positionCode === "COO";
+  const canViewGlobal = user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO";
   const canManagePeople = canViewGlobal || positionCode === "HR_CFO";
   const canOverrideConflicts = user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO";
 
@@ -40,7 +40,7 @@ export function internalCalendarAccessWhere(context: CalendarContext): Prisma.In
       { ownerCollaboratorId: employeeId },
       { visibility: "Public interne" },
       { visibility: "Département", departmentId },
-      { participants: { some: { collaboratorId: employeeId, participantStatus: "Actif" } } },
+      { visibility: "Participants", participants: { some: { collaboratorId: employeeId, participantStatus: "Actif" } } },
     ],
   };
 }
@@ -98,6 +98,11 @@ export async function detectCalendarConflicts({
       deletedAt: null,
     },
   });
+  const collaborators = await prisma.hrcfoEmployee.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { id: true, fullName: true },
+  });
+  const collaboratorNames = new Map(collaborators.map((collaborator) => [collaborator.id, collaborator.fullName]));
 
   const conflicts: Array<{
     collaboratorId: string;
@@ -113,12 +118,13 @@ export async function detectCalendarConflicts({
       event.ownerCollaboratorId === collaboratorId || event.participants.some((participant) => participant.collaboratorId === collaboratorId)
     );
     if (overlappingEvent) {
+      const name = collaboratorNames.get(collaboratorId) || "Ce collaborateur";
       conflicts.push({
         collaboratorId,
         conflictType: "Chevauchement événement",
         conflictWithEventId: overlappingEvent.id,
         severity: "Avertissement",
-        message: `Conflit avec « ${overlappingEvent.title} » sur ce créneau.`,
+        message: `${name} a déjà « ${overlappingEvent.title} » sur ce créneau.`,
       });
     }
 
@@ -127,12 +133,13 @@ export async function detectCalendarConflicts({
       ["Absent", "Congé", "Indisponible", "Mission"].includes(availability.availabilityStatus)
     );
     if (blockingAvailability) {
+      const name = collaboratorNames.get(collaboratorId) || "Ce collaborateur";
       conflicts.push({
         collaboratorId,
         conflictType: blockingAvailability.availabilityStatus,
         conflictWithAvailabilityId: blockingAvailability.id,
         severity: blockingAvailability.availabilityStatus === "Congé" || blockingAvailability.availabilityStatus === "Absent" ? "Bloquant" : "Avertissement",
-        message: `Disponibilité marquée « ${blockingAvailability.availabilityStatus} » pour ce jour.`,
+        message: `${name} sera indisponible: disponibilité marquée « ${blockingAvailability.availabilityStatus} » pour ce jour (${blockingAvailability.startTime}-${blockingAvailability.endTime}).`,
       });
       continue;
     }
@@ -145,11 +152,12 @@ export async function detectCalendarConflicts({
       timeStringValue(availability.endTime) >= eventEnd
     );
     if (collaboratorAvailabilities.length > 0 && !coversSlot) {
+      const name = collaboratorNames.get(collaboratorId) || "Ce collaborateur";
       conflicts.push({
         collaboratorId,
         conflictType: "Hors horaires disponibles",
         severity: "Info",
-        message: "Le créneau sort des plages de disponibilité enregistrées.",
+        message: `${name} n'a pas de plage disponible couvrant entièrement ce créneau.`,
       });
     }
   }

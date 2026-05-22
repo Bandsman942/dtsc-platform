@@ -21,6 +21,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Corrigé
 
 - Correction du build Vercel du calendrier interne: les validateurs Zod create/update utilisent désormais un schéma de base non raffiné avant d'appliquer les règles de dates, afin d'éviter l'erreur `.partial() cannot be used on object schemas containing refinements`.
+- Correction de la visibilité du calendrier interne: les événements privés et participants ne sont plus exposés largement aux collaborateurs non concernés.
+- Correction de l'expérience plein écran des appels vidéo mobile: les contrôles restent au premier plan, disparaissent automatiquement après quelques secondes et réapparaissent au toucher.
 - Correction du focus plein écran des appels vidéo: la sélection d'un participant ne peut plus masquer toute la scène si la tuile LiveKit n'est pas encore identifiable; l'affichage retombe sur la grille normale au lieu d'un écran vide.
 - Correction du plein écran mobile des appels vidéo afin que la scène occupe réellement tout le viewport PWA, sans être réduite par la liste des participants ou les contrôles secondaires.
 - Correction de l'enregistrement des préférences utilisateur sur mobile/PWA: les notifications navigateur sont désormais déclenchées via le service worker quand disponible et toutes les erreurs de permission/API mobile sont capturées sans casser l'application.
@@ -30,6 +32,13 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Le calendrier interne affiche ses indicateurs en accordéon, ouvre les détails événement en plein écran mobile et regroupe les sous-sections de détail en accordéons.
+- Les événements calendrier disposent maintenant d'actions `...` pour modifier ou annuler un événement, avec formulaire responsive en modale haute.
+- Les conflits calendrier affichent le collaborateur concerné et la raison métier lisible depuis son emploi du temps.
+- Les événements de type tâche, réunion, blocage, mission ou appel planifié créent une source métier reliée dans COO, SCO ou Mes collaborateurs selon le type.
+- Les cartes d'annonces sont recentrées avec marges symétriques et menu d'actions horizontal en haut à droite.
+- Les formulaires des blocs Administration s'ouvrent dans des boîtes de dialogue hautes et scrollables pour éviter qu'ils restent compressés dans l'arrière-plan des accordéons.
+- Les champs `Input` partagés récupèrent automatiquement un libellé accessible et une info contextuelle depuis leur placeholder lorsqu'aucun label explicite n'est fourni.
 - Le calendrier interne détecte les chevauchements, absences, congés, missions, indisponibilités et créneaux hors horaires disponibles avant création ou modification d'événement.
 - Les messages sortants des groupes `Mes collaborateurs` affichent un accusé compact: une coche quand le message est envoyé et deux coches vertes lorsque tous les autres membres actifs ont confirmé la lecture.
 - Sur mobile/PWA, le sélecteur de vue plein écran d'appel disparaît automatiquement après le choix d'un participant ou du partage d'écran, puis réapparaît au toucher de la scène.

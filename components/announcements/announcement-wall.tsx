@@ -361,7 +361,7 @@ export function AnnouncementWall({
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
           const dislikes = announcement.reactions.filter((reaction) => reaction.value === -1).length;
           return (
-            <article key={announcement.id} className="dtsc-card relative min-w-0 overflow-visible p-4 pr-16 sm:p-6 sm:pr-20">
+            <article key={announcement.id} className="dtsc-card relative mx-auto min-w-0 max-w-3xl overflow-visible p-4 sm:p-6">
               <div className="min-w-0">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-3">
@@ -379,6 +379,7 @@ export function AnnouncementWall({
                 <ActionMenu
                   className="absolute right-4 top-4 sm:right-5 sm:top-5"
                   label="Actions de l'annonce"
+                  orientation="horizontal"
                   items={[
                     { key: "info", label: t("announcements.info"), icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
                     ...(isAdmin ? [{ key: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => setEditingAnnouncement(announcement) }] : []),
