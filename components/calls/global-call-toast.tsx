@@ -38,6 +38,7 @@ export function GlobalCallToast() {
   const [settings, setSettings] = useState<CallToastSettings | null>(null);
   const cursorRef = useRef<string | null>(new Date().toISOString());
   const seenRef = useRef(new Set<string>());
+  const disabledRef = useRef(false);
 
   const shouldMuteGlobalToast = useMemo(() => pathname?.startsWith("/collaborators"), [pathname]);
 
@@ -45,8 +46,15 @@ export function GlobalCallToast() {
     let cancelled = false;
 
     async function poll() {
+      if (disabledRef.current) {
+        return;
+      }
       const cursor = cursorRef.current ? `?cursor=${encodeURIComponent(cursorRef.current)}` : "";
       const response = await fetch(`/api/collaborators/calls/events${cursor}`, { cache: "no-store" }).catch(() => null);
+      if (response?.status === 401) {
+        disabledRef.current = true;
+        return;
+      }
       if (!response?.ok) {
         return;
       }

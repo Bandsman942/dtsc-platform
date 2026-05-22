@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import type { ElementType } from "react";
+import { useEffect, type ElementType } from "react";
 import { Bell, Bot, CalendarCheck, ChevronRight, Home, LogOut, Settings, Shield, User, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -41,6 +41,51 @@ export function MobilePwaHeader({
   const locale = user.locale || "fr";
   const adminAllowed = canAccessAdministration(user.role);
 
+  useEffect(() => {
+    let stopped = false;
+    const markOnline = () => {
+      if (stopped) {
+        return;
+      }
+      void fetch("/api/collaborators/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "online" }),
+      }).catch(() => null);
+    };
+    const markOffline = () => {
+      const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
+      const payload = new Blob([JSON.stringify({ status: "offline" })], { type: "application/json" });
+      if (!browserNavigator?.sendBeacon?.("/api/collaborators/presence", payload)) {
+        void fetch("/api/collaborators/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "offline" }),
+          keepalive: true,
+        }).catch(() => null);
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        markOnline();
+      } else {
+        markOffline();
+      }
+    };
+    markOnline();
+    const interval = window.setInterval(markOnline, 15000);
+    window.addEventListener("focus", markOnline);
+    window.addEventListener("pagehide", markOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", markOnline);
+      window.removeEventListener("pagehide", markOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   async function signOut() {
     await fetch("/api/auth/sign-out", { method: "POST" });
     window.location.href = "/";
@@ -57,7 +102,7 @@ export function MobilePwaHeader({
         <Link href="/dashboard" className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
           <span className="relative flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
             <Image src="/dtsc-logo.png" alt="Logo DTSC" fill sizes="44px" className="object-cover" priority />
-            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-dtsc-surface bg-emerald-400" />
+            <span className="animate-dtsc-online-pulse absolute bottom-0.5 right-0.5 z-20 h-3.5 w-3.5 rounded-full border-2 border-dtsc-surface bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.9)]" />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-base font-black tracking-tight text-dtsc-ink">DTSC</span>

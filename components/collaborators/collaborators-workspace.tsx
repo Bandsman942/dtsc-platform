@@ -31,6 +31,7 @@ type Group = {
   ownerId: string;
   visibility?: string | null;
   createdAt?: string;
+  unreadMessageCount?: number;
   unreadMentionCount?: number;
   unreadMentionPreview?: string | null;
   lastMentionAt?: string | null;
@@ -207,8 +208,19 @@ export function CollaboratorsWorkspace({
       if (document.visibilityState === "visible") {
         void refresh();
       }
-    }, 5000);
-    return () => window.clearInterval(interval);
+    }, 2500);
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    }
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -261,7 +273,7 @@ export function CollaboratorsWorkspace({
     setIsLoadingOlderMessages(false);
     if (!cursor) {
       await fetch(`/api/collaborators/groups/${groupId}/mentions/read`, { method: "POST" }).catch(() => null);
-      setGroups((current) => current.map((group) => group.id === groupId ? { ...group, unreadMentionCount: 0, unreadMentionPreview: null, lastMentionAt: null } : group));
+      setGroups((current) => current.map((group) => group.id === groupId ? { ...group, unreadMessageCount: 0, unreadMentionCount: 0, unreadMentionPreview: null, lastMentionAt: null } : group));
     }
   }, []);
 
@@ -523,6 +535,8 @@ export function CollaboratorsWorkspace({
           {groupList.paginatedItems.map((group) => {
             const groupActiveCall = group.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE");
             const activeParticipantCount = groupActiveCall?.participants?.filter((participant) => participant.status === "JOINED").length || 0;
+            const unreadMessageCount = group.unreadMessageCount || 0;
+            const unreadMentionCount = group.unreadMentionCount || 0;
             return (
             <button
               key={group.id}
@@ -533,14 +547,15 @@ export function CollaboratorsWorkspace({
               }}
               className={cn(
                 "w-full rounded-[1.35rem] border p-3 text-left transition sm:p-4",
-                group.unreadMentionCount ? "border-cyan-300 bg-cyan-400/10 shadow-[0_14px_40px_rgba(0,186,217,0.12)]" : activeGroupId === group.id ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page hover:border-cyan-300"
+                unreadMessageCount || unreadMentionCount ? "border-cyan-300 bg-cyan-400/10 shadow-[0_14px_40px_rgba(0,186,217,0.12)]" : activeGroupId === group.id ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page hover:border-cyan-300"
               )}
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate font-black text-dtsc-ink">{group.name}</span>
                 <span className="flex shrink-0 items-center gap-1">
                   {groupActiveCall && <span className="rounded-full bg-emerald-400/18 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-emerald-600">Live</span>}
-                  {Boolean(group.unreadMentionCount) && <span className="rounded-full bg-cyan-300 px-2 py-0.5 text-[0.68rem] font-black text-[#001736]">@ {group.unreadMentionCount}</span>}
+                  {Boolean(unreadMentionCount) && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[0.68rem] font-black text-[#001736]">@ {unreadMentionCount}</span>}
+                  {Boolean(unreadMessageCount) && <span className="flex min-w-5 items-center justify-center rounded-full bg-cyan-300 px-1.5 py-0.5 text-[0.68rem] font-black text-[#001736]">{unreadMessageCount > 99 ? "99+" : unreadMessageCount}</span>}
                 </span>
               </span>
               <span className="mt-1 block text-xs text-dtsc-muted">{formatEnumLabel(group.groupType)} · {group._count?.members ?? group.members.length} membres · {group._count?.messages ?? 0} messages</span>
@@ -550,7 +565,7 @@ export function CollaboratorsWorkspace({
                   Appel {groupActiveCall.callType === "VIDEO" ? "vidéo" : "audio"} · {activeParticipantCount} en ligne
                 </span>
               )}
-              <span className={cn("mt-2 block truncate text-xs", group.unreadMentionCount ? "font-bold text-cyan-600" : "text-dtsc-muted")}>{group.unreadMentionPreview || group.messages[0]?.content || group.description || "Aucun message récent."}</span>
+              <span className={cn("mt-2 block truncate text-xs", unreadMessageCount || unreadMentionCount ? "font-bold text-cyan-600" : "text-dtsc-muted")}>{group.unreadMentionPreview || group.messages[0]?.content || group.description || "Aucun message récent."}</span>
             </button>
             );
           })}
@@ -939,7 +954,7 @@ function MessageThread({
   messages: GroupMessage[];
   hasOlderMessages: boolean;
   isLoadingOlderMessages: boolean;
-  onLoadOlder: () => void;
+  onLoadOlder: () => Promise<void> | void;
   onOpenSharedSnapshot: (snapshotId: string) => void;
   onOpenReadInfo: (messageId: string) => void;
   onChanged: () => Promise<void>;
@@ -950,6 +965,7 @@ function MessageThread({
   const [content, setContent] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const previousGroupIdRef = useRef(group.id);
   const previousLastMessageIdRef = useRef<string | null>(null);
@@ -983,6 +999,22 @@ function MessageThread({
   function insertMention(member: GroupMember) {
     setContent((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, `@${member.user.name} `));
     setMentionedUserIds((current) => [...new Set([...current, member.userId])]);
+  }
+
+  async function jumpToMessage(messageId: string) {
+    const findMessageElement = () => messageListRef.current?.querySelector<HTMLElement>(`[data-group-message-id="${messageId}"]`) || null;
+    let target = findMessageElement();
+    if (!target && hasOlderMessages) {
+      await onLoadOlder();
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+      target = findMessageElement();
+    }
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMessageId(messageId);
+    window.setTimeout(() => setHighlightedMessageId((current) => current === messageId ? null : current), 1800);
   }
 
   useEffect(() => {
@@ -1027,6 +1059,8 @@ function MessageThread({
             onOpenSharedSnapshot={onOpenSharedSnapshot}
             onOpenReadInfo={onOpenReadInfo}
             onReply={setReplyTo}
+            onJumpToMessage={jumpToMessage}
+            highlighted={highlightedMessageId === message.id}
             onMentionProfile={onMentionProfile}
             onCreateMentionGroup={onCreateMentionGroup}
           />
@@ -1077,6 +1111,8 @@ function GroupMessageBubble({
   onOpenSharedSnapshot,
   onOpenReadInfo,
   onReply,
+  onJumpToMessage,
+  highlighted,
   onMentionProfile,
   onCreateMentionGroup,
 }: {
@@ -1089,6 +1125,8 @@ function GroupMessageBubble({
   onOpenSharedSnapshot: (snapshotId: string) => void;
   onOpenReadInfo: (messageId: string) => void;
   onReply: (message: GroupMessage) => void;
+  onJumpToMessage: (messageId: string) => void;
+  highlighted: boolean;
   onMentionProfile: (user: MentionedUser) => void;
   onCreateMentionGroup: (user: MentionedUser) => void;
 }) {
@@ -1105,7 +1143,7 @@ function GroupMessageBubble({
     );
   }
   return (
-    <div className={cn("flex", message.authorId === currentUserId ? "justify-end" : "justify-start")}>
+    <div id={`group-message-${message.id}`} data-group-message-id={message.id} className={cn("flex rounded-2xl transition", highlighted && "dtsc-message-focus-pulse", message.authorId === currentUserId ? "justify-end" : "justify-start")}>
       <div className={cn("flex max-w-[92%] gap-2 sm:max-w-[88%]", message.authorId === currentUserId && "flex-row-reverse")}>
         <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[0.68rem] font-black sm:h-9 sm:w-9", participantColor.bgClassName, participantColor.textClassName, participantColor.borderClassName)}>
           {message.author.name.slice(0, 2).toUpperCase()}
@@ -1127,7 +1165,7 @@ function GroupMessageBubble({
             />
           </div>
           {message.replyTo && !message.deletedAt && (
-            <button type="button" className={cn("mb-2 block w-full rounded-xl border-l-4 p-3 text-left text-xs", message.authorId === currentUserId ? "border-cyan-200 bg-white/10 text-white/85" : "border-cyan-300 bg-dtsc-page text-dtsc-muted")}>
+            <button type="button" onClick={() => onJumpToMessage(message.replyTo?.id || "")} className={cn("mb-2 block w-full rounded-xl border-l-4 p-3 text-left text-xs transition hover:-translate-y-0.5 hover:border-emerald-300", message.authorId === currentUserId ? "border-cyan-200 bg-white/10 text-white/85" : "border-cyan-300 bg-dtsc-page text-dtsc-muted")}>
               <span className="block font-black">{message.replyTo.author.name}</span>
               <span className="mt-1 line-clamp-2 block">{message.replyTo.deletedAt ? "Message supprimé." : message.replyTo.content}</span>
             </button>
@@ -1396,6 +1434,7 @@ function GroupCallRoom({
   const [focusControlsVisible, setFocusControlsVisible] = useState(true);
   const [compactFullscreenUi, setCompactFullscreenUi] = useState(false);
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
+  const callShellRef = useRef<HTMLDivElement | null>(null);
   const t = (key: string) => translate(userPreferences.locale, key);
   const starterMember = group?.members.find((member) => member.userId === joinedCall.call.startedById);
   const connectedParticipants = group?.calls
@@ -1409,7 +1448,7 @@ function GroupCallRoom({
 
   useEffect(() => {
     function syncFullscreenState() {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      setIsFullscreen(document.fullscreenElement === callShellRef.current);
     }
     document.addEventListener("fullscreenchange", syncFullscreenState);
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
@@ -1448,20 +1487,27 @@ function GroupCallRoom({
     if (!isFullscreen || joinedCall.call.callType !== "VIDEO") {
       return;
     }
-    const fullscreenRoot = document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : document;
-    const root = fullscreenRoot.querySelector<HTMLElement>(".dtsc-livekit-room");
-    if (!root) {
-      return;
-    }
-
-    const applyFocus = () => applyLiveKitFullscreenFocus(root, fullscreenFocus, group);
-    applyFocus();
-    const observer = new MutationObserver(applyFocus);
-    observer.observe(root, { attributes: true, childList: true, subtree: true });
-    const interval = window.setInterval(applyFocus, 800);
+    let cancelled = false;
+    const timeouts: number[] = [];
+    const applyFocusSafely = (attempt = 0) => {
+      if (cancelled) {
+        return;
+      }
+      const root = callShellRef.current?.querySelector<HTMLElement>(".dtsc-livekit-room");
+      const applied = root ? applyLiveKitFullscreenFocus(root, fullscreenFocus, group) : false;
+      if (!applied && attempt < 5) {
+        timeouts.push(window.setTimeout(() => applyFocusSafely(attempt + 1), 220 + attempt * 180));
+      }
+    };
+    const frameId = window.requestAnimationFrame(() => applyFocusSafely());
     return () => {
-      observer.disconnect();
-      window.clearInterval(interval);
+      cancelled = true;
+      window.cancelAnimationFrame(frameId);
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+      const root = callShellRef.current?.querySelector<HTMLElement>(".dtsc-livekit-room");
+      if (!root) {
+        return;
+      }
       root.removeAttribute("data-dtsc-focus-ready");
       root.querySelectorAll(".dtsc-focus-selected").forEach((node) => node.classList.remove("dtsc-focus-selected"));
     };
@@ -1506,8 +1552,8 @@ function GroupCallRoom({
 
   async function toggleFullscreen() {
     try {
-      const element = document.querySelector(".dtsc-call-shell");
-      if (document.fullscreenElement) {
+      const element = callShellRef.current;
+      if (document.fullscreenElement === element) {
         await document.exitFullscreen();
       } else if (element instanceof HTMLElement) {
         await element.requestFullscreen();
@@ -1536,7 +1582,7 @@ function GroupCallRoom({
   }
 
   return (
-    <div className="dtsc-call-shell relative grid min-h-[78vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
+    <div ref={callShellRef} className="dtsc-call-shell relative grid min-h-[78vh] overflow-hidden rounded-3xl border border-dtsc-border bg-[#06111f] text-white shadow-[0_24px_80px_rgba(0,23,54,0.28)] md:grid-cols-[minmax(0,1fr)_18rem]">
       <section className="dtsc-call-main flex min-h-0 flex-col">
         <div className="dtsc-call-header shrink-0 border-b border-white/10 p-3 sm:p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">{joinedCall.call.callType === "VIDEO" ? "Réunion vidéo DTSC" : "Réunion audio DTSC"}</p>
@@ -1749,7 +1795,7 @@ function applyLiveKitFullscreenFocus(root: HTMLElement, focus: FullscreenFocusTa
   tiles.forEach((tile) => tile.classList.remove("dtsc-focus-selected"));
 
   if (focus === "auto") {
-    return;
+    return true;
   }
 
   const selectedTile = focus === "screen"
@@ -1757,11 +1803,12 @@ function applyLiveKitFullscreenFocus(root: HTMLElement, focus: FullscreenFocusTa
     : findLiveKitParticipantTile(tiles, focus.slice("participant:".length), group);
 
   if (!selectedTile) {
-    return;
+    return false;
   }
 
   selectedTile.classList.add("dtsc-focus-selected");
   root.setAttribute("data-dtsc-focus-ready", "true");
+  return true;
 }
 
 function findLiveKitScreenShareTile(root: HTMLElement, tiles: HTMLElement[]) {

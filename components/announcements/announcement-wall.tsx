@@ -38,6 +38,11 @@ type Announcement = {
 };
 
 type AnnouncementCommentItem = Announcement["comments"][number];
+type AnnouncementEditDraft = {
+  title: string;
+  content: string;
+  contentHtml: string;
+};
 
 function canPublish(role: UserRole, allowClientAnnouncements: boolean) {
   return allowClientAnnouncements || role === "ADMIN" || role === "MANAGER" || role === "SUPPORT";
@@ -71,6 +76,7 @@ export function AnnouncementWall({
   const [composerContent, setComposerContent] = useState({ text: "", html: "" });
   const [previewMode, setPreviewMode] = useState<"mobile" | "desktop" | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [editingDraft, setEditingDraft] = useState<AnnouncementEditDraft | null>(null);
   const [editingComment, setEditingComment] = useState<AnnouncementCommentItem | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ announcementId: string; comment: AnnouncementCommentItem } | null>(null);
   const [deletingAnnouncement, setDeletingAnnouncement] = useState<Announcement | null>(null);
@@ -174,10 +180,25 @@ export function AnnouncementWall({
     if (response.ok) {
       setFeedback("Annonce modifiée.");
       setEditingAnnouncement(null);
+      setEditingDraft(null);
       router.refresh();
     } else {
       setFeedback("Seul l'administrateur peut modifier une annonce.");
     }
+  }
+
+  function openAnnouncementEditor(announcement: Announcement) {
+    setEditingAnnouncement(announcement);
+    setEditingDraft({
+      title: announcement.title,
+      content: announcement.content,
+      contentHtml: announcement.content,
+    });
+  }
+
+  function closeAnnouncementEditor() {
+    setEditingAnnouncement(null);
+    setEditingDraft(null);
   }
 
   async function updateComment(event: React.FormEvent<HTMLFormElement>) {
@@ -382,7 +403,7 @@ export function AnnouncementWall({
                   orientation="horizontal"
                   items={[
                     { key: "info", label: t("announcements.info"), icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
-                    ...(isAdmin ? [{ key: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => setEditingAnnouncement(announcement) }] : []),
+                    ...(isAdmin ? [{ key: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => openAnnouncementEditor(announcement) }] : []),
                     ...(isAdmin ? [{ key: "delete", label: t("common.delete"), icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
                     { key: "copy", label: t("common.copy"), icon: Copy, onSelect: () => copyAnnouncement(announcement) },
                     { key: "transfer", label: t("common.transfer"), icon: Send, onSelect: () => setTransferAnnouncement(announcement) },
@@ -446,20 +467,22 @@ export function AnnouncementWall({
           </div>
         )}
       </section>
-      <Dialog open={Boolean(editingAnnouncement)} title="Modifier l'annonce" onClose={() => setEditingAnnouncement(null)}>
-        {editingAnnouncement && (
+      <Dialog open={Boolean(editingAnnouncement)} title={t("announcements.editTitle")} onClose={closeAnnouncementEditor}>
+        {editingAnnouncement && editingDraft && (
           <form onSubmit={updateAnnouncement} className="space-y-3">
-            <Input name="title" defaultValue={editingAnnouncement.title} required />
+            <Input name="title" value={editingDraft.title} onChange={(event) => setEditingDraft((current) => current ? { ...current, title: event.target.value } : current)} required />
             <RichTextEditor
               key={editingAnnouncement.id}
               textName="content"
               htmlName="contentHtml"
-              defaultValue={editingAnnouncement.content}
+              defaultValue={editingDraft.contentHtml || editingDraft.content}
               placeholder={t("announcements.contentPlaceholder")}
               minHeightClassName="min-h-48"
               allowImageUpload
               imageUploadUrl="/api/announcements/images"
+              onContentChange={(content) => setEditingDraft((current) => current ? { ...current, content: content.text, contentHtml: content.html } : current)}
             />
+            <p className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-100">{t("announcements.localDraftNotice")}</p>
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">{t("common.save")}</Button>
           </form>
         )}
@@ -665,6 +688,7 @@ function AnnouncementComments({
   onDelete: (comment: AnnouncementCommentItem) => void;
   onReply: (comment: AnnouncementCommentItem) => void;
 }) {
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const commentsByParent = new Map<string, AnnouncementCommentItem[]>();
   for (const commentItem of comments) {
     const parentKey = commentItem.parentId || "root";
@@ -680,16 +704,33 @@ function AnnouncementComments({
     },
   });
 
+  function jumpToComment(commentId: string) {
+    const target = document.querySelector<HTMLElement>(`[data-announcement-comment-id="${commentId}"]`);
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedCommentId(commentId);
+    window.setTimeout(() => setHighlightedCommentId((current) => current === commentId ? null : current), 1800);
+  }
+
   function renderComment(commentItem: AnnouncementCommentItem, depth = 0) {
     const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
     const replies = commentsByParent.get(commentItem.id) || [];
+    const parentComment = commentItem.parentId ? comments.find((item) => item.id === commentItem.parentId) : null;
 
     return (
       <div key={commentItem.id} className={depth > 0 ? "ml-3 min-w-0 border-l border-dtsc-border pl-3 sm:ml-5 sm:pl-4" : "min-w-0"}>
-        <div className="relative rounded-2xl bg-dtsc-page p-3 pr-14">
+        <div data-announcement-comment-id={commentItem.id} className={`relative rounded-2xl bg-dtsc-page p-3 pr-14 transition ${highlightedCommentId === commentItem.id ? "dtsc-message-focus-pulse" : ""}`}>
           <div className="min-w-0">
             <div className="min-w-0">
               <p className="break-words text-xs font-black text-dtsc-blue">{commentItem.user.name} · {formatEnumLabel(commentItem.user.role)}</p>
+              {parentComment && (
+                <button type="button" onClick={() => jumpToComment(parentComment.id)} className="mt-2 block w-full rounded-xl border-l-4 border-cyan-300 bg-dtsc-surface p-2 text-left text-xs text-dtsc-muted transition hover:-translate-y-0.5 hover:border-emerald-300">
+                  <span className="block font-black text-dtsc-blue">{parentComment.user.name}</span>
+                  <span className="mt-1 line-clamp-2 block">{parentComment.content}</span>
+                </button>
+              )}
               <p className="mt-1 break-words text-sm text-dtsc-muted">{commentItem.content}</p>
             </div>
             <ActionMenu

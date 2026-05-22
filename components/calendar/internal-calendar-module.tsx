@@ -71,6 +71,13 @@ type CollaboratorOption = {
   userId?: string | null;
 };
 
+type CalendarEventTemplate = {
+  eventType: string;
+  ownerCollaboratorId?: string;
+  participantIds?: string[];
+  title?: string;
+};
+
 export function InternalCalendarModule({
   initialEvents,
   initialAvailabilities,
@@ -92,6 +99,9 @@ export function InternalCalendarModule({
   const [availabilityFormOpen, setAvailabilityFormOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventItem | null>(initialEvents[0] || null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
+  const [filteredDetailDialog, setFilteredDetailDialog] = useState<"conflicts" | "availability" | null>(null);
+  const [eventTemplate, setEventTemplate] = useState<CalendarEventTemplate | null>(null);
   const [eventToCancel, setEventToCancel] = useState<CalendarEventItem | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const locale = userPreferences.locale || "fr";
@@ -142,6 +152,12 @@ export function InternalCalendarModule({
     setMobileDetailOpen(true);
   }
 
+  function openTemplatedEventForm(template: CalendarEventTemplate) {
+    setEventTemplate(template);
+    setEditingEvent(null);
+    setEventFormOpen(true);
+  }
+
   return (
     <div className="space-y-5">
       <section className="dtsc-panel p-5 sm:p-6">
@@ -173,9 +189,31 @@ export function InternalCalendarModule({
         <AccordionItem title={translate(locale, "calendar.kpis")} defaultOpen>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label={translate(locale, "calendar.upcoming")} value={events.filter((event) => new Date(event.startDateTime).getTime() >= Date.now()).length} onClick={() => setActiveView("week")} />
-            <MetricCard label={translate(locale, "calendar.conflicts")} value={conflicts.length} tone={conflicts.length ? "warning" : "success"} onClick={() => setActiveView("conflicts")} />
-            <MetricCard label={translate(locale, "calendar.availabilities")} value={availabilities.length} onClick={() => setActiveView("availability")} />
-            <MetricCard label={translate(locale, "calendar.collaborators")} value={collaborators.length} onClick={() => setActiveView("collaborator")} />
+            <MetricCard
+              label={translate(locale, "calendar.conflicts")}
+              value={conflicts.length}
+              tone={conflicts.length ? "warning" : "success"}
+              onClick={() => {
+                setActiveView("conflicts");
+                setFilteredDetailDialog("conflicts");
+              }}
+            />
+            <MetricCard
+              label={translate(locale, "calendar.availabilities")}
+              value={availabilities.length}
+              onClick={() => {
+                setActiveView("availability");
+                setFilteredDetailDialog("availability");
+              }}
+            />
+            <MetricCard
+              label={translate(locale, "calendar.collaborators")}
+              value={collaborators.length}
+              onClick={() => {
+                setActiveView("collaborator");
+                setCollaboratorsDialogOpen(true);
+              }}
+            />
           </section>
         </AccordionItem>
       </Accordion>
@@ -242,12 +280,17 @@ export function InternalCalendarModule({
 
       {eventFormOpen && (
         <EventFormDialog
+          template={eventTemplate}
           collaborators={collaborators}
           context={context}
           locale={locale}
-          onClose={() => setEventFormOpen(false)}
+          onClose={() => {
+            setEventTemplate(null);
+            setEventFormOpen(false);
+          }}
           onSaved={(event) => {
             upsertEvent(event);
+            setEventTemplate(null);
             setEventFormOpen(false);
             setStatusMessage("Événement créé.");
           }}
@@ -281,6 +324,36 @@ export function InternalCalendarModule({
             setStatusMessage("Disponibilité enregistrée.");
           }}
         />
+      )}
+
+      {collaboratorsDialogOpen && (
+        <CalendarCollaboratorsDialog
+          collaborators={collaborators}
+          locale={locale}
+          onClose={() => setCollaboratorsDialogOpen(false)}
+          onCreateEvent={(template) => {
+            setCollaboratorsDialogOpen(false);
+            openTemplatedEventForm(template);
+          }}
+        />
+      )}
+
+      {filteredDetailDialog && (
+        <Dialog
+          open
+          title={filteredDetailDialog === "conflicts" ? translate(locale, "calendar.conflicts") : translate(locale, "calendar.availabilities")}
+          description={translate(locale, "calendar.filteredDetailsDescription")}
+          onClose={() => setFilteredDetailDialog(null)}
+          className="h-[92dvh] max-w-4xl"
+        >
+          <div className="max-h-[76dvh] overflow-y-auto pr-1">
+            {filteredDetailDialog === "conflicts" ? (
+              <ConflictList conflicts={conflicts} collaborators={collaborators} locale={locale} />
+            ) : (
+              <AvailabilityList availabilities={availabilities} collaborators={collaborators} locale={locale} />
+            )}
+          </div>
+        </Dialog>
       )}
 
       {eventToCancel && (
@@ -321,6 +394,7 @@ export function InternalCalendarModule({
 
 function EventFormDialog({
   event,
+  template,
   collaborators,
   context,
   locale,
@@ -328,6 +402,7 @@ function EventFormDialog({
   onSaved,
 }: {
   event?: CalendarEventItem;
+  template?: CalendarEventTemplate | null;
   collaborators: CollaboratorOption[];
   context: { employeeId?: string | null; canManagePeople: boolean; canOverrideConflicts: boolean };
   locale: string;
@@ -337,8 +412,10 @@ function EventFormDialog({
   const [message, setMessage] = useState("");
   const [conflicts, setConflicts] = useState<Array<{ message: string; severity: string }>>([]);
   const [allowConflicts, setAllowConflicts] = useState(false);
-  const defaultOwner = event?.ownerCollaboratorId || context.employeeId || collaborators[0]?.id || "";
-  const selectedParticipants = new Set(event?.participants.map((participant) => participant.collaboratorId) || [defaultOwner]);
+  const defaultOwner = event?.ownerCollaboratorId || template?.ownerCollaboratorId || context.employeeId || collaborators[0]?.id || "";
+  const defaultEventType = event?.eventType || template?.eventType || "Tâche";
+  const templateParticipants = template?.participantIds?.length ? template.participantIds : [defaultOwner];
+  const selectedParticipants = new Set(event?.participants.map((participant) => participant.collaboratorId) || templateParticipants);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -383,10 +460,10 @@ function EventFormDialog({
       <form onSubmit={submit} data-event-id={event?.id || ""} className="grid min-h-0 gap-4 overflow-y-auto pr-1">
         <div className="grid gap-3 sm:grid-cols-2">
           <FieldShell label={translate(locale, "calendar.fields.title")} hint="Nom lisible de l'événement dans votre calendrier DTSC.">
-            <Input name="title" required defaultValue={event?.title || ""} placeholder={translate(locale, "calendar.fields.title")} className="h-12 rounded-2xl bg-dtsc-page" />
+            <Input name="title" required defaultValue={event?.title || template?.title || ""} placeholder={translate(locale, "calendar.fields.title")} className="h-12 rounded-2xl bg-dtsc-page" />
           </FieldShell>
           <FieldShell label="Type d'événement" hint="Le type peut créer un objet lié dans COO, SCO ou Mes collaborateurs.">
-          <select name="eventType" defaultValue={event?.eventType || "Tâche"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="eventType" defaultValue={defaultEventType} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"].map((type) => <option key={type}>{type}</option>)}
           </select>
           </FieldShell>
@@ -454,6 +531,74 @@ function EventFormDialog({
           <Button type="submit" className="rounded-xl bg-dtsc-navy text-white">{translate(locale, "common.save")}</Button>
         </div>
       </form>
+    </Dialog>
+  );
+}
+
+function CalendarCollaboratorsDialog({
+  collaborators,
+  locale,
+  onClose,
+  onCreateEvent,
+}: {
+  collaborators: CollaboratorOption[];
+  locale: string;
+  onClose: () => void;
+  onCreateEvent: (template: CalendarEventTemplate) => void;
+}) {
+  const collaboratorList = useSmartList({
+    items: collaborators,
+    pageSize: 12,
+    getSearchText: (collaborator) => `${collaborator.fullName} ${collaborator.email || ""} ${collaborator.department} ${collaborator.jobTitle}`,
+  });
+
+  function createFor(collaborator: CollaboratorOption, eventType: string) {
+    onCreateEvent({
+      eventType,
+      ownerCollaboratorId: collaborator.id,
+      participantIds: [collaborator.id],
+      title: `${eventType} - ${collaborator.fullName}`,
+    });
+  }
+
+  return (
+    <Dialog open title={translate(locale, "calendar.collaborators")} description={translate(locale, "calendar.collaboratorDialogDescription")} onClose={onClose} className="h-[92dvh] max-w-4xl">
+      <div className="flex min-h-0 flex-col gap-4">
+        <ListControls
+          query={collaboratorList.query}
+          onQueryChange={collaboratorList.setQuery}
+          page={collaboratorList.page}
+          pageCount={collaboratorList.pageCount}
+          totalCount={collaboratorList.totalCount}
+          filteredCount={collaboratorList.filteredCount}
+          placeholder={translate(locale, "calendar.searchCollaborators")}
+          onPageChange={collaboratorList.setPage}
+        />
+        <div className="max-h-[68dvh] space-y-2 overflow-y-auto pr-1">
+          {collaboratorList.paginatedItems.map((collaborator) => (
+            <div key={collaborator.id} className="flex min-w-0 items-center justify-between gap-3 rounded-3xl border border-dtsc-border bg-dtsc-page p-3">
+              <div className="min-w-0">
+                <p className="truncate font-black text-dtsc-ink">{collaborator.fullName}</p>
+                <p className="truncate text-xs font-bold text-dtsc-muted">{collaborator.jobTitle || translate(locale, "calendar.collaborator")} · {collaborator.department || "DTSC"}</p>
+                {collaborator.email && <p className="truncate text-xs text-dtsc-muted">{collaborator.email}</p>}
+              </div>
+              <ActionMenu
+                label={translate(locale, "calendar.collaboratorActions")}
+                items={[
+                  { key: "task", label: translate(locale, "calendar.createTask"), icon: Plus, onSelect: () => createFor(collaborator, "Tâche") },
+                  { key: "meeting", label: translate(locale, "calendar.createMeeting"), icon: Users, onSelect: () => createFor(collaborator, "Réunion") },
+                  { key: "mission", label: translate(locale, "calendar.createMission"), icon: Plus, onSelect: () => createFor(collaborator, "Mission") },
+                  { key: "blocking", label: translate(locale, "calendar.createBlocking"), icon: Plus, onSelect: () => createFor(collaborator, "Blocage") },
+                  { key: "audio", label: translate(locale, "calendar.createAudioCall"), icon: Plus, onSelect: () => createFor(collaborator, "Appel audio") },
+                  { key: "video", label: translate(locale, "calendar.createVideoCall"), icon: Plus, onSelect: () => createFor(collaborator, "Appel vidéo") },
+                  { key: "absence", label: translate(locale, "calendar.createAbsence"), icon: Plus, onSelect: () => createFor(collaborator, "Absence") },
+                ]}
+              />
+            </div>
+          ))}
+          {!collaboratorList.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{translate(locale, "calendar.noCollaborators")}</p>}
+        </div>
+      </div>
     </Dialog>
   );
 }

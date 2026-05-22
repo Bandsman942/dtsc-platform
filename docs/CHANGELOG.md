@@ -20,6 +20,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction de la régression de plein écran des appels vidéo: suppression de l'observateur de mutations récursif sur le DOM LiveKit, focus plein écran appliqué de façon bornée avec fallback et conteneur plein écran ciblé par référence stable.
+- Correction du polling global des événements d'appel afin qu'une réponse `401` désactive proprement le polling côté client sans bruit console répété.
 - Correction du build Vercel du calendrier interne: les validateurs Zod create/update utilisent désormais un schéma de base non raffiné avant d'appliquer les règles de dates, afin d'éviter l'erreur `.partial() cannot be used on object schemas containing refinements`.
 - Correction de la visibilité du calendrier interne: les événements privés et participants ne sont plus exposés largement aux collaborateurs non concernés.
 - Correction de l'expérience plein écran des appels vidéo mobile: les contrôles restent au premier plan, disparaissent automatiquement après quelques secondes et réapparaissent au toucher.

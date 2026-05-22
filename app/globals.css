@@ -413,6 +413,14 @@
     animation: message-in 300ms ease-out;
   }
 
+  .animate-dtsc-online-pulse {
+    animation: dtsc-online-pulse 1.8s ease-in-out infinite;
+  }
+
+  .dtsc-message-focus-pulse {
+    animation: dtsc-message-focus-pulse 1.55s ease-out;
+  }
+
   .animate-hero-image {
     animation: hero-image 700ms ease-out;
   }
@@ -876,6 +884,36 @@
     }
   }
 
+  @keyframes dtsc-online-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.48), 0 0 16px rgba(52, 211, 153, 0.65);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 7px rgba(52, 211, 153, 0), 0 0 22px rgba(52, 211, 153, 0.82);
+      transform: scale(1.08);
+    }
+  }
+
+  @keyframes dtsc-message-focus-pulse {
+    0% {
+      outline: 2px solid rgba(52, 211, 153, 0);
+      box-shadow: 0 0 0 rgba(52, 211, 153, 0);
+      transform: scale(1);
+    }
+    24% {
+      outline: 2px solid rgba(52, 211, 153, 0.92);
+      box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.14), 0 16px 46px rgba(0, 23, 54, 0.18);
+      transform: scale(1.012);
+    }
+    100% {
+      outline: 2px solid rgba(52, 211, 153, 0);
+      box-shadow: 0 0 0 rgba(52, 211, 153, 0);
+      transform: scale(1);
+    }
+  }
+
   @keyframes premium-reveal {
     from {
       opacity: 0;
@@ -917,6 +955,8 @@
     .animate-scale-in,
     .animate-message-in,
     .animate-hero-image,
+    .animate-dtsc-online-pulse,
+    .dtsc-message-focus-pulse,
     .dtsc-premium-reveal,
     .dtsc-premium-reveal-delay {
       animation: fade-in 200ms ease-out;

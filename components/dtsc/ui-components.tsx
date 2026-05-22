@@ -124,7 +124,7 @@ export function MobileAvatar({
   return (
     <span className={cn("relative inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-cyan-400/35 to-[#002b5b]/35 text-sm font-black text-dtsc-ink shadow-[0_12px_32px_rgba(0,23,54,0.14)] dark:text-white", className)}>
       {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initials}
-      {online !== undefined && <span className={cn("absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-dtsc-surface", online ? "bg-emerald-400" : "bg-slate-400")} />}
+      {online !== undefined && <span className={cn("absolute bottom-0.5 right-0.5 z-20 h-3 w-3 rounded-full border-2 border-dtsc-surface shadow-[0_0_14px_rgba(52,211,153,0.75)]", online ? "animate-dtsc-online-pulse bg-emerald-400" : "bg-slate-400")} />}
     </span>
   );
 }

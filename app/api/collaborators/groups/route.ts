@@ -78,7 +78,21 @@ export async function GET(req: Request) {
         orderBy: { createdAt: "desc" },
       })
     : [];
+  const unreadMessages = groupIds.length
+    ? await prisma.collaborationGroupMessage.groupBy({
+        by: ["groupId"],
+        where: {
+          groupId: { in: groupIds },
+          authorId: { not: session.userId },
+          deletedAt: null,
+          messageType: { not: "SYSTEM" },
+          reads: { none: { userId: session.userId } },
+        },
+        _count: { _all: true },
+      })
+    : [];
   const unreadMentionByGroup = new Map<string, { count: number; preview: string; createdAt: Date }>();
+  const unreadMessageByGroup = new Map(unreadMessages.map((item) => [item.groupId, item._count._all]));
   for (const mention of unreadMentions) {
     const current = unreadMentionByGroup.get(mention.message.groupId);
     unreadMentionByGroup.set(mention.message.groupId, {
@@ -91,6 +105,7 @@ export async function GET(req: Request) {
     const mention = unreadMentionByGroup.get(group.id);
     return {
       ...group,
+      unreadMessageCount: unreadMessageByGroup.get(group.id) || 0,
       unreadMentionCount: mention?.count || 0,
       unreadMentionPreview: mention?.preview || null,
       lastMentionAt: mention?.createdAt || null,

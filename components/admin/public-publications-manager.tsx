@@ -30,6 +30,11 @@ type Publication = {
   } | null;
 };
 
+type PublicationDraft = Pick<Publication, "title" | "slug" | "category" | "excerpt" | "coverLabel" | "published"> & {
+  content: string;
+  contentHtml: string;
+};
+
 const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
 
 export function PublicPublicationsManager({
@@ -49,6 +54,7 @@ export function PublicPublicationsManager({
   const [items, setItems] = useState(publications);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
+  const [editingDraft, setEditingDraft] = useState<PublicationDraft | null>(null);
   const editingFormRef = useRef<HTMLFormElement | null>(null);
   const [confirmEditSave, setConfirmEditSave] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Publication | null>(null);
@@ -100,6 +106,7 @@ export function PublicPublicationsManager({
         );
       }
       setEditing(null);
+      setEditingDraft(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
       router.refresh();
@@ -196,6 +203,16 @@ export function PublicPublicationsManager({
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" size="sm" disabled={!canEditPublication(publication)} onClick={() => {
                     setEditing(publication);
+                    setEditingDraft({
+                      title: publication.title,
+                      slug: publication.slug,
+                      category: publication.category,
+                      excerpt: publication.excerpt,
+                      coverLabel: publication.coverLabel,
+                      content: publication.content,
+                      contentHtml: publication.content,
+                      published: publication.published,
+                    });
                     setEditingPreviewHtml(publication.content);
                   }} className="rounded-xl">
                     <Edit3 className="h-4 w-4" />
@@ -223,10 +240,11 @@ export function PublicPublicationsManager({
 
       <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => {
         setEditing(null);
+        setEditingDraft(null);
         setEditingPreviewHtml("");
         setConfirmEditSave(false);
       }}>
-        {editing && (
+        {editing && editingDraft && (
           <form
             ref={editingFormRef}
             onSubmit={(event) => {
@@ -235,29 +253,33 @@ export function PublicPublicationsManager({
             }}
             className="grid gap-3"
           >
-            <Input name="title" defaultValue={editing.title} required disabled={!canEditPublication(editing)} />
-            <Input name="slug" defaultValue={editing.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canEditPublication(editing)} />
-            <select name="category" defaultValue={editing.category} disabled={!canEditPublication(editing)} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+            <Input name="title" value={editingDraft.title} onChange={(event) => setEditingDraft((current) => current ? { ...current, title: event.target.value } : current)} required disabled={!canEditPublication(editing)} />
+            <Input name="slug" value={editingDraft.slug} onChange={(event) => setEditingDraft((current) => current ? { ...current, slug: event.target.value } : current)} pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canEditPublication(editing)} />
+            <select name="category" value={editingDraft.category} onChange={(event) => setEditingDraft((current) => current ? { ...current, category: event.target.value } : current)} disabled={!canEditPublication(editing)} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
               {categories.map((category) => (
                 <option key={category} value={category}>{formatEnumLabel(category)}</option>
               ))}
             </select>
-            <Input name="coverLabel" defaultValue={editing.coverLabel || ""} disabled={!canEditPublication(editing)} />
-            <textarea name="excerpt" defaultValue={editing.excerpt} disabled={!canEditPublication(editing)} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <Input name="coverLabel" value={editingDraft.coverLabel || ""} onChange={(event) => setEditingDraft((current) => current ? { ...current, coverLabel: event.target.value } : current)} disabled={!canEditPublication(editing)} />
+            <textarea name="excerpt" value={editingDraft.excerpt} onChange={(event) => setEditingDraft((current) => current ? { ...current, excerpt: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <RichTextEditor
               key={editing.id}
               textName="content"
               htmlName="contentHtml"
-              defaultValue={editing.content}
+              defaultValue={editingDraft.contentHtml || editingDraft.content}
               disabled={!canEditPublication(editing)}
               allowImageUpload
-              onContentChange={({ html }) => setEditingPreviewHtml(html)}
+              onContentChange={(content) => {
+                setEditingDraft((current) => current ? { ...current, content: content.text, contentHtml: content.html } : current);
+                setEditingPreviewHtml(content.html);
+              }}
               placeholder="Contenu long de la publication"
             />
             <PublicationPreview html={editingPreviewHtml} />
+            <p className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-100">Vous modifiez une copie locale. La publication publique sera synchronisée uniquement après confirmation.</p>
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publié
-              <input name="published" type="checkbox" defaultChecked={editing.published} disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
+              <input name="published" type="checkbox" checked={editingDraft.published} onChange={(event) => setEditingDraft((current) => current ? { ...current, published: event.target.checked } : current)} disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
             </label>
             <Button disabled={!canEditPublication(editing)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
           </form>
