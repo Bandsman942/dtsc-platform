@@ -9,6 +9,7 @@ import { Bell, Bot, CalendarCheck, ChevronRight, Home, LogOut, Settings, Shield,
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
+import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { translate } from "@/lib/i18n";
@@ -33,9 +34,13 @@ const primaryItems = [
 export function MobilePwaHeader({
   user,
   unreadNotifications,
+  currentOrganizationId,
+  organizationOptions = [],
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
+  currentOrganizationId?: string | null;
+  organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
@@ -125,6 +130,9 @@ export function MobilePwaHeader({
       </div>
 
       <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {organizationOptions.length > 0 && (
+          <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />
+        )}
         {adminAllowed && <QuickChip href="/admin" active={pathname?.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
         <QuickChip href="/settings" active={pathname?.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
         <QuickChip href="/profile" active={pathname?.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />

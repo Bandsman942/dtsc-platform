@@ -12,6 +12,7 @@ export const signUpSchema = z.object({
 export const signInSchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
   password: z.string().min(1),
+  organizationId: z.string().max(120).optional().or(z.literal("")),
 });
 
 export const chatRequestSchema = z.object({

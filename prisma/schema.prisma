@@ -154,6 +154,13 @@ model User {
   announcementSharesSent AnnouncementShare[] @relation("AnnouncementShareSender")
   announcementSharesReceived AnnouncementShare[] @relation("AnnouncementShareRecipient")
   announcementReports AnnouncementReport[]
+  organizationMemberships OrganizationMember[]
+  organizationAdminGrants OrganizationAdminGrant[] @relation("OrganizationAdminGrantUser")
+  grantedOrganizationAdmins OrganizationAdminGrant[] @relation("OrganizationAdminGrantDtscUser")
+  createdOrganizations Organization[] @relation("OrganizationCreatedByDtsc")
+  updatedOrganizationSubscriptions OrganizationSubscription[] @relation("OrganizationSubscriptionUpdatedBy")
+  createdOrganizationSubscriptions OrganizationSubscription[] @relation("OrganizationSubscriptionCreatedBy")
+  organizationBillingRecords BillingRecord[]
 
   @@index([role])
   @@index([status])
@@ -175,6 +182,7 @@ model BillingPlan {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   subscriptions     Subscription[]
+  organizationSubscriptions OrganizationSubscription[]
   invoices          Invoice[]
 
   @@index([isActive, sortOrder])
@@ -444,11 +452,123 @@ model UsageLog {
 model Organization {
   id            String   @id @default(cuid())
   name          String
+  slug          String?  @unique
+  logoUrl       String?
+  ownerUserId   String?
+  status        String   @default("DRAFT")
+  organizationType String @default("CLIENT")
   sector        String?
+  industry      String?
+  country       String?
+  city          String?
+  timezone      String   @default("Africa/Kinshasa")
+  settingsJson  Json?
+  brandingJson  Json?
   contactPerson String?
   email         String?
   phone         String?
+  address       String?
+  notes         String?
+  createdByDtscUserId String?
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+  createdByDtsc User? @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
+  members       OrganizationMember[]
+  adminGrants   OrganizationAdminGrant[]
+  subscriptions OrganizationSubscription[]
+  billingRecords BillingRecord[]
+  supportTickets SupportTicket[]
+  announcements Announcement[] @relation("AnnouncementOrganization")
+  authoredAnnouncements Announcement[] @relation("AnnouncementAuthorOrganization")
+  collaborationGroups CollaborationGroup[]
+
+  @@index([status, organizationType])
+  @@index([createdByDtscUserId])
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           String   @default("MEMBER")
+  status         String   @default("INVITED")
+  invitedBy      String?
+  joinedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  removedAt      DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, role, status])
+}
+
+model OrganizationAdminGrant {
+  id                    String   @id @default(cuid())
+  organizationId         String
+  userId                 String
+  grantedByDtscUserId    String
+  status                 String   @default("ACTIVE")
+  grantedAt              DateTime @default(now())
+  revokedAt              DateTime?
+  reason                 String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                   User @relation("OrganizationAdminGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedByDtscUser      User @relation("OrganizationAdminGrantDtscUser", fields: [grantedByDtscUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@index([userId, status])
+  @@index([grantedByDtscUserId])
+}
+
+model OrganizationSubscription {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  planId              String
+  status              String   @default("PENDING_PAYMENT")
+  startedAt           DateTime?
+  expiresAt           DateTime?
+  trialEndsAt         DateTime?
+  createdByDtscUserId String?
+  updatedByDtscUserId String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                BillingPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  createdByDtscUser   User? @relation("OrganizationSubscriptionCreatedBy", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
+  updatedByDtscUser   User? @relation("OrganizationSubscriptionUpdatedBy", fields: [updatedByDtscUserId], references: [id], onDelete: SetNull)
+  billingRecords      BillingRecord[]
+
+  @@index([organizationId, status])
+  @@index([planId])
+  @@index([expiresAt])
+}
+
+model BillingRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  subscriptionId String?
+  amount         Decimal  @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  status         String   @default("PENDING")
+  paymentMethod  String?
+  reference      String?
+  invoiceUrl     String?
+  createdByUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription   OrganizationSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  createdByUser  User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([subscriptionId])
+  @@index([reference])
 }
 
 model NewsletterSubscriber {
@@ -499,18 +619,25 @@ model ContactMessage {
 model SupportTicket {
   id          String         @id @default(cuid())
   userId      String
+  organizationId String?
+  assignedToDtscUserId String?
+  category    String?
+  source      String?
   subject     String
   description String
   status      TicketStatus   @default(OPEN)
   priority    TicketPriority @default(MEDIUM)
   resolution  String?
   resolvedAt  DateTime?
+  closedAt    DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   messages    TicketMessage[]
 
   @@index([userId, status])
+  @@index([organizationId, status, createdAt])
   @@index([priority, createdAt])
 }
 
@@ -606,6 +733,10 @@ model Notification {
 model Announcement {
   id        String                 @id @default(cuid())
   authorId  String
+  organizationId String?
+  authorOrganizationId String?
+  scope     String                 @default("GLOBAL_PRIVATE")
+  moderationStatus String          @default("PUBLISHED")
   title     String
   content   String
   status    String                 @default("ACTIVE")
@@ -621,12 +752,16 @@ model Announcement {
   createdAt DateTime               @default(now())
   updatedAt DateTime               @updatedAt
   author    User                   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  organization Organization?       @relation("AnnouncementOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  authorOrganization Organization? @relation("AnnouncementAuthorOrganization", fields: [authorOrganizationId], references: [id], onDelete: SetNull)
   comments  AnnouncementComment[]
   reactions AnnouncementReaction[]
   shares    AnnouncementShare[]
   reports   AnnouncementReport[]
 
   @@index([status, createdAt])
+  @@index([scope, organizationId, moderationStatus])
+  @@index([authorOrganizationId])
   @@index([deletedAt, archivedAt])
   @@index([authorId])
 }
@@ -1591,12 +1726,14 @@ model CollaborationGroup {
   archived    Boolean  @default(false)
   ownerId     String
   companyId   String?
+  organizationId String?
   visibility  String   @default("PRIVATE")
   status      String   @default("ACTIVE")
   archivedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   owner       User     @relation("CollaborationGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   members     CollaborationGroupMember[]
   invitations CollaborationGroupInvitation[]
   messages    CollaborationGroupMessage[]
@@ -1606,6 +1743,7 @@ model CollaborationGroup {
 
   @@index([ownerId, status, updatedAt])
   @@index([companyId])
+  @@index([organizationId, groupType, status])
   @@index([meetingId])
 }
 

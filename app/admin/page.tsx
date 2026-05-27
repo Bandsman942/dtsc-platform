@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, Code2, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Building2, Code2, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
 import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -11,6 +11,7 @@ import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { CeoExecutiveSummary } from "@/components/admin/ceo-executive-summary";
+import { ClientOrganizationsPanel } from "@/components/admin/client-organizations-panel";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
@@ -56,6 +57,7 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "settings", label: "Paramètres", description: "Limites, OTP, diffusions", icon: Settings },
   { id: "publications", label: "Publications", description: "Articles et ressources publiques", icon: FileText },
   { id: "users", label: "Utilisateurs", description: "Comptes, rôles et limites", icon: Users },
+  { id: "clientOrganizations", label: "Entreprises clientes", description: "Espaces client et admins", icon: Building2 },
   { id: "hrCfo", label: "HR & CFO", description: "RH, finance et contrôle", icon: BriefcaseBusiness },
   { id: "sco", label: "SCO", description: "Achats, stocks et logistique", icon: PackageCheck },
   { id: "coo", label: "COO", description: "Opérations, tâches et workflows", icon: BarChart3 },
@@ -100,6 +102,8 @@ export default async function AdminPage({
   const [
     settings,
     users,
+    clientOrganizations,
+    billingPlans,
     userCount,
     activeUserCount,
     conversationCount,
@@ -178,6 +182,20 @@ export default async function AdminPage({
         orderBy: { createdAt: "desc" },
         include: { _count: { select: { conversations: true } } },
         take: 200,
+      }),
+      prisma.organization.findMany({
+        where: { organizationType: "CLIENT", deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        include: {
+          members: { include: { user: { select: { id: true, name: true, email: true } } }, take: 20 },
+          subscriptions: { include: { plan: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 1 },
+        },
+        take: 200,
+      }),
+      prisma.billingPlan.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, slug: true },
       }),
       prisma.user.count(),
       prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
@@ -836,6 +854,18 @@ export default async function AdminPage({
             </AccordionItem>
             <AccordionItem title="Newsletter et prospects">
               <NewsletterSubscribersManager canManage={user.role === UserRole.ADMIN} />
+            </AccordionItem>
+          </Accordion>
+        )}
+
+        {activeSection === "clientOrganizations" && canView("clientOrganizations") && (
+          <Accordion>
+            <AccordionItem title="Entreprises clientes" defaultOpen>
+              <ClientOrganizationsPanel
+                organizations={JSON.parse(JSON.stringify(clientOrganizations))}
+                users={users.map((item) => ({ id: item.id, name: item.name, email: item.email, role: item.role }))}
+                plans={billingPlans}
+              />
             </AccordionItem>
           </Accordion>
         )}

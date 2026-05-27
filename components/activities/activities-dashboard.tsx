@@ -226,7 +226,7 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
   }
 
   return (
-    <form onSubmit={submitWorkflow} className="min-w-0 space-y-5 overflow-hidden">
+    <form onSubmit={submitWorkflow} className="min-w-0 space-y-5 overflow-visible">
       <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
         <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
           Formulaire

@@ -83,6 +83,9 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     if (defaultValue === htmlRef.current || defaultValue === editorRef.current?.innerHTML) {
       return;
     }
+    if (document.activeElement === editorRef.current) {
+      return;
+    }
 
     const nextText = defaultValue.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     setPlainText(nextText);

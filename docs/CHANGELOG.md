@@ -7,8 +7,16 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Corrigé
 
 - Masquage complet du module `Calendrier interne` pour les utilisateurs `CLIENT`: navigation desktop/mobile, page `/calendar`, middleware et routes `/api/calendar*` bloquent désormais cet accès.
-- Correction du clipping desktop des formulaires Administration dans les accordéons: les cartes et contenus accordéon ne gardent plus un `overflow` qui empêche d'atteindre les extrémités des formulaires sur grand écran.
+- Correction étendue du clipping des formulaires longs: les dialogues partagés utilisent désormais davantage de hauteur utile avec scroll interne, les accordéons/cartes Administration, Activités, Annonces et Support évitent de couper les extrémités des formulaires sur desktop/mobile.
 - Correction de l'éditeur riche des annonces et publications publiques: la saisie sur brouillon local ne réapplique plus le HTML à chaque frappe, le curseur reste à l'endroit modifié et la suppression immédiate d'image fonctionne avant l'enregistrement.
+
+### Ajouté
+
+- Fondation SaaS hybride multi-entreprises: extension `Organization`, memberships actifs, grants `ADMIN_ENTREPRISE`, abonnements/facturation organisationnels et champs `organizationId` progressifs sur support, annonces et groupes.
+- Création de l'organisation interne stable `dtsc-internal` via migration `20260522153000_hybrid_multi_tenant`.
+- Connexion avec entreprise optionnelle: l'API `POST /api/auth/organizations` ne retourne que les entreprises où l'email saisi est membre actif, et `POST /api/auth/sign-in` refuse l'accès aux espaces internes clients sans membership actif.
+- Sélecteur d'espace connecté après connexion via `POST /api/account/context`, avec contexte actif stocké en session.
+- Bloc Administration `Entreprises clientes` pour créer/suspendre/archiver les organisations clientes, désigner ou retirer un administrateur entreprise et lier un plan, sans accès DTSC aux données métier privées.
 
 ## 2026-05-21
 

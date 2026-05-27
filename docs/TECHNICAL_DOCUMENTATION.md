@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 21 mai 2026
+Derniere mise a jour: 22 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -30,6 +30,7 @@ Objectifs couverts par le code actuel:
 - calendrier interne prive pour suivre disponibilites, evenements, participants, missions, absences, reunions, conflits de planning et synchronisations COO sans API calendrier externe;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces avancees, numerotations, checklist, tirets, gras, italique, souligne, palette de couleurs controlee et collage de contenus riches;
 - support sous forme de tickets conversationnels;
+- fondation SaaS hybride multi-entreprises avec tenant interne DTSC, organisations clientes, memberships actifs, contexte de session optionnel et administration des entreprises clientes strictement côté DTSC;
 - administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
@@ -89,6 +90,33 @@ Les réponses du chatbot privé supportent une réaction persistée `Like` ou `D
 - Deploiement: Vercel
 - CI: GitHub Actions avec `pnpm type-check`
 - PWA: manifest App Router, service worker statique et prompt d'installation prive
+
+### Modèle SaaS hybride multi-entreprises
+
+La plateforme ajoute une couche progressive d'isolation par organisation sans casser les données existantes. La migration `20260522153000_hybrid_multi_tenant` étend `Organization`, crée l'organisation interne stable `dtsc-internal`, puis ajoute:
+
+- `OrganizationMember`: membership utilisateur/organisation avec rôle (`OWNER`, `ADMIN_ENTREPRISE`, `MANAGER`, `MEMBER`, `GUEST`) et statut (`INVITED`, `ACTIVE`, `SUSPENDED`, `REMOVED`);
+- `OrganizationAdminGrant`: attribution/retrait audité du rôle `ADMIN_ENTREPRISE` par DTSC uniquement;
+- `OrganizationSubscription`: abonnement d'une organisation à un `BillingPlan`, contrôlé par DTSC;
+- `BillingRecord`: historique de facturation organisationnelle;
+- champs `organizationId` sur `SupportTicket`, `Announcement` et `CollaborationGroup` pour préparer l'isolation progressive.
+
+La session peut contenir `activeContext`, `activeOrganizationId`, `activeOrganizationName` et `activeOrganizationRole`. `lib/organizations.ts` centralise la résolution du contexte:
+
+- sans entreprise sélectionnée, un client reste en `GLOBAL_CLIENT`, tandis que les rôles DTSC internes utilisent `DTSC_INTERNAL`;
+- avec entreprise sélectionnée, `resolveOrganizationLoginContext()` exige une organisation active et un membership actif;
+- un rôle global DTSC ne contourne jamais `OrganizationMember` pour accéder aux modules internes d'un client.
+
+Routes ajoutées:
+
+- `POST /api/auth/organizations`: retourne les organisations actives liées à l'email fourni. Accès public limité au login, sans annuaire global public.
+- `POST /api/account/context`: change le contexte actif après connexion. Accès authentifié, vérifie le membership actif et journalise les changements/refus.
+- `POST /api/admin/client-organizations`: crée une entreprise cliente côté DTSC, peut désigner un administrateur entreprise et lier un plan.
+- `PATCH /api/admin/client-organizations/[id]`: met à jour l'entreprise, change son statut ou accorde/retire `ADMIN_ENTREPRISE`.
+
+Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
+
+Règle de sécurité permanente: toute future route interne entreprise doit filtrer par `organizationId`, vérifier un `OrganizationMember` actif, appliquer le rôle organisationnel et ne jamais accepter le rôle global `ADMIN` comme passe-droit vers les données privées d'une entreprise cliente.
 
 ### Appels de groupes et réunions COO audio/vidéo
 

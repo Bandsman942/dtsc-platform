@@ -335,7 +335,7 @@ export function AnnouncementWall({
             </div>
           </div>
           {canPost && (
-            <details className="mt-5 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface">
+            <details className="mt-5 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface lg:overflow-visible">
               <summary className="cursor-pointer list-none px-4 py-3 text-sm font-black text-dtsc-blue [&::-webkit-details-marker]:hidden">
                 {t("announcements.createNew")}
               </summary>

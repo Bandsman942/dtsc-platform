@@ -100,6 +100,10 @@ export async function setSessionCookie(user: {
   email: string;
   name: string;
   role: UserRole;
+  activeContext?: "GLOBAL_CLIENT" | "COMMUNITY" | "DTSC_INTERNAL" | "ORGANIZATION";
+  activeOrganizationId?: string | null;
+  activeOrganizationName?: string | null;
+  activeOrganizationRole?: string | null;
 }) {
   const cookieStore = await cookies();
   const token = await createSessionToken(
@@ -108,6 +112,10 @@ export async function setSessionCookie(user: {
       email: user.email,
       name: user.name,
       role: user.role,
+      activeContext: user.activeContext,
+      activeOrganizationId: user.activeOrganizationId || null,
+      activeOrganizationName: user.activeOrganizationName || null,
+      activeOrganizationRole: user.activeOrganizationRole || null,
     },
     requireEnv("AUTH_SECRET")
   );

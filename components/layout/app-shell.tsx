@@ -11,6 +11,8 @@ import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
+import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
+import { getSession } from "@/lib/auth";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -32,7 +34,8 @@ export async function AppShell({
     locale?: string | null;
   };
 }) {
-  const [unreadNotifications, latestUnreadNotifications, employeeRecord] = await Promise.all([
+  const session = await getSession();
+  const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships] = await Promise.all([
     prisma.notification.count({
       where: {
         userId: user.id,
@@ -51,13 +54,35 @@ export async function AppShell({
       where: { userId: user.id, status: { not: "EXITED" } },
       select: { id: true },
     }),
+    prisma.organizationMember.findMany({
+      where: {
+        userId: user.id,
+        status: "ACTIVE",
+        removedAt: null,
+        organization: { status: "ACTIVE", deletedAt: null },
+      },
+      select: {
+        role: true,
+        organization: { select: { id: true, name: true, organizationType: true } },
+      },
+      orderBy: { organization: { name: "asc" } },
+      take: 12,
+    }),
   ]);
+  const organizationOptions = organizationMemberships
+    .filter((membership) => membership.organization.organizationType !== "DTSC_INTERNAL" || user.role !== "CLIENT")
+    .map((membership) => ({ id: membership.organization.id, label: membership.organization.name, role: membership.role }));
 
   return (
     <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
       <SessionTimeoutGuard />
       <GlobalCallToast />
-      <MobilePwaHeader user={user} unreadNotifications={unreadNotifications} />
+      <MobilePwaHeader
+        user={user}
+        unreadNotifications={unreadNotifications}
+        currentOrganizationId={session?.activeOrganizationId || null}
+        organizationOptions={organizationOptions}
+      />
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
         <DtscLogo href="/dashboard" />
 
@@ -85,6 +110,9 @@ export async function AppShell({
               {dtsc.slogan}
             </div>
             <div className="flex items-center gap-3">
+              {organizationOptions.length > 0 && (
+                <OrganizationContextSwitcher currentOrganizationId={session?.activeOrganizationId || null} organizations={organizationOptions} />
+              )}
               <ThemeToggle />
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-semibold text-dtsc-ink">{user.name}</p>

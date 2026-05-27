@@ -26,7 +26,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
       role="dialog"
       aria-modal="true"
     >
-      <div className={cn("flex max-h-[95dvh] min-h-[60dvh] w-full min-w-0 max-w-2xl flex-col overflow-hidden rounded-[1.65rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.35)] sm:max-h-[90vh] sm:min-h-0 sm:rounded-2xl", className)}>
+      <div className={cn("flex max-h-[96dvh] min-h-[66dvh] w-full min-w-0 max-w-2xl flex-col overflow-hidden rounded-[1.65rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.35)] sm:max-h-[calc(100dvh-2rem)] sm:min-h-[min(34rem,calc(100dvh-2rem))] sm:rounded-2xl", className)}>
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-dtsc-border bg-dtsc-page px-4 py-3 sm:px-5 sm:py-4">
           <div className="min-w-0">
             <h2 className="break-words text-lg font-black text-dtsc-ink">{title}</h2>
@@ -36,7 +36,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 sm:py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 scroll-pb-8 sm:px-5 sm:py-5">{children}</div>
         {footer && <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-dtsc-border bg-dtsc-page px-4 py-3 sm:px-5 sm:py-4">{footer}</div>}
       </div>
     </div>

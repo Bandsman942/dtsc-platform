@@ -186,8 +186,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Accès à la plateforme",
         text:
-          "L'utilisateur s'engage à fournir des informations exactes lors de son inscription et à conserver la confidentialité de ses identifiants. Les comptes sont personnels, rattachés à un rôle et peuvent être limités, suspendus ou désactivés en cas d'usage abusif, de tentative d'accès non autorisé ou de non-respect des règles de sécurité.",
-        bullets: ["Compte personnel et non transférable", "Mot de passe confidentiel", "Rôles ADMIN, MANAGER, SUPPORT et CLIENT", "Suspension possible en cas d'abus"],
+          "L'utilisateur s'engage à fournir des informations exactes lors de son inscription et à conserver la confidentialité de ses identifiants. Les comptes sont personnels, rattachés à un rôle et peuvent être limités, suspendus ou désactivés en cas d'usage abusif, de tentative d'accès non autorisé ou de non-respect des règles de sécurité. Lorsque l'utilisateur choisit une entreprise à la connexion, l'accès à cet espace privé exige un rattachement actif à cette organisation; le rôle global DTSC ne donne pas automatiquement accès aux données internes privées d'une entreprise cliente.",
+        bullets: ["Compte personnel et non transférable", "Mot de passe confidentiel", "Rôles globaux et rôles d'organisation séparés", "Entreprise à la connexion uniquement si membership actif", "Suspension possible en cas d'abus"],
       },
       {
         heading: "Utilisation du chatbot",
@@ -198,8 +198,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Contenus, annonces et support",
         text:
-          "Les annonces, commentaires, tickets, groupes Mes collaborateurs et messages doivent rester professionnels, utiles et respectueux. DTSC peut modérer, archiver, signaler ou retirer un contenu qui perturbe la plateforme, expose des informations confidentielles, contient des propos illicites ou porte atteinte aux droits d'autrui. Les transferts d'annonces, les partages chatbot et les mentions doivent viser uniquement des personnes autorisées à accéder à l'information partagée.",
-        bullets: ["Publication professionnelle requise", "Modération et signalement possibles", "Confidentialité des tickets et groupes", "Partage chatbot volontaire", "Mentions limitées aux personnes autorisées", "Fenêtre de modification paramétrable"],
+          "Les annonces, commentaires, tickets, groupes Mes collaborateurs et messages doivent rester professionnels, utiles et respectueux. DTSC peut modérer, archiver, signaler ou retirer un contenu qui perturbe la plateforme, expose des informations confidentielles, contient des propos illicites ou porte atteinte aux droits d'autrui. Les annonces peuvent être globales, communautaires ou limitées à une entreprise selon leur portée. Les tickets support partagent avec DTSC uniquement les informations volontairement transmises dans le ticket; ils ne donnent pas accès aux autres données internes de l'entreprise cliente.",
+        bullets: ["Publication professionnelle requise", "Portée globale, communautaire ou organisationnelle", "Modération et signalement possibles", "Tickets support limités aux informations volontairement partagées", "Partage chatbot volontaire", "Mentions limitées aux personnes autorisées", "Fenêtre de modification paramétrable"],
       },
       {
         heading: "Modules internes HR & CFO / SCO / COO / CEO / MPO / CTO / LA",
@@ -244,8 +244,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Sécurité et confidentialité",
         text:
-          "DTSC applique une séparation entre les clés API serveur et le frontend, utilise des sessions sécurisées, conserve les mots de passe sous forme hachée et protège les routes privées par rôle. Les accès administratifs doivent être limités aux personnes habilitées. Les mesures de sécurité doivent évoluer avec le niveau de risque, conformément aux principes de sécurité du traitement prévus par le RGPD.",
-        bullets: ["Mots de passe hachés", "Clés API non exposées au client", "Contrôle d'accès RBAC", "Journalisation et limitation d'usage"],
+          "DTSC applique une séparation entre les clés API serveur et le frontend, utilise des sessions sécurisées, conserve les mots de passe sous forme hachée et protège les routes privées par rôle. Dans le modèle multi-entreprises, les données internes d'une entreprise cliente doivent être isolées par organisation et accessibles uniquement aux membres actifs autorisés. DTSC administre la plateforme, les abonnements et le support, mais ne consulte pas les modules internes privés des clients sans rattachement explicite à l'organisation concernée.",
+        bullets: ["Mots de passe hachés", "Clés API non exposées au client", "Contrôle d'accès RBAC et membership actif", "Isolation des données par organisation", "Journalisation et limitation d'usage"],
       },
       {
         heading: "Droits des utilisateurs",

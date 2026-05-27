@@ -28,7 +28,7 @@ export function SupportForm() {
   }
 
   return (
-    <details className="dtsc-card overflow-hidden p-0">
+    <details className="dtsc-card overflow-hidden p-0 lg:overflow-visible">
       <summary className="cursor-pointer list-none px-5 py-4 text-base font-black text-dtsc-ink [&::-webkit-details-marker]:hidden">
         Créer un ticket support
       </summary>

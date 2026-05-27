@@ -196,6 +196,7 @@ Conserver une hiérarchie visible pour:
 ## Règles DTSC — UI mobile/PWA premium compacte
 
 - Les blocs importants des modules privés doivent privilégier les accordéons sur mobile/PWA afin d'éviter les pages verticales interminables.
+- Les formulaires longs ouverts depuis Administration, Activités, Support, Annonces ou modules métier doivent utiliser une modale/sheet haute avec scroll interne fiable; ne pas les enfermer dans un conteneur `overflow-hidden` qui empêche d'atteindre le bas du formulaire sur desktop ou mobile.
 - Les accordéons, listes premium, menus flottants et overlays mobiles doivent utiliser les variables DTSC (`--dtsc-surface`, `--dtsc-page`, `--dtsc-ink`, `--dtsc-muted`) ou les classes glass partagées; éviter les fonds fixes `bg-white/*` qui cassent le mode sombre.
 - Les sections Administration doivent rester accessibles par une navigation mobile flottante, avec affichage strictement limité aux sections autorisées par RBAC et poste RH officiel.
 - Les formulaires longs ou fréquents doivent être pliables, en modale, sheet ou accordéon; ne pas afficher plusieurs formulaires ouverts par défaut sur mobile.
@@ -206,6 +207,22 @@ Conserver une hiérarchie visible pour:
 - Les réactions chatbot Like/Dislike doivent être persistées côté serveur sur le message assistant propriétaire de la conversation; une action UI visible ne doit jamais être seulement locale.
 - Les notifications doivent supporter des filtres avancés côté UI à partir des vrais types/statuts existants, sans remplacer les données backend par des mocks.
 - Toute modification UI mobile/PWA doit préserver i18n, accessibilité clavier, safe-area, PWA standalone, RBAC et permissions côté API.
+
+## Règles DTSC — SaaS hybride multi-entreprises
+
+- DTSC Platform évolue vers un modèle SaaS hybride: un tenant interne DTSC, des espaces clients `Organization` et un contexte actif de session (`GLOBAL_CLIENT`, `COMMUNITY`, `DTSC_INTERNAL`, `ORGANIZATION`).
+- La connexion peut accepter une entreprise optionnelle. Sans entreprise sélectionnée, l'utilisateur accède à son espace client standard; avec entreprise sélectionnée, le backend doit vérifier que `Organization.status = ACTIVE` et que `OrganizationMember.status = ACTIVE`.
+- La liste des entreprises au login ne doit jamais exposer tout l'annuaire client: elle est chargée uniquement à partir de l'email saisi et retourne seulement les organisations où cet email est membre actif.
+- Même `ADMIN` global DTSC, CEO DTSC ou support technique ne reçoit aucun droit automatique sur les modules internes privés d'une entreprise cliente. L'accès entreprise exige un membership actif explicite.
+- DTSC peut créer, modifier, suspendre ou archiver une entreprise cliente, accorder ou retirer `ADMIN_ENTREPRISE`, gérer plans/abonnements/facturation et traiter les tickets support volontairement soumis.
+- DTSC ne doit pas ouvrir `Administration [Entreprise]`, `Activités [Entreprise]`, calendrier, tâches, réunions, fichiers, conversations, appels, données RH/finance/juridique ou workflows internes d'une entreprise cliente sans membership actif dans cette entreprise.
+- Toute nouvelle donnée interne d'entreprise doit porter `organization_id` ou un équivalent Prisma `organizationId`, et toute route entreprise doit vérifier session, rôle global si action plateforme, membership actif, rôle organisationnel et visibilité de l'objet.
+- Les abonnements d'organisation restent contrôlés par DTSC: le client peut voir plan, statut, limites et factures, mais ne peut pas modifier prix, plan ou validation de paiement.
+- Les tickets support partagent uniquement les informations volontairement envoyées au support DTSC; un ticket ne donne pas accès au reste des données internes de l'entreprise.
+- Le module Annonces peut rester global/communautaire avec `scope`, `organizationId` et `moderationStatus`; `ORGANIZATION_ONLY` doit être visible uniquement aux membres actifs de l'organisation concernée.
+- Les groupes peuvent devenir transversaux (`CROSS_ORGANIZATION`, `PRIVATE_NETWORK`) uniquement par invitation acceptée. Les groupes internes d'organisation restent invisibles aux non-membres, y compris aux rôles DTSC globaux non invités.
+- Toute attribution/retrait d'admin entreprise, tentative d'accès refusée, changement de contexte, création/suspension d'organisation, changement d'abonnement et action support critique doit être auditée.
+- Les métriques DTSC sur les entreprises clientes doivent rester administratives, agrégées ou anonymisées lorsqu'elles touchent à l'activité interne.
 
 ## Advanced Mobile UX, Activities, Groups, Files and Audit Standards
 

@@ -61,6 +61,10 @@ export async function middleware(request: NextRequest) {
         email: session.email,
         name: session.name,
         role: session.role,
+        activeContext: session.activeContext,
+        activeOrganizationId: session.activeOrganizationId || null,
+        activeOrganizationName: session.activeOrganizationName || null,
+        activeOrganizationRole: session.activeOrganizationRole || null,
       },
       secret
     );

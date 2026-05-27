@@ -16,8 +16,36 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [isPending, setIsPending] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<Record<string, FormDataEntryValue> | null>(null);
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
+  const [emailValue, setEmailValue] = useState("");
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [organizationLoading, setOrganizationLoading] = useState(false);
   const isSignUp = mode === "sign-up";
   const sessionExpired = !isSignUp && searchParams.get("reason") === "session-expired";
+
+  async function loadOrganizations(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    setOrganizations([]);
+    setSelectedOrganizationId("");
+    if (isSignUp || !normalizedEmail.includes("@")) {
+      return;
+    }
+
+    setOrganizationLoading(true);
+    try {
+      const response = await fetch("/api/auth/organizations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      const body = (await response.json().catch(() => null)) as { organizations?: Array<{ id: string; name: string; role: string }> } | null;
+      setOrganizations(body?.organizations || []);
+    } catch {
+      setOrganizations([]);
+    } finally {
+      setOrganizationLoading(false);
+    }
+  }
 
   async function submitPayload(payload: Record<string, FormDataEntryValue>) {
     const response = await fetch(`/api/auth/${mode}`, {
@@ -119,7 +147,39 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         <Input name="otp" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="Code OTP à 6 chiffres" autoComplete="one-time-code" required />
       ) : (
         <>
-          <Input name="email" type="email" placeholder="Email professionnel" autoComplete="email" required />
+          <Input
+            name="email"
+            type="email"
+            placeholder="Email professionnel"
+            autoComplete="email"
+            required
+            value={emailValue}
+            onChange={(event) => setEmailValue(event.target.value)}
+            onBlur={(event) => void loadOrganizations(event.target.value)}
+          />
+          {!isSignUp && (
+            <label className="grid gap-1">
+              <span className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">Entreprise</span>
+              <select
+                name="organizationId"
+                value={selectedOrganizationId}
+                onChange={(event) => setSelectedOrganizationId(event.target.value)}
+                className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-200"
+              >
+                <option value="">{organizationLoading ? "Chargement des espaces..." : "Choisir une entreprise"}</option>
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name} · {organization.role}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs leading-5 text-dtsc-muted">
+                {selectedOrganizationId
+                  ? `Vous vous connecterez à l'espace privé de ${organizations.find((item) => item.id === selectedOrganizationId)?.name || "cette entreprise"}.`
+                  : "Laissez vide pour accéder à votre espace client standard."}
+              </span>
+            </label>
+          )}
           <PasswordInput
             name="password"
             placeholder="Mot de passe"

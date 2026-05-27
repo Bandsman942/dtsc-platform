@@ -8,6 +8,10 @@ export type SessionPayload = {
   email: string;
   name: string;
   role: UserRole;
+  activeContext?: "GLOBAL_CLIENT" | "COMMUNITY" | "DTSC_INTERNAL" | "ORGANIZATION";
+  activeOrganizationId?: string | null;
+  activeOrganizationName?: string | null;
+  activeOrganizationRole?: string | null;
   exp: number;
 };
 
