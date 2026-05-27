@@ -94,12 +94,12 @@ export function EnterpriseAdministrationModule({
   const router = useRouter();
   const [message, setMessage] = useState("");
 
-  async function toggleModule(module: EnterpriseModuleItem) {
+  async function toggleModule(enterpriseModule: EnterpriseModuleItem) {
     setMessage("");
-    const response = await fetch(`/api/enterprise/${organization.id}/modules/${module.id}`, {
+    const response = await fetch(`/api/enterprise/${organization.id}/modules/${enterpriseModule.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isEnabled: !module.isEnabled }),
+      body: JSON.stringify({ isEnabled: !enterpriseModule.isEnabled }),
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     setMessage(response.ok ? "Module mis à jour." : body?.message || "Mise à jour impossible.");
@@ -150,29 +150,29 @@ export function EnterpriseAdministrationModule({
       <Accordion>
         <AccordionItem title="Modules entreprise" defaultOpen>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {modules.map((module) => (
-              <article key={module.id} className="dtsc-glass-list-item rounded-2xl p-4">
+            {modules.map((enterpriseModule) => (
+              <article key={enterpriseModule.id} className="dtsc-glass-list-item rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{module.moduleCategory}</p>
-                    <h3 className="mt-1 text-base font-black text-dtsc-ink">{module.labelFr}</h3>
-                    <p className="mt-1 line-clamp-2 text-xs font-semibold text-dtsc-muted">{module.descriptionFr || module.moduleCode}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{enterpriseModule.moduleCategory}</p>
+                    <h3 className="mt-1 text-base font-black text-dtsc-ink">{enterpriseModule.labelFr}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs font-semibold text-dtsc-muted">{enterpriseModule.descriptionFr || enterpriseModule.moduleCode}</p>
                   </div>
                   <ActionMenu
                     label="Actions module"
                     items={[
                       {
                         key: "toggle",
-                        label: module.isEnabled ? "Désactiver" : "Activer",
-                        icon: module.isEnabled ? ToggleLeft : ToggleRight,
-                        disabled: module.isCore && module.isEnabled,
-                        onSelect: () => void toggleModule(module),
+                        label: enterpriseModule.isEnabled ? "Désactiver" : "Activer",
+                        icon: enterpriseModule.isEnabled ? ToggleLeft : ToggleRight,
+                        disabled: enterpriseModule.isCore && enterpriseModule.isEnabled,
+                        onSelect: () => void toggleModule(enterpriseModule),
                       },
                     ]}
                   />
                 </div>
-                <span className={`mt-3 inline-flex rounded-full px-2 py-1 text-[0.68rem] font-black ${module.isEnabled ? "bg-emerald-400/14 text-emerald-500" : "bg-slate-500/14 text-dtsc-muted"}`}>
-                  {module.isEnabled ? "Activé" : "Désactivé"} {module.isCore ? "· socle" : ""}
+                <span className={`mt-3 inline-flex rounded-full px-2 py-1 text-[0.68rem] font-black ${enterpriseModule.isEnabled ? "bg-emerald-400/14 text-emerald-500" : "bg-slate-500/14 text-dtsc-muted"}`}>
+                  {enterpriseModule.isEnabled ? "Activé" : "Désactivé"} {enterpriseModule.isCore ? "· socle" : ""}
                 </span>
               </article>
             ))}

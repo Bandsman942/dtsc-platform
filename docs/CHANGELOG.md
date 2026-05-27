@@ -16,6 +16,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - Le bloc Administration `Entreprises clientes` utilise désormais une combobox de secteurs alimentée par la base, affiche l'aperçu du modèle sectoriel et peut appliquer le template à la création ou depuis le menu `...`.
 
+### Corrigé
+
+- Correction du build Vercel des modules SaaS sectoriels: les variables locales nommées `module` ont été renommées pour respecter `@next/next/no-assign-module-variable`, et le texte JSX des activités entreprise échappe correctement les apostrophes.
+
 ### Sécurisé
 
 - Renforcement de l'isolation SaaS hybride: le contexte interne DTSC exige désormais un membership actif sur l'organisation `DTSC` (`dtsc-internal`) au lieu de se baser uniquement sur le rôle global.

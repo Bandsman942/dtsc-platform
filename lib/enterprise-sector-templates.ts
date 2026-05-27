@@ -91,13 +91,13 @@ export async function getSectorTemplatePreview(sectorIdOrCode: string): Promise<
       icon: sector.icon,
       color: sector.color,
     },
-    modules: template.modules.map((module) => ({
-      code: module.moduleCode,
-      labelFr: module.labelFr,
-      labelEn: module.labelEn,
-      category: module.moduleCategory,
-      icon: module.icon,
-      isCore: module.moduleCategory === "CORE",
+    modules: template.modules.map((templateModule) => ({
+      code: templateModule.moduleCode,
+      labelFr: templateModule.labelFr,
+      labelEn: templateModule.labelEn,
+      category: templateModule.moduleCategory,
+      icon: templateModule.icon,
+      isCore: templateModule.moduleCategory === "CORE",
     })),
     positions: template.positions.map((position) => ({
       code: position.positionCode,
@@ -156,15 +156,15 @@ export async function canAccessEnterpriseModule(userId: string, organizationId: 
     return false;
   }
 
-  const module = await prisma.enterpriseModule.findUnique({
+  const enterpriseModule = await prisma.enterpriseModule.findUnique({
     where: { organizationId_moduleCode: { organizationId, moduleCode } },
     select: { isEnabled: true, requiresPlanLevel: true },
   });
-  if (!module?.isEnabled) {
+  if (!enterpriseModule?.isEnabled) {
     return false;
   }
 
-  if (module.requiresPlanLevel && !(await hasActiveOrganizationSubscription(organizationId))) {
+  if (enterpriseModule.requiresPlanLevel && !(await hasActiveOrganizationSubscription(organizationId))) {
     return false;
   }
 
@@ -303,69 +303,69 @@ export async function applySectorTemplateToOrganization({
     }
 
     const modules = [];
-    for (const module of template.modules) {
-      const isCore = module.moduleCategory === "CORE";
+    for (const templateModule of template.modules) {
+      const isCore = templateModule.moduleCategory === "CORE";
       const savedModule = await tx.enterpriseModule.upsert({
-        where: { organizationId_moduleCode: { organizationId, moduleCode: module.moduleCode } },
+        where: { organizationId_moduleCode: { organizationId, moduleCode: templateModule.moduleCode } },
         update: {
           sectorId: isCore ? null : sector.id,
-          labelFr: module.labelFr,
-          labelEn: module.labelEn,
-          descriptionFr: module.descriptionFr,
-          descriptionEn: module.descriptionEn,
-          moduleCategory: module.moduleCategory,
-          icon: module.icon,
-          isEnabled: module.defaultEnabled,
+          labelFr: templateModule.labelFr,
+          labelEn: templateModule.labelEn,
+          descriptionFr: templateModule.descriptionFr,
+          descriptionEn: templateModule.descriptionEn,
+          moduleCategory: templateModule.moduleCategory,
+          icon: templateModule.icon,
+          isEnabled: templateModule.defaultEnabled,
           isCore,
-          sourceTemplateId: module.id,
-          requiresPlanLevel: module.requiresPlanLevel,
-          sortOrder: module.sortOrder,
+          sourceTemplateId: templateModule.id,
+          requiresPlanLevel: templateModule.requiresPlanLevel,
+          sortOrder: templateModule.sortOrder,
         },
         create: {
           organizationId,
           sectorId: isCore ? null : sector.id,
-          moduleCode: module.moduleCode,
-          labelFr: module.labelFr,
-          labelEn: module.labelEn,
-          descriptionFr: module.descriptionFr,
-          descriptionEn: module.descriptionEn,
-          moduleCategory: module.moduleCategory,
-          icon: module.icon,
-          isEnabled: module.defaultEnabled,
+          moduleCode: templateModule.moduleCode,
+          labelFr: templateModule.labelFr,
+          labelEn: templateModule.labelEn,
+          descriptionFr: templateModule.descriptionFr,
+          descriptionEn: templateModule.descriptionEn,
+          moduleCategory: templateModule.moduleCategory,
+          icon: templateModule.icon,
+          isEnabled: templateModule.defaultEnabled,
           isCore,
-          sourceTemplateId: module.id,
-          requiresPlanLevel: module.requiresPlanLevel,
-          sortOrder: module.sortOrder,
+          sourceTemplateId: templateModule.id,
+          requiresPlanLevel: templateModule.requiresPlanLevel,
+          sortOrder: templateModule.sortOrder,
         },
       });
       modules.push(savedModule);
       await tx.enterpriseAdminSection.upsert({
-        where: { organizationId_sectionCode: { organizationId, sectionCode: module.moduleCode } },
+        where: { organizationId_sectionCode: { organizationId, sectionCode: templateModule.moduleCode } },
         update: {
           moduleId: savedModule.id,
-          labelFr: module.labelFr,
-          labelEn: module.labelEn,
-          descriptionFr: module.descriptionFr,
-          descriptionEn: module.descriptionEn,
-          icon: module.icon,
-          isEnabled: module.defaultEnabled,
-          requiredPermission: `module:${module.moduleCode}:manage`,
-          sortOrder: module.sortOrder,
-          sourceTemplateId: module.id,
+          labelFr: templateModule.labelFr,
+          labelEn: templateModule.labelEn,
+          descriptionFr: templateModule.descriptionFr,
+          descriptionEn: templateModule.descriptionEn,
+          icon: templateModule.icon,
+          isEnabled: templateModule.defaultEnabled,
+          requiredPermission: `module:${templateModule.moduleCode}:manage`,
+          sortOrder: templateModule.sortOrder,
+          sourceTemplateId: templateModule.id,
         },
         create: {
           organizationId,
           moduleId: savedModule.id,
-          sectionCode: module.moduleCode,
-          labelFr: module.labelFr,
-          labelEn: module.labelEn,
-          descriptionFr: module.descriptionFr,
-          descriptionEn: module.descriptionEn,
-          icon: module.icon,
-          isEnabled: module.defaultEnabled,
-          requiredPermission: `module:${module.moduleCode}:manage`,
-          sortOrder: module.sortOrder,
-          sourceTemplateId: module.id,
+          sectionCode: templateModule.moduleCode,
+          labelFr: templateModule.labelFr,
+          labelEn: templateModule.labelEn,
+          descriptionFr: templateModule.descriptionFr,
+          descriptionEn: templateModule.descriptionEn,
+          icon: templateModule.icon,
+          isEnabled: templateModule.defaultEnabled,
+          requiredPermission: `module:${templateModule.moduleCode}:manage`,
+          sortOrder: templateModule.sortOrder,
+          sourceTemplateId: templateModule.id,
         },
       });
     }

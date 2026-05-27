@@ -26,12 +26,12 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const module = await prisma.enterpriseModule.findFirst({ where: { id: moduleId, organizationId } });
-  if (!module) {
+  const enterpriseModule = await prisma.enterpriseModule.findFirst({ where: { id: moduleId, organizationId } });
+  if (!enterpriseModule) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (module.isCore && !parsed.data.isEnabled) {
+  if (enterpriseModule.isCore && !parsed.data.isEnabled) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Core module", message: "Un module socle ne peut pas être désactivé." }, { status: 400 });
   }
@@ -50,7 +50,7 @@ export async function PATCH(req: Request, { params }: Params) {
     entity: "EnterpriseModule",
     entityId: moduleId,
     request: req,
-    metadata: { organizationId, moduleCode: module.moduleCode, isEnabled: parsed.data.isEnabled },
+    metadata: { organizationId, moduleCode: enterpriseModule.moduleCode, isEnabled: parsed.data.isEnabled },
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, module: updated });

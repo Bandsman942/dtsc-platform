@@ -15,6 +15,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
   `role === UserRole.ADMIN || role === UserRole.SUPPORT`.
 - Ne pas appeler `.partial()`, `.pick()`, `.omit()` ou `.extend()` sur un schéma Zod déjà raffiné avec `.refine()`/`.superRefine()` quand ce schéma est importé par les routes Next.js: Vercel peut échouer au build avec `.partial() cannot be used on object schemas containing refinements`.
   Créer d'abord un schéma objet de base non raffiné, dériver les variantes create/update depuis cette base, puis appliquer les raffinements sur chaque variante finale.
+- Ne pas nommer une variable, un paramètre de callback ou une constante locale `module` dans les routes Next.js, helpers partagés ou composants TSX: `@next/next/no-assign-module-variable` fait échouer le build Vercel. Utiliser des noms explicites comme `enterpriseModule`, `templateModule` ou `moduleItem`.
 - Après modification de `prisma/schema.prisma`, ajouter une migration SQL dans `prisma/migrations/.../migration.sql`.
 - Les migrations Vercel sont exécutées par `pnpm prisma migrate deploy && pnpm build`.
 - Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.

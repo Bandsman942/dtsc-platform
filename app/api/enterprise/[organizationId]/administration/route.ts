@@ -65,7 +65,7 @@ export async function GET(req: Request, { params }: Params) {
     organization,
     dashboard: {
       membersCount,
-      activeModulesCount: modules.filter((module) => module.isEnabled).length,
+      activeModulesCount: modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
       modulesCount: modules.length,
       openRequestsCount,
       recentRequestsCount: recentRequests.length,
