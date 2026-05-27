@@ -122,6 +122,45 @@ Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autori
 
 Règle de sécurité permanente: toute future route interne entreprise doit filtrer par `organizationId`, vérifier un `OrganizationMember` actif, appliquer le rôle organisationnel et ne jamais accepter le rôle global `ADMIN` comme passe-droit vers les données privées d'une entreprise cliente.
 
+### Modèles sectoriels entreprise
+
+La migration `20260527143000_enterprise_sector_templates` ajoute la couche SaaS sectorielle:
+
+- `BusinessSector`: référentiel des secteurs affichés dans la combobox de création d'entreprise cliente;
+- `SectorTemplate*`: modules, postes, départements, blocs d'activités et workflows proposés par secteur;
+- `EnterpriseModule`, `EnterpriseAdminSection`, `EnterprisePosition`, `EnterpriseDepartment`, `EnterpriseActivityBlock`, `EnterpriseWorkflow`: configuration réellement générée pour une organisation;
+- `EnterpriseActivityRequest`: demandes, rapports ou signalements soumis depuis `Activités [Entreprise]`.
+
+Le seed SQL est idempotent et précharge les secteurs `HEALTH_CARE`, `PHARMACY`, `INSURANCE`, `EDUCATION`, `COMMERCE_RETAIL`, `PROFESSIONAL_SERVICES`, `NGO_ASBL`, `TRANSPORT_LOGISTICS`, `CONSTRUCTION_REAL_ESTATE`, `TECH_DIGITAL`, `MANUFACTURING`, `AGRI_FOOD`, `HOSPITALITY_EVENTS`, `FINANCE_MICROFINANCE`, `PUBLIC_ADMIN` et `OTHER`.
+
+Les helpers de sécurité et d'application sont centralisés dans `lib/enterprise-sector-templates.ts`:
+
+- `listBusinessSectors()`;
+- `getSectorTemplatePreview(sectorIdOrCode)`;
+- `applySectorTemplateToOrganization({ organizationId, sectorId, actorUserId, mode })`;
+- `canManageEnterpriseAdministration(userId, organizationId)`;
+- `canAccessEnterpriseModule(userId, organizationId, moduleCode, action)`;
+- `canAccessEnterpriseActivity(userId, organizationId, blockCode, action)`.
+
+Routes ajoutées:
+
+| Méthode | Route | Accès | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/admin/business-sectors` | DTSC admin/manager interne | Liste les secteurs actifs pour la combobox. |
+| `GET` | `/api/admin/sector-templates?sectorId=...` | DTSC admin/manager interne | Prévisualise modules, postes, départements, blocs et workflows du secteur. |
+| `POST` | `/api/admin/client-organizations` | DTSC admin/manager interne | Peut lier `sectorId` et appliquer automatiquement le template. |
+| `PATCH` | `/api/admin/client-organizations/[id]` | DTSC admin/manager interne | Peut changer le secteur ou appliquer le modèle sectoriel. |
+| `GET/POST` | `/api/enterprise/[organizationId]/administration` | Membre actif admin entreprise/manager | Lit l'administration entreprise ou crée/met à jour un département. |
+| `PATCH` | `/api/enterprise/[organizationId]/modules/[moduleId]` | Membre actif admin entreprise/manager | Active ou désactive un module non socle. |
+| `GET/POST` | `/api/enterprise/[organizationId]/activities` | Membre actif | Lit les blocs et demandes, ou crée une demande réelle. |
+
+Pages privées ajoutées:
+
+- `/enterprise-admin`: affiche `Administration [Entreprise]` uniquement en contexte `ORGANIZATION` avec rôle organisationnel autorisé.
+- `/enterprise-activities`: affiche `Activités [Entreprise]` pour les membres actifs de l'entreprise.
+
+Voir aussi `docs/enterprise-sector-modules.md` pour la procédure d'ajout de secteurs et modules.
+
 ### Appels de groupes et réunions COO audio/vidéo
 
 Les appels audio/vidéo sont persistés dans `CollaborationGroupCall`, `CollaborationGroupCallParticipant` et `CollaborationGroupCallEvent`. Chaque appel appartient à un groupe `CollaborationGroup`; un appel peut aussi être lié à une réunion COO via `meetingId`.

@@ -157,12 +157,14 @@ export function MobileBottomNavigation({
   showEmployeeActivities,
   showInternalModules = false,
   showCollaborationModule = true,
+  enterpriseContext = null,
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
   showEmployeeActivities: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean } | null;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
@@ -175,12 +177,24 @@ export function MobileBottomNavigation({
     }
     return true;
   });
+  const enterprisePrimaryItems = enterpriseContext
+    ? [
+        { href: "/enterprise-activities", labelKey: "navigation.enterpriseActivities", fallback: "Activités", icon: CalendarCheck },
+      ]
+    : [];
+  const primaryNavigationItems = enterpriseContext
+    ? [
+        ...visibleItems.filter((item) => item.href !== "/activities"),
+        ...enterprisePrimaryItems,
+      ].slice(0, 5)
+    : visibleItems;
   const overflowItems = [
     { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
     { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
     ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
     { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
     { href: "/support", labelKey: "navigation.support", fallback: "Support" },
+    ...(enterpriseContext?.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Admin entreprise" }] : []),
   ];
 
   return (
@@ -192,8 +206,8 @@ export function MobileBottomNavigation({
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       aria-label="Navigation mobile DTSC"
     >
-      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(visibleItems.length, 5)}, minmax(0, 1fr))` }}>
-        {visibleItems.slice(0, 5).map((item) => {
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(primaryNavigationItems.length, 5)}, minmax(0, 1fr))` }}>
+        {primaryNavigationItems.slice(0, 5).map((item) => {
           const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
           const Icon = item.icon;
           const isNotifications = item.href === "/notifications";

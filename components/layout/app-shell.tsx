@@ -16,7 +16,7 @@ import { getSession } from "@/lib/auth";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
-import { hasActiveOrganizationSubscription, isDtscInternalSession } from "@/lib/organizations";
+import { canAccessOrganizationAdministration, hasActiveOrganizationSubscription, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export async function AppShell({
@@ -38,6 +38,13 @@ export async function AppShell({
   const session = await getSession();
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
+  const enterpriseContext =
+    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      ? {
+          organizationName: session.activeOrganizationName || "Entreprise",
+          showAdmin: canAccessOrganizationAdministration(session.activeOrganizationRole),
+        }
+      : null;
   const organizationFeaturesEnabled =
     !activeOrganizationId || dtscInternalContext || (await hasActiveOrganizationSubscription(activeOrganizationId));
   const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships] = await Promise.all([
@@ -109,6 +116,7 @@ export async function AppShell({
             showEmployeeActivities={showEmployeeActivities}
             showInternalModules={dtscInternalContext}
             showCollaborationModule={organizationFeaturesEnabled}
+            enterpriseContext={enterpriseContext}
             locale={user.locale}
           />
         </nav>
@@ -150,6 +158,7 @@ export async function AppShell({
           showEmployeeActivities={showEmployeeActivities}
           showInternalModules={dtscInternalContext}
           showCollaborationModule={organizationFeaturesEnabled}
+          enterpriseContext={enterpriseContext}
         />
         <PWAInstallPrompt />
         <PwaNotificationBridge notifications={latestUnreadNotifications} enabled={Boolean(user.pushNotificationsEnabled)} />

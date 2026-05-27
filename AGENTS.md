@@ -228,6 +228,12 @@ Conserver une hiérarchie visible pour:
 - Les groupes peuvent devenir transversaux (`CROSS_ORGANIZATION`, `PRIVATE_NETWORK`) uniquement par invitation acceptée. Les groupes internes d'organisation restent invisibles aux non-membres, y compris aux rôles DTSC globaux non invités.
 - Toute attribution/retrait d'admin entreprise, tentative d'accès refusée, changement de contexte, création/suspension d'organisation, changement d'abonnement et action support critique doit être auditée.
 - Les métriques DTSC sur les entreprises clientes doivent rester administratives, agrégées ou anonymisées lorsqu'elles touchent à l'activité interne.
+- Les entreprises clientes peuvent avoir un secteur d'activité normalisé via `BusinessSector`; ne pas réintroduire de champ secteur libre dans les formulaires de création/édition d'organisation cliente.
+- Les modèles sectoriels (`SectorTemplate*`) sont des gabarits inspirés de standards institutionnels; leur application doit générer des enregistrements réels `EnterpriseModule`, `EnterpriseDepartment`, `EnterprisePosition`, `EnterpriseActivityBlock` et `EnterpriseWorkflow` isolés par `organizationId`.
+- `Administration [Entreprise]` et `Activités [Entreprise]` sont des modules dynamiques propres au contexte `ORGANIZATION`; ils ne doivent jamais rediriger vers `/admin` ou `/activities`, qui restent strictement DTSC internes.
+- Toute action visible dans un module entreprise doit vérifier le membership actif, le module activé, la permission organisationnelle et, si applicable, le plan d'abonnement de l'organisation côté API.
+- Les changements de secteur doivent fusionner ou remplacer uniquement les éléments sectoriels générés; ne jamais écraser silencieusement les personnalisations entreprise sans action explicite.
+- Les futures extensions sectorielles doivent documenter les modules, postes, blocs d'activités, workflows et permissions dans `docs/enterprise-sector-modules.md`.
 
 ## Advanced Mobile UX, Activities, Groups, Files and Audit Standards
 

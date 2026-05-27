@@ -29,6 +29,7 @@ export function NavLinks({
   showEmployeeActivities = false,
   showInternalModules = false,
   showCollaborationModule = true,
+  enterpriseContext = null,
   locale = "fr",
 }: {
   role: UserRole;
@@ -37,6 +38,7 @@ export function NavLinks({
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean } | null;
   locale?: string | null;
 }) {
   const pathname = usePathname();
@@ -55,6 +57,15 @@ export function NavLinks({
   const navItems = showInternalModules && canAccessAdministration(role)
     ? [...visibleBaseItems, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...visibleBaseItems, ...employeeItems];
+  const enterpriseItems = enterpriseContext
+    ? [
+        { href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
+        ...(enterpriseContext.showAdmin
+          ? [{ href: "/enterprise-admin", label: `Administration ${enterpriseContext.organizationName}`, icon: Shield, help: "Administrer les modules, postes et workflows de votre entreprise." }]
+          : []),
+      ]
+    : [];
+  const finalNavItems = [...navItems, ...enterpriseItems];
   const translationByHref: Record<string, string> = {
     "/dashboard": "navigation.dashboard",
     "/chat": "navigation.chat",
@@ -69,11 +80,13 @@ export function NavLinks({
     "/settings": "navigation.settings",
     "/activities": "navigation.activities",
     "/admin": "navigation.admin",
+    "/enterprise-activities": "navigation.enterpriseActivities",
+    "/enterprise-admin": "navigation.enterpriseAdmin",
   };
 
   return (
     <>
-      {navItems.map((item) => {
+      {finalNavItems.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const showNotificationSignal = item.href === "/notifications" && unreadNotifications > 0;
         return (
@@ -99,7 +112,13 @@ export function NavLinks({
                 </span>
               )}
             </span>
-            {mobile && item.href === "/admin" ? "Admin" : translate(locale, translationByHref[item.href] || item.label)}
+            {mobile && item.href === "/admin"
+              ? "Admin"
+              : item.href === "/enterprise-activities"
+                ? translate(locale, "navigation.enterpriseActivitiesNamed").replace("{organization}", enterpriseContext?.organizationName || "")
+                : item.href === "/enterprise-admin"
+                  ? translate(locale, "navigation.enterpriseAdminNamed").replace("{organization}", enterpriseContext?.organizationName || "")
+                  : translate(locale, translationByHref[item.href] || item.label)}
             {showNotificationSignal && (
               <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
                 {unreadNotifications > 99 ? "99+" : unreadNotifications}

@@ -106,6 +106,7 @@ export default async function AdminPage({
     users,
     clientOrganizations,
     billingPlans,
+    businessSectors,
     userCount,
     activeUserCount,
     conversationCount,
@@ -191,6 +192,7 @@ export default async function AdminPage({
         include: {
           members: { include: { user: { select: { id: true, name: true, email: true } } }, take: 20 },
           subscriptions: { include: { plan: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 1 },
+          businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
         },
         take: 200,
       }),
@@ -198,6 +200,11 @@ export default async function AdminPage({
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         select: { id: true, name: true, slug: true },
+      }),
+      prisma.businessSector.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }],
+        select: { id: true, code: true, labelFr: true, labelEn: true, descriptionFr: true, descriptionEn: true, icon: true, color: true },
       }),
       prisma.user.count(),
       prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
@@ -867,6 +874,7 @@ export default async function AdminPage({
                 organizations={JSON.parse(JSON.stringify(clientOrganizations))}
                 users={users.map((item) => ({ id: item.id, name: item.name, email: item.email, role: item.role }))}
                 plans={billingPlans}
+                sectors={businessSectors}
               />
             </AccordionItem>
           </Accordion>

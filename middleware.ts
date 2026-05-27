@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
+const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-activities", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 const dtscInternalRoutes = ["/admin", "/calendar", "/activities"];
 const dtscInternalApiRoutes = ["/api/admin", "/api/calendar", "/api/activities"];
@@ -101,6 +101,8 @@ export const config = {
     "/calendar/:path*",
     "/documents/:path*",
     "/activities/:path*",
+    "/enterprise-admin/:path*",
+    "/enterprise-activities/:path*",
     "/collaborators/:path*",
     "/profile/:path*",
     "/settings/:path*",

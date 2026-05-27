@@ -32,7 +32,11 @@
     "settings": "Settings",
     "activities": "DTSC Activities",
     "calendar": "Internal calendar",
-    "admin": "Administration"
+    "admin": "Administration",
+    "enterpriseActivities": "Company activities",
+    "enterpriseAdmin": "Company administration",
+    "enterpriseActivitiesNamed": "Activities {organization}",
+    "enterpriseAdminNamed": "Administration {organization}"
   },
   "organizations": {
     "organization": "Organization",
@@ -56,6 +60,22 @@
     "subscription": "Subscription",
     "dtscCannotAccessPrivateSpaces": "DTSC cannot access clients' private internal spaces.",
     "privateDataAccessDenied": "Access denied to this company's internal data."
+  },
+  "enterpriseSectors": {
+    "businessSector": "Business sector",
+    "chooseBusinessSector": "Choose a business sector",
+    "templatePreview": "Sector template preview",
+    "applyTemplate": "Apply sector template",
+    "applyAfterCreation": "Automatically apply the template after creation",
+    "modules": "Modules",
+    "positions": "Positions",
+    "departments": "Departments",
+    "activityBlocks": "Activity blocks",
+    "workflows": "Workflows",
+    "enterpriseAdministration": "Administration {organization}",
+    "enterpriseActivities": "Activities {organization}",
+    "submitEnterpriseRequest": "Submit a company request",
+    "sectorIsolationNotice": "Modules, positions and activities are isolated by company and active membership."
   },
   "announcements": {
     "actions": "Announcement actions",

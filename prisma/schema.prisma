@@ -161,6 +161,7 @@ model User {
   updatedOrganizationSubscriptions OrganizationSubscription[] @relation("OrganizationSubscriptionUpdatedBy")
   createdOrganizationSubscriptions OrganizationSubscription[] @relation("OrganizationSubscriptionCreatedBy")
   organizationBillingRecords BillingRecord[]
+  enterpriseActivityRequests EnterpriseActivityRequest[]
 
   @@index([role])
   @@index([status])
@@ -458,6 +459,8 @@ model Organization {
   status        String   @default("DRAFT")
   organizationType String @default("CLIENT")
   sector        String?
+  sectorId      String?
+  sectorCode    String?
   industry      String?
   country       String?
   city          String?
@@ -473,6 +476,7 @@ model Organization {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
+  businessSector BusinessSector? @relation(fields: [sectorId], references: [id], onDelete: SetNull)
   createdByDtsc User? @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
   members       OrganizationMember[]
   adminGrants   OrganizationAdminGrant[]
@@ -482,9 +486,346 @@ model Organization {
   announcements Announcement[] @relation("AnnouncementOrganization")
   authoredAnnouncements Announcement[] @relation("AnnouncementAuthorOrganization")
   collaborationGroups CollaborationGroup[]
+  enterpriseModules EnterpriseModule[]
+  enterpriseAdminSections EnterpriseAdminSection[]
+  enterprisePositions EnterprisePosition[]
+  enterpriseDepartments EnterpriseDepartment[]
+  enterpriseActivityBlocks EnterpriseActivityBlock[]
+  enterpriseWorkflows EnterpriseWorkflow[]
+  enterpriseActivityRequests EnterpriseActivityRequest[]
 
   @@index([status, organizationType])
+  @@index([sectorId])
+  @@index([sectorCode])
   @@index([createdByDtscUserId])
+}
+
+model BusinessSector {
+  id                String   @id
+  code              String   @unique
+  labelFr           String
+  labelEn           String
+  descriptionFr     String?
+  descriptionEn     String?
+  isicReferenceCode String?
+  icon              String?
+  color             String?
+  isActive          Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  organizations     Organization[]
+  templates         SectorTemplate[]
+  enterpriseModules EnterpriseModule[]
+  enterprisePositions EnterprisePosition[]
+  enterpriseActivityBlocks EnterpriseActivityBlock[]
+
+  @@index([isActive, sortOrder])
+  @@index([code])
+}
+
+model SectorTemplate {
+  id             String   @id
+  sectorId       String
+  version        Int      @default(1)
+  label          String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sector         BusinessSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  modules        SectorTemplateModule[]
+  positions      SectorTemplatePosition[]
+  departments    SectorTemplateDepartment[]
+  activityBlocks SectorTemplateActivityBlock[]
+  workflows      SectorTemplateWorkflow[]
+
+  @@unique([sectorId, version])
+  @@index([sectorId, isActive])
+}
+
+model SectorTemplateModule {
+  id                String   @id
+  templateId        String
+  moduleCode        String
+  labelFr           String
+  labelEn           String
+  descriptionFr     String?
+  descriptionEn     String?
+  moduleCategory    String
+  icon              String?
+  sortOrder         Int      @default(0)
+  defaultEnabled    Boolean  @default(true)
+  requiresPlanLevel String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  template          SectorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  enterpriseModules EnterpriseModule[]
+  enterpriseAdminSections EnterpriseAdminSection[]
+
+  @@unique([templateId, moduleCode])
+  @@index([moduleCode])
+}
+
+model SectorTemplatePosition {
+  id                     String   @id
+  templateId             String
+  positionCode           String
+  labelFr                String
+  labelEn                String
+  departmentCode         String?
+  hierarchyLevel         Int      @default(50)
+  descriptionFr          String?
+  descriptionEn          String?
+  defaultPermissionsJson Json?
+  isKeyPosition          Boolean  @default(false)
+  sortOrder              Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  template               SectorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  enterprisePositions    EnterprisePosition[]
+
+  @@unique([templateId, positionCode])
+  @@index([positionCode])
+}
+
+model SectorTemplateDepartment {
+  id              String   @id
+  templateId      String
+  departmentCode  String
+  labelFr         String
+  labelEn         String
+  descriptionFr   String?
+  descriptionEn   String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  template        SectorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  enterpriseDepartments EnterpriseDepartment[]
+
+  @@unique([templateId, departmentCode])
+  @@index([departmentCode])
+}
+
+model SectorTemplateActivityBlock {
+  id               String   @id
+  templateId       String
+  blockCode        String
+  labelFr          String
+  labelEn          String
+  descriptionFr    String?
+  descriptionEn    String?
+  icon             String?
+  sortOrder        Int      @default(0)
+  defaultEnabled   Boolean  @default(true)
+  targetModuleCode String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  template         SectorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  enterpriseActivityBlocks EnterpriseActivityBlock[]
+
+  @@unique([templateId, blockCode])
+  @@index([blockCode])
+}
+
+model SectorTemplateWorkflow {
+  id             String   @id
+  templateId     String
+  workflowCode   String
+  labelFr        String
+  labelEn        String
+  descriptionFr  String?
+  descriptionEn  String?
+  stepsJson      Json?
+  defaultEnabled Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  template       SectorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  enterpriseWorkflows EnterpriseWorkflow[]
+
+  @@unique([templateId, workflowCode])
+  @@index([workflowCode])
+}
+
+model EnterpriseModule {
+  id                String   @id @default(cuid())
+  organizationId    String
+  sectorId          String?
+  moduleCode        String
+  labelFr           String
+  labelEn           String
+  descriptionFr     String?
+  descriptionEn     String?
+  moduleCategory    String
+  icon              String?
+  isEnabled         Boolean  @default(true)
+  isCore            Boolean  @default(false)
+  sourceTemplateId  String?
+  requiresPlanLevel String?
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sector            BusinessSector? @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  sourceTemplate    SectorTemplateModule? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  adminSections     EnterpriseAdminSection[]
+
+  @@unique([organizationId, moduleCode])
+  @@index([organizationId])
+  @@index([sectorId])
+  @@index([moduleCode])
+  @@index([isEnabled])
+}
+
+model EnterpriseAdminSection {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  moduleId           String
+  sectionCode        String
+  labelFr            String
+  labelEn            String
+  descriptionFr      String?
+  descriptionEn      String?
+  icon               String?
+  isEnabled          Boolean  @default(true)
+  requiredPermission String?
+  sortOrder          Int      @default(0)
+  sourceTemplateId   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  module             EnterpriseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  sourceTemplate     SectorTemplateModule? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, sectionCode])
+  @@index([organizationId])
+  @@index([moduleId])
+  @@index([sectionCode])
+}
+
+model EnterprisePosition {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  sectorId               String?
+  positionCode           String
+  labelFr                String
+  labelEn                String
+  departmentId           String?
+  hierarchyLevel         Int      @default(50)
+  descriptionFr          String?
+  descriptionEn          String?
+  permissionsJson        Json?
+  isActive               Boolean  @default(true)
+  isKeyPosition          Boolean  @default(false)
+  sourceTemplateId       String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sector                 BusinessSector? @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  department             EnterpriseDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  sourceTemplate         SectorTemplatePosition? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, positionCode])
+  @@index([organizationId])
+  @@index([sectorId])
+  @@index([positionCode])
+  @@index([departmentId])
+}
+
+model EnterpriseDepartment {
+  id               String   @id @default(cuid())
+  organizationId   String
+  departmentCode   String
+  labelFr          String
+  labelEn          String
+  descriptionFr    String?
+  descriptionEn    String?
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  sourceTemplateId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTemplate   SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  positions        EnterprisePosition[]
+
+  @@unique([organizationId, departmentCode])
+  @@index([organizationId])
+  @@index([departmentCode])
+}
+
+model EnterpriseActivityBlock {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  sectorId           String?
+  blockCode          String
+  labelFr            String
+  labelEn            String
+  descriptionFr      String?
+  descriptionEn      String?
+  icon               String?
+  targetModuleCode   String?
+  isEnabled          Boolean  @default(true)
+  requiredPermission String?
+  sortOrder          Int      @default(0)
+  sourceTemplateId   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sector             BusinessSector? @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  sourceTemplate     SectorTemplateActivityBlock? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  requests           EnterpriseActivityRequest[]
+
+  @@unique([organizationId, blockCode])
+  @@index([organizationId])
+  @@index([sectorId])
+  @@index([blockCode])
+}
+
+model EnterpriseWorkflow {
+  id               String   @id @default(cuid())
+  organizationId   String
+  workflowCode     String
+  labelFr          String
+  labelEn          String
+  descriptionFr    String?
+  descriptionEn    String?
+  stepsJson        Json?
+  isEnabled        Boolean  @default(true)
+  sourceTemplateId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTemplate   SectorTemplateWorkflow? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, workflowCode])
+  @@index([organizationId])
+  @@index([workflowCode])
+}
+
+model EnterpriseActivityRequest {
+  id             String   @id @default(cuid())
+  organizationId String
+  blockId        String?
+  blockCode      String
+  title          String
+  description    String
+  status         String   @default("SUBMITTED")
+  priority       String   @default("NORMAL")
+  targetModuleCode String?
+  assignedToUserId String?
+  createdById    String
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  block          EnterpriseActivityBlock? @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  createdBy      User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, blockCode])
+  @@index([createdById, createdAt])
+  @@index([assignedToUserId, status])
 }
 
 model OrganizationMember {

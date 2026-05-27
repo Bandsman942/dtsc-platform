@@ -81,6 +81,61 @@ export const supportTicketUpdateSchema = z.object({
   resolution: z.string().max(2_000).optional().or(z.literal("")),
 });
 
+export const enterpriseOrganizationCreateSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional().or(z.literal("")),
+  sectorId: z.string().max(160).optional().or(z.literal("")),
+  industry: z.string().max(160).optional().or(z.literal("")),
+  country: z.string().max(120).optional().or(z.literal("")),
+  city: z.string().max(120).optional().or(z.literal("")),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().max(60).optional().or(z.literal("")),
+  address: z.string().max(240).optional().or(z.literal("")),
+  timezone: z.string().max(80).default("Africa/Kinshasa"),
+  status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]).default("DRAFT"),
+  adminUserId: z.string().optional().or(z.literal("")),
+  planId: z.string().optional().or(z.literal("")),
+  applySectorTemplate: z.coerce.boolean().default(false),
+  notes: z.string().max(1000).optional().or(z.literal("")),
+});
+
+export const enterpriseOrganizationUpdateSchema = z.object({
+  action: z.enum(["update", "set_status", "grant_admin", "revoke_admin", "apply_sector_template"]),
+  name: z.string().trim().min(2).max(160).optional(),
+  sectorId: z.string().max(160).optional().or(z.literal("")),
+  industry: z.string().max(160).optional().or(z.literal("")),
+  country: z.string().max(120).optional().or(z.literal("")),
+  city: z.string().max(120).optional().or(z.literal("")),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().max(60).optional().or(z.literal("")),
+  address: z.string().max(240).optional().or(z.literal("")),
+  timezone: z.string().max(80).optional(),
+  status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]).optional(),
+  userId: z.string().optional().or(z.literal("")),
+  templateMode: z.enum(["merge", "replace_sector"]).default("merge"),
+  reason: z.string().max(500).optional().or(z.literal("")),
+});
+
+export const enterpriseModuleToggleSchema = z.object({
+  isEnabled: z.coerce.boolean(),
+});
+
+export const enterpriseDepartmentSchema = z.object({
+  departmentCode: z.string().trim().min(2).max(80).regex(/^[A-Z0-9_]+$/),
+  labelFr: z.string().trim().min(2).max(160),
+  labelEn: z.string().trim().min(2).max(160),
+  descriptionFr: z.string().max(800).optional().or(z.literal("")),
+  descriptionEn: z.string().max(800).optional().or(z.literal("")),
+  isActive: z.coerce.boolean().default(true),
+});
+
+export const enterpriseActivityRequestSchema = z.object({
+  blockCode: z.string().trim().min(2).max(120),
+  title: z.string().trim().min(3).max(180),
+  description: z.string().trim().min(5).max(2500),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+});
+
 export const internalCalendarAvailabilitySchema = z.object({
   collaboratorId: z.string().min(1),
   dayOfWeek: z.coerce.number().int().min(0).max(6),

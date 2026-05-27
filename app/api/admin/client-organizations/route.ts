@@ -1,25 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { applySectorTemplateToOrganization } from "@/lib/enterprise-sector-templates";
 import { canManageClientOrganizations } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
-
-const createOrganizationSchema = z.object({
-  name: z.string().trim().min(2).max(160),
-  slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional().or(z.literal("")),
-  industry: z.string().max(160).optional().or(z.literal("")),
-  country: z.string().max(120).optional().or(z.literal("")),
-  city: z.string().max(120).optional().or(z.literal("")),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().max(60).optional().or(z.literal("")),
-  address: z.string().max(240).optional().or(z.literal("")),
-  timezone: z.string().max(80).default("Africa/Kinshasa"),
-  status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]).default("DRAFT"),
-  adminUserId: z.string().optional().or(z.literal("")),
-  planId: z.string().optional().or(z.literal("")),
-  notes: z.string().max(1000).optional().or(z.literal("")),
-});
+import { enterpriseOrganizationCreateSchema } from "@/lib/validators";
 
 function slugify(value: string) {
   return value
@@ -43,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Forbidden", message: "Seul DTSC peut gérer les entreprises clientes." }, { status: 403 });
   }
 
-  const parsed = createOrganizationSchema.safeParse(await req.json().catch(() => null));
+  const parsed = enterpriseOrganizationCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid payload", message: "Les informations de l'entreprise sont invalides." }, { status: 400 });
@@ -70,6 +55,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid plan", message: "Le plan sélectionné est introuvable ou inactif." }, { status: 400 });
     }
   }
+  const sector = data.sectorId
+    ? await prisma.businessSector.findFirst({ where: { id: data.sectorId, isActive: true }, select: { id: true, code: true, labelFr: true } })
+    : null;
+  if (data.sectorId && !sector) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid sector", message: "Le secteur d'activité sélectionné est introuvable ou inactif." }, { status: 400 });
+  }
 
   const organization = await prisma.$transaction(async (tx) => {
     const created = await tx.organization.create({
@@ -78,8 +70,10 @@ export async function POST(req: Request) {
         slug,
         status: data.status,
         organizationType: "CLIENT",
-        sector: data.industry || null,
-        industry: data.industry || null,
+        sectorId: sector?.id || null,
+        sectorCode: sector?.code || null,
+        sector: sector?.labelFr || data.industry || null,
+        industry: sector?.labelFr || data.industry || null,
         country: data.country || null,
         city: data.city || null,
         email: data.email || null,
@@ -130,6 +124,15 @@ export async function POST(req: Request) {
 
     return created;
   });
+
+  if (sector && data.applySectorTemplate) {
+    await applySectorTemplateToOrganization({
+      organizationId: organization.id,
+      sectorId: sector.id,
+      actorUserId: session.userId,
+      mode: "merge",
+    });
+  }
 
   await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_CREATED", entity: "Organization", entityId: organization.id, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

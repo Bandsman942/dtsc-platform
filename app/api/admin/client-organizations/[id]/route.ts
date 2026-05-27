@@ -1,26 +1,12 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { applySectorTemplateToOrganization } from "@/lib/enterprise-sector-templates";
 import { canManageClientOrganizations } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import { enterpriseOrganizationUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
-
-const updateOrganizationSchema = z.object({
-  action: z.enum(["update", "set_status", "grant_admin", "revoke_admin"]),
-  name: z.string().trim().min(2).max(160).optional(),
-  industry: z.string().max(160).optional().or(z.literal("")),
-  country: z.string().max(120).optional().or(z.literal("")),
-  city: z.string().max(120).optional().or(z.literal("")),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().max(60).optional().or(z.literal("")),
-  address: z.string().max(240).optional().or(z.literal("")),
-  timezone: z.string().max(80).optional(),
-  status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]).optional(),
-  userId: z.string().optional().or(z.literal("")),
-  reason: z.string().max(500).optional().or(z.literal("")),
-});
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -35,7 +21,7 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const parsed = updateOrganizationSchema.safeParse(await req.json().catch(() => null));
+  const parsed = enterpriseOrganizationUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -98,15 +84,44 @@ export async function PATCH(req: Request, { params }: Params) {
       });
     });
     await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_ADMIN_REVOKED", entity: "Organization", entityId: id, request: req, metadata: { userId: targetUserId } });
+  } else if (data.action === "apply_sector_template") {
+    const sectorId = data.sectorId || organization.sectorId;
+    if (!sectorId) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Missing sector", message: "Choisissez un secteur avant d'appliquer un modèle sectoriel." }, { status: 400 });
+    }
+    const result = await applySectorTemplateToOrganization({
+      organizationId: id,
+      sectorId,
+      actorUserId: session.userId,
+      mode: data.templateMode,
+    });
+    await writeAuditLog({
+      userId: session.userId,
+      action: "CLIENT_ORGANIZATION_SECTOR_TEMPLATE_APPLIED",
+      entity: "Organization",
+      entityId: id,
+      request: req,
+      metadata: result,
+    });
   } else {
+    const sector = data.sectorId
+      ? await prisma.businessSector.findFirst({ where: { id: data.sectorId, isActive: true }, select: { id: true, code: true, labelFr: true } })
+      : null;
+    if (data.sectorId && !sector) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Invalid sector", message: "Le secteur d'activité sélectionné est introuvable ou inactif." }, { status: 400 });
+    }
     await prisma.organization.update({
       where: { id },
       data: data.action === "set_status"
         ? { status: data.status || organization.status }
         : {
             name: data.name || organization.name,
-            sector: data.industry ?? organization.sector,
-            industry: data.industry ?? organization.industry,
+            sectorId: data.sectorId ? sector?.id || null : organization.sectorId,
+            sectorCode: data.sectorId ? sector?.code || null : organization.sectorCode,
+            sector: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.sector,
+            industry: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.industry,
             country: data.country ?? organization.country,
             city: data.city ?? organization.city,
             email: data.email ?? organization.email,

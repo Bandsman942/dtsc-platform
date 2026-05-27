@@ -4,6 +4,18 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-05-27
 
+### Ajouté
+
+- Ajout de la couche SaaS sectorielle: référentiel `BusinessSector`, templates sectoriels, modules/postes/départements/blocs d'activités/workflows générés par entreprise et demandes `EnterpriseActivityRequest` isolées par `organizationId`.
+- Ajout de la migration `20260527143000_enterprise_sector_templates` avec seed idempotent des secteurs et du socle commun entreprise.
+- Ajout des routes `/api/admin/business-sectors`, `/api/admin/sector-templates`, `/api/enterprise/[organizationId]/administration`, `/api/enterprise/[organizationId]/modules/[moduleId]` et `/api/enterprise/[organizationId]/activities`.
+- Ajout des pages dynamiques privées `/enterprise-admin` et `/enterprise-activities` pour afficher `Administration [Entreprise]` et `Activités [Entreprise]` selon le contexte actif et le membership.
+- Ajout de la documentation `docs/enterprise-sector-modules.md`.
+
+### Amélioré
+
+- Le bloc Administration `Entreprises clientes` utilise désormais une combobox de secteurs alimentée par la base, affiche l'aperçu du modèle sectoriel et peut appliquer le template à la création ou depuis le menu `...`.
+
 ### Sécurisé
 
 - Renforcement de l'isolation SaaS hybride: le contexte interne DTSC exige désormais un membership actif sur l'organisation `DTSC` (`dtsc-internal`) au lieu de se baser uniquement sur le rôle global.
