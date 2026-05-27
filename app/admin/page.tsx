@@ -191,7 +191,11 @@ export default async function AdminPage({
         orderBy: { createdAt: "desc" },
         include: {
           members: { include: { user: { select: { id: true, name: true, email: true } } }, take: 20 },
-          subscriptions: { include: { plan: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 1 },
+          subscriptions: {
+            include: { plan: { select: { id: true, name: true, slug: true } } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
           businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
         },
         take: 200,

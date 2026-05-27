@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { Building2, ShieldCheck, ToggleLeft, ToggleRight } from "lucide-react";
+import { Building2, MailPlus, ShieldCheck, ToggleLeft, ToggleRight } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -66,10 +66,18 @@ type EnterpriseRequestItem = {
   createdBy: { name: string; email: string };
 };
 
+type EnterpriseMemberItem = {
+  id: string;
+  role: string;
+  status: string;
+  user: { id: string; name: string; email: string };
+};
+
 export function EnterpriseAdministrationModule({
   organization,
   dashboard,
   modules,
+  members,
   departments,
   positions,
   activityBlocks,
@@ -85,6 +93,7 @@ export function EnterpriseAdministrationModule({
   };
   dashboard: { membersCount: number; activeModulesCount: number; modulesCount: number; openRequestsCount: number; recentRequestsCount: number };
   modules: EnterpriseModuleItem[];
+  members: EnterpriseMemberItem[];
   departments: EnterpriseDepartmentItem[];
   positions: EnterprisePositionItem[];
   activityBlocks: EnterpriseActivityBlockItem[];
@@ -119,6 +128,23 @@ export function EnterpriseAdministrationModule({
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     setMessage(response.ok ? "Département enregistré." : body?.message || "Enregistrement impossible.");
+    if (response.ok) {
+      event.currentTarget.reset();
+      router.refresh();
+    }
+  }
+
+  async function inviteMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const response = await fetch(`/api/enterprise/${organization.id}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    setMessage(response.ok ? "Collaborateur ajouté à l'entreprise." : body?.message || "Invitation impossible.");
     if (response.ok) {
       event.currentTarget.reset();
       router.refresh();
@@ -180,6 +206,27 @@ export function EnterpriseAdministrationModule({
         </AccordionItem>
 
         <AccordionItem title="Collaborateurs, postes et permissions">
+          <form onSubmit={inviteMember} className="mb-4 grid gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 md:grid-cols-[1fr_12rem_auto]">
+            <Input name="email" type="email" placeholder="Email du collaborateur à ajouter" required />
+            <select name="role" defaultValue="MEMBER" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="MEMBER">Collaborateur</option>
+              <option value="MANAGER">Manager</option>
+              <option value="GUEST">Invité</option>
+            </select>
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <MailPlus className="h-4 w-4" />
+              Inviter
+            </Button>
+          </form>
+          <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {members.map((member) => (
+              <article key={member.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{member.role}</p>
+                <h3 className="mt-1 font-black text-dtsc-ink">{member.user.name}</h3>
+                <p className="text-xs font-semibold text-dtsc-muted">{member.user.email}</p>
+              </article>
+            ))}
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {positions.map((position) => (
               <article key={position.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">

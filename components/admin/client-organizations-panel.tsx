@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Building2, Layers3, ShieldCheck } from "lucide-react";
+import { Building2, CreditCard, Edit3, Layers3, ShieldCheck, Trash2 } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -21,8 +22,19 @@ type ClientOrganization = {
   country: string | null;
   city: string | null;
   email: string | null;
+  phone: string | null;
+  address: string | null;
+  timezone: string | null;
+  notes: string | null;
   members: Array<{ id: string; role: string; status: string; user: { id: string; name: string; email: string } }>;
-  subscriptions: Array<{ id: string; status: string; plan: { name: string } }>;
+  subscriptions: Array<{
+    id: string;
+    status: string;
+    startedAt: string | null;
+    expiresAt: string | null;
+    trialEndsAt: string | null;
+    plan: { id: string; name: string; slug: string };
+  }>;
 };
 
 type AdminUserOption = { id: string; name: string; email: string; role: string };
@@ -61,6 +73,9 @@ export function ClientOrganizationsPanel({
   const [selectedSectorId, setSelectedSectorId] = useState("");
   const [sectorQuery, setSectorQuery] = useState("");
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null);
+  const [editingOrganization, setEditingOrganization] = useState<ClientOrganization | null>(null);
+  const [subscriptionOrganization, setSubscriptionOrganization] = useState<ClientOrganization | null>(null);
+  const [organizationToDelete, setOrganizationToDelete] = useState<ClientOrganization | null>(null);
   const list = useSmartList({
     items: organizations,
     pageSize: 8,
@@ -129,6 +144,51 @@ export function ClientOrganizationsPanel({
     if (response.ok) {
       router.refresh();
     }
+  }
+
+  async function submitOrganizationEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingOrganization) {
+      return;
+    }
+    setMessage("");
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
+    await updateOrganization(editingOrganization.id, { ...payload, action: "update" });
+    if (payload.planId || editingOrganization.subscriptions[0]) {
+      await updateOrganization(editingOrganization.id, {
+        action: "update_subscription",
+        planId: payload.planId || "",
+        subscriptionStatus: payload.subscriptionStatus || "ACTIVE",
+        startedAt: payload.startedAt || "",
+        expiresAt: payload.expiresAt || "",
+        trialEndsAt: payload.trialEndsAt || "",
+      });
+    }
+    if (payload.userId) {
+      await updateOrganization(editingOrganization.id, { action: "grant_admin", userId: payload.userId });
+    }
+    setEditingOrganization(null);
+  }
+
+  async function submitSubscriptionEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!subscriptionOrganization) {
+      return;
+    }
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
+    await updateOrganization(subscriptionOrganization.id, { ...payload, action: "update_subscription" });
+    setSubscriptionOrganization(null);
+  }
+
+  async function confirmDeleteOrganization() {
+    if (!organizationToDelete) {
+      return;
+    }
+    await updateOrganization(organizationToDelete.id, {
+      action: "soft_delete",
+      reason: `Suppression logique depuis Administration DTSC: ${organizationToDelete.name}`,
+    });
+    setOrganizationToDelete(null);
   }
 
   return (
@@ -258,9 +318,12 @@ export function ClientOrganizationsPanel({
                   label="Actions entreprise"
                   items={[
                     { key: "activate", label: "Activer", icon: ShieldCheck, onSelect: () => updateOrganization(organization.id, { action: "set_status", status: "ACTIVE" }) },
+                    { key: "edit", label: "Modifier l'entreprise", icon: Edit3, onSelect: () => setEditingOrganization(organization) },
+                    { key: "subscription", label: "Gérer l'abonnement", icon: CreditCard, onSelect: () => setSubscriptionOrganization(organization) },
                     { key: "suspend", label: "Suspendre", icon: ShieldCheck, onSelect: () => updateOrganization(organization.id, { action: "set_status", status: "SUSPENDED" }) },
                     ...(organization.sectorId ? [{ key: "apply-template", label: "Appliquer le modèle sectoriel", icon: Layers3, onSelect: () => updateOrganization(organization.id, { action: "apply_sector_template", sectorId: organization.sectorId || "" }) }] : []),
                     { key: "archive", label: "Archiver", icon: ShieldCheck, destructive: true, onSelect: () => updateOrganization(organization.id, { action: "set_status", status: "ARCHIVED" }) },
+                    { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setOrganizationToDelete(organization) },
                   ]}
                 />
               </div>
@@ -282,7 +345,179 @@ export function ClientOrganizationsPanel({
         {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucune entreprise cliente trouvée.</p>}
       </div>
       {message && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
+      <OrganizationEditDialog
+        organization={editingOrganization}
+        users={activeUsers}
+        plans={plans}
+        sectors={sectors}
+        onClose={() => setEditingOrganization(null)}
+        onSubmit={submitOrganizationEdit}
+      />
+      <SubscriptionDialog
+        organization={subscriptionOrganization}
+        plans={plans}
+        onClose={() => setSubscriptionOrganization(null)}
+        onSubmit={submitSubscriptionEdit}
+      />
+      <Dialog
+        open={Boolean(organizationToDelete)}
+        title="Supprimer l'entreprise"
+        description={organizationToDelete?.name}
+        onClose={() => setOrganizationToDelete(null)}
+        className="max-w-lg"
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setOrganizationToDelete(null)} className="rounded-xl">
+              Annuler
+            </Button>
+            <Button type="button" onClick={() => void confirmDeleteOrganization()} className="rounded-xl bg-red-600 text-white hover:bg-red-700">
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <p className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-800 dark:bg-red-950/30 dark:text-red-200">
+          Cette action archive l&apos;entreprise, la retire des listes actives et annule ses abonnements actifs. Les données internes ne sont pas supprimées brutalement afin de préserver l&apos;audit et la traçabilité.
+        </p>
+      </Dialog>
     </section>
+  );
+}
+
+function formatDateInput(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function OrganizationEditDialog({
+  organization,
+  users,
+  plans,
+  sectors,
+  onClose,
+  onSubmit,
+}: {
+  organization: ClientOrganization | null;
+  users: AdminUserOption[];
+  plans: PlanOption[];
+  sectors: BusinessSectorOption[];
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const subscription = organization?.subscriptions[0];
+  return (
+    <Dialog open={Boolean(organization)} title="Modifier l'entreprise" description={organization?.name} onClose={onClose} className="h-[92dvh] max-w-5xl">
+      {organization && (
+        <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+          <Input name="name" defaultValue={organization.name} placeholder="Nom de l'entreprise" required />
+          <Input name="slug" defaultValue={organization.slug || ""} placeholder="slug-entreprise" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
+          <select name="sectorId" defaultValue={organization.sectorId || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="">Conserver le secteur actuel</option>
+            {sectors.map((sector) => (
+              <option key={sector.id} value={sector.id}>{sector.labelFr}</option>
+            ))}
+          </select>
+          <Input name="industry" defaultValue={organization.industry || ""} placeholder="Secteur libre / industrie" />
+          <Input name="country" defaultValue={organization.country || ""} placeholder="Pays" />
+          <Input name="city" defaultValue={organization.city || ""} placeholder="Ville" />
+          <Input name="email" type="email" defaultValue={organization.email || ""} placeholder="Email principal" />
+          <Input name="phone" defaultValue={organization.phone || ""} placeholder="Téléphone" />
+          <Input name="address" defaultValue={organization.address || ""} placeholder="Adresse" />
+          <Input name="timezone" defaultValue={organization.timezone || "Africa/Kinshasa"} placeholder="Fuseau horaire" />
+          <select name="status" defaultValue={organization.status} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="DRAFT">Brouillon</option>
+            <option value="ACTIVE">Actif</option>
+            <option value="SUSPENDED">Suspendu</option>
+            <option value="ARCHIVED">Archivé</option>
+          </select>
+          <select name="userId" defaultValue="" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="">Ajouter un admin entreprise si nécessaire</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
+            ))}
+          </select>
+          <section className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 md:col-span-2">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Abonnement</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <select name="planId" defaultValue={subscription?.plan.id || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="">Aucun plan</option>
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>{plan.name}</option>
+                ))}
+              </select>
+              <select name="subscriptionStatus" defaultValue={subscription?.status || "ACTIVE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="ACTIVE">Actif</option>
+                <option value="PENDING_PAYMENT">Paiement en attente</option>
+                <option value="PAST_DUE">En retard</option>
+                <option value="TRIAL">Essai</option>
+                <option value="SUSPENDED">Suspendu</option>
+                <option value="EXPIRED">Expiré</option>
+                <option value="CANCELED">Annulé</option>
+              </select>
+              <Input name="startedAt" type="date" defaultValue={formatDateInput(subscription?.startedAt)} />
+              <Input name="expiresAt" type="date" defaultValue={formatDateInput(subscription?.expiresAt)} />
+              <Input name="trialEndsAt" type="date" defaultValue={formatDateInput(subscription?.trialEndsAt)} />
+            </div>
+          </section>
+          <textarea name="notes" defaultValue={organization.notes || ""} placeholder="Notes internes DTSC" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink md:col-span-2" />
+          <div className="flex justify-end gap-3 md:col-span-2">
+            <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">Annuler</Button>
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+          </div>
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
+function SubscriptionDialog({
+  organization,
+  plans,
+  onClose,
+  onSubmit,
+}: {
+  organization: ClientOrganization | null;
+  plans: PlanOption[];
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const subscription = organization?.subscriptions[0];
+  return (
+    <Dialog open={Boolean(organization)} title="Gérer l'abonnement" description={organization?.name} onClose={onClose} className="max-w-3xl">
+      {organization && (
+        <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
+          <select name="planId" defaultValue={subscription?.plan.id || ""} required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="">Choisir un plan</option>
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>{plan.name}</option>
+            ))}
+          </select>
+          <select name="subscriptionStatus" defaultValue={subscription?.status || "ACTIVE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="ACTIVE">Actif</option>
+            <option value="PENDING_PAYMENT">Paiement en attente</option>
+            <option value="PAST_DUE">En retard</option>
+            <option value="TRIAL">Essai</option>
+            <option value="SUSPENDED">Suspendu</option>
+            <option value="EXPIRED">Expiré</option>
+            <option value="CANCELED">Annulé</option>
+          </select>
+          <Input name="startedAt" type="date" defaultValue={formatDateInput(subscription?.startedAt)} />
+          <Input name="expiresAt" type="date" defaultValue={formatDateInput(subscription?.expiresAt)} />
+          <Input name="trialEndsAt" type="date" defaultValue={formatDateInput(subscription?.trialEndsAt)} />
+          <div className="flex justify-end gap-3 md:col-span-2">
+            <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">Annuler</Button>
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer l&apos;abonnement</Button>
+          </div>
+        </form>
+      )}
+    </Dialog>
   );
 }
 

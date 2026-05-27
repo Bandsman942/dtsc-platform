@@ -8,6 +8,14 @@ import { enterpriseOrganizationUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
 
+function parseOptionalDate(value: string | undefined | null) {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -104,6 +112,69 @@ export async function PATCH(req: Request, { params }: Params) {
       request: req,
       metadata: result,
     });
+  } else if (data.action === "update_subscription") {
+    const latestSubscription = await prisma.organizationSubscription.findFirst({
+      where: { organizationId: id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, planId: true },
+    });
+    const planId = data.planId || latestSubscription?.planId;
+    if (!planId) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Missing plan", message: "Choisissez un plan avant de modifier l'abonnement." }, { status: 400 });
+    }
+    const plan = await prisma.billingPlan.findFirst({ where: { id: planId, isActive: true }, select: { id: true } });
+    if (!plan) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Invalid plan", message: "Le plan sélectionné est introuvable ou inactif." }, { status: 400 });
+    }
+    const subscriptionData = {
+      planId,
+      status: data.subscriptionStatus || "ACTIVE",
+      startedAt: parseOptionalDate(data.startedAt) || new Date(),
+      expiresAt: parseOptionalDate(data.expiresAt),
+      trialEndsAt: parseOptionalDate(data.trialEndsAt),
+      updatedByDtscUserId: session.userId,
+    };
+    const subscription = latestSubscription
+      ? await prisma.organizationSubscription.update({
+          where: { id: latestSubscription.id },
+          data: subscriptionData,
+        })
+      : await prisma.organizationSubscription.create({
+          data: {
+            organizationId: id,
+            createdByDtscUserId: session.userId,
+            ...subscriptionData,
+          },
+        });
+    await writeAuditLog({
+      userId: session.userId,
+      action: "CLIENT_ORGANIZATION_SUBSCRIPTION_UPDATED",
+      entity: "OrganizationSubscription",
+      entityId: subscription.id,
+      request: req,
+      metadata: { organizationId: id, planId, status: subscription.status },
+    });
+  } else if (data.action === "soft_delete") {
+    await prisma.$transaction(async (tx) => {
+      await tx.organization.update({
+        where: { id },
+        data: { status: "ARCHIVED", deletedAt: new Date(), notes: data.reason || organization.notes },
+      });
+      await tx.organizationSubscription.updateMany({
+        where: { organizationId: id, status: { in: ["ACTIVE", "PENDING_PAYMENT", "PAST_DUE", "TRIAL", "SUSPENDED"] } },
+        data: { status: "CANCELED", expiresAt: new Date(), updatedByDtscUserId: session.userId },
+      });
+    });
+    await writeAuditLog({
+      userId: session.userId,
+      action: "CLIENT_ORGANIZATION_SOFT_DELETED",
+      entity: "Organization",
+      entityId: id,
+      request: req,
+      metadata: { reason: data.reason || null },
+    });
   } else {
     const sector = data.sectorId
       ? await prisma.businessSector.findFirst({ where: { id: data.sectorId, isActive: true }, select: { id: true, code: true, labelFr: true } })
@@ -112,12 +183,24 @@ export async function PATCH(req: Request, { params }: Params) {
       await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
       return NextResponse.json({ error: "Invalid sector", message: "Le secteur d'activité sélectionné est introuvable ou inactif." }, { status: 400 });
     }
+    const nextSlug = data.slug || organization.slug;
+    if (nextSlug && nextSlug !== organization.slug) {
+      const existingSlug = await prisma.organization.findFirst({
+        where: { slug: nextSlug, id: { not: id }, deletedAt: null },
+        select: { id: true },
+      });
+      if (existingSlug) {
+        await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
+        return NextResponse.json({ error: "Slug already exists", message: "Ce slug d'entreprise existe déjà." }, { status: 409 });
+      }
+    }
     await prisma.organization.update({
       where: { id },
       data: data.action === "set_status"
         ? { status: data.status || organization.status }
         : {
             name: data.name || organization.name,
+            slug: nextSlug,
             sectorId: data.sectorId ? sector?.id || null : organization.sectorId,
             sectorCode: data.sectorId ? sector?.code || null : organization.sectorCode,
             sector: data.sectorId ? sector?.labelFr || null : data.industry ?? organization.sector,
@@ -128,6 +211,8 @@ export async function PATCH(req: Request, { params }: Params) {
             phone: data.phone ?? organization.phone,
             address: data.address ?? organization.address,
             timezone: data.timezone || organization.timezone,
+            notes: data.notes ?? organization.notes,
+            status: data.status || organization.status,
           },
     });
     await writeAuditLog({ userId: session.userId, action: data.action === "set_status" ? "CLIENT_ORGANIZATION_STATUS_CHANGED" : "CLIENT_ORGANIZATION_UPDATED", entity: "Organization", entityId: id, request: req, metadata: { status: data.status } });

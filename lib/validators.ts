@@ -100,8 +100,9 @@ export const enterpriseOrganizationCreateSchema = z.object({
 });
 
 export const enterpriseOrganizationUpdateSchema = z.object({
-  action: z.enum(["update", "set_status", "grant_admin", "revoke_admin", "apply_sector_template"]),
+  action: z.enum(["update", "set_status", "grant_admin", "revoke_admin", "apply_sector_template", "update_subscription", "soft_delete"]),
   name: z.string().trim().min(2).max(160).optional(),
+  slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional().or(z.literal("")),
   sectorId: z.string().max(160).optional().or(z.literal("")),
   industry: z.string().max(160).optional().or(z.literal("")),
   country: z.string().max(120).optional().or(z.literal("")),
@@ -112,8 +113,14 @@ export const enterpriseOrganizationUpdateSchema = z.object({
   timezone: z.string().max(80).optional(),
   status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]).optional(),
   userId: z.string().optional().or(z.literal("")),
+  planId: z.string().optional().or(z.literal("")),
+  subscriptionStatus: z.enum(["ACTIVE", "PENDING_PAYMENT", "PAST_DUE", "CANCELED", "EXPIRED", "SUSPENDED", "TRIAL"]).optional(),
+  startedAt: z.string().optional().or(z.literal("")),
+  expiresAt: z.string().optional().or(z.literal("")),
+  trialEndsAt: z.string().optional().or(z.literal("")),
   templateMode: z.enum(["merge", "replace_sector"]).default("merge"),
   reason: z.string().max(500).optional().or(z.literal("")),
+  notes: z.string().max(1000).optional().or(z.literal("")),
 });
 
 export const enterpriseModuleToggleSchema = z.object({
@@ -127,6 +134,11 @@ export const enterpriseDepartmentSchema = z.object({
   descriptionFr: z.string().max(800).optional().or(z.literal("")),
   descriptionEn: z.string().max(800).optional().or(z.literal("")),
   isActive: z.coerce.boolean().default(true),
+});
+
+export const enterpriseMemberInviteSchema = z.object({
+  email: z.string().email().max(180).transform((email) => email.toLowerCase()),
+  role: z.enum(["MANAGER", "MEMBER", "GUEST"]).default("MEMBER"),
 });
 
 export const enterpriseActivityRequestSchema = z.object({

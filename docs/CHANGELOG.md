@@ -20,6 +20,11 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - Correction du build Vercel des modules SaaS sectoriels: les variables locales nommées `module` ont été renommées pour respecter `@next/next/no-assign-module-variable`, et le texte JSX des activités entreprise échappe correctement les apostrophes.
 
+### Modifié
+
+- Le menu `...` des entreprises clientes permet désormais de modifier les informations générales, gérer l'abonnement, archiver ou supprimer logiquement une entreprise avec audit et conservation des données internes.
+- `Administration [Entreprise]` permet à un admin/manager entreprise d'ajouter un collaborateur existant à son organisation sans dépendre de DTSC, avec notification ciblée et contrôle backend du membership.
+
 ### Sécurisé
 
 - Renforcement de l'isolation SaaS hybride: le contexte interne DTSC exige désormais un membership actif sur l'organisation `DTSC` (`dtsc-internal`) au lieu de se baser uniquement sur le rôle global.

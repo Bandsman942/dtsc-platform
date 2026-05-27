@@ -13,7 +13,7 @@ export default async function EnterpriseAdminPage() {
     redirect("/dashboard");
   }
 
-  const [organization, membersCount, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests] = await Promise.all([
+  const [organization, members, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null },
       select: {
@@ -24,7 +24,12 @@ export default async function EnterpriseAdminPage() {
         businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
       },
     }),
-    prisma.organizationMember.count({ where: { organizationId, status: "ACTIVE", removedAt: null } }),
+    prisma.organizationMember.findMany({
+      where: { organizationId, status: "ACTIVE", removedAt: null },
+      orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+      include: { user: { select: { id: true, name: true, email: true } } },
+      take: 200,
+    }),
     prisma.enterpriseActivityRequest.count({ where: { organizationId, status: { in: ["SUBMITTED", "IN_PROGRESS", "PENDING"] } } }),
     prisma.enterpriseModule.findMany({ where: { organizationId }, orderBy: [{ moduleCategory: "asc" }, { sortOrder: "asc" }, { labelFr: "asc" }] }),
     prisma.enterpriseDepartment.findMany({ where: { organizationId }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }] }),
@@ -52,12 +57,13 @@ export default async function EnterpriseAdminPage() {
       <EnterpriseAdministrationModule
         organization={organization}
         dashboard={{
-          membersCount,
-          activeModulesCount: modules.filter((module) => module.isEnabled).length,
+          membersCount: members.length,
+          activeModulesCount: modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
           modulesCount: modules.length,
           openRequestsCount,
           recentRequestsCount: recentRequests.length,
         }}
+        members={JSON.parse(JSON.stringify(members))}
         modules={JSON.parse(JSON.stringify(modules))}
         departments={JSON.parse(JSON.stringify(departments))}
         positions={JSON.parse(JSON.stringify(positions))}

@@ -28,7 +28,7 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [organization, membersCount, openRequestsCount, modules, sections, departments, positions, activityBlocks, workflows, recentRequests] = await Promise.all([
+  const [organization, members, openRequestsCount, modules, sections, departments, positions, activityBlocks, workflows, recentRequests] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null },
       select: {
@@ -39,7 +39,12 @@ export async function GET(req: Request, { params }: Params) {
         businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
       },
     }),
-    prisma.organizationMember.count({ where: { organizationId, status: "ACTIVE", removedAt: null } }),
+    prisma.organizationMember.findMany({
+      where: { organizationId, status: "ACTIVE", removedAt: null },
+      orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+      include: { user: { select: { id: true, name: true, email: true } } },
+      take: 200,
+    }),
     prisma.enterpriseActivityRequest.count({ where: { organizationId, status: { in: ["SUBMITTED", "IN_PROGRESS", "PENDING"] } } }),
     prisma.enterpriseModule.findMany({ where: { organizationId }, orderBy: [{ moduleCategory: "asc" }, { sortOrder: "asc" }, { labelFr: "asc" }] }),
     prisma.enterpriseAdminSection.findMany({ where: { organizationId }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }] }),
@@ -64,12 +69,13 @@ export async function GET(req: Request, { params }: Params) {
   return NextResponse.json({
     organization,
     dashboard: {
-      membersCount,
+      membersCount: members.length,
       activeModulesCount: modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
       modulesCount: modules.length,
       openRequestsCount,
       recentRequestsCount: recentRequests.length,
     },
+    members,
     modules,
     sections,
     departments,

@@ -116,7 +116,7 @@ Routes ajoutées:
 - `POST /api/auth/organizations`: retourne les organisations actives liées à l'email fourni. Accès public limité au login, sans annuaire global public.
 - `POST /api/account/context`: change le contexte actif après connexion. Accès authentifié, vérifie le membership actif et journalise les changements/refus.
 - `POST /api/admin/client-organizations`: crée une entreprise cliente côté DTSC, peut désigner un administrateur entreprise et lier un plan.
-- `PATCH /api/admin/client-organizations/[id]`: met à jour l'entreprise, change son statut ou accorde/retire `ADMIN_ENTREPRISE`.
+- `PATCH /api/admin/client-organizations/[id]`: met à jour l'entreprise, change son statut, accorde/retire `ADMIN_ENTREPRISE`, gère son abonnement ou archive/supprime logiquement le contenant administratif.
 
 Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
 
@@ -149,8 +149,9 @@ Routes ajoutées:
 | `GET` | `/api/admin/business-sectors` | DTSC admin/manager interne | Liste les secteurs actifs pour la combobox. |
 | `GET` | `/api/admin/sector-templates?sectorId=...` | DTSC admin/manager interne | Prévisualise modules, postes, départements, blocs et workflows du secteur. |
 | `POST` | `/api/admin/client-organizations` | DTSC admin/manager interne | Peut lier `sectorId` et appliquer automatiquement le template. |
-| `PATCH` | `/api/admin/client-organizations/[id]` | DTSC admin/manager interne | Peut changer le secteur ou appliquer le modèle sectoriel. |
+| `PATCH` | `/api/admin/client-organizations/[id]` | DTSC admin/manager interne | Peut changer le secteur, appliquer le modèle sectoriel, gérer l'abonnement ou supprimer logiquement l'entreprise. |
 | `GET/POST` | `/api/enterprise/[organizationId]/administration` | Membre actif admin entreprise/manager | Lit l'administration entreprise ou crée/met à jour un département. |
+| `POST` | `/api/enterprise/[organizationId]/members` | Membre actif admin entreprise/manager | Ajoute un utilisateur existant comme `MEMBER`, `MANAGER` ou `GUEST`; ne peut pas accorder `ADMIN_ENTREPRISE`. |
 | `PATCH` | `/api/enterprise/[organizationId]/modules/[moduleId]` | Membre actif admin entreprise/manager | Active ou désactive un module non socle. |
 | `GET/POST` | `/api/enterprise/[organizationId]/activities` | Membre actif | Lit les blocs et demandes, ou crée une demande réelle. |
 
