@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { assertGroupMember, canManageGroup, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, canManageGroup, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 import { collaborationGroupUpdateSchema } from "@/lib/validators";
 
@@ -15,7 +15,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const member = await assertGroupMember(id, session.userId);
+  const member = await assertGroupMemberForSession(id, session);
   if (!canManageGroup(member, session.role)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -51,7 +51,7 @@ export async function DELETE(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const member = await assertGroupMember(id, session.userId);
+  const member = await assertGroupMemberForSession(id, session);
   if (!member) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

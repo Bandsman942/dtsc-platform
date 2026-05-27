@@ -244,8 +244,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Sécurité et confidentialité",
         text:
-          "DTSC applique une séparation entre les clés API serveur et le frontend, utilise des sessions sécurisées, conserve les mots de passe sous forme hachée et protège les routes privées par rôle. Dans le modèle multi-entreprises, les données internes d'une entreprise cliente doivent être isolées par organisation et accessibles uniquement aux membres actifs autorisés. DTSC administre la plateforme, les abonnements et le support, mais ne consulte pas les modules internes privés des clients sans rattachement explicite à l'organisation concernée.",
-        bullets: ["Mots de passe hachés", "Clés API non exposées au client", "Contrôle d'accès RBAC et membership actif", "Isolation des données par organisation", "Journalisation et limitation d'usage"],
+          "DTSC applique une séparation entre les clés API serveur et le frontend, utilise des sessions sécurisées, conserve les mots de passe sous forme hachée et protège les routes privées par rôle. Dans le modèle multi-entreprises, les données internes d'une entreprise cliente doivent être isolées par organisation et accessibles uniquement aux membres actifs autorisés. L'espace interne DTSC est lui-même une organisation dédiée: seuls les collaborateurs DTSC rattachés à un dossier RH actif peuvent y accéder. DTSC administre la plateforme, les abonnements et le support, mais ne consulte pas les modules internes privés des clients sans rattachement explicite à l'organisation concernée.",
+        bullets: ["Mots de passe hachés", "Clés API non exposées au client", "Contrôle d'accès RBAC et membership actif", "Tenant DTSC réservé aux collaborateurs liés", "Isolation des données par organisation", "Journalisation et limitation d'usage"],
       },
       {
         heading: "Droits des utilisateurs",
@@ -278,8 +278,8 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Cookies strictement nécessaires",
         text:
-          "Le cookie de session sécurisé permet à un utilisateur connecté d'accéder à son espace privé sans ressaisir ses identifiants à chaque page. Il est HTTP-only, signé côté serveur et nécessaire à l'authentification et au contrôle des accès par rôle, poste officiel RH et appartenance aux objets. Sans ce cookie, les modules privés comme le dashboard, le chatbot, l'entreprise, les activités collaborateur, le support ou l'administration ne peuvent pas fonctionner correctement.",
-        bullets: ["Session authentifiée", "Protection HTTP-only", "Accès aux routes privées", "Contrôle d'accès aux activités et sections sensibles", "Expiration de session pour sécurité"],
+          "Le cookie de session sécurisé permet à un utilisateur connecté d'accéder à son espace privé sans ressaisir ses identifiants à chaque page. Il est HTTP-only, signé côté serveur et nécessaire à l'authentification, au contexte actif d'entreprise et au contrôle des accès par rôle, poste officiel RH, membership actif et appartenance aux objets. Sans ce cookie, les modules privés comme le dashboard, le chatbot, l'entreprise, les activités collaborateur, le support ou l'administration ne peuvent pas fonctionner correctement.",
+        bullets: ["Session authentifiée", "Contexte actif d'entreprise", "Protection HTTP-only", "Accès aux routes privées", "Contrôle d'accès aux activités et sections sensibles", "Expiration de session pour sécurité"],
       },
       {
         heading: "Préférences locales et PWA",

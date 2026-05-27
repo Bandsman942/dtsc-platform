@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { assertGroupMember, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { generateLiveKitParticipantToken, isLiveKitConfigured, liveKitUrl } from "@/lib/livekit-service";
 import { prisma } from "@/lib/prisma";
 import { collaborationCallParticipantSchema } from "@/lib/validators";
@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ message: "Aucun appel actif n'a été trouvé." }, { status: 404 });
   }
-  const member = await assertGroupMember(call.groupId, session.userId);
+  const member = await assertGroupMemberForSession(call.groupId, session);
   if (!member) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

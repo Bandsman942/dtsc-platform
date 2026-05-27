@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notifications";
 import { supportTicketUpdateSchema } from "@/lib/validators";
@@ -19,7 +20,7 @@ function closesTicket(status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED") {
 
 export async function PATCH(req: Request, { params }: Params) {
   const session = await getSession();
-  if (!session || !canManageSupport(session.role)) {
+  if (!session || !isDtscInternalSession(session) || !canManageSupport(session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

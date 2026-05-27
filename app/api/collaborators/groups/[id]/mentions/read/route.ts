@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { assertGroupMember } from "@/lib/collaboration";
+import { assertGroupMemberForSession } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const member = await assertGroupMember(id, session.userId);
+  const member = await assertGroupMemberForSession(id, session);
   if (!member) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

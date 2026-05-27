@@ -16,6 +16,7 @@ import { getSession } from "@/lib/auth";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
+import { hasActiveOrganizationSubscription, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export async function AppShell({
@@ -35,6 +36,10 @@ export async function AppShell({
   };
 }) {
   const session = await getSession();
+  const dtscInternalContext = isDtscInternalSession(session);
+  const activeOrganizationId = session?.activeOrganizationId || null;
+  const organizationFeaturesEnabled =
+    !activeOrganizationId || dtscInternalContext || (await hasActiveOrganizationSubscription(activeOrganizationId));
   const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships] = await Promise.all([
     prisma.notification.count({
       where: {
@@ -72,6 +77,7 @@ export async function AppShell({
   const organizationOptions = organizationMemberships
     .filter((membership) => membership.organization.organizationType !== "DTSC_INTERNAL" || user.role !== "CLIENT")
     .map((membership) => ({ id: membership.organization.id, label: membership.organization.name, role: membership.role }));
+  const showEmployeeActivities = dtscInternalContext && Boolean(employeeRecord);
 
   return (
     <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
@@ -80,8 +86,9 @@ export async function AppShell({
       <MobilePwaHeader
         user={user}
         unreadNotifications={unreadNotifications}
-        currentOrganizationId={session?.activeOrganizationId || null}
+        currentOrganizationId={activeOrganizationId}
         organizationOptions={organizationOptions}
+        showInternalModules={dtscInternalContext}
       />
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
         <DtscLogo href="/dashboard" />
@@ -96,7 +103,14 @@ export async function AppShell({
         </Link>
 
         <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-          <NavLinks role={user.role} unreadNotifications={unreadNotifications} showEmployeeActivities={Boolean(employeeRecord)} locale={user.locale} />
+          <NavLinks
+            role={user.role}
+            unreadNotifications={unreadNotifications}
+            showEmployeeActivities={showEmployeeActivities}
+            showInternalModules={dtscInternalContext}
+            showCollaborationModule={organizationFeaturesEnabled}
+            locale={user.locale}
+          />
         </nav>
       </aside>
 
@@ -111,7 +125,7 @@ export async function AppShell({
             </div>
             <div className="flex items-center gap-3">
               {organizationOptions.length > 0 && (
-                <OrganizationContextSwitcher currentOrganizationId={session?.activeOrganizationId || null} organizations={organizationOptions} />
+                <OrganizationContextSwitcher currentOrganizationId={activeOrganizationId} organizations={organizationOptions} />
               )}
               <ThemeToggle />
               <div className="hidden text-right sm:block">
@@ -130,7 +144,13 @@ export async function AppShell({
           </div>
         </header>
         <main className="min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
-        <MobileBottomNavigation user={user} unreadNotifications={unreadNotifications} showEmployeeActivities={Boolean(employeeRecord)} />
+        <MobileBottomNavigation
+          user={user}
+          unreadNotifications={unreadNotifications}
+          showEmployeeActivities={showEmployeeActivities}
+          showInternalModules={dtscInternalContext}
+          showCollaborationModule={organizationFeaturesEnabled}
+        />
         <PWAInstallPrompt />
         <PwaNotificationBridge notifications={latestUnreadNotifications} enabled={Boolean(user.pushNotificationsEnabled)} />
         <DtscFooter />

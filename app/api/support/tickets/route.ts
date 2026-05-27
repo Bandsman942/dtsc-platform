@@ -3,6 +3,7 @@ import { UserRole, UserStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notifications";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId } from "@/lib/organizations";
 import { supportTicketSchema } from "@/lib/validators";
 
 export async function POST(req: Request) {
@@ -19,6 +20,7 @@ export async function POST(req: Request) {
   const ticket = await prisma.supportTicket.create({
     data: {
       userId: session.userId,
+      organizationId: getActiveOrganizationId(session),
       subject: body.data.subject,
       description: body.data.description,
       priority: body.data.priority,
@@ -26,7 +28,13 @@ export async function POST(req: Request) {
   });
 
   const supportUsers = await prisma.user.findMany({
-    where: { role: { in: [UserRole.ADMIN, UserRole.SUPPORT] }, status: UserStatus.ACTIVE },
+    where: {
+      role: { in: [UserRole.ADMIN, UserRole.SUPPORT] },
+      status: UserStatus.ACTIVE,
+      organizationMemberships: {
+        some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
+      },
+    },
     select: { id: true },
   });
   await notifyUsers({

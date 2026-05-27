@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { UserRole, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { assertGroupMember, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUsers } from "@/lib/notifications";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -16,13 +17,19 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const member = await assertGroupMember(id, session.userId);
+  const member = await assertGroupMemberForSession(id, session);
   if (!member) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const supporters = await prisma.user.findMany({
-    where: { status: UserStatus.ACTIVE, OR: [{ role: UserRole.ADMIN }, { role: UserRole.SUPPORT }] },
+    where: {
+      status: UserStatus.ACTIVE,
+      OR: [{ role: UserRole.ADMIN }, { role: UserRole.SUPPORT }],
+      organizationMemberships: {
+        some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
+      },
+    },
     select: { id: true },
     take: 50,
   });

@@ -1,13 +1,18 @@
 import { redirect } from "next/navigation";
 import { ActivitiesDashboard } from "@/components/activities/activities-dashboard";
 import { AppShell } from "@/components/layout/app-shell";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { formatEnumLabel } from "@/lib/labels";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function ActivitiesPage() {
   const user = await requireUser();
+  const session = await getSession();
+  if (!isDtscInternalSession(session)) {
+    redirect("/dashboard");
+  }
   const employee = await prisma.hrcfoEmployee.findFirst({
     where: { userId: user.id, status: { not: "EXITED" } },
     include: { position: true },

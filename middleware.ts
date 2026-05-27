@@ -4,8 +4,11 @@ import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/se
 
 const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
+const dtscInternalRoutes = ["/admin", "/calendar", "/activities"];
+const dtscInternalApiRoutes = ["/api/admin", "/api/calendar", "/api/activities"];
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
+const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";
 
 function isPathMatch(pathname: string, routes: string[]) {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -18,6 +21,10 @@ function isAllowedOrigin(request: NextRequest) {
   }
 
   return origin === request.nextUrl.origin;
+}
+
+function hasDtscInternalContext(session: Awaited<ReturnType<typeof verifySessionToken>>) {
+  return session?.activeContext === "DTSC_INTERNAL" && session.activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID;
 }
 
 export async function middleware(request: NextRequest) {
@@ -41,11 +48,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
-  if (isPathMatch(pathname, adminRoutes) && session?.role === "CLIENT") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (isPathMatch(pathname, dtscInternalApiRoutes)) {
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!hasDtscInternalContext(session)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
-  if (isPathMatch(pathname, ["/calendar"]) && session?.role === "CLIENT") {
+  if (isPathMatch(pathname, dtscInternalRoutes) && !hasDtscInternalContext(session)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

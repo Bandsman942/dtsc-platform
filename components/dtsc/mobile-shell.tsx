@@ -36,15 +36,17 @@ export function MobilePwaHeader({
   unreadNotifications,
   currentOrganizationId,
   organizationOptions = [],
+  showInternalModules = false,
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
+  showInternalModules?: boolean;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
-  const adminAllowed = canAccessAdministration(user.role);
+  const adminAllowed = showInternalModules && canAccessAdministration(user.role);
 
   useEffect(() => {
     let stopped = false;
@@ -153,19 +155,30 @@ export function MobileBottomNavigation({
   user,
   unreadNotifications,
   showEmployeeActivities,
+  showInternalModules = false,
+  showCollaborationModule = true,
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
   showEmployeeActivities: boolean;
+  showInternalModules?: boolean;
+  showCollaborationModule?: boolean;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
-  const visibleItems = primaryItems.filter((item) => !item.employeeOnly || showEmployeeActivities);
-  const canUseInternalCalendar = user.role !== "CLIENT";
+  const visibleItems = primaryItems.filter((item) => {
+    if (item.employeeOnly && !showEmployeeActivities) {
+      return false;
+    }
+    if (item.href === "/collaborators") {
+      return showCollaborationModule;
+    }
+    return true;
+  });
   const overflowItems = [
     { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
     { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
-    ...(canUseInternalCalendar ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
+    ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
     { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
     { href: "/support", labelKey: "navigation.support", fallback: "Support" },
   ];
@@ -215,7 +228,7 @@ export function MobileBottomNavigation({
             <ChevronRight className="h-3 w-3" />
           </Link>
         ))}
-        {canAccessAdministration(user.role) && (
+        {showInternalModules && canAccessAdministration(user.role) && (
           <Link href="/admin" className="flex shrink-0 items-center gap-1 rounded-full bg-cyan-400/14 px-3 py-1.5 text-[0.68rem] font-black text-cyan-500">
             Admin
             <ChevronRight className="h-3 w-3" />

@@ -101,11 +101,15 @@ La plateforme ajoute une couche progressive d'isolation par organisation sans ca
 - `BillingRecord`: historique de facturation organisationnelle;
 - champs `organizationId` sur `SupportTicket`, `Announcement` et `CollaborationGroup` pour préparer l'isolation progressive.
 
+La migration `20260527120000_strengthen_tenant_isolation` normalise ensuite ce tenant interne en entreprise `DTSC` (`slug = dtsc`, `organizationType = DTSC_INTERNAL`), rattache automatiquement uniquement les utilisateurs liés à un dossier `HrcfoEmployee` actif et reclasse les groupes collaboratifs historiques dans cette organisation interne.
+
 La session peut contenir `activeContext`, `activeOrganizationId`, `activeOrganizationName` et `activeOrganizationRole`. `lib/organizations.ts` centralise la résolution du contexte:
 
-- sans entreprise sélectionnée, un client reste en `GLOBAL_CLIENT`, tandis que les rôles DTSC internes utilisent `DTSC_INTERNAL`;
+- sans entreprise sélectionnée, l'utilisateur reste en `GLOBAL_CLIENT` sauf s'il possède un `OrganizationMember` actif sur `dtsc-internal`; un rôle global `ADMIN`, `MANAGER` ou `SUPPORT` seul ne suffit plus pour recevoir `DTSC_INTERNAL`;
 - avec entreprise sélectionnée, `resolveOrganizationLoginContext()` exige une organisation active et un membership actif;
 - un rôle global DTSC ne contourne jamais `OrganizationMember` pour accéder aux modules internes d'un client.
+
+Les modules historiques internes DTSC (`/admin`, `/activities`, `/calendar` et routes `/api/admin*`, `/api/activities*`, `/api/calendar*`) exigent désormais une session `DTSC_INTERNAL` avec `activeOrganizationId = dtsc-internal`. Les modules partagés filtrent aussi par contexte actif: annonces par `scope`/`organizationId`, groupes par membership et `organizationId`, tickets support par ticket volontairement soumis dans le contexte courant. Les groupes internes d'une entreprise cliente sont bloqués si l'organisation n'a pas d'abonnement actif, sans bascule implicite vers les données DTSC.
 
 Routes ajoutées:
 

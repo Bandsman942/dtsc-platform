@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { assertGroupMember, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { collaborationMessageSchema } from "@/lib/validators";
@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: Params) {
   }
   await touchUserPresence(session.userId);
   const { id } = await params;
-  const member = await assertGroupMember(id, session.userId);
+  const member = await assertGroupMemberForSession(id, session);
   if (!member) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -55,7 +55,7 @@ export async function POST(req: Request, { params }: Params) {
   }
   await touchUserPresence(session.userId);
   const { id } = await params;
-  const member = await assertGroupMember(id, session.userId);
+  const member = await assertGroupMemberForSession(id, session);
   if (!member || member.group.status !== "ACTIVE") {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

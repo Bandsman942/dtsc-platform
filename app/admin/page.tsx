@@ -18,12 +18,13 @@ import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel"
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart, type VisitPoint } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
 import { canAccessAdministration, parseAdminRoleAccess, type AdminBlockId } from "@/lib/admin-access";
 import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDatasets, buildLaDatasets, buildMpoDatasets, buildScoDatasets } from "@/lib/admin-operations";
 import { canAccessAdminSection, ensureDefaultPositions } from "@/lib/business-roles";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { formatEnumLabel } from "@/lib/labels";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
@@ -76,7 +77,8 @@ export default async function AdminPage({
   searchParams: Promise<{ role?: string; period?: string; date?: string; section?: string; ceoStart?: string; ceoEnd?: string }>;
 }) {
   const user = await requireUser();
-  if (!canAccessAdministration(user.role)) {
+  const session = await getSession();
+  if (!isDtscInternalSession(session) || !canAccessAdministration(user.role)) {
     redirect("/dashboard");
   }
   const { role, period, date, section, ceoStart, ceoEnd } = await searchParams;

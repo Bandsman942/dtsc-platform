@@ -1,17 +1,40 @@
+import type { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { AnnouncementWall } from "@/components/announcements/announcement-wall";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
 import { translate } from "@/lib/i18n";
+import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 
 export default async function AnnouncementsPage() {
   const user = await requireUser();
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const dtscInternalContext = isDtscInternalSession(session);
+  const globalAnnouncementScopes = ["GLOBAL_PUBLIC", "GLOBAL_PRIVATE", "COMMUNITY", "DTSC_OFFICIAL"];
+  const announcementWhere: Prisma.AnnouncementWhereInput = dtscInternalContext
+    ? { deletedAt: null }
+    : activeOrganizationId
+      ? {
+          deletedAt: null,
+          moderationStatus: "PUBLISHED",
+          OR: [{ scope: { in: globalAnnouncementScopes } }, { scope: "ORGANIZATION_ONLY", organizationId: activeOrganizationId }],
+        }
+      : { deletedAt: null, moderationStatus: "PUBLISHED", scope: { in: globalAnnouncementScopes } };
+  const transferRecipientWhere: Prisma.UserWhereInput = activeOrganizationId
+    ? {
+        status: "ACTIVE" as const,
+        organizationMemberships: {
+          some: { organizationId: activeOrganizationId, status: "ACTIVE", removedAt: null },
+        },
+      }
+    : { status: "ACTIVE" as const, id: user.id };
   const t = (key: string) => translate(user.locale, key);
   const [settings, announcements, users] = await Promise.all([
     getAppSettings(),
     prisma.announcement.findMany({
-      where: { deletedAt: null },
+      where: announcementWhere,
       orderBy: [{ pinnedAt: "desc" }, { createdAt: "desc" }],
       include: {
         author: { select: { id: true, name: true, role: true, avatarUrl: true, jobTitle: true } },
@@ -26,7 +49,7 @@ export default async function AnnouncementsPage() {
       take: 200,
     }),
     prisma.user.findMany({
-      where: { status: "ACTIVE" },
+      where: transferRecipientWhere,
       select: {
         id: true,
         name: true,

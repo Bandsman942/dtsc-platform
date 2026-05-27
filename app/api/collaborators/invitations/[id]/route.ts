@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
+import { canAccessGroupInSessionWithSubscription, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { collaborationInvitationResponseSchema } from "@/lib/validators";
@@ -30,6 +30,10 @@ export async function PATCH(req: Request, { params }: Params) {
   });
   if (!invitation) {
     return NextResponse.json({ error: "Invitation not found" }, { status: 404 });
+  }
+  if (!(await canAccessGroupInSessionWithSubscription(invitation.group, session))) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (parsed.data.action === "CANCEL" && invitation.invitedById !== session.userId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

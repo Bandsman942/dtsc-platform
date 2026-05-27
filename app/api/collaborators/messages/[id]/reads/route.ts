@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { canManageGroup } from "@/lib/collaboration";
+import { canAccessGroupInSessionWithSubscription, canManageGroup } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -32,7 +32,7 @@ export async function GET(req: Request, { params }: Params) {
     },
   });
   const currentMember = message?.group.members.find((member) => member.userId === session.userId) || null;
-  if (!message || !currentMember) {
+  if (!message || !currentMember || !(await canAccessGroupInSessionWithSubscription(message.group, session))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ message: "Accès refusé." }, { status: 403 });
   }

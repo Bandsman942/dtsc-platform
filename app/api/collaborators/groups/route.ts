@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { UserStatus } from "@prisma/client";
+import { UserStatus, type Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
+import {
+  DTSC_INTERNAL_ORGANIZATION_ID,
+  getActiveOrganizationId,
+  hasActiveOrganizationSubscription,
+  isDtscInternalSession,
+} from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { collaborationGroupSchema } from "@/lib/validators";
 
@@ -15,12 +21,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   await touchUserPresence(session.userId);
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const organizationSubscriptionActive = await hasActiveOrganizationSubscription(activeOrganizationId);
+  if (activeOrganizationId && activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID && !organizationSubscriptionActive) {
+    await writeApiLog({ request: req, statusCode: 402, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Subscription required", groups: [], invitations: [], users: [] }, { status: 402 });
+  }
+  const crossOrganizationGroupFilter: Prisma.CollaborationGroupWhereInput = { groupType: { in: ["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"] } };
+  const scopedGroupFilter: Prisma.CollaborationGroupWhereInput = isDtscInternalSession(session)
+    ? { OR: [{ organizationId: DTSC_INTERNAL_ORGANIZATION_ID }, { organizationId: null }] }
+    : activeOrganizationId && organizationSubscriptionActive
+      ? { OR: [{ organizationId: activeOrganizationId }, crossOrganizationGroupFilter] }
+      : crossOrganizationGroupFilter;
 
   const [groups, invitations, users] = await Promise.all([
     prisma.collaborationGroup.findMany({
       where: {
         status: "ACTIVE",
         members: { some: { userId: session.userId, status: "ACTIVE" } },
+        ...scopedGroupFilter,
       },
       include: {
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -54,13 +73,21 @@ export async function GET(req: Request) {
       where: {
         status: "PENDING",
         OR: [{ invitedUserId: session.userId }, { invitedEmail: session.email.toLowerCase() }],
+        group: { is: scopedGroupFilter },
       },
       include: { group: { select: { id: true, name: true, description: true } }, invitedBy: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
     prisma.user.findMany({
-      where: { status: UserStatus.ACTIVE },
+      where: activeOrganizationId && organizationSubscriptionActive
+        ? {
+            status: UserStatus.ACTIVE,
+            organizationMemberships: {
+              some: { organizationId: activeOrganizationId, status: "ACTIVE", removedAt: null },
+            },
+          }
+        : { status: UserStatus.ACTIVE, id: session.userId },
       select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true },
       orderBy: { name: "asc" },
       take: 300,
@@ -130,6 +157,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid group" }, { status: 400 });
   }
 
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const organizationSubscriptionActive = await hasActiveOrganizationSubscription(activeOrganizationId);
+  const isCrossOrganizationGroup = parsed.data.groupType === "CROSS_ORGANIZATION" || parsed.data.groupType === "PRIVATE_NETWORK" || parsed.data.groupType === "DTSC_SUPPORT";
+  if (activeOrganizationId && activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID && !organizationSubscriptionActive && !isCrossOrganizationGroup) {
+    await writeApiLog({ request: req, statusCode: 402, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Subscription required" }, { status: 402 });
+  }
+
+  const organizationId = activeOrganizationId && (!isCrossOrganizationGroup || activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID)
+    ? activeOrganizationId
+    : null;
   const group = await prisma.collaborationGroup.create({
     data: {
       name: parsed.data.name,
@@ -137,6 +175,7 @@ export async function POST(req: Request) {
       groupType: parsed.data.groupType,
       visibility: parsed.data.visibility,
       ownerId: session.userId,
+      organizationId,
       members: {
         create: { userId: session.userId, role: "OWNER", status: "ACTIVE" },
       },

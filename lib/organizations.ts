@@ -11,22 +11,39 @@ export type OrganizationContext = {
   activeOrganizationRole: string | null;
 };
 
-export function getDefaultContextForRole(role: UserRole): OrganizationContext {
-  if (role === UserRole.ADMIN || role === UserRole.MANAGER || role === UserRole.SUPPORT) {
-    return {
-      activeContext: "DTSC_INTERNAL",
-      activeOrganizationId: DTSC_INTERNAL_ORGANIZATION_ID,
-      activeOrganizationName: "DTSC Internal",
-      activeOrganizationRole: "DTSC",
-    };
-  }
-
+export function getDefaultContextForRole(): OrganizationContext {
   return {
     activeContext: "GLOBAL_CLIENT",
     activeOrganizationId: null,
     activeOrganizationName: null,
     activeOrganizationRole: null,
   };
+}
+
+export async function resolveDefaultOrganizationContext(user: Pick<User, "id" | "role">): Promise<OrganizationContext> {
+  const dtscMembership = await prisma.organizationMember.findFirst({
+    where: {
+      userId: user.id,
+      organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
+      status: "ACTIVE",
+      removedAt: null,
+      organization: { status: "ACTIVE", deletedAt: null, organizationType: "DTSC_INTERNAL" },
+    },
+    include: {
+      organization: { select: { id: true, name: true } },
+    },
+  });
+
+  if (dtscMembership) {
+    return {
+      activeContext: "DTSC_INTERNAL",
+      activeOrganizationId: dtscMembership.organization.id,
+      activeOrganizationName: dtscMembership.organization.name,
+      activeOrganizationRole: dtscMembership.role,
+    };
+  }
+
+  return getDefaultContextForRole();
 }
 
 export async function getAccessibleOrganizationsForEmail(email: string) {
@@ -49,7 +66,7 @@ export async function getAccessibleOrganizationsForEmail(email: string) {
 
 export async function resolveOrganizationLoginContext(user: Pick<User, "id" | "role">, organizationId?: string | null): Promise<OrganizationContext> {
   if (!organizationId) {
-    return getDefaultContextForRole(user.role);
+    return resolveDefaultOrganizationContext(user);
   }
 
   const membership = await prisma.organizationMember.findFirst({
@@ -94,6 +111,41 @@ export async function requireActiveOrganizationMembership(session: SessionPayloa
 
 export function isDtscPlatformRole(role: UserRole) {
   return role === UserRole.ADMIN || role === UserRole.MANAGER || role === UserRole.SUPPORT;
+}
+
+export function isDtscInternalSession(session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined) {
+  return session?.activeContext === "DTSC_INTERNAL" && session.activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID;
+}
+
+export function getActiveOrganizationId(session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined) {
+  if ((session?.activeContext === "ORGANIZATION" || session?.activeContext === "DTSC_INTERNAL") && session.activeOrganizationId) {
+    return session.activeOrganizationId;
+  }
+
+  return null;
+}
+
+export function isOrganizationScopedSession(session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined) {
+  return Boolean(getActiveOrganizationId(session));
+}
+
+export async function hasActiveOrganizationSubscription(organizationId: string | null | undefined) {
+  if (!organizationId || organizationId === DTSC_INTERNAL_ORGANIZATION_ID) {
+    return true;
+  }
+
+  const now = new Date();
+  const subscription = await prisma.organizationSubscription.findFirst({
+    where: {
+      organizationId,
+      status: "ACTIVE",
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    select: { id: true },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return Boolean(subscription);
 }
 
 export function canManageClientOrganizations(role: UserRole) {

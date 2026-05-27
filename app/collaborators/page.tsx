@@ -1,16 +1,37 @@
+import type { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
-import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getSession, requireUser } from "@/lib/auth";
 import { touchUserPresence } from "@/lib/collaboration";
+import {
+  DTSC_INTERNAL_ORGANIZATION_ID,
+  getActiveOrganizationId,
+  hasActiveOrganizationSubscription,
+  isDtscInternalSession,
+} from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string }> }) {
   const user = await requireUser();
+  const session = await getSession();
   const params = await searchParams;
   await touchUserPresence(user.id);
-  const [groups, invitations, users, conversations] = await Promise.all([
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const dtscInternalContext = isDtscInternalSession(session);
+  const organizationSubscriptionActive = await hasActiveOrganizationSubscription(activeOrganizationId);
+  if (activeOrganizationId && !dtscInternalContext && !organizationSubscriptionActive) {
+    redirect("/billing");
+  }
+  const crossOrganizationGroupFilter: Prisma.CollaborationGroupWhereInput = { groupType: { in: ["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"] } };
+  const scopedGroupFilter: Prisma.CollaborationGroupWhereInput = dtscInternalContext
+    ? { OR: [{ organizationId: DTSC_INTERNAL_ORGANIZATION_ID }, { organizationId: null }] }
+    : activeOrganizationId && organizationSubscriptionActive
+      ? { OR: [{ organizationId: activeOrganizationId }, crossOrganizationGroupFilter] }
+      : crossOrganizationGroupFilter;
+  const [groups, invitations, conversations] = await Promise.all([
     prisma.collaborationGroup.findMany({
-      where: { status: "ACTIVE", members: { some: { userId: user.id, status: "ACTIVE" } } },
+      where: { status: "ACTIVE", members: { some: { userId: user.id, status: "ACTIVE" } }, ...scopedGroupFilter },
       include: {
         owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
         members: {
@@ -40,16 +61,14 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
       take: 100,
     }),
     prisma.collaborationGroupInvitation.findMany({
-      where: { status: "PENDING", OR: [{ invitedUserId: user.id }, { invitedEmail: user.email.toLowerCase() }] },
+      where: {
+        status: "PENDING",
+        OR: [{ invitedUserId: user.id }, { invitedEmail: user.email.toLowerCase() }],
+        group: { is: scopedGroupFilter },
+      },
       include: { group: { select: { id: true, name: true, description: true } }, invitedBy: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 50,
-    }),
-    prisma.user.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true },
-      orderBy: { name: "asc" },
-      take: 300,
     }),
     prisma.conversation.findMany({
       where: { userId: user.id },
@@ -58,6 +77,23 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
       take: 100,
     }),
   ]);
+  const visibleGroupUserIds = [
+    ...new Set([user.id, ...groups.flatMap((group) => group.members.map((member) => member.userId))]),
+  ];
+  const userWhere: Prisma.UserWhereInput = activeOrganizationId && organizationSubscriptionActive
+      ? {
+          status: "ACTIVE",
+          organizationMemberships: {
+            some: { organizationId: activeOrganizationId, status: "ACTIVE", removedAt: null },
+          },
+        }
+      : { status: "ACTIVE", id: { in: visibleGroupUserIds } };
+  const users = await prisma.user.findMany({
+    where: userWhere,
+    select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true },
+    orderBy: { name: "asc" },
+    take: 300,
+  });
   const groupIds = groups.map((group) => group.id);
   const unreadMentions = groupIds.length
     ? await prisma.collaborationMessageMention.findMany({

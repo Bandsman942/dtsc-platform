@@ -2,13 +2,15 @@ import { redirect } from "next/navigation";
 import type { CollaboratorAvailability, Prisma } from "@prisma/client";
 import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
 import { AppShell } from "@/components/layout/app-shell";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
 import { canAccessInternalCalendar, calendarEventInclude, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function CalendarPage() {
   const user = await requireUser();
-  if (!canAccessInternalCalendar(user)) {
+  const session = await getSession();
+  if (!isDtscInternalSession(session) || !canAccessInternalCalendar(user)) {
     redirect("/dashboard");
   }
 

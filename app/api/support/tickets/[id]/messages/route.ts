@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { UserRole, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { ticketMessageSchema } from "@/lib/validators";
@@ -27,14 +28,19 @@ export async function POST(req: Request, { params }: Params) {
   const { id } = await params;
   const ticket = await prisma.supportTicket.findUnique({
     where: { id },
-    select: { id: true, userId: true, subject: true },
+    select: { id: true, userId: true, organizationId: true, subject: true },
   });
 
   if (!ticket) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (ticket.userId !== session.userId && !canManageSupport(session.role)) {
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const canManageTicket = isDtscInternalSession(session) && canManageSupport(session.role);
+  const canUseOwnTicket =
+    ticket.userId === session.userId &&
+    (ticket.organizationId ? ticket.organizationId === activeOrganizationId : activeOrganizationId === null);
+  if (!canUseOwnTicket && !canManageTicket) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -53,7 +59,13 @@ export async function POST(req: Request, { params }: Params) {
 
   if (ticket.userId === session.userId) {
     const supportUsers = await prisma.user.findMany({
-      where: { role: { in: [UserRole.ADMIN, UserRole.SUPPORT] }, status: UserStatus.ACTIVE },
+      where: {
+        role: { in: [UserRole.ADMIN, UserRole.SUPPORT] },
+        status: UserStatus.ACTIVE,
+        organizationMemberships: {
+          some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
+        },
+      },
       select: { id: true },
     });
     await notifyUsers({

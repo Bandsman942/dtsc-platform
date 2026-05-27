@@ -27,20 +27,32 @@ export function NavLinks({
   mobile = false,
   unreadNotifications = 0,
   showEmployeeActivities = false,
+  showInternalModules = false,
+  showCollaborationModule = true,
   locale = "fr",
 }: {
   role: UserRole;
   mobile?: boolean;
   unreadNotifications?: number;
   showEmployeeActivities?: boolean;
+  showInternalModules?: boolean;
+  showCollaborationModule?: boolean;
   locale?: string | null;
 }) {
   const pathname = usePathname();
-  const employeeItems = showEmployeeActivities
+  const employeeItems = showInternalModules && showEmployeeActivities
     ? [{ href: "/activities", label: "Activités DTSC", icon: CalendarCheck, help: "Voir les tâches, opérations, réunions et blocages internes qui vous concernent." }]
     : [];
-  const visibleBaseItems = items.filter((item) => item.href !== "/calendar" || role !== "CLIENT");
-  const navItems = canAccessAdministration(role)
+  const visibleBaseItems = items.filter((item) => {
+    if (item.href === "/calendar") {
+      return showInternalModules;
+    }
+    if (item.href === "/collaborators") {
+      return showCollaborationModule;
+    }
+    return true;
+  });
+  const navItems = showInternalModules && canAccessAdministration(role)
     ? [...visibleBaseItems, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...visibleBaseItems, ...employeeItems];
   const translationByHref: Record<string, string> = {

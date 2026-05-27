@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { touchUserPresence } from "@/lib/collaboration";
+import { canAccessGroupInSessionWithSubscription, touchUserPresence } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 
 const MAX_EVENT_AGE_MS = 10 * 60 * 1000;
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const [groups, user] = await Promise.all([
     prisma.collaborationGroup.findMany({
       where: { status: "ACTIVE", members: { some: { userId: session.userId, status: "ACTIVE" } } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, organizationId: true, groupType: true },
       take: 200,
     }),
     prisma.user.findUnique({
@@ -39,7 +39,12 @@ export async function GET(req: Request) {
       },
     }),
   ]);
-  const groupIds = groups.map((group) => group.id);
+  const visibleGroupChecks = await Promise.all(groups.map(async (group) => ({
+    group,
+    visible: await canAccessGroupInSessionWithSubscription(group, session),
+  })));
+  const visibleGroups = visibleGroupChecks.filter((item) => item.visible).map((item) => item.group);
+  const groupIds = visibleGroups.map((group) => group.id);
   if (!groupIds.length) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ events: [], cursor: new Date().toISOString(), settings: user });
@@ -66,7 +71,7 @@ export async function GET(req: Request) {
       },
     },
   });
-  const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
+  const groupNameById = new Map(visibleGroups.map((group) => [group.id, group.name]));
   const filteredEvents = events.filter((event) => {
     if (event.eventType === "USER_JOINED" || event.eventType === "USER_LEFT") {
       return user?.participantEventAlertsEnabled !== false;

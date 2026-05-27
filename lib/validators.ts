@@ -244,7 +244,7 @@ export const announcementStatusSchema = z.object({
 export const collaborationGroupSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(800).optional().or(z.literal("")),
-  groupType: z.enum(["COMPANY", "PROJECT", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "OTHER"]).default("PROJECT"),
+  groupType: z.enum(["COMPANY", "PROJECT", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "OTHER"]).default("PROJECT"),
   visibility: z.enum(["PRIVATE", "COMPANY", "INTERNAL"]).default("PRIVATE"),
 });
 

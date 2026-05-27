@@ -1,4 +1,6 @@
 import { UserRole } from "@prisma/client";
+import type { SessionPayload } from "@/lib/session";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, hasActiveOrganizationSubscription, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export async function getActiveGroupMember(groupId: string, userId: string) {
@@ -15,6 +17,54 @@ export function canManageGroup(member: { role: string } | null, role?: UserRole)
 export async function assertGroupMember(groupId: string, userId: string) {
   const member = await getActiveGroupMember(groupId, userId);
   if (!member) {
+    return null;
+  }
+  return member;
+}
+
+function isCrossContextGroup(group: { groupType: string }) {
+  return group.groupType === "CROSS_ORGANIZATION" || group.groupType === "PRIVATE_NETWORK" || group.groupType === "DTSC_SUPPORT";
+}
+
+export function canAccessGroupInSession(
+  group: { organizationId: string | null; groupType: string },
+  session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined
+) {
+  if (isDtscInternalSession(session)) {
+    return group.organizationId === DTSC_INTERNAL_ORGANIZATION_ID || group.organizationId === null || isCrossContextGroup(group);
+  }
+
+  const activeOrganizationId = getActiveOrganizationId(session);
+  if (activeOrganizationId) {
+    return group.organizationId === activeOrganizationId || isCrossContextGroup(group);
+  }
+
+  return group.organizationId === null && isCrossContextGroup(group);
+}
+
+export async function canAccessGroupInSessionWithSubscription(
+  group: { organizationId: string | null; groupType: string },
+  session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined
+) {
+  if (!canAccessGroupInSession(group, session)) {
+    return false;
+  }
+  const activeOrganizationId = getActiveOrganizationId(session);
+  if (
+    activeOrganizationId &&
+    activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID &&
+    group.organizationId === activeOrganizationId &&
+    !isCrossContextGroup(group) &&
+    !(await hasActiveOrganizationSubscription(activeOrganizationId))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export async function assertGroupMemberForSession(groupId: string, session: SessionPayload) {
+  const member = await getActiveGroupMember(groupId, session.userId);
+  if (!member || !(await canAccessGroupInSessionWithSubscription(member.group, session))) {
     return null;
   }
   return member;

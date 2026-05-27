@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSession, setSessionCookie } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib/organizations";
+import { resolveDefaultOrganizationContext, resolveOrganizationLoginContext } from "@/lib/organizations";
 
 const contextSchema = z.object({
   organizationId: z.string().max(120).nullable().optional(),
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let context = getDefaultContextForRole(user.role);
+  let context = await resolveDefaultOrganizationContext(user);
   if (parsed.data.organizationId) {
     try {
       context = await resolveOrganizationLoginContext(user, parsed.data.organizationId);

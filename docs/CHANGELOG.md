@@ -2,6 +2,19 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-05-27
+
+### Sécurisé
+
+- Renforcement de l'isolation SaaS hybride: le contexte interne DTSC exige désormais un membership actif sur l'organisation `DTSC` (`dtsc-internal`) au lieu de se baser uniquement sur le rôle global.
+- Blocage des modules internes historiques `/admin`, `/activities`, `/calendar` et de leurs routes API pour toute session qui n'est pas explicitement dans le tenant DTSC interne.
+- Filtrage contextuel des modules partagés: annonces par `scope`/`organizationId`, groupes par `organizationId`/membership et tickets support par contexte actif.
+
+### Ajouté
+
+- Migration `20260527120000_strengthen_tenant_isolation` qui normalise l'entreprise interne `DTSC`, rattache les collaborateurs DTSC liés à un dossier RH actif et reclasse les groupes collaboratifs historiques dans le tenant DTSC.
+- Conservation du contexte actif lors du heartbeat de session afin d'éviter qu'une session entreprise revienne silencieusement à un contexte global.
+
 ## 2026-05-22
 
 ### Corrigé

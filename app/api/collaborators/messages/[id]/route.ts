@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { canManageGroup, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
+import { canAccessGroupInSessionWithSubscription, canManageGroup, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { collaborationMessageUpdateSchema } from "@/lib/validators";
@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: Params) {
     include: { group: { include: { members: { where: { userId: session.userId, status: "ACTIVE" } } } } },
   });
   const member = message?.group.members[0] || null;
-  if (!message || (!canManageGroup(member, session.role) && message.authorId !== session.userId)) {
+  if (!message || !(await canAccessGroupInSessionWithSubscription(message.group, session)) || (!canManageGroup(member, session.role) && message.authorId !== session.userId)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -82,7 +82,7 @@ export async function DELETE(req: Request, { params }: Params) {
     include: { group: { include: { members: { where: { userId: session.userId, status: "ACTIVE" } } } } },
   });
   const member = message?.group.members[0] || null;
-  if (!message || (!canManageGroup(member, session.role) && message.authorId !== session.userId)) {
+  if (!message || !(await canAccessGroupInSessionWithSubscription(message.group, session)) || (!canManageGroup(member, session.role) && message.authorId !== session.userId)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

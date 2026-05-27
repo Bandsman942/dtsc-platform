@@ -1,14 +1,21 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SupportForm } from "@/components/support/support-form";
 import { TicketBoard } from "@/components/support/ticket-board";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
+import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function SupportPage() {
   const user = await requireUser();
-  const canManageTickets = user.role === "ADMIN" || user.role === "SUPPORT";
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const canManageTickets = isDtscInternalSession(session) && (user.role === "ADMIN" || user.role === "SUPPORT");
   const tickets = await prisma.supportTicket.findMany({
-    where: canManageTickets ? undefined : { userId: user.id },
+    where: canManageTickets
+      ? undefined
+      : activeOrganizationId
+        ? { organizationId: activeOrganizationId, userId: user.id }
+        : { organizationId: null, userId: user.id },
     orderBy: { updatedAt: "desc" },
     include: {
       user: { select: { name: true, email: true, role: true } },

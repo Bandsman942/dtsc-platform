@@ -54,7 +54,8 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Ancienne page `/documents` redirigée vers `/company`; les documents restent gérés dans le module Entreprise selon les limites d'abonnement
 - Sessions sécurisées par cookie signé
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
-- Fondation SaaS hybride multi-entreprises: tenant interne DTSC, entreprises clientes créées par DTSC, memberships actifs, contexte d'accès optionnel à la connexion, sélecteur d'espace après connexion et isolation progressive par `organizationId`.
+- Fondation SaaS hybride multi-entreprises: tenant interne `DTSC` créé comme organisation réelle, entreprises clientes créées par DTSC, memberships actifs, contexte d'accès optionnel à la connexion, sélecteur d'espace après connexion et isolation progressive par `organizationId`.
+- Accès DTSC interne limité aux utilisateurs possédant un membership actif sur l'organisation `DTSC`, généré à partir des dossiers collaborateurs RH actifs; un membre d'une entreprise cliente ne voit plus les données internes DTSC.
 - Administration DTSC des entreprises clientes: création, activation/suspension/archivage, attribution/retrait du rôle `ADMIN_ENTREPRISE` et liaison d'un plan sans accès aux données métier privées des clients.
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier

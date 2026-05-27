@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { assertGroupMember, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -15,7 +15,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id, memberId } = await params;
-  const actorMember = await assertGroupMember(id, session.userId);
+  const actorMember = await assertGroupMemberForSession(id, session);
   if (!actorMember || actorMember.role !== "OWNER") {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ message: "Seul le propriétaire peut gérer les rôles du groupe." }, { status: 403 });
