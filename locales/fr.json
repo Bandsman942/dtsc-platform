@@ -103,6 +103,7 @@
     "saved": "Élément santé créé.",
     "updated": "Élément santé modifié.",
     "archived": "Élément santé archivé.",
+    "actionSaved": "Action santé enregistrée.",
     "failed": "Action santé impossible.",
     "labels": {
       "title": "Titre",

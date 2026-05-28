@@ -9,10 +9,15 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout de la première itération sectorielle concrète pour `HEALTH_CARE`: sous-modules Patients, Rendez-vous et Incidents qualité dans `Administration [Entreprise]`, avec listes recherchables, pagination, détail, formulaire plein écran mobile, modification et archivage via menu `...`.
 - Ajout du modèle `EnterpriseSectorRecord` et de la migration `20260528100000_enterprise_sector_records` pour stocker des données métier sectorielles isolées par `organizationId`, `sectorCode`, `moduleCode` et `recordType`.
 - Ajout des routes sécurisées `GET/POST /api/enterprise/[organizationId]/healthcare` et `PATCH/DELETE /api/enterprise/[organizationId]/healthcare/[recordId]`, avec validation Zod, rate limiting, contrôle du module activé, notifications ciblées et audit logs.
+- Extension de l'itération `HEALTH_CARE` avec dashboard santé, consultations, dossiers médicaux, équipe médicale, laboratoire, pharmacie interne, facturation médicale, assurances/prises en charge, documents médicaux, confidentialité, paramètres et rapports santé.
+- Ajout d'actions métier persistées pour les sous-modules santé: confirmation/annulation de rendez-vous, conversion en consultation, clôture/réouverture, validation labo, gestion de prises en charge, mouvements de stock et résolution d'incident.
+- Ajout de la migration `20260528133000_healthcare_sector_iteration` pour enrichir le template santé, les organisations santé existantes et les blocs Activités santé avec documents médicaux, paramètres, rapports, laboratoire, pharmacie et documents patient.
+- Ajout d'une documentation dédiée `docs/sectors/health-care.md` pour les sous-modules, workflows, permissions, stockage et limites de l'itération santé.
 
 ### Sécurisé
 
 - Les données santé ne sont servies qu'aux membres actifs pouvant gérer l'administration de l'entreprise active et uniquement si l'organisation est une entreprise cliente active de secteur `HEALTH_CARE`.
+- Les sous-modules santé avancés continuent d'utiliser `organizationId`, `sectorCode = HEALTH_CARE`, les permissions de module entreprise, le rate limiting et les audit logs; les incidents critiques notifient les responsables entreprise actifs.
 
 ## 2026-05-27
 

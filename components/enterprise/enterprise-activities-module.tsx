@@ -32,6 +32,51 @@ type ActivityRequest = {
   block: { labelFr: string; labelEn: string; icon: string | null } | null;
 };
 
+const healthActivityFields: Record<string, Array<{ name: string; label: string; placeholder: string; type?: "textarea" | "text" | "number" }>> = {
+  REPORT_PATIENT_INCIDENT: [
+    { name: "patient", label: "Patient concerné", placeholder: "Nom ou code patient, si concerné" },
+    { name: "service", label: "Service concerné", placeholder: "Consultation, soins infirmiers, laboratoire..." },
+    { name: "severity", label: "Criticité", placeholder: "Faible, moyenne, élevée ou critique" },
+  ],
+  REQUEST_COVERAGE: [
+    { name: "patient", label: "Patient", placeholder: "Nom ou code patient" },
+    { name: "insurer", label: "Assureur", placeholder: "Nom de l'assureur ou organisme" },
+    { name: "benefit", label: "Prestation concernée", placeholder: "Consultation, laboratoire, acte médical..." },
+    { name: "estimatedAmount", label: "Montant estimé", placeholder: "Montant estimé", type: "number" },
+  ],
+  SUBMIT_MEDICAL_REPORT: [
+    { name: "period", label: "Période", placeholder: "Semaine, mois ou plage concernée" },
+    { name: "service", label: "Service", placeholder: "Service médical concerné" },
+    { name: "difficulties", label: "Difficultés", placeholder: "Difficultés rencontrées", type: "textarea" },
+    { name: "recommendations", label: "Recommandations", placeholder: "Actions recommandées", type: "textarea" },
+  ],
+  REQUEST_MEDICAL_OPINION: [
+    { name: "patient", label: "Patient", placeholder: "Nom ou code patient" },
+    { name: "context", label: "Contexte", placeholder: "Contexte clinique synthétique", type: "textarea" },
+    { name: "question", label: "Question médicale", placeholder: "Avis attendu", type: "textarea" },
+    { name: "recipient", label: "Médecin destinataire", placeholder: "Nom du médecin ou service" },
+  ],
+  REPORT_CONFIDENTIALITY_ISSUE: [
+    { name: "scope", label: "Donnée concernée", placeholder: "Dossier, document, consultation..." },
+    { name: "impact", label: "Impact observé", placeholder: "Impact patient ou confidentialité", type: "textarea" },
+  ],
+  REPORT_LAB_ISSUE: [
+    { name: "patient", label: "Patient concerné", placeholder: "Nom ou code patient, si concerné" },
+    { name: "exam", label: "Examen concerné", placeholder: "Type d'examen ou référence" },
+    { name: "impact", label: "Problème constaté", placeholder: "Retard, résultat, prélèvement...", type: "textarea" },
+  ],
+  REPORT_PHARMACY_STOCKOUT: [
+    { name: "product", label: "Produit concerné", placeholder: "Nom du produit médical" },
+    { name: "quantity", label: "Quantité restante", placeholder: "Quantité disponible" },
+    { name: "need", label: "Besoin estimé", placeholder: "Besoin urgent ou seuil attendu" },
+  ],
+  SUBMIT_PATIENT_DOCUMENT: [
+    { name: "patient", label: "Patient", placeholder: "Nom ou code patient" },
+    { name: "documentType", label: "Type document", placeholder: "Ordonnance, certificat, résultat..." },
+    { name: "reason", label: "Contexte du dépôt", placeholder: "Pourquoi ce document doit être traité", type: "textarea" },
+  ],
+};
+
 export function EnterpriseActivitiesModule({
   organization,
   blocks,
@@ -50,6 +95,7 @@ export function EnterpriseActivitiesModule({
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
   const [message, setMessage] = useState("");
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
+  const selectedActivityFields = healthActivityFields[selectedBlockCode] || [];
   const list = useSmartList({
     items: requests,
     pageSize: 8,
@@ -58,21 +104,33 @@ export function EnterpriseActivitiesModule({
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     if (!selectedBlockCode) {
       setMessage("Choisissez un bloc d'activité.");
       return;
     }
     setMessage("");
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const formData = new FormData(formElement);
+    const title = String(formData.get("title") || "");
+    const baseDescription = String(formData.get("description") || "");
+    const priority = String(formData.get("priority") || "NORMAL");
+    const activityFields = healthActivityFields[selectedBlockCode] || [];
+    const details = activityFields
+      .map((field) => {
+        const value = String(formData.get(field.name) || "").trim();
+        return value ? `${field.label}: ${value}` : "";
+      })
+      .filter(Boolean);
+    const description = details.length ? `${baseDescription}\n\n${details.join("\n")}` : baseDescription;
     const response = await fetch(`/api/enterprise/${organization.id}/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, blockCode: selectedBlockCode }),
+      body: JSON.stringify({ title, description, priority, blockCode: selectedBlockCode }),
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     setMessage(response.ok ? "Demande envoyée." : body?.message || "Envoi impossible.");
     if (response.ok) {
-      event.currentTarget.reset();
+      formElement.reset();
       router.refresh();
     }
   }
@@ -118,6 +176,20 @@ export function EnterpriseActivitiesModule({
             </div>
             <Input name="title" placeholder="Titre de la demande" required />
             <textarea name="description" required placeholder="Décrivez précisément la demande, le rapport ou le problème." className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+            {!!selectedActivityFields.length && (
+              <div className="grid gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-3 md:grid-cols-2">
+                {selectedActivityFields.map((field) => (
+                  <label key={field.name} className="grid gap-1 text-sm font-black text-dtsc-ink">
+                    <span className="text-xs uppercase tracking-[0.14em] text-dtsc-muted">{field.label}</span>
+                    {field.type === "textarea" ? (
+                      <textarea name={field.name} placeholder={field.placeholder} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
+                    ) : (
+                      <Input name={field.name} type={field.type || "text"} placeholder={field.placeholder} />
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
             <select name="priority" defaultValue="NORMAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
               <option value="LOW">Faible</option>
               <option value="NORMAL">Normale</option>

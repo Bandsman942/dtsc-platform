@@ -237,7 +237,8 @@ Conserver une hiérarchie visible pour:
 - Les changements de secteur doivent fusionner ou remplacer uniquement les éléments sectoriels générés; ne jamais écraser silencieusement les personnalisations entreprise sans action explicite.
 - Les futures extensions sectorielles doivent documenter les modules, postes, blocs d'activités, workflows et permissions dans `docs/enterprise-sector-modules.md`.
 - Les itérations sectorielles doivent être livrées secteur par secteur: commencer par des sous-modules réellement persistés, avec liste, recherche, filtres, formulaire complet, détail, actions `...`, audit et isolation `organizationId`.
-- Le secteur `HEALTH_CARE` utilise `EnterpriseSectorRecord` pour ses premiers sous-modules exploitables (`PATIENTS`, `APPOINTMENTS`, `QUALITY_INCIDENTS`); toute route doit vérifier `sectorCode = HEALTH_CARE`, membership actif, module activé et rôle entreprise avant lecture/écriture.
+- Le secteur `HEALTH_CARE` utilise `EnterpriseSectorRecord` pour ses sous-modules exploitables (`PATIENTS`, `APPOINTMENTS`, `CONSULTATIONS`, `MEDICAL_RECORDS`, `CARE_TEAM`, `LABORATORY`, `INTERNAL_PHARMACY`, `MEDICAL_BILLING`, `INSURANCE_COVERAGE`, `QUALITY_INCIDENTS`, `MEDICAL_DOCUMENTS`, `MEDICAL_CONFIDENTIALITY`, `HEALTH_SETTINGS`, `HEALTH_REPORTS`); toute route doit vérifier `sectorCode = HEALTH_CARE`, membership actif, module activé et rôle entreprise avant lecture/écriture.
+- Les actions santé visibles (confirmer/annuler rendez-vous, convertir en consultation, clôturer/rouvrir, valider labo, gérer prise en charge, mouvement de stock, résoudre incident, archiver) doivent rester persistées, journalisées et isolées par `organizationId`.
 - Les données métier sectorielles génériques doivent être stockées dans `EnterpriseSectorRecord` ou dans une table dédiée documentée; ne jamais afficher une carte sectorielle avancée sans route API persistante associée.
 
 ## Advanced Mobile UX, Activities, Groups, Files and Audit Standards

@@ -103,6 +103,7 @@
     "saved": "Healthcare item created.",
     "updated": "Healthcare item updated.",
     "archived": "Healthcare item archived.",
+    "actionSaved": "Healthcare action saved.",
     "failed": "Healthcare action failed.",
     "labels": {
       "title": "Title",

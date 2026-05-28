@@ -122,17 +122,22 @@ Routes ajoutées:
 
 La migration `20260528100000_enterprise_sector_records` ajoute `EnterpriseSectorRecord`, un stockage générique pour les premières itérations sectorielles exploitables. Chaque enregistrement contient `organizationId`, `sectorCode`, `moduleCode`, `recordType`, statut, priorité, responsable optionnel et `payloadJson` métier. Les relations vers `Organization` et `User` permettent l'audit, l'assignation et l'isolation stricte par entreprise.
 
+La migration `20260528133000_healthcare_sector_iteration` complète le template santé et les organisations `HEALTH_CARE` existantes avec les modules sectoriels `MEDICAL_DOCUMENTS`, `HEALTH_SETTINGS`, `HEALTH_REPORTS`, ainsi que les blocs Activités santé `REPORT_LAB_ISSUE`, `REPORT_PHARMACY_STOCKOUT` et `SUBMIT_PATIENT_DOCUMENT`.
+
 Première itération active: `HEALTH_CARE`.
 
 - Interface: `components/enterprise/healthcare-admin-workspace.tsx`, affichée dans `Administration [Entreprise]` uniquement pour les organisations `HEALTH_CARE`.
-- Sous-modules: `PATIENTS`, `APPOINTMENTS`, `QUALITY_INCIDENTS`.
+- Sous-modules Administration santé: dashboard santé, patients, rendez-vous, consultations, dossiers médicaux, équipe médicale, laboratoire, pharmacie interne, facturation médicale, assurances/prises en charge, incidents qualité, documents médicaux, confidentialité médicale, paramètres santé et rapports santé.
+- Activités santé: les blocs santé de `Activités [Entreprise]` peuvent collecter des champs métier contextualisés et créent toujours une vraie `EnterpriseActivityRequest` liée à `organizationId`.
 - API:
   - `GET /api/enterprise/[organizationId]/healthcare` pour lister les enregistrements santé autorisés;
   - `POST /api/enterprise/[organizationId]/healthcare` pour créer un enregistrement;
   - `PATCH /api/enterprise/[organizationId]/healthcare/[recordId]` pour modifier;
   - `DELETE /api/enterprise/[organizationId]/healthcare/[recordId]` pour archiver logiquement.
 
-Ces routes vérifient la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module activé via `canAccessEnterpriseModule()`, la validation Zod et le rate limiting. Les créations/modifications/archivages journalisent `AuditLog` et créent une notification lorsqu'un responsable membre de l'organisation est assigné.
+Ces routes vérifient la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module activé via `canAccessEnterpriseModule()`, la validation Zod et le rate limiting. Les créations/modifications/archivages journalisent `AuditLog` et créent une notification lorsqu'un responsable membre de l'organisation est assigné. Les incidents qualité critiques notifient également les rôles de gestion actifs de l'entreprise.
+
+Les actions `PATCH` métier mettent à jour le statut et l'historique léger dans `payloadJson`: confirmation ou annulation de rendez-vous, marquage absent, conversion en consultation, clôture/réouverture de consultation, validation labo, soumission/approbation/rejet de prise en charge, entrée/sortie/ajustement de stock et résolution d'incident. Les consultations clôturées, factures payées et résultats validés sont verrouillés contre modification libre jusqu'à réouverture autorisée.
 
 Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
 

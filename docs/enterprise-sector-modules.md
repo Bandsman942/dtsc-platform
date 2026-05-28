@@ -100,13 +100,25 @@ Ce module permet de consulter et gérer les modules, sections, postes, départem
 
 ### Itération `HEALTH_CARE`
 
-La première itération sectorielle approfondie concerne `HEALTH_CARE`. Quand une entreprise active possède `sectorCode = HEALTH_CARE`, `Administration [Entreprise]` affiche un bloc `Santé - sous-modules métier`.
+La première itération sectorielle approfondie concerne `HEALTH_CARE`. Quand une entreprise active possède `sectorCode = HEALTH_CARE`, `Administration [Entreprise]` affiche un bloc `Santé - sous-modules métier` avec dashboard, sous-modules, listes, formulaires, détails et actions persistées.
 
 Sous-modules disponibles:
 
-- `PATIENTS`: profils administratifs patients, référents, contacts et prise en charge.
-- `APPOINTMENTS`: rendez-vous et suivis internes.
-- `QUALITY_INCIDENTS`: incidents qualité, confidentialité, sécurité et amélioration continue.
+- `HEALTH_DASHBOARD`: indicateurs santé consolidés à partir des données persistées.
+- `PATIENTS`: profils administratifs patients, référents, contacts, allergies et antécédents.
+- `APPOINTMENTS`: rendez-vous, confirmation, absence, annulation et conversion en consultation.
+- `CONSULTATIONS`: constantes, symptômes, examens, diagnostics, prescription, clôture et réouverture.
+- `MEDICAL_RECORDS`: dossier médical patient, antécédents, allergies, traitements, alertes et notes.
+- `CARE_TEAM`: affectations internes, postes santé, services, spécialités et permissions sectorielles.
+- `LABORATORY`: demandes d'examens, résultats, conclusions et validation.
+- `INTERNAL_PHARMACY`: produits médicaux, stock, seuils, péremption et mouvements.
+- `MEDICAL_BILLING`: factures médicales, lignes de facturation, montants, paiement et verrouillage.
+- `INSURANCE_COVERAGE`: prises en charge, assureurs, montants demandés/approuvés et validation.
+- `QUALITY_INCIDENTS`: incidents patient, soin, confidentialité, laboratoire, pharmacie, facturation ou qualité.
+- `MEDICAL_DOCUMENTS`: références de documents médicaux contrôlés et niveau de confidentialité.
+- `MEDICAL_CONFIDENTIALITY`: règles internes d'accès aux dossiers et notes sensibles.
+- `HEALTH_SETTINGS`: paramètres santé de l'établissement.
+- `HEALTH_REPORTS`: rapports d'activité santé par période et service.
 
 Chaque sous-module expose:
 
@@ -114,9 +126,11 @@ Chaque sous-module expose:
 - un formulaire complet en dialogue haut/mobile-first;
 - une fiche de détail;
 - des statuts et priorités;
-- un menu `...` pour consulter, modifier ou archiver;
+- un menu `...` pour consulter, modifier, archiver ou déclencher les actions métier autorisées;
 - une écriture réelle dans `EnterpriseSectorRecord`;
 - un audit `ENTERPRISE_HEALTHCARE_RECORD_CREATED`, `ENTERPRISE_HEALTHCARE_RECORD_UPDATED` ou `ENTERPRISE_HEALTHCARE_RECORD_ARCHIVED`.
+
+Les actions métier persistées incluent notamment confirmation/annulation de rendez-vous, marquage absent, conversion en consultation, clôture/réouverture de consultation, validation de résultat labo, soumission/approbation/rejet d'une prise en charge, mouvements de pharmacie et résolution d'incident.
 
 Routes associées:
 
@@ -125,7 +139,9 @@ Routes associées:
 - `PATCH /api/enterprise/[organizationId]/healthcare/[recordId]`: modifie un enregistrement santé.
 - `DELETE /api/enterprise/[organizationId]/healthcare/[recordId]`: archive logiquement un enregistrement santé.
 
-Les routes exigent un membership actif, une organisation cliente active, `sectorCode = HEALTH_CARE`, un module santé activé et une permission organisationnelle compatible. Le rôle global DTSC ne donne aucun accès automatique aux données santé d'une entreprise cliente.
+Les routes exigent un membership actif, une organisation cliente active, `sectorCode = HEALTH_CARE`, un module santé activé et une permission organisationnelle compatible. Les sous-modules documents, confidentialité, paramètres et rapports s'appuient sur les modules entreprise `MEDICAL_RECORDS`, `SETTINGS` ou `REPORTS` pour vérifier les droits. Le rôle global DTSC ne donne aucun accès automatique aux données santé d'une entreprise cliente.
+
+Voir `docs/sectors/health-care.md` pour les workflows, permissions et limites de cette itération.
 
 ## Activités [Entreprise]
 

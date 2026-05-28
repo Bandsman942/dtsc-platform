@@ -11,19 +11,70 @@ import { enterpriseHealthcareRecordSchema } from "@/lib/validators";
 type Params = { params: Promise<{ organizationId: string }> };
 
 const HEALTHCARE_SECTOR_CODE = "HEALTH_CARE";
+const HEALTHCARE_RECORD_TYPES: Record<string, string> = {
+  PATIENTS: "PATIENT_PROFILE",
+  APPOINTMENTS: "APPOINTMENT",
+  CONSULTATIONS: "CONSULTATION",
+  MEDICAL_RECORDS: "MEDICAL_RECORD",
+  CARE_TEAM: "CARE_TEAM_MEMBER",
+  LABORATORY: "LAB_REQUEST",
+  INTERNAL_PHARMACY: "PHARMACY_ITEM",
+  MEDICAL_BILLING: "MEDICAL_INVOICE",
+  INSURANCE_COVERAGE: "INSURANCE_COVERAGE",
+  QUALITY_INCIDENTS: "QUALITY_INCIDENT",
+  MEDICAL_CONFIDENTIALITY: "CONFIDENTIALITY_RULE",
+  MEDICAL_DOCUMENTS: "MEDICAL_DOCUMENT",
+  HEALTH_SETTINGS: "HEALTH_SETTING",
+  HEALTH_REPORTS: "HEALTH_REPORT",
+};
 
 type HealthcareRecordInput = z.infer<typeof enterpriseHealthcareRecordSchema>;
 
 function compactHealthcarePayload(data: HealthcareRecordInput): Prisma.InputJsonValue {
   return {
+    sex: data.sex || null,
+    birthDateOrAge: data.birthDateOrAge || null,
+    address: data.address || null,
+    emergencyContact: data.emergencyContact || null,
+    emergencyPhone: data.emergencyPhone || null,
+    email: data.email || null,
+    profession: data.profession || null,
+    maritalStatus: data.maritalStatus || null,
+    bloodGroup: data.bloodGroup || null,
+    allergies: data.allergies || null,
+    medicalHistory: data.medicalHistory || null,
     patientCode: data.patientCode || null,
     patientName: data.patientName || null,
     contactPhone: data.contactPhone || null,
+    linkedRecordId: data.linkedRecordId || null,
+    healthProfessional: data.healthProfessional || null,
     appointmentDate: data.appointmentDate || null,
     appointmentType: data.appointmentType || null,
     careTeam: data.careTeam || null,
+    vitalSigns: data.vitalSigns || null,
+    symptoms: data.symptoms || null,
+    clinicalExam: data.clinicalExam || null,
+    provisionalDiagnosis: data.provisionalDiagnosis || null,
+    finalDiagnosis: data.finalDiagnosis || null,
+    treatmentPlan: data.treatmentPlan || null,
+    prescription: data.prescription || null,
+    requestedExams: data.requestedExams || null,
+    recommendations: data.recommendations || null,
     incidentType: data.incidentType || null,
     severity: data.severity,
+    service: data.service || null,
+    amountRequested: data.amountRequested || null,
+    amountApproved: data.amountApproved || null,
+    invoiceLines: data.invoiceLines || null,
+    totalAmount: data.totalAmount || null,
+    paymentMethod: data.paymentMethod || null,
+    stockQuantity: data.stockQuantity || null,
+    stockThreshold: data.stockThreshold || null,
+    expiryDate: data.expiryDate || null,
+    documentType: data.documentType || null,
+    fileReference: data.fileReference || null,
+    settingKey: data.settingKey || null,
+    settingValue: data.settingValue || null,
     confidentialityLevel: data.confidentialityLevel,
     insuranceProvider: data.insuranceProvider || null,
     notes: data.notes || null,
@@ -31,16 +82,20 @@ function compactHealthcarePayload(data: HealthcareRecordInput): Prisma.InputJson
 }
 
 function isConsistentHealthcareRecord(moduleCode: string, recordType: string) {
-  if (moduleCode === "PATIENTS") {
-    return recordType === "PATIENT_PROFILE";
+  return HEALTHCARE_RECORD_TYPES[moduleCode] === recordType;
+}
+
+function permissionModuleCode(moduleCode: string) {
+  if (moduleCode === "MEDICAL_DOCUMENTS") {
+    return "MEDICAL_RECORDS";
   }
-  if (moduleCode === "APPOINTMENTS") {
-    return recordType === "APPOINTMENT";
+  if (moduleCode === "MEDICAL_CONFIDENTIALITY" || moduleCode === "HEALTH_SETTINGS") {
+    return "SETTINGS";
   }
-  if (moduleCode === "QUALITY_INCIDENTS") {
-    return recordType === "QUALITY_INCIDENT";
+  if (moduleCode === "HEALTH_REPORTS") {
+    return "REPORTS";
   }
-  return false;
+  return moduleCode;
 }
 
 async function assertHealthcareOrganization(organizationId: string) {
@@ -98,7 +153,7 @@ export async function GET(req: Request, { params }: Params) {
         : {}),
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 120,
+    take: 300,
     include: {
       createdBy: { select: { name: true, email: true } },
       assignedTo: { select: { id: true, name: true, email: true } },
@@ -137,7 +192,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const data = parsed.data;
-  if (!(await canAccessEnterpriseModule(session.userId, organizationId, data.moduleCode, "write"))) {
+  if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(data.moduleCode), "write"))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à gérer ce sous-module santé." }, { status: 403 });
   }
@@ -183,6 +238,31 @@ export async function POST(req: Request, { params }: Params) {
         targetUrl: "/enterprise-admin",
       },
     });
+  }
+  if (record.moduleCode === "QUALITY_INCIDENTS" && (record.priority === "CRITICAL" || data.severity === "CRITICAL")) {
+    const managers = await prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        removedAt: null,
+        role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"] },
+        userId: { not: session.userId },
+      },
+      select: { userId: true },
+      take: 30,
+    });
+    if (managers.length) {
+      await prisma.notification.createMany({
+        data: managers.map((member) => ({
+          userId: member.userId,
+          title: "Incident santé critique",
+          body: record.title,
+          type: "ENTERPRISE_HEALTHCARE_CRITICAL",
+          targetUrl: "/enterprise-admin",
+        })),
+        skipDuplicates: true,
+      });
+    }
   }
 
   await writeAuditLog({

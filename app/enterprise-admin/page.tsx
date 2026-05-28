@@ -49,7 +49,7 @@ export default async function EnterpriseAdminPage() {
     prisma.enterpriseSectorRecord.findMany({
       where: { organizationId, sectorCode: "HEALTH_CARE", deletedAt: null },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 120,
+      take: 300,
       include: {
         createdBy: { select: { name: true, email: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
