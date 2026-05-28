@@ -118,6 +118,22 @@ Routes ajoutées:
 - `POST /api/admin/client-organizations`: crée une entreprise cliente côté DTSC, peut désigner un administrateur entreprise et lier un plan.
 - `PATCH /api/admin/client-organizations/[id]`: met à jour l'entreprise, change son statut, accorde/retire `ADMIN_ENTREPRISE`, gère son abonnement ou archive/supprime logiquement le contenant administratif.
 
+#### Données métier sectorielles
+
+La migration `20260528100000_enterprise_sector_records` ajoute `EnterpriseSectorRecord`, un stockage générique pour les premières itérations sectorielles exploitables. Chaque enregistrement contient `organizationId`, `sectorCode`, `moduleCode`, `recordType`, statut, priorité, responsable optionnel et `payloadJson` métier. Les relations vers `Organization` et `User` permettent l'audit, l'assignation et l'isolation stricte par entreprise.
+
+Première itération active: `HEALTH_CARE`.
+
+- Interface: `components/enterprise/healthcare-admin-workspace.tsx`, affichée dans `Administration [Entreprise]` uniquement pour les organisations `HEALTH_CARE`.
+- Sous-modules: `PATIENTS`, `APPOINTMENTS`, `QUALITY_INCIDENTS`.
+- API:
+  - `GET /api/enterprise/[organizationId]/healthcare` pour lister les enregistrements santé autorisés;
+  - `POST /api/enterprise/[organizationId]/healthcare` pour créer un enregistrement;
+  - `PATCH /api/enterprise/[organizationId]/healthcare/[recordId]` pour modifier;
+  - `DELETE /api/enterprise/[organizationId]/healthcare/[recordId]` pour archiver logiquement.
+
+Ces routes vérifient la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module activé via `canAccessEnterpriseModule()`, la validation Zod et le rate limiting. Les créations/modifications/archivages journalisent `AuditLog` et créent une notification lorsqu'un responsable membre de l'organisation est assigné.
+
 Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
 
 Règle de sécurité permanente: toute future route interne entreprise doit filtrer par `organizationId`, vérifier un `OrganizationMember` actif, appliquer le rôle organisationnel et ne jamais accepter le rôle global `ADMIN` comme passe-droit vers les données privées d'une entreprise cliente.

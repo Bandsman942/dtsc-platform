@@ -2,6 +2,18 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-05-28
+
+### Ajouté
+
+- Ajout de la première itération sectorielle concrète pour `HEALTH_CARE`: sous-modules Patients, Rendez-vous et Incidents qualité dans `Administration [Entreprise]`, avec listes recherchables, pagination, détail, formulaire plein écran mobile, modification et archivage via menu `...`.
+- Ajout du modèle `EnterpriseSectorRecord` et de la migration `20260528100000_enterprise_sector_records` pour stocker des données métier sectorielles isolées par `organizationId`, `sectorCode`, `moduleCode` et `recordType`.
+- Ajout des routes sécurisées `GET/POST /api/enterprise/[organizationId]/healthcare` et `PATCH/DELETE /api/enterprise/[organizationId]/healthcare/[recordId]`, avec validation Zod, rate limiting, contrôle du module activé, notifications ciblées et audit logs.
+
+### Sécurisé
+
+- Les données santé ne sont servies qu'aux membres actifs pouvant gérer l'administration de l'entreprise active et uniquement si l'organisation est une entreprise cliente active de secteur `HEALTH_CARE`.
+
 ## 2026-05-27
 
 ### Ajouté

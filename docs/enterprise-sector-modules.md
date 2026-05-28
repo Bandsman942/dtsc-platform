@@ -37,6 +37,7 @@ Les modèles sont structurés pour rester compatibles avec des cadres reconnus s
 - `EnterpriseActivityBlock`: blocs réellement visibles dans `Activités [Entreprise]`.
 - `EnterpriseWorkflow`: workflows réellement activés.
 - `EnterpriseActivityRequest`: demandes, rapports ou signalements soumis par les membres de l'entreprise.
+- `EnterpriseSectorRecord`: enregistrements métier sectoriels génériques isolés par `organizationId`, `sectorCode`, `moduleCode` et `recordType`.
 
 ## Secteurs préchargés
 
@@ -96,6 +97,35 @@ Le module `/enterprise-admin` est visible uniquement en contexte `ORGANIZATION` 
 - `MANAGER`.
 
 Ce module permet de consulter et gérer les modules, sections, postes, départements, blocs d'activités et workflows de l'organisation active. Il ne donne pas accès à l'administration globale DTSC.
+
+### Itération `HEALTH_CARE`
+
+La première itération sectorielle approfondie concerne `HEALTH_CARE`. Quand une entreprise active possède `sectorCode = HEALTH_CARE`, `Administration [Entreprise]` affiche un bloc `Santé - sous-modules métier`.
+
+Sous-modules disponibles:
+
+- `PATIENTS`: profils administratifs patients, référents, contacts et prise en charge.
+- `APPOINTMENTS`: rendez-vous et suivis internes.
+- `QUALITY_INCIDENTS`: incidents qualité, confidentialité, sécurité et amélioration continue.
+
+Chaque sous-module expose:
+
+- une liste paginée et recherchable;
+- un formulaire complet en dialogue haut/mobile-first;
+- une fiche de détail;
+- des statuts et priorités;
+- un menu `...` pour consulter, modifier ou archiver;
+- une écriture réelle dans `EnterpriseSectorRecord`;
+- un audit `ENTERPRISE_HEALTHCARE_RECORD_CREATED`, `ENTERPRISE_HEALTHCARE_RECORD_UPDATED` ou `ENTERPRISE_HEALTHCARE_RECORD_ARCHIVED`.
+
+Routes associées:
+
+- `GET /api/enterprise/[organizationId]/healthcare`: liste les enregistrements santé filtrés par organisation.
+- `POST /api/enterprise/[organizationId]/healthcare`: crée un enregistrement santé.
+- `PATCH /api/enterprise/[organizationId]/healthcare/[recordId]`: modifie un enregistrement santé.
+- `DELETE /api/enterprise/[organizationId]/healthcare/[recordId]`: archive logiquement un enregistrement santé.
+
+Les routes exigent un membership actif, une organisation cliente active, `sectorCode = HEALTH_CARE`, un module santé activé et une permission organisationnelle compatible. Le rôle global DTSC ne donne aucun accès automatique aux données santé d'une entreprise cliente.
 
 ## Activités [Entreprise]
 

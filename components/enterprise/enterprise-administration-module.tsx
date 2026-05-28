@@ -7,6 +7,8 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { HealthcareAdminWorkspace, type EnterpriseSectorRecordItem } from "@/components/enterprise/healthcare-admin-workspace";
+import { translate } from "@/lib/i18n";
 
 type EnterpriseModuleItem = {
   id: string;
@@ -83,6 +85,8 @@ export function EnterpriseAdministrationModule({
   activityBlocks,
   workflows,
   recentRequests,
+  sectorRecords,
+  locale,
 }: {
   organization: {
     id: string;
@@ -99,6 +103,8 @@ export function EnterpriseAdministrationModule({
   activityBlocks: EnterpriseActivityBlockItem[];
   workflows: EnterpriseWorkflowItem[];
   recentRequests: EnterpriseRequestItem[];
+  sectorRecords: EnterpriseSectorRecordItem[];
+  locale?: string | null;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -174,6 +180,12 @@ export function EnterpriseAdministrationModule({
       </section>
 
       <Accordion>
+        {organization.sectorCode === "HEALTH_CARE" && (
+          <AccordionItem title={translate(locale, "enterpriseHealthcare.accordionTitle")} defaultOpen>
+            <HealthcareAdminWorkspace organizationId={organization.id} records={sectorRecords} members={members} locale={locale} />
+          </AccordionItem>
+        )}
+
         <AccordionItem title="Modules entreprise" defaultOpen>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {modules.map((enterpriseModule) => (

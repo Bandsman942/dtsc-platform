@@ -13,7 +13,7 @@ export default async function EnterpriseAdminPage() {
     redirect("/dashboard");
   }
 
-  const [organization, members, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests] = await Promise.all([
+  const [organization, members, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests, sectorRecords] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null },
       select: {
@@ -46,6 +46,15 @@ export default async function EnterpriseAdminPage() {
       take: 10,
       include: { createdBy: { select: { name: true, email: true } } },
     }),
+    prisma.enterpriseSectorRecord.findMany({
+      where: { organizationId, sectorCode: "HEALTH_CARE", deletedAt: null },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 120,
+      include: {
+        createdBy: { select: { name: true, email: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
+      },
+    }),
   ]);
 
   if (!organization) {
@@ -61,8 +70,9 @@ export default async function EnterpriseAdminPage() {
           activeModulesCount: modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
           modulesCount: modules.length,
           openRequestsCount,
-          recentRequestsCount: recentRequests.length,
+        recentRequestsCount: recentRequests.length,
         }}
+        locale={user.locale}
         members={JSON.parse(JSON.stringify(members))}
         modules={JSON.parse(JSON.stringify(modules))}
         departments={JSON.parse(JSON.stringify(departments))}
@@ -70,6 +80,7 @@ export default async function EnterpriseAdminPage() {
         activityBlocks={JSON.parse(JSON.stringify(activityBlocks))}
         workflows={JSON.parse(JSON.stringify(workflows))}
         recentRequests={JSON.parse(JSON.stringify(recentRequests))}
+        sectorRecords={JSON.parse(JSON.stringify(sectorRecords))}
       />
     </AppShell>
   );

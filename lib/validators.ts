@@ -148,6 +148,31 @@ export const enterpriseActivityRequestSchema = z.object({
   priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
 });
 
+const enterpriseHealthcareRecordBaseSchema = z.object({
+  moduleCode: z.enum(["PATIENTS", "APPOINTMENTS", "QUALITY_INCIDENTS"]),
+  recordType: z.enum(["PATIENT_PROFILE", "APPOINTMENT", "QUALITY_INCIDENT"]),
+  title: z.string().trim().min(3).max(180),
+  summary: z.string().max(1200).optional().or(z.literal("")),
+  status: z.enum(["DRAFT", "ACTIVE", "SCHEDULED", "IN_PROGRESS", "RESOLVED", "ARCHIVED"]).default("ACTIVE"),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+  assignedToUserId: z.string().max(160).optional().or(z.literal("")),
+  patientCode: z.string().max(80).optional().or(z.literal("")),
+  patientName: z.string().max(160).optional().or(z.literal("")),
+  contactPhone: z.string().max(80).optional().or(z.literal("")),
+  appointmentDate: z.string().max(80).optional().or(z.literal("")),
+  appointmentType: z.string().max(120).optional().or(z.literal("")),
+  careTeam: z.string().max(500).optional().or(z.literal("")),
+  incidentType: z.string().max(140).optional().or(z.literal("")),
+  severity: z.enum(["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
+  confidentialityLevel: z.enum(["STANDARD", "CONFIDENTIAL", "RESTRICTED"]).default("CONFIDENTIAL"),
+  insuranceProvider: z.string().max(140).optional().or(z.literal("")),
+  notes: z.string().max(2000).optional().or(z.literal("")),
+});
+
+export const enterpriseHealthcareRecordSchema = enterpriseHealthcareRecordBaseSchema;
+
+export const enterpriseHealthcareRecordUpdateSchema = enterpriseHealthcareRecordBaseSchema.partial();
+
 export const internalCalendarAvailabilitySchema = z.object({
   collaboratorId: z.string().min(1),
   dayOfWeek: z.coerce.number().int().min(0).max(6),
