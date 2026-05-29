@@ -151,6 +151,14 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
   const [detailOpen, setDetailOpen] = useState(false);
   const getSearchText = useCallback((item: ActivityItem) => [item.title, item.status, item.detail, item.body].join(" "), []);
   const list = useSmartList({ items: section.items, pageSize: 8, getSearchText });
+  const sectionAction = (
+    <>
+      {section.id === "collab-requests" && <RequestComposer collaborators={collaborators} selected={selected} compact />}
+      {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} compact />}
+      {section.id === "blockers" && <BlockerComposer operations={operations} compact />}
+    </>
+  );
+  const hasSectionAction = section.id === "collab-requests" || section.id === "reports" || section.id === "blockers";
 
   useEffect(() => {
     setSelected(section.items[0] || null);
@@ -161,39 +169,42 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
       {section.id === "collaborator-forms" ? (
         <CollaboratorWorkflowComposer collaborators={collaborators} operations={operations} />
       ) : (
-      <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className={`min-w-0 ${detailOpen ? "hidden lg:block" : "block"}`}>
-          <ListControls
-            query={list.query}
-            onQueryChange={list.setQuery}
-            page={list.page}
-            pageCount={list.pageCount}
-            totalCount={list.totalCount}
-            filteredCount={list.filteredCount}
-            placeholder="Rechercher dans ces activités..."
-            onPageChange={list.setPage}
-          />
-          <div className="max-h-[62dvh] space-y-3 overflow-y-auto pr-1 lg:max-h-[58vh]">
-            {list.paginatedItems.map((item) => (
-              <button key={`${item.entityType}-${item.id}`} type="button" onClick={() => { setSelected(item); setDetailOpen(true); }} className={`w-full rounded-2xl border p-4 text-left ${selected?.id === item.id && selected.entityType === item.entityType ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
-                <MiniItem item={item} />
-              </button>
-            ))}
+        <div className="min-h-0 space-y-4">
+          {hasSectionAction && (
+            <div className="flex flex-wrap justify-end gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+              {sectionAction}
+            </div>
+          )}
+          <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className={`min-w-0 ${detailOpen ? "hidden lg:block" : "block"}`}>
+              <ListControls
+                query={list.query}
+                onQueryChange={list.setQuery}
+                page={list.page}
+                pageCount={list.pageCount}
+                totalCount={list.totalCount}
+                filteredCount={list.filteredCount}
+                placeholder="Rechercher dans ces activités..."
+                onPageChange={list.setPage}
+              />
+              <div className="max-h-[62dvh] space-y-3 overflow-y-auto pr-1 lg:max-h-[58vh]">
+                {list.paginatedItems.map((item) => (
+                  <button key={`${item.entityType}-${item.id}`} type="button" onClick={() => { setSelected(item); setDetailOpen(true); }} className={`w-full rounded-2xl border p-4 text-left ${selected?.id === item.id && selected.entityType === item.entityType ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
+                    <MiniItem item={item} />
+                  </button>
+                ))}
+                {section.items.length === 0 && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-muted">Aucun élément enregistré pour ce bloc.</p>}
+              </div>
+            </div>
+            <div className={`min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 ${detailOpen ? "block" : "hidden lg:block"}`}>
+              <Button type="button" variant="outline" onClick={() => setDetailOpen(false)} className="mb-3 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden">
+                <ArrowLeft className="h-4 w-4" />
+                Retour à la liste
+              </Button>
+              {selected ? <ActivityDetail item={selected} collaborators={collaborators} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
+            </div>
           </div>
         </div>
-        <div className={`min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 ${detailOpen ? "block" : "hidden lg:block"}`}>
-          <Button type="button" variant="outline" onClick={() => setDetailOpen(false)} className="mb-3 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden">
-            <ArrowLeft className="h-4 w-4" />
-            Retour à la liste
-          </Button>
-          <div className="mb-4 flex justify-end">
-            {section.id === "collab-requests" && <RequestComposer collaborators={collaborators} selected={selected} compact />}
-            {section.id === "reports" && <ReportComposer collaborators={collaborators} operations={operations} compact />}
-            {section.id === "blockers" && <BlockerComposer operations={operations} compact />}
-          </div>
-          {selected ? <ActivityDetail item={selected} collaborators={collaborators} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
-        </div>
-      </div>
       )}
     </Dialog>
   );
@@ -268,9 +279,7 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
               </select>
             </FormField>
             <FormField label="Participants" hint="Sélectionnez un ou plusieurs collaborateurs concernés." className="md:col-span-2">
-              <select name="participantIds" multiple className="min-h-36 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-                {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
-              </select>
+              <CollaboratorCheckboxList name="participantIds" collaborators={collaborators} emptyLabel="Aucun collaborateur disponible pour cette réunion." />
             </FormField>
             <FormField label="Opération liée" hint="Associez la réunion à une opération existante si nécessaire.">
               <select name="operationId" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
@@ -466,6 +475,28 @@ function ActivityFileField({ name, label }: { name: string; label: string }) {
             )}
           </Dialog>
         </div>
+      )}
+    </div>
+  );
+}
+
+function CollaboratorCheckboxList({ name, collaborators, emptyLabel }: { name: string; collaborators: CollaboratorOption[]; emptyLabel: string }) {
+  return (
+    <div className="max-h-48 min-h-32 overflow-y-auto rounded-xl border border-dtsc-border bg-dtsc-page p-2">
+      {collaborators.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {collaborators.map((collaborator) => (
+            <label key={collaborator.id} className="flex min-w-0 items-start gap-2 rounded-xl bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink">
+              <input name={name} value={collaborator.id} type="checkbox" className="mt-1 h-4 w-4 rounded border-dtsc-border text-cyan-500" />
+              <span className="min-w-0">
+                <span className="block truncate">{collaborator.label}</span>
+                {collaborator.email && <span className="block truncate text-xs text-dtsc-muted">{collaborator.email}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-xl bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-muted">{emptyLabel}</p>
       )}
     </div>
   );

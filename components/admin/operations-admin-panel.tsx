@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, ClipboardList, Download, Eye, FileText, Plus, Save, Trash2 } from "lucide-react";
+import { useCallback, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { CalendarDays, ClipboardList, Download, Eye, FileText, Plus, Save, Trash2, UploadCloud, X } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,17 @@ import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import type { OperationDataset, OperationField, OperationRecord } from "@/lib/admin-operations-types";
 import { formatEnumLabel } from "@/lib/labels";
+
+const maxOperationFileSize = 6_000_000;
+const medicalProjectFieldNames = new Set([
+  "healthDigitalCategory",
+  "healthObjective",
+  "medicalDataConcerned",
+  "medicalRisk",
+  "confidentialityConstraint",
+  "healthValidation",
+  "ethicalCompliance",
+]);
 
 export function OperationsAdminPanel({
   eyebrow,
@@ -493,6 +504,10 @@ function OperationForm({
     return values;
   }, [defaults, fields]);
   const [previewValues, setPreviewValues] = useState(initialPreviews);
+  const hasMedicalDefaults = useMemo(() => {
+    return [...medicalProjectFieldNames].some((fieldName) => Boolean(defaults[fieldName]));
+  }, [defaults]);
+  const [medicalProjectEnabled, setMedicalProjectEnabled] = useState(hasMedicalDefaults || defaults.projectType === "DIGITAL_HEALTH");
 
   function setSelectPreview(fieldName: string, email: string) {
     setPreviewValues((current) => ({ ...current, [fieldName]: email }));
@@ -500,16 +515,23 @@ function OperationForm({
 
   return (
     <form onSubmit={onSubmit} className="grid min-w-0 gap-3 md:grid-cols-2">
-      {fields.map((field) => (
-        <FieldInput
-          key={field.name}
-          field={field}
-          disabled={disabled}
-          defaultValue={defaults[field.name] || ""}
-          previewValue={field.previewFor ? previewValues[field.previewFor] || "" : ""}
-          onSelectPreview={setSelectPreview}
-        />
-      ))}
+      {fields.map((field) => {
+        if (medicalProjectFieldNames.has(field.name) && !medicalProjectEnabled) {
+          return null;
+        }
+        return (
+          <FieldInput
+            key={field.name}
+            field={field}
+            disabled={disabled}
+            defaultValue={defaults[field.name] || ""}
+            previewValue={field.previewFor ? previewValues[field.previewFor] || "" : ""}
+            onSelectPreview={setSelectPreview}
+            checkboxChecked={field.name === "isMedicalProject" ? medicalProjectEnabled : undefined}
+            onCheckboxChange={field.name === "isMedicalProject" ? setMedicalProjectEnabled : undefined}
+          />
+        );
+      })}
       <div className="md:col-span-2">
         <Button disabled={disabled} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           {submitIcon === "plus" ? <Plus className="h-4 w-4" /> : <Save className="h-4 w-4" />}
@@ -526,19 +548,44 @@ function FieldInput({
   defaultValue,
   previewValue,
   onSelectPreview,
+  checkboxChecked,
+  onCheckboxChange,
 }: {
   field: OperationField;
   disabled: boolean;
   defaultValue: string;
   previewValue: string;
   onSelectPreview: (fieldName: string, email: string) => void;
+  checkboxChecked?: boolean;
+  onCheckboxChange?: (checked: boolean) => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState("");
   const className = "w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_82%,transparent)] px-3 py-2 text-sm text-dtsc-ink backdrop-blur-xl";
   const label = (
     <span className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">
       {field.label}
     </span>
   );
+  const defaultValues = defaultValue.split(",").map((value) => value.trim()).filter(Boolean);
+
+  function handleOperationFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0] || null;
+    if (!file) {
+      setSelectedFile(null);
+      setFileError("");
+      return;
+    }
+    if (file.size > maxOperationFileSize) {
+      event.currentTarget.value = "";
+      setSelectedFile(null);
+      setFileError("Le fichier dépasse la limite autorisée de 6 Mo.");
+      return;
+    }
+    setSelectedFile(file);
+    setFileError("");
+  }
 
   if (field.type === "hidden") {
     return <input type="hidden" name={field.name} value={defaultValue || field.placeholder || ""} />;
@@ -556,23 +603,56 @@ function FieldInput({
 
   if (field.type === "file") {
     return (
-      <label className="grid min-w-0 gap-1 md:col-span-2">
+      <div className="grid min-w-0 gap-2 md:col-span-2">
         {label}
-        {defaultValue && (
-          <a href={defaultValue} target="_blank" rel="noreferrer" className="w-fit rounded-xl bg-dtsc-soft px-3 py-2 text-xs font-black text-dtsc-blue underline-offset-4 hover:underline">
-            Voir le fichier existant
-          </a>
-        )}
+        {defaultValue && <FileAttachmentPreview href={defaultValue} label="Fichier déjà associé" />}
         <input type="hidden" name={field.name} value={defaultValue} />
         <input
+          ref={fileInputRef}
           name={`${field.name}__file`}
           type="file"
           disabled={disabled}
-          className={`${className} file:mr-3 file:rounded-lg file:border-0 file:bg-dtsc-blue file:px-3 file:py-1 file:text-xs file:font-black file:text-white`}
+          onChange={handleOperationFileChange}
+          className="sr-only"
           accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.txt,application/pdf,image/png,image/jpeg,image/webp"
         />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => fileInputRef.current?.click()}
+          className="flex min-h-28 w-full min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-cyan-300/70 bg-cyan-400/10 px-4 py-5 text-center transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <UploadCloud className="h-5 w-5 text-cyan-500" />
+          <span className="text-sm font-black text-dtsc-ink">{selectedFile ? selectedFile.name : "Sélectionner un fichier depuis l'appareil"}</span>
+          <span className="text-xs leading-5 text-dtsc-muted">PDF, image, Word, Excel ou texte. Taille maximale: 6 Mo.</span>
+        </button>
+        {selectedFile && (
+          <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink">
+              <FileText className="h-4 w-4 shrink-0 text-cyan-500" />
+              <span className="truncate">{selectedFile.name}</span>
+              <span className="shrink-0 text-xs text-dtsc-muted">{formatFileSize(selectedFile.size)}</span>
+            </span>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                setSelectedFile(null);
+                setFileError("");
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = "";
+                }
+              }}
+              className="h-8 w-8 rounded-xl text-dtsc-muted hover:text-red-500"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {fileError && <span className="text-xs font-bold text-red-500">{fileError}</span>}
         {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
-      </label>
+      </div>
     );
   }
 
@@ -586,8 +666,60 @@ function FieldInput({
     );
   }
 
-  if (field.type === "select" || field.type === "select-multiple") {
-    const defaultValues = defaultValue.split(",").map((value) => value.trim()).filter(Boolean);
+  if (field.type === "checkbox") {
+    const checked = checkboxChecked ?? (defaultValue === "true" || defaultValue === "on");
+    return (
+      <label className="flex min-w-0 items-start gap-3 rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_82%,transparent)] p-3 md:col-span-2">
+        <input
+          name={field.name}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled || field.readOnly}
+          onChange={(event) => onCheckboxChange?.(event.currentTarget.checked)}
+          className="mt-1 h-4 w-4 rounded border-dtsc-border text-cyan-500"
+        />
+        <span className="min-w-0">
+          {label}
+          {field.helperText && <span className="mt-1 block text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
+        </span>
+      </label>
+    );
+  }
+
+  if (field.type === "select-multiple") {
+    return (
+      <div className="grid min-w-0 gap-1 md:col-span-2">
+        {label}
+        <div className="max-h-48 min-h-28 overflow-y-auto rounded-xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_82%,transparent)] p-2">
+          {field.options && field.options.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {field.options.map((option) => (
+                <label key={option.value} className="flex min-w-0 items-start gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-sm font-semibold text-dtsc-ink">
+                  <input
+                    name={field.name}
+                    value={option.value}
+                    type="checkbox"
+                    defaultChecked={defaultValues.includes(option.value) || defaultValues.includes(option.label)}
+                    disabled={disabled || field.readOnly}
+                    className="mt-1 h-4 w-4 rounded border-dtsc-border text-cyan-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate">{option.label}</span>
+                    {option.email && <span className="block truncate text-xs text-dtsc-muted">{option.email}</span>}
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl bg-dtsc-page px-3 py-2 text-sm font-semibold text-dtsc-muted">Aucun collaborateur disponible.</p>
+          )}
+        </div>
+        {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
+      </div>
+    );
+  }
+
+  if (field.type === "select") {
     return (
       <label className="grid min-w-0 gap-1">
         {label}
@@ -595,15 +727,14 @@ function FieldInput({
           name={field.name}
           required={field.required}
           disabled={disabled || field.readOnly}
-          multiple={field.type === "select-multiple"}
-          defaultValue={field.type === "select-multiple" ? defaultValues : defaultValue}
-          className={`${className} ${field.type === "select-multiple" ? "min-h-28" : ""}`}
+          defaultValue={defaultValue}
+          className={className}
           onChange={(event) => {
             const email = event.currentTarget.selectedOptions[0]?.dataset.email || "";
             onSelectPreview(field.name, email);
           }}
         >
-          {!field.required && field.type !== "select-multiple" && <option value="">Non renseigné</option>}
+          {!field.required && <option value="">Non renseigné</option>}
           {field.options?.map((option) => (
             <option key={option.value} value={option.value} data-email={option.email || ""}>{option.label}</option>
           ))}
@@ -670,12 +801,22 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function formatFileSize(size: number) {
+  if (size < 1024 * 1024) {
+    return `${Math.max(1, Math.round(size / 1024))} Ko`;
+  }
+  return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
 async function buildPayloadWithUploads(form: HTMLFormElement) {
   const formData = new FormData(form);
   const payload: Record<string, FormDataEntryValue> = {};
   const uploadEntries = Array.from(formData.entries()).filter(([key, value]) => key.endsWith("__file") && value instanceof File && value.size > 0);
 
   for (const [key, value] of formData.entries()) {
+    if (key === "isMedicalProject") {
+      continue;
+    }
     if (!key.endsWith("__file")) {
       const existing = payload[key];
       payload[key] = existing ? `${existing}, ${value}` : value;
@@ -701,6 +842,8 @@ function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown
   const title = pickString(record, ["title", "fullName", "employeeName", "name", "invoiceNumber", "tag"]) || dataset.label;
   const subtitle = pickString(record, ["department", "jobTitle", "category", "counterparty", "requesterName", "location", "ownerDepartment"]);
   const amount = pickNumber(record, ["amount", "netAmount", "monthlyCompensation", "estimatedAmount", "currentBalance"]);
+  const operationAttachmentCandidate = pickString(record, ["href", "associatedDocuments", "attachmentUrl", "documentUrl", "documentationUrl", "fileUrl"]);
+  const operationAttachmentHref = isAttachmentHref(operationAttachmentCandidate) ? operationAttachmentCandidate : "";
   const meta = compactStrings([
     pickString(record, ["project", "relatedProject", "selectedVendorName", "assignedTo", "ownerName"]),
     pickString(record, ["priority", "urgency", "riskLevel", "condition", "complianceStatus", "budgetStatus"]),
@@ -717,8 +860,8 @@ function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown
     notes: typeof record.notes === "string" ? record.notes : null,
     createdAt: String(record.createdAt || new Date().toISOString()),
     meta,
-    href: typeof record.href === "string"
-      ? record.href
+    href: operationAttachmentHref
+      ? operationAttachmentHref
       : typeof record.invoiceId === "string"
         ? `/api/invoices/${record.invoiceId}/pdf`
         : dataset.id === "payrolls" && typeof record.id === "string"
@@ -726,6 +869,8 @@ function recordFromRaw(dataset: OperationDataset, record: Record<string, unknown
           : null,
     hrefLabel: typeof record.hrefLabel === "string"
       ? record.hrefLabel
+      : operationAttachmentHref
+        ? "Document associé"
       : typeof record.invoiceId === "string"
         ? "Télécharger la facture"
         : dataset.id === "payrolls"
@@ -768,4 +913,8 @@ function pickNumber(record: Record<string, unknown>, keys: string[]) {
     }
   }
   return null;
+}
+
+function isAttachmentHref(value: string) {
+  return value.startsWith("/api/") || value.startsWith("http://") || value.startsWith("https://");
 }

@@ -66,6 +66,13 @@ function option(value: unknown, label: unknown, email?: unknown) {
   return { value: stringOf(value), label: stringOf(label), email: email ? stringOf(email) : undefined };
 }
 
+const materialCategoryOptions = statusOptions(["IT_EQUIPMENT", "OFFICE_SUPPLIES", "NETWORK", "FURNITURE", "CONSUMABLE", "MEDICAL_DEVICE", "LOGISTICS", "SOFTWARE_LICENSE", "OTHER"]);
+const vendorCategoryOptions = statusOptions(["IT_HARDWARE", "OFFICE_SUPPLIES", "CLOUD_SERVICES", "NETWORK_EQUIPMENT", "LOGISTICS", "TRANSPORT", "PRINTING", "MAINTENANCE", "TECHNICAL_PROVIDER", "OTHER"]);
+const assetCategoryOptions = statusOptions(["COMPUTER", "PHONE", "PRINTER", "NETWORK_DEVICE", "FURNITURE", "FIELD_EQUIPMENT", "MEDICAL_DEVICE", "SOFTWARE_LICENSE", "OTHER"]);
+const mpoRecordCategoryOptions = statusOptions(["SCOPING", "SPECIFICATION", "DELIVERABLE", "RISK", "BUDGET", "MATERIAL", "DIGITAL_HEALTH", "DOCUMENTATION", "REPORTING", "COORDINATION", "OTHER"]);
+const ctoRecordCategoryOptions = statusOptions(["ARCHITECTURE", "DEVELOPMENT", "API", "DATABASE", "DEPLOYMENT", "SECURITY", "BUG", "DOCUMENTATION", "QUALITY", "SUPPORT", "OTHER"]);
+const healthDigitalCategoryOptions = statusOptions(["PATIENT_PORTAL", "TELEMEDICINE", "EHR", "LAB_SYSTEM", "PHARMACY_SYSTEM", "INSURANCE_COVERAGE", "MEDICAL_BILLING", "HEALTH_ANALYTICS", "INTEROPERABILITY", "QUALITY_PATIENT_SAFETY", "OTHER"]);
+
 function compactStrings(values: Array<string | null | undefined>) {
   return values.filter((value): value is string => Boolean(value));
 }
@@ -362,7 +369,7 @@ export function buildScoDatasets(data: {
       fields: [
         { name: "name", label: "Nom du bien", type: "text", required: true },
         { name: "sku", label: "Référence / code", type: "text" },
-        { name: "category", label: "Catégorie", type: "text", required: true },
+        { name: "category", label: "Catégorie", type: "select", required: true, options: materialCategoryOptions },
         selectField("itemType", "Type de bien", ["STOCK", "ASSET", "EQUIPMENT", "CONSUMABLE", "SERVICE_TOOL"]),
         { name: "unit", label: "Unité", type: "text", placeholder: "unité" },
         { name: "quantity", label: "Quantité", type: "number" },
@@ -398,7 +405,7 @@ export function buildScoDatasets(data: {
       endpoint: "/api/admin/sco/vendors",
       fields: [
         { name: "name", label: "Fournisseur", type: "text", required: true },
-        { name: "category", label: "Catégorie", type: "text", required: true },
+        { name: "category", label: "Catégorie", type: "select", required: true, options: vendorCategoryOptions },
         selectField("vendorType", "Type fournisseur", ["IT_HARDWARE", "OFFICE_SUPPLIES", "CLOUD_SERVICES", "NETWORK_EQUIPMENT", "LOGISTICS", "TRANSPORT", "PRINTING", "MAINTENANCE", "TECHNICAL_PROVIDER", "OTHER"]),
         { name: "contactName", label: "Contact", type: "text" },
         { name: "email", label: "Email", type: "email" },
@@ -482,7 +489,7 @@ export function buildScoDatasets(data: {
         { name: "materialItemId", label: "Bien matériel", type: "select", options: materialOptions, helperText: "Optionnel: lie cet inventaire au référentiel des biens matériels DTSC." },
         { name: "name", label: "Article", type: "text", required: true },
         { name: "sku", label: "Référence", type: "text" },
-        { name: "category", label: "Catégorie", type: "text", required: true },
+        { name: "category", label: "Catégorie", type: "select", required: true, options: materialCategoryOptions },
         { name: "quantity", label: "Quantité", type: "number" },
         { name: "minimumQuantity", label: "Seuil minimum", type: "number" },
         { name: "unit", label: "Unité", type: "text" },
@@ -520,7 +527,7 @@ export function buildScoDatasets(data: {
         { name: "materialItemId", label: "Bien matériel", type: "select", options: materialOptions, helperText: "Optionnel: lie cet actif au référentiel des biens matériels DTSC." },
         { name: "tag", label: "Tag", type: "text", required: true },
         { name: "name", label: "Équipement", type: "text", required: true },
-        { name: "category", label: "Catégorie", type: "text", required: true },
+        { name: "category", label: "Catégorie", type: "select", required: true, options: assetCategoryOptions },
         { name: "brandModel", label: "Marque / modèle", type: "text" },
         { name: "serialNumber", label: "Numéro de série", type: "text" },
         { name: "estimatedValue", label: "Valeur estimée", type: "number" },
@@ -565,7 +572,7 @@ export function buildScoDatasets(data: {
         { name: "relatedProjectId", label: "Projet MPO lié", type: "select", options: mpoProjectOptions },
         { name: "relatedTechnicalProjectId", label: "Projet CTO lié", type: "select", options: ctoProjectOptions },
         { name: "relatedTaskId", label: "Tâche COO liée", type: "select", options: cooTaskOptions },
-        { name: "participants", label: "Participants", type: "textarea" },
+        { name: "participants", label: "Participants", type: "select-multiple", options: employeeNameOptions, helperText: "Cochez les collaborateurs qui participent à la mission." },
         { name: "logisticsNeeds", label: "Besoins logistiques", type: "textarea" },
         { name: "requiredMaterial", label: "Matériel nécessaire", type: "textarea" },
         { name: "estimatedBudget", label: "Budget estimé", type: "number" },
@@ -631,10 +638,11 @@ export function buildMpoDatasets(data: {
         { name: "needDescription", label: "Description du besoin", type: "textarea" },
         { name: "businessObjective", label: "Objectif business", type: "textarea" },
         { name: "technicalObjective", label: "Objectif technique", type: "textarea" },
-        { name: "collaborators", label: "Collaborateurs impliqués", type: "textarea" },
+        { name: "collaborators", label: "Collaborateurs impliqués", type: "select-multiple", options: employeeOptions, helperText: "Cochez les collaborateurs impliqués dans le projet." },
         { name: "expectedDeliverables", label: "Livrables attendus", type: "textarea" },
-        { name: "associatedDocuments", label: "Documents associés", type: "textarea" },
-        { name: "healthDigitalCategory", label: "Catégorie santé digitale", type: "text" },
+        { name: "associatedDocuments", label: "Documents associés", type: "file", helperText: "Fichier privé stocké via la route sécurisée et consultable selon les droits Administration." },
+        { name: "isMedicalProject", label: "Projet médical / santé digitale", type: "checkbox", helperText: "Cochez uniquement si ce projet traite un parcours, une donnée ou un processus médical." },
+        { name: "healthDigitalCategory", label: "Catégorie santé digitale", type: "select", options: healthDigitalCategoryOptions },
         { name: "healthObjective", label: "Objectif médical", type: "textarea" },
         { name: "medicalDataConcerned", label: "Données médicales concernées", type: "textarea" },
         { name: "medicalRisk", label: "Risque médical", type: "textarea" },
@@ -668,7 +676,7 @@ export function buildMpoDatasets(data: {
         { name: "title", label: "Titre", type: "text", required: true },
         selectField("status", "Statut", mpoStatus.records),
         selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
-        { name: "category", label: "Catégorie", type: "text" },
+        { name: "category", label: "Catégorie", type: "select", options: mpoRecordCategoryOptions },
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "responsibleEmployeeId", label: "Responsable", type: "select", options: employeeOptions },
         { name: "targetEmployeeId", label: "Destinataire / collaborateur concerné", type: "select", options: employeeOptions },
@@ -736,7 +744,7 @@ export function buildCtoDatasets(data: {
         { name: "documentationUrl", label: "Documentation associée", type: "text" },
         { name: "functionalSummary", label: "Résumé fonctionnel", type: "textarea" },
         { name: "technicalObjective", label: "Objectif technique", type: "textarea" },
-        { name: "technicalCollaborators", label: "Collaborateurs techniques", type: "textarea" },
+        { name: "technicalCollaborators", label: "Collaborateurs techniques", type: "select-multiple", options: employeeOptions, helperText: "Cochez les collaborateurs techniques impliqués." },
         { name: "techStack", label: "Stack technique", type: "textarea" },
         { name: "expectedTechnicalDeliverables", label: "Livrables techniques attendus", type: "textarea" },
         { name: "comments", label: "Commentaires", type: "textarea" },
@@ -765,7 +773,7 @@ export function buildCtoDatasets(data: {
         { name: "title", label: "Titre", type: "text", required: true },
         selectField("status", "Statut", ctoStatus.records),
         selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
-        { name: "category", label: "Catégorie", type: "text" },
+        { name: "category", label: "Catégorie", type: "select", options: ctoRecordCategoryOptions },
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "responsibleEmployeeId", label: "Responsable", type: "select", options: employeeOptions },
         { name: "assigneeEmployeeId", label: "Assigné à", type: "select", options: employeeOptions },
@@ -1135,8 +1143,8 @@ export function buildCooDatasets(data: {
         { name: "title", label: "Titre", type: "text", required: true },
         { name: "pilotDepartmentId", label: "Département pilote", type: "select", required: true, options: departmentOptions },
         { name: "leadEmployeeId", label: "Responsable principal", type: "select", required: true, options: employeeOptions },
-        { name: "involvedDepartments", label: "Départements impliqués", type: "text", placeholder: "Commercial, Tech, HR & CFO..." },
-        { name: "collaborators", label: "Collaborateurs impliqués", type: "text" },
+        { name: "involvedDepartments", label: "Départements impliqués", type: "select-multiple", options: departmentOptions, helperText: "Cochez les départements concernés par l'opération." },
+        { name: "collaborators", label: "Collaborateurs impliqués", type: "select-multiple", options: employeeOptions, helperText: "Cochez les collaborateurs impliqués dans l'opération." },
         selectField("priority", "Priorité", ["LOW", "NORMAL", "HIGH", "CRITICAL"]),
         selectField("status", "Statut", cooStatus.operations),
         { name: "startDate", label: "Date de début", type: "date" },
@@ -1311,7 +1319,7 @@ export function buildCooDatasets(data: {
         { name: "departmentId", label: "Département", type: "select", options: departmentOptions },
         { name: "reportOwnerEmployeeId", label: "Responsable CR", type: "select", required: true, options: employeeOptions },
         selectField("status", "Statut", cooStatus.meetings),
-        { name: "participants", label: "Participants", type: "select-multiple", options: employeeOptions, helperText: "Maintenez Ctrl ou Cmd pour sélectionner plusieurs collaborateurs." },
+        { name: "participants", label: "Participants", type: "select-multiple", options: employeeOptions, helperText: "Cochez les collaborateurs concernés par cette réunion." },
         { name: "collaborationGroupId", label: "Groupe existant optionnel", type: "select", options: meetingGroupOptions, helperText: "Laissez vide pour créer automatiquement un groupe de réunion audio/vidéo dédié." },
         selectField("linkedEntityType", "Élément lié", ["TASK", "OPERATION", "BLOCKER", "DEPARTMENT_REQUEST", "MPO_PROJECT", "CTO_PROJECT", "LEGAL_CASE", "HR_CFO_REQUEST", "SCO_NEED", "OTHER"]),
         { name: "linkedEntityId", label: "Identifiant de l'élément lié", type: "text" },
@@ -1346,7 +1354,7 @@ export function buildCooDatasets(data: {
         { name: "steps", label: "Étapes", type: "textarea", required: true },
         { name: "stepOwners", label: "Responsables par étape", type: "textarea" },
         { name: "stepDeadlines", label: "Délais par étape", type: "textarea" },
-        { name: "shareEmployeeIds", label: "Partager avec", type: "select-multiple", options: employeeOptions, helperText: "Optionnel: partage le workflow aux collaborateurs sélectionnés." },
+        { name: "shareEmployeeIds", label: "Partager avec", type: "select-multiple", options: employeeOptions, helperText: "Cochez les collaborateurs qui doivent recevoir ce workflow." },
         { name: "shareInstruction", label: "Instruction de partage", type: "textarea" },
       ],
       statusOptions: statusOptions(cooStatus.workflows),

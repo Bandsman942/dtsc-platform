@@ -613,12 +613,26 @@ function EnterpriseFormDialogCard({
 
 function UserMultiSelect({ name, label, members }: { name: string; label: string; members: EnterpriseMemberItem[] }) {
   return (
-    <label className="grid gap-1 text-sm font-black text-dtsc-ink">
+    <div className="grid gap-1 text-sm font-black text-dtsc-ink">
       <span className="text-xs uppercase tracking-[0.14em] text-dtsc-muted">{label}</span>
-      <select name={name} multiple className="min-h-36 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink">
-        {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name}</option>)}
-      </select>
-      <span className="text-xs font-semibold text-dtsc-muted">Maintenez Ctrl ou Cmd pour sélectionner plusieurs collaborateurs.</span>
-    </label>
+      <div className="max-h-44 min-h-32 overflow-y-auto rounded-xl border border-dtsc-border bg-dtsc-surface p-2">
+        {members.length > 0 ? (
+          <div className="grid gap-2">
+            {members.map((member) => (
+              <label key={member.user.id} className="flex min-w-0 items-start gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-sm font-semibold text-dtsc-ink">
+                <input name={name} value={member.user.id} type="checkbox" className="mt-1 h-4 w-4 rounded border-dtsc-border text-cyan-500" />
+                <span className="min-w-0">
+                  <span className="block truncate">{member.user.name}</span>
+                  <span className="block truncate text-xs text-dtsc-muted">{member.user.email}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl bg-dtsc-page px-3 py-2 text-sm font-semibold text-dtsc-muted">Aucun collaborateur actif disponible.</p>
+        )}
+      </div>
+      <span className="text-xs font-semibold text-dtsc-muted">Cochez les collaborateurs concernés par ce workflow.</span>
+    </div>
   );
 }

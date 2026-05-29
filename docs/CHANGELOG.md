@@ -6,6 +6,11 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Les sélecteurs multi-collaborateurs des réunions, workflows COO, formulaires Activités DTSC et workflows entreprise utilisent désormais des listes à cases à cocher au lieu de demander Ctrl/Cmd + clic.
+- Les blocs `Activités DTSC` qui disposent d'une action de création affichent leur bouton dès l'ouverture du bloc, même si aucune donnée n'existe encore.
+- Le sélecteur d'espace actif reste visible et utilisable sur mobile grâce à une largeur minimale, un style contrasté et un comportement horizontal stable.
+- Dans `Administration > MPO > Portefeuille de projets`, `Documents associés` devient une zone d'import fichier privée avec contrainte de taille, aperçu et téléchargement du fichier déjà stocké; les champs médicaux n'apparaissent qu'après activation explicite du projet médical.
+- Les champs `Catégorie` des registres MPO/CTO et des référentiels SCO principaux passent en combobox contrôlées afin de réduire les saisies libres non structurées.
 - Les dialogues de formulaires hauts utilisent désormais un vrai comportement plein écran desktop/mobile: en-tête de fermeture toujours visible, hauteur utile du viewport, fermeture par bouton, Échap ou clic sur le fond, afin d'éviter les formulaires enfermés dans une zone scrollable trop courte.
 - Standardisation complémentaire des formulaires `Profil et activités entreprise`, `Disponibilité`, `Informations du compte`, `Modifier le profil`, sections de paramètres privées et sous-formulaires `Administration [Entreprise]`: les saisies longues passent par des dialogues hauts `92dvh` avec étiquettes/aides visibles quand le formulaire était encore inline.
 - Les formulaires ciblés des modules Entreprise, Support, Paramètres, Activités DTSC, Administration DTSC et Activités [Entreprise] s'ouvrent désormais dans des dialogues hauts responsive avec scroll interne, au lieu de rester prisonniers de cartes ou de blocs trop courts.

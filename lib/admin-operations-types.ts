@@ -16,7 +16,7 @@ export type OperationRecord = {
 export type OperationField = {
   name: string;
   label: string;
-  type: "text" | "email" | "number" | "date" | "textarea" | "select" | "select-multiple" | "hidden" | "preview" | "file";
+  type: "text" | "email" | "number" | "date" | "textarea" | "select" | "select-multiple" | "hidden" | "preview" | "file" | "checkbox";
   required?: boolean;
   placeholder?: string;
   options?: Array<{ value: string; label: string; email?: string }>;

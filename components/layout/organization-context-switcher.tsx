@@ -33,13 +33,13 @@ export function OrganizationContextSwitcher({
   }
 
   return (
-    <label className="flex min-w-0 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/70 px-2 py-1.5 text-xs font-bold text-dtsc-muted">
+    <label className="flex min-w-[15rem] max-w-[calc(100vw-2rem)] shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/90 px-3 py-2 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.12)] backdrop-blur-xl">
       <Building2 className="h-4 w-4 shrink-0 text-cyan-500" />
       <select
         value={value}
         disabled={pending}
         onChange={(event) => void changeContext(event.target.value)}
-        className="min-w-0 bg-transparent text-xs font-black text-dtsc-ink outline-none"
+        className="w-full min-w-0 truncate bg-transparent text-xs font-black text-dtsc-ink outline-none"
         aria-label="Changer d'espace DTSC"
       >
         <option value="">Espace client standard</option>
