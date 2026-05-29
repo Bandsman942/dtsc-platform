@@ -100,6 +100,8 @@ Chaque type de demande possède maintenant son formulaire métier avec destinata
 - `Workflows / Procédures`: création de `EnterpriseWorkflow`, catégorie santé, étapes, responsables, destinataires et notifications de partage.
 - `Paramètres entreprise`: persistance des paramètres généraux sur `Organization` et des paramètres santé dans `Organization.settingsJson.health`.
 
+Ces formulaires d'administration santé et entreprise ne sont plus rendus directement dans les accordéons: ils s'ouvrent depuis une carte d'action vers un dialogue haut responsive avec scroll interne, afin de garder les longues saisies lisibles sur desktop, tablette et mobile.
+
 Le bloc technique `Blocs Activités entreprise` n'est plus exposé comme section principale de l'administration cliente; il reste une configuration de template utilisée par `Activités [Entreprise]`.
 
 ## Postes et permissions

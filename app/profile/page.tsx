@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfileActivityHistory, type ProfileActivityItem } from "@/components/profile/profile-activity-history";
+import { ProfileAccountInfo } from "@/components/profile/profile-account-info";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { requireUser } from "@/lib/auth";
@@ -81,32 +82,16 @@ export default async function ProfilePage() {
         <div className="p-4 sm:p-6">
           <Accordion>
             <AccordionItem title="Informations du compte" defaultOpen>
-              <dl className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-                  <dt className="text-sm text-dtsc-muted">Nom</dt>
-                  <dd className="mt-1 font-bold text-dtsc-ink">{user.name}</dd>
-                </div>
-                <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-                  <dt className="text-sm text-dtsc-muted">Email</dt>
-                  <dd className="mt-1 font-bold text-dtsc-ink">{user.email}</dd>
-                </div>
-                <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-                  <dt className="text-sm text-dtsc-muted">Entreprise</dt>
-                  <dd className="mt-1 font-bold text-dtsc-ink">{user.companyName || "Non renseignée"}</dd>
-                </div>
-                <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-                  <dt className="text-sm text-dtsc-muted">Téléphone</dt>
-                  <dd className="mt-1 font-bold text-dtsc-ink">{user.phone || "Non renseigné"}</dd>
-                </div>
-                <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-                  <dt className="text-sm text-dtsc-muted">Rôle</dt>
-                  <dd className="mt-1 inline-flex rounded-full bg-[#d5e3fd] px-3 py-1 text-sm font-bold text-[#002b5b]">{formatEnumLabel(user.role)}</dd>
-                </div>
-                <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-                  <dt className="text-sm text-dtsc-muted">Inscription</dt>
-                  <dd className="mt-1 font-bold text-dtsc-ink">{formatDate(user.createdAt)}</dd>
-                </div>
-              </dl>
+              <ProfileAccountInfo
+                account={{
+                  name: user.name,
+                  email: user.email,
+                  companyName: user.companyName || "Non renseignée",
+                  phone: user.phone || "Non renseigné",
+                  role: formatEnumLabel(user.role),
+                  createdAt: formatDate(user.createdAt),
+                }}
+              />
             </AccordionItem>
             <AccordionItem title="Modifier le profil">
               <ProfileEditor user={JSON.parse(JSON.stringify(user))} />

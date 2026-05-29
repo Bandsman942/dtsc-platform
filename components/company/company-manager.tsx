@@ -80,6 +80,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
   const [profile, setProfile] = useState(initialProfile);
   const [activities, setActivities] = useState(initialActivities);
   const [editingActivity, setEditingActivity] = useState<CompanyActivity | null>(null);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [message, setMessage] = useState("");
   const smartList = useSmartList({
@@ -100,6 +101,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
     setMessage(response.ok ? "Profil entreprise enregistré. Le chatbot utilisera ce contexte dans votre espace privé." : body?.error || "Impossible d'enregistrer le profil entreprise.");
     if (response.ok) {
       setProfile(body.profile);
+      setProfileDialogOpen(false);
     }
   }
 
@@ -108,6 +110,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
     setMessage(response.ok ? "Profil entreprise supprimé." : "Impossible de supprimer le profil entreprise.");
     if (response.ok) {
       setProfile(null);
+      setProfileDialogOpen(false);
     }
   }
 
@@ -155,24 +158,22 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
             </p>
           </div>
         </div>
-        <form onSubmit={saveProfile} className="mt-6 grid gap-4 md:grid-cols-2">
-          {profileFields.map((field) => (
-            <label key={field.name} title={field.title} className={field.textarea ? "grid gap-1 text-sm font-bold text-dtsc-ink md:col-span-2" : "grid gap-1 text-sm font-bold text-dtsc-ink"}>
-              {field.label}
-              {field.textarea ? (
-                <textarea name={field.name} defaultValue={profile?.[field.name] || ""} placeholder={field.placeholder} required={field.required} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
-              ) : (
-                <Input name={field.name} defaultValue={profile?.[field.name] || ""} placeholder={field.placeholder} required={field.required} />
-              )}
-            </label>
-          ))}
-          <div className="flex flex-wrap gap-3 md:col-span-2">
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" title="Enregistrer le profil entreprise pour personnaliser les réponses du chatbot.">Enregistrer le profil</Button>
-            <Button type="button" variant="outline" onClick={deleteProfile} className="rounded-xl text-red-300" title="Supprimer le contexte entreprise de votre espace privé.">
-              Supprimer le profil
-            </Button>
+        <div className="mt-6 rounded-2xl border border-dtsc-border bg-dtsc-page p-5">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{profile?.sector || "Secteur non renseigné"}</p>
+          <h3 className="mt-1 text-xl font-black text-dtsc-ink">{profile?.organizationName || "Profil entreprise à compléter"}</h3>
+          <p className="mt-2 line-clamp-3 text-sm leading-6 text-dtsc-muted">
+            {profile?.description || "Renseignez le profil professionnel pour contextualiser le chatbot, les activités et les échanges liés à votre entreprise."}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-dtsc-muted">
+            <span className="rounded-full bg-dtsc-surface px-3 py-1">{profile?.city || "Ville non renseignée"}</span>
+            <span className="rounded-full bg-dtsc-surface px-3 py-1">{profile?.sizeRange || "Taille non renseignée"}</span>
+            <span className="rounded-full bg-dtsc-surface px-3 py-1">{profile?.userPosition || "Poste non renseigné"}</span>
           </div>
-        </form>
+          <Button type="button" onClick={() => setProfileDialogOpen(true)} className="mt-5 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" title="Ouvrir le formulaire plein écran du profil entreprise.">
+            <Edit3 className="h-4 w-4" />
+            Modifier le profil entreprise
+          </Button>
+        </div>
       </section>
 
       <section className="dtsc-card p-6">
@@ -223,6 +224,10 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
         <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
       </Dialog>
 
+      <Dialog open={profileDialogOpen} title="Profil et activités entreprise" description="Renseignez le contexte professionnel utilisé par DTSC Platform et le chatbot dans votre espace privé." onClose={() => setProfileDialogOpen(false)} className="h-[92dvh] max-w-6xl">
+        <CompanyProfileForm profile={profile} onSubmit={saveProfile} onDelete={deleteProfile} />
+      </Dialog>
+
       <Dialog open={activityDialogOpen} title="Nouvelle activité professionnelle" description="Décrivez une activité réelle de votre contexte métier. Ces informations restent isolées dans le contexte actif." onClose={() => setActivityDialogOpen(false)} className="h-[92dvh] max-w-5xl">
         <ActivityForm onSubmit={(event) => saveActivity(event)} />
       </Dialog>
@@ -233,6 +238,36 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
         )}
       </Dialog>
     </div>
+  );
+}
+
+function CompanyProfileForm({
+  profile,
+  onSubmit,
+  onDelete,
+}: {
+  profile: CompanyProfile | null;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+      {profileFields.map((field) => (
+        <FormField key={field.name} label={field.label} hint={field.title} className={field.textarea ? "md:col-span-2" : undefined}>
+          {field.textarea ? (
+            <textarea name={field.name} defaultValue={profile?.[field.name] || ""} placeholder={field.placeholder} required={field.required} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+          ) : (
+            <Input name={field.name} defaultValue={profile?.[field.name] || ""} placeholder={field.placeholder} required={field.required} />
+          )}
+        </FormField>
+      ))}
+      <div className="sticky bottom-0 flex flex-wrap gap-3 border-t border-dtsc-border bg-dtsc-surface/95 py-4 backdrop-blur md:col-span-2">
+        <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" title="Enregistrer le profil entreprise pour personnaliser les réponses du chatbot.">Enregistrer le profil</Button>
+        <Button type="button" variant="outline" onClick={onDelete} className="rounded-xl text-red-300" title="Supprimer le contexte entreprise de votre espace privé.">
+          Supprimer le profil
+        </Button>
+      </div>
+    </form>
   );
 }
 

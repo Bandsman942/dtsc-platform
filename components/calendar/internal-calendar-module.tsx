@@ -6,6 +6,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -646,30 +647,46 @@ function AvailabilityFormDialog({
   }
 
   return (
-    <Dialog open title={translate(locale, "calendar.availability")} description={translate(locale, "calendar.availabilityDescription")} onClose={onClose} className="max-w-3xl">
+    <Dialog open title={translate(locale, "calendar.availability")} description={translate(locale, "calendar.availabilityDescription")} onClose={onClose} className="h-[92dvh] max-w-3xl">
       <form onSubmit={submit} className="grid gap-3">
-        <select name="collaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-          {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.fullName}</option>)}
-        </select>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <select name="dayOfWeek" defaultValue={1} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-            {weekDays.map((day, index) => <option key={day} value={index}>{translate(locale, `calendar.days.${day}`)}</option>)}
+        <FormField label="Collaborateur" hint="Choisissez le collaborateur concerné par cette disponibilité.">
+          <select name="collaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+            {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.fullName}</option>)}
           </select>
-          <Input name="startTime" required type="time" defaultValue="08:00" className="h-12 rounded-2xl bg-dtsc-page" />
-          <Input name="endTime" required type="time" defaultValue="17:00" className="h-12 rounded-2xl bg-dtsc-page" />
+        </FormField>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <FormField label="Jour" hint="Jour de la semaine concerné.">
+            <select name="dayOfWeek" defaultValue={1} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+              {weekDays.map((day, index) => <option key={day} value={index}>{translate(locale, `calendar.days.${day}`)}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Heure de début" hint="Début du créneau disponible ou occupé.">
+            <Input name="startTime" required type="time" defaultValue="08:00" className="h-12 rounded-2xl bg-dtsc-page" />
+          </FormField>
+          <FormField label="Heure de fin" hint="Fin du créneau disponible ou occupé.">
+            <Input name="endTime" required type="time" defaultValue="17:00" className="h-12 rounded-2xl bg-dtsc-page" />
+          </FormField>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <select name="availabilityStatus" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-            {["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"].map((status) => <option key={status}>{status}</option>)}
-          </select>
-          <select name="locationMode" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-            {["Non défini", "Site DTSC", "Télétravail", "Externe", "Mission"].map((mode) => <option key={mode}>{mode}</option>)}
-          </select>
-          <select name="recurrenceType" defaultValue="Hebdomadaire" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-            {["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"].map((type) => <option key={type}>{type}</option>)}
-          </select>
+          <FormField label="Statut" hint="Indique si le collaborateur est disponible, absent, en mission ou indisponible.">
+            <select name="availabilityStatus" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+              {["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"].map((status) => <option key={status}>{status}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Lieu / mode" hint="Précise si le créneau est sur site, en télétravail ou externe.">
+            <select name="locationMode" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+              {["Non défini", "Site DTSC", "Télétravail", "Externe", "Mission"].map((mode) => <option key={mode}>{mode}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Récurrence" hint="Définit si ce créneau se répète dans le planning.">
+            <select name="recurrenceType" defaultValue="Hebdomadaire" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+              {["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"].map((type) => <option key={type}>{type}</option>)}
+            </select>
+          </FormField>
         </div>
-        <textarea name="notes" placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+        <FormField label="Notes" hint="Ajoutez une précision utile pour comprendre cette disponibilité.">
+          <textarea name="notes" placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+        </FormField>
         {message && <p className="rounded-2xl bg-red-500/10 p-3 text-sm font-bold text-red-600">{message}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">{translate(locale, "common.cancel")}</Button>

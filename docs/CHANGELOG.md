@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Standardisation complémentaire des formulaires `Profil et activités entreprise`, `Disponibilité`, `Informations du compte`, `Modifier le profil`, sections de paramètres privées et sous-formulaires `Administration [Entreprise]`: les saisies longues passent par des dialogues hauts `92dvh` avec étiquettes/aides visibles quand le formulaire était encore inline.
 - Les formulaires ciblés des modules Entreprise, Support, Paramètres, Activités DTSC, Administration DTSC et Activités [Entreprise] s'ouvrent désormais dans des dialogues hauts responsive avec scroll interne, au lieu de rester prisonniers de cartes ou de blocs trop courts.
 - Ajout d'étiquettes et d'aides contextuelles sur les champs des formulaires ciblés: activités professionnelles, création de ticket support, identité professionnelle, création de compte utilisateur, création/modification d'entreprise cliente, gestion d'abonnement, demandes/blocages/rapports DTSC et demandes d'activités entreprise.
 - Affinage du secteur `HEALTH_CARE`: formulaires santé restructurés sans répétition inutile, combobox alimentées par patients/rendez-vous/consultations/collaborateurs/départements/postes de l'organisation, et validation backend des références par `organizationId`.

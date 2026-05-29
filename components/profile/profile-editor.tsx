@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Camera, CheckCircle2, FolderOpen, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 
 type ProfileData = {
@@ -94,6 +95,7 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
   const [imageBroken, setImageBroken] = useState(false);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -142,6 +144,7 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
 
     setMessage(response.ok ? "Profil mis à jour." : "Impossible de mettre à jour le profil.");
     if (response.ok) {
+      setEditorOpen(false);
       router.refresh();
     }
   }
@@ -177,7 +180,21 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
 
   return (
     <>
-      <form onSubmit={saveProfile} className="space-y-6 p-6 sm:p-8">
+      <div className="p-6 sm:p-8">
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">Profil public et professionnel</p>
+          <h3 className="mt-1 text-xl font-black text-dtsc-ink">{user.name}</h3>
+          <p className="mt-2 text-sm font-semibold text-dtsc-muted">{user.jobTitle || "Poste non renseigné"} · {user.companyName || "Entreprise non renseignée"}</p>
+          <p className="mt-2 line-clamp-3 text-sm leading-6 text-dtsc-muted">{user.bio || "Complétez votre profil pour améliorer vos échanges, vos publications et votre présence dans DTSC Platform."}</p>
+          <Button type="button" onClick={() => setEditorOpen(true)} className="mt-5 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Camera className="h-4 w-4" />
+            Modifier le profil
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={editorOpen} title="Modifier le profil" description="Mettez à jour votre identité professionnelle, votre photo et les informations visibles selon vos préférences." onClose={() => setEditorOpen(false)} className="h-[92dvh] max-w-5xl">
+      <form onSubmit={saveProfile} className="space-y-6">
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5">
             <div className="flex flex-col items-center text-center">
@@ -227,43 +244,35 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-              Nom complet
+            <FormField label="Nom complet" hint="Nom affiché dans votre profil, vos messages et vos demandes.">
               <Input name="name" defaultValue={user.name} required />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-              Poste
+            </FormField>
+            <FormField label="Poste" hint="Votre fonction ou responsabilité principale.">
               <Input name="jobTitle" defaultValue={user.jobTitle || ""} placeholder="Ex: Responsable opérations" />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-              Entreprise
+            </FormField>
+            <FormField label="Entreprise" hint="Organisation principale associée à votre profil.">
               <Input name="companyName" defaultValue={user.companyName || ""} />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-              Téléphone
+            </FormField>
+            <FormField label="Téléphone" hint="Numéro utile pour les échanges autorisés et le support.">
               <Input name="phone" defaultValue={user.phone || ""} />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-              Localisation
+            </FormField>
+            <FormField label="Localisation" hint="Ville et pays à afficher dans votre contexte professionnel.">
               <Input name="location" defaultValue={user.location || ""} placeholder="Ville, pays" />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink">
-              Site ou portfolio
+            </FormField>
+            <FormField label="Site ou portfolio" hint="Lien public vers votre site, portfolio ou profil professionnel.">
               <Input name="website" defaultValue={user.website || ""} placeholder="https://..." />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink sm:col-span-2">
-              Photo via URL publique
+            </FormField>
+            <FormField label="Photo via URL publique" hint="Utilisez seulement une URL publique que vous êtes autorisé à afficher." className="sm:col-span-2">
               <Input name="avatarUrl" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} placeholder="https://..." />
-            </label>
-            <label className="grid gap-2 text-sm font-bold text-dtsc-ink sm:col-span-2">
-              Bio professionnelle
+            </FormField>
+            <FormField label="Bio professionnelle" hint="Résumé court de votre rôle, vos responsabilités et votre expertise." className="sm:col-span-2">
               <textarea
                 name="bio"
                 defaultValue={user.bio || ""}
                 placeholder="Résumé court de votre rôle, vos responsabilités et votre expertise."
                 className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm leading-7 text-dtsc-ink outline-none focus:border-cyan-400"
               />
-            </label>
+            </FormField>
             <label className="flex items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm leading-6 text-dtsc-muted sm:col-span-2">
               <input name="publicProfileConsent" type="checkbox" defaultChecked={user.publicProfileConsent} className="mt-1 h-4 w-4 accent-cyan-500" />
               <span>
@@ -278,6 +287,7 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
           </section>
         </div>
       </form>
+      </Dialog>
 
       <Dialog open={Boolean(message)} title="Profil utilisateur" onClose={() => setMessage("")}>
         <div className="flex items-start gap-3">

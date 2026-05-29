@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { HealthcareAdminWorkspace, type EnterpriseSectorRecordItem } from "@/components/enterprise/healthcare-admin-workspace";
 import { translate } from "@/lib/i18n";
@@ -407,7 +408,8 @@ export function EnterpriseAdministrationModule({
         </AccordionItem>
 
         <AccordionItem title="Départements">
-          <form onSubmit={(event) => void submitAdminMutation(event, "Département enregistré.")} className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+          <EnterpriseFormDialogCard title="Manager les départements" description="Créez ou mettez à jour les départements de cette entreprise dans une vue dédiée." buttonLabel="Ouvrir le formulaire département" icon={<Building2 className="h-4 w-4" />}>
+          <form onSubmit={(event) => void submitAdminMutation(event, "Département enregistré.")} className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="entityType" value="department" />
             <Input name="departmentCode" placeholder="CODE_DEPARTEMENT" required pattern="[A-Z0-9_]+" />
             <Input name="labelFr" placeholder="Nom du département" required />
@@ -425,6 +427,7 @@ export function EnterpriseAdministrationModule({
               Enregistrer le département
             </Button>
           </form>
+          </EnterpriseFormDialogCard>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {departments.map((department) => (
               <article key={department.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
@@ -440,7 +443,8 @@ export function EnterpriseAdministrationModule({
         </AccordionItem>
 
         <AccordionItem title="Workflows / Procédures">
-          <form onSubmit={(event) => void submitAdminMutation(event, "Workflow enregistré et partagé si des destinataires ont été sélectionnés.")} className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+          <EnterpriseFormDialogCard title="Workflows / Procédures" description="Créez une procédure interne, assignez des responsables et partagez-la aux collaborateurs concernés." buttonLabel="Ouvrir le formulaire workflow" icon={<Route className="h-4 w-4" />}>
+          <form onSubmit={(event) => void submitAdminMutation(event, "Workflow enregistré et partagé si des destinataires ont été sélectionnés.")} className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="entityType" value="workflow" />
             <Input name="workflowCode" placeholder="CODE_WORKFLOW" required pattern="[A-Z0-9_]+" />
             <Input name="labelFr" placeholder="Titre de la procédure" required />
@@ -471,6 +475,7 @@ export function EnterpriseAdministrationModule({
               Enregistrer le workflow
             </Button>
           </form>
+          </EnterpriseFormDialogCard>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {workflows.map((workflow) => (
               <article key={workflow.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
@@ -483,6 +488,7 @@ export function EnterpriseAdministrationModule({
         </AccordionItem>
 
         <AccordionItem title="Paramètres entreprise">
+          <EnterpriseFormDialogCard title="Paramètres entreprise" description="Modifiez les paramètres généraux et santé persistés pour cette entreprise." buttonLabel="Ouvrir les paramètres entreprise" icon={<SlidersHorizontal className="h-4 w-4" />}>
           <form onSubmit={(event) => void submitAdminMutation(event, "Paramètres entreprise enregistrés.")} className="grid gap-4">
             <input type="hidden" name="entityType" value="settings" />
             <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
@@ -528,6 +534,7 @@ export function EnterpriseAdministrationModule({
               Enregistrer les paramètres
             </Button>
           </form>
+          </EnterpriseFormDialogCard>
         </AccordionItem>
       </Accordion>
 
@@ -572,6 +579,36 @@ function MemberCard({ member, statusLabel }: { member: EnterpriseMemberItem; sta
 
 function EmptyState({ text }: { text: string }) {
   return <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm font-semibold text-dtsc-muted">{text}</p>;
+}
+
+function EnterpriseFormDialogCard({
+  title,
+  description,
+  buttonLabel,
+  icon,
+  children,
+}: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+        <p className="text-sm font-semibold leading-6 text-dtsc-muted">{description}</p>
+        <Button type="button" onClick={() => setOpen(true)} className="mt-4 w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          {icon}
+          {buttonLabel}
+        </Button>
+      </div>
+      <Dialog open={open} title={title} description={description} onClose={() => setOpen(false)} className="h-[92dvh] max-w-6xl">
+        {children}
+      </Dialog>
+    </>
+  );
 }
 
 function UserMultiSelect({ name, label, members }: { name: string; label: string; members: EnterpriseMemberItem[] }) {

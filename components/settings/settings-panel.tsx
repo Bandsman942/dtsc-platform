@@ -209,7 +209,8 @@ export function SettingsPanel({
         <section className="dtsc-card p-6">
           <SettingsSectionHeader id="preferences" icon={SlidersHorizontal} title="Préférences privées" description="Réglages persistés sur votre compte pour personnaliser votre espace." openId={openMobileSection} onToggle={setOpenMobileSection} />
           <div className={cn(openMobileSection === "preferences" ? "block" : "hidden", "md:block")}>
-          <form id="account-preferences-form" onSubmit={updatePreferences} className="mt-5 grid gap-4 md:grid-cols-2">
+          <SettingsDialogCard title="Préférences privées" description="Ouvrir les préférences privées en plein écran pour modifier la page d'accueil, la langue, les dates et le style IA." buttonLabel="Configurer les préférences">
+          <form id="account-preferences-form" onSubmit={updatePreferences} className="grid gap-4 md:grid-cols-2">
             <input type="hidden" name="preferredModel" value={user.preferredModel || ""} />
             {user.notifySupportEnabled ?? true ? <input type="hidden" name="notifySupportEnabled" value="on" /> : null}
             {user.notifyUsageEnabled ?? true ? <input type="hidden" name="notifyUsageEnabled" value="on" /> : null}
@@ -293,6 +294,7 @@ export function SettingsPanel({
               {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
             </div>
           </form>
+          </SettingsDialogCard>
           </div>
         </section>
       </div>
@@ -301,7 +303,8 @@ export function SettingsPanel({
         <section className="dtsc-card p-6">
           <SettingsSectionHeader id="appearance" icon={Monitor} title="Apparence" description="Mode clair, sombre ou système." openId={openMobileSection} onToggle={setOpenMobileSection} />
           <div className={cn(openMobileSection === "appearance" ? "block" : "hidden", "md:block")}>
-          <div className="mt-5 grid gap-2">
+          <SettingsDialogCard title="Apparence" description="Choisissez le thème clair, sombre ou système dans une vue dédiée." buttonLabel="Configurer l'apparence">
+          <div className="grid gap-2">
             {[
               { value: "light", label: "Clair", icon: Sun },
               { value: "dark", label: "Sombre", icon: Moon },
@@ -321,13 +324,15 @@ export function SettingsPanel({
               </button>
             ))}
           </div>
+          </SettingsDialogCard>
           </div>
         </section>
 
         <section className="dtsc-card p-6">
           <SettingsSectionHeader id="notifications" icon={Bell} title="Notifications" description="Alertes applicatives, usage IA et notifications visibles en PWA." openId={openMobileSection} onToggle={setOpenMobileSection} />
           <div className={cn(openMobileSection === "notifications" ? "block" : "hidden", "md:block")}>
-          <form onSubmit={updatePreferences} className="mt-5 space-y-3 text-sm text-dtsc-muted">
+          <SettingsDialogCard title="Notifications" description="Configurez les alertes support, IA, diffusions DTSC et notifications PWA." buttonLabel="Configurer les notifications">
+          <form onSubmit={updatePreferences} className="space-y-3 text-sm text-dtsc-muted">
             <input type="hidden" name="interfaceDensity" value={user.interfaceDensity || "COMFORTABLE"} />
             <input type="hidden" name="startPage" value={user.startPage || "/dashboard"} />
             <input type="hidden" name="locale" value={user.locale || "fr"} />
@@ -382,13 +387,15 @@ export function SettingsPanel({
             </Button>
             {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
           </form>
+          </SettingsDialogCard>
           </div>
         </section>
 
         <section className="dtsc-card p-6">
           <SettingsSectionHeader id="calls" icon={PhoneCall} title="Paramètres des appels" description="Sons, alertes flottantes et comportement par défaut des appels DTSC." openId={openMobileSection} onToggle={setOpenMobileSection} />
           <div className={cn(openMobileSection === "calls" ? "block" : "hidden", "md:block")}>
-          <form onSubmit={updatePreferences} className="mt-5 space-y-3 text-sm text-dtsc-muted">
+          <SettingsDialogCard title="Paramètres des appels" description="Réglez les sons, alertes, comportements par défaut et durées d'affichage des appels." buttonLabel="Configurer les appels">
+          <form onSubmit={updatePreferences} className="space-y-3 text-sm text-dtsc-muted">
             <input type="hidden" name="preferredModel" value={user.preferredModel || ""} />
             {user.notifySupportEnabled ?? true ? <input type="hidden" name="notifySupportEnabled" value="on" /> : null}
             {user.notifyUsageEnabled ?? true ? <input type="hidden" name="notifyUsageEnabled" value="on" /> : null}
@@ -432,6 +439,7 @@ export function SettingsPanel({
             </Button>
             {preferencesMessage && <p className="text-sm font-semibold text-dtsc-blue">{preferencesMessage}</p>}
           </form>
+          </SettingsDialogCard>
           </div>
         </section>
       </aside>
@@ -479,6 +487,34 @@ function CallPreferenceHiddenFields({ user }: { user: SettingsUser }) {
       <input type="hidden" name="preferredAudioInputId" value={user.preferredAudioInputId || ""} />
       <input type="hidden" name="preferredVideoInputId" value={user.preferredVideoInputId || ""} />
       <input type="hidden" name="preferredAudioOutputId" value={user.preferredAudioOutputId || ""} />
+    </>
+  );
+}
+
+function SettingsDialogCard({
+  title,
+  description,
+  buttonLabel,
+  children,
+}: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+        <p className="text-sm font-semibold leading-6 text-dtsc-muted">{description}</p>
+        <Button type="button" onClick={() => setOpen(true)} className="mt-4 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          <SlidersHorizontal className="h-4 w-4" />
+          {buttonLabel}
+        </Button>
+      </div>
+      <Dialog open={open} title={title} description={description} onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
+        {children}
+      </Dialog>
     </>
   );
 }
