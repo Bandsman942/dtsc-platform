@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
+import { Building2, CalendarDays, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -74,6 +74,18 @@ type EnterpriseRequestItem = {
   priority: string;
   createdAt: string;
   createdBy: { name: string; email: string };
+};
+
+type EnterpriseCalendarEventItem = {
+  id: string;
+  title: string;
+  eventType: string;
+  startDateTime: string;
+  endDateTime: string;
+  status: string;
+  priority: string;
+  visibility: string;
+  participants?: Array<{ id: string; collaboratorId: string; participantStatus: string }>;
 };
 
 type EnterpriseMemberItem = {
@@ -151,6 +163,7 @@ export function EnterpriseAdministrationModule({
   positions,
   workflows,
   recentRequests,
+  calendarEvents,
   sectorRecords,
   locale,
 }: {
@@ -178,6 +191,7 @@ export function EnterpriseAdministrationModule({
   activityBlocks: EnterpriseActivityBlockItem[];
   workflows: EnterpriseWorkflowItem[];
   recentRequests: EnterpriseRequestItem[];
+  calendarEvents: EnterpriseCalendarEventItem[];
   sectorRecords: EnterpriseSectorRecordItem[];
   locale?: string | null;
 }) {
@@ -322,6 +336,60 @@ export function EnterpriseAdministrationModule({
                 </div>
               </article>
             ))}
+          </div>
+        </AccordionItem>
+
+        <AccordionItem title={translate(locale, "enterpriseCalendar.title")}>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{translate(locale, "enterpriseCalendar.eyebrow")}</p>
+                  <h2 className="mt-1 text-lg font-black text-dtsc-ink">{translate(locale, "enterpriseCalendar.eventsTitle")} {organization.name}</h2>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-dtsc-muted">
+                    {translate(locale, "enterpriseCalendar.description")}
+                  </p>
+                </div>
+                <Button asChild className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+                  <a href="/calendar">
+                    <CalendarDays className="h-4 w-4" />
+                    {translate(locale, "enterpriseCalendar.open")}
+                  </a>
+                </Button>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {calendarEvents.map((event) => (
+                  <article key={event.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{event.eventType} · {event.priority}</p>
+                        <h3 className="mt-1 truncate text-base font-black text-dtsc-ink">{event.title}</h3>
+                        <p className="mt-1 text-xs font-semibold text-dtsc-muted">
+                          {new Date(event.startDateTime).toLocaleString("fr-FR")} - {new Date(event.endDateTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-cyan-400/14 px-2 py-1 text-[0.68rem] font-black text-cyan-600">{event.status}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">{event.visibility}</span>
+                      <span className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">
+                        {event.participants?.length || 0} participant(s)
+                      </span>
+                    </div>
+                  </article>
+                ))}
+                {!calendarEvents.length && (
+                  <EmptyState text={translate(locale, "enterpriseCalendar.empty")} />
+                )}
+              </div>
+            </section>
+            <aside className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-4">
+              <CalendarDays className="h-6 w-6 text-cyan-600" />
+              <h3 className="mt-3 font-black text-dtsc-ink">{translate(locale, "enterpriseCalendar.privacyTitle")}</h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-dtsc-muted">
+                {translate(locale, "enterpriseCalendar.privacyDescription")}
+              </p>
+            </aside>
           </div>
         </AccordionItem>
 

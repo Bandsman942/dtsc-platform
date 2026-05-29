@@ -711,8 +711,11 @@ export function CollaboratorsWorkspace({
           <Input name="name" defaultValue={groupDialog === "edit" ? activeGroup?.name || "" : ""} placeholder="Nom du groupe" required />
           <textarea name="description" defaultValue={groupDialog === "edit" ? activeGroup?.description || "" : ""} placeholder="Description" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
           <select name="groupType" defaultValue={groupDialog === "edit" ? activeGroup?.groupType || "PROJECT" : "PROJECT"} className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink">
-            {["COMPANY", "PROJECT", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
+            {["COMPANY", "PROJECT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
           </select>
+          <p className="text-xs font-semibold leading-5 text-dtsc-muted">
+            Les groupes internes restent liés au contexte actif. Les groupes transversaux permettent d&apos;inviter des utilisateurs de toute la plateforme, avec accès uniquement après acceptation.
+          </p>
           <Button className="rounded-xl bg-[#002b5b] text-white">Enregistrer</Button>
         </form>
       </Dialog>

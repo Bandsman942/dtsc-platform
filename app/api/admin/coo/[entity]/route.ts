@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { detectCalendarConflicts } from "@/lib/internal-calendar";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { cooSchemas } from "@/lib/validators";
 
@@ -419,7 +420,7 @@ async function createCalendarEventFromCooSource({
   meetingLink?: string | null;
 }) {
   const existing = await prisma.internalCalendarEvent.findFirst({
-    where: { sourceModule: "COO", sourceEntityType, sourceEntityId, deletedAt: null },
+    where: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, sourceModule: "COO", sourceEntityType, sourceEntityId, deletedAt: null },
     select: { id: true },
   });
   if (existing) {
@@ -429,6 +430,7 @@ async function createCalendarEventFromCooSource({
   const conflicts = await detectCalendarConflicts({ participantIds: allParticipantIds, startDateTime, endDateTime });
   await prisma.internalCalendarEvent.create({
     data: {
+      organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
       title,
       description,
       eventType,

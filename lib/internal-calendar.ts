@@ -1,28 +1,58 @@
 import { UserRole, type Prisma } from "@prisma/client";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { notifyUsers } from "@/lib/notifications";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import type { SessionPayload } from "@/lib/session";
 
 export type CalendarContext = Awaited<ReturnType<typeof getCalendarContext>>;
 
-export function canAccessInternalCalendar(user: { role: UserRole }) {
-  return user.role !== UserRole.CLIENT;
+export function canAccessInternalCalendar(user: { role: UserRole }, session?: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null) {
+  return user.role !== UserRole.CLIENT || session?.activeContext === "ORGANIZATION";
 }
 
-export async function getCalendarContext(user: { id: string; role: UserRole }) {
-  const employee = await prisma.hrcfoEmployee.findFirst({
-    where: { userId: user.id, status: { not: "EXITED" } },
-    include: { position: true },
-  });
+export async function getCalendarContext(
+  user: { id: string; role: UserRole },
+  session?: Pick<SessionPayload, "activeContext" | "activeOrganizationId" | "activeOrganizationRole"> | null,
+) {
+  const activeOrganizationId = getActiveOrganizationId(session) || (isDtscInternalSession(session) ? DTSC_INTERNAL_ORGANIZATION_ID : null);
+  const dtscInternal = isDtscInternalSession(session);
+  const employee = dtscInternal
+    ? await prisma.hrcfoEmployee.findFirst({
+        where: { userId: user.id, status: { not: "EXITED" } },
+        include: { position: true },
+      })
+    : null;
+  const organizationMember = !dtscInternal && activeOrganizationId
+    ? await prisma.organizationMember.findFirst({
+        where: {
+          organizationId: activeOrganizationId,
+          userId: user.id,
+          status: "ACTIVE",
+          removedAt: null,
+          organization: { status: "ACTIVE", deletedAt: null },
+        },
+      })
+    : null;
   const positionCode = normalizePositionCode(employee?.position?.code || employee?.positionCode || employee?.jobTitle || "");
-  const canViewGlobal = user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO";
+  const organizationRole = organizationMember?.role || session?.activeOrganizationRole || null;
+  const canViewOrganizationGlobal = organizationRole === "OWNER" || organizationRole === "ADMIN_ENTREPRISE" || organizationRole === "ADMIN_ENTERPRISE" || organizationRole === "MANAGER";
+  const canViewGlobal = dtscInternal
+    ? user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO"
+    : canViewOrganizationGlobal;
   const canManagePeople = canViewGlobal || positionCode === "HR_CFO";
-  const canOverrideConflicts = user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO";
+  const canOverrideConflicts = dtscInternal
+    ? user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO"
+    : canViewOrganizationGlobal;
 
   return {
     userId: user.id,
     role: user.role,
+    activeOrganizationId,
+    dtscInternal,
     employee,
+    organizationMember,
+    calendarCollaboratorId: dtscInternal ? employee?.id || null : organizationMember?.id || null,
     positionCode,
     canViewGlobal,
     canManagePeople,
@@ -32,12 +62,13 @@ export async function getCalendarContext(user: { id: string; role: UserRole }) {
 
 export function internalCalendarAccessWhere(context: CalendarContext): Prisma.InternalCalendarEventWhereInput {
   if (context.canViewGlobal) {
-    return { deletedAt: null };
+    return { organizationId: context.activeOrganizationId, deletedAt: null };
   }
 
-  const employeeId = context.employee?.id || "__no_employee__";
+  const employeeId = context.calendarCollaboratorId || "__no_employee__";
   const departmentId = context.employee?.departmentId || "__no_department__";
   return {
+    organizationId: context.activeOrganizationId,
     deletedAt: null,
     OR: [
       { createdBy: context.userId },
@@ -53,7 +84,94 @@ export function canManageCollaboratorCalendar(context: CalendarContext, collabor
   if (!collaboratorId) {
     return true;
   }
-  return context.canManagePeople || context.employee?.id === collaboratorId;
+  return context.canManagePeople || context.calendarCollaboratorId === collaboratorId;
+}
+
+export function collaboratorAvailabilityWhere(context: CalendarContext, collaboratorId?: string): Prisma.CollaboratorAvailabilityWhereInput {
+  const base = { organizationId: context.activeOrganizationId, deletedAt: null };
+  if (context.canViewGlobal || context.canManagePeople) {
+    return { ...base, ...(collaboratorId ? { collaboratorId } : {}) };
+  }
+  return { ...base, collaboratorId: context.calendarCollaboratorId || "__no_employee__" };
+}
+
+export function calendarCollaboratorWhere(context: CalendarContext) {
+  if (context.dtscInternal) {
+    return context.canViewGlobal || context.canManagePeople
+      ? { status: { not: "EXITED" as const } }
+      : { id: context.employee?.id || "__no_employee__" };
+  }
+  return context.canViewGlobal || context.canManagePeople
+    ? {
+        organizationId: context.activeOrganizationId || "__no_organization__",
+        status: "ACTIVE",
+        removedAt: null,
+      }
+    : {
+        id: context.organizationMember?.id || "__no_member__",
+        organizationId: context.activeOrganizationId || "__no_organization__",
+        status: "ACTIVE",
+        removedAt: null,
+      };
+}
+
+export async function getCalendarCollaborators(context: CalendarContext) {
+  if (context.dtscInternal) {
+    return prisma.hrcfoEmployee.findMany({
+      where: calendarCollaboratorWhere(context) as Prisma.HrcfoEmployeeWhereInput,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        department: true,
+        departmentId: true,
+        jobTitle: true,
+        userId: true,
+      },
+      orderBy: { fullName: "asc" },
+      take: 300,
+    });
+  }
+
+  const members = await prisma.organizationMember.findMany({
+    where: {
+      organizationId: context.activeOrganizationId || "__no_organization__",
+      status: "ACTIVE",
+      removedAt: null,
+    },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+    take: 300,
+  });
+  return members.map((member) => ({
+    id: member.id,
+    fullName: member.user.name,
+    email: member.user.email,
+    department: member.role,
+    departmentId: null,
+    jobTitle: member.role,
+    userId: member.userId,
+  }));
+}
+
+export async function validateCalendarCollaborators(context: CalendarContext, collaboratorIds: string[]) {
+  const uniqueIds = [...new Set(collaboratorIds.filter(Boolean))];
+  if (!uniqueIds.length) {
+    return true;
+  }
+  if (context.dtscInternal) {
+    const count = await prisma.hrcfoEmployee.count({ where: { id: { in: uniqueIds }, status: { not: "EXITED" } } });
+    return count === uniqueIds.length;
+  }
+  const count = await prisma.organizationMember.count({
+    where: {
+      id: { in: uniqueIds },
+      organizationId: context.activeOrganizationId || "__no_organization__",
+      status: "ACTIVE",
+      removedAt: null,
+    },
+  });
+  return count === uniqueIds.length;
 }
 
 export function calendarEventInclude() {
@@ -64,16 +182,19 @@ export function calendarEventInclude() {
 }
 
 export async function detectCalendarConflicts({
+  context,
   participantIds,
   startDateTime,
   endDateTime,
   excludeEventId,
 }: {
+  context?: CalendarContext;
   participantIds: string[];
   startDateTime: Date;
   endDateTime: Date;
   excludeEventId?: string;
 }) {
+  const calendarContext = context ?? ({ activeOrganizationId: DTSC_INTERNAL_ORGANIZATION_ID, dtscInternal: true } as CalendarContext);
   const uniqueIds = [...new Set(participantIds.filter(Boolean))];
   if (!uniqueIds.length) {
     return [];
@@ -82,6 +203,7 @@ export async function detectCalendarConflicts({
   const dayOfWeek = startDateTime.getDay();
   const existingEvents = await prisma.internalCalendarEvent.findMany({
     where: {
+      organizationId: calendarContext.activeOrganizationId,
       deletedAt: null,
       ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
       startDateTime: { lt: endDateTime },
@@ -97,16 +219,13 @@ export async function detectCalendarConflicts({
 
   const availabilities = await prisma.collaboratorAvailability.findMany({
     where: {
+      organizationId: calendarContext.activeOrganizationId,
       collaboratorId: { in: uniqueIds },
       dayOfWeek,
       deletedAt: null,
     },
   });
-  const collaborators = await prisma.hrcfoEmployee.findMany({
-    where: { id: { in: uniqueIds } },
-    select: { id: true, fullName: true },
-  });
-  const collaboratorNames = new Map(collaborators.map((collaborator) => [collaborator.id, collaborator.fullName]));
+  const collaboratorNames = await calendarCollaboratorNames(calendarContext, uniqueIds);
 
   const conflicts: Array<{
     collaboratorId: string;
@@ -170,22 +289,44 @@ export async function detectCalendarConflicts({
 }
 
 export async function notifyCalendarParticipants({
+  context,
   participantIds,
   title,
   body,
   targetUrl,
 }: {
+  context: CalendarContext;
   participantIds: string[];
   title: string;
   body: string;
   targetUrl: string;
 }) {
-  const employees = await prisma.hrcfoEmployee.findMany({
-    where: { id: { in: [...new Set(participantIds)] }, status: { not: "EXITED" }, userId: { not: null } },
-    select: { userId: true },
+  const uniqueIds = [...new Set(participantIds)];
+  const userIds = context.dtscInternal
+    ? (await prisma.hrcfoEmployee.findMany({
+        where: { id: { in: uniqueIds }, status: { not: "EXITED" }, userId: { not: null } },
+        select: { userId: true },
+      })).map((employee) => employee.userId).filter((userId): userId is string => Boolean(userId))
+    : (await prisma.organizationMember.findMany({
+        where: { id: { in: uniqueIds }, organizationId: context.activeOrganizationId || "__no_organization__", status: "ACTIVE", removedAt: null },
+        select: { userId: true },
+      })).map((member) => member.userId);
+  await notifyUsers({ userIds, title, body, type: "CALENDAR", targetUrl, organizationId: context.activeOrganizationId });
+}
+
+async function calendarCollaboratorNames(context: CalendarContext, collaboratorIds: string[]) {
+  if (context.dtscInternal) {
+    const collaborators = await prisma.hrcfoEmployee.findMany({
+      where: { id: { in: collaboratorIds } },
+      select: { id: true, fullName: true },
+    });
+    return new Map(collaborators.map((collaborator) => [collaborator.id, collaborator.fullName]));
+  }
+  const members = await prisma.organizationMember.findMany({
+    where: { id: { in: collaboratorIds }, organizationId: context.activeOrganizationId || "__no_organization__" },
+    include: { user: { select: { name: true } } },
   });
-  const userIds = employees.map((employee) => employee.userId).filter((userId): userId is string => Boolean(userId));
-  await notifyUsers({ userIds, title, body, type: "CALENDAR", targetUrl });
+  return new Map(members.map((member) => [member.id, member.user.name]));
 }
 
 function timeValue(date: Date) {

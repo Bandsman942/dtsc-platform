@@ -13,7 +13,7 @@ export default async function EnterpriseAdminPage() {
     redirect("/dashboard");
   }
 
-  const [organization, members, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests, sectorRecords] = await Promise.all([
+  const [organization, members, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests, calendarEvents, sectorRecords] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null },
       select: {
@@ -55,6 +55,12 @@ export default async function EnterpriseAdminPage() {
       take: 10,
       include: { createdBy: { select: { name: true, email: true } } },
     }),
+    prisma.internalCalendarEvent.findMany({
+      where: { organizationId, deletedAt: null },
+      orderBy: [{ startDateTime: "asc" }, { createdAt: "desc" }],
+      take: 40,
+      include: { participants: true },
+    }),
     prisma.enterpriseSectorRecord.findMany({
       where: { organizationId, sectorCode: "HEALTH_CARE", deletedAt: null },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -89,6 +95,7 @@ export default async function EnterpriseAdminPage() {
         activityBlocks={JSON.parse(JSON.stringify(activityBlocks))}
         workflows={JSON.parse(JSON.stringify(workflows))}
         recentRequests={JSON.parse(JSON.stringify(recentRequests))}
+        calendarEvents={JSON.parse(JSON.stringify(calendarEvents))}
         sectorRecords={JSON.parse(JSON.stringify(sectorRecords))}
       />
     </AppShell>

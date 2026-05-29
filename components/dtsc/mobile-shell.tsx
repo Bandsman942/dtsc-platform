@@ -190,6 +190,7 @@ export function MobileBottomNavigation({
     : visibleItems;
   const overflowItems = enterpriseContext
     ? [
+        { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" },
         { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
         { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
         { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },

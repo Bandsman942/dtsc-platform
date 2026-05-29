@@ -125,6 +125,16 @@
       "notes": "Notes internes"
     }
   },
+  "enterpriseCalendar": {
+    "title": "Calendrier interne",
+    "eyebrow": "Contexte entreprise",
+    "eventsTitle": "Événements internes",
+    "description": "Les réunions, missions, tâches et appels créés depuis le calendrier restent isolés dans cette organisation et alimentent les vues internes adaptées.",
+    "open": "Ouvrir le calendrier",
+    "empty": "Aucun événement interne n'est encore planifié pour cette entreprise.",
+    "privacyTitle": "Règle de confidentialité",
+    "privacyDescription": "Le calendrier utilise les membres actifs de l'entreprise. Les événements privés, participants et disponibilités ne sortent pas du contexte entreprise."
+  },
   "announcements": {
     "actions": "Actions de l’annonce",
     "archive": "Archiver",

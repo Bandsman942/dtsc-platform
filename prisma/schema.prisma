@@ -510,6 +510,8 @@ model Organization {
   announcements Announcement[] @relation("AnnouncementOrganization")
   authoredAnnouncements Announcement[] @relation("AnnouncementAuthorOrganization")
   collaborationGroups CollaborationGroup[]
+  collaboratorAvailabilities CollaboratorAvailability[]
+  internalCalendarEvents InternalCalendarEvent[]
   enterpriseModules EnterpriseModule[]
   enterpriseAdminSections EnterpriseAdminSection[]
   enterprisePositions EnterprisePosition[]
@@ -1942,6 +1944,7 @@ model CooMeetingMinutes {
 
 model CollaboratorAvailability {
   id                 String    @id @default(cuid())
+  organizationId     String?
   collaboratorId     String
   dayOfWeek          Int
   startTime          String
@@ -1955,7 +1958,9 @@ model CollaboratorAvailability {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
+  organization        Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
+  @@index([organizationId, collaboratorId, dayOfWeek, deletedAt])
   @@index([collaboratorId, dayOfWeek, deletedAt])
   @@index([availabilityStatus, locationMode])
   @@index([createdBy, createdAt])
@@ -1963,6 +1968,7 @@ model CollaboratorAvailability {
 
 model InternalCalendarEvent {
   id                    String   @id @default(cuid())
+  organizationId        String?
   title                 String
   description           String?
   eventType             String   @default("Tâche")
@@ -1983,9 +1989,12 @@ model InternalCalendarEvent {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   deletedAt             DateTime?
+  organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   participants          InternalCalendarEventParticipant[]
   conflicts             InternalCalendarConflict[]
 
+  @@index([organizationId, startDateTime, endDateTime])
+  @@index([organizationId, status, eventType])
   @@index([startDateTime, endDateTime])
   @@index([status, eventType])
   @@index([ownerCollaboratorId, startDateTime])

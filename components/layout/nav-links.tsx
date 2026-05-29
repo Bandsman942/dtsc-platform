@@ -47,7 +47,7 @@ export function NavLinks({
     : [];
   const visibleBaseItems = items.filter((item) => {
     if (item.href === "/calendar") {
-      return showInternalModules;
+      return showInternalModules || Boolean(enterpriseContext);
     }
     if (item.href === "/collaborators") {
       return showCollaborationModule;

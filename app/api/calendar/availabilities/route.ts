@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canAccessInternalCalendar, canManageCollaboratorCalendar, getCalendarContext } from "@/lib/internal-calendar";
+import { canAccessInternalCalendar, canManageCollaboratorCalendar, collaboratorAvailabilityWhere, getCalendarContext, validateCalendarCollaborators } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
 import { internalCalendarAvailabilitySchema } from "@/lib/validators";
 
@@ -12,16 +12,18 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canAccessInternalCalendar({ role: session.role })) {
+  if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs DTSC autorisés." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs autorisés de l'espace actif." }, { status: 403 });
   }
 
-  const context = await getCalendarContext({ id: session.userId, role: session.role });
+  const context = await getCalendarContext({ id: session.userId, role: session.role }, session);
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const collaboratorId = new URL(req.url).searchParams.get("collaboratorId") || "";
-  const where = context.canViewGlobal || context.canManagePeople
-    ? { deletedAt: null, ...(collaboratorId ? { collaboratorId } : {}) }
-    : { deletedAt: null, collaboratorId: context.employee?.id || "__no_employee__" };
+  const where = collaboratorAvailabilityWhere(context, collaboratorId);
 
   const availabilities = await prisma.collaboratorAvailability.findMany({
     where,
@@ -39,12 +41,16 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canAccessInternalCalendar({ role: session.role })) {
+  if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs DTSC autorisés." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs autorisés de l'espace actif." }, { status: 403 });
   }
 
-  const context = await getCalendarContext({ id: session.userId, role: session.role });
+  const context = await getCalendarContext({ id: session.userId, role: session.role }, session);
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const parsed = internalCalendarAvailabilitySchema.safeParse(await req.json());
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
@@ -55,10 +61,15 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Vous ne pouvez pas modifier cette disponibilité." }, { status: 403 });
   }
+  if (!(await validateCalendarCollaborators(context, [parsed.data.collaboratorId]))) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid collaborator", message: "Ce collaborateur n'appartient pas à l'organisation active." }, { status: 400 });
+  }
 
   const availability = await prisma.collaboratorAvailability.create({
     data: {
       ...parsed.data,
+      organizationId: context.activeOrganizationId,
       notes: parsed.data.notes || null,
       recurrenceUntil: parsed.data.recurrenceUntil || null,
       createdBy: session.userId,

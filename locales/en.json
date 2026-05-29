@@ -125,6 +125,16 @@
       "notes": "Internal notes"
     }
   },
+  "enterpriseCalendar": {
+    "title": "Internal calendar",
+    "eyebrow": "Enterprise context",
+    "eventsTitle": "Internal events",
+    "description": "Meetings, missions, tasks and calls created from the calendar remain isolated in this organization and feed the adapted internal views.",
+    "open": "Open calendar",
+    "empty": "No internal event has been planned for this company yet.",
+    "privacyTitle": "Privacy rule",
+    "privacyDescription": "The calendar uses the company's active members. Private events, participants and availabilities never leave the enterprise context."
+  },
   "announcements": {
     "actions": "Announcement actions",
     "archive": "Archive",

@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Le module `Calendrier interne` est à nouveau disponible en contexte entreprise cliente: la page, les routes `/api/calendar*`, les disponibilités et les événements utilisent maintenant le `organizationId` actif au lieu de rester réservés au seul tenant DTSC.
+- `Administration [Entreprise]` affiche une vue `Calendrier interne` avec les événements planifiés de l'organisation et un accès direct au calendrier, sans exposer les événements d'une autre entreprise.
+- Les groupes `Mes collaborateurs` proposent explicitement les types transversaux `CROSS_ORGANIZATION` et `PRIVATE_NETWORK`, avec invitation et acceptation obligatoires pour les utilisateurs recherchés sur toute la plateforme.
 - Correction du build Vercel des checkboxes de participants `Activités DTSC`: le rendu n'accède plus à un champ `email` absent du type `CollaboratorOption`.
 - Les sélecteurs multi-collaborateurs des réunions, workflows COO, formulaires Activités DTSC et workflows entreprise utilisent désormais des listes à cases à cocher au lieu de demander Ctrl/Cmd + clic.
 - Les blocs `Activités DTSC` qui disposent d'une action de création affichent leur bouton dès l'ouverture du bloc, même si aucune donnée n'existe encore.
@@ -24,6 +27,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Sécurisé
 
+- Ajout de `organizationId` sur `InternalCalendarEvent` et `CollaboratorAvailability`, avec migration de backfill vers l'organisation interne DTSC et index dédiés au filtrage par entreprise.
+- Les participants et propriétaires du calendrier sont validés côté backend contre les membres actifs de l'organisation active; un membre d'une entreprise ne peut plus cibler un collaborateur DTSC ou une autre entreprise via le calendrier.
 - Renforcement de l'isolation en contexte entreprise: `Dashboard`, `Chatbot`, `Entreprise`, `Documents`, `Paramètres`, `Notifications`, `Support` et `Mes collaborateurs` restent visibles, mais leurs données historiques sont maintenant filtrées par `organizationId` quand l'utilisateur travaille dans une entreprise.
 - Les badges et alertes de notifications du shell sont filtrés par contexte actif afin de ne pas mélanger les notifications globales, DTSC internes et entreprise.
 - Les routes santé refusent désormais les références patient, rendez-vous, consultation, département ou poste qui ne sont pas dans la même entreprise.

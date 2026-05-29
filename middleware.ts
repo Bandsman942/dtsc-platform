@@ -4,8 +4,8 @@ import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/se
 
 const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-activities", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
-const dtscInternalRoutes = ["/admin", "/calendar", "/activities"];
-const dtscInternalApiRoutes = ["/api/admin", "/api/calendar", "/api/activities"];
+const dtscInternalRoutes = ["/admin", "/activities"];
+const dtscInternalApiRoutes = ["/api/admin", "/api/activities"];
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
 const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";

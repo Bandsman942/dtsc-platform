@@ -6,10 +6,13 @@ import {
   canAccessInternalCalendar,
   canManageCollaboratorCalendar,
   calendarEventInclude,
+  collaboratorAvailabilityWhere,
   detectCalendarConflicts,
+  getCalendarCollaborators,
   getCalendarContext,
   internalCalendarAccessWhere,
   notifyCalendarParticipants,
+  validateCalendarCollaborators,
 } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
 import { internalCalendarEventSchema } from "@/lib/validators";
@@ -21,12 +24,16 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canAccessInternalCalendar({ role: session.role })) {
+  if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs DTSC autorisés." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs autorisés de l'espace actif." }, { status: 403 });
   }
 
-  const context = await getCalendarContext({ id: session.userId, role: session.role });
+  const context = await getCalendarContext({ id: session.userId, role: session.role }, session);
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden", message: "Aucun espace calendrier actif." }, { status: 403 });
+  }
   const url = new URL(req.url);
   const startParam = url.searchParams.get("start");
   const endParam = url.searchParams.get("end");
@@ -68,32 +75,15 @@ export async function GET(req: Request) {
       take: 200,
     }),
     prisma.collaboratorAvailability.findMany({
-      where: context.canViewGlobal
-        ? { deletedAt: null }
-        : { deletedAt: null, collaboratorId: context.employee?.id || "__no_employee__" },
+      where: collaboratorAvailabilityWhere(context),
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
       take: 200,
     }),
-    prisma.hrcfoEmployee.findMany({
-      where: context.canViewGlobal || context.canManagePeople
-        ? { status: { not: "EXITED" } }
-        : { id: context.employee?.id || "__no_employee__" },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        department: true,
-        departmentId: true,
-        jobTitle: true,
-        userId: true,
-      },
-      orderBy: { fullName: "asc" },
-      take: 300,
-    }),
+    getCalendarCollaborators(context),
   ]);
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ events, availabilities, collaborators, context: { employeeId: context.employee?.id || null, canViewGlobal: context.canViewGlobal, canManagePeople: context.canManagePeople } });
+  return NextResponse.json({ events, availabilities, collaborators, context: { employeeId: context.calendarCollaboratorId || null, canViewGlobal: context.canViewGlobal, canManagePeople: context.canManagePeople } });
 }
 
 export async function POST(req: Request) {
@@ -103,12 +93,16 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canAccessInternalCalendar({ role: session.role })) {
+  if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs DTSC autorisés." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs autorisés de l'espace actif." }, { status: 403 });
   }
 
-  const context = await getCalendarContext({ id: session.userId, role: session.role });
+  const context = await getCalendarContext({ id: session.userId, role: session.role }, session);
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Forbidden", message: "Aucun espace calendrier actif." }, { status: 403 });
+  }
   const parsed = internalCalendarEventSchema.safeParse(await req.json());
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
@@ -116,14 +110,19 @@ export async function POST(req: Request) {
   }
 
   const { participantIds, allowConflicts, ...data } = parsed.data;
-  const ownerCollaboratorId = data.ownerCollaboratorId || context.employee?.id || "";
+  const ownerCollaboratorId = data.ownerCollaboratorId || context.calendarCollaboratorId || "";
   if (!canManageCollaboratorCalendar(context, ownerCollaboratorId)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Vous ne pouvez pas modifier ce planning." }, { status: 403 });
   }
 
   const allParticipantIds = [...new Set([ownerCollaboratorId, ...participantIds].filter(Boolean))];
+  if (!(await validateCalendarCollaborators(context, allParticipantIds))) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid participants", message: "Tous les collaborateurs doivent appartenir à l'organisation active." }, { status: 400 });
+  }
   const conflicts = await detectCalendarConflicts({
+    context,
     participantIds: allParticipantIds,
     startDateTime: data.startDateTime,
     endDateTime: data.endDateTime,
@@ -135,6 +134,7 @@ export async function POST(req: Request) {
   }
 
   const linkedSource = await createCalendarLinkedSource({
+    context,
     data,
     ownerCollaboratorId,
     participantIds: allParticipantIds,
@@ -144,6 +144,7 @@ export async function POST(req: Request) {
   const event = await prisma.internalCalendarEvent.create({
     data: {
       ...data,
+      organizationId: context.activeOrganizationId,
       ownerCollaboratorId: ownerCollaboratorId || null,
       departmentId: data.departmentId || context.employee?.departmentId || null,
       physicalLocation: data.physicalLocation || null,
@@ -173,6 +174,7 @@ export async function POST(req: Request) {
   });
 
   await notifyCalendarParticipants({
+    context,
     participantIds: allParticipantIds,
     title: "Nouvel événement calendrier",
     body: event.title,
@@ -184,11 +186,13 @@ export async function POST(req: Request) {
 }
 
 async function createCalendarLinkedSource({
+  context,
   data,
   ownerCollaboratorId,
   participantIds,
   createdById,
 }: {
+  context: Awaited<ReturnType<typeof getCalendarContext>>;
   data: {
     title: string;
     description?: string | null;
@@ -204,6 +208,32 @@ async function createCalendarLinkedSource({
   participantIds: string[];
   createdById: string;
 }) {
+  const priority = calendarPriorityToInternalPriority(data.priority);
+  if (!context.dtscInternal) {
+    const requestRecord = await prisma.enterpriseActivityRequest.create({
+      data: {
+        organizationId: context.activeOrganizationId || "",
+        blockCode: "INTERNAL_CALENDAR",
+        title: data.title,
+        description: data.description || `${data.eventType} planifié depuis le calendrier interne de l'entreprise.`,
+        priority,
+        status: "SUBMITTED",
+        createdById,
+        assignedToUserId: null,
+        targetModuleCode: "INTERNAL_CALENDAR",
+        metadataJson: {
+          eventType: data.eventType,
+          startDateTime: data.startDateTime.toISOString(),
+          endDateTime: data.endDateTime.toISOString(),
+          locationMode: data.locationMode,
+          visibility: data.visibility,
+          participantIds,
+        },
+      },
+    });
+    return { sourceModule: "ENTERPRISE_CALENDAR", sourceEntityType: "EnterpriseActivityRequest", sourceEntityId: requestRecord.id };
+  }
+
   const employees = await prisma.hrcfoEmployee.findMany({
     where: { id: { in: [...new Set([ownerCollaboratorId, ...participantIds].filter(Boolean))] } },
     select: { id: true, fullName: true, departmentId: true, department: true, userId: true },
@@ -211,7 +241,6 @@ async function createCalendarLinkedSource({
   const owner = employees.find((employee) => employee.id === ownerCollaboratorId) || employees[0];
   const participantNames = employees.map((employee) => employee.fullName).join(", ");
   const plannedTime = timeString(data.startDateTime);
-  const priority = calendarPriorityToInternalPriority(data.priority);
 
   if (data.eventType === "Tâche") {
     const task = await prisma.cooTask.create({
@@ -308,6 +337,7 @@ async function createCalendarLinkedSource({
         groupType: "meeting",
         autoCreated: true,
         ownerId: createdById,
+        organizationId: context.activeOrganizationId,
         visibility: "PRIVATE",
         members: {
           create: [...new Set([createdById, ...userIds])].map((userId) => ({

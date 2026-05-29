@@ -3,20 +3,19 @@ import type { CollaboratorAvailability, Prisma } from "@prisma/client";
 import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
-import { canAccessInternalCalendar, calendarEventInclude, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
-import { isDtscInternalSession } from "@/lib/organizations";
+import { canAccessInternalCalendar, calendarEventInclude, collaboratorAvailabilityWhere, getCalendarCollaborators, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
 
 export default async function CalendarPage() {
   const user = await requireUser();
   const session = await getSession();
-  if (!isDtscInternalSession(session) || !canAccessInternalCalendar(user)) {
+  if (!session || !canAccessInternalCalendar(user, session)) {
     redirect("/dashboard");
   }
 
-  const context = await getCalendarContext({ id: user.id, role: user.role });
+  const context = await getCalendarContext({ id: user.id, role: user.role }, session);
 
-  if (!context.employee && user.role === "CLIENT") {
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
     redirect("/dashboard");
   }
 
@@ -28,28 +27,11 @@ export default async function CalendarPage() {
       take: 200,
     }),
     prisma.collaboratorAvailability.findMany({
-      where: context.canViewGlobal || context.canManagePeople
-        ? { deletedAt: null }
-        : { deletedAt: null, collaboratorId: context.employee?.id || "__no_employee__" },
+      where: collaboratorAvailabilityWhere(context),
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
       take: 200,
     }),
-    prisma.hrcfoEmployee.findMany({
-      where: context.canViewGlobal || context.canManagePeople
-        ? { status: { not: "EXITED" } }
-        : { id: context.employee?.id || "__no_employee__" },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        department: true,
-        departmentId: true,
-        jobTitle: true,
-        userId: true,
-      },
-      orderBy: { fullName: "asc" },
-      take: 300,
-    }),
+    getCalendarCollaborators(context),
   ]);
 
   return (
@@ -59,7 +41,7 @@ export default async function CalendarPage() {
         initialAvailabilities={availabilities.map(serializeAvailability)}
         collaborators={collaborators}
         context={{
-          employeeId: context.employee?.id || null,
+          employeeId: context.calendarCollaboratorId || null,
           canViewGlobal: context.canViewGlobal,
           canManagePeople: context.canManagePeople,
           canOverrideConflicts: context.canOverrideConflicts,
