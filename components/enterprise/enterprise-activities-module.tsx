@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { FileText, Send, Sparkles } from "lucide-react";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -143,6 +145,7 @@ export function EnterpriseActivitiesModule({
   const router = useRouter();
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
   const [message, setMessage] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
   const selectedActivityFields = healthActivityFields[selectedBlockCode] || defaultActivityFields;
   const patients = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [sectorRecords]);
@@ -203,6 +206,7 @@ export function EnterpriseActivitiesModule({
     setMessage(response.ok ? "Demande envoyée au destinataire sélectionné." : body?.message || "Envoi impossible.");
     if (response.ok) {
       formElement.reset();
+      setFormOpen(false);
       router.refresh();
     }
   }
@@ -238,52 +242,67 @@ export function EnterpriseActivitiesModule({
               );
             })}
           </div>
-          <form onSubmit={createRequest} className="mt-4 grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <div className="mt-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <div className="flex items-start gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-3">
               <Sparkles className="mt-1 h-4 w-4 shrink-0 text-cyan-600" />
-              <div>
+              <div className="min-w-0">
                 <p className="font-black text-dtsc-ink">{selectedBlock?.labelFr || "Choisissez une action"}</p>
                 <p className="text-xs font-semibold text-dtsc-muted">{selectedBlock?.descriptionFr || "Le formulaire créera une vraie demande liée à votre organisation."}</p>
               </div>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Input name="title" placeholder="Objet de la demande" required />
-              <select name="assignedToUserId" required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-                <option value="">{members.length ? "Destinataire" : "Aucun collaborateur actif"}</option>
-                {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name} · {member.role}</option>)}
-              </select>
-            </div>
-            <textarea name="description" required placeholder="Décrivez précisément la demande, le rapport ou le problème." className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
-            {!!selectedActivityFields.length && (
-              <div className="grid gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-3 md:grid-cols-2">
-                {selectedActivityFields.map((field) => (
-                  <label key={field.name} className="grid gap-1 text-sm font-black text-dtsc-ink">
-                    <span className="text-xs uppercase tracking-[0.14em] text-dtsc-muted">{field.label}</span>
-                    {field.type === "textarea" ? (
-                      <textarea name={field.name} required={field.required} placeholder={field.placeholder} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
-                    ) : field.type === "select" || field.source ? (
-                      <select name={field.name} required={field.required} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-                        <option value="">{field.placeholder}</option>
-                        {fieldOptions(field).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    ) : (
-                      <Input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} />
-                    )}
-                  </label>
-                ))}
-              </div>
-            )}
-            <select name="priority" defaultValue="NORMAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-              <option value="LOW">Faible</option>
-              <option value="NORMAL">Normale</option>
-              <option value="HIGH">Élevée</option>
-              <option value="CRITICAL">Critique</option>
-            </select>
-            <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Button type="button" onClick={() => setFormOpen(true)} className="mt-4 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <Send className="h-4 w-4" />
-              Envoyer la demande
+              Ouvrir le formulaire
             </Button>
-          </form>
+          </div>
+          <Dialog open={formOpen} title={selectedBlock?.labelFr || "Nouvelle demande entreprise"} description={selectedBlock?.descriptionFr || "Cette action crée une vraie demande isolée dans l'entreprise active."} onClose={() => setFormOpen(false)} className="h-[92dvh] max-w-5xl">
+            <form onSubmit={createRequest} className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField label="Objet de la demande" hint="Résumez précisément ce que vous envoyez au destinataire.">
+                  <Input name="title" placeholder="Objet de la demande" required />
+                </FormField>
+                <FormField label="Destinataire" hint="Choisissez un collaborateur actif de cette entreprise.">
+                  <select name="assignedToUserId" required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                    <option value="">{members.length ? "Destinataire" : "Aucun collaborateur actif"}</option>
+                    {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name} · {member.role}</option>)}
+                  </select>
+                </FormField>
+              </div>
+              <FormField label="Description" hint="Décrivez le contexte, le besoin, le rapport ou le problème à traiter.">
+                <textarea name="description" required placeholder="Décrivez précisément la demande, le rapport ou le problème." className="min-h-36 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+              </FormField>
+              {!!selectedActivityFields.length && (
+                <div className="grid gap-4 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-3 md:grid-cols-2">
+                  {selectedActivityFields.map((field) => (
+                    <FormField key={field.name} label={field.label} hint={field.placeholder}>
+                      {field.type === "textarea" ? (
+                        <textarea name={field.name} required={field.required} placeholder={field.placeholder} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
+                      ) : field.type === "select" || field.source ? (
+                        <select name={field.name} required={field.required} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                          <option value="">{field.placeholder}</option>
+                          {fieldOptions(field).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      ) : (
+                        <Input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} />
+                      )}
+                    </FormField>
+                  ))}
+                </div>
+              )}
+              <FormField label="Priorité" hint="Indiquez l'urgence de traitement attendue.">
+                <select name="priority" defaultValue="NORMAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                  <option value="LOW">Faible</option>
+                  <option value="NORMAL">Normale</option>
+                  <option value="HIGH">Élevée</option>
+                  <option value="CRITICAL">Critique</option>
+                </select>
+              </FormField>
+              <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+                <Send className="h-4 w-4" />
+                Envoyer la demande
+              </Button>
+            </form>
+          </Dialog>
         </AccordionItem>
 
         <AccordionItem title="Workflows partagés">

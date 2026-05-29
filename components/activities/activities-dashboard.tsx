@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, Download, Ey
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -156,7 +157,7 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
   }, [section]);
 
   return (
-    <Dialog open={true} title={section.title} description={section.description} onClose={onClose} className="h-[92dvh] max-w-6xl sm:h-auto">
+    <Dialog open={true} title={section.title} description={section.description} onClose={onClose} className="h-[92dvh] max-w-6xl">
       {section.id === "collaborator-forms" ? (
         <CollaboratorWorkflowComposer collaborators={collaborators} operations={operations} />
       ) : (
@@ -228,8 +229,7 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
   return (
     <form onSubmit={submitWorkflow} className="min-w-0 space-y-5 overflow-visible">
       <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-        <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
-          Formulaire
+        <FormField label="Formulaire" hint="Choisissez le type de formulaire à transmettre. Les champs s'adaptent au processus sélectionné.">
           <select value={workflowType} onChange={(event) => setWorkflowType(event.target.value)} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm normal-case tracking-normal text-dtsc-ink">
             <option value="COO_MEETING">Mes réunions & comptes rendus</option>
             <option value="LEGAL_CASE">Soumettre un dossier juridique</option>
@@ -238,36 +238,62 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
             <option value="LEGAL_DISPUTE">Soumettre un litige ou une réclamation</option>
             <option value="LEGAL_REQUEST">Faire une demande juridique</option>
           </select>
-        </label>
+        </FormField>
       </div>
 
       {workflowType === "COO_MEETING" && (
         <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
           <h4 className="font-black text-dtsc-ink">Mes réunions & comptes rendus</h4>
           <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
-            <Input name="title" placeholder="Titre de la réunion" required className="rounded-xl bg-dtsc-page" />
-            <select name="meetingType" defaultValue="COORDINATION" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-              {["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
-            </select>
-            <Input name="meetingDate" type="date" className="rounded-xl bg-dtsc-page" />
-            <Input name="meetingTime" placeholder="Heure" className="rounded-xl bg-dtsc-page" />
-            <Input name="duration" placeholder="Durée prévue" className="rounded-xl bg-dtsc-page" />
-            <select name="confidentialityLevel" defaultValue="INTERNAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-              {["INTERNAL", "CONFIDENTIAL", "STRATEGIC"].map((level) => <option key={level} value={level}>{formatEnumLabel(level)}</option>)}
-            </select>
-            <select name="participantIds" multiple className="min-h-36 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-              {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
-            </select>
-            <select name="operationId" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-              <option value="">Opération liée</option>
-              {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
-            </select>
+            <FormField label="Titre de la réunion" hint="Nommez la réunion pour la retrouver dans le suivi COO.">
+              <Input name="title" placeholder="Titre de la réunion" required className="rounded-xl bg-dtsc-page" />
+            </FormField>
+            <FormField label="Type de réunion" hint="Classez la réunion selon son objectif principal.">
+              <select name="meetingType" defaultValue="COORDINATION" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+                {["COORDINATION", "STRATEGIC", "OPERATIONAL", "FOLLOW_UP", "TECHNICAL", "FINANCIAL", "HR", "CLIENT", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Date" hint="Indiquez la date prévue ou tenue de la réunion.">
+              <Input name="meetingDate" type="date" className="rounded-xl bg-dtsc-page" />
+            </FormField>
+            <FormField label="Heure" hint="Précisez l'heure de démarrage si elle est connue.">
+              <Input name="meetingTime" placeholder="Heure" className="rounded-xl bg-dtsc-page" />
+            </FormField>
+            <FormField label="Durée prévue" hint="Exemple: 30 min, 1 h, 2 h.">
+              <Input name="duration" placeholder="Durée prévue" className="rounded-xl bg-dtsc-page" />
+            </FormField>
+            <FormField label="Confidentialité" hint="Définissez qui peut consulter le compte rendu et les décisions.">
+              <select name="confidentialityLevel" defaultValue="INTERNAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+                {["INTERNAL", "CONFIDENTIAL", "STRATEGIC"].map((level) => <option key={level} value={level}>{formatEnumLabel(level)}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Participants" hint="Sélectionnez un ou plusieurs collaborateurs concernés." className="md:col-span-2">
+              <select name="participantIds" multiple className="min-h-36 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+                {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Opération liée" hint="Associez la réunion à une opération existante si nécessaire.">
+              <select name="operationId" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+                <option value="">Opération liée</option>
+                {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
+              </select>
+            </FormField>
           </div>
-          <textarea name="agenda" placeholder="Ordre du jour" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-          <textarea name="minutes" placeholder="Compte rendu" className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-          <textarea name="decisions" placeholder="Décisions prises" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-          <textarea name="generatedTasks" placeholder="Actions à suivre" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-          <textarea name="comments" placeholder="Commentaire initial" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          <FormField label="Ordre du jour" hint="Listez les points à traiter pendant la réunion." className="mt-3">
+            <textarea name="agenda" placeholder="Ordre du jour" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
+          <FormField label="Compte rendu" hint="Résumez les échanges importants et le contexte utile." className="mt-3">
+            <textarea name="minutes" placeholder="Compte rendu" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
+          <FormField label="Décisions prises" hint="Notez les décisions validées pendant la réunion." className="mt-3">
+            <textarea name="decisions" placeholder="Décisions prises" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
+          <FormField label="Actions à suivre" hint="Indiquez les tâches ou suites opérationnelles attendues." className="mt-3">
+            <textarea name="generatedTasks" placeholder="Actions à suivre" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
+          <FormField label="Commentaire initial" hint="Ajoutez une précision visible dans le fil de suivi." className="mt-3">
+            <textarea name="comments" placeholder="Commentaire initial" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
         </div>
       )}
 
@@ -287,41 +313,87 @@ function LegalWorkflowFields({ workflowType }: { workflowType: string }) {
     <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">{legalWorkflowTitle(workflowType)}</h4>
       <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
-        <Input name={workflowType === "LEGAL_REQUEST" ? "subject" : "title"} placeholder={titlePlaceholder} required className="rounded-xl bg-dtsc-page" />
-        <LegalTypeSelect workflowType={workflowType} />
-        {workflowType === "LEGAL_CONTRACT" && <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />}
-        {workflowType === "LEGAL_DISPUTE" && <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />}
-        {workflowType === "LEGAL_CONTRACT" && <Input name="desiredValidationDate" type="date" title="Date souhaitée de validation" className="rounded-xl bg-dtsc-page" />}
-        {workflowType === "LEGAL_REQUEST" && <Input name="desiredDueDate" type="date" title="Date limite souhaitée" className="rounded-xl bg-dtsc-page" />}
-        {workflowType === "LEGAL_DISPUTE" && <Input name="occurredAt" type="date" title="Date de survenue" className="rounded-xl bg-dtsc-page" />}
+        <FormField label={titlePlaceholder} hint="Saisissez un intitulé court et précis pour la demande juridique.">
+          <Input name={workflowType === "LEGAL_REQUEST" ? "subject" : "title"} placeholder={titlePlaceholder} required className="rounded-xl bg-dtsc-page" />
+        </FormField>
+        <FormField label="Catégorie juridique" hint="Choisissez la catégorie qui oriente le traitement par le Legal Advisor.">
+          <LegalTypeSelect workflowType={workflowType} />
+        </FormField>
+        {workflowType === "LEGAL_CONTRACT" && (
+          <FormField label="Partie concernée" hint="Indiquez le client, fournisseur, partenaire ou collaborateur concerné.">
+            <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />
+          </FormField>
+        )}
+        {workflowType === "LEGAL_DISPUTE" && (
+          <FormField label="Partie concernée" hint="Indiquez l'autre partie impliquée dans le litige ou la réclamation.">
+            <Input name="counterparty" placeholder="Partie concernée" className="rounded-xl bg-dtsc-page" />
+          </FormField>
+        )}
+        {workflowType === "LEGAL_CONTRACT" && (
+          <FormField label="Date souhaitée de validation" hint="Ajoutez la date cible pour la relecture ou validation.">
+            <Input name="desiredValidationDate" type="date" className="rounded-xl bg-dtsc-page" />
+          </FormField>
+        )}
+        {workflowType === "LEGAL_REQUEST" && (
+          <FormField label="Date limite souhaitée" hint="Précisez la date attendue pour la réponse juridique.">
+            <Input name="desiredDueDate" type="date" className="rounded-xl bg-dtsc-page" />
+          </FormField>
+        )}
+        {workflowType === "LEGAL_DISPUTE" && (
+          <FormField label="Date de survenue" hint="Indiquez la date de l'événement ou du litige.">
+            <Input name="occurredAt" type="date" className="rounded-xl bg-dtsc-page" />
+          </FormField>
+        )}
         {(workflowType === "LEGAL_CASE" || workflowType === "LEGAL_REQUEST") && (
-          <select name="priority" defaultValue="NORMAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-            {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
-          </select>
+          <FormField label="Priorité" hint="Définissez l'urgence de traitement juridique.">
+            <select name="priority" defaultValue="NORMAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+              {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
+            </select>
+          </FormField>
         )}
         {workflowType === "LEGAL_RISK" && (
-          <select name="urgency" defaultValue="NORMAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-            {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((urgency) => <option key={urgency} value={urgency}>{formatEnumLabel(urgency)}</option>)}
-          </select>
+          <FormField label="Urgence" hint="Évaluez la vitesse de traitement nécessaire pour limiter le risque.">
+            <select name="urgency" defaultValue="NORMAL" className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+              {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((urgency) => <option key={urgency} value={urgency}>{formatEnumLabel(urgency)}</option>)}
+            </select>
+          </FormField>
         )}
         <ActivityFileField name={workflowType === "LEGAL_CONTRACT" || workflowType === "LEGAL_DISPUTE" || workflowType === "LEGAL_REQUEST" ? "documentUrl" : "attachmentUrl"} label="Document joint" />
-        <Input name="linkedEntityType" placeholder="Élément lié: projet, fournisseur, client..." className="rounded-xl bg-dtsc-page" />
-        <Input name="linkedEntityId" placeholder="Référence de l'élément lié" className="rounded-xl bg-dtsc-page" />
+        <FormField label="Élément lié" hint="Précisez le type d'objet lié si la demande concerne un projet, fournisseur ou client.">
+          <Input name="linkedEntityType" placeholder="Élément lié: projet, fournisseur, client..." className="rounded-xl bg-dtsc-page" />
+        </FormField>
+        <FormField label="Référence liée" hint="Ajoutez l'identifiant ou la référence interne de l'élément concerné.">
+          <Input name="linkedEntityId" placeholder="Référence de l'élément lié" className="rounded-xl bg-dtsc-page" />
+        </FormField>
       </div>
       {workflowType === "LEGAL_CONTRACT" ? (
-        <textarea name="subject" required placeholder="Objet du contrat et instruction de relecture" className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        <FormField label="Objet du contrat" hint="Décrivez le contrat et les instructions attendues pour la relecture." className="mt-3">
+          <textarea name="subject" required placeholder="Objet du contrat et instruction de relecture" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        </FormField>
       ) : (
-        <textarea name="description" required placeholder="Description" className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        <FormField label="Description" hint="Expliquez le besoin, le contexte et le résultat attendu." className="mt-3">
+          <textarea name="description" required placeholder="Description" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        </FormField>
       )}
-      {workflowType === "LEGAL_CASE" && <textarea name="reason" placeholder="Raison de la demande" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />}
-      {(workflowType === "LEGAL_RISK" || workflowType === "LEGAL_DISPUTE") && <textarea name="potentialImpact" placeholder="Impact perçu ou estimé" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />}
+      {workflowType === "LEGAL_CASE" && (
+        <FormField label="Raison de la demande" hint="Indiquez pourquoi ce dossier doit être analysé par l'équipe juridique." className="mt-3">
+          <textarea name="reason" placeholder="Raison de la demande" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        </FormField>
+      )}
+      {(workflowType === "LEGAL_RISK" || workflowType === "LEGAL_DISPUTE") && (
+        <FormField label="Impact perçu ou estimé" hint="Décrivez les conséquences possibles sur DTSC, le client ou le projet." className="mt-3">
+          <textarea name="potentialImpact" placeholder="Impact perçu ou estimé" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+        </FormField>
+      )}
       {workflowType === "LEGAL_CONTRACT" && (
         <label className="mt-3 flex items-center gap-2 text-sm font-bold text-dtsc-muted">
           <input name="strategic" type="checkbox" className="h-4 w-4 rounded border-dtsc-border" />
           Contrat stratégique ou nécessitant signature CEO
         </label>
       )}
-      <textarea name="comments" placeholder="Commentaire initial" className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      <FormField label="Commentaire initial" hint="Ajoutez une précision utile au premier échange." className="mt-3">
+        <textarea name="comments" placeholder="Commentaire initial" className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
     </div>
   );
 }
@@ -846,20 +918,32 @@ function RequestComposer({ collaborators, selected, compact = false }: { collabo
       <input type="hidden" name="relatedEntityType" value={selected?.entityType || ""} />
       <input type="hidden" name="relatedEntityId" value={selected?.id || ""} />
       <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
-        <Input name="title" placeholder={selected ? `Demande liée à: ${selected.title}` : "Titre de la demande"} required className="rounded-xl bg-dtsc-page" />
-        <select name="targetEmployeeId" required className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-          <option value="">Collaborateur destinataire</option>
-          {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
-        </select>
-        <select name="requestType" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="INFORMATION">
-          {["INFORMATION", "DOCUMENT", "VALIDATION", "SUPPORT", "ACTION", "MEETING", "FOLLOW_UP", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
-        </select>
-        <select name="priority" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="NORMAL">
-          {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
-        </select>
-        <Input name="dueDate" type="date" className="rounded-xl bg-dtsc-page" />
+        <FormField label="Objet de la demande" hint="Indiquez clairement ce que vous attendez du collaborateur.">
+          <Input name="title" placeholder={selected ? `Demande liée à: ${selected.title}` : "Titre de la demande"} required className="rounded-xl bg-dtsc-page" />
+        </FormField>
+        <FormField label="Collaborateur destinataire" hint="Sélectionnez la personne qui devra traiter ou répondre à cette demande.">
+          <select name="targetEmployeeId" required className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <option value="">Collaborateur destinataire</option>
+            {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Type de demande" hint="Classez la demande pour faciliter son suivi dans les activités DTSC.">
+          <select name="requestType" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="INFORMATION">
+            {["INFORMATION", "DOCUMENT", "VALIDATION", "SUPPORT", "ACTION", "MEETING", "FOLLOW_UP", "OTHER"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Priorité" hint="Définissez l'urgence métier pour orienter le traitement.">
+          <select name="priority" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="NORMAL">
+            {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Échéance souhaitée" hint="Ajoutez une date limite si la demande doit être traitée avant un délai précis.">
+          <Input name="dueDate" type="date" className="rounded-xl bg-dtsc-page" />
+        </FormField>
       </div>
-      <textarea name="message" required placeholder="Expliquez clairement ce que vous attendez du collaborateur..." className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      <FormField label="Message détaillé" hint="Décrivez le contexte, les informations attendues et les pièces utiles." className="mt-3">
+        <textarea name="message" required placeholder="Expliquez clairement ce que vous attendez du collaborateur..." className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
       <RequestAttachmentField key={formVersion} />
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer la demande</Button>
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
@@ -874,7 +958,7 @@ function RequestComposer({ collaborators, selected, compact = false }: { collabo
         <Send className="h-4 w-4" />
         Formuler une demande
       </Button>
-      <Dialog open={open} title="Formuler une demande" onClose={() => setOpen(false)} className="max-w-4xl">
+      <Dialog open={open} title="Formuler une demande" onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
         {form}
       </Dialog>
     </>
@@ -980,21 +1064,35 @@ function BlockerComposer({ operations, compact = false }: { operations: Collabor
       <h4 className="font-black text-dtsc-ink">Déclarer un blocage</h4>
       <p className="mt-1 text-sm leading-6 text-dtsc-muted">Signalez un obstacle opérationnel pour le faire remonter au COO avec contexte et criticité.</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <Input name="title" placeholder="Titre du blocage" required className="rounded-xl bg-dtsc-page" />
-        <select name="severity" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="MEDIUM">
-          {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((severity) => <option key={severity} value={severity}>{formatEnumLabel(severity)}</option>)}
-        </select>
-        <select name="sourceType" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="TASK">
-          {["TASK", "OPERATION", "DEPARTMENT_REQUEST", "HR", "FINANCE", "TECHNICAL", "INFORMATION", "VALIDATION_DELAY", "OTHER"].map((source) => <option key={source} value={source}>{formatEnumLabel(source)}</option>)}
-        </select>
-        <select name="operationId" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-          <option value="">Opération liée</option>
-          {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
-        </select>
+        <FormField label="Titre du blocage" hint="Résumez l'obstacle en une phrase claire.">
+          <Input name="title" placeholder="Titre du blocage" required className="rounded-xl bg-dtsc-page" />
+        </FormField>
+        <FormField label="Criticité" hint="Indiquez l'impact du blocage sur les délais, le client ou l'équipe.">
+          <select name="severity" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="MEDIUM">
+            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((severity) => <option key={severity} value={severity}>{formatEnumLabel(severity)}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Origine du blocage" hint="Précisez le type d'activité concerné pour orienter le suivi COO.">
+          <select name="sourceType" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="TASK">
+            {["TASK", "OPERATION", "DEPARTMENT_REQUEST", "HR", "FINANCE", "TECHNICAL", "INFORMATION", "VALIDATION_DELAY", "OTHER"].map((source) => <option key={source} value={source}>{formatEnumLabel(source)}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Opération liée" hint="Associez le blocage à une opération si elle existe déjà.">
+          <select name="operationId" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <option value="">Opération liée</option>
+            {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
+          </select>
+        </FormField>
       </div>
-      <textarea name="description" required placeholder="Description du blocage..." className="mt-3 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-      <textarea name="impact" placeholder="Impact sur le travail, le client ou le délai..." className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
-      <textarea name="correctiveAction" placeholder="Action attendue ou solution proposée..." className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      <FormField label="Description du blocage" hint="Expliquez ce qui empêche l'avancement et les éléments déjà vérifiés." className="mt-3">
+        <textarea name="description" required placeholder="Description du blocage..." className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
+      <FormField label="Impact observé" hint="Décrivez les conséquences sur le travail, le client, le budget ou le délai." className="mt-3">
+        <textarea name="impact" placeholder="Impact sur le travail, le client ou le délai..." className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
+      <FormField label="Action attendue" hint="Proposez une correction ou indiquez l'aide dont vous avez besoin." className="mt-3">
+        <textarea name="correctiveAction" placeholder="Action attendue ou solution proposée..." className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><CircleAlert className="h-4 w-4" /> Déclarer</Button>
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
@@ -1008,7 +1106,7 @@ function BlockerComposer({ operations, compact = false }: { operations: Collabor
         <CircleAlert className="h-4 w-4" />
         Signaler un blocage
       </Button>
-      <Dialog open={open} title="Déclarer un blocage" onClose={() => setOpen(false)} className="max-w-4xl">
+      <Dialog open={open} title="Déclarer un blocage" onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
         {form}
       </Dialog>
     </>
@@ -1038,20 +1136,30 @@ function ReportComposer({ collaborators, operations, compact = false }: { collab
     <form onSubmit={createReport} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <h4 className="font-black text-dtsc-ink">Envoyer un rapport opérationnel</h4>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <Input name="title" placeholder="Titre du rapport" required className="rounded-xl bg-dtsc-page" />
-        <select name="recipientEmployeeId" required className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-          <option value="">Destinataire</option>
-          {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
-        </select>
-        <select name="operationId" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
-          <option value="">Opération liée</option>
-          {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
-        </select>
-        <select name="priority" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="NORMAL">
-          {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
-        </select>
+        <FormField label="Titre du rapport" hint="Donnez un titre exploitable pour retrouver rapidement ce rapport.">
+          <Input name="title" placeholder="Titre du rapport" required className="rounded-xl bg-dtsc-page" />
+        </FormField>
+        <FormField label="Destinataire" hint="Sélectionnez le collaborateur qui doit recevoir et traiter le rapport.">
+          <select name="recipientEmployeeId" required className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <option value="">Destinataire</option>
+            {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.label}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Opération liée" hint="Reliez le rapport à une opération DTSC si nécessaire.">
+          <select name="operationId" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink">
+            <option value="">Opération liée</option>
+            {operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.label}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Priorité" hint="Indiquez l'importance du rapport pour la suite des opérations.">
+          <select name="priority" className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" defaultValue="NORMAL">
+            {["LOW", "NORMAL", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
+          </select>
+        </FormField>
       </div>
-      <textarea name="content" required placeholder="Contenu du rapport..." className="mt-3 min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      <FormField label="Contenu du rapport" hint="Présentez les faits, résultats, difficultés et recommandations." className="mt-3">
+        <textarea name="content" required placeholder="Contenu du rapport..." className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer</Button>
       {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
@@ -1065,7 +1173,7 @@ function ReportComposer({ collaborators, operations, compact = false }: { collab
         <Send className="h-4 w-4" />
         Nouveau rapport
       </Button>
-      <Dialog open={open} title="Envoyer un rapport" onClose={() => setOpen(false)} className="max-w-4xl">
+      <Dialog open={open} title="Envoyer un rapport" onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
         {form}
       </Dialog>
     </>

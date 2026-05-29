@@ -6,6 +6,7 @@ import { Building2, CreditCard, Edit3, Layers3, ShieldCheck, Trash2 } from "luci
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -73,6 +74,7 @@ export function ClientOrganizationsPanel({
   const [selectedSectorId, setSelectedSectorId] = useState("");
   const [sectorQuery, setSectorQuery] = useState("");
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingOrganization, setEditingOrganization] = useState<ClientOrganization | null>(null);
   const [subscriptionOrganization, setSubscriptionOrganization] = useState<ClientOrganization | null>(null);
   const [organizationToDelete, setOrganizationToDelete] = useState<ClientOrganization | null>(null);
@@ -126,6 +128,7 @@ export function ClientOrganizationsPanel({
     setMessage(response.ok ? "Entreprise cliente créée." : body?.message || "Création impossible.");
     if (response.ok) {
       event.currentTarget.reset();
+      setCreateOpen(false);
       setSelectedSectorId("");
       setSectorQuery("");
       setTemplatePreview(null);
@@ -197,69 +200,97 @@ export function ClientOrganizationsPanel({
         DTSC gère l&apos;abonnement et l&apos;activation de l&apos;espace client, mais ne peut pas accéder aux données internes privées de cette entreprise.
       </div>
 
-      <form onSubmit={createOrganization} className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2 xl:grid-cols-3">
-        <Input name="name" placeholder="Nom de l'entreprise" required />
-        <Input name="slug" placeholder="slug-entreprise" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
-        <div className="relative md:col-span-2 xl:col-span-1">
-          <input type="hidden" name="sectorId" value={selectedSectorId} />
-          <Input
-            value={sectorQuery}
-            onChange={(event) => {
-              setSectorQuery(event.currentTarget.value);
-              setSelectedSectorId("");
-            }}
-            placeholder="Choisir un secteur d'activité"
-            aria-label="Secteur d'activité"
-          />
-          {filteredSectors.length > 0 && (
-            <div className="mt-2 max-h-56 overflow-y-auto rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_88%,transparent)] p-2 shadow-[0_18px_55px_rgba(0,23,54,0.14)] backdrop-blur-xl">
-              {filteredSectors.slice(0, 8).map((sector) => {
-                const active = selectedSectorId === sector.id;
-                return (
-                  <button
-                    key={sector.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSectorId(sector.id);
-                      setSectorQuery(sector.labelFr);
-                    }}
-                    className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition ${active ? "bg-cyan-400/18 text-cyan-600" : "text-dtsc-ink hover:bg-dtsc-soft"}`}
-                  >
-                    <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: sector.color || "#22d3ee" }} />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-black">{sector.labelFr}</span>
-                      <span className="line-clamp-2 text-xs font-semibold text-dtsc-muted">{sector.descriptionFr || sector.labelEn}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+      <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-black text-dtsc-ink">Nouvelle entreprise cliente</h3>
+            <p className="mt-1 text-sm text-dtsc-muted">Créez l&apos;organisation, son secteur, son administrateur initial et son plan.</p>
+          </div>
+          <Button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Building2 className="h-4 w-4" />
+            Créer l&apos;entreprise cliente
+          </Button>
         </div>
-        <Input name="country" placeholder="Pays" />
-        <Input name="city" placeholder="Ville" />
-        <Input name="email" type="email" placeholder="Email principal" />
-        <Input name="phone" placeholder="Téléphone" />
-        <Input name="address" placeholder="Adresse" />
-        <select name="status" defaultValue="DRAFT" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-          <option value="DRAFT">Brouillon</option>
-          <option value="ACTIVE">Actif</option>
-          <option value="SUSPENDED">Suspendu</option>
-          <option value="ARCHIVED">Archivé</option>
-        </select>
-        <select name="adminUserId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-          <option value="">Désigner un admin entreprise existant</option>
-          {activeUsers.map((user) => (
-            <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
-          ))}
-        </select>
-        <select name="planId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-          <option value="">Plan à lier plus tard</option>
-          {plans.map((plan) => (
-            <option key={plan.id} value={plan.id}>{plan.name}</option>
-          ))}
-        </select>
-        <textarea name="notes" placeholder="Notes internes DTSC" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink xl:col-span-3" />
+      </div>
+
+      <Dialog open={createOpen} title="Créer une entreprise cliente" description="DTSC crée l'espace client, sélectionne le secteur et peut appliquer un modèle sectoriel sans accéder aux données privées futures." onClose={() => setCreateOpen(false)} className="h-[92dvh] max-w-6xl">
+      <form onSubmit={createOrganization} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <FormField label="Nom de l'entreprise" hint="Nom officiel ou commercial qui apparaîtra dans le sélecteur d'espace.">
+          <Input name="name" placeholder="Nom de l'entreprise" required />
+        </FormField>
+        <FormField label="Slug" hint="Identifiant court en minuscules, utilisé pour les URLs et références.">
+          <Input name="slug" placeholder="slug-entreprise" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
+        </FormField>
+        <FormField label="Secteur d'activité" hint="Choisissez un secteur pour prévisualiser et appliquer le template adapté." className="md:col-span-2 xl:col-span-1">
+          <div className="relative">
+            <input type="hidden" name="sectorId" value={selectedSectorId} />
+            <Input
+              value={sectorQuery}
+              onChange={(event) => {
+                setSectorQuery(event.currentTarget.value);
+                setSelectedSectorId("");
+              }}
+              placeholder="Choisir un secteur d'activité"
+              aria-label="Secteur d'activité"
+            />
+            {filteredSectors.length > 0 && (
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-2xl border border-dtsc-border bg-[color-mix(in_srgb,var(--dtsc-surface)_88%,transparent)] p-2 shadow-[0_18px_55px_rgba(0,23,54,0.14)] backdrop-blur-xl">
+                {filteredSectors.slice(0, 8).map((sector) => {
+                  const active = selectedSectorId === sector.id;
+                  return (
+                    <button
+                      key={sector.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSectorId(sector.id);
+                        setSectorQuery(sector.labelFr);
+                      }}
+                      className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition ${active ? "bg-cyan-400/18 text-cyan-600" : "text-dtsc-ink hover:bg-dtsc-soft"}`}
+                    >
+                      <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: sector.color || "#22d3ee" }} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-black">{sector.labelFr}</span>
+                        <span className="line-clamp-2 text-xs font-semibold text-dtsc-muted">{sector.descriptionFr || sector.labelEn}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </FormField>
+        <FormField label="Pays" hint="Pays principal de l'entreprise."><Input name="country" placeholder="Pays" /></FormField>
+        <FormField label="Ville" hint="Ville ou zone principale."><Input name="city" placeholder="Ville" /></FormField>
+        <FormField label="Email principal" hint="Adresse administrative de contact."><Input name="email" type="email" placeholder="Email principal" /></FormField>
+        <FormField label="Téléphone" hint="Numéro administratif de contact."><Input name="phone" placeholder="Téléphone" /></FormField>
+        <FormField label="Adresse" hint="Adresse physique ou administrative."><Input name="address" placeholder="Adresse" /></FormField>
+        <FormField label="Statut" hint="État administratif de l'espace client.">
+          <select name="status" defaultValue="DRAFT" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="DRAFT">Brouillon</option>
+            <option value="ACTIVE">Actif</option>
+            <option value="SUSPENDED">Suspendu</option>
+            <option value="ARCHIVED">Archivé</option>
+          </select>
+        </FormField>
+        <FormField label="Administrateur entreprise" hint="Utilisateur existant qui recevra le rôle admin entreprise.">
+          <select name="adminUserId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="">Désigner un admin entreprise existant</option>
+            {activeUsers.map((user) => (
+              <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Plan initial" hint="Plan d'abonnement à rattacher maintenant ou plus tard.">
+          <select name="planId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+            <option value="">Plan à lier plus tard</option>
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>{plan.name}</option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Notes internes DTSC" hint="Notes administratives visibles uniquement côté DTSC." className="xl:col-span-3">
+          <textarea name="notes" placeholder="Notes internes DTSC" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+        </FormField>
         {templatePreview && (
           <div className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 xl:col-span-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -288,6 +319,7 @@ export function ClientOrganizationsPanel({
           </Button>
         </div>
       </form>
+      </Dialog>
 
       <ListControls
         query={list.query}
@@ -413,60 +445,55 @@ function OrganizationEditDialog({
 }) {
   const subscription = organization?.subscriptions[0];
   return (
-    <Dialog open={Boolean(organization)} title="Modifier l'entreprise" description={organization?.name} onClose={onClose} className="h-[92dvh] max-w-5xl">
+    <Dialog open={Boolean(organization)} title="Modifier l'entreprise" description={organization?.name} onClose={onClose} className="h-[92dvh] max-w-6xl">
       {organization && (
         <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-          <Input name="name" defaultValue={organization.name} placeholder="Nom de l'entreprise" required />
-          <Input name="slug" defaultValue={organization.slug || ""} placeholder="slug-entreprise" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
-          <select name="sectorId" defaultValue={organization.sectorId || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="">Conserver le secteur actuel</option>
-            {sectors.map((sector) => (
-              <option key={sector.id} value={sector.id}>{sector.labelFr}</option>
-            ))}
-          </select>
-          <Input name="industry" defaultValue={organization.industry || ""} placeholder="Secteur libre / industrie" />
-          <Input name="country" defaultValue={organization.country || ""} placeholder="Pays" />
-          <Input name="city" defaultValue={organization.city || ""} placeholder="Ville" />
-          <Input name="email" type="email" defaultValue={organization.email || ""} placeholder="Email principal" />
-          <Input name="phone" defaultValue={organization.phone || ""} placeholder="Téléphone" />
-          <Input name="address" defaultValue={organization.address || ""} placeholder="Adresse" />
-          <Input name="timezone" defaultValue={organization.timezone || "Africa/Kinshasa"} placeholder="Fuseau horaire" />
-          <select name="status" defaultValue={organization.status} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="DRAFT">Brouillon</option>
-            <option value="ACTIVE">Actif</option>
-            <option value="SUSPENDED">Suspendu</option>
-            <option value="ARCHIVED">Archivé</option>
-          </select>
-          <select name="userId" defaultValue="" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="">Ajouter un admin entreprise si nécessaire</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
-            ))}
-          </select>
+          <FormField label="Nom de l'entreprise" hint="Nom affiché dans l'espace client."><Input name="name" defaultValue={organization.name} placeholder="Nom de l'entreprise" required /></FormField>
+          <FormField label="Slug" hint="Identifiant URL en minuscules."><Input name="slug" defaultValue={organization.slug || ""} placeholder="slug-entreprise" pattern="[a-z0-9]+(-[a-z0-9]+)*" /></FormField>
+          <FormField label="Secteur normalisé" hint="Sélectionnez un secteur pour adapter les modules.">
+            <select name="sectorId" defaultValue={organization.sectorId || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="">Conserver le secteur actuel</option>
+              {sectors.map((sector) => (
+                <option key={sector.id} value={sector.id}>{sector.labelFr}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Secteur libre" hint="Complément métier administratif si nécessaire."><Input name="industry" defaultValue={organization.industry || ""} placeholder="Secteur libre / industrie" /></FormField>
+          <FormField label="Pays" hint="Pays principal."><Input name="country" defaultValue={organization.country || ""} placeholder="Pays" /></FormField>
+          <FormField label="Ville" hint="Ville ou zone principale."><Input name="city" defaultValue={organization.city || ""} placeholder="Ville" /></FormField>
+          <FormField label="Email principal" hint="Email administratif de l'entreprise."><Input name="email" type="email" defaultValue={organization.email || ""} placeholder="Email principal" /></FormField>
+          <FormField label="Téléphone" hint="Numéro administratif de l'entreprise."><Input name="phone" defaultValue={organization.phone || ""} placeholder="Téléphone" /></FormField>
+          <FormField label="Adresse" hint="Adresse administrative ou physique."><Input name="address" defaultValue={organization.address || ""} placeholder="Adresse" /></FormField>
+          <FormField label="Fuseau horaire" hint="Fuseau utilisé pour dates, réunions et notifications."><Input name="timezone" defaultValue={organization.timezone || "Africa/Kinshasa"} placeholder="Fuseau horaire" /></FormField>
+          <FormField label="Statut" hint="État opérationnel de l'espace client.">
+            <select name="status" defaultValue={organization.status} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="DRAFT">Brouillon</option>
+              <option value="ACTIVE">Actif</option>
+              <option value="SUSPENDED">Suspendu</option>
+              <option value="ARCHIVED">Archivé</option>
+            </select>
+          </FormField>
+          <FormField label="Ajouter un admin entreprise" hint="Optionnel: accorder le rôle admin à un utilisateur existant.">
+            <select name="userId" defaultValue="" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="">Ajouter un admin entreprise si nécessaire</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
+              ))}
+            </select>
+          </FormField>
           <section className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 md:col-span-2">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Abonnement</p>
             <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <select name="planId" defaultValue={subscription?.plan.id || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-                <option value="">Aucun plan</option>
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>{plan.name}</option>
-                ))}
-              </select>
-              <select name="subscriptionStatus" defaultValue={subscription?.status || "ACTIVE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-                <option value="ACTIVE">Actif</option>
-                <option value="PENDING_PAYMENT">Paiement en attente</option>
-                <option value="PAST_DUE">En retard</option>
-                <option value="TRIAL">Essai</option>
-                <option value="SUSPENDED">Suspendu</option>
-                <option value="EXPIRED">Expiré</option>
-                <option value="CANCELED">Annulé</option>
-              </select>
-              <Input name="startedAt" type="date" defaultValue={formatDateInput(subscription?.startedAt)} />
-              <Input name="expiresAt" type="date" defaultValue={formatDateInput(subscription?.expiresAt)} />
-              <Input name="trialEndsAt" type="date" defaultValue={formatDateInput(subscription?.trialEndsAt)} />
+              <FormField label="Plan" hint="Plan actif ou à rattacher."><select name="planId" defaultValue={subscription?.plan.id || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink"><option value="">Aucun plan</option>{plans.map((plan) => (<option key={plan.id} value={plan.id}>{plan.name}</option>))}</select></FormField>
+              <FormField label="Statut abonnement" hint="État de facturation contrôlé par DTSC."><select name="subscriptionStatus" defaultValue={subscription?.status || "ACTIVE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink"><option value="ACTIVE">Actif</option><option value="PENDING_PAYMENT">Paiement en attente</option><option value="PAST_DUE">En retard</option><option value="TRIAL">Essai</option><option value="SUSPENDED">Suspendu</option><option value="EXPIRED">Expiré</option><option value="CANCELED">Annulé</option></select></FormField>
+              <FormField label="Début" hint="Date de démarrage de l'abonnement."><Input name="startedAt" type="date" defaultValue={formatDateInput(subscription?.startedAt)} /></FormField>
+              <FormField label="Expiration" hint="Date de fin ou renouvellement."><Input name="expiresAt" type="date" defaultValue={formatDateInput(subscription?.expiresAt)} /></FormField>
+              <FormField label="Fin d'essai" hint="Date de fin de période d'essai si applicable."><Input name="trialEndsAt" type="date" defaultValue={formatDateInput(subscription?.trialEndsAt)} /></FormField>
             </div>
           </section>
-          <textarea name="notes" defaultValue={organization.notes || ""} placeholder="Notes internes DTSC" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink md:col-span-2" />
+          <FormField label="Notes internes DTSC" hint="Notes administratives non visibles par l'entreprise cliente." className="md:col-span-2">
+            <textarea name="notes" defaultValue={organization.notes || ""} placeholder="Notes internes DTSC" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
           <div className="flex justify-end gap-3 md:col-span-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">Annuler</Button>
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
@@ -490,27 +517,31 @@ function SubscriptionDialog({
 }) {
   const subscription = organization?.subscriptions[0];
   return (
-    <Dialog open={Boolean(organization)} title="Gérer l'abonnement" description={organization?.name} onClose={onClose} className="max-w-3xl">
+    <Dialog open={Boolean(organization)} title="Gérer l'abonnement" description={organization?.name} onClose={onClose} className="h-[92dvh] max-w-4xl">
       {organization && (
-        <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
-          <select name="planId" defaultValue={subscription?.plan.id || ""} required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="">Choisir un plan</option>
-            {plans.map((plan) => (
-              <option key={plan.id} value={plan.id}>{plan.name}</option>
-            ))}
-          </select>
-          <select name="subscriptionStatus" defaultValue={subscription?.status || "ACTIVE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="ACTIVE">Actif</option>
-            <option value="PENDING_PAYMENT">Paiement en attente</option>
-            <option value="PAST_DUE">En retard</option>
-            <option value="TRIAL">Essai</option>
-            <option value="SUSPENDED">Suspendu</option>
-            <option value="EXPIRED">Expiré</option>
-            <option value="CANCELED">Annulé</option>
-          </select>
-          <Input name="startedAt" type="date" defaultValue={formatDateInput(subscription?.startedAt)} />
-          <Input name="expiresAt" type="date" defaultValue={formatDateInput(subscription?.expiresAt)} />
-          <Input name="trialEndsAt" type="date" defaultValue={formatDateInput(subscription?.trialEndsAt)} />
+        <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+          <FormField label="Plan" hint="Choisissez le plan que DTSC active pour cette entreprise.">
+            <select name="planId" defaultValue={subscription?.plan.id || ""} required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="">Choisir un plan</option>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>{plan.name}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Statut" hint="Contrôle l'accès aux modules dépendants de l'abonnement.">
+            <select name="subscriptionStatus" defaultValue={subscription?.status || "ACTIVE"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="ACTIVE">Actif</option>
+              <option value="PENDING_PAYMENT">Paiement en attente</option>
+              <option value="PAST_DUE">En retard</option>
+              <option value="TRIAL">Essai</option>
+              <option value="SUSPENDED">Suspendu</option>
+              <option value="EXPIRED">Expiré</option>
+              <option value="CANCELED">Annulé</option>
+            </select>
+          </FormField>
+          <FormField label="Date de début" hint="Début de la période active."><Input name="startedAt" type="date" defaultValue={formatDateInput(subscription?.startedAt)} /></FormField>
+          <FormField label="Date d'expiration" hint="Fin de période ou renouvellement attendu."><Input name="expiresAt" type="date" defaultValue={formatDateInput(subscription?.expiresAt)} /></FormField>
+          <FormField label="Fin d'essai" hint="Optionnel: date de fin de l'essai."><Input name="trialEndsAt" type="date" defaultValue={formatDateInput(subscription?.trialEndsAt)} /></FormField>
           <div className="flex justify-end gap-3 md:col-span-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">Annuler</Button>
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer l&apos;abonnement</Button>

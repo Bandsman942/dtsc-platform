@@ -5,6 +5,8 @@ import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import { Bell, Bot, ChevronDown, Globe2, LayoutDashboard, Lock, Monitor, Moon, PhoneCall, Save, SlidersHorizontal, Sun, UserCog, Volume2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { cn } from "@/lib/utils";
@@ -57,6 +59,7 @@ export function SettingsPanel({
   const [profileMessage, setProfileMessage] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [preferencesMessage, setPreferencesMessage] = useState("");
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(Boolean(user.pushNotificationsEnabled));
   const [openMobileSection, setOpenMobileSection] = useState("profile");
   const canUseInternalCalendar = user.role !== "CLIENT";
@@ -76,6 +79,7 @@ export function SettingsPanel({
     });
     setProfileMessage(response.ok ? "Profil mis à jour." : "Impossible de mettre à jour le profil.");
     if (response.ok) {
+      setProfileDialogOpen(false);
       router.refresh();
     }
   }
@@ -173,19 +177,16 @@ export function SettingsPanel({
         <section className="dtsc-card p-6">
           <SettingsSectionHeader id="profile" icon={UserCog} title="Identité professionnelle" description="Informations utilisées par DTSC pour qualifier vos demandes." openId={openMobileSection} onToggle={setOpenMobileSection} />
           <div className={cn(openMobileSection === "profile" ? "block" : "hidden", "md:block")}>
-          <form onSubmit={updateProfile} className="mt-5 grid gap-4 md:grid-cols-2">
-            <Input name="name" defaultValue={user.name} placeholder="Nom complet" required />
-            <Input name="email" defaultValue={user.email} disabled className="opacity-70" />
-            <Input name="companyName" defaultValue={user.companyName || ""} placeholder="Entreprise" />
-            <Input name="phone" defaultValue={user.phone || ""} placeholder="Téléphone" />
-            <div className="md:col-span-2 flex flex-wrap items-center gap-3">
-              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-                <Save className="h-4 w-4" />
-                Enregistrer le profil
-              </Button>
-              {profileMessage && <p className="text-sm font-semibold text-dtsc-blue">{profileMessage}</p>}
-            </div>
-          </form>
+          <div className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <p className="font-black text-dtsc-ink">{user.name}</p>
+            <p className="mt-1 text-sm text-dtsc-muted">{user.email}</p>
+            <p className="mt-2 text-sm font-semibold text-dtsc-muted">{user.companyName || "Entreprise non renseignée"} · {user.phone || "Téléphone non renseigné"}</p>
+            <Button type="button" onClick={() => setProfileDialogOpen(true)} className="mt-4 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <UserCog className="h-4 w-4" />
+              Modifier l&apos;identité
+            </Button>
+            {profileMessage && <p className="mt-3 text-sm font-semibold text-dtsc-blue">{profileMessage}</p>}
+          </div>
           </div>
         </section>
 
@@ -434,6 +435,29 @@ export function SettingsPanel({
           </div>
         </section>
       </aside>
+      <Dialog open={profileDialogOpen} title="Identité professionnelle" description="Ces informations aident DTSC à adapter l'expérience, le support et les échanges à votre contexte." onClose={() => setProfileDialogOpen(false)} className="h-[92dvh] max-w-4xl">
+        <form onSubmit={updateProfile} className="grid gap-4 md:grid-cols-2">
+          <FormField label="Nom complet" hint="Nom affiché dans votre profil, vos messages et vos demandes.">
+            <Input name="name" defaultValue={user.name} placeholder="Nom complet" required />
+          </FormField>
+          <FormField label="Email du compte" hint="Adresse utilisée pour vous connecter. Elle ne se modifie pas ici.">
+            <Input name="email" defaultValue={user.email} disabled className="opacity-70" />
+          </FormField>
+          <FormField label="Entreprise" hint="Nom de votre entreprise ou organisation principale.">
+            <Input name="companyName" defaultValue={user.companyName || ""} placeholder="Entreprise" />
+          </FormField>
+          <FormField label="Téléphone" hint="Numéro utile pour le support ou les échanges professionnels.">
+            <Input name="phone" defaultValue={user.phone || ""} placeholder="Téléphone" />
+          </FormField>
+          <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <Save className="h-4 w-4" />
+              Enregistrer le profil
+            </Button>
+            {profileMessage && <p className="text-sm font-semibold text-dtsc-blue">{profileMessage}</p>}
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

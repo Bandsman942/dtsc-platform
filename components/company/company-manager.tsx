@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { BriefcaseBusiness, Edit3, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, Edit3, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -79,6 +80,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
   const [profile, setProfile] = useState(initialProfile);
   const [activities, setActivities] = useState(initialActivities);
   const [editingActivity, setEditingActivity] = useState<CompanyActivity | null>(null);
+  const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [message, setMessage] = useState("");
   const smartList = useSmartList({
     items: activities,
@@ -125,6 +127,7 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
     }
     setActivities((current) => activityId ? current.map((item) => (item.id === activityId ? body.activity : item)) : [body.activity, ...current]);
     form.reset();
+    setActivityDialogOpen(false);
     setEditingActivity(null);
     setMessage("Activité métier enregistrée.");
   }
@@ -177,21 +180,10 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
         <p className="mt-2 text-sm leading-6 text-dtsc-muted">
           Décrivez vos activités récurrentes, les données utilisées, les outils, les irritants et les priorités. Le chatbot adaptera ses conseils à ces informations.
         </p>
-        <form onSubmit={(event) => saveActivity(event)} className="mt-5 grid gap-3 lg:grid-cols-[1fr_1fr_180px]">
-          <Input name="title" placeholder="Activité: reporting commercial" required />
-          <Input name="frequency" placeholder="Fréquence: quotidien, mensuel..." />
-          <select name="priority" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
-          </select>
-          <textarea name="description" placeholder="Description de l'activité" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:col-span-3" required />
-          <Input name="tools" placeholder="Outils utilisés" />
-          <Input name="dataInputs" placeholder="Données en entrée" />
-          <Input name="dataOutputs" placeholder="Résultats / rapports produits" />
-          <textarea name="painPoints" placeholder="Difficultés, risques ou pertes de temps" className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink lg:col-span-3" />
-          <div className="lg:col-span-3">
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" title="Ajouter cette activité au contexte professionnel du chatbot.">Ajouter l&apos;activité</Button>
-          </div>
-        </form>
+        <Button type="button" onClick={() => setActivityDialogOpen(true)} className="mt-5 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" title="Ouvrir le formulaire plein écran d'activité professionnelle.">
+          <Plus className="h-4 w-4" />
+          Ajouter une activité professionnelle
+        </Button>
 
         <div className="mt-6">
           <ListControls
@@ -231,23 +223,53 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
         <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
       </Dialog>
 
-      <Dialog open={Boolean(editingActivity)} title="Modifier l'activité" onClose={() => setEditingActivity(null)}>
+      <Dialog open={activityDialogOpen} title="Nouvelle activité professionnelle" description="Décrivez une activité réelle de votre contexte métier. Ces informations restent isolées dans le contexte actif." onClose={() => setActivityDialogOpen(false)} className="h-[92dvh] max-w-5xl">
+        <ActivityForm onSubmit={(event) => saveActivity(event)} />
+      </Dialog>
+
+      <Dialog open={Boolean(editingActivity)} title="Modifier l'activité professionnelle" description="Mettez à jour les informations utilisées pour contextualiser le chatbot." onClose={() => setEditingActivity(null)} className="h-[92dvh] max-w-5xl">
         {editingActivity && (
-          <form onSubmit={(event) => saveActivity(event, editingActivity.id)} className="grid gap-3">
-            <Input name="title" defaultValue={editingActivity.title} required />
-            <Input name="frequency" defaultValue={editingActivity.frequency || ""} />
-            <select name="priority" defaultValue={editingActivity.priority} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-              {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
-            </select>
-            <textarea name="description" defaultValue={editingActivity.description} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
-            <Input name="tools" defaultValue={editingActivity.tools || ""} />
-            <Input name="dataInputs" defaultValue={editingActivity.dataInputs || ""} />
-            <Input name="dataOutputs" defaultValue={editingActivity.dataOutputs || ""} />
-            <textarea name="painPoints" defaultValue={editingActivity.painPoints || ""} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
-            <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
-          </form>
+          <ActivityForm activity={editingActivity} onSubmit={(event) => saveActivity(event, editingActivity.id)} />
         )}
       </Dialog>
     </div>
+  );
+}
+
+function ActivityForm({ activity, onSubmit }: { activity?: CompanyActivity; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return (
+    <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+      <FormField label="Titre de l'activité" hint="Nommez clairement l'activité métier à documenter.">
+        <Input name="title" defaultValue={activity?.title || ""} placeholder="Exemple: reporting commercial" required />
+      </FormField>
+      <FormField label="Fréquence" hint="Indiquez à quelle fréquence cette activité revient.">
+        <Input name="frequency" defaultValue={activity?.frequency || ""} placeholder="Quotidien, hebdomadaire, mensuel..." />
+      </FormField>
+      <FormField label="Priorité" hint="Aidez le chatbot à comprendre l'importance opérationnelle.">
+        <select name="priority" defaultValue={activity?.priority || "MEDIUM"} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+          {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((priority) => <option key={priority} value={priority}>{formatEnumLabel(priority)}</option>)}
+        </select>
+      </FormField>
+      <FormField label="Outils utilisés" hint="Listez les outils, fichiers ou logiciels utilisés." className="md:col-span-1">
+        <Input name="tools" defaultValue={activity?.tools || ""} placeholder="Excel, CRM, WhatsApp, ERP..." />
+      </FormField>
+      <FormField label="Description" hint="Expliquez le déroulement réel de l'activité." className="md:col-span-2">
+        <textarea name="description" defaultValue={activity?.description || ""} placeholder="Décrivez les étapes, acteurs et livrables." className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+      </FormField>
+      <FormField label="Données en entrée" hint="Précisez les sources utilisées pour démarrer l'activité.">
+        <Input name="dataInputs" defaultValue={activity?.dataInputs || ""} placeholder="Commandes, ventes, fichiers, demandes..." />
+      </FormField>
+      <FormField label="Résultats produits" hint="Indiquez les rapports, décisions ou documents générés.">
+        <Input name="dataOutputs" defaultValue={activity?.dataOutputs || ""} placeholder="Rapport, tableau de bord, validation..." />
+      </FormField>
+      <FormField label="Difficultés et risques" hint="Mentionnez les lenteurs, risques, erreurs ou pertes de temps." className="md:col-span-2">
+        <textarea name="painPoints" defaultValue={activity?.painPoints || ""} placeholder="Difficultés, risques ou pertes de temps." className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+      </FormField>
+      <div className="md:col-span-2">
+        <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" title="Enregistrer cette activité dans le contexte professionnel.">
+          {activity ? "Enregistrer les modifications" : "Ajouter l'activité"}
+        </Button>
+      </div>
+    </form>
   );
 }
