@@ -10,6 +10,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Réorganisation de `Administration [Entreprise]`: modules filtrés par socle commun et template santé, retrait du bloc technique `Blocs Activités entreprise`, séparation collaborateurs/invitations/postes/permissions/départements/workflows/paramètres.
 - Les invitations collaborateurs entreprise ne créent plus un membre actif immédiatement: elles restent en statut `INVITED`, évitent les doublons et notifient l'utilisateur existant.
 - `Activités [Entreprise]` utilise des formulaires santé spécifiques avec destinataire obligatoire et métadonnées persistées, et affiche les workflows partagés.
+- Correction du build Vercel sur les workflows entreprise: les étapes optionnelles sont normalisées avant découpage pour satisfaire TypeScript strict.
 
 ### Sécurisé
 

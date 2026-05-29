@@ -209,7 +209,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   if (data.entityType === "workflow") {
-    const steps = data.steps
+    const steps = (data.steps || "")
       .split(/\r?\n/)
       .map((step) => step.trim())
       .filter(Boolean);
