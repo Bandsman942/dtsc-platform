@@ -15,6 +15,7 @@ import { retrieveKnowledgeContext } from "@/lib/rag";
 import { getCompanyContextForUser } from "@/lib/company-context";
 import { performPrivateChatActionFromHistory } from "@/lib/private-chat-actions";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 
 export const maxDuration = 60;
 
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const organizationId = getActiveOrganizationId(session);
 
   const limiter = await rateLimit(`chat:${session.userId}`, 30, 60 * 60 * 1000);
   if (!limiter.ok) {
@@ -112,10 +114,10 @@ export async function POST(req: Request) {
   resetAt.setDate(resetAt.getDate() + 1);
   const [messagesToday, tokensToday] = await Promise.all([
     prisma.message.count({
-      where: { userId: session.userId, role: "user", createdAt: { gte: today } },
+      where: { userId: session.userId, organizationId, role: "user", createdAt: { gte: today } },
     }),
     prisma.usageLog.aggregate({
-      where: { userId: session.userId, createdAt: { gte: today } },
+      where: { userId: session.userId, organizationId, createdAt: { gte: today } },
       _sum: { totalTokens: true },
     }),
   ]);
@@ -142,11 +144,12 @@ export async function POST(req: Request) {
   const model = getOpenAIModel(body.data.model || user.preferredModel || undefined);
   const conversation = body.data.conversationId
     ? await prisma.conversation.findFirst({
-        where: { id: body.data.conversationId, userId: session.userId },
+        where: { id: body.data.conversationId, userId: session.userId, organizationId },
       })
     : await prisma.conversation.create({
         data: {
           userId: session.userId,
+          organizationId,
           title: truncate(body.data.content.replace(/\s+/g, " "), 72),
         },
       });
@@ -160,6 +163,7 @@ export async function POST(req: Request) {
     data: {
       conversationId: conversation.id,
       userId: session.userId,
+      organizationId,
       role: "user",
       content: body.data.content,
       model,
@@ -175,6 +179,7 @@ export async function POST(req: Request) {
   const privateAction = await performPrivateChatActionFromHistory({
     history,
     userId: session.userId,
+    organizationId,
     request: req,
   }).catch((error) => {
     console.error("Private chat action failed", error);
@@ -184,6 +189,7 @@ export async function POST(req: Request) {
     await prisma.message.create({
       data: {
         conversationId: conversation.id,
+        organizationId,
         role: "assistant",
         content: privateAction.reply,
         model,
@@ -210,11 +216,11 @@ export async function POST(req: Request) {
   }
 
   const [companyContext, ragContext] = await Promise.all([
-    getCompanyContextForUser(session.userId).catch((error) => {
+    getCompanyContextForUser(session.userId, organizationId).catch((error) => {
       console.error("Company context retrieval failed", error);
       return "";
     }),
-    retrieveKnowledgeContext(session.userId, body.data.content).catch((error) => {
+    retrieveKnowledgeContext(session.userId, body.data.content, organizationId).catch((error) => {
       console.error("RAG retrieval failed", error);
       return "";
     }),
@@ -323,6 +329,7 @@ export async function POST(req: Request) {
           await prisma.message.create({
             data: {
               conversationId: conversation.id,
+              organizationId,
               role: "assistant",
               content: assistantContent,
               model,
@@ -333,6 +340,7 @@ export async function POST(req: Request) {
           await prisma.usageLog.create({
             data: {
               userId: session.userId,
+              organizationId,
               conversationId: conversation.id,
               model,
               inputTokens: usage.inputTokens,

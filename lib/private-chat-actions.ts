@@ -2,6 +2,7 @@ import { TicketPriority, UserRole, UserStatus } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { getOpenAIModel } from "@/lib/openai";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { sendZohoOutboundMail } from "@/lib/zoho-mail";
 import { notifyUsers } from "@/lib/notifications";
@@ -121,10 +122,12 @@ function missingInfoReply(action: ExtractedAction) {
 export async function performPrivateChatActionFromHistory({
   history,
   userId,
+  organizationId = null,
   request,
 }: {
   history: ChatHistoryItem[];
   userId: string;
+  organizationId?: string | null;
   request: Request;
 }): Promise<PrivateChatActionResult> {
   const action = await extractAction(history);
@@ -201,6 +204,7 @@ export async function performPrivateChatActionFromHistory({
   const ticket = await prisma.supportTicket.create({
     data: {
       userId,
+      organizationId,
       subject,
       description: message,
       priority,
@@ -210,6 +214,9 @@ export async function performPrivateChatActionFromHistory({
     where: {
       status: UserStatus.ACTIVE,
       OR: [{ role: UserRole.ADMIN }, { role: UserRole.SUPPORT }],
+      organizationMemberships: {
+        some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
+      },
     },
     select: { id: true },
   });
@@ -219,6 +226,7 @@ export async function performPrivateChatActionFromHistory({
     body: subject,
     type: "SUPPORT",
     targetUrl: "/support",
+    organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
   });
   await writeAuditLog({
     userId,

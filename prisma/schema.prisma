@@ -134,7 +134,7 @@ model User {
   publicPublications  PublicPublication[]
   publicPublicationComments PublicPublicationComment[]
   publicPublicationReactions PublicPublicationReaction[]
-  companyProfile      CompanyProfile?
+  companyProfiles     CompanyProfile[]
   companyActivities   CompanyActivity[]
   pushSubscriptions    PushSubscription[]
   conversationProjects ConversationProject[]
@@ -267,6 +267,7 @@ model Invoice {
 model KnowledgeDocument {
   id            String         @id @default(cuid())
   userId        String
+  organizationId String?
   title         String
   fileName      String
   mimeType      String
@@ -279,9 +280,10 @@ model KnowledgeDocument {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization  Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   chunks        KnowledgeChunk[]
 
-  @@index([userId, status, createdAt])
+  @@index([userId, organizationId, status, createdAt])
   @@index([storageBucket, storagePath])
   @@index([createdAt])
 }
@@ -290,6 +292,7 @@ model KnowledgeChunk {
   id         String            @id @default(cuid())
   documentId String
   userId     String
+  organizationId String?
   content    String
   tokenHint  Int               @default(0)
   embedding  Unsupported("vector(1536)")?
@@ -297,12 +300,13 @@ model KnowledgeChunk {
   document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
-  @@index([userId, createdAt])
+  @@index([userId, organizationId, createdAt])
 }
 
 model CompanyProfile {
   id                String   @id @default(cuid())
-  userId            String   @unique
+  userId            String
+  organizationId    String?
   organizationName  String
   legalForm         String?
   sector            String?
@@ -330,14 +334,18 @@ model CompanyProfile {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, organizationId])
   @@index([sector])
   @@index([updatedAt])
+  @@index([userId, organizationId, updatedAt])
 }
 
 model CompanyActivity {
   id          String   @id @default(cuid())
   userId      String
+  organizationId String?
   title       String
   description String
   frequency   String?
@@ -349,8 +357,9 @@ model CompanyActivity {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
-  @@index([userId, priority, updatedAt])
+  @@index([userId, organizationId, priority, updatedAt])
 }
 
 model PendingRegistration {
@@ -374,34 +383,38 @@ model PendingRegistration {
 model Conversation {
   id        String     @id @default(cuid())
   userId    String
+  organizationId String?
   title     String     @default("Nouvelle conversation")
   projectName String?
   projectId String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   project   ConversationProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   messages  Message[]
   usageLogs UsageLog[]
   collaborationMessages CollaborationGroupMessage[]
   sharedConversationSnapshots CollaborationSharedConversation[]
 
-  @@index([userId, updatedAt])
-  @@index([userId, projectName, updatedAt])
-  @@index([userId, projectId, updatedAt])
+  @@index([userId, organizationId, updatedAt])
+  @@index([userId, organizationId, projectName, updatedAt])
+  @@index([userId, organizationId, projectId, updatedAt])
 }
 
 model ConversationProject {
   id        String   @id @default(cuid())
   userId    String
+  organizationId String?
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   conversations Conversation[]
 
-  @@unique([userId, name])
-  @@index([userId, updatedAt])
+  @@unique([userId, organizationId, name])
+  @@index([userId, organizationId, updatedAt])
 }
 
 model PushSubscription {
@@ -422,6 +435,7 @@ model Message {
   id             String       @id @default(cuid())
   conversationId String
   userId         String?
+  organizationId String?
   role           MessageRole
   content        String
   model          String?
@@ -433,12 +447,13 @@ model Message {
   user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
-  @@index([userId])
+  @@index([userId, organizationId])
 }
 
 model UsageLog {
   id             String       @id @default(cuid())
   userId         String
+  organizationId String?
   conversationId String?
   model          String
   inputTokens    Int          @default(0)
@@ -449,7 +464,7 @@ model UsageLog {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
-  @@index([userId, createdAt])
+  @@index([userId, organizationId, createdAt])
   @@index([conversationId])
 }
 
@@ -485,6 +500,12 @@ model Organization {
   adminGrants   OrganizationAdminGrant[]
   subscriptions OrganizationSubscription[]
   billingRecords BillingRecord[]
+  knowledgeDocuments KnowledgeDocument[]
+  companyProfiles CompanyProfile[]
+  companyActivities CompanyActivity[]
+  conversations Conversation[]
+  conversationProjects ConversationProject[]
+  notifications Notification[]
   supportTickets SupportTicket[]
   announcements Announcement[] @relation("AnnouncementOrganization")
   authoredAnnouncements Announcement[] @relation("AnnouncementAuthorOrganization")
@@ -1095,6 +1116,7 @@ model PublicPublicationReaction {
 model Notification {
   id        String    @id @default(cuid())
   userId    String
+  organizationId String?
   title     String
   body      String
   type      String    @default("INFO")
@@ -1102,8 +1124,9 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
-  @@index([userId, readAt, createdAt])
+  @@index([userId, organizationId, readAt, createdAt])
 }
 
 model Announcement {

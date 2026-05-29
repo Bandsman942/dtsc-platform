@@ -114,6 +114,7 @@ export async function POST(req: Request, { params }: Params) {
       body: `Vous êtes invité dans ${createdInvitations[0].group.name}.`,
       type: "COLLABORATION",
       targetUrl: "/collaborators",
+      organizationId: member?.group.organizationId || null,
     });
   }
   for (const invitation of createdInvitations) {

@@ -46,6 +46,7 @@ export async function PATCH(req: Request, { params }: Params) {
     body: `${ticket.subject} · ${ticket.status}`,
     type: "SUPPORT",
     targetUrl: "/support",
+    organizationId: ticket.organizationId,
   });
 
   return NextResponse.json({ ok: true, ticket });

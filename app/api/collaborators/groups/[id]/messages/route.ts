@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUsers } from "@/lib/notifications";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { collaborationMessageSchema } from "@/lib/validators";
 
@@ -65,9 +66,10 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid message" }, { status: 400 });
   }
+  const organizationId = getActiveOrganizationId(session);
   const sharedConversation = parsed.data.sharedChatbotConversationId
     ? await prisma.conversation.findFirst({
-      where: { id: parsed.data.sharedChatbotConversationId, userId: session.userId },
+      where: { id: parsed.data.sharedChatbotConversationId, userId: session.userId, organizationId },
       select: {
         id: true,
         title: true,
@@ -142,6 +144,7 @@ export async function POST(req: Request, { params }: Params) {
     body: `${session.name}: ${parsed.data.content.slice(0, 160)}`,
     type: "COLLABORATION",
     targetUrl: "/collaborators",
+    organizationId: member.group.organizationId,
   });
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: "message.create", entityType: "CollaborationGroupMessage", entityId: message.id });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

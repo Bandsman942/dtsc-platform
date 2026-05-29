@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { conversationProjectSchema } from "@/lib/validators";
 
@@ -24,10 +25,11 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   let updated: { count: number };
   try {
     updated = await prisma.conversationProject.updateMany({
-      where: { id, userId: session.userId },
+      where: { id, userId: session.userId, organizationId },
       data: { name: body.data.name },
     });
   } catch (error) {
@@ -63,8 +65,9 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const project = await prisma.conversationProject.findFirst({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
     select: { id: true },
   });
 
@@ -74,7 +77,7 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 
   await prisma.conversation.updateMany({
-    where: { userId: session.userId, projectId: id },
+    where: { userId: session.userId, organizationId, projectId: id },
     data: { projectId: null, projectName: null },
   });
   await prisma.conversationProject.delete({ where: { id } });

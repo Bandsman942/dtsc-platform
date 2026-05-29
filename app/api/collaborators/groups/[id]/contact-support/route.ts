@@ -47,6 +47,7 @@ export async function POST(req: Request, { params }: Params) {
     body: `${session.name} sollicite l'équipe DTSC dans ${member.group.name}.`,
     type: "SUPPORT",
     targetUrl: "/collaborators",
+    organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
   });
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: "support.request", entityType: "CollaborationGroupMessage", entityId: message.id });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

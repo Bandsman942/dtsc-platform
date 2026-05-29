@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 
 export async function GET() {
   const session = await getSession();
@@ -9,8 +10,9 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = getActiveOrganizationId(session);
   const conversations = await prisma.conversation.findMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, organizationId },
     orderBy: { updatedAt: "desc" },
     include: {
       project: { select: { id: true, name: true } },
@@ -29,9 +31,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = getActiveOrganizationId(session);
   const conversation = await prisma.conversation.create({
     data: {
       userId: session.userId,
+      organizationId,
       title: "Nouvelle conversation",
     },
   });

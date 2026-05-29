@@ -258,6 +258,7 @@ export async function POST(req: Request, { params }: Params) {
       await prisma.notification.createMany({
         data: data.recipientUserIds.map((userId) => ({
           userId,
+          organizationId,
           title: "Workflow entreprise partagé",
           body: data.labelFr,
           type: "ENTERPRISE_WORKFLOW",

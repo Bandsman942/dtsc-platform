@@ -135,6 +135,7 @@ export async function POST(req: Request, { params }: Params) {
     await prisma.notification.createMany({
       data: adminMembers.map((member) => ({
         userId: member.userId,
+        organizationId,
         title: "Nouvelle demande entreprise",
         body: data.title,
         type: "ENTERPRISE_ACTIVITY",

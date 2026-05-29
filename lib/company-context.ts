@@ -4,11 +4,11 @@ function line(label: string, value?: string | null) {
   return value?.trim() ? `- ${label}: ${value.trim()}` : null;
 }
 
-export async function getCompanyContextForUser(userId: string) {
+export async function getCompanyContextForUser(userId: string, organizationId: string | null = null) {
   const [profile, activities] = await Promise.all([
-    prisma.companyProfile.findUnique({ where: { userId } }),
+    prisma.companyProfile.findFirst({ where: { userId, organizationId } }),
     prisma.companyActivity.findMany({
-      where: { userId },
+      where: { userId, organizationId },
       orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
       take: 12,
     }),

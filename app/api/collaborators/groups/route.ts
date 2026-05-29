@@ -180,7 +180,7 @@ export async function POST(req: Request) {
   await writeGroupAudit({ groupId: group.id, actorId: session.userId, action: "group.create", entityType: "CollaborationGroup", entityId: group.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.group.create", entity: "CollaborationGroup", entityId: group.id, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  await notifyUser({ userId: session.userId, title: "Groupe collaboratif créé", body: group.name, type: "COLLABORATION", targetUrl: "/collaborators" });
+  await notifyUser({ userId: session.userId, title: "Groupe collaboratif créé", body: group.name, type: "COLLABORATION", targetUrl: "/collaborators", organizationId });
 
   return NextResponse.json({ ok: true, group }, { status: 201 });
 }

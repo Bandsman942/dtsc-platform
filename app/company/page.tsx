@@ -4,20 +4,23 @@ import { AppShell } from "@/components/layout/app-shell";
 import { CompanyManager } from "@/components/company/company-manager";
 import { DocumentManager } from "@/components/documents/document-manager";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function CompanyPage() {
   const user = await requireUser();
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
   const [profile, activities, documents, activeSubscription] = await Promise.all([
-    prisma.companyProfile.findUnique({ where: { userId: user.id } }),
+    prisma.companyProfile.findFirst({ where: { userId: user.id, organizationId: activeOrganizationId } }),
     prisma.companyActivity.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, organizationId: activeOrganizationId },
       orderBy: { updatedAt: "desc" },
       take: 100,
     }),
     prisma.knowledgeDocument.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, organizationId: activeOrganizationId },
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { chunks: true } } },
       take: 100,

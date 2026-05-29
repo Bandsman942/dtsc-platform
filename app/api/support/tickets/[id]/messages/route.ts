@@ -74,6 +74,7 @@ export async function POST(req: Request, { params }: Params) {
       body: ticket.subject,
       type: "SUPPORT",
       targetUrl: "/support",
+      organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
     });
   } else {
     await notifyUser({
@@ -82,6 +83,7 @@ export async function POST(req: Request, { params }: Params) {
       body: ticket.subject,
       type: "SUPPORT",
       targetUrl: "/support",
+      organizationId: ticket.organizationId,
     });
   }
 

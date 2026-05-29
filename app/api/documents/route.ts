@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { DocumentStatus, SubscriptionStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { documentUploadSchema } from "@/lib/validators";
 import { indexKnowledgeDocument, knowledgeUploadLimits } from "@/lib/rag";
@@ -13,9 +14,10 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const organizationId = getActiveOrganizationId(session);
 
   const documents = await prisma.knowledgeDocument.findMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, organizationId },
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { chunks: true } } },
     take: 100,
@@ -31,6 +33,7 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const organizationId = getActiveOrganizationId(session);
 
   const formData = await req.formData().catch(() => null);
   const file = formData?.get("file");
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
     include: { plan: true },
   });
   const currentDocuments = await prisma.knowledgeDocument.count({
-    where: { userId: session.userId, status: { in: [DocumentStatus.PROCESSING, DocumentStatus.READY] } },
+    where: { userId: session.userId, organizationId, status: { in: [DocumentStatus.PROCESSING, DocumentStatus.READY] } },
   });
   const maxDocuments = activeSubscription?.plan.maxDocuments ?? 0;
   if (currentDocuments >= maxDocuments) {
@@ -65,6 +68,7 @@ export async function POST(req: Request) {
   try {
     const document = await indexKnowledgeDocument({
       userId: session.userId,
+      organizationId,
       title: body.data.title || undefined,
       file,
     });

@@ -4,6 +4,7 @@ import { MessageRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -28,11 +29,12 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const message = await prisma.message.findFirst({
     where: {
       id,
       role: MessageRole.assistant,
-      conversation: { userId: session.userId },
+      conversation: { userId: session.userId, organizationId },
     },
     select: { id: true },
   });

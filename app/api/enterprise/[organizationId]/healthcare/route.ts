@@ -263,6 +263,7 @@ export async function POST(req: Request, { params }: Params) {
     await prisma.notification.create({
       data: {
         userId: record.assignedToUserId,
+        organizationId,
         title: "Nouvel élément santé",
         body: record.title,
         type: "ENTERPRISE_HEALTHCARE",
@@ -286,6 +287,7 @@ export async function POST(req: Request, { params }: Params) {
       await prisma.notification.createMany({
         data: managers.map((member) => ({
           userId: member.userId,
+          organizationId,
           title: "Incident santé critique",
           body: record.title,
           type: "ENTERPRISE_HEALTHCARE_CRITICAL",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { companyProfileSchema } from "@/lib/validators";
 
@@ -23,11 +24,14 @@ export async function PATCH(req: Request) {
   }
 
   const data = normalizeEmptyStrings(body.data);
-  const profile = await prisma.companyProfile.upsert({
-    where: { userId: session.userId },
-    update: data,
-    create: { ...data, userId: session.userId },
+  const organizationId = getActiveOrganizationId(session);
+  const existingProfile = await prisma.companyProfile.findFirst({
+    where: { userId: session.userId, organizationId },
+    select: { id: true },
   });
+  const profile = existingProfile
+    ? await prisma.companyProfile.update({ where: { id: existingProfile.id }, data })
+    : await prisma.companyProfile.create({ data: { ...data, userId: session.userId, organizationId } });
 
   await writeAuditLog({
     userId: session.userId,
@@ -49,7 +53,8 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await prisma.companyProfile.deleteMany({ where: { userId: session.userId } });
+  const organizationId = getActiveOrganizationId(session);
+  await prisma.companyProfile.deleteMany({ where: { userId: session.userId, organizationId } });
   await writeAuditLog({
     userId: session.userId,
     action: "COMPANY_PROFILE_DELETED",

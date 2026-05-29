@@ -29,7 +29,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const target = await prisma.collaborationGroupMember.findFirst({
     where: { id: memberId, groupId: id, status: "ACTIVE" },
-    include: { user: { select: { id: true, name: true } }, group: { select: { ownerId: true, name: true } } },
+    include: { user: { select: { id: true, name: true } }, group: { select: { ownerId: true, name: true, organizationId: true } } },
   });
   if (!target) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: Params) {
       data: { status: "REMOVED", leftAt: new Date() },
     });
     await createGroupSystemMessage({ groupId: id, actorId: session.userId, content: `${target.user.name} a été retiré du groupe.` });
-    await notifyUser({ userId: target.userId, title: "Retrait d'un groupe DTSC", body: `Vous avez été retiré de ${target.group.name}.`, type: "COLLABORATION", targetUrl: "/collaborators" });
+    await notifyUser({ userId: target.userId, title: "Retrait d'un groupe DTSC", body: `Vous avez été retiré de ${target.group.name}.`, type: "COLLABORATION", targetUrl: "/collaborators", organizationId: target.group.organizationId });
   } else {
     const nextRole = action === "PROMOTE_ADMIN" ? "ADMIN" : "MEMBER";
     await prisma.collaborationGroupMember.update({ where: { id: memberId }, data: { role: nextRole } });
@@ -54,7 +54,7 @@ export async function PATCH(req: Request, { params }: Params) {
       ? `${target.user.name} est maintenant administrateur du groupe.`
       : `${target.user.name} n'est plus administrateur du groupe.`;
     await createGroupSystemMessage({ groupId: id, actorId: session.userId, content });
-    await notifyUser({ userId: target.userId, title: "Rôle de groupe mis à jour", body: content, type: "COLLABORATION", targetUrl: "/collaborators" });
+    await notifyUser({ userId: target.userId, title: "Rôle de groupe mis à jour", body: content, type: "COLLABORATION", targetUrl: "/collaborators", organizationId: target.group.organizationId });
   }
 
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: `member.${action.toLowerCase()}`, entityType: "CollaborationGroupMember", entityId: memberId });

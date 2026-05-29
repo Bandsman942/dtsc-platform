@@ -1,6 +1,7 @@
 import { ChatWorkspace } from "@/components/chat/chat-workspace";
 import { AppShell } from "@/components/layout/app-shell";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function ChatPage({
@@ -9,9 +10,11 @@ export default async function ChatPage({
   searchParams: Promise<{ conversationId?: string }>;
 }) {
   const user = await requireUser();
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
   const { conversationId } = await searchParams;
   const conversations = await prisma.conversation.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, organizationId: activeOrganizationId },
     orderBy: { updatedAt: "desc" },
     include: {
       project: { select: { id: true, name: true } },
@@ -20,7 +23,7 @@ export default async function ChatPage({
     take: 200,
   });
   const projects = await prisma.conversationProject.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, organizationId: activeOrganizationId },
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { conversations: true } } },
     take: 100,
@@ -36,9 +39,9 @@ export default async function ChatPage({
   const resetAt = new Date(today);
   resetAt.setDate(resetAt.getDate() + 1);
   const [messagesToday, tokensToday] = await Promise.all([
-    prisma.message.count({ where: { userId: user.id, role: "user", createdAt: { gte: today } } }),
+    prisma.message.count({ where: { userId: user.id, organizationId: activeOrganizationId, role: "user", createdAt: { gte: today } } }),
     prisma.usageLog.aggregate({
-      where: { userId: user.id, createdAt: { gte: today } },
+      where: { userId: user.id, organizationId: activeOrganizationId, createdAt: { gte: today } },
       _sum: { totalTokens: true },
     }),
   ]);

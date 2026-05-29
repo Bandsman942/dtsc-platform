@@ -31,12 +31,14 @@ export async function notifyUser({
   body,
   type = "INFO",
   targetUrl,
+  organizationId = null,
 }: {
   userId: string;
   title: string;
   body: string;
   type?: string;
   targetUrl?: string;
+  organizationId?: string | null;
 }) {
   if (notificationPreferenceField(type)) {
     const user = await prisma.user.findUnique({
@@ -53,7 +55,7 @@ export async function notifyUser({
   }
 
   return prisma.notification.create({
-    data: { userId, title, body, type, targetUrl },
+    data: { userId, organizationId, title, body, type, targetUrl },
   });
 }
 
@@ -63,12 +65,14 @@ export async function notifyUsers({
   body,
   type = "INFO",
   targetUrl,
+  organizationId = null,
 }: {
   userIds: string[];
   title: string;
   body: string;
   type?: string;
   targetUrl?: string;
+  organizationId?: string | null;
 }) {
   if (!userIds.length) {
     return;
@@ -95,6 +99,6 @@ export async function notifyUsers({
   }
 
   await prisma.notification.createMany({
-    data: allowedUserIds.map((userId) => ({ userId, title, body, type, targetUrl })),
+    data: allowedUserIds.map((userId) => ({ userId, organizationId, title, body, type, targetUrl })),
   });
 }

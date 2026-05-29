@@ -264,6 +264,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await prisma.notification.create({
       data: {
         userId: record.assignedToUserId,
+        organizationId,
         title: "Élément santé mis à jour",
         body: record.title,
         type: "ENTERPRISE_HEALTHCARE",

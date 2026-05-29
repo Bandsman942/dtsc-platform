@@ -87,6 +87,7 @@ export async function POST(req: Request, { params }: Params) {
     body: parsed.data.message || `Vous êtes invité à rejoindre l'espace privé de ${organization.name}.`,
     type: "ORGANIZATION",
     targetUrl: "/notifications",
+    organizationId,
   });
   await writeAuditLog({
     userId: session.userId,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { companyActivitySchema } from "@/lib/validators";
 
@@ -22,8 +23,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid company activity" }, { status: 400 });
   }
 
+  const organizationId = getActiveOrganizationId(session);
   const activity = await prisma.companyActivity.create({
-    data: { ...normalizeEmptyStrings(body.data), userId: session.userId },
+    data: { ...normalizeEmptyStrings(body.data), userId: session.userId, organizationId },
   });
 
   await writeAuditLog({

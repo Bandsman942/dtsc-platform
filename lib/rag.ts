@@ -111,16 +111,19 @@ function toVectorLiteral(embedding: number[]) {
 
 export async function indexKnowledgeDocument({
   userId,
+  organizationId = null,
   title,
   file,
 }: {
   userId: string;
+  organizationId?: string | null;
   title?: string;
   file: File;
 }) {
   const document = await prisma.knowledgeDocument.create({
     data: {
       userId,
+      organizationId,
       title: title || file.name,
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
@@ -137,11 +140,12 @@ export async function indexKnowledgeDocument({
     for (const chunk of chunks) {
       const embedding = await createEmbedding(chunk);
       await prisma.$executeRawUnsafe(
-        `INSERT INTO "KnowledgeChunk" ("id", "documentId", "userId", "content", "tokenHint", "embedding")
-         VALUES ($1, $2, $3, $4, $5, $6::vector)`,
+        `INSERT INTO "KnowledgeChunk" ("id", "documentId", "userId", "organizationId", "content", "tokenHint", "embedding")
+         VALUES ($1, $2, $3, $4, $5, $6, $7::vector)`,
         randomUUID(),
         document.id,
         userId,
+        organizationId,
         chunk,
         Math.ceil(chunk.length / 4),
         toVectorLiteral(embedding)
@@ -170,9 +174,9 @@ export async function indexKnowledgeDocument({
   }
 }
 
-export async function retrieveKnowledgeContext(userId: string, question: string) {
+export async function retrieveKnowledgeContext(userId: string, question: string, organizationId: string | null = null) {
   const readyDocuments = await prisma.knowledgeDocument.count({
-    where: { userId, status: DocumentStatus.READY },
+    where: { userId, organizationId, status: DocumentStatus.READY },
   });
   if (!readyDocuments) {
     return "";
@@ -184,11 +188,12 @@ export async function retrieveKnowledgeContext(userId: string, question: string)
     `SELECT kc."content", kd."title", (kc."embedding" <=> $1::vector) AS distance
      FROM "KnowledgeChunk" kc
      INNER JOIN "KnowledgeDocument" kd ON kd."id" = kc."documentId"
-     WHERE kc."userId" = $2 AND kd."status" = 'READY'
+     WHERE kc."userId" = $2 AND kd."organizationId" IS NOT DISTINCT FROM $3 AND kd."status" = 'READY'
      ORDER BY kc."embedding" <=> $1::vector
      LIMIT 5`,
     vector,
-    userId
+    userId,
+    organizationId
   );
 
   if (!rows.length) {

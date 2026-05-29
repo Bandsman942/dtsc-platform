@@ -51,7 +51,7 @@ export async function PATCH(req: Request, { params }: Params) {
       }),
     ]);
     await createGroupSystemMessage({ groupId: invitation.groupId, actorId: session.userId, content: `${session.name} a rejoint le groupe.` });
-    await notifyUser({ userId: invitation.invitedById, title: "Invitation acceptée", body: `${session.name} a rejoint ${invitation.group.name}.`, type: "COLLABORATION", targetUrl: "/collaborators" });
+    await notifyUser({ userId: invitation.invitedById, title: "Invitation acceptée", body: `${session.name} a rejoint ${invitation.group.name}.`, type: "COLLABORATION", targetUrl: "/collaborators", organizationId: invitation.group.organizationId });
   } else {
     await prisma.collaborationGroupInvitation.update({
       where: { id },

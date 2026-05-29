@@ -22,8 +22,6 @@ const items = [
   { href: "/settings", label: "Paramètres", icon: Settings, help: "Configurer votre compte, thème et préférences." },
 ];
 
-const enterpriseAccessibleHrefs = new Set(["/billing", "/announcements", "/profile", "/collaborators", "/support"]);
-
 export function NavLinks({
   role,
   mobile = false,
@@ -48,9 +46,6 @@ export function NavLinks({
     ? [{ href: "/activities", label: "Activités DTSC", icon: CalendarCheck, help: "Voir les tâches, opérations, réunions et blocages internes qui vous concernent." }]
     : [];
   const visibleBaseItems = items.filter((item) => {
-    if (enterpriseContext && !enterpriseAccessibleHrefs.has(item.href)) {
-      return false;
-    }
     if (item.href === "/calendar") {
       return showInternalModules;
     }

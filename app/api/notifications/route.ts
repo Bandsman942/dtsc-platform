@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export async function DELETE(req: Request) {
@@ -11,8 +13,14 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = getActiveOrganizationId(session);
+  const notificationContextWhere: Prisma.NotificationWhereInput = organizationId
+    ? isDtscInternalSession(session)
+      ? { OR: [{ organizationId }, { organizationId: null }] }
+      : { organizationId }
+    : { organizationId: null };
   const deleted = await prisma.notification.deleteMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, ...notificationContextWhere },
   });
 
   await writeApiLog({

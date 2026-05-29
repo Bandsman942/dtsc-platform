@@ -71,7 +71,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
       take: 50,
     }),
     prisma.conversation.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, organizationId: activeOrganizationId },
       select: { id: true, title: true, updatedAt: true, _count: { select: { messages: true } } },
       orderBy: { updatedAt: "desc" },
       take: 100,

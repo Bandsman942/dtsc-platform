@@ -1,16 +1,25 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { NotificationList } from "@/components/notifications/notification-list";
-import { requireUser } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
+import { getSession, requireUser } from "@/lib/auth";
+import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
 export default async function NotificationsPage() {
   const user = await requireUser();
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
+  const notificationContextWhere: Prisma.NotificationWhereInput = activeOrganizationId
+    ? isDtscInternalSession(session)
+      ? { OR: [{ organizationId: activeOrganizationId }, { organizationId: null }] }
+      : { organizationId: activeOrganizationId }
+    : { organizationId: null };
   const settings = await getAppSettings();
   const retentionStart = new Date();
   retentionStart.setDate(retentionStart.getDate() - settings.notificationRetentionDays);
   const notifications = await prisma.notification.findMany({
-    where: { userId: user.id, createdAt: { gte: retentionStart } },
+    where: { userId: user.id, ...notificationContextWhere, createdAt: { gte: retentionStart } },
     orderBy: { createdAt: "desc" },
     take: 200,
   });

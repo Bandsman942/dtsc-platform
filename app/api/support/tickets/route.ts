@@ -17,10 +17,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid ticket data" }, { status: 400 });
   }
 
+  const organizationId = getActiveOrganizationId(session);
   const ticket = await prisma.supportTicket.create({
     data: {
       userId: session.userId,
-      organizationId: getActiveOrganizationId(session),
+      organizationId,
       subject: body.data.subject,
       description: body.data.description,
       priority: body.data.priority,
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
     body: body.data.subject,
     type: "SUPPORT",
     targetUrl: "/support",
+    organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
   });
 
   return NextResponse.json({ ticket });

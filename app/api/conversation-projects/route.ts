@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { conversationProjectSchema } from "@/lib/validators";
 
@@ -12,8 +13,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const organizationId = getActiveOrganizationId(session);
   const projects = await prisma.conversationProject.findMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, organizationId },
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { conversations: true } } },
   });
@@ -36,11 +38,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid project" }, { status: 400 });
   }
 
-  const project = await prisma.conversationProject.upsert({
-    where: { userId_name: { userId: session.userId, name: body.data.name } },
-    update: { updatedAt: new Date() },
-    create: { userId: session.userId, name: body.data.name },
+  const organizationId = getActiveOrganizationId(session);
+  const existingProject = await prisma.conversationProject.findFirst({
+    where: { userId: session.userId, organizationId, name: body.data.name },
+    select: { id: true },
   });
+  const project = existingProject
+    ? await prisma.conversationProject.update({ where: { id: existingProject.id }, data: { updatedAt: new Date() } })
+    : await prisma.conversationProject.create({ data: { userId: session.userId, organizationId, name: body.data.name } });
 
   await writeApiLog({
     request: req,

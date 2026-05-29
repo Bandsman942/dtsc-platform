@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { deleteKnowledgeFileFromSupabase } from "@/lib/supabase-storage";
 
@@ -15,8 +16,9 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const document = await prisma.knowledgeDocument.findFirst({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
     select: { id: true, fileName: true, storageBucket: true, storagePath: true },
   });
 

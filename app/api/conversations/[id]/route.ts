@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { conversationUpdateSchema } from "@/lib/validators";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -16,8 +17,9 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const conversation = await prisma.conversation.findFirst({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
     include: {
       messages: { orderBy: { createdAt: "asc" } },
     },
@@ -47,11 +49,12 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   let projectName = body.data.projectName || null;
   const projectId = body.data.projectId || null;
   if (projectId) {
     const project = await prisma.conversationProject.findFirst({
-      where: { id: projectId, userId: session.userId },
+      where: { id: projectId, userId: session.userId, organizationId },
       select: { id: true, name: true },
     });
     if (!project) {
@@ -61,7 +64,7 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const conversation = await prisma.conversation.updateMany({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
     data: {
       ...(body.data.title ? { title: body.data.title } : {}),
       ...(typeof body.data.projectName !== "undefined" || typeof body.data.projectId !== "undefined"
@@ -93,8 +96,9 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const conversation = await prisma.conversation.deleteMany({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
   });
 
   if (!conversation.count) {

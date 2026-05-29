@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 type Params = {
@@ -16,8 +18,14 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
+  const notificationContextWhere: Prisma.NotificationWhereInput = organizationId
+    ? isDtscInternalSession(session)
+      ? { OR: [{ organizationId }, { organizationId: null }] }
+      : { organizationId }
+    : { organizationId: null };
   const notification = await prisma.notification.updateMany({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, ...notificationContextWhere },
     data: { readAt: new Date() },
   });
 

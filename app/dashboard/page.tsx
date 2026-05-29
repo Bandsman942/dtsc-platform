@@ -4,29 +4,33 @@ import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { dtsc } from "@/lib/dtsc";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
   const [conversationCount, messageCount, recentConversations, profile, activityCount, documentCount, readyDocumentCount, usageToday] = await Promise.all([
-    prisma.conversation.count({ where: { userId: user.id } }),
-    prisma.message.count({ where: { conversation: { userId: user.id } } }),
+    prisma.conversation.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
+    prisma.message.count({ where: { conversation: { userId: user.id, organizationId: activeOrganizationId } } }),
     prisma.conversation.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, organizationId: activeOrganizationId },
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { _count: { select: { messages: true } } },
     }),
-    prisma.companyProfile.findUnique({ where: { userId: user.id } }),
-    prisma.companyActivity.count({ where: { userId: user.id } }),
-    prisma.knowledgeDocument.count({ where: { userId: user.id } }),
-    prisma.knowledgeDocument.count({ where: { userId: user.id, status: "READY" } }),
+    prisma.companyProfile.findFirst({ where: { userId: user.id, organizationId: activeOrganizationId } }),
+    prisma.companyActivity.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
+    prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
+    prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId, status: "READY" } }),
     prisma.usageLog.aggregate({
       where: {
         userId: user.id,
+        organizationId: activeOrganizationId,
         createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
       },
       _sum: { totalTokens: true },

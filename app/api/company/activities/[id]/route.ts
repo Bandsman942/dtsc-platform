@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { companyActivitySchema } from "@/lib/validators";
 
@@ -19,6 +20,7 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const body = companyActivitySchema.safeParse(await req.json());
   if (!body.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
@@ -26,7 +28,7 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const existing = await prisma.companyActivity.findFirst({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
     select: { id: true },
   });
   if (!existing) {
@@ -60,8 +62,9 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  const organizationId = getActiveOrganizationId(session);
   const activity = await prisma.companyActivity.findFirst({
-    where: { id, userId: session.userId },
+    where: { id, userId: session.userId, organizationId },
     select: { id: true, title: true },
   });
 

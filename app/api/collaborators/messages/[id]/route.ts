@@ -62,6 +62,7 @@ export async function PATCH(req: Request, { params }: Params) {
       body: parsed.data.content?.slice(0, 160) || "Vous avez été mentionné dans un groupe.",
       type: "COLLABORATION",
       targetUrl: "/collaborators",
+      organizationId: message.group.organizationId,
     });
   }
   await writeGroupAudit({ groupId: message.groupId, actorId: session.userId, action: "message.update", entityType: "CollaborationGroupMessage", entityId: id });

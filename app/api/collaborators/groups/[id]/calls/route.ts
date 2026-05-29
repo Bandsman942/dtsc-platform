@@ -125,6 +125,7 @@ export async function POST(req: Request, { params }: Params) {
     body: `${session.name} a lancé un appel dans ${member.group.name}.`,
     type: "COLLABORATION",
     targetUrl: "/collaborators",
+    organizationId: member.group.organizationId,
   });
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: "call.start", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.call.start", entity: "CollaborationGroupCall", entityId: call.id, request: req });
