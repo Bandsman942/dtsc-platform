@@ -21,11 +21,20 @@ export default async function EnterpriseAdminPage() {
         name: true,
         sector: true,
         sectorCode: true,
+        country: true,
+        city: true,
+        address: true,
+        phone: true,
+        email: true,
+        logoUrl: true,
+        timezone: true,
+        settingsJson: true,
+        brandingJson: true,
         businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
       },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId, status: "ACTIVE", removedAt: null },
+      where: { organizationId, removedAt: null },
       orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
       include: { user: { select: { id: true, name: true, email: true } } },
       take: 200,
@@ -70,7 +79,7 @@ export default async function EnterpriseAdminPage() {
           activeModulesCount: modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
           modulesCount: modules.length,
           openRequestsCount,
-        recentRequestsCount: recentRequests.length,
+          recentRequestsCount: recentRequests.length,
         }}
         locale={user.locale}
         members={JSON.parse(JSON.stringify(members))}

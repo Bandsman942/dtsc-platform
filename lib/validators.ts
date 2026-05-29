@@ -133,12 +133,79 @@ export const enterpriseDepartmentSchema = z.object({
   labelEn: z.string().trim().min(2).max(160),
   descriptionFr: z.string().max(800).optional().or(z.literal("")),
   descriptionEn: z.string().max(800).optional().or(z.literal("")),
+  responsibleUserId: z.string().max(160).optional().or(z.literal("")),
+  sortOrder: z.coerce.number().int().min(0).max(10000).default(0),
   isActive: z.coerce.boolean().default(true),
 });
+
+export const enterprisePositionSchema = z.object({
+  positionCode: z.string().trim().min(2).max(80).regex(/^[A-Z0-9_]+$/),
+  labelFr: z.string().trim().min(2).max(160),
+  labelEn: z.string().trim().min(2).max(160),
+  descriptionFr: z.string().max(1000).optional().or(z.literal("")),
+  descriptionEn: z.string().max(1000).optional().or(z.literal("")),
+  departmentId: z.string().max(160).optional().or(z.literal("")),
+  hierarchyLevel: z.coerce.number().int().min(1).max(100).default(50),
+  isKeyPosition: z.coerce.boolean().default(false),
+  isActive: z.coerce.boolean().default(true),
+  permissions: z.array(z.string().min(3).max(120)).max(100).default([]),
+});
+
+export const enterpriseWorkflowSchema = z.object({
+  workflowCode: z.string().trim().min(2).max(80).regex(/^[A-Z0-9_]+$/),
+  labelFr: z.string().trim().min(3).max(180),
+  labelEn: z.string().trim().min(3).max(180),
+  descriptionFr: z.string().max(1600).optional().or(z.literal("")),
+  descriptionEn: z.string().max(1600).optional().or(z.literal("")),
+  category: z.string().max(120).optional().or(z.literal("")),
+  departmentId: z.string().max(160).optional().or(z.literal("")),
+  responsibleUserIds: z.array(z.string().min(1).max(160)).max(50).default([]),
+  recipientUserIds: z.array(z.string().min(1).max(160)).max(100).default([]),
+  steps: z.string().max(4000).optional().or(z.literal("")),
+  recommendedDelay: z.string().max(120).optional().or(z.literal("")),
+  documents: z.string().max(1000).optional().or(z.literal("")),
+  comment: z.string().max(1000).optional().or(z.literal("")),
+  status: z.enum(["DRAFT", "ACTIVE", "SHARED", "ARCHIVED"]).default("ACTIVE"),
+  isEnabled: z.coerce.boolean().default(true),
+});
+
+export const enterpriseSettingsSchema = z.object({
+  displayName: z.string().trim().min(2).max(180),
+  logoUrl: z.string().url().max(600).optional().or(z.literal("")),
+  primaryColor: z.string().max(40).optional().or(z.literal("")),
+  country: z.string().max(120).optional().or(z.literal("")),
+  city: z.string().max(120).optional().or(z.literal("")),
+  address: z.string().max(240).optional().or(z.literal("")),
+  phone: z.string().max(80).optional().or(z.literal("")),
+  email: z.string().email().optional().or(z.literal("")),
+  defaultLanguage: z.enum(["fr", "en"]).default("fr"),
+  timezone: z.string().max(80).default("Africa/Kinshasa"),
+  establishmentType: z.enum(["CABINET", "CLINIC", "HOSPITAL", "MEDICAL_CENTER"]).default("CLINIC"),
+  patientPrefix: z.string().max(20).default("PAT-"),
+  invoicePrefix: z.string().max(20).default("FAC-"),
+  activeServices: z.string().max(1200).optional().or(z.literal("")),
+  enhancedMedicalPrivacy: z.coerce.boolean().default(true),
+  medicalRecordRoles: z.string().max(800).optional().or(z.literal("")),
+  closeConsultationRoles: z.string().max(800).optional().or(z.literal("")),
+  reopenConsultationRoles: z.string().max(800).optional().or(z.literal("")),
+  labValidationRoles: z.string().max(800).optional().or(z.literal("")),
+  consultationLockHours: z.coerce.number().int().min(0).max(8760).default(48),
+  pharmacyAlertOptions: z.string().max(1200).optional().or(z.literal("")),
+  laboratoryAlertOptions: z.string().max(1200).optional().or(z.literal("")),
+  criticalIncidentOptions: z.string().max(1200).optional().or(z.literal("")),
+});
+
+export const enterpriseAdministrationMutationSchema = z.discriminatedUnion("entityType", [
+  enterpriseDepartmentSchema.extend({ entityType: z.literal("department") }),
+  enterprisePositionSchema.extend({ entityType: z.literal("position") }),
+  enterpriseWorkflowSchema.extend({ entityType: z.literal("workflow") }),
+  enterpriseSettingsSchema.extend({ entityType: z.literal("settings") }),
+]);
 
 export const enterpriseMemberInviteSchema = z.object({
   email: z.string().email().max(180).transform((email) => email.toLowerCase()),
   role: z.enum(["MANAGER", "MEMBER", "GUEST"]).default("MEMBER"),
+  message: z.string().max(800).optional().or(z.literal("")),
 });
 
 export const enterpriseActivityRequestSchema = z.object({
@@ -146,6 +213,8 @@ export const enterpriseActivityRequestSchema = z.object({
   title: z.string().trim().min(3).max(180),
   description: z.string().trim().min(5).max(2500),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+  assignedToUserId: z.string().max(160).optional().or(z.literal("")),
+  metadata: z.record(z.string(), z.string().max(1000)).default({}),
 });
 
 const enterpriseHealthcareRecordBaseSchema = z.object({
@@ -225,6 +294,11 @@ const enterpriseHealthcareRecordBaseSchema = z.object({
   ]).default("ACTIVE"),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
   assignedToUserId: z.string().max(160).optional().or(z.literal("")),
+  patientRecordId: z.string().max(160).optional().or(z.literal("")),
+  appointmentRecordId: z.string().max(160).optional().or(z.literal("")),
+  consultationRecordId: z.string().max(160).optional().or(z.literal("")),
+  departmentId: z.string().max(160).optional().or(z.literal("")),
+  positionId: z.string().max(160).optional().or(z.literal("")),
   patientCode: z.string().max(80).optional().or(z.literal("")),
   patientName: z.string().max(160).optional().or(z.literal("")),
   contactPhone: z.string().max(80).optional().or(z.literal("")),

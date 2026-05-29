@@ -124,6 +124,8 @@ La migration `20260528100000_enterprise_sector_records` ajoute `EnterpriseSector
 
 La migration `20260528133000_healthcare_sector_iteration` complète le template santé et les organisations `HEALTH_CARE` existantes avec les modules sectoriels `MEDICAL_DOCUMENTS`, `HEALTH_SETTINGS`, `HEALTH_REPORTS`, ainsi que les blocs Activités santé `REPORT_LAB_ISSUE`, `REPORT_PHARMACY_STOCKOUT` et `SUBMIT_PATIENT_DOCUMENT`.
 
+La migration `20260529113000_enterprise_department_responsible` ajoute `EnterpriseDepartment.responsibleUserId` pour persister le responsable métier d'un département entreprise sans mélanger les départements clients avec les référentiels internes DTSC.
+
 Première itération active: `HEALTH_CARE`.
 
 - Interface: `components/enterprise/healthcare-admin-workspace.tsx`, affichée dans `Administration [Entreprise]` uniquement pour les organisations `HEALTH_CARE`.
@@ -138,6 +140,14 @@ Première itération active: `HEALTH_CARE`.
 Ces routes vérifient la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module activé via `canAccessEnterpriseModule()`, la validation Zod et le rate limiting. Les créations/modifications/archivages journalisent `AuditLog` et créent une notification lorsqu'un responsable membre de l'organisation est assigné. Les incidents qualité critiques notifient également les rôles de gestion actifs de l'entreprise.
 
 Les actions `PATCH` métier mettent à jour le statut et l'historique léger dans `payloadJson`: confirmation ou annulation de rendez-vous, marquage absent, conversion en consultation, clôture/réouverture de consultation, validation labo, soumission/approbation/rejet de prise en charge, entrée/sortie/ajustement de stock et résolution d'incident. Les consultations clôturées, factures payées et résultats validés sont verrouillés contre modification libre jusqu'à réouverture autorisée.
+
+Affinage santé:
+
+- Les formulaires Administration santé utilisent des combobox issues des données de l'organisation pour les patients, rendez-vous, consultations, collaborateurs, départements et postes.
+- Les références `patientRecordId`, `appointmentRecordId`, `consultationRecordId`, `departmentId` et `positionId` sont stockées dans `payloadJson` et vérifiées côté API contre `organizationId`.
+- `POST /api/enterprise/[organizationId]/administration` accepte maintenant `entityType = department | position | workflow | settings` pour gérer départements, postes/permissions, workflows/procédures et paramètres entreprise/santé avec audit.
+- `POST /api/enterprise/[organizationId]/members` crée une invitation `OrganizationMember.status = INVITED` pour un utilisateur existant au lieu de l'activer directement.
+- `POST /api/enterprise/[organizationId]/activities` accepte `assignedToUserId` et `metadata`; le destinataire doit être membre actif de la même entreprise et reçoit la notification ciblée.
 
 Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
 

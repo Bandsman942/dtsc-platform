@@ -49,31 +49,44 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "User not found", message: "Ce collaborateur doit d'abord disposer d'un compte actif DTSC Platform." }, { status: 404 });
   }
 
+  const existingMembership = await prisma.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId, userId: targetUser.id } },
+    select: { id: true, status: true, removedAt: true },
+  });
+  if (existingMembership?.status === "ACTIVE" && !existingMembership.removedAt) {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Already member", message: "Cet utilisateur est déjà collaborateur actif de cette entreprise." }, { status: 409 });
+  }
+  if (existingMembership?.status === "INVITED" && !existingMembership.removedAt) {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invitation pending", message: "Une invitation est déjà en attente pour cet utilisateur." }, { status: 409 });
+  }
+
   const membership = await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId, userId: targetUser.id } },
     update: {
       role: parsed.data.role,
-      status: "ACTIVE",
+      status: "INVITED",
       removedAt: null,
-      joinedAt: new Date(),
+      joinedAt: null,
       invitedBy: session.userId,
     },
     create: {
       organizationId,
       userId: targetUser.id,
       role: parsed.data.role,
-      status: "ACTIVE",
+      status: "INVITED",
       invitedBy: session.userId,
-      joinedAt: new Date(),
+      joinedAt: null,
     },
   });
 
   await notifyUser({
     userId: targetUser.id,
     title: `Invitation ${organization.name}`,
-    body: `Vous avez été ajouté à l'espace privé de ${organization.name}.`,
+    body: parsed.data.message || `Vous êtes invité à rejoindre l'espace privé de ${organization.name}.`,
     type: "ORGANIZATION",
-    targetUrl: "/enterprise-activities",
+    targetUrl: "/notifications",
   });
   await writeAuditLog({
     userId: session.userId,

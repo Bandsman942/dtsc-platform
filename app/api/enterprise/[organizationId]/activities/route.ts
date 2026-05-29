@@ -91,6 +91,16 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (data.assignedToUserId) {
+    const assignee = await prisma.organizationMember.findFirst({
+      where: { organizationId, userId: data.assignedToUserId, status: "ACTIVE", removedAt: null },
+      select: { userId: true },
+    });
+    if (!assignee) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Invalid assignee", message: "Le destinataire doit être collaborateur actif de cette entreprise." }, { status: 400 });
+    }
+  }
 
   const requestRecord = await prisma.enterpriseActivityRequest.create({
     data: {
@@ -102,22 +112,25 @@ export async function POST(req: Request, { params }: Params) {
       priority: data.priority,
       status: "SUBMITTED",
       targetModuleCode: block.targetModuleCode,
+      assignedToUserId: data.assignedToUserId || null,
       createdById: session.userId,
-      metadataJson: { membershipRole: membership.role },
+      metadataJson: { membershipRole: membership.role, ...data.metadata },
     },
   });
 
-  const adminMembers = await prisma.organizationMember.findMany({
-    where: {
-      organizationId,
-      status: "ACTIVE",
-      removedAt: null,
-      role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"] },
-      userId: { not: session.userId },
-    },
-    select: { userId: true },
-    take: 20,
-  });
+  const adminMembers = data.assignedToUserId
+    ? [{ userId: data.assignedToUserId }]
+    : await prisma.organizationMember.findMany({
+        where: {
+          organizationId,
+          status: "ACTIVE",
+          removedAt: null,
+          role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"] },
+          userId: { not: session.userId },
+        },
+        select: { userId: true },
+        take: 20,
+      });
   if (adminMembers.length) {
     await prisma.notification.createMany({
       data: adminMembers.map((member) => ({

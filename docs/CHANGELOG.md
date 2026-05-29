@@ -2,7 +2,20 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
-## 2026-05-28
+## 2026-05-29
+
+### Corrigé
+
+- Affinage du secteur `HEALTH_CARE`: formulaires santé restructurés sans répétition inutile, combobox alimentées par patients/rendez-vous/consultations/collaborateurs/départements/postes de l'organisation, et validation backend des références par `organizationId`.
+- Réorganisation de `Administration [Entreprise]`: modules filtrés par socle commun et template santé, retrait du bloc technique `Blocs Activités entreprise`, séparation collaborateurs/invitations/postes/permissions/départements/workflows/paramètres.
+- Les invitations collaborateurs entreprise ne créent plus un membre actif immédiatement: elles restent en statut `INVITED`, évitent les doublons et notifient l'utilisateur existant.
+- `Activités [Entreprise]` utilise des formulaires santé spécifiques avec destinataire obligatoire et métadonnées persistées, et affiche les workflows partagés.
+
+### Sécurisé
+
+- Les routes santé refusent désormais les références patient, rendez-vous, consultation, département ou poste qui ne sont pas dans la même entreprise.
+- Les paramètres généraux et santé sont persistés sur `Organization.settingsJson` / `brandingJson` avec audit, au lieu de rester des champs décoratifs côté interface.
+- Les sous-modules santé désactivés sont vérifiés avec leur code réel côté API afin d'empêcher l'accès backend à un sous-module masqué.
 
 ### Ajouté
 
@@ -12,6 +25,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Extension de l'itération `HEALTH_CARE` avec dashboard santé, consultations, dossiers médicaux, équipe médicale, laboratoire, pharmacie interne, facturation médicale, assurances/prises en charge, documents médicaux, confidentialité, paramètres et rapports santé.
 - Ajout d'actions métier persistées pour les sous-modules santé: confirmation/annulation de rendez-vous, conversion en consultation, clôture/réouverture, validation labo, gestion de prises en charge, mouvements de stock et résolution d'incident.
 - Ajout de la migration `20260528133000_healthcare_sector_iteration` pour enrichir le template santé, les organisations santé existantes et les blocs Activités santé avec documents médicaux, paramètres, rapports, laboratoire, pharmacie et documents patient.
+- Ajout de la migration `20260529113000_enterprise_department_responsible` pour persister le responsable d'un département entreprise.
 - Ajout d'une documentation dédiée `docs/sectors/health-care.md` pour les sous-modules, workflows, permissions, stockage et limites de l'itération santé.
 
 ### Sécurisé

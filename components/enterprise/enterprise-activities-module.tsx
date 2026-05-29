@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Sparkles } from "lucide-react";
+import { FileText, Send, Sparkles } from "lucide-react";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,75 +32,143 @@ type ActivityRequest = {
   block: { labelFr: string; labelEn: string; icon: string | null } | null;
 };
 
-const healthActivityFields: Record<string, Array<{ name: string; label: string; placeholder: string; type?: "textarea" | "text" | "number" }>> = {
+type EnterpriseMember = {
+  id: string;
+  role: string;
+  status: string;
+  user: { id: string; name: string; email: string };
+};
+
+type SectorRecord = {
+  id: string;
+  moduleCode: string;
+  title: string;
+  status: string;
+  payloadJson: Record<string, unknown> | null;
+};
+
+type EnterpriseWorkflow = {
+  id: string;
+  workflowCode: string;
+  labelFr: string;
+  labelEn: string;
+  descriptionFr: string | null;
+  stepsJson: unknown;
+  updatedAt?: string;
+};
+
+type ActivityField = {
+  name: string;
+  label: string;
+  placeholder: string;
+  type?: "textarea" | "text" | "number" | "select";
+  source?: "patients" | "labRequests" | "pharmacyItems" | "members";
+  options?: string[];
+  required?: boolean;
+};
+
+const defaultActivityFields: ActivityField[] = [
+  { name: "validationType", label: "Type de validation", placeholder: "Validation administrative, médicale, facture...", required: true },
+  { name: "relatedItem", label: "Élément lié", placeholder: "Référence ou contexte", required: false },
+];
+
+const healthActivityFields: Record<string, ActivityField[]> = {
+  REQUEST_VALIDATION: defaultActivityFields,
   REPORT_PATIENT_INCIDENT: [
-    { name: "patient", label: "Patient concerné", placeholder: "Nom ou code patient, si concerné" },
-    { name: "service", label: "Service concerné", placeholder: "Consultation, soins infirmiers, laboratoire..." },
-    { name: "severity", label: "Criticité", placeholder: "Faible, moyenne, élevée ou critique" },
+    { name: "patient", label: "Patient concerné", placeholder: "Sélectionner un patient", source: "patients" },
+    { name: "service", label: "Service concerné", placeholder: "Consultation, soins infirmiers, laboratoire...", required: true },
+    { name: "severity", label: "Criticité", placeholder: "Criticité", type: "select", options: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], required: true },
   ],
   REQUEST_COVERAGE: [
-    { name: "patient", label: "Patient", placeholder: "Nom ou code patient" },
-    { name: "insurer", label: "Assureur", placeholder: "Nom de l'assureur ou organisme" },
-    { name: "benefit", label: "Prestation concernée", placeholder: "Consultation, laboratoire, acte médical..." },
+    { name: "patient", label: "Patient", placeholder: "Sélectionner un patient", source: "patients", required: true },
+    { name: "insurer", label: "Assureur", placeholder: "Nom de l'assureur ou organisme", required: true },
+    { name: "benefit", label: "Prestation concernée", placeholder: "Consultation, laboratoire, acte médical...", required: true },
     { name: "estimatedAmount", label: "Montant estimé", placeholder: "Montant estimé", type: "number" },
   ],
   SUBMIT_MEDICAL_REPORT: [
-    { name: "period", label: "Période", placeholder: "Semaine, mois ou plage concernée" },
-    { name: "service", label: "Service", placeholder: "Service médical concerné" },
+    { name: "period", label: "Période", placeholder: "Semaine, mois ou plage concernée", required: true },
+    { name: "service", label: "Service", placeholder: "Service médical concerné", required: true },
     { name: "difficulties", label: "Difficultés", placeholder: "Difficultés rencontrées", type: "textarea" },
     { name: "recommendations", label: "Recommandations", placeholder: "Actions recommandées", type: "textarea" },
   ],
   REQUEST_MEDICAL_OPINION: [
-    { name: "patient", label: "Patient", placeholder: "Nom ou code patient" },
-    { name: "context", label: "Contexte", placeholder: "Contexte clinique synthétique", type: "textarea" },
-    { name: "question", label: "Question médicale", placeholder: "Avis attendu", type: "textarea" },
-    { name: "recipient", label: "Médecin destinataire", placeholder: "Nom du médecin ou service" },
-  ],
-  REPORT_CONFIDENTIALITY_ISSUE: [
-    { name: "scope", label: "Donnée concernée", placeholder: "Dossier, document, consultation..." },
-    { name: "impact", label: "Impact observé", placeholder: "Impact patient ou confidentialité", type: "textarea" },
+    { name: "patient", label: "Patient", placeholder: "Sélectionner un patient", source: "patients", required: true },
+    { name: "context", label: "Contexte", placeholder: "Contexte clinique synthétique", type: "textarea", required: true },
+    { name: "question", label: "Question médicale", placeholder: "Avis attendu", type: "textarea", required: true },
   ],
   REPORT_LAB_ISSUE: [
-    { name: "patient", label: "Patient concerné", placeholder: "Nom ou code patient, si concerné" },
-    { name: "exam", label: "Examen concerné", placeholder: "Type d'examen ou référence" },
-    { name: "impact", label: "Problème constaté", placeholder: "Retard, résultat, prélèvement...", type: "textarea" },
+    { name: "patient", label: "Patient concerné", placeholder: "Sélectionner un patient", source: "patients" },
+    { name: "labRequest", label: "Demande labo", placeholder: "Sélectionner une demande labo", source: "labRequests" },
+    { name: "severity", label: "Criticité", placeholder: "Criticité", type: "select", options: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+    { name: "problem", label: "Problème constaté", placeholder: "Retard, résultat, prélèvement...", type: "textarea", required: true },
   ],
   REPORT_PHARMACY_STOCKOUT: [
-    { name: "product", label: "Produit concerné", placeholder: "Nom du produit médical" },
+    { name: "product", label: "Produit concerné", placeholder: "Sélectionner un produit", source: "pharmacyItems", required: true },
     { name: "quantity", label: "Quantité restante", placeholder: "Quantité disponible" },
-    { name: "need", label: "Besoin estimé", placeholder: "Besoin urgent ou seuil attendu" },
+    { name: "urgency", label: "Urgence", placeholder: "Urgence", type: "select", options: ["LOW", "NORMAL", "HIGH", "CRITICAL"] },
   ],
   SUBMIT_PATIENT_DOCUMENT: [
-    { name: "patient", label: "Patient", placeholder: "Nom ou code patient" },
-    { name: "documentType", label: "Type document", placeholder: "Ordonnance, certificat, résultat..." },
+    { name: "patient", label: "Patient", placeholder: "Sélectionner un patient", source: "patients", required: true },
+    { name: "documentType", label: "Type document", placeholder: "Type document", type: "select", options: ["Ordonnance", "Certificat", "Résultat", "Facture", "Assurance", "Autre"], required: true },
     { name: "reason", label: "Contexte du dépôt", placeholder: "Pourquoi ce document doit être traité", type: "textarea" },
   ],
 };
+
+function payloadText(record: SectorRecord, key: string) {
+  const value = record.payloadJson?.[key];
+  return typeof value === "string" ? value : "";
+}
 
 export function EnterpriseActivitiesModule({
   organization,
   blocks,
   requests,
+  members,
+  sectorRecords,
+  workflows,
 }: {
   organization: {
     id: string;
     name: string;
     sector: string | null;
+    sectorCode?: string | null;
     businessSector: { labelFr: string; labelEn: string; icon: string | null; color: string | null } | null;
   };
   blocks: ActivityBlock[];
   requests: ActivityRequest[];
+  members: EnterpriseMember[];
+  sectorRecords: SectorRecord[];
+  workflows: EnterpriseWorkflow[];
 }) {
   const router = useRouter();
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
   const [message, setMessage] = useState("");
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
-  const selectedActivityFields = healthActivityFields[selectedBlockCode] || [];
+  const selectedActivityFields = healthActivityFields[selectedBlockCode] || defaultActivityFields;
+  const patients = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [sectorRecords]);
+  const labRequests = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "LABORATORY"), [sectorRecords]);
+  const pharmacyItems = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "INTERNAL_PHARMACY"), [sectorRecords]);
   const list = useSmartList({
     items: requests,
     pageSize: 8,
     getSearchText: (request) => `${request.title} ${request.description} ${request.status} ${request.priority} ${request.blockCode}`,
   });
+
+  function fieldOptions(field: ActivityField) {
+    if (field.source === "patients") {
+      return patients.map((record) => ({ value: record.id, label: payloadText(record, "patientName") || record.title }));
+    }
+    if (field.source === "labRequests") {
+      return labRequests.map((record) => ({ value: record.id, label: record.title }));
+    }
+    if (field.source === "pharmacyItems") {
+      return pharmacyItems.map((record) => ({ value: record.id, label: record.title }));
+    }
+    if (field.source === "members") {
+      return members.map((member) => ({ value: member.user.id, label: member.user.name }));
+    }
+    return (field.options || []).map((option) => ({ value: option, label: option }));
+  }
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,10 +182,14 @@ export function EnterpriseActivitiesModule({
     const title = String(formData.get("title") || "");
     const baseDescription = String(formData.get("description") || "");
     const priority = String(formData.get("priority") || "NORMAL");
-    const activityFields = healthActivityFields[selectedBlockCode] || [];
-    const details = activityFields
+    const assignedToUserId = String(formData.get("assignedToUserId") || "");
+    const metadata: Record<string, string> = {};
+    const details = selectedActivityFields
       .map((field) => {
         const value = String(formData.get(field.name) || "").trim();
+        if (value) {
+          metadata[field.name] = value;
+        }
         return value ? `${field.label}: ${value}` : "";
       })
       .filter(Boolean);
@@ -125,10 +197,10 @@ export function EnterpriseActivitiesModule({
     const response = await fetch(`/api/enterprise/${organization.id}/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, priority, blockCode: selectedBlockCode }),
+      body: JSON.stringify({ title, description, priority, assignedToUserId, blockCode: selectedBlockCode, metadata }),
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? "Demande envoyée." : body?.message || "Envoi impossible.");
+    setMessage(response.ok ? "Demande envoyée au destinataire sélectionné." : body?.message || "Envoi impossible.");
     if (response.ok) {
       formElement.reset();
       router.refresh();
@@ -149,7 +221,7 @@ export function EnterpriseActivitiesModule({
       </section>
 
       <Accordion>
-        <AccordionItem title="Actions rapides" defaultOpen>
+        <AccordionItem title="Actions santé" defaultOpen>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {blocks.map((block) => {
               const active = selectedBlockCode === block.blockCode;
@@ -161,7 +233,7 @@ export function EnterpriseActivitiesModule({
                   className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition ${active ? "border-cyan-300 bg-cyan-400/16 text-cyan-600" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}
                 >
                   <span className="block text-sm font-black">{block.labelFr}</span>
-                  <span className="mt-1 block max-w-56 truncate text-xs font-semibold text-dtsc-muted">{block.targetModuleCode || "Socle commun"}</span>
+                  <span className="mt-1 block max-w-56 truncate text-xs font-semibold text-dtsc-muted">{block.descriptionFr || block.targetModuleCode || "Socle commun"}</span>
                 </button>
               );
             })}
@@ -174,7 +246,13 @@ export function EnterpriseActivitiesModule({
                 <p className="text-xs font-semibold text-dtsc-muted">{selectedBlock?.descriptionFr || "Le formulaire créera une vraie demande liée à votre organisation."}</p>
               </div>
             </div>
-            <Input name="title" placeholder="Titre de la demande" required />
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input name="title" placeholder="Objet de la demande" required />
+              <select name="assignedToUserId" required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="">{members.length ? "Destinataire" : "Aucun collaborateur actif"}</option>
+                {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name} · {member.role}</option>)}
+              </select>
+            </div>
             <textarea name="description" required placeholder="Décrivez précisément la demande, le rapport ou le problème." className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
             {!!selectedActivityFields.length && (
               <div className="grid gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-3 md:grid-cols-2">
@@ -182,9 +260,14 @@ export function EnterpriseActivitiesModule({
                   <label key={field.name} className="grid gap-1 text-sm font-black text-dtsc-ink">
                     <span className="text-xs uppercase tracking-[0.14em] text-dtsc-muted">{field.label}</span>
                     {field.type === "textarea" ? (
-                      <textarea name={field.name} placeholder={field.placeholder} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
+                      <textarea name={field.name} required={field.required} placeholder={field.placeholder} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-ink" />
+                    ) : field.type === "select" || field.source ? (
+                      <select name={field.name} required={field.required} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                        <option value="">{field.placeholder}</option>
+                        {fieldOptions(field).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
                     ) : (
-                      <Input name={field.name} type={field.type || "text"} placeholder={field.placeholder} />
+                      <Input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} />
                     )}
                   </label>
                 ))}
@@ -201,6 +284,26 @@ export function EnterpriseActivitiesModule({
               Envoyer la demande
             </Button>
           </form>
+        </AccordionItem>
+
+        <AccordionItem title="Workflows partagés">
+          <div className="grid gap-3 md:grid-cols-2">
+            {workflows.map((workflow) => (
+              <article key={workflow.id} className="dtsc-glass-list-item rounded-2xl p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/14 text-cyan-600">
+                    <FileText className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{workflow.workflowCode}</p>
+                    <h3 className="mt-1 font-black text-dtsc-ink">{workflow.labelFr}</h3>
+                    <p className="mt-1 line-clamp-2 text-sm text-dtsc-muted">{workflow.descriptionFr || "Workflow interne partagé avec votre entreprise."}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+            {!workflows.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucun workflow partagé pour le moment.</p>}
+          </div>
         </AccordionItem>
 
         <AccordionItem title="Mes demandes et rapports" defaultOpen>

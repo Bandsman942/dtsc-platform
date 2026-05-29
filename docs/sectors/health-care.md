@@ -26,6 +26,7 @@ L'itération `HEALTH_CARE` transforme le modèle sectoriel santé en espace expl
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
 - `20260528133000_healthcare_sector_iteration`: enrichit le template `HEALTH_CARE`, les organisations santé existantes et les blocs Activités santé avec documents médicaux, paramètres santé, rapports santé, signalement laboratoire, rupture pharmacie et dépôt de document patient.
+- `20260529113000_enterprise_department_responsible`: ajoute `EnterpriseDepartment.responsibleUserId` pour persister le responsable d'un département entreprise.
 
 ## Stockage et API
 
@@ -39,6 +40,16 @@ Les enregistrements sont stockés dans `EnterpriseSectorRecord` avec:
 - `priority`;
 - `assignedToUserId`;
 - `payloadJson` pour les champs métier.
+
+Les formulaires santé utilisent désormais des références logiques validées côté backend dans `payloadJson`:
+
+- `patientRecordId` vers un enregistrement `PATIENTS` de la même organisation;
+- `appointmentRecordId` vers un enregistrement `APPOINTMENTS` de la même organisation;
+- `consultationRecordId` vers un enregistrement `CONSULTATIONS` de la même organisation;
+- `departmentId` vers `EnterpriseDepartment` de la même organisation;
+- `positionId` vers `EnterprisePosition` de la même organisation.
+
+Les champs patient, rendez-vous, consultation, collaborateur, département, poste, statut et priorité sont rendus sous forme de combobox/selects alimentés par les données de l'entreprise active. Les routes refusent toute référence qui ne correspond pas à `organizationId`.
 
 Routes:
 
@@ -76,7 +87,20 @@ Les consultations clôturées, résultats validés et factures payées sont verr
 - signaler rupture pharmacie;
 - soumettre document patient.
 
-Les formulaires santé ajoutent des champs contextualisés dans la description persistée, sans exposer les sous-modules sensibles aux collaborateurs non autorisés.
+Chaque type de demande possède maintenant son formulaire métier avec destinataire obligatoire parmi les membres actifs de l'entreprise. Les champs contextualisés sont persistés dans la description et dans `metadataJson`, puis la notification cible le destinataire choisi. Les workflows partagés depuis `Administration [Entreprise]` sont affichés dans un bloc dédié `Workflows partagés`.
+
+## Administration entreprise Santé
+
+`Administration [Entreprise]` sépare désormais clairement:
+
+- `Modules entreprise`: socle commun + sous-modules santé réellement activés pour l'organisation. La désactivation masque le sous-module santé dans l'administration et bloque aussi l'accès API au sous-module sans supprimer les données.
+- `Collaborateurs`: invitation d'un utilisateur existant avec statut `INVITED`; l'utilisateur n'est pas intégré comme membre actif tant que l'invitation n'est pas acceptée par le workflow prévu.
+- `Postes & permissions`: création ou mise à jour de `EnterprisePosition`, rattachement à un département, statut actif, poste clé et permissions santé recommandées.
+- `Départements`: création ou mise à jour de `EnterpriseDepartment`, ordre d'affichage et responsable membre actif.
+- `Workflows / Procédures`: création de `EnterpriseWorkflow`, catégorie santé, étapes, responsables, destinataires et notifications de partage.
+- `Paramètres entreprise`: persistance des paramètres généraux sur `Organization` et des paramètres santé dans `Organization.settingsJson.health`.
+
+Le bloc technique `Blocs Activités entreprise` n'est plus exposé comme section principale de l'administration cliente; il reste une configuration de template utilisée par `Activités [Entreprise]`.
 
 ## Postes et permissions
 
@@ -90,7 +114,7 @@ Permissions recommandées:
 - Responsable qualité: incidents qualité, rapports, alertes.
 - Directeur médical / admin entreprise: supervision santé selon rôle organisationnel.
 
-Le backend applique les contrôles via `canAccessEnterpriseModule()` et les sous-modules documents, confidentialité, paramètres et rapports sont rattachés respectivement aux modules `MEDICAL_RECORDS`, `SETTINGS` ou `REPORTS` pour la vérification d'accès.
+Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le code réel de chaque sous-module santé afin qu'une désactivation côté `EnterpriseModule` soit respectée par l'API.
 
 ## Confidentialité
 
@@ -103,4 +127,5 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` et les sous
 
 - Cette itération utilise `EnterpriseSectorRecord` comme stockage sectoriel générique; des tables dédiées peuvent être ajoutées plus tard pour des besoins médicaux avancés.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.
-- Les permissions fines par poste santé sont préparées côté modèle et documentation; elles devront être renforcées par une matrice dédiée si l'entreprise active des dossiers médicaux très sensibles.
+- Les permissions par poste santé sont persistées dans `EnterprisePosition.permissionsJson`; une matrice d'application plus fine peut encore être ajoutée pour les dossiers médicaux très sensibles.
+- L'acceptation/refus d'invitation côté invité utilise le statut `OrganizationMember`; l'interface d'acceptation peut être enrichie dans une prochaine itération si un écran dédié aux invitations est ajouté.

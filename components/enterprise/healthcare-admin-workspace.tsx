@@ -52,6 +52,22 @@ type HealthcareMember = {
   user: { id: string; name: string; email: string };
 };
 
+type HealthcareDepartment = {
+  id: string;
+  departmentCode: string;
+  labelFr: string;
+  labelEn: string;
+  isActive: boolean;
+};
+
+type HealthcarePosition = {
+  id: string;
+  positionCode: string;
+  labelFr: string;
+  labelEn: string;
+  isActive: boolean;
+};
+
 type HealthcareModuleCode =
   | "HEALTH_DASHBOARD"
   | "PATIENTS"
@@ -95,6 +111,11 @@ type HealthcareFormState = {
   status: string;
   priority: string;
   assignedToUserId: string;
+  patientRecordId: string;
+  appointmentRecordId: string;
+  consultationRecordId: string;
+  departmentId: string;
+  positionId: string;
   patientCode: string;
   patientName: string;
   sex: string;
@@ -261,6 +282,11 @@ function defaultForm(moduleCode: HealthcareRecordModuleCode): HealthcareFormStat
     status: defaultStatus(moduleCode),
     priority: moduleCode === "QUALITY_INCIDENTS" ? "HIGH" : "NORMAL",
     assignedToUserId: "",
+    patientRecordId: "",
+    appointmentRecordId: "",
+    consultationRecordId: "",
+    departmentId: "",
+    positionId: "",
     patientCode: "",
     patientName: "",
     sex: "",
@@ -321,6 +347,11 @@ function formFromRecord(record: EnterpriseSectorRecordItem): HealthcareFormState
     status: record.status,
     priority: record.priority,
     assignedToUserId: record.assignedTo?.id || "",
+    patientRecordId: payloadText(record, "patientRecordId"),
+    appointmentRecordId: payloadText(record, "appointmentRecordId") || payloadText(record, "linkedRecordId"),
+    consultationRecordId: payloadText(record, "consultationRecordId"),
+    departmentId: payloadText(record, "departmentId"),
+    positionId: payloadText(record, "positionId"),
     patientCode: payloadText(record, "patientCode"),
     patientName: payloadText(record, "patientName"),
     sex: payloadText(record, "sex"),
@@ -387,11 +418,17 @@ export function HealthcareAdminWorkspace({
   organizationId,
   records,
   members,
+  departments,
+  positions,
+  activeModuleCodes,
   locale,
 }: {
   organizationId: string;
   records: EnterpriseSectorRecordItem[];
   members: HealthcareMember[];
+  departments: HealthcareDepartment[];
+  positions: HealthcarePosition[];
+  activeModuleCodes: Set<string>;
   locale?: string | null;
 }) {
   const router = useRouter();
@@ -405,8 +442,15 @@ export function HealthcareAdminWorkspace({
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const activeSubmodule = submodules.find((item) => item.code === activeModuleCode) || submodules[0];
+  const enabledSubmodules = useMemo(
+    () => submodules.filter((item) => item.code === "HEALTH_DASHBOARD" || activeModuleCodes.has(item.code)),
+    [activeModuleCodes],
+  );
+  const activeSubmodule = enabledSubmodules.find((item) => item.code === activeModuleCode) || enabledSubmodules[0] || submodules[0];
   const visibleRecords = useMemo(() => records.filter((record) => record.moduleCode === activeModuleCode), [activeModuleCode, records]);
+  const patientOptions = useMemo(() => records.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [records]);
+  const appointmentOptions = useMemo(() => records.filter((record) => record.moduleCode === "APPOINTMENTS" && !["ARCHIVED", "CANCELLED"].includes(record.status)), [records]);
+  const consultationOptions = useMemo(() => records.filter((record) => record.moduleCode === "CONSULTATIONS" && record.status !== "ARCHIVED"), [records]);
   const getSearchText = useCallback(
     (record: EnterpriseSectorRecordItem) =>
       [
@@ -520,7 +564,7 @@ export function HealthcareAdminWorkspace({
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2">
-        {submodules.map((submodule) => {
+        {enabledSubmodules.map((submodule) => {
           const Icon = submodule.icon;
           const active = submodule.code === activeModuleCode;
           const count = submodule.code === "HEALTH_DASHBOARD" ? records.length : records.filter((record) => record.moduleCode === submodule.code).length;
@@ -613,6 +657,11 @@ export function HealthcareAdminWorkspace({
         <HealthcareRecordForm
           formState={formState}
           members={members}
+          departments={departments}
+          positions={positions}
+          patientOptions={patientOptions}
+          appointmentOptions={appointmentOptions}
+          consultationOptions={consultationOptions}
           isSaving={isSaving}
           onChange={updateField}
           onSubmit={submitForm}
@@ -737,6 +786,11 @@ function StatusDistribution({ label, records }: { label: string; records: Enterp
 function HealthcareRecordForm({
   formState,
   members,
+  departments,
+  positions,
+  patientOptions,
+  appointmentOptions,
+  consultationOptions,
   isSaving,
   onChange,
   onSubmit,
@@ -744,6 +798,11 @@ function HealthcareRecordForm({
 }: {
   formState: HealthcareFormState;
   members: HealthcareMember[];
+  departments: HealthcareDepartment[];
+  positions: HealthcarePosition[];
+  patientOptions: EnterpriseSectorRecordItem[];
+  appointmentOptions: EnterpriseSectorRecordItem[];
+  consultationOptions: EnterpriseSectorRecordItem[];
   isSaving: boolean;
   onChange: (field: keyof HealthcareFormState, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -752,14 +811,14 @@ function HealthcareRecordForm({
   const statusOptions = moduleStatuses[formState.moduleCode] || ["ACTIVE", "IN_PROGRESS", "RESOLVED", "ARCHIVED"];
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <FormSection title="Informations principales">
+      <FormSection title={sectionTitle(formState.moduleCode)}>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Titre">
             <Input value={formState.title} onChange={(event) => onChange("title", event.target.value)} required placeholder="Libellé clair de l'élément santé" />
           </Field>
-          <Field label="Patient">
-            <Input value={formState.patientName} onChange={(event) => onChange("patientName", event.target.value)} required={["PATIENTS", "APPOINTMENTS", "CONSULTATIONS", "MEDICAL_RECORDS"].includes(formState.moduleCode)} placeholder="Nom du patient si concerné" />
-          </Field>
+          {formState.moduleCode !== "PATIENTS" && (
+            <RecordSelect label="Patient concerné" value={formState.patientRecordId} onChange={(value) => onChange("patientRecordId", value)} records={patientOptions} emptyLabel="Aucun patient disponible" />
+          )}
           <Field label="Statut">
             <select value={formState.status} onChange={(event) => onChange("status", event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
               {statusOptions.map((value) => <option key={value} value={value}>{statusLabels[value] || value}</option>)}
@@ -776,18 +835,18 @@ function HealthcareRecordForm({
         </Field>
       </FormSection>
 
-      <FormSection title="Détails métier">
+      <FormSection title="Champs métier">
         {formState.moduleCode === "PATIENTS" && <PatientFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "APPOINTMENTS" && <AppointmentFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "CONSULTATIONS" && <ConsultationFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "MEDICAL_RECORDS" && <MedicalRecordFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "CARE_TEAM" && <CareTeamFields formState={formState} onChange={onChange} members={members} />}
-        {formState.moduleCode === "LABORATORY" && <LaboratoryFields formState={formState} onChange={onChange} />}
+        {formState.moduleCode === "APPOINTMENTS" && <AppointmentFields formState={formState} onChange={onChange} members={members} />}
+        {formState.moduleCode === "CONSULTATIONS" && <ConsultationFields formState={formState} onChange={onChange} members={members} appointmentOptions={appointmentOptions} />}
+        {formState.moduleCode === "MEDICAL_RECORDS" && <MedicalRecordFields formState={formState} onChange={onChange} consultationOptions={consultationOptions} />}
+        {formState.moduleCode === "CARE_TEAM" && <CareTeamFields formState={formState} onChange={onChange} members={members} departments={departments} positions={positions} />}
+        {formState.moduleCode === "LABORATORY" && <LaboratoryFields formState={formState} onChange={onChange} members={members} consultationOptions={consultationOptions} />}
         {formState.moduleCode === "INTERNAL_PHARMACY" && <PharmacyFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "MEDICAL_BILLING" && <BillingFields formState={formState} onChange={onChange} />}
+        {formState.moduleCode === "MEDICAL_BILLING" && <BillingFields formState={formState} onChange={onChange} consultationOptions={consultationOptions} />}
         {formState.moduleCode === "INSURANCE_COVERAGE" && <InsuranceFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "QUALITY_INCIDENTS" && <IncidentFields formState={formState} onChange={onChange} />}
-        {formState.moduleCode === "MEDICAL_DOCUMENTS" && <DocumentFields formState={formState} onChange={onChange} />}
+        {formState.moduleCode === "QUALITY_INCIDENTS" && <IncidentFields formState={formState} onChange={onChange} members={members} departments={departments} />}
+        {formState.moduleCode === "MEDICAL_DOCUMENTS" && <DocumentFields formState={formState} onChange={onChange} consultationOptions={consultationOptions} />}
         {formState.moduleCode === "MEDICAL_CONFIDENTIALITY" && <SettingsFields formState={formState} onChange={onChange} confidentiality />}
         {formState.moduleCode === "HEALTH_SETTINGS" && <SettingsFields formState={formState} onChange={onChange} />}
         {formState.moduleCode === "HEALTH_REPORTS" && <ReportFields formState={formState} onChange={onChange} />}
@@ -822,9 +881,30 @@ function HealthcareRecordForm({
   );
 }
 
+function sectionTitle(moduleCode: HealthcareRecordModuleCode) {
+  const titles: Record<HealthcareRecordModuleCode, string> = {
+    PATIENTS: "Identité du patient",
+    APPOINTMENTS: "Patient, date et motif",
+    CONSULTATIONS: "Consultation médicale",
+    MEDICAL_RECORDS: "Dossier médical",
+    CARE_TEAM: "Affectation équipe médicale",
+    LABORATORY: "Demande et résultat laboratoire",
+    INTERNAL_PHARMACY: "Produit et stock",
+    MEDICAL_BILLING: "Facture médicale",
+    INSURANCE_COVERAGE: "Prise en charge assurance",
+    QUALITY_INCIDENTS: "Incident qualité",
+    MEDICAL_DOCUMENTS: "Document médical",
+    MEDICAL_CONFIDENTIALITY: "Règle de confidentialité",
+    HEALTH_SETTINGS: "Paramètre santé",
+    HEALTH_REPORTS: "Rapport santé",
+  };
+  return titles[moduleCode];
+}
+
 function PatientFields({ formState, onChange }: FieldGroupProps) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
+      <Field label="Nom complet du patient"><Input value={formState.patientName} onChange={(event) => onChange("patientName", event.target.value)} required placeholder="Nom complet" /></Field>
       <Field label="Identifiant patient"><Input value={formState.patientCode} onChange={(event) => onChange("patientCode", event.target.value)} placeholder="PAT-0001" /></Field>
       <Field label="Sexe"><Select value={formState.sex} onChange={(value) => onChange("sex", value)} options={["Féminin", "Masculin", "Autre", "Non renseigné"]} /></Field>
       <Field label="Date de naissance ou âge"><Input value={formState.birthDateOrAge} onChange={(event) => onChange("birthDateOrAge", event.target.value)} required placeholder="1990-01-01 ou 36 ans" /></Field>
@@ -842,23 +922,23 @@ function PatientFields({ formState, onChange }: FieldGroupProps) {
   );
 }
 
-function AppointmentFields({ formState, onChange }: FieldGroupProps) {
+function AppointmentFields({ formState, onChange, members }: FieldGroupProps & { members: HealthcareMember[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Field label="Date et heure"><Input type="datetime-local" value={formState.appointmentDate} onChange={(event) => onChange("appointmentDate", event.target.value)} required /></Field>
       <Field label="Type de rendez-vous"><Select value={formState.appointmentType} onChange={(value) => onChange("appointmentType", value)} options={["Consultation générale", "Consultation spécialisée", "Suivi", "Contrôle", "Urgence", "Laboratoire", "Autre"]} /></Field>
-      <Field label="Professionnel assigné"><Input value={formState.healthProfessional} onChange={(event) => onChange("healthProfessional", event.target.value)} placeholder="Médecin, infirmier, service..." /></Field>
+      <MemberSelect label="Professionnel assigné" value={formState.assignedToUserId} onChange={(value) => onChange("assignedToUserId", value)} members={members} />
       <Field label="Motif"><Input value={formState.service} onChange={(event) => onChange("service", event.target.value)} placeholder="Motif du rendez-vous" /></Field>
     </div>
   );
 }
 
-function ConsultationFields({ formState, onChange }: FieldGroupProps) {
+function ConsultationFields({ formState, onChange, members, appointmentOptions }: FieldGroupProps & { members: HealthcareMember[]; appointmentOptions: EnterpriseSectorRecordItem[] }) {
   return (
     <div className="grid gap-3">
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Rendez-vous lié"><Input value={formState.linkedRecordId} onChange={(event) => onChange("linkedRecordId", event.target.value)} placeholder="ID rendez-vous si applicable" /></Field>
-        <Field label="Médecin responsable"><Input value={formState.healthProfessional} onChange={(event) => onChange("healthProfessional", event.target.value)} /></Field>
+        <RecordSelect label="Rendez-vous lié" value={formState.appointmentRecordId} onChange={(value) => onChange("appointmentRecordId", value)} records={appointmentOptions} emptyLabel="Aucun rendez-vous disponible" optional />
+        <MemberSelect label="Médecin responsable" value={formState.assignedToUserId} onChange={(value) => onChange("assignedToUserId", value)} members={members} />
       </div>
       <Field label="Constantes vitales"><textarea value={formState.vitalSigns} onChange={(event) => onChange("vitalSigns", event.target.value)} rows={3} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" placeholder="Température, tension, FC, FR, SpO2, poids, taille, IMC..." /></Field>
       <Field label="Symptômes"><textarea value={formState.symptoms} onChange={(event) => onChange("symptoms", event.target.value)} rows={3} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
@@ -875,9 +955,10 @@ function ConsultationFields({ formState, onChange }: FieldGroupProps) {
   );
 }
 
-function MedicalRecordFields({ formState, onChange }: FieldGroupProps) {
+function MedicalRecordFields({ formState, onChange, consultationOptions }: FieldGroupProps & { consultationOptions: EnterpriseSectorRecordItem[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
+      <RecordSelect label="Consultation de référence" value={formState.consultationRecordId} onChange={(value) => onChange("consultationRecordId", value)} records={consultationOptions} emptyLabel="Aucune consultation disponible" optional />
       <Field label="Antécédents"><textarea value={formState.medicalHistory} onChange={(event) => onChange("medicalHistory", event.target.value)} rows={4} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
       <Field label="Allergies"><textarea value={formState.allergies} onChange={(event) => onChange("allergies", event.target.value)} rows={4} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
       <Field label="Traitements en cours"><textarea value={formState.prescription} onChange={(event) => onChange("prescription", event.target.value)} rows={4} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
@@ -886,29 +967,24 @@ function MedicalRecordFields({ formState, onChange }: FieldGroupProps) {
   );
 }
 
-function CareTeamFields({ formState, onChange, members }: FieldGroupProps & { members: HealthcareMember[] }) {
+function CareTeamFields({ formState, onChange, members, departments, positions }: FieldGroupProps & { members: HealthcareMember[]; departments: HealthcareDepartment[]; positions: HealthcarePosition[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Field label="Utilisateur membre">
-        <select value={formState.assignedToUserId} onChange={(event) => onChange("assignedToUserId", event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-          <option value="">Sélectionner</option>
-          {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Poste santé"><Select value={formState.healthProfessional} onChange={(value) => onChange("healthProfessional", value)} options={["Directeur médical", "Médecin", "Infirmier", "Réceptionniste", "Laborantin", "Pharmacien", "Caissier médical", "Responsable administratif", "Responsable qualité", "Agent assurance / prise en charge"]} /></Field>
-      <Field label="Département / service"><Select value={formState.service} onChange={(value) => onChange("service", value)} options={["Direction médicale", "Consultation", "Soins infirmiers", "Réception", "Laboratoire", "Pharmacie", "Facturation", "Assurance / prise en charge", "Qualité", "Administration"]} /></Field>
+      <MemberSelect label="Utilisateur membre" value={formState.assignedToUserId} onChange={(value) => onChange("assignedToUserId", value)} members={members} />
+      <PositionSelect label="Poste santé" value={formState.positionId} onChange={(value) => onChange("positionId", value)} positions={positions} />
+      <DepartmentSelect label="Département / service" value={formState.departmentId} onChange={(value) => onChange("departmentId", value)} departments={departments} />
       <Field label="Numéro professionnel / spécialité"><Input value={formState.settingValue} onChange={(event) => onChange("settingValue", event.target.value)} /></Field>
     </div>
   );
 }
 
-function LaboratoryFields({ formState, onChange }: FieldGroupProps) {
+function LaboratoryFields({ formState, onChange, members, consultationOptions }: FieldGroupProps & { members: HealthcareMember[]; consultationOptions: EnterpriseSectorRecordItem[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Field label="Consultation liée"><Input value={formState.linkedRecordId} onChange={(event) => onChange("linkedRecordId", event.target.value)} /></Field>
+      <RecordSelect label="Consultation liée" value={formState.consultationRecordId} onChange={(value) => onChange("consultationRecordId", value)} records={consultationOptions} emptyLabel="Aucune consultation disponible" optional />
       <Field label="Type d'examen"><Select value={formState.appointmentType} onChange={(value) => onChange("appointmentType", value)} options={["Hématologie", "Biochimie", "Parasitologie", "Immunologie", "Bactériologie", "Imagerie externe", "Autre"]} /></Field>
       <Field label="Indication"><Input value={formState.service} onChange={(event) => onChange("service", event.target.value)} /></Field>
-      <Field label="Prescripteur"><Input value={formState.healthProfessional} onChange={(event) => onChange("healthProfessional", event.target.value)} /></Field>
+      <MemberSelect label="Prescripteur" value={formState.assignedToUserId} onChange={(value) => onChange("assignedToUserId", value)} members={members} />
       <Field label="Résultat / compte rendu"><textarea value={formState.settingValue} onChange={(event) => onChange("settingValue", event.target.value)} rows={4} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
       <Field label="Conclusion"><textarea value={formState.recommendations} onChange={(event) => onChange("recommendations", event.target.value)} rows={4} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
     </div>
@@ -928,11 +1004,11 @@ function PharmacyFields({ formState, onChange }: FieldGroupProps) {
   );
 }
 
-function BillingFields({ formState, onChange }: FieldGroupProps) {
+function BillingFields({ formState, onChange, consultationOptions }: FieldGroupProps & { consultationOptions: EnterpriseSectorRecordItem[] }) {
   return (
     <div className="grid gap-3">
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Consultation liée"><Input value={formState.linkedRecordId} onChange={(event) => onChange("linkedRecordId", event.target.value)} /></Field>
+        <RecordSelect label="Consultation liée" value={formState.consultationRecordId} onChange={(value) => onChange("consultationRecordId", value)} records={consultationOptions} emptyLabel="Aucune consultation disponible" optional />
         <Field label="Mode de paiement"><Input value={formState.paymentMethod} onChange={(event) => onChange("paymentMethod", event.target.value)} /></Field>
         <Field label="Remise / montant net"><Input value={formState.amountApproved} onChange={(event) => onChange("amountApproved", event.target.value)} /></Field>
         <Field label="Montant total calculé"><Input value={formState.totalAmount} onChange={(event) => onChange("totalAmount", event.target.value)} /></Field>
@@ -954,23 +1030,24 @@ function InsuranceFields({ formState, onChange }: FieldGroupProps) {
   );
 }
 
-function IncidentFields({ formState, onChange }: FieldGroupProps) {
+function IncidentFields({ formState, onChange, members, departments }: FieldGroupProps & { members: HealthcareMember[]; departments: HealthcareDepartment[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Field label="Type incident"><Select value={formState.incidentType} onChange={(value) => onChange("incidentType", value)} options={["Incident patient", "Incident soin", "Incident confidentialité", "Incident administratif", "Incident laboratoire", "Incident pharmacie", "Incident facturation", "Autre"]} /></Field>
       <Field label="Criticité"><Select value={formState.severity} onChange={(value) => onChange("severity", value)} options={["LOW", "MEDIUM", "HIGH", "CRITICAL"]} /></Field>
-      <Field label="Service concerné"><Input value={formState.service} onChange={(event) => onChange("service", event.target.value)} /></Field>
+      <DepartmentSelect label="Service concerné" value={formState.departmentId} onChange={(value) => onChange("departmentId", value)} departments={departments} />
+      <MemberSelect label="Responsable de traitement" value={formState.assignedToUserId} onChange={(value) => onChange("assignedToUserId", value)} members={members} />
       <Field label="Impact"><Input value={formState.settingValue} onChange={(event) => onChange("settingValue", event.target.value)} /></Field>
       <Field label="Action corrective proposée"><textarea value={formState.recommendations} onChange={(event) => onChange("recommendations", event.target.value)} rows={4} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm text-dtsc-ink" /></Field>
     </div>
   );
 }
 
-function DocumentFields({ formState, onChange }: FieldGroupProps) {
+function DocumentFields({ formState, onChange, consultationOptions }: FieldGroupProps & { consultationOptions: EnterpriseSectorRecordItem[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Field label="Type document"><Select value={formState.documentType} onChange={(value) => onChange("documentType", value)} options={["Résultat laboratoire", "Ordonnance", "Certificat médical", "Compte rendu", "Consentement", "Facture médicale", "Document assurance", "Autre"]} /></Field>
-      <Field label="Consultation liée"><Input value={formState.linkedRecordId} onChange={(event) => onChange("linkedRecordId", event.target.value)} /></Field>
+      <RecordSelect label="Consultation liée" value={formState.consultationRecordId} onChange={(value) => onChange("consultationRecordId", value)} records={consultationOptions} emptyLabel="Aucune consultation disponible" optional />
       <Field label="Référence fichier interne"><Input value={formState.fileReference} onChange={(event) => onChange("fileReference", event.target.value)} placeholder="URL interne contrôlée ou référence du fichier" /></Field>
       <Field label="Date document"><Input type="date" value={formState.appointmentDate} onChange={(event) => onChange("appointmentDate", event.target.value)} /></Field>
     </div>
@@ -1080,6 +1157,68 @@ function Select({ value, options, onChange }: { value: string; options: string[]
   );
 }
 
+function RecordSelect({
+  label,
+  value,
+  records,
+  emptyLabel,
+  optional = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  records: EnterpriseSectorRecordItem[];
+  emptyLabel: string;
+  optional?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <select value={value} required={!optional} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        <option value="">{records.length ? "Sélectionner" : emptyLabel}</option>
+        {records.map((record) => (
+          <option key={record.id} value={record.id}>
+            {payloadText(record, "patientName") || record.title} · {statusLabels[record.status] || record.status}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+function MemberSelect({ label, value, members, onChange }: { label: string; value: string; members: HealthcareMember[]; onChange: (value: string) => void }) {
+  return (
+    <Field label={label}>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        <option value="">{members.length ? "Sélectionner" : "Aucun collaborateur actif"}</option>
+        {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name} · {member.role}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+function DepartmentSelect({ label, value, departments, onChange }: { label: string; value: string; departments: HealthcareDepartment[]; onChange: (value: string) => void }) {
+  return (
+    <Field label={label}>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        <option value="">{departments.length ? "Sélectionner" : "Aucun département disponible"}</option>
+        {departments.filter((department) => department.isActive).map((department) => <option key={department.id} value={department.id}>{department.labelFr}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+function PositionSelect({ label, value, positions, onChange }: { label: string; value: string; positions: HealthcarePosition[]; onChange: (value: string) => void }) {
+  return (
+    <Field label={label}>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        <option value="">{positions.length ? "Sélectionner" : "Aucun poste disponible"}</option>
+        {positions.filter((position) => position.isActive).map((position) => <option key={position.id} value={position.id}>{position.labelFr}</option>)}
+      </select>
+    </Field>
+  );
+}
+
 function StatusBadge({ value }: { value: string }) {
   return <span className="rounded-full bg-cyan-400/14 px-2 py-1 text-[0.68rem] font-black text-cyan-600">{statusLabels[value] || value}</span>;
 }
@@ -1096,6 +1235,11 @@ function HealthcareDetails({ record, locale }: { record: EnterpriseSectorRecordI
     [t("enterpriseHealthcare.labels.priority"), priorityLabels[record.priority] || record.priority],
     [t("enterpriseHealthcare.labels.assignee"), record.assignedTo?.name || "Non assigné"],
     ["Patient", payloadText(record, "patientName")],
+    ["Référence patient", payloadText(record, "patientRecordId")],
+    ["Référence rendez-vous", payloadText(record, "appointmentRecordId")],
+    ["Référence consultation", payloadText(record, "consultationRecordId")],
+    ["Département", payloadText(record, "departmentId")],
+    ["Poste", payloadText(record, "positionId")],
     ["Code patient", payloadText(record, "patientCode")],
     ["Téléphone", payloadText(record, "contactPhone")],
     ["Date / période", payloadText(record, "appointmentDate")],

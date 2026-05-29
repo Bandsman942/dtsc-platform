@@ -29,10 +29,10 @@ export default async function EnterpriseActivitiesPage() {
         OR: [{ createdById: user.id }, { assignedToUserId: user.id }],
       };
 
-  const [organization, blocks, requests] = await Promise.all([
+  const [organization, blocks, requests, members, sectorRecords, workflows] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null },
-      select: { id: true, name: true, sector: true, businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } } },
+      select: { id: true, name: true, sector: true, sectorCode: true, businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } } },
     }),
     prisma.enterpriseActivityBlock.findMany({
       where: { organizationId, isEnabled: true },
@@ -44,6 +44,22 @@ export default async function EnterpriseActivitiesPage() {
       take: 80,
       include: { createdBy: { select: { name: true, email: true } }, block: { select: { labelFr: true, labelEn: true, icon: true } } },
     }),
+    prisma.organizationMember.findMany({
+      where: { organizationId, status: "ACTIVE", removedAt: null },
+      orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+      include: { user: { select: { id: true, name: true, email: true } } },
+      take: 200,
+    }),
+    prisma.enterpriseSectorRecord.findMany({
+      where: { organizationId, sectorCode: "HEALTH_CARE", deletedAt: null },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 300,
+      include: {
+        createdBy: { select: { name: true, email: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
+      },
+    }),
+    prisma.enterpriseWorkflow.findMany({ where: { organizationId, isEnabled: true }, orderBy: { updatedAt: "desc" }, take: 100 }),
   ]);
 
   if (!organization) {
@@ -56,6 +72,9 @@ export default async function EnterpriseActivitiesPage() {
         organization={organization}
         blocks={JSON.parse(JSON.stringify(blocks))}
         requests={JSON.parse(JSON.stringify(requests))}
+        members={JSON.parse(JSON.stringify(members))}
+        sectorRecords={JSON.parse(JSON.stringify(sectorRecords))}
+        workflows={JSON.parse(JSON.stringify(workflows))}
       />
     </AppShell>
   );

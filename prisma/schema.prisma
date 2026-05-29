@@ -744,6 +744,7 @@ model EnterpriseDepartment {
   labelEn          String
   descriptionFr    String?
   descriptionEn    String?
+  responsibleUserId String?
   isActive         Boolean  @default(true)
   sortOrder        Int      @default(0)
   sourceTemplateId String?
@@ -756,6 +757,7 @@ model EnterpriseDepartment {
   @@unique([organizationId, departmentCode])
   @@index([organizationId])
   @@index([departmentCode])
+  @@index([responsibleUserId])
 }
 
 model EnterpriseActivityBlock {

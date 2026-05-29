@@ -43,6 +43,11 @@ function compactHealthcarePayload(data: HealthcareRecordInput): Prisma.InputJson
     bloodGroup: data.bloodGroup || null,
     allergies: data.allergies || null,
     medicalHistory: data.medicalHistory || null,
+    patientRecordId: data.patientRecordId || null,
+    appointmentRecordId: data.appointmentRecordId || null,
+    consultationRecordId: data.consultationRecordId || null,
+    departmentId: data.departmentId || null,
+    positionId: data.positionId || null,
     patientCode: data.patientCode || null,
     patientName: data.patientName || null,
     contactPhone: data.contactPhone || null,
@@ -86,15 +91,6 @@ function isConsistentHealthcareRecord(moduleCode: string, recordType: string) {
 }
 
 function permissionModuleCode(moduleCode: string) {
-  if (moduleCode === "MEDICAL_DOCUMENTS") {
-    return "MEDICAL_RECORDS";
-  }
-  if (moduleCode === "MEDICAL_CONFIDENTIALITY" || moduleCode === "HEALTH_SETTINGS") {
-    return "SETTINGS";
-  }
-  if (moduleCode === "HEALTH_REPORTS") {
-    return "REPORTS";
-  }
   return moduleCode;
 }
 
@@ -109,6 +105,36 @@ async function assertHealthcareOrganization(organizationId: string) {
     },
     select: { id: true, name: true },
   });
+}
+
+async function validateHealthcareReferences(organizationId: string, data: Partial<HealthcareRecordInput>) {
+  const checks = [
+    data.patientRecordId ? { id: data.patientRecordId, moduleCode: "PATIENTS", message: "Le patient sélectionné n'appartient pas à cette entreprise." } : null,
+    data.appointmentRecordId ? { id: data.appointmentRecordId, moduleCode: "APPOINTMENTS", message: "Le rendez-vous sélectionné n'appartient pas à cette entreprise." } : null,
+    data.consultationRecordId ? { id: data.consultationRecordId, moduleCode: "CONSULTATIONS", message: "La consultation sélectionnée n'appartient pas à cette entreprise." } : null,
+  ].filter((entry): entry is { id: string; moduleCode: string; message: string } => Boolean(entry));
+  for (const check of checks) {
+    const linkedRecord = await prisma.enterpriseSectorRecord.findFirst({
+      where: { id: check.id, organizationId, sectorCode: HEALTHCARE_SECTOR_CODE, moduleCode: check.moduleCode, deletedAt: null },
+      select: { id: true },
+    });
+    if (!linkedRecord) {
+      return check.message;
+    }
+  }
+  if (data.departmentId) {
+    const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
+    if (!department) {
+      return "Le département sélectionné n'appartient pas à cette entreprise.";
+    }
+  }
+  if (data.positionId) {
+    const position = await prisma.enterprisePosition.findFirst({ where: { id: data.positionId, organizationId, isActive: true }, select: { id: true } });
+    if (!position) {
+      return "Le poste sélectionné n'appartient pas à cette entreprise.";
+    }
+  }
+  return null;
 }
 
 export async function GET(req: Request, { params }: Params) {
@@ -206,6 +232,11 @@ export async function POST(req: Request, { params }: Params) {
       await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
       return NextResponse.json({ error: "Invalid assignee", message: "Le responsable sélectionné n'appartient pas à cette entreprise." }, { status: 400 });
     }
+  }
+  const referenceError = await validateHealthcareReferences(organizationId, data);
+  if (referenceError) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
   }
 
   const record = await prisma.enterpriseSectorRecord.create({

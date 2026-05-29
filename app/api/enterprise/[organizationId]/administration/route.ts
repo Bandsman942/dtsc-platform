@@ -3,9 +3,13 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
-import { enterpriseDepartmentSchema } from "@/lib/validators";
+import { enterpriseAdministrationMutationSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
 
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -40,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
       },
     }),
     prisma.organizationMember.findMany({
-      where: { organizationId, status: "ACTIVE", removedAt: null },
+      where: { organizationId, removedAt: null },
       orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
       include: { user: { select: { id: true, name: true, email: true } } },
       take: 200,
@@ -99,34 +103,215 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const parsed = enterpriseDepartmentSchema.safeParse(await req.json().catch(() => null));
+  const parsed = enterpriseAdministrationMutationSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les informations du département sont invalides." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid payload", message: "Les informations d'administration entreprise sont invalides." }, { status: 400 });
   }
 
   const data = parsed.data;
-  const department = await prisma.enterpriseDepartment.upsert({
-    where: { organizationId_departmentCode: { organizationId, departmentCode: data.departmentCode } },
-    update: {
-      labelFr: data.labelFr,
-      labelEn: data.labelEn,
-      descriptionFr: data.descriptionFr || null,
-      descriptionEn: data.descriptionEn || null,
-      isActive: data.isActive,
+  if (data.entityType === "department" && data.responsibleUserId) {
+    const responsible = await prisma.organizationMember.findFirst({ where: { organizationId, userId: data.responsibleUserId, status: "ACTIVE", removedAt: null }, select: { userId: true } });
+    if (!responsible) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Invalid responsible", message: "Le responsable du département doit être membre actif de cette entreprise." }, { status: 400 });
+    }
+  }
+
+  if (data.entityType === "position" && data.departmentId) {
+    const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
+    if (!department) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+      return NextResponse.json({ error: "Invalid department", message: "Le département sélectionné n'appartient pas à cette entreprise." }, { status: 400 });
+    }
+  }
+
+  if (data.entityType === "workflow") {
+    if (data.departmentId) {
+      const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
+      if (!department) {
+        await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+        return NextResponse.json({ error: "Invalid department", message: "Le département du workflow n'appartient pas à cette entreprise." }, { status: 400 });
+      }
+    }
+    const selectedUsers = [...data.responsibleUserIds, ...data.recipientUserIds];
+    if (selectedUsers.length) {
+      const activeMembers = await prisma.organizationMember.count({ where: { organizationId, userId: { in: selectedUsers }, status: "ACTIVE", removedAt: null } });
+      if (activeMembers !== new Set(selectedUsers).size) {
+        await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+        return NextResponse.json({ error: "Invalid recipients", message: "Les responsables et destinataires doivent être membres actifs de cette entreprise." }, { status: 400 });
+      }
+    }
+  }
+
+  if (data.entityType === "department") {
+    const department = await prisma.enterpriseDepartment.upsert({
+      where: { organizationId_departmentCode: { organizationId, departmentCode: data.departmentCode } },
+      update: {
+        labelFr: data.labelFr,
+        labelEn: data.labelEn,
+        descriptionFr: data.descriptionFr || null,
+        descriptionEn: data.descriptionEn || null,
+        responsibleUserId: data.responsibleUserId || null,
+        sortOrder: data.sortOrder,
+        isActive: data.isActive,
+      },
+      create: {
+        organizationId,
+        departmentCode: data.departmentCode,
+        labelFr: data.labelFr,
+        labelEn: data.labelEn,
+        descriptionFr: data.descriptionFr || null,
+        descriptionEn: data.descriptionEn || null,
+        responsibleUserId: data.responsibleUserId || null,
+        sortOrder: data.sortOrder,
+        isActive: data.isActive,
+      },
+    });
+
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DEPARTMENT_UPSERTED", entity: "EnterpriseDepartment", entityId: department.id, request: req, metadata: { organizationId } });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
+    return NextResponse.json({ ok: true, department });
+  }
+
+  if (data.entityType === "position") {
+    const position = await prisma.enterprisePosition.upsert({
+      where: { organizationId_positionCode: { organizationId, positionCode: data.positionCode } },
+      update: {
+        labelFr: data.labelFr,
+        labelEn: data.labelEn,
+        descriptionFr: data.descriptionFr || null,
+        descriptionEn: data.descriptionEn || null,
+        departmentId: data.departmentId || null,
+        hierarchyLevel: data.hierarchyLevel,
+        isActive: data.isActive,
+        isKeyPosition: data.isKeyPosition,
+        permissionsJson: data.permissions.length ? data.permissions : [],
+      },
+      create: {
+        organizationId,
+        positionCode: data.positionCode,
+        labelFr: data.labelFr,
+        labelEn: data.labelEn,
+        descriptionFr: data.descriptionFr || null,
+        descriptionEn: data.descriptionEn || null,
+        departmentId: data.departmentId || null,
+        hierarchyLevel: data.hierarchyLevel,
+        isActive: data.isActive,
+        isKeyPosition: data.isKeyPosition,
+        permissionsJson: data.permissions.length ? data.permissions : [],
+      },
+    });
+
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_POSITION_UPSERTED", entity: "EnterprisePosition", entityId: position.id, request: req, metadata: { organizationId } });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
+    return NextResponse.json({ ok: true, position });
+  }
+
+  if (data.entityType === "workflow") {
+    const steps = data.steps
+      .split(/\r?\n/)
+      .map((step) => step.trim())
+      .filter(Boolean);
+    const workflow = await prisma.enterpriseWorkflow.upsert({
+      where: { organizationId_workflowCode: { organizationId, workflowCode: data.workflowCode } },
+      update: {
+        labelFr: data.labelFr,
+        labelEn: data.labelEn,
+        descriptionFr: data.descriptionFr || null,
+        descriptionEn: data.descriptionEn || null,
+        isEnabled: data.isEnabled,
+        stepsJson: {
+          category: data.category || null,
+          departmentId: data.departmentId || null,
+          responsibleUserIds: data.responsibleUserIds,
+          recipientUserIds: data.recipientUserIds,
+          recommendedDelay: data.recommendedDelay || null,
+          documents: data.documents || null,
+          status: data.status,
+          comment: data.comment || null,
+          steps,
+        },
+      },
+      create: {
+        organizationId,
+        workflowCode: data.workflowCode,
+        labelFr: data.labelFr,
+        labelEn: data.labelEn,
+        descriptionFr: data.descriptionFr || null,
+        descriptionEn: data.descriptionEn || null,
+        isEnabled: data.isEnabled,
+        stepsJson: {
+          category: data.category || null,
+          departmentId: data.departmentId || null,
+          responsibleUserIds: data.responsibleUserIds,
+          recipientUserIds: data.recipientUserIds,
+          recommendedDelay: data.recommendedDelay || null,
+          documents: data.documents || null,
+          status: data.status,
+          comment: data.comment || null,
+          steps,
+        },
+      },
+    });
+    if (data.recipientUserIds.length) {
+      await prisma.notification.createMany({
+        data: data.recipientUserIds.map((userId) => ({
+          userId,
+          title: "Workflow entreprise partagé",
+          body: data.labelFr,
+          type: "ENTERPRISE_WORKFLOW",
+          targetUrl: "/enterprise-activities",
+        })),
+        skipDuplicates: true,
+      });
+    }
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WORKFLOW_UPSERTED", entity: "EnterpriseWorkflow", entityId: workflow.id, request: req, metadata: { organizationId, recipients: data.recipientUserIds.length } });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
+    return NextResponse.json({ ok: true, workflow });
+  }
+
+  const previous = await prisma.organization.findUnique({ where: { id: organizationId }, select: { settingsJson: true, brandingJson: true } });
+  const settingsJson = {
+    ...jsonObject(previous?.settingsJson),
+    defaultLanguage: data.defaultLanguage,
+    health: {
+      establishmentType: data.establishmentType,
+      patientPrefix: data.patientPrefix,
+      invoicePrefix: data.invoicePrefix,
+      activeServices: data.activeServices || null,
+      enhancedMedicalPrivacy: data.enhancedMedicalPrivacy,
+      medicalRecordRoles: data.medicalRecordRoles || null,
+      closeConsultationRoles: data.closeConsultationRoles || null,
+      reopenConsultationRoles: data.reopenConsultationRoles || null,
+      labValidationRoles: data.labValidationRoles || null,
+      consultationLockHours: data.consultationLockHours,
+      pharmacyAlertOptions: data.pharmacyAlertOptions || null,
+      laboratoryAlertOptions: data.laboratoryAlertOptions || null,
+      criticalIncidentOptions: data.criticalIncidentOptions || null,
     },
-    create: {
-      organizationId,
-      departmentCode: data.departmentCode,
-      labelFr: data.labelFr,
-      labelEn: data.labelEn,
-      descriptionFr: data.descriptionFr || null,
-      descriptionEn: data.descriptionEn || null,
-      isActive: data.isActive,
+  };
+  const brandingJson = {
+    ...jsonObject(previous?.brandingJson),
+    primaryColor: data.primaryColor || null,
+  };
+  const organization = await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      name: data.displayName,
+      logoUrl: data.logoUrl || null,
+      country: data.country || null,
+      city: data.city || null,
+      address: data.address || null,
+      phone: data.phone || null,
+      email: data.email || null,
+      timezone: data.timezone,
+      settingsJson,
+      brandingJson,
     },
   });
 
-  await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DEPARTMENT_UPSERTED", entity: "EnterpriseDepartment", entityId: department.id, request: req, metadata: { organizationId } });
+  await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SETTINGS_UPDATED", entity: "Organization", entityId: organization.id, request: req, metadata: { organizationId, sector: "HEALTH_CARE" } });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, department });
+  return NextResponse.json({ ok: true, organization });
 }
