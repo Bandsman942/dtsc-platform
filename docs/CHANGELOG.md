@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du build Vercel des checkboxes de participants `Activités DTSC`: le rendu n'accède plus à un champ `email` absent du type `CollaboratorOption`.
 - Les sélecteurs multi-collaborateurs des réunions, workflows COO, formulaires Activités DTSC et workflows entreprise utilisent désormais des listes à cases à cocher au lieu de demander Ctrl/Cmd + clic.
 - Les blocs `Activités DTSC` qui disposent d'une action de création affichent leur bouton dès l'ouverture du bloc, même si aucune donnée n'existe encore.
 - Le sélecteur d'espace actif reste visible et utilisable sur mobile grâce à une largeur minimale, un style contrasté et un comportement horizontal stable.

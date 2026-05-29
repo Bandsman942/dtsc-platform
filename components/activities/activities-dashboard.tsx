@@ -490,7 +490,7 @@ function CollaboratorCheckboxList({ name, collaborators, emptyLabel }: { name: s
               <input name={name} value={collaborator.id} type="checkbox" className="mt-1 h-4 w-4 rounded border-dtsc-border text-cyan-500" />
               <span className="min-w-0">
                 <span className="block truncate">{collaborator.label}</span>
-                {collaborator.email && <span className="block truncate text-xs text-dtsc-muted">{collaborator.email}</span>}
+                {collaborator.userId && <span className="block truncate text-xs text-dtsc-muted">Compte lié</span>}
               </span>
             </label>
           ))}
