@@ -80,17 +80,10 @@ export async function GET(req: Request) {
       take: 50,
     }),
     prisma.user.findMany({
-      where: activeOrganizationId && organizationSubscriptionActive
-        ? {
-            status: UserStatus.ACTIVE,
-            organizationMemberships: {
-              some: { organizationId: activeOrganizationId, status: "ACTIVE", removedAt: null },
-            },
-          }
-        : { status: UserStatus.ACTIVE, id: session.userId },
+      where: { status: UserStatus.ACTIVE },
       select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true },
       orderBy: { name: "asc" },
-      take: 300,
+      take: 500,
     }),
   ]);
   const groupIds = groups.map((group) => group.id);

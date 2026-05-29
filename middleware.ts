@@ -6,6 +6,8 @@ const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar
 const adminRoutes = ["/admin"];
 const dtscInternalRoutes = ["/admin", "/calendar", "/activities"];
 const dtscInternalApiRoutes = ["/api/admin", "/api/calendar", "/api/activities"];
+const organizationBlockedRoutes = ["/dashboard", "/chat", "/company", "/documents", "/settings", "/notifications"];
+const organizationBlockedApiRoutes = ["/api/chat", "/api/conversations", "/api/company", "/api/documents", "/api/notifications"];
 const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks/zoho/outgoing-mail"];
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
 const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";
@@ -27,6 +29,10 @@ function hasDtscInternalContext(session: Awaited<ReturnType<typeof verifySession
   return session?.activeContext === "DTSC_INTERNAL" && session.activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID;
 }
 
+function hasOrganizationContext(session: Awaited<ReturnType<typeof verifySessionToken>>) {
+  return session?.activeContext === "ORGANIZATION" && Boolean(session.activeOrganizationId);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (request.headers.has("x-middleware-subrequest")) {
@@ -46,6 +52,20 @@ export async function middleware(request: NextRequest) {
     const signInUrl = new URL("/auth/sign-in", request.url);
     signInUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(signInUrl);
+  }
+
+  if (hasOrganizationContext(session) && isPathMatch(pathname, organizationBlockedApiRoutes)) {
+    return NextResponse.json(
+      {
+        error: "Forbidden",
+        message: "Ce module global n'est pas disponible dans un espace entreprise.",
+      },
+      { status: 403 }
+    );
+  }
+
+  if (hasOrganizationContext(session) && isPathMatch(pathname, organizationBlockedRoutes)) {
+    return NextResponse.redirect(new URL("/enterprise-activities", request.url));
   }
 
   if (isPathMatch(pathname, dtscInternalApiRoutes)) {

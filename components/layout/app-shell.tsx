@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
-import type { UserRole } from "@prisma/client";
+import type { Prisma, UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SessionTimeoutGuard } from "@/components/auth/session-timeout-guard";
@@ -47,16 +47,23 @@ export async function AppShell({
       : null;
   const organizationFeaturesEnabled =
     !activeOrganizationId || dtscInternalContext || (await hasActiveOrganizationSubscription(activeOrganizationId));
+  const notificationPrefixes = enterpriseContext
+    ? ["/enterprise-activities", "/enterprise-admin", "/billing", "/announcements", "/profile", "/collaborators"]
+    : null;
+  const notificationScopeWhere: Prisma.NotificationWhereInput = notificationPrefixes
+    ? { OR: notificationPrefixes.map((targetUrl) => ({ targetUrl: { startsWith: targetUrl } })) }
+    : {};
   const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships] = await Promise.all([
     prisma.notification.count({
       where: {
         userId: user.id,
         readAt: null,
+        ...notificationScopeWhere,
       },
     }),
     user.pushNotificationsEnabled
       ? prisma.notification.findMany({
-          where: { userId: user.id, readAt: null },
+          where: { userId: user.id, readAt: null, ...notificationScopeWhere },
           orderBy: { createdAt: "desc" },
           take: 5,
           select: { id: true, title: true, body: true, targetUrl: true },
@@ -96,18 +103,21 @@ export async function AppShell({
         currentOrganizationId={activeOrganizationId}
         organizationOptions={organizationOptions}
         showInternalModules={dtscInternalContext}
+        enterpriseContext={enterpriseContext}
       />
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
-        <DtscLogo href="/dashboard" />
+        <DtscLogo href={enterpriseContext ? "/enterprise-activities" : "/dashboard"} />
 
-        <Link
-          href="/chat"
-          title="Démarrer une nouvelle conversation avec l'assistant DTSC."
-          className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition hover:-translate-y-0.5 hover:bg-[#002b5b]"
-        >
-          <Sparkles className="h-4 w-4 text-cyan-300" />
-          Nouveau chat
-        </Link>
+        {!enterpriseContext && (
+          <Link
+            href="/chat"
+            title="Démarrer une nouvelle conversation avec l'assistant DTSC."
+            className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition hover:-translate-y-0.5 hover:bg-[#002b5b]"
+          >
+            <Sparkles className="h-4 w-4 text-cyan-300" />
+            Nouveau chat
+          </Link>
+        )}
 
         <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
           <NavLinks

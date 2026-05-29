@@ -37,12 +37,14 @@ export function MobilePwaHeader({
   currentOrganizationId,
   organizationOptions = [],
   showInternalModules = false,
+  enterpriseContext = null,
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
   showInternalModules?: boolean;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean } | null;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
@@ -106,7 +108,7 @@ export function MobilePwaHeader({
       className="sticky top-0 z-40 border-b border-white/14 bg-dtsc-surface/78 px-4 py-3 shadow-[0_16px_50px_rgba(0,23,54,0.10)] backdrop-blur-2xl lg:hidden"
     >
       <div className="flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
+        <Link href={enterpriseContext ? "/enterprise-activities" : "/dashboard"} className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
           <span className="relative flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
             <Image src="/dtsc-logo.png" alt="Logo DTSC" fill sizes="44px" className="object-cover" priority />
             <span className="animate-dtsc-online-pulse absolute bottom-0.5 right-0.5 z-20 h-3.5 w-3.5 rounded-full border-2 border-dtsc-surface bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.9)]" />
@@ -119,14 +121,16 @@ export function MobilePwaHeader({
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Link href="/notifications" className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted shadow-[0_10px_32px_rgba(0,23,54,0.08)]" aria-label="Notifications">
-            <Bell className="h-4 w-4" />
-            {unreadNotifications > 0 && (
-              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-cyan-400 px-1 text-[0.62rem] font-black text-[#001736]">
-                {unreadNotifications > 99 ? "99+" : unreadNotifications}
-              </span>
-            )}
-          </Link>
+          {!enterpriseContext && (
+            <Link href="/notifications" className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted shadow-[0_10px_32px_rgba(0,23,54,0.08)]" aria-label="Notifications">
+              <Bell className="h-4 w-4" />
+              {unreadNotifications > 0 && (
+                <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-cyan-400 px-1 text-[0.62rem] font-black text-[#001736]">
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </span>
+              )}
+            </Link>
+          )}
           <MobileAvatar src={user.avatarUrl} name={user.name} online />
         </div>
       </div>
@@ -136,7 +140,7 @@ export function MobilePwaHeader({
           <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />
         )}
         {adminAllowed && <QuickChip href="/admin" active={pathname?.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
-        <QuickChip href="/settings" active={pathname?.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
+        {!enterpriseContext && <QuickChip href="/settings" active={pathname?.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />}
         <QuickChip href="/profile" active={pathname?.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />
         <button
           type="button"
@@ -169,6 +173,9 @@ export function MobileBottomNavigation({
   const pathname = usePathname();
   const locale = user.locale || "fr";
   const visibleItems = primaryItems.filter((item) => {
+    if (enterpriseContext) {
+      return item.href === "/collaborators" && showCollaborationModule;
+    }
     if (item.employeeOnly && !showEmployeeActivities) {
       return false;
     }
@@ -184,18 +191,24 @@ export function MobileBottomNavigation({
     : [];
   const primaryNavigationItems = enterpriseContext
     ? [
-        ...visibleItems.filter((item) => item.href !== "/activities"),
+        ...visibleItems,
         ...enterprisePrimaryItems,
       ].slice(0, 5)
     : visibleItems;
-  const overflowItems = [
-    { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
-    { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
-    ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
-    { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
-    { href: "/support", labelKey: "navigation.support", fallback: "Support" },
-    ...(enterpriseContext?.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Admin entreprise" }] : []),
-  ];
+  const overflowItems = enterpriseContext
+    ? [
+        { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
+        { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
+        { href: "/support", labelKey: "navigation.support", fallback: "Support" },
+        ...(enterpriseContext.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Admin entreprise" }] : []),
+      ]
+    : [
+        { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
+        { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
+        ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
+        { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
+        { href: "/support", labelKey: "navigation.support", fallback: "Support" },
+      ];
 
   return (
     <motion.nav

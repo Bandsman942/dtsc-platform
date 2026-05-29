@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 22 mai 2026
+Derniere mise a jour: 29 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -26,7 +26,7 @@ Objectifs couverts par le code actuel:
 - chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, snapshots consultables pour les groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
-- module prive Mes collaborateurs avec groupes, invitations, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, appels audio/vidéo LiveKit sécurisés par groupe, notifications et journal d'audit par groupe;
+- module prive Mes collaborateurs avec groupes internes ou transversaux, recherche d'utilisateurs actifs de toute l'application pour invitations, acceptation obligatoire, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, appels audio/vidéo LiveKit sécurisés par groupe, notifications et journal d'audit par groupe;
 - calendrier interne prive pour suivre disponibilites, evenements, participants, missions, absences, reunions, conflits de planning et synchronisations COO sans API calendrier externe;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces avancees, numerotations, checklist, tirets, gras, italique, souligne, palette de couleurs controlee et collage de contenus riches;
 - support sous forme de tickets conversationnels;
@@ -109,7 +109,7 @@ La session peut contenir `activeContext`, `activeOrganizationId`, `activeOrganiz
 - avec entreprise sélectionnée, `resolveOrganizationLoginContext()` exige une organisation active et un membership actif;
 - un rôle global DTSC ne contourne jamais `OrganizationMember` pour accéder aux modules internes d'un client.
 
-Les modules historiques internes DTSC (`/admin`, `/activities`, `/calendar` et routes `/api/admin*`, `/api/activities*`, `/api/calendar*`) exigent désormais une session `DTSC_INTERNAL` avec `activeOrganizationId = dtsc-internal`. Les modules partagés filtrent aussi par contexte actif: annonces par `scope`/`organizationId`, groupes par membership et `organizationId`, tickets support par ticket volontairement soumis dans le contexte courant. Les groupes internes d'une entreprise cliente sont bloqués si l'organisation n'a pas d'abonnement actif, sans bascule implicite vers les données DTSC.
+Les modules historiques internes DTSC (`/admin`, `/activities`, `/calendar` et routes `/api/admin*`, `/api/activities*`, `/api/calendar*`) exigent désormais une session `DTSC_INTERNAL` avec `activeOrganizationId = dtsc-internal`. En contexte `ORGANIZATION`, le middleware bloque les modules globaux non isolés (`/dashboard`, `/chat`, `/company`, `/documents`, `/settings`, `/notifications` et leurs principales routes API) afin d'empêcher une session entreprise d'écrire ou lire dans l'espace global DTSC/client. Les seuls modules communs entre espaces sont `Abonnement`, `Annonces` et `Profil`; `Support` reste visible uniquement avec des tickets filtrés par contexte actif, et `Mes collaborateurs` reste transversal mais exige appartenance au groupe ou invitation acceptée. Les groupes internes d'une entreprise cliente sont bloqués si l'organisation n'a pas d'abonnement actif, sans bascule implicite vers les données DTSC.
 
 Routes ajoutées:
 

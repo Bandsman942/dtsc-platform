@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { UserStatus, type Prisma } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
 import { redirect } from "next/navigation";
@@ -77,22 +77,11 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
       take: 100,
     }),
   ]);
-  const visibleGroupUserIds = [
-    ...new Set([user.id, ...groups.flatMap((group) => group.members.map((member) => member.userId))]),
-  ];
-  const userWhere: Prisma.UserWhereInput = activeOrganizationId && organizationSubscriptionActive
-      ? {
-          status: "ACTIVE",
-          organizationMemberships: {
-            some: { organizationId: activeOrganizationId, status: "ACTIVE", removedAt: null },
-          },
-        }
-      : { status: "ACTIVE", id: { in: visibleGroupUserIds } };
   const users = await prisma.user.findMany({
-    where: userWhere,
+    where: { status: UserStatus.ACTIVE },
     select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true },
     orderBy: { name: "asc" },
-    take: 300,
+    take: 500,
   });
   const groupIds = groups.map((group) => group.id);
   const unreadMentions = groupIds.length

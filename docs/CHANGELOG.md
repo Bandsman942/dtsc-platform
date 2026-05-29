@@ -14,6 +14,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Sécurisé
 
+- Renforcement de l'isolation en contexte entreprise: les routes et liens globaux non isolés (`Dashboard`, `Chatbot`, `Entreprise`, `Documents`, `Paramètres`, `Notifications`) sont désormais bloqués ou redirigés, tandis que seuls `Abonnement`, `Annonces` et `Profil` restent communs au compte utilisateur.
+- Les badges et alertes de notifications du shell sont filtrés en contexte entreprise pour ne pas afficher d'éléments liés aux modules globaux bloqués.
 - Les routes santé refusent désormais les références patient, rendez-vous, consultation, département ou poste qui ne sont pas dans la même entreprise.
 - Les paramètres généraux et santé sont persistés sur `Organization.settingsJson` / `brandingJson` avec audit, au lieu de rester des champs décoratifs côté interface.
 - Les sous-modules santé désactivés sont vérifiés avec leur code réel côté API afin d'empêcher l'accès backend à un sous-module masqué.
@@ -28,6 +30,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout de la migration `20260528133000_healthcare_sector_iteration` pour enrichir le template santé, les organisations santé existantes et les blocs Activités santé avec documents médicaux, paramètres, rapports, laboratoire, pharmacie et documents patient.
 - Ajout de la migration `20260529113000_enterprise_department_responsible` pour persister le responsable d'un département entreprise.
 - Ajout d'une documentation dédiée `docs/sectors/health-care.md` pour les sous-modules, workflows, permissions, stockage et limites de l'itération santé.
+- Extension de `Mes collaborateurs`: la recherche d'invitation peut proposer les utilisateurs actifs de toute l'application afin de créer des groupes transversaux, tout en conservant l'acceptation obligatoire et le contrôle d'appartenance au groupe.
 
 ### Sécurisé
 
