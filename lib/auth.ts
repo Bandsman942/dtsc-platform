@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getAuthCookieDomain, getSignInUrl, getDashboardUrl } from "@/lib/domains";
 import { requireEnv } from "@/lib/env";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import {
@@ -80,7 +81,7 @@ export async function getCurrentUser() {
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user || user.status !== "ACTIVE") {
-    redirect("/auth/sign-in");
+    redirect(getSignInUrl());
   }
 
   return user;
@@ -89,7 +90,7 @@ export async function requireUser() {
 export async function requireRole(roles: UserRole[]) {
   const user = await requireUser();
   if (!roles.includes(user.role)) {
-    redirect("/dashboard");
+    redirect(getDashboardUrl());
   }
 
   return user;
@@ -120,16 +121,35 @@ export async function setSessionCookie(user: {
     requireEnv("AUTH_SECRET")
   );
 
+  const cookieDomain = getAuthCookieDomain();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   });
 }
 
 export async function clearSessionCookie() {
   const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+  const cookieDomain = getAuthCookieDomain();
+  const baseOptions = {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  } as const;
+
+  cookieStore.set(SESSION_COOKIE, "", baseOptions);
+  if (cookieDomain) {
+    cookieStore.set(SESSION_COOKIE, "", {
+      ...baseOptions,
+      domain: cookieDomain,
+    });
+  } else {
+    cookieStore.delete(SESSION_COOKIE);
+  }
 }

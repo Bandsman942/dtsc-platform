@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 29 mai 2026
+Derniere mise a jour: 30 mai 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -37,6 +37,33 @@ Objectifs couverts par le code actuel:
 - logs API et webhooks etendus aux zones critiques: chat, conversations, notifications, documents, paiements, diffusions, newsletter, entreprise et publications;
 - experience PWA orientee espace prive avec manifest, service worker prudent, page hors ligne, prompt d'installation authentifie et carte publique d'installation sur l'accueil;
 - integrations OpenAI, Neon PostgreSQL, Prisma, Zoho Mail API, Zoho webhooks et Vercel.
+
+### Préparation multi-sous-domaines
+
+La plateforme reste une seule application Next.js App Router déployée sur Vercel, mais le middleware est maintenant conscient du host afin de préparer les frontières produit sans déplacement massif de fichiers:
+
+- `dtsc-platform.com` et `www.dtsc-platform.com`: site public et pages légales;
+- `app.dtsc-platform.com`: espace SaaS principal (`/dashboard`, `/chat`, `/company`, `/calendar`, `/enterprise-admin`, `/enterprise-activities`, `/collaborators`, etc.);
+- `console.dtsc-platform.com`: console globale DTSC, routée vers `/admin` et réservée à `DTSC_INTERNAL`;
+- `account.dtsc-platform.com`: authentification et choix d'espace;
+- `support.dtsc-platform.com`: module support existant.
+
+`lib/domains.ts` centralise les URLs et helpers de navigation (`getSignInUrl`, `getDashboardUrl`, `getConsoleUrl`, `getSupportUrl`, `getPublicUrl`, `buildUrlForHostType`). Les routes `/api/*`, les assets Next.js, le service worker, les icônes, `/offline` et `/offline.html` ne sont pas rewriteés par host. Les anciennes routes (`/admin`, `/dashboard`, `/support`, `/auth/sign-in`) restent disponibles, puis sont redirigées vers le bon sous-domaine en production.
+
+Variables d'environnement liées:
+
+```bash
+NEXT_PUBLIC_PUBLIC_URL=https://dtsc-platform.com
+NEXT_PUBLIC_APP_URL=https://app.dtsc-platform.com
+NEXT_PUBLIC_CONSOLE_URL=https://console.dtsc-platform.com
+NEXT_PUBLIC_ACCOUNT_URL=https://account.dtsc-platform.com
+NEXT_PUBLIC_SUPPORT_URL=https://support.dtsc-platform.com
+AUTH_COOKIE_DOMAIN=.dtsc-platform.com
+```
+
+En local, `AUTH_COOKIE_DOMAIN` doit rester absent. En production, s'il est défini, `dtsc_session` conserve `httpOnly`, `sameSite=lax`, `secure=true`, `path=/` et reçoit le domaine parent pour fonctionner entre les sous-domaines officiels. La déconnexion expire aussi le cookie host-only historique pour éviter une session résiduelle pendant la transition.
+
+La matrice complète est documentée dans `docs/ROUTING_AND_SUBDOMAINS.md`.
 
 ### Design mobile/PWA premium
 

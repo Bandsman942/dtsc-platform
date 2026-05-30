@@ -7,6 +7,25 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { buildUrlForHostType, getCurrentHostType, getDashboardUrl } from "@/lib/domains";
+
+function normalizeRedirectTarget(target: unknown) {
+  if (typeof target !== "string" || !target.trim()) {
+    return getDashboardUrl();
+  }
+  if (target.startsWith("/") && !target.startsWith("//")) {
+    return target;
+  }
+  try {
+    const targetHostType = getCurrentHostType(new URL(target).host);
+    if (targetHostType === "app" || targetHostType === "console" || targetHostType === "support") {
+      return target;
+    }
+  } catch {
+    return getDashboardUrl();
+  }
+  return getDashboardUrl();
+}
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const router = useRouter();
@@ -84,7 +103,12 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    router.push(searchParams.get("next") || body?.redirectTo || "/dashboard");
+    const target = normalizeRedirectTarget(searchParams.get("next") || body?.redirectTo);
+    if (/^https?:\/\//i.test(target)) {
+      window.location.href = target;
+      return;
+    }
+    router.push(target);
     router.refresh();
   }
 
@@ -201,7 +225,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       )}
       <p className="text-center text-sm text-dtsc-muted">
         {isSignUp ? "Déjà un compte ?" : "Pas encore de compte ?"}{" "}
-        <Link href={isSignUp ? "/auth/sign-in" : "/auth/sign-up"} className="font-semibold text-dtsc-blue hover:text-cyan-600">
+        <Link href={buildUrlForHostType("account", isSignUp ? "/auth/sign-in" : "/auth/sign-up")} className="font-semibold text-dtsc-blue hover:text-cyan-600">
           {isSignUp ? "Connexion" : "Inscription"}
         </Link>
       </p>

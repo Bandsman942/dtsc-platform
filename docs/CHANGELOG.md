@@ -2,6 +2,31 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-05-30
+
+### Ajouté
+
+- Préparation de DTSC Platform à une séparation logique par sous-domaines dans le même projet Vercel: site public, espace SaaS, console DTSC, compte/authentification et support.
+- Ajout de `lib/domains.ts` pour centraliser les URLs produit, détecter le type de host courant, construire les liens cross-subdomain et éviter les liens critiques hardcodés.
+- Ajout de la documentation `docs/ROUTING_AND_SUBDOMAINS.md` avec matrice de routage, variables d'environnement, fonctionnement du cookie partagé, limites connues et trajectoire future vers monorepo.
+
+### Modifié
+
+- Renommage du package npm en `dtsc-platform`.
+- Le middleware détecte les hosts publics, app, console, account et support, puis applique des redirections légères sans déplacer les routes App Router existantes.
+- Les liens critiques de connexion, inscription, déconnexion, navigation publique et branding produit utilisent progressivement les helpers de domaines.
+- Le shell privé affiche le contexte produit actif avec un branding discret sur desktop et mobile.
+
+### Sécurisé
+
+- Le cookie `dtsc_session` peut recevoir `AUTH_COOKIE_DOMAIN` en production pour être partagé entre sous-domaines officiels tout en conservant `httpOnly`, `sameSite=lax`, `secure` et le format de session existant.
+- La console `console.dtsc-platform.com` reste réservée aux sessions `DTSC_INTERNAL`; un client ou membre d'entreprise non autorisé est redirigé vers l'espace SaaS.
+- Les routes `/api/*`, assets, service worker, pages offline et fichiers publics sont exclus du routage par host afin de ne pas casser les API, la PWA ni les intégrations existantes.
+
+### Documentation
+
+- Mise à jour de `README.md`, `docs/TECHNICAL_DOCUMENTATION.md`, `docs/CHANGELOG.md`, `env.example`, de la politique de confidentialité et de la politique des cookies pour expliquer la préparation multi-sous-domaines et le cookie de session optionnel partagé.
+
 ## 2026-05-29
 
 ### Corrigé

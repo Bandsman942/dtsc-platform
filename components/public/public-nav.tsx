@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { publicLinks } from "@/components/public/public-links";
+import { getSignInUrl } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 
 function isActive(pathname: string, href: string) {
@@ -57,7 +58,7 @@ export function PublicNav() {
           );
         })}
         <Link
-          href="/auth/sign-in"
+          href={getSignInUrl("/dashboard")}
           onClick={() => setOpen(false)}
           className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft"
         >

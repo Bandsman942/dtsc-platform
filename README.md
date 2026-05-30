@@ -1,6 +1,6 @@
-# DTSC Chatbot
+# DTSC Platform
 
-Plateforme SaaS de chatbot client pour **DTSC — Data and Tech Solutions Consulting**, cabinet basé à Kinshasa.
+Plateforme SaaS multi-tenant pour **DTSC — Data and Tech Solutions Consulting**, cabinet basé à Kinshasa.
 
 Slogan: **Le numérique au service de votre performance**.
 
@@ -26,6 +26,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 ## Documentation Technique
 
 La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md).
+La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND_SUBDOMAINS.md](docs/ROUTING_AND_SUBDOMAINS.md).
 
 ## Fonctionnalités
 
@@ -53,6 +54,7 @@ La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENT
 - Module Entreprise: profil organisationnel, poste utilisateur, responsabilités, activités métier, processus, données, objectifs et KPI injectés dans le contexte privé du chatbot
 - Ancienne page `/documents` redirigée vers `/company`; les documents restent gérés dans le module Entreprise selon les limites d'abonnement
 - Sessions sécurisées par cookie signé
+- Préparation multi-sous-domaines dans une seule app Vercel: site public, espace SaaS, console DTSC, compte/authentification et support peuvent être routés par host sans extraction monorepo.
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Fondation SaaS hybride multi-entreprises: tenant interne `DTSC` créé comme organisation réelle, entreprises clientes créées par DTSC, memberships actifs, contexte d'accès optionnel à la connexion, sélecteur d'espace après connexion et isolation progressive par `organizationId`.
 - Isolation renforcée en contexte entreprise: Abonnement, Annonces et Profil restent communs au compte utilisateur, tandis que Dashboard, Chatbot, Entreprise, Documents, Paramètres, Notifications, Support, Calendrier interne et Mes collaborateurs restent visibles avec des données filtrées par le contexte actif et `organizationId`.
@@ -129,6 +131,13 @@ OPENAI_API_KEY=
 AUTH_SECRET=
 APP_URL=http://localhost:3000
 NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_PUBLIC_URL=https://dtsc-platform.com
+NEXT_PUBLIC_APP_URL=https://app.dtsc-platform.com
+NEXT_PUBLIC_CONSOLE_URL=https://console.dtsc-platform.com
+NEXT_PUBLIC_ACCOUNT_URL=https://account.dtsc-platform.com
+NEXT_PUBLIC_SUPPORT_URL=https://support.dtsc-platform.com
+# Production only when official subdomains share the session cookie:
+# AUTH_COOKIE_DOMAIN=.dtsc-platform.com
 OPENAI_MODEL=gpt-5-nano
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini

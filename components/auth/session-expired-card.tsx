@@ -5,17 +5,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock3, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSignInUrl } from "@/lib/domains";
 
 export function SessionExpiredCard() {
   const router = useRouter();
   const [seconds, setSeconds] = useState(8);
+  const reconnectUrl = `${getSignInUrl("/dashboard")}&reason=session-expired`;
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setSeconds((current) => {
         if (current <= 1) {
           window.clearInterval(interval);
-          router.push("/auth/sign-in?reason=session-expired");
+          if (/^https?:\/\//i.test(reconnectUrl)) {
+            window.location.href = reconnectUrl;
+          } else {
+            router.push(reconnectUrl);
+          }
           return 0;
         }
         return current - 1;
@@ -23,7 +29,7 @@ export function SessionExpiredCard() {
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [router]);
+  }, [reconnectUrl, router]);
 
   return (
     <div className="w-full max-w-xl rounded-[1.5rem] border border-dtsc-border bg-dtsc-surface p-8 text-center shadow-[0_24px_80px_rgba(0,23,54,0.16)]">
@@ -40,7 +46,7 @@ export function SessionExpiredCard() {
         Redirection vers la connexion dans {seconds}s
       </div>
       <Button asChild className="mt-7 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-        <Link href="/auth/sign-in?reason=session-expired">Se reconnecter maintenant</Link>
+        <Link href={reconnectUrl}>Se reconnecter maintenant</Link>
       </Button>
     </div>
   );

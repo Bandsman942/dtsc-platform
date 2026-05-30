@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Sparkles } from "lucide-react";
 import type { Prisma, UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -13,6 +14,7 @@ import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { getSession } from "@/lib/auth";
+import { getCurrentHostType, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -36,6 +38,8 @@ export async function AppShell({
   };
 }) {
   const session = await getSession();
+  const requestHeaders = await headers();
+  const productBranding = getProductBranding(getCurrentHostType(requestHeaders.get("host")));
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
   const enterpriseContext =
@@ -102,9 +106,13 @@ export async function AppShell({
         currentOrganizationId={activeOrganizationId}
         organizationOptions={organizationOptions}
         showInternalModules={dtscInternalContext}
+        productBranding={productBranding}
       />
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
         <DtscLogo href="/dashboard" />
+        <div className="mt-3 inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-200">
+          {productBranding}
+        </div>
 
         <Link
           href="/chat"
@@ -135,7 +143,7 @@ export async function AppShell({
               DTSC
             </Link>
             <div className="hidden text-sm font-medium text-dtsc-muted md:block">
-              {dtsc.slogan}
+              {productBranding} · {dtsc.slogan}
             </div>
             <div className="flex items-center gap-3">
               {organizationOptions.length > 0 && (

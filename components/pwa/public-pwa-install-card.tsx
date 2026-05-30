@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Download, MonitorSmartphone, ShieldCheck, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { getSignInUrl } from "@/lib/domains";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -97,7 +98,7 @@ export function PublicPWAInstallCard() {
               {installed ? "Application installée" : "Installer l'application"}
             </Button>
             <Button asChild variant="outline" className="rounded-xl border-white/20 bg-white/10 px-6 text-white hover:bg-white/15">
-              <Link href="/auth/sign-in">
+              <Link href={getSignInUrl("/dashboard")}>
                 Ouvrir l&apos;espace client
                 <ArrowRight className="h-4 w-4" />
               </Link>

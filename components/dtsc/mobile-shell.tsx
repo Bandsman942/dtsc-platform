@@ -10,6 +10,7 @@ import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
+import { getPublicUrl } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { translate } from "@/lib/i18n";
@@ -37,12 +38,14 @@ export function MobilePwaHeader({
   currentOrganizationId,
   organizationOptions = [],
   showInternalModules = false,
+  productBranding = "Espace SaaS",
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
   showInternalModules?: boolean;
+  productBranding?: string;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
@@ -95,7 +98,7 @@ export function MobilePwaHeader({
 
   async function signOut() {
     await fetch("/api/auth/sign-out", { method: "POST" });
-    window.location.href = "/";
+    window.location.href = getPublicUrl("/");
   }
 
   return (
@@ -113,7 +116,7 @@ export function MobilePwaHeader({
           </span>
           <span className="min-w-0">
             <span className="block truncate text-base font-black tracking-tight text-dtsc-ink">DTSC</span>
-            <span className="block truncate text-[0.66rem] font-black uppercase tracking-[0.18em] text-cyan-600">IA Platform</span>
+            <span className="block truncate text-[0.66rem] font-black uppercase tracking-[0.18em] text-cyan-600">{productBranding}</span>
           </span>
         </Link>
 
