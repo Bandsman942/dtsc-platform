@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ElementType } from "react";
 import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
@@ -9,7 +10,15 @@ import { canAccessAdministration } from "@/lib/admin-access";
 import { getConsoleUrl, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
 
-const items = [
+type NavItem = {
+  href: string;
+  path?: string;
+  label: string;
+  icon: ElementType;
+  help: string;
+};
+
+const items: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, help: "Voir vos indicateurs, conversations récentes et accès rapides." },
   { href: "/chat", label: "Chatbot", icon: Bot, help: "Discuter avec l'assistant DTSC et exploiter votre contexte métier." },
   { href: "/billing", label: "Abonnement", icon: CreditCard, help: "Consulter votre plan, vos limites et vos factures." },
@@ -43,7 +52,7 @@ export function NavLinks({
   locale?: string | null;
 }) {
   const pathname = usePathname();
-  const employeeItems = showInternalModules && showEmployeeActivities
+  const employeeItems: NavItem[] = showInternalModules && showEmployeeActivities
     ? [{ href: "/activities", label: "Activités DTSC", icon: CalendarCheck, help: "Voir les tâches, opérations, réunions et blocages internes qui vous concernent." }]
     : [];
   const visibleBaseItems = items.filter((item) => {
@@ -55,10 +64,10 @@ export function NavLinks({
     }
     return true;
   });
-  const navItems = showInternalModules && canAccessAdministration(role)
+  const navItems: NavItem[] = showInternalModules && canAccessAdministration(role)
     ? [...visibleBaseItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...visibleBaseItems, ...employeeItems];
-  const enterpriseItems = enterpriseContext
+  const enterpriseItems: NavItem[] = enterpriseContext
     ? [
         { href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
         ...(enterpriseContext.showAdmin
@@ -66,7 +75,7 @@ export function NavLinks({
           : []),
       ]
     : [];
-  const finalNavItems = [...navItems, ...enterpriseItems];
+  const finalNavItems: NavItem[] = [...navItems, ...enterpriseItems];
   const translationByHref: Record<string, string> = {
     "/dashboard": "navigation.dashboard",
     "/chat": "navigation.chat",
@@ -88,7 +97,7 @@ export function NavLinks({
   return (
     <>
       {finalNavItems.map((item) => {
-        const itemPath = "path" in item ? item.path : item.href;
+        const itemPath = item.path || item.href;
         const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
         const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
         return (

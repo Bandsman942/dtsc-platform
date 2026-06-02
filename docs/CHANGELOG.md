@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Correction du build Vercel sur la navigation privée: les items `NavLinks` sont typés explicitement pour éviter qu'un chemin actif soit inféré en `unknown` pendant le contrôle TypeScript.
 - Stabilisation de la couche multi-sous-domaines: redirections post-login centralisées, `next` interne validé, déconnexion ramenée vers Account et navigation inter-produits Console DTSC, SaaS, Support, Compte et Site public.
 - La Console DTSC protège strictement `/admin` pour les sessions `DTSC_INTERNAL`, tout en redirigeant les chemins SaaS et Support vers leurs sous-domaines dédiés afin de conserver une navigation SSO fluide.
 - Les liens critiques du shell, de la navigation desktop/mobile, du dashboard, du support, de l'administration et des pages Account utilisent les helpers de `lib/domains.ts` quand ils traversent un produit.
