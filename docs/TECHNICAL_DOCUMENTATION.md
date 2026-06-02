@@ -282,7 +282,7 @@ Ces secrets ne doivent jamais être exposés côté client. `lib/livekit-service
 
 Le module prive `/calendar` fournit un calendrier interne sans dependance a Google Calendar, Cal.com ou autre fournisseur externe. Il fonctionne dans le tenant DTSC interne et dans chaque contexte entreprise active. Un utilisateur `CLIENT` peut y accéder uniquement lorsqu'il est membre actif de l'entreprise sélectionnée; hors contexte entreprise autorisé, la page et les routes `/api/calendar*` retournent `403` ou redirigent hors du module. Il s'appuie sur les modeles Prisma suivants:
 
-- `CollaboratorAvailability`: plages de disponibilite, absence, conge, mission, teletravail ou presence sur site par collaborateur, toujours rattachées à `organizationId`.
+- `CollaboratorAvailability`: plages de disponibilite, absence, conge, mission, teletravail ou presence sur site par collaborateur, toujours rattachées à `organizationId`; une plage peut viser une date precise (`specificDate`) ou une recurrence claire (`recurrenceType`, `recurrenceStart`, `recurrenceUntil`, `recurrenceInterval`).
 - `InternalCalendarEvent`: evenement interne planifie avec type, statut, priorite, source metier, proprietaire, departement, visibilite et `organizationId`.
 - `InternalCalendarEventParticipant`: participants d'un evenement avec statut et reponse.
 - `InternalCalendarConflict`: conflits detectes et historises sur un evenement.
@@ -293,13 +293,17 @@ Routes principales:
 - `POST /api/calendar`: cree un evenement, detecte les conflits, bloque les conflits non autorises, notifie les participants et journalise l'action.
 - `GET /api/calendar/availabilities`: liste les disponibilites accessibles.
 - `POST /api/calendar/availabilities`: cree une plage de disponibilite apres verification de propriete/RBAC.
+- `GET/PATCH/DELETE /api/calendar/availabilities/[id]`: lit, modifie ou supprime logiquement une disponibilite visible et autorisee.
 - `GET/PATCH/DELETE /api/calendar/events/[id]`: lit, modifie ou annule logiquement un evenement visible et autorise.
 
-La detection de conflits dans `lib/internal-calendar.ts` verifie les chevauchements avec d'autres evenements, les absences/conges/indisponibilites et les creneaux hors disponibilite. Les conflits retournes indiquent le collaborateur concerne et une raison lisible issue de son planning ou de l'evenement chevauchant.
+La detection de conflits dans `lib/internal-calendar.ts` verifie les chevauchements avec d'autres evenements, les absences/conges/indisponibilites et les creneaux hors disponibilite. Les disponibilites peuvent s'appliquer a une date unique, quotidiennement, hebdomadairement ou mensuellement; `dayOfWeek` n'est requis que pour la recurrence hebdomadaire. Les conflits retournes indiquent le collaborateur concerne et une raison lisible issue de son planning ou de l'evenement chevauchant.
 
 La visibilite est appliquee cote backend par `internalCalendarAccessWhere`: `Prive` reste limite au createur/proprietaire et aux roles autorises du contexte actif, `Participants` est limite aux participants actifs, `Departement` au departement et `Public interne` aux collaborateurs autorises de la même organisation. Les evenements COO crees via `POST /api/admin/coo/tasks` ou `POST /api/admin/coo/meetings` creent aussi un evenement calendrier source `COO` dans l'organisation interne DTSC quand une date existe. Depuis `POST /api/calendar`, les types `Tache`, `Reunion`, `Blocage`, `Mission`, `Appel audio` et `Appel video` créent une source métier adaptée: modules internes DTSC pour le tenant DTSC, ou `EnterpriseActivityRequest` dans l'organisation cliente pour alimenter les vues `Administration [Entreprise]` sans exposer les données à une autre entreprise.
 
+Le rôle global `SUPPORT`, lorsqu'il est connecté dans le tenant interne DTSC, peut consulter les disponibilités des autres collaborateurs DTSC et la liste nécessaire à leur affichage. Cette visibilité ne donne pas accès global aux événements privés et ne permet pas de modifier les disponibilités ou les événements d'un autre collaborateur sans droit de gestion (`ADMIN`, CEO/COO/HR & CFO selon les règles existantes).
+
 La migration `20260529223000_calendar_organization_scope` ajoute `organizationId` à `CollaboratorAvailability` et `InternalCalendarEvent`, backfill les données historiques vers `dtsc-internal`, puis crée les index nécessaires au filtrage par entreprise. Les collaborateurs du calendrier sont résolus depuis `HrcfoEmployee` dans DTSC et depuis `OrganizationMember` dans une entreprise cliente; les participants envoyés par l'API sont validés côté serveur dans la même organisation avant création ou modification.
+La migration `20260602153000_calendar_availability_crud` rend `CollaboratorAvailability.dayOfWeek` optionnel, ajoute `specificDate`, `recurrenceStart` et `recurrenceInterval`, puis crée les index nécessaires aux lectures par date, collaborateur et fréquence.
 
 Préférences utilisateur d'appel persistées sur `User`:
 

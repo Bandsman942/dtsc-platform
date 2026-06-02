@@ -53,11 +53,15 @@ export type CalendarEventItem = {
 export type CalendarAvailabilityItem = {
   id: string;
   collaboratorId: string;
-  dayOfWeek: number;
+  dayOfWeek?: number | null;
+  specificDate?: string | null;
   startTime: string;
   endTime: string;
   availabilityStatus: string;
   recurrenceType: string;
+  recurrenceStart?: string | null;
+  recurrenceUntil?: string | null;
+  recurrenceInterval?: number | null;
   locationMode: string;
   notes?: string | null;
 };
@@ -89,7 +93,7 @@ export function InternalCalendarModule({
   initialEvents: CalendarEventItem[];
   initialAvailabilities: CalendarAvailabilityItem[];
   collaborators: CollaboratorOption[];
-  context: { employeeId?: string | null; canViewGlobal: boolean; canManagePeople: boolean; canOverrideConflicts: boolean };
+  context: { employeeId?: string | null; canViewGlobal: boolean; canViewPeopleAvailability?: boolean; canManagePeople: boolean; canOverrideConflicts: boolean };
   userPreferences: UserDatePreferences;
 }) {
   const [events, setEvents] = useState(initialEvents);
@@ -98,6 +102,8 @@ export function InternalCalendarModule({
   const [eventFormOpen, setEventFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEventItem | null>(null);
   const [availabilityFormOpen, setAvailabilityFormOpen] = useState(false);
+  const [editingAvailability, setEditingAvailability] = useState<CalendarAvailabilityItem | null>(null);
+  const [availabilityToDelete, setAvailabilityToDelete] = useState<CalendarAvailabilityItem | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventItem | null>(initialEvents[0] || null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
@@ -140,12 +146,35 @@ export function InternalCalendarModule({
     setStatusMessage("Événement annulé.");
   }
 
+  async function deleteAvailability(availability: CalendarAvailabilityItem) {
+    const response = await fetch(`/api/calendar/availabilities/${availability.id}`, { method: "DELETE" });
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    if (!response.ok) {
+      setStatusMessage(body?.message || "Suppression impossible.");
+      return;
+    }
+    setAvailabilities((current) => current.filter((item) => item.id !== availability.id));
+    setAvailabilityToDelete(null);
+    setStatusMessage("Disponibilité supprimée.");
+  }
+
   function upsertEvent(event: CalendarEventItem) {
     setEvents((current) => {
       const exists = current.some((item) => item.id === event.id);
       return exists ? current.map((item) => item.id === event.id ? event : item) : [event, ...current];
     });
     setSelectedEvent(event);
+  }
+
+  function upsertAvailability(availability: CalendarAvailabilityItem) {
+    setAvailabilities((current) => {
+      const exists = current.some((item) => item.id === availability.id);
+      return exists ? current.map((item) => item.id === availability.id ? availability : item) : [availability, ...current];
+    });
+  }
+
+  function canManageAvailability(availability: CalendarAvailabilityItem) {
+    return context.canManagePeople || availability.collaboratorId === context.employeeId;
   }
 
   function selectEvent(event: CalendarEventItem) {
@@ -268,7 +297,14 @@ export function InternalCalendarModule({
 
         <section className="dtsc-card hidden min-w-0 p-4 xl:block">
           {activeView === "availability" ? (
-            <AvailabilityList availabilities={availabilities} collaborators={collaborators} locale={locale} />
+            <AvailabilityList
+              availabilities={availabilities}
+              collaborators={collaborators}
+              locale={locale}
+              canManageAvailability={canManageAvailability}
+              onEdit={setEditingAvailability}
+              onDelete={setAvailabilityToDelete}
+            />
           ) : activeView === "conflicts" ? (
             <ConflictList conflicts={conflicts} collaborators={collaborators} locale={locale} />
           ) : selectedEvent ? (
@@ -319,10 +355,25 @@ export function InternalCalendarModule({
           context={context}
           locale={locale}
           onClose={() => setAvailabilityFormOpen(false)}
-          onCreated={(availability) => {
-            setAvailabilities((current) => [availability, ...current]);
+          onSaved={(availability) => {
+            upsertAvailability(availability);
             setAvailabilityFormOpen(false);
             setStatusMessage("Disponibilité enregistrée.");
+          }}
+        />
+      )}
+
+      {editingAvailability && (
+        <AvailabilityFormDialog
+          availability={editingAvailability}
+          collaborators={collaborators}
+          context={context}
+          locale={locale}
+          onClose={() => setEditingAvailability(null)}
+          onSaved={(availability) => {
+            upsertAvailability(availability);
+            setEditingAvailability(null);
+            setStatusMessage("Disponibilité modifiée.");
           }}
         />
       )}
@@ -332,6 +383,7 @@ export function InternalCalendarModule({
           collaborators={collaborators}
           locale={locale}
           onClose={() => setCollaboratorsDialogOpen(false)}
+          context={context}
           onCreateEvent={(template) => {
             setCollaboratorsDialogOpen(false);
             openTemplatedEventForm(template);
@@ -351,8 +403,29 @@ export function InternalCalendarModule({
             {filteredDetailDialog === "conflicts" ? (
               <ConflictList conflicts={conflicts} collaborators={collaborators} locale={locale} />
             ) : (
-              <AvailabilityList availabilities={availabilities} collaborators={collaborators} locale={locale} />
+              <AvailabilityList
+                availabilities={availabilities}
+                collaborators={collaborators}
+                locale={locale}
+                canManageAvailability={canManageAvailability}
+                onEdit={setEditingAvailability}
+                onDelete={setAvailabilityToDelete}
+              />
             )}
+          </div>
+        </Dialog>
+      )}
+
+      {availabilityToDelete && (
+        <Dialog open title={translate(locale, "calendar.deleteAvailability")} description={collaboratorName(collaborators, availabilityToDelete.collaboratorId)} onClose={() => setAvailabilityToDelete(null)} className="max-w-lg">
+          <p className="text-sm leading-6 text-dtsc-muted">{translate(locale, "calendar.deleteAvailabilityConfirm")}</p>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setAvailabilityToDelete(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+              {translate(locale, "common.cancel")}
+            </Button>
+            <Button type="button" onClick={() => void deleteAvailability(availabilityToDelete)} className="rounded-xl bg-red-600 text-white hover:bg-red-700">
+              {translate(locale, "common.delete")}
+            </Button>
           </div>
         </Dialog>
       )}
@@ -539,11 +612,13 @@ function EventFormDialog({
 function CalendarCollaboratorsDialog({
   collaborators,
   locale,
+  context,
   onClose,
   onCreateEvent,
 }: {
   collaborators: CollaboratorOption[];
   locale: string;
+  context: { employeeId?: string | null; canManagePeople: boolean };
   onClose: () => void;
   onCreateEvent: (template: CalendarEventTemplate) => void;
 }) {
@@ -560,6 +635,10 @@ function CalendarCollaboratorsDialog({
       participantIds: [collaborator.id],
       title: `${eventType} - ${collaborator.fullName}`,
     });
+  }
+
+  function canCreateEventFor(collaborator: CollaboratorOption) {
+    return context.canManagePeople || collaborator.id === context.employeeId;
   }
 
   return (
@@ -583,18 +662,20 @@ function CalendarCollaboratorsDialog({
                 <p className="truncate text-xs font-bold text-dtsc-muted">{collaborator.jobTitle || translate(locale, "calendar.collaborator")} · {collaborator.department || "DTSC"}</p>
                 {collaborator.email && <p className="truncate text-xs text-dtsc-muted">{collaborator.email}</p>}
               </div>
-              <ActionMenu
-                label={translate(locale, "calendar.collaboratorActions")}
-                items={[
-                  { key: "task", label: translate(locale, "calendar.createTask"), icon: Plus, onSelect: () => createFor(collaborator, "Tâche") },
-                  { key: "meeting", label: translate(locale, "calendar.createMeeting"), icon: Users, onSelect: () => createFor(collaborator, "Réunion") },
-                  { key: "mission", label: translate(locale, "calendar.createMission"), icon: Plus, onSelect: () => createFor(collaborator, "Mission") },
-                  { key: "blocking", label: translate(locale, "calendar.createBlocking"), icon: Plus, onSelect: () => createFor(collaborator, "Blocage") },
-                  { key: "audio", label: translate(locale, "calendar.createAudioCall"), icon: Plus, onSelect: () => createFor(collaborator, "Appel audio") },
-                  { key: "video", label: translate(locale, "calendar.createVideoCall"), icon: Plus, onSelect: () => createFor(collaborator, "Appel vidéo") },
-                  { key: "absence", label: translate(locale, "calendar.createAbsence"), icon: Plus, onSelect: () => createFor(collaborator, "Absence") },
-                ]}
-              />
+              {canCreateEventFor(collaborator) && (
+                <ActionMenu
+                  label={translate(locale, "calendar.collaboratorActions")}
+                  items={[
+                    { key: "task", label: translate(locale, "calendar.createTask"), icon: Plus, onSelect: () => createFor(collaborator, "Tâche") },
+                    { key: "meeting", label: translate(locale, "calendar.createMeeting"), icon: Users, onSelect: () => createFor(collaborator, "Réunion") },
+                    { key: "mission", label: translate(locale, "calendar.createMission"), icon: Plus, onSelect: () => createFor(collaborator, "Mission") },
+                    { key: "blocking", label: translate(locale, "calendar.createBlocking"), icon: Plus, onSelect: () => createFor(collaborator, "Blocage") },
+                    { key: "audio", label: translate(locale, "calendar.createAudioCall"), icon: Plus, onSelect: () => createFor(collaborator, "Appel audio") },
+                    { key: "video", label: translate(locale, "calendar.createVideoCall"), icon: Plus, onSelect: () => createFor(collaborator, "Appel vidéo") },
+                    { key: "absence", label: translate(locale, "calendar.createAbsence"), icon: Plus, onSelect: () => createFor(collaborator, "Absence") },
+                  ]}
+                />
+              )}
             </div>
           ))}
           {!collaboratorList.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{translate(locale, "calendar.noCollaborators")}</p>}
@@ -605,36 +686,48 @@ function CalendarCollaboratorsDialog({
 }
 
 function AvailabilityFormDialog({
+  availability,
   collaborators,
   context,
   locale,
   onClose,
-  onCreated,
+  onSaved,
 }: {
+  availability?: CalendarAvailabilityItem | null;
   collaborators: CollaboratorOption[];
   context: { employeeId?: string | null; canManagePeople: boolean };
   locale: string;
   onClose: () => void;
-  onCreated: (availability: CalendarAvailabilityItem) => void;
+  onSaved: (availability: CalendarAvailabilityItem) => void;
 }) {
   const [message, setMessage] = useState("");
-  const defaultOwner = context.employeeId || collaborators[0]?.id || "";
+  const [recurrenceType, setRecurrenceType] = useState(availability?.recurrenceType || "Aucune");
+  const defaultOwner = availability?.collaboratorId || context.employeeId || collaborators[0]?.id || "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const selectedRecurrenceType = String(formData.get("recurrenceType") || "Aucune");
+    const specificDate = String(formData.get("specificDate") || "");
+    const recurrenceStart = String(formData.get("recurrenceStart") || "");
+    const recurrenceUntil = String(formData.get("recurrenceUntil") || "");
     const payload = {
       collaboratorId: String(formData.get("collaboratorId") || defaultOwner),
-      dayOfWeek: Number(formData.get("dayOfWeek") || 1),
+      dayOfWeek: selectedRecurrenceType === "Hebdomadaire" ? Number(formData.get("dayOfWeek") || 1) : null,
+      specificDate: selectedRecurrenceType === "Aucune" ? specificDate : null,
       startTime: String(formData.get("startTime") || ""),
       endTime: String(formData.get("endTime") || ""),
       availabilityStatus: String(formData.get("availabilityStatus") || "Disponible"),
-      recurrenceType: String(formData.get("recurrenceType") || "Hebdomadaire"),
+      recurrenceType: selectedRecurrenceType,
+      recurrenceStart: selectedRecurrenceType === "Aucune" ? null : recurrenceStart || null,
+      recurrenceUntil: recurrenceUntil || null,
+      recurrenceInterval: Number(formData.get("recurrenceInterval") || 1),
       locationMode: String(formData.get("locationMode") || "Non défini"),
       notes: String(formData.get("notes") || ""),
     };
-    const response = await fetch("/api/calendar/availabilities", {
-      method: "POST",
+    const endpoint = availability ? `/api/calendar/availabilities/${availability.id}` : "/api/calendar/availabilities";
+    const response = await fetch(endpoint, {
+      method: availability ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -643,49 +736,70 @@ function AvailabilityFormDialog({
       setMessage(body?.message || "Enregistrement impossible.");
       return;
     }
-    onCreated(body.availability);
+    onSaved(body.availability);
   }
 
   return (
-    <Dialog open title={translate(locale, "calendar.availability")} description={translate(locale, "calendar.availabilityDescription")} onClose={onClose} className="h-[92dvh] max-w-3xl">
-      <form onSubmit={submit} className="grid gap-3">
+    <Dialog open title={availability ? translate(locale, "calendar.editAvailability") : translate(locale, "calendar.availability")} description={translate(locale, "calendar.availabilityDescription")} onClose={onClose} className="h-[92dvh] max-w-3xl">
+      <form onSubmit={submit} className="grid min-h-0 gap-3 overflow-y-auto pr-1">
         <FormField label="Collaborateur" hint="Choisissez le collaborateur concerné par cette disponibilité.">
           <select name="collaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.fullName}</option>)}
           </select>
         </FormField>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Jour" hint="Jour de la semaine concerné.">
-            <select name="dayOfWeek" defaultValue={1} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-              {weekDays.map((day, index) => <option key={day} value={index}>{translate(locale, `calendar.days.${day}`)}</option>)}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField label={translate(locale, "calendar.availabilityFrequency")} hint={translate(locale, "calendar.availabilityFrequencyHint")}>
+            <select name="recurrenceType" value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value)} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+              {["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"].map((type) => <option key={type} value={type}>{availabilityFrequencyLabel(type, locale)}</option>)}
             </select>
           </FormField>
+          <FormField label={translate(locale, "calendar.recurrenceInterval")} hint={translate(locale, "calendar.recurrenceIntervalHint")}>
+            <Input name="recurrenceInterval" type="number" min={1} max={12} defaultValue={availability?.recurrenceInterval || 1} disabled={recurrenceType === "Aucune"} className="h-12 rounded-2xl bg-dtsc-page" />
+          </FormField>
+        </div>
+        {recurrenceType === "Aucune" ? (
+          <FormField label={translate(locale, "calendar.specificDate")} hint={translate(locale, "calendar.specificDateHint")}>
+            <Input name="specificDate" required type="date" defaultValue={toDateInput(availability?.specificDate)} className="h-12 rounded-2xl bg-dtsc-page" />
+          </FormField>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {recurrenceType === "Hebdomadaire" && (
+              <FormField label={translate(locale, "calendar.weeklyDay")} hint={translate(locale, "calendar.weeklyDayHint")}>
+                <select name="dayOfWeek" defaultValue={availability?.dayOfWeek ?? 1} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+                  {weekDays.map((day, index) => <option key={day} value={index}>{translate(locale, `calendar.days.${day}`)}</option>)}
+                </select>
+              </FormField>
+            )}
+            <FormField label={translate(locale, "calendar.recurrenceStart")} hint={translate(locale, "calendar.recurrenceStartHint")}>
+              <Input name="recurrenceStart" type="date" defaultValue={toDateInput(availability?.recurrenceStart)} className="h-12 rounded-2xl bg-dtsc-page" />
+            </FormField>
+            <FormField label={translate(locale, "calendar.recurrenceUntil")} hint={translate(locale, "calendar.recurrenceUntilHint")}>
+              <Input name="recurrenceUntil" type="date" defaultValue={toDateInput(availability?.recurrenceUntil)} className="h-12 rounded-2xl bg-dtsc-page" />
+            </FormField>
+          </div>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
           <FormField label="Heure de début" hint="Début du créneau disponible ou occupé.">
-            <Input name="startTime" required type="time" defaultValue="08:00" className="h-12 rounded-2xl bg-dtsc-page" />
+            <Input name="startTime" required type="time" defaultValue={availability?.startTime || "08:00"} className="h-12 rounded-2xl bg-dtsc-page" />
           </FormField>
           <FormField label="Heure de fin" hint="Fin du créneau disponible ou occupé.">
-            <Input name="endTime" required type="time" defaultValue="17:00" className="h-12 rounded-2xl bg-dtsc-page" />
+            <Input name="endTime" required type="time" defaultValue={availability?.endTime || "17:00"} className="h-12 rounded-2xl bg-dtsc-page" />
           </FormField>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <FormField label="Statut" hint="Indique si le collaborateur est disponible, absent, en mission ou indisponible.">
-            <select name="availabilityStatus" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+            <select name="availabilityStatus" defaultValue={availability?.availabilityStatus || "Disponible"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
               {["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"].map((status) => <option key={status}>{status}</option>)}
             </select>
           </FormField>
           <FormField label="Lieu / mode" hint="Précise si le créneau est sur site, en télétravail ou externe.">
-            <select name="locationMode" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+            <select name="locationMode" defaultValue={availability?.locationMode || "Non défini"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
               {["Non défini", "Site DTSC", "Télétravail", "Externe", "Mission"].map((mode) => <option key={mode}>{mode}</option>)}
-            </select>
-          </FormField>
-          <FormField label="Récurrence" hint="Définit si ce créneau se répète dans le planning.">
-            <select name="recurrenceType" defaultValue="Hebdomadaire" className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-              {["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"].map((type) => <option key={type}>{type}</option>)}
             </select>
           </FormField>
         </div>
         <FormField label="Notes" hint="Ajoutez une précision utile pour comprendre cette disponibilité.">
-          <textarea name="notes" placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+          <textarea name="notes" defaultValue={availability?.notes || ""} placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
         </FormField>
         {message && <p className="rounded-2xl bg-red-500/10 p-3 text-sm font-bold text-red-600">{message}</p>}
         <div className="flex justify-end gap-2">
@@ -797,21 +911,49 @@ function EventDetail({
   );
 }
 
-function AvailabilityList({ availabilities, collaborators, locale }: { availabilities: CalendarAvailabilityItem[]; collaborators: CollaboratorOption[]; locale: string }) {
+function AvailabilityList({
+  availabilities,
+  collaborators,
+  locale,
+  canManageAvailability,
+  onEdit,
+  onDelete,
+}: {
+  availabilities: CalendarAvailabilityItem[];
+  collaborators: CollaboratorOption[];
+  locale: string;
+  canManageAvailability?: (availability: CalendarAvailabilityItem) => boolean;
+  onEdit?: (availability: CalendarAvailabilityItem) => void;
+  onDelete?: (availability: CalendarAvailabilityItem) => void;
+}) {
   return (
     <div>
       <h2 className="font-black text-dtsc-ink">{translate(locale, "calendar.availabilities")}</h2>
       <div className="mt-4 max-h-[68dvh] space-y-3 overflow-y-auto pr-1">
         {availabilities.map((availability) => (
-          <div key={availability.id} className="rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
+          <div key={availability.id} className="relative rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
+            {canManageAvailability?.(availability) && onEdit && onDelete && (
+              <div className="absolute right-3 top-3">
+                <ActionMenu
+                  label={translate(locale, "calendar.availabilityActions")}
+                  items={[
+                    { key: "edit", label: translate(locale, "common.edit"), icon: Pencil, onSelect: () => onEdit(availability) },
+                    { key: "delete", label: translate(locale, "common.delete"), icon: Trash2, destructive: true, onSelect: () => onDelete(availability) },
+                  ]}
+                />
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <StatusBadge value={availability.availabilityStatus} />
               <StatusBadge value={availability.locationMode} />
+              <StatusBadge value={availabilityFrequencyLabel(availability.recurrenceType, locale)} />
             </div>
-            <p className="mt-3 font-black text-dtsc-ink">{collaboratorName(collaborators, availability.collaboratorId)}</p>
-            <p className="text-sm text-dtsc-muted">{translate(locale, `calendar.days.${weekDays[availability.dayOfWeek] || "monday"}`)} · {availability.startTime} - {availability.endTime}</p>
+            <p className="mt-3 pr-12 font-black text-dtsc-ink">{collaboratorName(collaborators, availability.collaboratorId)}</p>
+            <p className="text-sm font-bold text-dtsc-muted">{availabilityScheduleLabel(availability, locale)} · {availability.startTime} - {availability.endTime}</p>
+            {availability.notes && <p className="mt-2 whitespace-pre-wrap text-sm text-dtsc-muted">{availability.notes}</p>}
           </div>
         ))}
+        {availabilities.length === 0 && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{translate(locale, "calendar.noAvailabilities")}</p>}
       </div>
     </div>
   );
@@ -924,6 +1066,46 @@ function toDateTimeInput(value?: string | null) {
   const offset = date.getTimezoneOffset();
   const local = new Date(date.getTime() - offset * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function toDateInput(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function availabilityFrequencyLabel(type: string, locale: string) {
+  const keyByType: Record<string, string> = {
+    Aucune: "calendar.frequencies.once",
+    Quotidienne: "calendar.frequencies.daily",
+    Hebdomadaire: "calendar.frequencies.weekly",
+    Mensuelle: "calendar.frequencies.monthly",
+  };
+  return translate(locale, keyByType[type] || "calendar.frequencies.once");
+}
+
+function availabilityScheduleLabel(availability: CalendarAvailabilityItem, locale: string) {
+  if (availability.recurrenceType === "Aucune") {
+    return availability.specificDate ? formatDateOnly(availability.specificDate, locale) : translate(locale, "calendar.unspecifiedDate");
+  }
+  const start = availability.recurrenceStart ? formatDateOnly(availability.recurrenceStart, locale) : translate(locale, "calendar.now");
+  const until = availability.recurrenceUntil ? formatDateOnly(availability.recurrenceUntil, locale) : translate(locale, "calendar.noEndDate");
+  if (availability.recurrenceType === "Hebdomadaire") {
+    const dayName = typeof availability.dayOfWeek === "number" ? translate(locale, `calendar.days.${weekDays[availability.dayOfWeek] || "monday"}`) : translate(locale, "calendar.unspecifiedDay");
+    return `${dayName} · ${start} - ${until}`;
+  }
+  return `${start} - ${until}`;
+}
+
+function formatDateOnly(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "fr-FR", { dateStyle: "medium" }).format(new Date(value));
 }
 
 function startOfDay(date: Date) {

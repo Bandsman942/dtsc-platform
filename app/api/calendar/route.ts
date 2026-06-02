@@ -76,14 +76,24 @@ export async function GET(req: Request) {
     }),
     prisma.collaboratorAvailability.findMany({
       where: collaboratorAvailabilityWhere(context),
-      orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+      orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
       take: 200,
     }),
     getCalendarCollaborators(context),
   ]);
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ events, availabilities, collaborators, context: { employeeId: context.calendarCollaboratorId || null, canViewGlobal: context.canViewGlobal, canManagePeople: context.canManagePeople } });
+  return NextResponse.json({
+    events,
+    availabilities,
+    collaborators,
+    context: {
+      employeeId: context.calendarCollaboratorId || null,
+      canViewGlobal: context.canViewGlobal,
+      canViewPeopleAvailability: context.canViewPeopleAvailability,
+      canManagePeople: context.canManagePeople,
+    },
+  });
 }
 
 export async function POST(req: Request) {

@@ -28,7 +28,7 @@ export default async function CalendarPage() {
     }),
     prisma.collaboratorAvailability.findMany({
       where: collaboratorAvailabilityWhere(context),
-      orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+      orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
       take: 200,
     }),
     getCalendarCollaborators(context),
@@ -43,6 +43,7 @@ export default async function CalendarPage() {
         context={{
           employeeId: context.calendarCollaboratorId || null,
           canViewGlobal: context.canViewGlobal,
+          canViewPeopleAvailability: context.canViewPeopleAvailability,
           canManagePeople: context.canManagePeople,
           canOverrideConflicts: context.canOverrideConflicts,
         }}
@@ -94,10 +95,14 @@ function serializeAvailability(availability: CollaboratorAvailability): Calendar
     id: availability.id,
     collaboratorId: availability.collaboratorId,
     dayOfWeek: availability.dayOfWeek,
+    specificDate: availability.specificDate?.toISOString() || null,
     startTime: availability.startTime,
     endTime: availability.endTime,
     availabilityStatus: availability.availabilityStatus,
     recurrenceType: availability.recurrenceType,
+    recurrenceStart: availability.recurrenceStart?.toISOString() || null,
+    recurrenceUntil: availability.recurrenceUntil?.toISOString() || null,
+    recurrenceInterval: availability.recurrenceInterval,
     locationMode: availability.locationMode,
     notes: availability.notes,
   };

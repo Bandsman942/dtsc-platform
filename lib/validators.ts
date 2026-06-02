@@ -354,17 +354,57 @@ export const enterpriseHealthcareRecordUpdateSchema = enterpriseHealthcareRecord
   actionReason: z.string().max(600).optional().or(z.literal("")),
 });
 
-export const internalCalendarAvailabilitySchema = z.object({
+const internalCalendarAvailabilityBaseSchema = z.object({
   collaboratorId: z.string().min(1),
-  dayOfWeek: z.coerce.number().int().min(0).max(6),
+  dayOfWeek: z.coerce.number().int().min(0).max(6).optional().nullable(),
+  specificDate: z.coerce.date().optional().nullable(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   availabilityStatus: z.enum(["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"]).default("Disponible"),
   recurrenceType: z.enum(["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"]).default("Hebdomadaire"),
+  recurrenceStart: z.coerce.date().optional().nullable(),
   recurrenceUntil: z.coerce.date().optional().nullable(),
+  recurrenceInterval: z.coerce.number().int().min(1).max(12).default(1),
   locationMode: z.enum(["Site DTSC", "Télétravail", "Externe", "Mission", "Non défini"]).default("Non défini"),
   notes: z.string().max(800).optional().or(z.literal("")),
-}).refine((data) => data.endTime > data.startTime, {
+});
+
+function hasValidAvailabilityTimeRange(data: { startTime?: string; endTime?: string }) {
+  return !data.startTime || !data.endTime || data.endTime > data.startTime;
+}
+
+function hasValidAvailabilitySchedule(data: { recurrenceType?: string; dayOfWeek?: number | null; specificDate?: Date | null }) {
+  if (data.recurrenceType === "Aucune") {
+    return Boolean(data.specificDate);
+  }
+  if (data.recurrenceType === "Hebdomadaire") {
+    return typeof data.dayOfWeek === "number";
+  }
+  return true;
+}
+
+export const internalCalendarAvailabilitySchema = internalCalendarAvailabilityBaseSchema.refine(hasValidAvailabilityTimeRange, {
+  message: "L'heure de fin doit être après l'heure de début.",
+  path: ["endTime"],
+}).refine(hasValidAvailabilitySchedule, {
+  message: "Choisissez une date précise ou le jour requis pour la fréquence sélectionnée.",
+  path: ["specificDate"],
+});
+
+export const internalCalendarAvailabilityUpdateSchema = z.object({
+  collaboratorId: z.string().min(1).optional(),
+  dayOfWeek: z.coerce.number().int().min(0).max(6).optional().nullable(),
+  specificDate: z.coerce.date().optional().nullable(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  availabilityStatus: z.enum(["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"]).optional(),
+  recurrenceType: z.enum(["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"]).optional(),
+  recurrenceStart: z.coerce.date().optional().nullable(),
+  recurrenceUntil: z.coerce.date().optional().nullable(),
+  recurrenceInterval: z.coerce.number().int().min(1).max(12).optional(),
+  locationMode: z.enum(["Site DTSC", "Télétravail", "Externe", "Mission", "Non défini"]).optional(),
+  notes: z.string().max(800).optional().or(z.literal("")),
+}).refine(hasValidAvailabilityTimeRange, {
   message: "L'heure de fin doit être après l'heure de début.",
   path: ["endTime"],
 });

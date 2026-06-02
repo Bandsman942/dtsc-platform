@@ -1,4 +1,4 @@
-import { UserRole, type Prisma } from "@prisma/client";
+import { UserRole, type CollaboratorAvailability, type Prisma } from "@prisma/client";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { notifyUsers } from "@/lib/notifications";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
@@ -40,6 +40,7 @@ export async function getCalendarContext(
   const canViewGlobal = dtscInternal
     ? user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO"
     : canViewOrganizationGlobal;
+  const canViewPeopleAvailability = dtscInternal && user.role === UserRole.SUPPORT;
   const canManagePeople = canViewGlobal || positionCode === "HR_CFO";
   const canOverrideConflicts = dtscInternal
     ? user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO"
@@ -55,6 +56,7 @@ export async function getCalendarContext(
     calendarCollaboratorId: dtscInternal ? employee?.id || null : organizationMember?.id || null,
     positionCode,
     canViewGlobal,
+    canViewPeopleAvailability,
     canManagePeople,
     canOverrideConflicts,
   };
@@ -89,7 +91,7 @@ export function canManageCollaboratorCalendar(context: CalendarContext, collabor
 
 export function collaboratorAvailabilityWhere(context: CalendarContext, collaboratorId?: string): Prisma.CollaboratorAvailabilityWhereInput {
   const base = { organizationId: context.activeOrganizationId, deletedAt: null };
-  if (context.canViewGlobal || context.canManagePeople) {
+  if (context.canViewGlobal || context.canManagePeople || context.canViewPeopleAvailability) {
     return { ...base, ...(collaboratorId ? { collaboratorId } : {}) };
   }
   return { ...base, collaboratorId: context.calendarCollaboratorId || "__no_employee__" };
@@ -97,7 +99,7 @@ export function collaboratorAvailabilityWhere(context: CalendarContext, collabor
 
 export function calendarCollaboratorWhere(context: CalendarContext) {
   if (context.dtscInternal) {
-    return context.canViewGlobal || context.canManagePeople
+    return context.canViewGlobal || context.canManagePeople || context.canViewPeopleAvailability
       ? { status: { not: "EXITED" as const } }
       : { id: context.employee?.id || "__no_employee__" };
   }
@@ -200,7 +202,6 @@ export async function detectCalendarConflicts({
     return [];
   }
 
-  const dayOfWeek = startDateTime.getDay();
   const existingEvents = await prisma.internalCalendarEvent.findMany({
     where: {
       organizationId: calendarContext.activeOrganizationId,
@@ -221,7 +222,6 @@ export async function detectCalendarConflicts({
     where: {
       organizationId: calendarContext.activeOrganizationId,
       collaboratorId: { in: uniqueIds },
-      dayOfWeek,
       deletedAt: null,
     },
   });
@@ -251,9 +251,15 @@ export async function detectCalendarConflicts({
       });
     }
 
-    const collaboratorAvailabilities = availabilities.filter((availability) => availability.collaboratorId === collaboratorId);
+    const collaboratorAvailabilities = availabilities.filter((availability) =>
+      availability.collaboratorId === collaboratorId && availabilityAppliesToDate(availability, startDateTime)
+    );
+    const eventStart = timeValue(startDateTime);
+    const eventEnd = timeValue(endDateTime);
     const blockingAvailability = collaboratorAvailabilities.find((availability) =>
-      ["Absent", "Congé", "Indisponible", "Mission"].includes(availability.availabilityStatus)
+      ["Absent", "Congé", "Indisponible", "Mission"].includes(availability.availabilityStatus) &&
+      timeStringValue(availability.startTime) < eventEnd &&
+      timeStringValue(availability.endTime) > eventStart
     );
     if (blockingAvailability) {
       const name = collaboratorNames.get(collaboratorId) || "Ce collaborateur";
@@ -267,8 +273,6 @@ export async function detectCalendarConflicts({
       continue;
     }
 
-    const eventStart = timeValue(startDateTime);
-    const eventEnd = timeValue(endDateTime);
     const coversSlot = collaboratorAvailabilities.some((availability) =>
       ["Disponible", "Télétravail", "Sur site"].includes(availability.availabilityStatus) &&
       timeStringValue(availability.startTime) <= eventStart &&
@@ -336,4 +340,62 @@ function timeValue(date: Date) {
 function timeStringValue(value: string) {
   const [hours = "0", minutes = "0"] = value.split(":");
   return Number(hours) * 60 + Number(minutes);
+}
+
+function availabilityAppliesToDate(
+  availability: Pick<CollaboratorAvailability, "dayOfWeek" | "specificDate" | "recurrenceType" | "recurrenceStart" | "recurrenceUntil" | "recurrenceInterval">,
+  date: Date
+) {
+  const day = startOfCalendarDay(date);
+  if (availability.recurrenceUntil && day.getTime() > startOfCalendarDay(availability.recurrenceUntil).getTime()) {
+    return false;
+  }
+
+  if (availability.specificDate) {
+    return sameCalendarDay(availability.specificDate, day);
+  }
+
+  const recurrenceStart = availability.recurrenceStart ? startOfCalendarDay(availability.recurrenceStart) : null;
+  if (recurrenceStart && day.getTime() < recurrenceStart.getTime()) {
+    return false;
+  }
+
+  const interval = Math.max(1, availability.recurrenceInterval || 1);
+  if (availability.recurrenceType === "Quotidienne") {
+    return !recurrenceStart || daysBetween(recurrenceStart, day) % interval === 0;
+  }
+
+  if (availability.recurrenceType === "Mensuelle") {
+    if (!recurrenceStart) {
+      return typeof availability.dayOfWeek === "number" ? availability.dayOfWeek === day.getDay() : true;
+    }
+    return day.getDate() === recurrenceStart.getDate() && monthsBetween(recurrenceStart, day) % interval === 0;
+  }
+
+  if (availability.recurrenceType === "Hebdomadaire") {
+    if (typeof availability.dayOfWeek !== "number" || availability.dayOfWeek !== day.getDay()) {
+      return false;
+    }
+    return !recurrenceStart || Math.floor(daysBetween(recurrenceStart, day) / 7) % interval === 0;
+  }
+
+  return typeof availability.dayOfWeek === "number" && availability.dayOfWeek === day.getDay();
+}
+
+function startOfCalendarDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function sameCalendarDay(left: Date, right: Date) {
+  return startOfCalendarDay(left).getTime() === startOfCalendarDay(right).getTime();
+}
+
+function daysBetween(start: Date, end: Date) {
+  return Math.floor((startOfCalendarDay(end).getTime() - startOfCalendarDay(start).getTime()) / 86_400_000);
+}
+
+function monthsBetween(start: Date, end: Date) {
+  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
 }

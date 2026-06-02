@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 
   const availabilities = await prisma.collaboratorAvailability.findMany({
     where,
-    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+    orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
     take: 300,
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const parsed = internalCalendarAvailabilitySchema.safeParse(await req.json());
+  const parsed = internalCalendarAvailabilitySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid payload", message: "La disponibilité est invalide." }, { status: 400 });
@@ -70,8 +70,12 @@ export async function POST(req: Request) {
     data: {
       ...parsed.data,
       organizationId: context.activeOrganizationId,
+      dayOfWeek: parsed.data.dayOfWeek ?? null,
+      specificDate: parsed.data.specificDate || null,
       notes: parsed.data.notes || null,
+      recurrenceStart: parsed.data.recurrenceStart || null,
       recurrenceUntil: parsed.data.recurrenceUntil || null,
+      recurrenceInterval: parsed.data.recurrenceInterval || 1,
       createdBy: session.userId,
     },
   });
