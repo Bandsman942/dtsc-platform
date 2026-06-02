@@ -1,6 +1,6 @@
-import { UserRole } from "@prisma/client";
+import { UserRole, type Prisma } from "@prisma/client";
 import type { SessionPayload } from "@/lib/session";
-import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, hasActiveOrganizationSubscription, isDtscInternalSession } from "@/lib/organizations";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export async function getActiveGroupMember(groupId: string, userId: string) {
@@ -26,6 +26,25 @@ function isCrossContextGroup(group: { groupType: string }) {
   return group.groupType === "CROSS_ORGANIZATION" || group.groupType === "PRIVATE_NETWORK" || group.groupType === "DTSC_SUPPORT";
 }
 
+export function collaborationGroupScopeWhere(
+  session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined
+): Prisma.CollaborationGroupWhereInput {
+  const crossContextGroups: Prisma.CollaborationGroupWhereInput = {
+    groupType: { in: ["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"] },
+  };
+
+  if (isDtscInternalSession(session)) {
+    return { OR: [{ organizationId: DTSC_INTERNAL_ORGANIZATION_ID }, { organizationId: null }, crossContextGroups] };
+  }
+
+  const activeOrganizationId = getActiveOrganizationId(session);
+  if (activeOrganizationId) {
+    return { OR: [{ organizationId: activeOrganizationId }, crossContextGroups] };
+  }
+
+  return { organizationId: null, ...crossContextGroups };
+}
+
 export function canAccessGroupInSession(
   group: { organizationId: string | null; groupType: string },
   session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined
@@ -46,20 +65,7 @@ export async function canAccessGroupInSessionWithSubscription(
   group: { organizationId: string | null; groupType: string },
   session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined
 ) {
-  if (!canAccessGroupInSession(group, session)) {
-    return false;
-  }
-  const activeOrganizationId = getActiveOrganizationId(session);
-  if (
-    activeOrganizationId &&
-    activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID &&
-    group.organizationId === activeOrganizationId &&
-    !isCrossContextGroup(group) &&
-    !(await hasActiveOrganizationSubscription(activeOrganizationId))
-  ) {
-    return false;
-  }
-  return true;
+  return canAccessGroupInSession(group, session);
 }
 
 export async function assertGroupMemberForSession(groupId: string, session: SessionPayload) {

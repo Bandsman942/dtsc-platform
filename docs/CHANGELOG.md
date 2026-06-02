@@ -7,6 +7,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Modifié
 
 - Transformation progressive de `/admin` en Console DTSC SaaS avec vue générale de pilotage: entreprises clientes actives, abonnements, tickets ouverts/critiques, utilisateurs actifs, modules activés, incidents API, audits sensibles et événements sécurité récents.
+- Correction de la visibilité du module `Mes collaborateurs` en contexte entreprise cliente: le lien reste affiché dans tous les contextes authentifiés et la lecture des groupes repose sur le membership actif et le contexte autorisé, plus sur l'abonnement actif de l'organisation.
 - Réorganisation des libellés de sections Console autour de Vue générale, Entreprises clientes, Abonnements & facturation, Support client, Publications & contenus, Utilisateurs & accès, Sécurité & audit, Modules internes DTSC et Paramètres plateforme.
 - Correction du module Support: l'historique des tickets d'un utilisateur est à nouveau visible indépendamment du contexte actif, tout en conservant `organizationId` comme contexte de triage et l'isolation stricte par `userId`.
 - La création d'un ticket support déclenche désormais un rafraîchissement serveur de la liste afin que le ticket apparaisse immédiatement après persistance.

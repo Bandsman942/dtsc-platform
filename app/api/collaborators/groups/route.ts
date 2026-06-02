@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { UserStatus, type Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { collaborationGroupScopeWhere, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
 import {
   DTSC_INTERNAL_ORGANIZATION_ID,
   getActiveOrganizationId,
   hasActiveOrganizationSubscription,
-  isDtscInternalSession,
 } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { collaborationGroupSchema } from "@/lib/validators";
@@ -21,18 +20,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   await touchUserPresence(session.userId);
-  const activeOrganizationId = getActiveOrganizationId(session);
-  const organizationSubscriptionActive = await hasActiveOrganizationSubscription(activeOrganizationId);
-  if (activeOrganizationId && activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID && !organizationSubscriptionActive) {
-    await writeApiLog({ request: req, statusCode: 402, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Subscription required", groups: [], invitations: [], users: [] }, { status: 402 });
-  }
-  const crossOrganizationGroupFilter: Prisma.CollaborationGroupWhereInput = { groupType: { in: ["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"] } };
-  const scopedGroupFilter: Prisma.CollaborationGroupWhereInput = isDtscInternalSession(session)
-    ? { OR: [{ organizationId: DTSC_INTERNAL_ORGANIZATION_ID }, { organizationId: null }] }
-    : activeOrganizationId && organizationSubscriptionActive
-      ? { OR: [{ organizationId: activeOrganizationId }, crossOrganizationGroupFilter] }
-      : crossOrganizationGroupFilter;
+  const scopedGroupFilter: Prisma.CollaborationGroupWhereInput = collaborationGroupScopeWhere(session);
 
   const [groups, invitations, users] = await Promise.all([
     prisma.collaborationGroup.findMany({

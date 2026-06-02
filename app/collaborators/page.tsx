@@ -1,15 +1,9 @@
-import { UserStatus, type Prisma } from "@prisma/client";
+import { UserStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
-import { redirect } from "next/navigation";
 import { getSession, requireUser } from "@/lib/auth";
-import { touchUserPresence } from "@/lib/collaboration";
-import {
-  DTSC_INTERNAL_ORGANIZATION_ID,
-  getActiveOrganizationId,
-  hasActiveOrganizationSubscription,
-  isDtscInternalSession,
-} from "@/lib/organizations";
+import { collaborationGroupScopeWhere, touchUserPresence } from "@/lib/collaboration";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string }> }) {
@@ -18,17 +12,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
   const params = await searchParams;
   await touchUserPresence(user.id);
   const activeOrganizationId = getActiveOrganizationId(session);
-  const dtscInternalContext = isDtscInternalSession(session);
-  const organizationSubscriptionActive = await hasActiveOrganizationSubscription(activeOrganizationId);
-  if (activeOrganizationId && !dtscInternalContext && !organizationSubscriptionActive) {
-    redirect("/billing");
-  }
-  const crossOrganizationGroupFilter: Prisma.CollaborationGroupWhereInput = { groupType: { in: ["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"] } };
-  const scopedGroupFilter: Prisma.CollaborationGroupWhereInput = dtscInternalContext
-    ? { OR: [{ organizationId: DTSC_INTERNAL_ORGANIZATION_ID }, { organizationId: null }] }
-    : activeOrganizationId && organizationSubscriptionActive
-      ? { OR: [{ organizationId: activeOrganizationId }, crossOrganizationGroupFilter] }
-      : crossOrganizationGroupFilter;
+  const scopedGroupFilter = collaborationGroupScopeWhere(session);
   const [groups, invitations, conversations] = await Promise.all([
     prisma.collaborationGroup.findMany({
       where: { status: "ACTIVE", members: { some: { userId: user.id, status: "ACTIVE" } }, ...scopedGroupFilter },

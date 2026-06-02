@@ -19,7 +19,7 @@ import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/d
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
-import { canAccessOrganizationAdministration, hasActiveOrganizationSubscription, isDtscInternalSession } from "@/lib/organizations";
+import { canAccessOrganizationAdministration, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export async function AppShell({
@@ -51,8 +51,7 @@ export async function AppShell({
           showAdmin: canAccessOrganizationAdministration(session.activeOrganizationRole),
         }
       : null;
-  const organizationFeaturesEnabled =
-    !activeOrganizationId || dtscInternalContext || (await hasActiveOrganizationSubscription(activeOrganizationId));
+  const showCollaborationModule = Boolean(session);
   const notificationContextWhere: Prisma.NotificationWhereInput = activeOrganizationId
     ? dtscInternalContext
       ? { OR: [{ organizationId: activeOrganizationId }, { organizationId: null }] }
@@ -132,7 +131,7 @@ export async function AppShell({
             unreadNotifications={unreadNotifications}
             showEmployeeActivities={showEmployeeActivities}
             showInternalModules={dtscInternalContext}
-            showCollaborationModule={organizationFeaturesEnabled}
+            showCollaborationModule={showCollaborationModule}
             enterpriseContext={enterpriseContext}
             locale={user.locale}
           />
@@ -174,7 +173,7 @@ export async function AppShell({
           unreadNotifications={unreadNotifications}
           showEmployeeActivities={showEmployeeActivities}
           showInternalModules={dtscInternalContext}
-          showCollaborationModule={organizationFeaturesEnabled}
+          showCollaborationModule={showCollaborationModule}
           enterpriseContext={enterpriseContext}
         />
         <PWAInstallPrompt />
