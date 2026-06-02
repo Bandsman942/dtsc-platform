@@ -13,8 +13,9 @@ import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge"
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
+import { ProductNavigation } from "@/components/layout/product-navigation";
 import { getSession } from "@/lib/auth";
-import { getCurrentHostType, getProductBranding } from "@/lib/domains";
+import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -39,7 +40,8 @@ export async function AppShell({
 }) {
   const session = await getSession();
   const requestHeaders = await headers();
-  const productBranding = getProductBranding(getCurrentHostType(requestHeaders.get("host")));
+  const currentHostType = getCurrentHostType(requestHeaders.get("host"));
+  const productBranding = getProductBranding(currentHostType);
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
   const enterpriseContext =
@@ -109,10 +111,11 @@ export async function AppShell({
         productBranding={productBranding}
       />
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
-        <DtscLogo href="/dashboard" />
+        <DtscLogo href={getDashboardUrl()} />
         <div className="mt-3 inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-200">
           {productBranding}
         </div>
+        <ProductNavigation currentHostType={currentHostType} isDtscInternal={dtscInternalContext} className="mt-5" />
 
         <Link
           href="/chat"
@@ -139,7 +142,7 @@ export async function AppShell({
       <div className="lg:pl-72">
         <header className="sticky top-0 z-30 hidden border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl lg:block">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-            <Link href="/dashboard" className="font-extrabold text-dtsc-ink lg:hidden">
+            <Link href={getDashboardUrl()} className="font-extrabold text-dtsc-ink lg:hidden">
               DTSC
             </Link>
             <div className="hidden text-sm font-medium text-dtsc-muted md:block">

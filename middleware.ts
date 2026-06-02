@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildUrlForHostType, getAuthCookieDomain, getCurrentHostType, getDashboardUrl, getSignInUrl, type HostType } from "@/lib/domains";
+import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
@@ -54,22 +55,6 @@ function redirectToSignIn(request: NextRequest, nextTarget = requestPathWithSear
   return NextResponse.redirect(new URL(getSignInUrl(nextTarget), request.url));
 }
 
-function trustedNextTarget(value: string | null) {
-  if (!value) {
-    return null;
-  }
-  if (value.startsWith("/") && !value.startsWith("//")) {
-    return value;
-  }
-  try {
-    const nextUrl = new URL(value);
-    const hostType = getCurrentHostType(nextUrl.host);
-    return hostType === "app" || hostType === "console" || hostType === "support" ? value : null;
-  } catch {
-    return null;
-  }
-}
-
 function routeHostForPrivatePath(pathname: string): HostType {
   if (isPathMatch(pathname, adminRoutes)) {
     return "console";
@@ -87,6 +72,7 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "public") {
+    // Public keeps marketing pages only; product routes move to their owning host.
     if (isPathMatch(pathname, authRoutes)) {
       return redirectToHost(request, "account", requestPathWithSearch(request));
     }
@@ -97,6 +83,7 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "app") {
+    // The SaaS host must not expose the DTSC console or support paths directly.
     if (pathname === "/") {
       return session ? redirectToHost(request, "app", "/dashboard") : redirectToSignIn(request, "/dashboard");
     }
@@ -113,11 +100,18 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "console") {
+    // Console protects /admin, while SaaS and support paths remain navigable via SSO.
     if (pathname === "/") {
       return redirectToHost(request, "console", "/admin");
     }
     if (isPathMatch(pathname, authRoutes)) {
       return redirectToHost(request, "account", requestPathWithSearch(request));
+    }
+    if (pathname === "/support" || pathname.startsWith("/support/")) {
+      return redirectToHost(request, "support", requestPathWithSearch(request));
+    }
+    if (isPathMatch(pathname, appOnlyRedirectRoutes) || pathname === "/activities" || pathname.startsWith("/activities/")) {
+      return redirectToHost(request, "app", requestPathWithSearch(request));
     }
     if (!isPathMatch(pathname, adminRoutes)) {
       return redirectToHost(request, "console", "/admin");
@@ -132,13 +126,16 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "account") {
+    // Account owns authentication; signed-in users leave it through a trusted next target.
     if (pathname === "/") {
       return redirectToHost(request, "account", "/auth/sign-in");
     }
     if (isPathMatch(pathname, authRoutes)) {
       if (session) {
-        const nextTarget = trustedNextTarget(request.nextUrl.searchParams.get("next"));
-        return NextResponse.redirect(new URL(nextTarget || getDashboardUrl(), request.url));
+        return NextResponse.redirect(new URL(resolvePostLoginRedirect({
+          next: request.nextUrl.searchParams.get("next"),
+          context: session.activeContext,
+        }), request.url));
       }
       return null;
     }
@@ -146,6 +143,7 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "support") {
+    // Support protects tickets and delegates app/console routes to the right host.
     if (pathname === "/") {
       return redirectToHost(request, "support", "/support");
     }
@@ -182,6 +180,7 @@ export async function middleware(request: NextRequest) {
   const session = secret ? await verifySessionToken(token, secret) : null;
   const hostType = getCurrentHostType(request.headers.get("host"));
 
+  // API routes are never host-rewritten; only auth/RBAC guards run here.
   if (pathname.startsWith("/api/")) {
     if (isPathMatch(pathname, dtscInternalApiRoutes)) {
       if (!session) {
@@ -212,12 +211,15 @@ export async function middleware(request: NextRequest) {
   }
 
   if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") && session) {
-    const nextTarget = trustedNextTarget(request.nextUrl.searchParams.get("next"));
-    return NextResponse.redirect(new URL(nextTarget || getDashboardUrl(), request.url));
+    return NextResponse.redirect(new URL(resolvePostLoginRedirect({
+      next: request.nextUrl.searchParams.get("next"),
+      context: session.activeContext,
+    }), request.url));
   }
 
   const response = NextResponse.next();
   if (session && isPathMatch(pathname, [...privateRoutes, ...adminRoutes]) && secret) {
+    // Refresh the shared SSO cookie without changing its context payload.
     const tokenValue = await createSessionToken(
       {
         userId: session.userId,

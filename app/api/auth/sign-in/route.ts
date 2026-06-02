@@ -7,6 +7,7 @@ import { ensureDefaultAdmin } from "@/lib/default-admin";
 import { resolveOrganizationLoginContext } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { writeAuditLog } from "@/lib/audit";
+import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 
 export async function POST(req: Request) {
   const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-in"), 8, 15 * 60 * 1000);
@@ -17,10 +18,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = signInSchema.safeParse(await req.json());
+  const rawPayload = await req.json().catch(() => null);
+  const body = signInSchema.safeParse(rawPayload);
   if (!body.success) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
   }
+  const payloadNext =
+    rawPayload && typeof rawPayload === "object" && "next" in rawPayload && typeof rawPayload.next === "string"
+      ? rawPayload.next
+      : null;
+  const requestedNext = payloadNext || new URL(req.url).searchParams.get("next");
 
   await ensureDefaultAdmin(body.data.email, body.data.password);
 
@@ -73,5 +80,12 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true, redirectTo: user.startPage || "/dashboard" });
+  return NextResponse.json({
+    ok: true,
+    redirectTo: resolvePostLoginRedirect({
+      next: requestedNext,
+      context: context.activeContext,
+      userStartPage: user.startPage,
+    }),
+  });
 }

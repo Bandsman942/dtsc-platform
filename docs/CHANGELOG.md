@@ -6,6 +6,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Stabilisation de la couche multi-sous-domaines: redirections post-login centralisées, `next` interne validé, déconnexion ramenée vers Account et navigation inter-produits Console DTSC, SaaS, Support, Compte et Site public.
+- La Console DTSC protège strictement `/admin` pour les sessions `DTSC_INTERNAL`, tout en redirigeant les chemins SaaS et Support vers leurs sous-domaines dédiés afin de conserver une navigation SSO fluide.
+- Les liens critiques du shell, de la navigation desktop/mobile, du dashboard, du support, de l'administration et des pages Account utilisent les helpers de `lib/domains.ts` quand ils traversent un produit.
+- Ajout de `docs/SUBDOMAIN_QA_CHECKLIST.md` et enrichissement de la documentation Vercel pour les domaines, variables d'environnement, ordre de test et rollback sans extraction monorepo.
 - Harmonisation des contenus publics DTSC autour des 7 leviers numériques officiels: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
 - Les pages Accueil, Services, Solutions, Secteurs, Projets, À propos, Contact, Ressources et les metadata SEO présentent désormais les solutions, secteurs et démonstrations comme des exemples ou cas d'application des 7 leviers, sans créer de liste concurrente de services.
 - Alignement de l'index de recherche publique, du contexte de l'assistant IA public, du prompt DTSC et des textes newsletter pour rattacher chatbot, dashboards, ERP, CRM, portails clients, assistant documentaire, reporting et workflows numériques aux leviers correspondants.

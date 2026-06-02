@@ -3,14 +3,15 @@
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { getPublicUrl } from "@/lib/domains";
+import { getSignInUrl } from "@/lib/domains";
 
 export function SignOutButton() {
   const router = useRouter();
 
   async function signOut() {
-    await fetch("/api/auth/sign-out", { method: "POST" });
-    const target = getPublicUrl("/");
+    const response = await fetch("/api/auth/sign-out", { method: "POST" });
+    const body = (await response.json().catch(() => null)) as { redirectTo?: string } | null;
+    const target = body?.redirectTo || getSignInUrl();
     if (/^https?:\/\//i.test(target)) {
       window.location.href = target;
       return;

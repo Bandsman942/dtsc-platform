@@ -7,24 +7,14 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { buildUrlForHostType, getCurrentHostType, getDashboardUrl } from "@/lib/domains";
+import { buildUrlForHostType, getDashboardUrl } from "@/lib/domains";
+import { resolveTrustedInternalRedirect } from "@/lib/post-login-redirect";
 
 function normalizeRedirectTarget(target: unknown) {
   if (typeof target !== "string" || !target.trim()) {
     return getDashboardUrl();
   }
-  if (target.startsWith("/") && !target.startsWith("//")) {
-    return target;
-  }
-  try {
-    const targetHostType = getCurrentHostType(new URL(target).host);
-    if (targetHostType === "app" || targetHostType === "console" || targetHostType === "support") {
-      return target;
-    }
-  } catch {
-    return getDashboardUrl();
-  }
-  return getDashboardUrl();
+  return resolveTrustedInternalRedirect(target) || getDashboardUrl();
 }
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
@@ -87,7 +77,9 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     const payload = pendingRegistration
       ? { ...pendingRegistration, otp: String(formData.get("otp") || "") }
       : Object.fromEntries(formData.entries());
-    const { response, body } = await submitPayload(payload);
+    const nextTarget = !isSignUp ? searchParams.get("next") : null;
+    const requestPayload = nextTarget ? { ...payload, next: nextTarget } : payload;
+    const { response, body } = await submitPayload(requestPayload);
 
     setIsPending(false);
 
@@ -103,7 +95,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    const target = normalizeRedirectTarget(searchParams.get("next") || body?.redirectTo);
+    const target = normalizeRedirectTarget(body?.redirectTo);
     if (/^https?:\/\//i.test(target)) {
       window.location.href = target;
       return;

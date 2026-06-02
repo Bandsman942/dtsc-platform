@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { Button } from "@/components/ui/button";
+import { getDashboardUrl } from "@/lib/domains";
 
 export default function NotFound() {
   return (
@@ -12,7 +13,7 @@ export default function NotFound() {
           La ressource demandée n&apos;existe pas ou n&apos;est plus disponible.
         </p>
         <Button asChild className="mt-6 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-          <Link href="/dashboard">Retour au dashboard</Link>
+          <Link href={getDashboardUrl()}>Retour au dashboard</Link>
         </Button>
       </div>
       <div className="mt-8">

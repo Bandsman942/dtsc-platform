@@ -51,6 +51,12 @@ La plateforme reste une seule application Next.js App Router déployée sur Verc
 
 `lib/domains.ts` centralise les URLs et helpers de navigation (`getSignInUrl`, `getDashboardUrl`, `getConsoleUrl`, `getSupportUrl`, `getPublicUrl`, `buildUrlForHostType`). Les routes `/api/*`, les assets Next.js, le service worker, les icônes, `/offline` et `/offline.html` ne sont pas rewriteés par host. Les anciennes routes (`/admin`, `/dashboard`, `/support`, `/auth/sign-in`) restent disponibles, puis sont redirigées vers le bon sous-domaine en production.
 
+`lib/post-login-redirect.ts` centralise la destination apres connexion. La route `POST /api/auth/sign-in` transmet le `next` fourni au helper, qui accepte uniquement les URLs internes DTSC fiables et refuse les domaines externes. Les destinations par defaut sont `console.dtsc-platform.com/admin` pour `DTSC_INTERNAL`, puis `app.dtsc-platform.com/dashboard` pour les contextes `ORGANIZATION`, `GLOBAL_CLIENT` ou absents. Les chemins relatifs critiques (`/admin`, `/support`, `/dashboard`, etc.) sont convertis vers le bon produit via les helpers de domaines.
+
+`components/layout/product-navigation.tsx` rend la navigation globale entre Site public, SaaS, Console DTSC, Support et Compte. La Console DTSC n'est affichee que pour une session `DTSC_INTERNAL`; cette navigation n'octroie aucun droit et les routes serveur conservent leurs controles de session, contexte actif, membership et RBAC. Le composant est integre dans `AppShell`, donc disponible dans l'app SaaS, la Console et Support, et peut apparaitre sur Account quand une session existe.
+
+La deconnexion passe par `POST /api/auth/sign-out`, expire le cookie host-only historique et le cookie partage `AUTH_COOKIE_DOMAIN` quand il existe, puis renvoie Account comme destination de sortie. Les clients `SignOutButton` et le shell mobile utilisent cette destination serveur avec fallback vers `getSignInUrl()`.
+
 Variables d'environnement liées:
 
 ```bash
@@ -65,6 +71,7 @@ AUTH_COOKIE_DOMAIN=.dtsc-platform.com
 En local, `AUTH_COOKIE_DOMAIN` doit rester absent. En production, s'il est défini, `dtsc_session` conserve `httpOnly`, `sameSite=lax`, `secure=true`, `path=/` et reçoit le domaine parent pour fonctionner entre les sous-domaines officiels. La déconnexion expire aussi le cookie host-only historique pour éviter une session résiduelle pendant la transition.
 
 La matrice complète est documentée dans `docs/ROUTING_AND_SUBDOMAINS.md`.
+Les scenarios de verification manuelle sont documentes dans `docs/SUBDOMAIN_QA_CHECKLIST.md`.
 
 ### Design mobile/PWA premium
 

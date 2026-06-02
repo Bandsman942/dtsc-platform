@@ -27,6 +27,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 
 La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md).
 La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND_SUBDOMAINS.md](docs/ROUTING_AND_SUBDOMAINS.md).
+La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLIST.md](docs/SUBDOMAIN_QA_CHECKLIST.md).
 
 ## Fonctionnalités
 
@@ -56,6 +57,7 @@ La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND
 - Ancienne page `/documents` redirigée vers `/company`; les documents restent gérés dans le module Entreprise selon les limites d'abonnement
 - Sessions sécurisées par cookie signé
 - Préparation multi-sous-domaines dans une seule app Vercel: site public, espace SaaS, console DTSC, compte/authentification et support peuvent être routés par host sans extraction monorepo.
+- Navigation inter-produits Console DTSC, SaaS, Support, Compte et Site public avec redirections post-login centralisées, `next` interne validé et déconnexion ramenée vers Account.
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Fondation SaaS hybride multi-entreprises: tenant interne `DTSC` créé comme organisation réelle, entreprises clientes créées par DTSC, memberships actifs, contexte d'accès optionnel à la connexion, sélecteur d'espace après connexion et isolation progressive par `organizationId`.
 - Isolation renforcée en contexte entreprise: Abonnement, Annonces et Profil restent communs au compte utilisateur, tandis que Dashboard, Chatbot, Entreprise, Documents, Paramètres, Notifications, Support, Calendrier interne et Mes collaborateurs restent visibles avec des données filtrées par le contexte actif et `organizationId`.

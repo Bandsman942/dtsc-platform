@@ -10,7 +10,7 @@ import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
-import { getPublicUrl } from "@/lib/domains";
+import { getConsoleUrl, getDashboardUrl, getSignInUrl, getSupportUrl } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { translate } from "@/lib/i18n";
@@ -97,8 +97,9 @@ export function MobilePwaHeader({
   }, []);
 
   async function signOut() {
-    await fetch("/api/auth/sign-out", { method: "POST" });
-    window.location.href = getPublicUrl("/");
+    const response = await fetch("/api/auth/sign-out", { method: "POST" });
+    const body = (await response.json().catch(() => null)) as { redirectTo?: string } | null;
+    window.location.href = body?.redirectTo || getSignInUrl();
   }
 
   return (
@@ -109,7 +110,7 @@ export function MobilePwaHeader({
       className="sticky top-0 z-40 border-b border-white/14 bg-dtsc-surface/78 px-4 py-3 shadow-[0_16px_50px_rgba(0,23,54,0.10)] backdrop-blur-2xl lg:hidden"
     >
       <div className="flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
+        <Link href={getDashboardUrl()} className="flex min-w-0 items-center gap-3" aria-label="Accueil DTSC Platform">
           <span className="relative flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
             <Image src="/dtsc-logo.png" alt="Logo DTSC" fill sizes="44px" className="object-cover" priority />
             <span className="animate-dtsc-online-pulse absolute bottom-0.5 right-0.5 z-20 h-3.5 w-3.5 rounded-full border-2 border-dtsc-surface bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.9)]" />
@@ -138,7 +139,7 @@ export function MobilePwaHeader({
         {organizationOptions.length > 0 && (
           <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />
         )}
-        {adminAllowed && <QuickChip href="/admin" active={pathname?.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
+        {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={pathname?.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
         <QuickChip href="/settings" active={pathname?.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
         <QuickChip href="/profile" active={pathname?.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />
         <button
@@ -197,7 +198,7 @@ export function MobileBottomNavigation({
         { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
         { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
         { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
-        { href: "/support", labelKey: "navigation.support", fallback: "Support" },
+        { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support" },
         ...(enterpriseContext.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Admin entreprise" }] : []),
       ]
     : [
@@ -205,7 +206,7 @@ export function MobileBottomNavigation({
         { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
         ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
         { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
-        { href: "/support", labelKey: "navigation.support", fallback: "Support" },
+        { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support" },
       ];
 
   return (
@@ -254,7 +255,7 @@ export function MobileBottomNavigation({
           </Link>
         ))}
         {showInternalModules && canAccessAdministration(user.role) && (
-          <Link href="/admin" className="flex shrink-0 items-center gap-1 rounded-full bg-cyan-400/14 px-3 py-1.5 text-[0.68rem] font-black text-cyan-500">
+          <Link href={getConsoleUrl("/admin")} className="flex shrink-0 items-center gap-1 rounded-full bg-cyan-400/14 px-3 py-1.5 text-[0.68rem] font-black text-cyan-500">
             Admin
             <ChevronRight className="h-3 w-3" />
           </Link>

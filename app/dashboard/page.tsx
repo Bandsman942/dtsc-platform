@@ -9,6 +9,7 @@ import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { dtsc } from "@/lib/dtsc";
+import { getSupportUrl } from "@/lib/domains";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -56,7 +57,7 @@ export default async function DashboardPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" title="Créer un ticket pour une demande commerciale, technique ou stratégique." className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
-              <Link href="/support">Contacter l&apos;équipe DTSC</Link>
+              <Link href={getSupportUrl("/support")}>Contacter l&apos;équipe DTSC</Link>
             </Button>
             <Button asChild variant="outline" title="Renseigner votre entreprise pour personnaliser le chatbot." className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
               <Link href="/company">Compléter mon entreprise</Link>
@@ -134,7 +135,7 @@ export default async function DashboardPage() {
                   Créez un ticket pour une demande commerciale, technique ou stratégique.
                 </p>
                 <Button asChild className="mt-5 rounded-xl bg-[#001736] text-white hover:bg-[#002b5b]">
-                  <Link href="/support">Créer une demande</Link>
+                  <Link href={getSupportUrl("/support")}>Créer une demande</Link>
                 </Button>
               </div>
             </div>

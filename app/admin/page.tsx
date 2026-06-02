@@ -24,6 +24,7 @@ import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDataset
 import { canAccessAdminSection, ensureDefaultPositions } from "@/lib/business-roles";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { formatEnumLabel } from "@/lib/labels";
+import { getDashboardUrl } from "@/lib/domains";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
@@ -79,7 +80,7 @@ export default async function AdminPage({
   const user = await requireUser();
   const session = await getSession();
   if (!isDtscInternalSession(session) || !canAccessAdministration(user.role)) {
-    redirect("/dashboard");
+    redirect(getDashboardUrl());
   }
   const { role, period, date, section, ceoStart, ceoEnd } = await searchParams;
   const parsedPeriod = Number(period || 30);

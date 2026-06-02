@@ -6,6 +6,7 @@ import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, 
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
+import { getConsoleUrl, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
 
 const items = [
@@ -17,7 +18,7 @@ const items = [
   { href: "/collaborators", label: "Mes collaborateurs", icon: UsersRound, help: "Créer des groupes, inviter des membres et échanger autour de vos projets." },
   { href: "/notifications", label: "Notifications", icon: Bell, help: "Lire les alertes importantes liées à votre compte." },
   { href: "/announcements", label: "Annonces", icon: Megaphone, help: "Suivre les publications internes et échanger en commentaires." },
-  { href: "/support", label: "Support", icon: Headphones, help: "Créer et suivre vos tickets avec l'équipe DTSC." },
+  { href: getSupportUrl("/support"), path: "/support", label: "Support", icon: Headphones, help: "Créer et suivre vos tickets avec l'équipe DTSC." },
   { href: "/profile", label: "Profil", icon: User, help: "Mettre à jour vos informations personnelles." },
   { href: "/settings", label: "Paramètres", icon: Settings, help: "Configurer votre compte, thème et préférences." },
 ];
@@ -55,7 +56,7 @@ export function NavLinks({
     return true;
   });
   const navItems = showInternalModules && canAccessAdministration(role)
-    ? [...visibleBaseItems, ...employeeItems, { href: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
+    ? [...visibleBaseItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...visibleBaseItems, ...employeeItems];
   const enterpriseItems = enterpriseContext
     ? [
@@ -87,11 +88,12 @@ export function NavLinks({
   return (
     <>
       {finalNavItems.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const showNotificationSignal = item.href === "/notifications" && unreadNotifications > 0;
+        const itemPath = "path" in item ? item.path : item.href;
+        const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+        const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
         return (
           <Link
-            key={item.href}
+            key={itemPath}
             href={item.href}
             title={item.help}
             className={cn(
@@ -112,13 +114,13 @@ export function NavLinks({
                 </span>
               )}
             </span>
-            {mobile && item.href === "/admin"
+            {mobile && itemPath === "/admin"
               ? "Admin"
-              : item.href === "/enterprise-activities"
+              : itemPath === "/enterprise-activities"
                 ? translate(locale, "navigation.enterpriseActivitiesNamed").replace("{organization}", enterpriseContext?.organizationName || "")
-                : item.href === "/enterprise-admin"
+                : itemPath === "/enterprise-admin"
                   ? translate(locale, "navigation.enterpriseAdminNamed").replace("{organization}", enterpriseContext?.organizationName || "")
-                  : translate(locale, translationByHref[item.href] || item.label)}
+                  : translate(locale, translationByHref[itemPath] || item.label)}
             {showNotificationSignal && (
               <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
                 {unreadNotifications > 99 ? "99+" : unreadNotifications}

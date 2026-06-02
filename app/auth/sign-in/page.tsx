@@ -1,10 +1,18 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import { AuthForm } from "@/components/auth/auth-form";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
+import { ProductNavigation } from "@/components/layout/product-navigation";
+import { getSession } from "@/lib/auth";
+import { getCurrentHostType } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
+import { isDtscInternalSession } from "@/lib/organizations";
 
-export default function SignInPage() {
+export default async function SignInPage() {
+  const [session, requestHeaders] = await Promise.all([getSession(), headers()]);
+  const currentHostType = getCurrentHostType(requestHeaders.get("host"));
+
   return (
     <main className="grid min-h-screen bg-dtsc-page text-dtsc-ink lg:grid-cols-[0.95fr_1.05fr]">
       <section className="relative hidden overflow-hidden border-r border-dtsc-border bg-[#001736] p-10 text-white lg:flex lg:flex-col lg:justify-between">
@@ -44,6 +52,13 @@ export default function SignInPage() {
               <AuthForm mode="sign-in" />
             </Suspense>
           </div>
+          {session && (
+            <ProductNavigation
+              currentHostType={currentHostType}
+              isDtscInternal={isDtscInternalSession(session)}
+              className="mt-6"
+            />
+          )}
         </div>
         <DtscFooter compact />
       </section>
