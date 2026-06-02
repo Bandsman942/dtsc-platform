@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { UserStatus } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
