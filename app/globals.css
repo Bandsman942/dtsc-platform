@@ -458,6 +458,9 @@
   }
 
   .dtsc-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     border: 1px solid var(--dtsc-border);
     border-radius: 1rem;
     background:
@@ -466,6 +469,9 @@
   }
 
   .dtsc-card-alt {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     border: 1px solid color-mix(in srgb, var(--dtsc-border) 78%, var(--dtsc-cyan) 22%);
     border-radius: 1rem;
     background:
@@ -501,6 +507,9 @@
   }
 
   .dtsc-glass-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     border: 1px solid color-mix(in srgb, var(--dtsc-border) 76%, var(--dtsc-cyan) 24%);
     background:
       radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--dtsc-cyan) 14%, transparent) 0, transparent 34%),
@@ -511,6 +520,9 @@
   }
 
   .dtsc-glass-list-item {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     border: 1px solid color-mix(in srgb, var(--dtsc-border) 78%, transparent);
     background:
       linear-gradient(135deg, color-mix(in srgb, var(--dtsc-surface-strong) 86%, transparent), color-mix(in srgb, var(--dtsc-soft) 50%, transparent));
@@ -528,6 +540,9 @@
   }
 
   .dtsc-panel {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     border: 1px solid var(--dtsc-border);
     border-radius: 1rem;
     background: color-mix(in srgb, var(--dtsc-surface) 92%, transparent);
@@ -543,6 +558,30 @@
   .text-dtsc-muted { color: var(--dtsc-muted); }
   .text-dtsc-blue { color: var(--dtsc-blue); }
   .border-dtsc-border { border-color: var(--dtsc-border); }
+
+  [role="dialog"] input,
+  [role="dialog"] select,
+  [role="dialog"] textarea,
+  [role="dialog"] form,
+  [role="dialog"] form > *,
+  .dtsc-card input,
+  .dtsc-card select,
+  .dtsc-card textarea,
+  .dtsc-card form,
+  .dtsc-card form > *,
+  .dtsc-panel input,
+  .dtsc-panel select,
+  .dtsc-panel textarea,
+  .dtsc-panel form,
+  .dtsc-panel form > *,
+  .dtsc-glass-list-item input,
+  .dtsc-glass-list-item select,
+  .dtsc-glass-list-item textarea,
+  .dtsc-glass-list-item form,
+  .dtsc-glass-list-item form > * {
+    min-width: 0;
+    max-width: 100%;
+  }
 
   .dtsc-hero-heading {
     color: #f8fbff;

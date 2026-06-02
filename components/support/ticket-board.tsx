@@ -77,44 +77,44 @@ export function TicketBoard({ tickets, canManage = false }: { tickets: TicketWit
         />
       )}
       {ticketList.paginatedItems.map((ticket) => (
-        <article key={ticket.id} className="dtsc-glass-list-item rounded-2xl p-5">
-          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">
+        <article key={ticket.id} className="dtsc-glass-list-item min-w-0 overflow-hidden rounded-2xl p-4 sm:p-5">
+          <div className="flex min-w-0 flex-col justify-between gap-3 lg:flex-row lg:items-start">
+            <div className="min-w-0">
+              <p className="break-words text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted [overflow-wrap:anywhere]">
                 {ticket.user?.email || "Utilisateur"} · {formatEnumLabel(ticket.priority)}
               </p>
-              <h3 className="mt-1 font-black text-dtsc-ink">{ticket.subject}</h3>
-              <p className="mt-2 text-sm leading-6 text-dtsc-muted">{ticket.description}</p>
+              <h3 className="mt-1 break-words font-black text-dtsc-ink">{ticket.subject}</h3>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-muted">{ticket.description}</p>
               {ticket.resolution && (
-                <p className="mt-3 rounded-xl bg-dtsc-soft p-3 text-sm font-semibold text-dtsc-blue">
+                <p className="mt-3 break-words rounded-xl bg-dtsc-soft p-3 text-sm font-semibold text-dtsc-blue">
                   Résolution: {ticket.resolution}
                 </p>
               )}
             </div>
-            <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{formatEnumLabel(ticket.status)}</span>
+            <span className="max-w-full shrink-0 self-start break-words rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{formatEnumLabel(ticket.status)}</span>
           </div>
-          <div className="mt-5 flex max-h-[34rem] flex-col rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <div className="mt-5 flex max-h-[34rem] min-w-0 flex-col overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted">Discussion</p>
             <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
               <TicketMessages messages={ticket.messages || []} />
             </div>
-            <form onSubmit={(event) => sendMessage(event, ticket.id)} className="mt-3 grid shrink-0 gap-3 md:grid-cols-[1fr_auto]">
-              <input name="content" placeholder="Répondre dans la discussion du ticket..." className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" required />
-              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={activeId === ticket.id}>
+            <form onSubmit={(event) => sendMessage(event, ticket.id)} className="mt-3 grid min-w-0 shrink-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <input name="content" placeholder="Répondre dans la discussion du ticket..." className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" required />
+              <Button className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] md:w-auto" disabled={activeId === ticket.id}>
                 Envoyer
               </Button>
             </form>
           </div>
           {canManage && (
-            <form onSubmit={(event) => resolveTicket(event, ticket.id)} className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
-              <select name="status" defaultValue={ticket.status} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+            <form onSubmit={(event) => resolveTicket(event, ticket.id)} className="mt-4 grid min-w-0 gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)_auto]">
+              <select name="status" defaultValue={ticket.status} className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
                 <option value="OPEN">{formatEnumLabel("OPEN")}</option>
                 <option value="IN_PROGRESS">{formatEnumLabel("IN_PROGRESS")}</option>
                 <option value="RESOLVED">{formatEnumLabel("RESOLVED")}</option>
                 <option value="CLOSED">{formatEnumLabel("CLOSED")}</option>
               </select>
-              <input name="resolution" defaultValue={ticket.resolution || ""} placeholder="Note de résolution visible par l'utilisateur" className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
-              <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={activeId === ticket.id}>
+              <input name="resolution" defaultValue={ticket.resolution || ""} placeholder="Note de résolution visible par l'utilisateur" className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
+              <Button className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] md:w-auto" disabled={activeId === ticket.id}>
                 {activeId === ticket.id ? "Mise à jour..." : "Mettre à jour"}
               </Button>
             </form>
@@ -156,11 +156,11 @@ function TicketMessages({ messages }: { messages: TicketMessageItem[] }) {
         />
       )}
       {messageList.paginatedItems.map((message) => (
-        <div key={message.id} className="rounded-2xl bg-dtsc-surface p-3">
-          <p className="text-xs font-black text-dtsc-blue">
+        <div key={message.id} className="min-w-0 overflow-hidden rounded-2xl bg-dtsc-surface p-3">
+          <p className="break-words text-xs font-black text-dtsc-blue [overflow-wrap:anywhere]">
             {message.user.name} · {formatEnumLabel(message.user.role)} · {new Date(message.createdAt).toLocaleString("fr-FR")}
           </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{message.content}</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-muted">{message.content}</p>
         </div>
       ))}
       {!messageList.filteredCount && (

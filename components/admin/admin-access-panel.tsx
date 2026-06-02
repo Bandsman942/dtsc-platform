@@ -28,30 +28,30 @@ export function AdminAccessPanel({ access }: { access: AdminRoleAccess }) {
   }
 
   return (
-    <section className="dtsc-card p-6">
-      <div className="flex items-start gap-3">
+    <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
+      <div className="flex min-w-0 items-start gap-3">
         <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-300">
           <ShieldCheck className="h-5 w-5" />
         </span>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">RBAC administration</p>
-          <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Accès par blocs pour les rôles non-client</h2>
+          <h2 className="mt-1 break-words text-2xl font-black text-dtsc-ink">Accès par blocs pour les rôles non-client</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
             Le rôle ADMIN conserve toujours tous les blocs. Vous pouvez ouvrir uniquement les sections utiles aux rôles MANAGER et SUPPORT.
           </p>
         </div>
       </div>
 
-      <form onSubmit={save} className="mt-5 grid gap-5 lg:grid-cols-2">
+      <form onSubmit={save} className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
         {configurableRoles.map((role) => (
-          <div key={role} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <div key={role} className="min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <h3 className="font-black text-dtsc-ink">{role}</h3>
-            <div className="mt-4 grid gap-3">
+            <div className="mt-4 grid min-w-0 gap-3">
               {adminBlocks.map((block) => (
-                <label key={`${role}-${block.id}`} title={block.description} className="flex items-start justify-between gap-4 rounded-xl border border-dtsc-border bg-dtsc-surface px-4 py-3 text-sm text-dtsc-ink">
-                  <span>
-                    <span className="block font-black">{block.label}</span>
-                    <span className="mt-1 block text-xs leading-5 text-dtsc-muted">{block.description}</span>
+                <label key={`${role}-${block.id}`} title={block.description} className="flex min-w-0 items-start justify-between gap-4 rounded-xl border border-dtsc-border bg-dtsc-surface px-4 py-3 text-sm text-dtsc-ink">
+                  <span className="min-w-0">
+                    <span className="block break-words font-black">{block.label}</span>
+                    <span className="mt-1 block break-words text-xs leading-5 text-dtsc-muted">{block.description}</span>
                   </span>
                   <input
                     name={role}

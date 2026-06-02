@@ -189,35 +189,35 @@ export function InternalCalendarModule({
   }
 
   return (
-    <div className="space-y-5">
-      <section className="dtsc-panel p-5 sm:p-6">
+    <div className="min-w-0 space-y-5">
+      <section className="dtsc-panel min-w-0 overflow-hidden p-4 sm:p-6">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">{translate(locale, "calendar.eyebrow")}</p>
-        <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-dtsc-ink sm:text-4xl">{translate(locale, "calendar.title")}</h1>
+        <div className="mt-2 flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="break-words text-3xl font-black tracking-tight text-dtsc-ink sm:text-4xl">{translate(locale, "calendar.title")}</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">{translate(locale, "calendar.description")}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => setEventFormOpen(true)} className="rounded-2xl bg-dtsc-navy text-white hover:bg-[#002b5b]">
+          <div className="flex min-w-0 flex-wrap gap-2">
+            <Button type="button" onClick={() => setEventFormOpen(true)} className="max-w-full rounded-2xl bg-dtsc-navy text-white hover:bg-[#002b5b]">
               <Plus className="h-4 w-4" />
               {translate(locale, "calendar.newEvent")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+            <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="max-w-full rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
               <Clock className="h-4 w-4" />
               {translate(locale, "calendar.availability")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => void refreshCalendar()} className="rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+            <Button type="button" variant="outline" onClick={() => void refreshCalendar()} className="max-w-full rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
               <RefreshCcw className="h-4 w-4" />
               {translate(locale, "calendar.refresh")}
             </Button>
           </div>
         </div>
-        {statusMessage && <p className="mt-4 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-700 dark:text-cyan-100">{statusMessage}</p>}
+        {statusMessage && <p className="mt-4 break-words rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-700 dark:text-cyan-100">{statusMessage}</p>}
       </section>
 
       <Accordion>
         <AccordionItem title={translate(locale, "calendar.kpis")} defaultOpen>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label={translate(locale, "calendar.upcoming")} value={events.filter((event) => new Date(event.startDateTime).getTime() >= Date.now()).length} onClick={() => setActiveView("week")} />
             <MetricCard
               label={translate(locale, "calendar.conflicts")}
@@ -248,7 +248,7 @@ export function InternalCalendarModule({
         </AccordionItem>
       </Accordion>
 
-      <section className="dtsc-card p-4">
+      <section className="dtsc-card min-w-0 overflow-hidden p-4">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {["today", "week", "month", "collaborator", "department", "conflicts", "availability"].map((view) => (
             <button
@@ -263,11 +263,11 @@ export function InternalCalendarModule({
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <section className="dtsc-card min-w-0 p-4">
-          <div className="mb-4 flex items-center gap-2">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <section className="dtsc-card min-w-0 overflow-hidden p-4">
+          <div className="mb-4 flex min-w-0 items-center gap-2">
             <Search className="h-4 w-4 text-cyan-500" />
-            <h2 className="font-black text-dtsc-ink">{translate(locale, "calendar.events")}</h2>
+            <h2 className="min-w-0 break-words font-black text-dtsc-ink">{translate(locale, "calendar.events")}</h2>
           </div>
           <ListControls
             query={eventList.query}
@@ -279,7 +279,7 @@ export function InternalCalendarModule({
             placeholder={translate(locale, "calendar.searchPlaceholder")}
             onPageChange={eventList.setPage}
           />
-          <div className="mt-4 max-h-[68dvh] space-y-3 overflow-y-auto pr-1">
+          <div className="mt-4 max-h-[68dvh] min-w-0 space-y-3 overflow-y-auto pr-1">
             {eventList.paginatedItems.map((event) => (
               <EventCard
                 key={event.id}
@@ -295,7 +295,7 @@ export function InternalCalendarModule({
           </div>
         </section>
 
-        <section className="dtsc-card hidden min-w-0 p-4 xl:block">
+        <section className="dtsc-card hidden min-w-0 overflow-hidden p-4 xl:block">
           {activeView === "availability" ? (
             <AvailabilityList
               availabilities={availabilities}
@@ -399,7 +399,7 @@ export function InternalCalendarModule({
           onClose={() => setFilteredDetailDialog(null)}
           className="h-[92dvh] max-w-4xl"
         >
-          <div className="max-h-[76dvh] overflow-y-auto pr-1">
+          <div className="max-h-[76dvh] min-w-0 overflow-y-auto pr-1">
             {filteredDetailDialog === "conflicts" ? (
               <ConflictList conflicts={conflicts} collaborators={collaborators} locale={locale} />
             ) : (
@@ -419,7 +419,7 @@ export function InternalCalendarModule({
       {availabilityToDelete && (
         <Dialog open title={translate(locale, "calendar.deleteAvailability")} description={collaboratorName(collaborators, availabilityToDelete.collaboratorId)} onClose={() => setAvailabilityToDelete(null)} className="max-w-lg">
           <p className="text-sm leading-6 text-dtsc-muted">{translate(locale, "calendar.deleteAvailabilityConfirm")}</p>
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="mt-5 flex flex-col justify-end gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => setAvailabilityToDelete(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
               {translate(locale, "common.cancel")}
             </Button>
@@ -433,7 +433,7 @@ export function InternalCalendarModule({
       {eventToCancel && (
         <Dialog open title={translate(locale, "calendar.cancelEvent")} description={eventToCancel.title} onClose={() => setEventToCancel(null)} className="max-w-lg">
           <p className="text-sm leading-6 text-dtsc-muted">{translate(locale, "calendar.cancelConfirm")}</p>
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="mt-5 flex flex-col justify-end gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => setEventToCancel(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
               {translate(locale, "common.cancel")}
             </Button>
@@ -531,13 +531,13 @@ function EventFormDialog({
 
   return (
     <Dialog open title={event ? translate(locale, "calendar.editEvent") : translate(locale, "calendar.newEvent")} description={translate(locale, "calendar.eventFormDescription")} onClose={onClose} className="h-[92dvh] max-w-4xl">
-      <form onSubmit={submit} data-event-id={event?.id || ""} className="grid min-h-0 gap-4 overflow-y-auto pr-1">
-        <div className="grid gap-3 sm:grid-cols-2">
+      <form onSubmit={submit} data-event-id={event?.id || ""} className="grid min-h-0 min-w-0 gap-4 overflow-y-auto pr-1">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <FieldShell label={translate(locale, "calendar.fields.title")} hint="Nom lisible de l'événement dans votre calendrier DTSC.">
             <Input name="title" required defaultValue={event?.title || template?.title || ""} placeholder={translate(locale, "calendar.fields.title")} className="h-12 rounded-2xl bg-dtsc-page" />
           </FieldShell>
           <FieldShell label="Type d'événement" hint="Le type peut créer un objet lié dans COO, SCO ou Mes collaborateurs.">
-          <select name="eventType" defaultValue={defaultEventType} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="eventType" defaultValue={defaultEventType} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"].map((type) => <option key={type}>{type}</option>)}
           </select>
           </FieldShell>
@@ -548,17 +548,17 @@ function EventFormDialog({
             <Input name="endDateTime" required type="datetime-local" defaultValue={toDateTimeInput(event?.endDateTime)} className="h-12 rounded-2xl bg-dtsc-page" />
           </FieldShell>
           <FieldShell label="Responsable" hint="Collaborateur propriétaire du planning concerné.">
-          <select name="ownerCollaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="ownerCollaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.fullName}</option>)}
           </select>
           </FieldShell>
           <FieldShell label="Priorité" hint="Importance opérationnelle de l'événement.">
-          <select name="priority" defaultValue={event?.priority || "Normale"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="priority" defaultValue={event?.priority || "Normale"} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Faible", "Normale", "Élevée", "Critique"].map((priority) => <option key={priority}>{priority}</option>)}
           </select>
           </FieldShell>
           <FieldShell label="Mode de lieu" hint="Site, télétravail, mission ou lieu externe.">
-          <select name="locationMode" defaultValue={event?.locationMode || "Non défini"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="locationMode" defaultValue={event?.locationMode || "Non défini"} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Non défini", "Site DTSC", "Télétravail", "Externe", "Mission"].map((mode) => <option key={mode}>{mode}</option>)}
           </select>
           </FieldShell>
@@ -566,19 +566,19 @@ function EventFormDialog({
             <Input name="physicalLocation" defaultValue={event?.physicalLocation || ""} placeholder={translate(locale, "calendar.fields.location")} className="h-12 rounded-2xl bg-dtsc-page" />
           </FieldShell>
           <FieldShell label={translate(locale, "calendar.visibility")} hint="Privé limite l'accès au créateur/propriétaire; Participants limite aux membres sélectionnés.">
-          <select name="visibility" defaultValue={event?.visibility || "Participants"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="visibility" defaultValue={event?.visibility || "Participants"} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {["Participants", "Privé", "Département", "Direction", "Public interne"].map((visibility) => <option key={visibility}>{visibility}</option>)}
           </select>
           </FieldShell>
         </div>
         <FieldShell label={translate(locale, "calendar.fields.description")} hint="Contexte, ordre du jour, consignes ou détails utiles pour les participants.">
-          <textarea name="description" defaultValue={event?.description || ""} placeholder={translate(locale, "calendar.fields.description")} className="min-h-28 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+          <textarea name="description" defaultValue={event?.description || ""} placeholder={translate(locale, "calendar.fields.description")} className="min-h-28 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
         </FieldShell>
-        <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
           <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{translate(locale, "calendar.participants")}</p>
-          <div className="grid max-h-44 gap-2 overflow-y-auto sm:grid-cols-2">
+          <div className="grid max-h-44 min-w-0 gap-2 overflow-y-auto sm:grid-cols-2">
             {collaborators.map((collaborator) => (
-              <label key={collaborator.id} className="flex items-center gap-2 rounded-xl bg-dtsc-surface px-3 py-2 text-sm font-bold text-dtsc-ink">
+              <label key={collaborator.id} className="flex min-w-0 items-center gap-2 rounded-xl bg-dtsc-surface px-3 py-2 text-sm font-bold text-dtsc-ink">
                 <input name="participantIds" type="checkbox" value={collaborator.id} defaultChecked={selectedParticipants.has(collaborator.id)} />
                 <span className="min-w-0 truncate">{collaborator.fullName}</span>
               </label>
@@ -586,10 +586,10 @@ function EventFormDialog({
           </div>
         </div>
         {conflicts.length > 0 && (
-          <div className="rounded-2xl border border-amber-300/50 bg-amber-300/10 p-3 text-sm text-amber-800 dark:text-amber-100">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-amber-300/50 bg-amber-300/10 p-3 text-sm text-amber-800 dark:text-amber-100">
             <p className="font-black">{message}</p>
             <ul className="mt-2 space-y-1">
-              {conflicts.map((conflict, index) => <li key={`${conflict.message}-${index}`}>{conflict.severity}: {conflict.message}</li>)}
+              {conflicts.map((conflict, index) => <li key={`${conflict.message}-${index}`} className="break-words">{conflict.severity}: {conflict.message}</li>)}
             </ul>
             {context.canOverrideConflicts && (
               <label className="mt-3 flex items-center gap-2 font-bold">
@@ -600,7 +600,7 @@ function EventFormDialog({
           </div>
         )}
         {message && conflicts.length === 0 && <p className="rounded-2xl bg-cyan-400/10 p-3 text-sm font-bold text-cyan-700 dark:text-cyan-100">{message}</p>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col justify-end gap-2 sm:flex-row">
           <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">{translate(locale, "common.cancel")}</Button>
           <Button type="submit" className="rounded-xl bg-dtsc-navy text-white">{translate(locale, "common.save")}</Button>
         </div>
@@ -643,7 +643,7 @@ function CalendarCollaboratorsDialog({
 
   return (
     <Dialog open title={translate(locale, "calendar.collaborators")} description={translate(locale, "calendar.collaboratorDialogDescription")} onClose={onClose} className="h-[92dvh] max-w-4xl">
-      <div className="flex min-h-0 flex-col gap-4">
+      <div className="flex min-h-0 min-w-0 flex-col gap-4">
         <ListControls
           query={collaboratorList.query}
           onQueryChange={collaboratorList.setQuery}
@@ -654,9 +654,9 @@ function CalendarCollaboratorsDialog({
           placeholder={translate(locale, "calendar.searchCollaborators")}
           onPageChange={collaboratorList.setPage}
         />
-        <div className="max-h-[68dvh] space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-[68dvh] min-w-0 space-y-2 overflow-y-auto pr-1">
           {collaboratorList.paginatedItems.map((collaborator) => (
-            <div key={collaborator.id} className="flex min-w-0 items-center justify-between gap-3 rounded-3xl border border-dtsc-border bg-dtsc-page p-3">
+            <div key={collaborator.id} className="flex min-w-0 items-center justify-between gap-3 overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-page p-3">
               <div className="min-w-0">
                 <p className="truncate font-black text-dtsc-ink">{collaborator.fullName}</p>
                 <p className="truncate text-xs font-bold text-dtsc-muted">{collaborator.jobTitle || translate(locale, "calendar.collaborator")} · {collaborator.department || "DTSC"}</p>
@@ -741,15 +741,15 @@ function AvailabilityFormDialog({
 
   return (
     <Dialog open title={availability ? translate(locale, "calendar.editAvailability") : translate(locale, "calendar.availability")} description={translate(locale, "calendar.availabilityDescription")} onClose={onClose} className="h-[92dvh] max-w-3xl">
-      <form onSubmit={submit} className="grid min-h-0 gap-3 overflow-y-auto pr-1">
+      <form onSubmit={submit} className="grid min-h-0 min-w-0 gap-3 overflow-y-auto pr-1">
         <FormField label="Collaborateur" hint="Choisissez le collaborateur concerné par cette disponibilité.">
-          <select name="collaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+          <select name="collaboratorId" defaultValue={defaultOwner} disabled={!context.canManagePeople} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
             {collaborators.map((collaborator) => <option key={collaborator.id} value={collaborator.id}>{collaborator.fullName}</option>)}
           </select>
         </FormField>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <FormField label={translate(locale, "calendar.availabilityFrequency")} hint={translate(locale, "calendar.availabilityFrequencyHint")}>
-            <select name="recurrenceType" value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value)} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+            <select name="recurrenceType" value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value)} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
               {["Aucune", "Quotidienne", "Hebdomadaire", "Mensuelle"].map((type) => <option key={type} value={type}>{availabilityFrequencyLabel(type, locale)}</option>)}
             </select>
           </FormField>
@@ -762,10 +762,10 @@ function AvailabilityFormDialog({
             <Input name="specificDate" required type="date" defaultValue={toDateInput(availability?.specificDate)} className="h-12 rounded-2xl bg-dtsc-page" />
           </FormField>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-3">
             {recurrenceType === "Hebdomadaire" && (
               <FormField label={translate(locale, "calendar.weeklyDay")} hint={translate(locale, "calendar.weeklyDayHint")}>
-                <select name="dayOfWeek" defaultValue={availability?.dayOfWeek ?? 1} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+                <select name="dayOfWeek" defaultValue={availability?.dayOfWeek ?? 1} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
                   {weekDays.map((day, index) => <option key={day} value={index}>{translate(locale, `calendar.days.${day}`)}</option>)}
                 </select>
               </FormField>
@@ -778,7 +778,7 @@ function AvailabilityFormDialog({
             </FormField>
           </div>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <FormField label="Heure de début" hint="Début du créneau disponible ou occupé.">
             <Input name="startTime" required type="time" defaultValue={availability?.startTime || "08:00"} className="h-12 rounded-2xl bg-dtsc-page" />
           </FormField>
@@ -786,23 +786,23 @@ function AvailabilityFormDialog({
             <Input name="endTime" required type="time" defaultValue={availability?.endTime || "17:00"} className="h-12 rounded-2xl bg-dtsc-page" />
           </FormField>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-3">
           <FormField label="Statut" hint="Indique si le collaborateur est disponible, absent, en mission ou indisponible.">
-            <select name="availabilityStatus" defaultValue={availability?.availabilityStatus || "Disponible"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+            <select name="availabilityStatus" defaultValue={availability?.availabilityStatus || "Disponible"} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
               {["Disponible", "Occupé", "Absent", "Congé", "Télétravail", "Sur site", "Mission", "Formation", "Indisponible"].map((status) => <option key={status}>{status}</option>)}
             </select>
           </FormField>
           <FormField label="Lieu / mode" hint="Précise si le créneau est sur site, en télétravail ou externe.">
-            <select name="locationMode" defaultValue={availability?.locationMode || "Non défini"} className="h-12 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+            <select name="locationMode" defaultValue={availability?.locationMode || "Non défini"} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
               {["Non défini", "Site DTSC", "Télétravail", "Externe", "Mission"].map((mode) => <option key={mode}>{mode}</option>)}
             </select>
           </FormField>
         </div>
         <FormField label="Notes" hint="Ajoutez une précision utile pour comprendre cette disponibilité.">
-          <textarea name="notes" defaultValue={availability?.notes || ""} placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
+          <textarea name="notes" defaultValue={availability?.notes || ""} placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
         </FormField>
-        {message && <p className="rounded-2xl bg-red-500/10 p-3 text-sm font-bold text-red-600">{message}</p>}
-        <div className="flex justify-end gap-2">
+        {message && <p className="break-words rounded-2xl bg-red-500/10 p-3 text-sm font-bold text-red-600">{message}</p>}
+        <div className="flex flex-col justify-end gap-2 sm:flex-row">
           <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">{translate(locale, "common.cancel")}</Button>
           <Button type="submit" className="rounded-xl bg-dtsc-navy text-white">{translate(locale, "common.save")}</Button>
         </div>
@@ -827,7 +827,7 @@ function EventCard({
   onCancel: () => void;
 }) {
   return (
-    <div className={`relative rounded-3xl border p-4 transition ${selected ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
+    <div className={`relative min-w-0 overflow-hidden rounded-3xl border p-4 transition ${selected ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page"}`}>
       <div className="absolute right-3 top-3">
         <ActionMenu
           label="Actions événement"
@@ -837,15 +837,15 @@ function EventCard({
           ]}
         />
       </div>
-      <button type="button" onClick={onSelect} className="block w-full pr-12 text-left">
-        <div className="flex flex-wrap items-center gap-2">
+      <button type="button" onClick={onSelect} className="block w-full min-w-0 pr-12 text-left">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <StatusBadge value={event.eventType} />
           <StatusBadge value={event.priority} />
           {event.conflicts.length > 0 && <StatusBadge value={`${event.conflicts.length} conflit(s)`} tone="warning" />}
         </div>
-        <h3 className="mt-3 line-clamp-2 text-lg font-black text-dtsc-ink">{event.title}</h3>
-        <p className="mt-2 text-sm text-dtsc-muted">{formatDateTime(event.startDateTime)} - {formatDateTime(event.endDateTime)}</p>
-        <p className="mt-1 text-xs font-bold text-dtsc-muted">{ownerName}</p>
+        <h3 className="mt-3 line-clamp-2 break-words text-lg font-black text-dtsc-ink">{event.title}</h3>
+        <p className="mt-2 break-words text-sm text-dtsc-muted">{formatDateTime(event.startDateTime)} - {formatDateTime(event.endDateTime)}</p>
+        <p className="mt-1 break-words text-xs font-bold text-dtsc-muted">{ownerName}</p>
       </button>
     </div>
   );
@@ -865,10 +865,10 @@ function EventDetail({
   onCancel: () => void;
 }) {
   return (
-    <div className="min-h-0 space-y-4">
-      <div className="rounded-3xl border border-dtsc-border bg-dtsc-page p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
+    <div className="min-h-0 min-w-0 space-y-4">
+      <div className="min-w-0 overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-page p-4 sm:p-5">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap gap-2">
             <StatusBadge value={event.status} />
             <StatusBadge value={event.eventType} />
             <StatusBadge value={event.locationMode} />
@@ -881,23 +881,23 @@ function EventDetail({
             ]}
           />
         </div>
-        <h2 className="mt-3 text-2xl font-black text-dtsc-ink">{event.title}</h2>
-        <p className="mt-2 text-sm text-dtsc-muted">{formatDateTime(event.startDateTime)} - {formatDateTime(event.endDateTime)}</p>
-        {event.description && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{event.description}</p>}
+        <h2 className="mt-3 break-words text-2xl font-black text-dtsc-ink">{event.title}</h2>
+        <p className="mt-2 break-words text-sm text-dtsc-muted">{formatDateTime(event.startDateTime)} - {formatDateTime(event.endDateTime)}</p>
+        {event.description && <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-muted">{event.description}</p>}
       </div>
       <Accordion>
         <AccordionItem title="Informations clés" defaultOpen>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <DetailCard icon={Users} label={translate(locale, "calendar.participants")} value={`${event.participants.length}`} />
             <DetailCard icon={Filter} label={translate(locale, "calendar.visibility")} value={event.visibility} />
           </div>
         </AccordionItem>
         <AccordionItem title={translate(locale, "calendar.participants")}>
-          <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-80 min-w-0 space-y-2 overflow-y-auto pr-1">
             {event.participants.map((participant) => (
-              <div key={participant.id} className="flex items-center justify-between rounded-2xl bg-dtsc-surface px-3 py-2 text-sm">
-                <span className="font-bold text-dtsc-ink">{collaboratorName(collaborators, participant.collaboratorId)}</span>
-                <span className="text-xs font-black text-cyan-600">{participant.responseStatus}</span>
+              <div key={participant.id} className="flex min-w-0 flex-col gap-1 rounded-2xl bg-dtsc-surface px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <span className="min-w-0 break-words font-bold text-dtsc-ink">{collaboratorName(collaborators, participant.collaboratorId)}</span>
+                <span className="break-words text-xs font-black text-cyan-600">{participant.responseStatus}</span>
               </div>
             ))}
             {event.participants.length === 0 && <p className="text-sm text-dtsc-muted">Aucun participant sélectionné.</p>}
@@ -927,11 +927,11 @@ function AvailabilityList({
   onDelete?: (availability: CalendarAvailabilityItem) => void;
 }) {
   return (
-    <div>
-      <h2 className="font-black text-dtsc-ink">{translate(locale, "calendar.availabilities")}</h2>
-      <div className="mt-4 max-h-[68dvh] space-y-3 overflow-y-auto pr-1">
+    <div className="min-w-0">
+      <h2 className="break-words font-black text-dtsc-ink">{translate(locale, "calendar.availabilities")}</h2>
+      <div className="mt-4 max-h-[68dvh] min-w-0 space-y-3 overflow-y-auto pr-1">
         {availabilities.map((availability) => (
-          <div key={availability.id} className="relative rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
+          <div key={availability.id} className="relative min-w-0 overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
             {canManageAvailability?.(availability) && onEdit && onDelete && (
               <div className="absolute right-3 top-3">
                 <ActionMenu
@@ -943,14 +943,14 @@ function AvailabilityList({
                 />
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               <StatusBadge value={availability.availabilityStatus} />
               <StatusBadge value={availability.locationMode} />
               <StatusBadge value={availabilityFrequencyLabel(availability.recurrenceType, locale)} />
             </div>
-            <p className="mt-3 pr-12 font-black text-dtsc-ink">{collaboratorName(collaborators, availability.collaboratorId)}</p>
-            <p className="text-sm font-bold text-dtsc-muted">{availabilityScheduleLabel(availability, locale)} · {availability.startTime} - {availability.endTime}</p>
-            {availability.notes && <p className="mt-2 whitespace-pre-wrap text-sm text-dtsc-muted">{availability.notes}</p>}
+            <p className="mt-3 break-words pr-12 font-black text-dtsc-ink">{collaboratorName(collaborators, availability.collaboratorId)}</p>
+            <p className="break-words text-sm font-bold text-dtsc-muted">{availabilityScheduleLabel(availability, locale)} · {availability.startTime} - {availability.endTime}</p>
+            {availability.notes && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-dtsc-muted">{availability.notes}</p>}
           </div>
         ))}
         {availabilities.length === 0 && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{translate(locale, "calendar.noAvailabilities")}</p>}
@@ -969,15 +969,15 @@ function ConflictList({
   locale: string;
 }) {
   return (
-    <div>
-      <h2 className="font-black text-dtsc-ink">{translate(locale, "calendar.conflicts")}</h2>
-      <div className="mt-4 max-h-[68dvh] space-y-3 overflow-y-auto pr-1">
+    <div className="min-w-0">
+      <h2 className="break-words font-black text-dtsc-ink">{translate(locale, "calendar.conflicts")}</h2>
+      <div className="mt-4 max-h-[68dvh] min-w-0 space-y-3 overflow-y-auto pr-1">
         {conflicts.map((conflict) => (
-          <div key={conflict.id} className="rounded-3xl border border-amber-300/40 bg-amber-300/10 p-4 text-sm">
-            <p className="font-black text-dtsc-ink">{conflict.eventTitle}</p>
-            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-cyan-600">{collaboratorName(collaborators, conflict.collaboratorId)}</p>
-            <p className="mt-1 font-bold text-amber-700 dark:text-amber-100">{conflict.severity} · {conflict.conflictType}</p>
-            <p className="mt-2 text-dtsc-muted">{conflict.message}</p>
+          <div key={conflict.id} className="min-w-0 overflow-hidden rounded-3xl border border-amber-300/40 bg-amber-300/10 p-4 text-sm">
+            <p className="break-words font-black text-dtsc-ink">{conflict.eventTitle}</p>
+            <p className="mt-1 break-words text-xs font-black uppercase tracking-[0.12em] text-cyan-600">{collaboratorName(collaborators, conflict.collaboratorId)}</p>
+            <p className="mt-1 break-words font-bold text-amber-700 dark:text-amber-100">{conflict.severity} · {conflict.conflictType}</p>
+            <p className="mt-2 break-words text-dtsc-muted">{conflict.message}</p>
           </div>
         ))}
         {conflicts.length === 0 && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{translate(locale, "calendar.noConflicts")}</p>}
@@ -989,8 +989,8 @@ function ConflictList({
 function MetricCard({ label, value, tone = "default", onClick }: { label: string; value: number; tone?: "default" | "warning" | "success"; onClick?: () => void }) {
   const toneClass = tone === "warning" ? "text-amber-500" : tone === "success" ? "text-emerald-500" : "text-cyan-500";
   return (
-    <button type="button" onClick={onClick} className="dtsc-card p-5 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300">
-      <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+    <button type="button" onClick={onClick} className="dtsc-card min-w-0 overflow-hidden p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 sm:p-5">
+      <p className="break-words text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
       <p className={`mt-3 text-3xl font-black ${toneClass}`}>{value}</p>
     </button>
   );
@@ -998,10 +998,10 @@ function MetricCard({ label, value, tone = "default", onClick }: { label: string
 
 function DetailCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
+    <div className="min-w-0 overflow-hidden rounded-3xl border border-dtsc-border bg-dtsc-page p-4">
       <Icon className="h-5 w-5 text-cyan-500" />
-      <p className="mt-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{label}</p>
-      <p className="mt-1 font-black text-dtsc-ink">{value}</p>
+      <p className="mt-2 break-words text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words font-black text-dtsc-ink">{value}</p>
     </div>
   );
 }
@@ -1009,16 +1009,16 @@ function DetailCard({ icon: Icon, label, value }: { icon: LucideIcon; label: str
 function FieldShell({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
   return (
     <label className="grid min-w-0 gap-1">
-      <span className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{label}</span>
+      <span className="break-words text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{label}</span>
       {children}
-      <span className="text-xs leading-5 text-dtsc-muted">{hint}</span>
+      <span className="break-words text-xs leading-5 text-dtsc-muted">{hint}</span>
     </label>
   );
 }
 
 function StatusBadge({ value, tone = "default" }: { value: string; tone?: "default" | "warning" }) {
   return (
-    <span className={`rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] ${tone === "warning" ? "bg-amber-300/18 text-amber-600 dark:text-amber-100" : "bg-cyan-400/14 text-cyan-600 dark:text-cyan-200"}`}>
+    <span className={`max-w-full break-words rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] ${tone === "warning" ? "bg-amber-300/18 text-amber-600 dark:text-amber-100" : "bg-cyan-400/14 text-cyan-600 dark:text-cyan-200"}`}>
       {value}
     </span>
   );

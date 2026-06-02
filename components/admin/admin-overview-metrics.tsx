@@ -71,30 +71,30 @@ export function AdminOverviewMetrics({
 
   return (
     <div className="space-y-5">
-      <section className="dtsc-card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-5">
+        <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Vue générale</p>
-            <h2 className="mt-2 text-2xl font-black text-dtsc-ink">Indicateurs de pilotage {periodLabel}</h2>
+            <h2 className="mt-2 break-words text-2xl font-black text-dtsc-ink">Indicateurs de pilotage {periodLabel}</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
               Filtrez la période pour suivre les comptes, l&apos;usage IA, les visites, les tickets, les paiements et les contenus publics avec des données recalculées à chaque chargement.
             </p>
           </div>
-          <form action="/admin" className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[1fr_1fr_auto]">
+          <form action="/admin" className="grid w-full min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:max-w-2xl">
             <input type="hidden" name="section" value="overview" />
-            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
+            <label className="grid min-w-0 gap-1 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
               Période
-              <select name="period" defaultValue={String(selectedPeriod)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+              <select name="period" defaultValue={String(selectedPeriod)} className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
                 {[7, 30, 90, 200].map((days) => (
                   <option key={days} value={days}>{days} jours</option>
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
+            <label className="grid min-w-0 gap-1 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">
               Date précise
-              <input type="date" name="date" defaultValue={selectedDate || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink" />
+              <input type="date" name="date" defaultValue={selectedDate || ""} className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink" />
             </label>
-            <button className="rounded-xl bg-[#002b5b] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,43,91,0.25)] transition hover:bg-[#001736]">
+            <button className="max-w-full rounded-xl bg-[#002b5b] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,43,91,0.25)] transition hover:bg-[#001736]">
               Filtrer
             </button>
           </form>
@@ -112,7 +112,7 @@ export function AdminOverviewMetrics({
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Utilisateurs" value={totals.users} helper={`${totals.activeUsers} actifs · ${period.users} nouveaux`} icon={Users} />
         <StatCard label="Conversations" value={totals.conversations} helper={`${period.conversations} nouvelles ${periodLabel}`} icon={MessageSquare} />
         <StatCard label="Messages" value={totals.messages} helper={`${period.messages} messages ${periodLabel}`} icon={MessageSquare} />
@@ -120,13 +120,13 @@ export function AdminOverviewMetrics({
         <StatCard label="Visites" value={period.visits} helper={`Audience publique ${periodLabel}`} icon={Activity} />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-3">
+      <section className="grid min-w-0 gap-4 xl:grid-cols-3">
         <MiniChart title="Visites publiques" points={series.visits} tone="cyan" />
         <MiniChart title="Messages chatbot" points={series.messages} tone="blue" />
         <MiniChart title="Tokens consommés" points={series.tokens} tone="emerald" />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+      <section className="grid min-w-0 gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <KpiPanel
           icon={Ticket}
           title="Support"
@@ -165,10 +165,10 @@ export function AdminOverviewMetrics({
         />
       </section>
 
-      <section className="rounded-2xl border border-dtsc-border bg-[#001736] p-6 text-white">
-        <div className="flex items-start gap-3">
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-dtsc-border bg-[#001736] p-4 text-white sm:p-6">
+        <div className="flex min-w-0 items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-cyan-300" />
-          <div>
+          <div className="min-w-0">
             <h2 className="font-black">Points de vigilance opérationnels</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <Signal label="Erreurs API" value={period.apiErrors} helper="À surveiller dans Audits" />
@@ -187,9 +187,9 @@ function MiniChart({ title, points, tone }: { title: string; points: MetricPoint
   const colorClass = tone === "cyan" ? "bg-cyan-400" : tone === "blue" ? "bg-blue-500" : "bg-emerald-400";
 
   return (
-    <article className="dtsc-card overflow-hidden p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-black text-dtsc-ink">{title}</h3>
+    <article className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-5">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h3 className="min-w-0 break-words font-black text-dtsc-ink">{title}</h3>
         <Gauge className="h-4 w-4 text-cyan-500" />
       </div>
       <div className="mt-4 h-48 overflow-x-auto rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
@@ -223,22 +223,22 @@ function KpiPanel({
   const max = Math.max(1, ...items.map((item) => item.value));
 
   return (
-    <article className="dtsc-card p-5">
-      <div className="flex items-center gap-3">
+    <article className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-5">
+      <div className="flex min-w-0 items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-dtsc-soft text-dtsc-blue">
           <Icon className="h-4 w-4" />
         </span>
-        <h3 className="font-black text-dtsc-ink">{title}</h3>
+        <h3 className="min-w-0 break-words font-black text-dtsc-ink">{title}</h3>
       </div>
       <div className="mt-4 space-y-2 text-sm leading-6 text-dtsc-muted">
-        {lines.map((line) => <p key={line}>{line}</p>)}
+        {lines.map((line) => <p key={line} className="break-words">{line}</p>)}
       </div>
       {items.length > 0 && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 min-w-0 space-y-3">
           {items.map((item) => (
-            <div key={`${title}-${item.label}`}>
-              <div className="mb-1 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">
-                <span>{formatDisplayLabel(item.label)}</span>
+            <div key={`${title}-${item.label}`} className="min-w-0">
+              <div className="mb-1 flex min-w-0 items-start justify-between gap-3 text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">
+                <span className="min-w-0 break-words [overflow-wrap:anywhere]">{formatDisplayLabel(item.label)}</span>
                 <span>{item.value}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-dtsc-page">
@@ -254,10 +254,10 @@ function KpiPanel({
 
 function Signal({ label, value, helper }: { label: string; value: number; helper: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">{label}</p>
-      <p className="mt-2 text-2xl font-black">{value}</p>
-      <p className="mt-1 text-xs text-slate-300">{helper}</p>
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-4">
+      <p className="break-words text-xs font-black uppercase tracking-[0.16em] text-cyan-200">{label}</p>
+      <p className="mt-2 break-words text-2xl font-black">{value}</p>
+      <p className="mt-1 break-words text-xs text-slate-300">{helper}</p>
     </div>
   );
 }

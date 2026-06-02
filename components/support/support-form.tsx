@@ -35,19 +35,19 @@ export function SupportForm() {
   }
 
   return (
-    <div className="dtsc-card p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-black text-dtsc-ink">Créer un ticket support</h2>
+    <div className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-5">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="break-words text-base font-black text-dtsc-ink">Créer un ticket support</h2>
           <p className="mt-1 text-sm text-dtsc-muted">Ouvrez un formulaire complet pour transmettre une demande contextualisée à DTSC.</p>
         </div>
-        <Button type="button" onClick={() => setOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+        <Button type="button" onClick={() => setOpen(true)} className="max-w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           Créer un ticket
         </Button>
       </div>
-      {message && <p className="mt-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+      {message && <p className="mt-3 break-words text-sm font-bold text-dtsc-blue">{message}</p>}
       <Dialog open={open} title="Créer un ticket support" description="Décrivez votre besoin avec assez de contexte pour permettre une réponse DTSC rapide et utile." onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
-        <form onSubmit={submit} className="grid gap-4">
+        <form onSubmit={submit} className="grid min-w-0 gap-4">
           <FormField label="Objet de la demande" hint="Résumez le sujet en une phrase claire.">
             <Input name="subject" placeholder="Exemple: difficulté de connexion à l'espace entreprise" required />
           </FormField>
@@ -55,19 +55,19 @@ export function SupportForm() {
             <textarea
               name="description"
               placeholder="Décrivez votre besoin, contexte ou urgence."
-              className="min-h-44 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+              className="min-h-44 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
               required
             />
           </FormField>
           <FormField label="Priorité" hint="Choisissez l'urgence réelle pour aider DTSC à prioriser le traitement.">
-            <select name="priority" className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+            <select name="priority" className="h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
               <option value="MEDIUM">Priorité normale</option>
               <option value="HIGH">Priorité haute</option>
               <option value="URGENT">Urgent</option>
               <option value="LOW">Faible</option>
             </select>
           </FormField>
-          <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={isPending}>
+          <Button className="w-full max-w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] sm:w-fit" disabled={isPending}>
             {isPending ? "Envoi..." : "Créer le ticket support"}
           </Button>
         </form>

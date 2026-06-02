@@ -857,10 +857,10 @@ export default async function AdminPage({
 
   return (
     <AppShell user={user}>
-      <div className="space-y-6">
-        <section className="dtsc-panel p-6">
+      <div className="min-w-0 space-y-6">
+        <section className="dtsc-panel min-w-0 overflow-hidden p-4 sm:p-6">
           <p className="text-sm font-bold text-cyan-600">Console DTSC SaaS</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Centre de pilotage DTSC Platform</h1>
+          <h1 className="mt-2 break-words text-3xl font-black tracking-tight text-dtsc-ink sm:text-4xl">Centre de pilotage DTSC Platform</h1>
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
             Pilotez les entreprises clientes, les abonnements, le support, les accès, la sécurité, les contenus publics et les modules internes DTSC depuis une console unique.
           </p>
@@ -876,7 +876,7 @@ export default async function AdminPage({
           }))}
         />
 
-        <nav className="hidden gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:grid" aria-label="Sous-modules Administration">
+        <nav className="hidden min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:grid" aria-label="Sous-modules Administration">
           {visibleSections.map((item) => {
             const Icon = item.icon;
             const active = activeSection === item.id;
@@ -884,19 +884,19 @@ export default async function AdminPage({
               <Link
                 key={item.id}
                 href={sectionHref(item.id)}
-                className={`rounded-2xl border p-4 shadow-[0_12px_34px_rgba(0,43,91,0.07)] transition ${
+                className={`min-w-0 overflow-hidden rounded-2xl border p-4 shadow-[0_12px_34px_rgba(0,43,91,0.07)] transition ${
                   active
                     ? "border-cyan-300 bg-[#002b5b] text-white"
                     : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-300 hover:bg-dtsc-soft"
                 }`}
               >
-                <span className="flex items-center gap-3">
+                <span className="flex min-w-0 items-start gap-3">
                   <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${active ? "bg-white/10 text-cyan-200" : "bg-dtsc-soft text-dtsc-blue"}`}>
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span>
-                    <span className="block font-black">{item.label}</span>
-                    <span className={`mt-1 block text-xs leading-5 ${active ? "text-slate-200" : "text-dtsc-muted"}`}>{item.description}</span>
+                  <span className="min-w-0">
+                    <span className="block break-words font-black">{item.label}</span>
+                    <span className={`mt-1 block break-words text-xs leading-5 ${active ? "text-slate-200" : "text-dtsc-muted"}`}>{item.description}</span>
                   </span>
                 </span>
               </Link>
