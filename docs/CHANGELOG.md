@@ -6,6 +6,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Refactorisation de la Console DTSC: les chargements de données de `/admin` sont extraits dans `lib/console/*` par domaine fonctionnel afin de garder la page App Router comme orchestrateur d'authentification, de section active et de rendu.
+- Les règles Support corrigées sont conservées pendant le refactor: l'historique utilisateur reste basé sur `SupportTicket.userId`, tandis que `organizationId` demeure un contexte de triage et d'analyse.
 - Correction responsive mobile des cartes et formulaires récents: Console DTSC, journaux d'audit, KPI, support, calendrier interne, dialogues et champs partagés restent désormais bornés à la largeur de l'écran avec retour à la ligne des libellés longs.
 - Transformation progressive de `/admin` en Console DTSC SaaS avec vue générale de pilotage: entreprises clientes actives, abonnements, tickets ouverts/critiques, utilisateurs actifs, modules activés, incidents API, audits sensibles et événements sécurité récents.
 - Extension du `Calendrier interne`: CRUD complet des disponibilités collaborateurs, plages sur date précise ou fréquence quotidienne/hebdomadaire/mensuelle, suppression logique auditée et visibilité des disponibilités DTSC ouverte au rôle `SUPPORT`.

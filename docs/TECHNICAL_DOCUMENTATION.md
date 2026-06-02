@@ -713,6 +713,19 @@ La page Administration devient progressivement la Console DTSC SaaS et reste org
 
 Les sections Console sont: Vue generale, Entreprises clientes, Abonnements & facturation, Support client, Publications & contenus, Utilisateurs & acces, Securite & audit, Modules internes DTSC et Parametres plateforme. Les modules internes existants `CEO`, `COO`, `CTO`, `MPO`, `HR & CFO`, `SCO` et `LA` restent accessibles selon `AppSetting.adminRoleAccess`, le role global et les postes officiels.
 
+Les loaders de donnees de la Console sont maintenant regroupes dans `lib/console/*` pour separer les responsabilites sans changer le comportement fonctionnel:
+
+- `console-overview.ts`: KPI et series de la vue generale;
+- `console-users.ts`: utilisateurs, usages et metriques d'activite;
+- `console-organizations.ts`: entreprises clientes, plans et secteurs;
+- `console-billing.ts`: paiements et indicateurs de facturation;
+- `console-support.ts`: conversations et tickets support affiches dans la Console;
+- `console-audit.ts`: logs API, audit et webhooks;
+- `console-publications.ts`: publications publiques administrables;
+- `console-internal-modules.ts`: datasets HR & CFO, SCO, COO, CEO, MPO, CTO et LA.
+
+`app/admin/page.tsx` conserve l'authentification, la verification `DTSC_INTERNAL`, la resolution de la section active, les controles de visibilite et le rendu des composants existants. Les datasets internes continuent d'etre serialises en objets JSON simples avant passage aux composants client. Le refactor ne modifie pas Prisma, n'ajoute pas de migration et ne change pas les regles Support: un utilisateur retrouve ses tickets via `SupportTicket.userId`; les comptes `ADMIN` ou `SUPPORT` en contexte `DTSC_INTERNAL` gerent les tickets autorises; `organizationId` reste un contexte de triage, pas un filtre qui masque l'historique du proprietaire.
+
 La vue generale detaillee accepte un filtre periode (`7`, `30`, `90`, `200` jours) ou une date precise, puis recalcule les metriques serveur: utilisateurs actifs et nouveaux comptes, conversations, messages, tokens, visites publiques, tickets, paiements confirmes, revenus suivis, contacts, abonnes newsletter, erreurs API, documents prets, publications publiques et brouillons. Les graphiques restent bornes dans leurs cartes et utilisent les series journalieres de visites, messages et tokens. Les sous-modules `HR & CFO` et `SCO` ajoutent un mini-ERP interne DTSC: formulaires de creation, listes paginees, recherche intelligente, changement de statut, notes de suivi, suppression controlee, audit log et logs API. Les blocs `Audit des paiements` et `Logs API et webhooks` utilisent `ListControls` et `useSmartList` pour une recherche accent-insensible et une pagination cote UI. Les visites publiques sont agregees par requete SQL et le total est calcule par `count()` sur la periode filtree, sans limite fixe a 500 lignes.
 
 Regles annonces:
