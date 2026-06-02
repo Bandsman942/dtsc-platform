@@ -9,22 +9,22 @@ export const dtsc = {
   socialHandle: "Facebook: dtsc-platform, Instagram: dtsc.platform, X: @dtscplatform",
   copyright: "© 2026 DTSC — Data and Tech Solutions Consulting. Tous droits réservés.",
   summary:
-    "DTSC est un cabinet innovant basé à Kinshasa, spécialisé dans la transformation digitale, la data, l'intelligence artificielle, le marketing digital et l'imprimerie numérique.",
-  vision: "Devenir un leader africain en transformation digitale et data consulting.",
+    "DTSC est un cabinet basé à Kinshasa qui aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
+  vision: "Devenir un leader africain de la performance mesurable par les 7 leviers numériques DTSC.",
   mission:
-    "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité grâce aux technologies.",
+    "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité grâce aux 7 leviers numériques DTSC.",
   targets: ["Assurances", "Cliniques", "Pharmacies", "PME"],
   services: [
-    "Data & BI: dashboards, KPI et reporting",
-    "Formations en analyse des données",
-    "Audit, optimisation, réduction des coûts et fraude",
-    "Solutions digitales et développement d'applications",
-    "IA: modèles prédictifs, chatbots et solutions basées sur l'IA",
-    "Marketing digital et acquisition clients",
-    "Imprimerie numérique et supports physiques",
+    "Data & BI",
+    "Intelligence artificielle",
+    "Solutions digitales",
+    "Audit & optimisation",
+    "Formations",
+    "Marketing digital",
+    "Imprimerie numérique",
   ],
   businessModel:
-    "Un accompagnement flexible: conseil, solutions digitales, formations, marketing et outils numériques adaptés à vos priorités.",
+    "Un accompagnement flexible autour des 7 leviers numériques officiels, avec cadrage, exécution, formation et suivi des gains mesurables.",
   organizationRoles: [
     {
       title: "Chief Executive Officer — CEO",
@@ -65,9 +65,9 @@ export const dtsc = {
   advantages: [
     "Décisions guidées par des indicateurs fiables",
     "Optimisation des coûts et des processus",
-    "Automatisation des tâches répétitives et critiques",
+    "Gains de temps mesurables grâce aux outils et à l'IA",
     "Meilleure visibilité et communication digitale",
-    "Conseil, mise en œuvre et suivi opérationnel",
+    "Suivi opérationnel orienté KPI et adoption",
   ],
 };
 

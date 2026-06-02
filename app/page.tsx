@@ -20,10 +20,10 @@ import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
 
 const gateways = [
-  { title: "Services", href: "/services", text: "Conseil numérique, data, IA, applications métier, formation et optimisation.", icon: Database },
-  { title: "Solutions", href: "/solutions", text: "Chatbot, dashboards, automatisation, portails clients et IA documentaire.", icon: Bot },
-  { title: "Secteurs", href: "/secteurs", text: "Assurances, cliniques, pharmacies, PME, ONG, finance et administration.", icon: ShieldCheck },
-  { title: "Projets", href: "/projets", text: "Démonstrations concrètes pour cadrer rapidement la valeur métier.", icon: BarChart3 },
+  { title: "Services", href: "/services", text: "Les 7 leviers numériques officiels qui structurent toute l'offre DTSC.", icon: Database },
+  { title: "Solutions", href: "/solutions", text: "Des exemples concrets rattachés aux leviers Data & BI, IA et Solutions digitales.", icon: Bot },
+  { title: "Secteurs", href: "/secteurs", text: "Les 7 leviers adaptés aux réalités des assurances, cliniques, PME et institutions.", icon: ShieldCheck },
+  { title: "Projets", href: "/projets", text: "Des cas d'application pour tester rapidement la valeur d'un levier numérique.", icon: BarChart3 },
 ];
 
 const homeHeroImages = [
@@ -41,17 +41,17 @@ const faqCategories = [
       {
         question: "Que fait concrètement DTSC pour une entreprise ?",
         answer:
-          "DTSC accompagne les organisations dans leur transformation numérique: diagnostic, automatisation des processus, tableaux de bord, applications métier, chatbot professionnel, exploitation de la data, conseil technologique, formation et amélioration de la performance.",
+          "DTSC aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique. Les dashboards, chatbots, ERP, CRM ou portails clients sont des exemples rattachés à ces leviers, pas des services séparés.",
       },
       {
         question: "Comment se passe une première consultation ?",
         answer:
-          "La première étape consiste à clarifier votre contexte, vos objectifs, vos contraintes et vos priorités. DTSC peut ensuite recommander une feuille de route, un prototype, un tableau de bord, une automatisation ou une solution complète selon le niveau de maturité de votre organisation.",
+          "La première étape consiste à clarifier votre contexte, vos objectifs, vos contraintes et vos priorités. DTSC identifie ensuite les leviers les plus utiles et peut proposer une feuille de route, un prototype ou un accompagnement progressif.",
       },
       {
         question: "Puis-je échanger avec l'assistant IA public avant de contacter DTSC ?",
         answer:
-          "Oui. L'assistant IA public de DTSC peut répondre aux questions liées aux services DTSC, aider à préciser un besoin et transmettre une demande commerciale à l'équipe après confirmation. Il reste limité au périmètre DTSC et ne doit pas répondre aux sujets hors contexte.",
+          "Oui. L'assistant IA public de DTSC peut répondre aux questions liées aux 7 leviers DTSC, aider à préciser un besoin et transmettre une demande commerciale à l'équipe après confirmation. Il reste limité au périmètre DTSC et ne doit pas répondre aux sujets hors contexte.",
       },
       {
         question: "Faut-il déjà avoir un cahier des charges détaillé ?",
@@ -61,13 +61,13 @@ const faqCategories = [
       {
         question: "Quels types d'organisations peuvent travailler avec DTSC ?",
         answer:
-          "DTSC vise les PME, startups, assurances, cliniques, pharmacies, ONG, institutions, écoles, structures financières et administrations qui veulent mieux utiliser le numérique, les données et l'IA.",
+          "DTSC vise les PME, startups, assurances, cliniques, pharmacies, ONG, institutions, écoles, structures financières et administrations qui veulent appliquer les 7 leviers numériques à leur performance réelle.",
       },
     ],
   },
   {
     title: "Solutions, data & IA",
-    description: "Réponses sur le chatbot, les dashboards, les applications métier et la capacité documentaire.",
+    description: "Réponses sur les exemples rattachés aux leviers Data & BI, Intelligence artificielle et Solutions digitales.",
     items: [
       {
         question: "Le chatbot DTSC remplace-t-il un consultant humain ?",
@@ -87,12 +87,12 @@ const faqCategories = [
       {
         question: "DTSC peut-il créer des tableaux de bord et KPI ?",
         answer:
-          "Oui. DTSC peut concevoir des dashboards pour suivre les ventes, opérations, finances, risques, satisfaction client, activité interne ou indicateurs propres à votre secteur.",
+          "Oui. Les dashboards, KPI, reporting et tableaux de bord sont des exemples du levier Data & BI. Ils peuvent suivre ventes, opérations, finances, risques, satisfaction client, activité interne ou indicateurs propres à votre secteur.",
       },
       {
         question: "Pouvez-vous automatiser des processus internes ?",
         answer:
-          "Oui. DTSC peut aider à réduire les doubles saisies, structurer les relances, centraliser les demandes, automatiser des validations, connecter des formulaires et produire des rapports plus fiables.",
+          "Oui, quand cela sert un objectif mesurable. Selon le contexte, l'automatisation peut relever du levier Intelligence artificielle ou du levier Solutions digitales, par exemple pour réduire les doubles saisies, structurer les relances ou produire des rapports plus fiables.",
       },
       {
         question: "Le chatbot privé peut-il envoyer un message à DTSC ?",
@@ -149,17 +149,17 @@ const faqCategories = [
       {
         question: "Quels délais prévoir pour un projet ?",
         answer:
-          "Le délai dépend du périmètre. Un cadrage ou prototype peut être rapide, alors qu'une application métier complète ou une intégration documentaire demande une phase d'analyse, de conception, de tests et d'accompagnement.",
+          "Le délai dépend du périmètre et du levier retenu. Un cadrage ou prototype peut être rapide, alors qu'un cas d'application plus complet demande une phase d'analyse, de conception, de tests et d'accompagnement.",
       },
       {
         question: "DTSC propose-t-il de la formation ?",
         answer:
-          "Oui. DTSC peut accompagner les équipes sur la lecture des KPI, la culture data, l'usage de tableaux de bord, l'automatisation, l'IA appliquée et l'adoption des outils mis en place.",
+          "Oui. Les Formations font partie des 7 leviers officiels DTSC: culture data, IA, lecture des KPI, adoption des outils numériques et montée en compétence des équipes.",
       },
       {
         question: "Quelles évolutions sont prévues pour la plateforme ?",
         answer:
-          "La roadmap inclut l'amélioration du RAG documentaire, les intégrations métier, les exports, le support avancé, les paiements, les communications clients et les canaux comme WhatsApp Business selon les priorités de production.",
+          "La roadmap améliore les cas d'application des 7 leviers, notamment l'IA documentaire, les intégrations utiles, les exports, le support avancé, les paiements et les communications clients selon les priorités de production.",
       },
       {
         question: "Qui peut rédiger des publications publiques DTSC ?",
@@ -199,10 +199,10 @@ export default function Page() {
               {dtsc.slogan}
             </p>
             <h1 className="dtsc-hero-heading dtsc-text-shimmer mt-6 max-w-5xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
-              Accélérez votre transformation numérique avec la data, l&apos;IA et des solutions technologiques sur mesure.
+              Boostez votre performance avec les 7 leviers numériques DTSC.
             </h1>
             <p className="dtsc-premium-reveal-delay mt-6 max-w-3xl text-lg leading-8 text-cyan-50">
-              DTSC accompagne les entreprises dans la conception, l&apos;automatisation et le déploiement de solutions digitales orientées performance.
+              DTSC accompagne les entreprises avec Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] shadow-[0_16px_40px_rgba(0,194,255,0.2)] hover:bg-cyan-300">
@@ -230,7 +230,7 @@ export default function Page() {
             <div className="relative overflow-hidden rounded-[1.5rem] border border-white/15 bg-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
               <HeroImageCarousel images={homeHeroImages} label="Data and Tech Solutions Consulting" eyebrow="Kinshasa · Afrique" className="h-80" priority />
               <div className="grid gap-3 p-5 sm:grid-cols-3">
-                {["Data", "IA", "Business"].map((item) => (
+                {["Data & BI", "IA", "Solutions"].map((item) => (
                   <div key={item} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-black text-white">
                     <BrainCircuit className="mb-3 h-5 w-5 text-cyan-300" />
                     {item}
@@ -256,7 +256,7 @@ export default function Page() {
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Ressources DTSC</p>
                 <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Lisez nos guides, annonces, cas pratiques et articles pour mieux préparer vos projets.</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
-                  Accédez à des contenus utiles sur la data, l&apos;IA, l&apos;automatisation, les dashboards et la transformation numérique avant de passer à l&apos;échange avec l&apos;équipe DTSC.
+                  Accédez à des contenus utiles sur les 7 leviers DTSC, avec des exemples comme les dashboards, l&apos;IA documentaire, les workflows numériques et le pilotage par les données.
                 </p>
               </div>
             </div>
@@ -275,10 +275,10 @@ export default function Page() {
           <div className="mb-8 max-w-3xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Explorer DTSC</p>
             <h2 className="dtsc-ink-shimmer mt-2 text-3xl font-black text-dtsc-ink">
-              Découvrez nos <span className="text-dtsc-blue">expertises</span> à travers des pages dédiées.
+              Découvrez les <span className="text-dtsc-blue">7 leviers</span> à travers des pages dédiées.
             </h2>
             <p className="mt-4 leading-7 text-dtsc-muted">
-              Retrouvez en un coup d&apos;œil nos services, solutions, secteurs d&apos;intervention et projets. Chaque rubrique vous présente clairement notre approche, nos expertises et la valeur que nous apportons aux organisations.
+              Retrouvez en un coup d&apos;œil nos services, solutions, secteurs d&apos;intervention et projets. Chaque rubrique explique comment les 7 leviers DTSC se déclinent en exemples, cas d&apos;application et résultats mesurables.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -309,10 +309,10 @@ export default function Page() {
           <div className="rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">Pourquoi DTSC ?</p>
             <h2 className="mt-3 text-3xl font-black">
-              Une expertise hybride entre <span className="text-cyan-300">santé</span>, data et technologie.
+              Une approche claire autour de <span className="text-cyan-300">7 leviers</span> numériques.
             </h2>
             <p className="mt-4 leading-7 text-slate-300">
-              DTSC accompagne les organisations dans leur transformation numérique en combinant expertise métier, analyse des données, automatisation et solutions technologiques adaptées aux réalités du terrain.
+              DTSC relie chaque besoin à un levier officiel pour éviter la dispersion: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
             </p>
           </div>
           <div className="grid gap-3">
@@ -339,7 +339,7 @@ export default function Page() {
                 Tout ce qu&apos;un client veut clarifier avant de démarrer avec DTSC.
               </h2>
               <p className="mt-5 max-w-2xl text-base leading-8 text-dtsc-muted">
-                Une FAQ structurée pour comprendre les services, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de prendre contact.
+                Une FAQ structurée pour comprendre les 7 leviers, la plateforme, la confidentialité, les abonnements et l&apos;accompagnement DTSC avant de prendre contact.
               </p>
               <div className="mt-7 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_18px_60px_rgba(0,43,91,0.08)]">
                 <div className="flex items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-muted">
@@ -390,7 +390,7 @@ export default function Page() {
         <div className="rounded-[1.5rem] bg-[#002b5b] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] sm:p-8 lg:p-10">
           <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
-              <h2 className="text-3xl font-black">Passez à une nouvelle étape de votre transformation numérique.</h2>
+              <h2 className="text-3xl font-black">Passez à une nouvelle étape de performance numérique.</h2>
               <p className="mt-3 max-w-3xl leading-7 text-blue-100">
                 Échangeons sur vos besoins et construisons ensemble une solution adaptée à vos objectifs, à vos équipes et à votre réalité opérationnelle.
               </p>

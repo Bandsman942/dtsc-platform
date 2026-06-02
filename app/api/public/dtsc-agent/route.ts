@@ -10,24 +10,26 @@ import { writeApiLog } from "@/lib/audit";
 
 const DTSC_PUBLIC_AGENT_PROMPT = `Tu es l'assistant IA officiel de DTSC - Data and Tech Solutions Consulting.
 
-Ta mission est d'aider les visiteurs du site public à comprendre les services de DTSC, qualifier leurs besoins et transmettre les demandes commerciales à l'équipe.
+Ta mission est d'aider les visiteurs du site public à comprendre les 7 leviers numériques officiels de DTSC, qualifier leurs besoins et transmettre les demandes commerciales à l'équipe.
 
-Tu dois répondre exclusivement aux questions liées à DTSC, ses services, ses expertises, ses offres, ses domaines d'intervention, ses articles publics, ses prestations et ses processus de contact.
+Tu dois répondre exclusivement aux questions liées à DTSC, ses 7 leviers, ses exemples de solutions, ses secteurs d'intervention, ses articles publics, ses prestations et ses processus de contact.
 
 Si une question est hors sujet, tu dois répondre :
-Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, ses services, ses solutions et vos besoins en transformation numérique, data, automatisation, IA ou développement d'applications.
+Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, ses 7 leviers numériques, ses exemples de solutions et vos besoins de performance.
 
-Tu peux parler uniquement des domaines suivants :
-- transformation numérique ;
-- data analytics ;
-- tableaux de bord et reporting ;
-- automatisation des processus ;
-- intelligence artificielle appliquée ;
-- développement web et applications métier ;
-- conseil technologique ;
-- gouvernance des données ;
-- accompagnement des entreprises ;
-- prise de contact avec DTSC.
+Tu peux parler uniquement des 7 leviers officiels :
+1. Data & BI ;
+2. Intelligence artificielle ;
+3. Solutions digitales ;
+4. Audit & optimisation ;
+5. Formations ;
+6. Marketing digital ;
+7. Imprimerie numérique.
+
+Règle centrale :
+- Ne présente jamais transformation numérique, applications métier, automatisation, chatbot, CRM, portail client, assistant documentaire, dashboard, reporting, ERP, développement web ou conseil technologique comme des services séparés.
+- Ces termes peuvent rester uniquement comme exemples rattachés à l'un des 7 leviers.
+- Exemples: chatbot et assistant documentaire -> Intelligence artificielle; dashboards, KPI et reporting -> Data & BI; ERP, CRM, portails clients et applications web -> Solutions digitales; audit des processus et réduction des coûts -> Audit & optimisation.
 
 Lorsque le visiteur exprime un besoin, tu dois qualifier le prospect en collectant progressivement :
 1. nom complet ;
@@ -35,7 +37,7 @@ Lorsque le visiteur exprime un besoin, tu dois qualifier le prospect en collecta
 3. adresse email ;
 4. numéro de téléphone, si disponible ;
 5. fonction ou rôle ;
-6. service recherché ;
+6. levier DTSC recherché ;
 7. description du besoin ;
 8. niveau d'urgence ;
 9. budget approximatif, si le visiteur accepte de le partager ;
@@ -53,7 +55,7 @@ Les informations minimales obligatoires sont :
 - nom complet ;
 - email ;
 - description du besoin ;
-- service recherché.
+- levier DTSC recherché.
 
 Si ces informations ne sont pas encore disponibles, continue la conversation pour les demander.
 
@@ -119,15 +121,16 @@ function getFunctionCall(body: unknown) {
 }
 
 const disabledFallback =
-  "L'assistant IA public DTSC est actuellement désactivé par l'administrateur. Voici l'essentiel à retenir sur DTSC: Data and Tech Solutions Consulting accompagne les organisations dans la transformation numérique, la data analytics, les tableaux de bord et le reporting, l'automatisation des processus, l'intelligence artificielle appliquée, le développement web et les applications métier, le conseil technologique, la gouvernance des données et l'amélioration de la performance opérationnelle. DTSC aide les entreprises à clarifier leurs besoins, structurer leurs données, automatiser leurs workflows, concevoir des solutions digitales utiles et préparer des décisions mieux documentées. Vous pouvez consulter la FAQ de la landing page pour les questions fréquentes, puis remplir manuellement le formulaire de contact ou le formulaire newsletter sur la page Contact afin que l'équipe DTSC puisse qualifier votre besoin.";
+  "L'assistant IA public DTSC est actuellement désactivé par l'administrateur. Voici l'essentiel à retenir sur DTSC: Data and Tech Solutions Consulting aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique. Les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires, workflows numériques et reporting sont des exemples rattachés à ces leviers, pas des services séparés. Vous pouvez consulter la FAQ de la landing page pour les questions fréquentes, puis remplir manuellement le formulaire de contact ou le formulaire newsletter sur la page Contact afin que l'équipe DTSC puisse qualifier votre besoin.";
 
 const outOfScopeReply =
-  "Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, ses services, ses solutions et vos besoins en transformation numérique, data, automatisation, IA ou développement d'applications.";
+  "Je suis l'assistant IA de DTSC. Je peux uniquement répondre aux questions concernant DTSC, ses 7 leviers numériques, ses exemples de solutions et vos besoins de performance.";
 
 const faqContext = [
   "FAQ landing page DTSC disponible:",
-  "- DTSC accompagne les organisations en diagnostic numérique, data analytics, dashboards, automatisation, IA appliquée, applications métier, formation et conseil technologique.",
-  "- Une première consultation sert à clarifier le contexte, les objectifs, les contraintes et les priorités avant de recommander une feuille de route, un prototype ou une solution.",
+  "- DTSC accompagne les organisations avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
+  "- Les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires et workflows numériques sont des exemples rattachés aux 7 leviers, pas des services séparés.",
+  "- Une première consultation sert à clarifier le contexte, les objectifs, les contraintes et les priorités avant de recommander les leviers prioritaires, une feuille de route, un prototype ou un accompagnement.",
   "- Un cahier des charges détaillé n'est pas obligatoire: DTSC peut aider à structurer une idée, un problème métier, un fichier ou un processus manuel.",
   "- L'assistant IA public répond uniquement aux sujets DTSC, qualifie les besoins et transmet une demande commerciale après confirmation.",
   "- L'assistant public ne doit jamais inventer de guide, article, checklist, étude de cas, PDF ou ressource non publiée.",
@@ -318,7 +321,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const reply = getTextFromResponse(body) || "Je suis l'assistant IA de DTSC. Je peux vous aider à préciser votre besoin en transformation numérique, data, IA, automatisation ou application métier.";
+    const reply = getTextFromResponse(body) || "Je suis l'assistant IA de DTSC. Je peux vous aider à préciser votre besoin et le rattacher aux 7 leviers numériques DTSC.";
     await writeApiLog({ request: req, statusCode: 200, startedAt, metadata: { action: "public_dtsc_agent_reply", conversationId: parsed.data.conversationId || null } });
     return streamAgentReply({ reply });
   } catch (error) {

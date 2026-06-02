@@ -19,7 +19,7 @@ export default function SignInPage() {
         <div className="relative">
           <p className="max-w-lg text-4xl font-black leading-tight text-white">Accédez à votre espace client DTSC.</p>
           <p className="mt-4 max-w-md leading-7 text-slate-200">
-            Retrouvez vos conversations, vos tickets et les recommandations liées à vos projets data, IA, marketing digital et transformation numérique.
+            Retrouvez vos conversations, vos tickets et les recommandations liées aux 7 leviers numériques DTSC.
           </p>
           <div className="mt-10 rounded-2xl border border-cyan-300/25 bg-white/10 p-6 text-cyan-50 shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md">
             <p className="text-sm font-bold uppercase tracking-wider">Accès sécurisé</p>

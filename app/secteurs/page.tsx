@@ -4,7 +4,7 @@ import { publicLongPages } from "@/lib/public-site";
 
 export const metadata: Metadata = {
   title: "Secteurs accompagnés",
-  description: "Assurances, cliniques, pharmacies, PME et organisations accompagnées par DTSC en data, BI, IA et transformation digitale.",
+  description: "Secteurs accompagnés par DTSC avec les 7 leviers numériques adaptés aux réalités métier: assurances, santé, PME, ONG, finance, éducation et administration.",
   alternates: { canonical: "/secteurs" },
 };
 

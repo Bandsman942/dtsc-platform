@@ -73,41 +73,40 @@ export const trustedSources: PublicSource[] = [
 ];
 
 export const serviceCards: PublicCard[] = [
-  { title: "Transformation numérique", text: "Diagnostic, feuille de route, priorisation et accompagnement des chantiers digitaux.", icon: Rocket },
-  { title: "Data & Business Intelligence", text: "Dashboards, KPI, reporting et culture de pilotage par les faits.", icon: Database },
-  { title: "Automatisation & IA", text: "Chatbots, modèles prédictifs, automatisation de processus et assistance documentaire.", icon: BrainCircuit },
-  { title: "Applications métier", text: "Développement web, portails clients, outils internes et solutions sur mesure.", icon: Layers3 },
-  { title: "Audit & optimisation", text: "Réduction des coûts, analyse des anomalies, fraude potentielle et amélioration continue.", icon: ShieldCheck },
-  { title: "Marketing digital", text: "Acquisition clients, visibilité numérique, branding et campagnes orientées performance.", icon: Network },
-  { title: "Formation data", text: "Montée en compétence des équipes sur l'analyse de données et la lecture des KPI.", icon: GraduationCap },
-  { title: "Imprimerie numérique", text: "Supports physiques professionnels pour renforcer la présence commerciale.", icon: FileText },
+  { title: "Data & BI", text: "Dashboards, KPI, reporting et pilotage clair par les données.", icon: Database },
+  { title: "Intelligence artificielle", text: "Chatbots, assistants documentaires, modèles prédictifs et automatisation intelligente.", icon: BrainCircuit },
+  { title: "Solutions digitales", text: "Applications web, ERP, CRM, portails clients et workflows numériques utiles.", icon: Layers3 },
+  { title: "Audit & optimisation", text: "Analyse des coûts, anomalies, pertes et processus à améliorer.", icon: ShieldCheck },
+  { title: "Formations", text: "Formation data, IA, lecture des KPI et adoption des outils numériques.", icon: GraduationCap },
+  { title: "Marketing digital", text: "Visibilité, acquisition clients, branding et campagnes digitales.", icon: Network },
+  { title: "Imprimerie numérique", text: "Brochures, flyers, cartes et supports commerciaux professionnels.", icon: FileText },
 ];
 
 export const solutionsCards: PublicCard[] = [
-  { title: "Chatbot intelligent", text: "Un assistant professionnel pour qualifier les besoins, structurer les demandes et orienter vers DTSC.", icon: Bot },
-  { title: "Dashboards Power BI", text: "Des tableaux de bord lisibles pour suivre ventes, opérations, finances, risques et satisfaction.", icon: BarChart3 },
-  { title: "Applications métier", text: "Des outils digitaux adaptés aux processus réels de l'organisation.", icon: Layers3 },
-  { title: "Automatisation", text: "Des flux plus rapides pour réduire les doubles saisies, relances manuelles et pertes d'information.", icon: Workflow },
-  { title: "Portails clients & CRM", text: "Des espaces structurés pour centraliser interactions, tickets, prospects et suivi commercial.", icon: Building2 },
-  { title: "Assistant documentaire", text: "Une façon simple d'interroger des documents validés et d'obtenir des réponses plus utiles.", icon: UploadCloud },
+  { title: "Chatbot intelligent", text: "Exemple du levier Intelligence artificielle pour qualifier et orienter les besoins.", icon: Bot },
+  { title: "Dashboards Power BI", text: "Exemple du levier Data & BI pour suivre KPI, reporting et décisions.", icon: BarChart3 },
+  { title: "Applications web", text: "Exemple du levier Solutions digitales pour structurer les opérations internes.", icon: Layers3 },
+  { title: "Workflows numériques", text: "Exemple des leviers Solutions digitales et IA pour réduire les doubles saisies.", icon: Workflow },
+  { title: "Portails clients, ERP & CRM", text: "Exemples du levier Solutions digitales pour centraliser les parcours clients.", icon: Building2 },
+  { title: "Assistant documentaire", text: "Exemple du levier Intelligence artificielle pour interroger des documents validés.", icon: UploadCloud },
 ];
 
 export const sectorCards: PublicCard[] = [
-  { title: "Santé", text: "Cliniques, projets médicaux, reporting sanitaire, tableaux de bord et confidentialité métier.", icon: Stethoscope },
-  { title: "Assurances", text: "Suivi portefeuille, renouvellements, sinistres, performance commerciale et anomalies.", icon: ShieldCheck },
-  { title: "PME & startups", text: "Outils simples, reporting dirigeant, marketing digital et automatisation des opérations.", icon: BriefcaseBusiness },
-  { title: "ONG & institutions", text: "Suivi projets, reporting bailleurs, données de terrain et tableaux d'impact.", icon: Building2 },
-  { title: "Éducation", text: "Suivi apprenants, indicateurs de formation, automatisation administrative et reporting.", icon: GraduationCap },
-  { title: "Finance", text: "Pilotage de performance, contrôle, conformité, tableaux de bord et qualité des données.", icon: Landmark },
-  { title: "Administration", text: "Processus internes, documents, demandes, indicateurs et amélioration du service.", icon: ClipboardCheck },
+  { title: "Santé", text: "7 leviers adaptés aux cliniques, pharmacies, données sanitaires et supports patients.", icon: Stethoscope },
+  { title: "Assurances", text: "7 leviers appliqués au portefeuille, aux sinistres, anomalies et campagnes clients.", icon: ShieldCheck },
+  { title: "PME & startups", text: "7 leviers pour structurer les données, les outils internes, la visibilité et l'adoption.", icon: BriefcaseBusiness },
+  { title: "ONG & institutions", text: "7 leviers adaptés au suivi projets, aux données terrain et aux supports bailleurs.", icon: Building2 },
+  { title: "Éducation", text: "7 leviers pour suivre les apprenants, former les équipes et digitaliser les parcours.", icon: GraduationCap },
+  { title: "Finance", text: "7 leviers pour piloter performance, contrôle, conformité et qualité des données.", icon: Landmark },
+  { title: "Administration", text: "7 leviers pour clarifier les processus, demandes, indicateurs et services aux usagers.", icon: ClipboardCheck },
 ];
 
 export const publicLongPages: Record<string, PublicLongPage> = {
   services: {
     eyebrow: "Services DTSC",
-    title: "Des services de conseil et d'exécution pour transformer la performance.",
+    title: "7 leviers numériques pour booster la performance des entreprises.",
     intro:
-      "DTSC accompagne les organisations qui veulent gagner du temps, mieux suivre leurs activités, attirer plus de clients et moderniser leurs outils sans complexité inutile.",
+      "DTSC accompagne les organisations avec 7 leviers officiels: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
     tone: "blue",
     heroLabel: "Conseil + Exécution",
     heroImage: "https://images.pexels.com/photos/3931504/pexels-photo-3931504.jpeg?auto=compress&cs=tinysrgb&w=1400",
@@ -121,30 +120,30 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     sources: trustedSources,
     sections: [
       {
-        heading: "Transformer sans surcharger l'organisation",
+        heading: "Avancer avec les 7 leviers DTSC",
         text:
-          "Beaucoup d'organisations savent qu'elles doivent se moderniser, mais ne veulent pas perdre du temps dans des outils difficiles à utiliser. DTSC privilégie une approche progressive: comprendre vos priorités, choisir les gains rapides, puis déployer des solutions que les équipes peuvent adopter facilement.",
-        bullets: ["Diagnostic initial", "Priorisation des gains rapides", "Livrables mesurables", "Formation et adoption"],
+          "Beaucoup d'organisations veulent progresser sans se disperser dans des offres difficiles à comparer. DTSC structure l'accompagnement autour de 7 leviers numériques, puis choisit avec vous les actions prioritaires selon vos objectifs, vos équipes et vos indicateurs.",
+        bullets: ["Diagnostic initial", "Choix des leviers prioritaires", "Livrables mesurables", "Formation et adoption"],
       },
       {
-        heading: "Relier data, IA et applications métier",
+        heading: "Relier les exemples aux bons leviers",
         text:
-          "Chez DTSC, les chiffres, les outils et l'assistance IA sont pensés comme un ensemble. Le but n'est pas d'ajouter de la technologie pour la technologie, mais de rendre les décisions plus claires, les opérations plus rapides et le service client plus fluide.",
-        bullets: ["Dashboards KPI", "Applications web", "Automatisation", "Chatbots et IA maîtrisée"],
+          "Les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires et workflows numériques ne sont pas des services séparés. Ce sont des exemples concrets rattachés aux leviers Data & BI, Intelligence artificielle et Solutions digitales selon le besoin.",
+        bullets: ["Dashboards KPI dans Data & BI", "Chatbots dans Intelligence artificielle", "ERP, CRM et portails dans Solutions digitales", "Audit des processus dans Audit & optimisation"],
       },
       {
-        heading: "Des solutions adaptées à chaque besoin",
+        heading: "Un même objectif: la performance mesurable",
         text:
-          "Chaque organisation avance à son rythme. DTSC peut intervenir pour un diagnostic, une solution métier, un tableau de bord, une automatisation, une formation ou un accompagnement continu. L'objectif reste le même: une réponse claire, utile et adaptée à votre réalité.",
-        bullets: ["Conseil stratégique", "Développement de solutions", "Formation des équipes"],
+          "Chaque levier DTSC doit produire un gain lisible: temps gagné, meilleur suivi, coûts réduits, visibilité accrue, adoption des outils ou décisions plus fiables. L'accompagnement reste progressif et adapté à votre réalité métier.",
+        bullets: ["Performance opérationnelle", "Réduction des coûts", "Visibilité commerciale", "Adoption par les équipes"],
       },
     ],
   },
   solutions: {
     eyebrow: "Solutions",
-    title: "Des solutions concrètes pour automatiser, piloter et mieux servir vos clients.",
+    title: "Des exemples concrets rattachés aux 7 leviers numériques DTSC.",
     intro:
-      "DTSC construit des solutions concrètes pour mieux répondre aux clients, suivre les activités, réduire les tâches manuelles et exploiter les informations déjà disponibles dans l'organisation.",
+      "Les solutions DTSC illustrent les 7 leviers numériques: elles montrent comment un chatbot, un dashboard, un portail ou un assistant documentaire peut devenir un cas d'usage utile, sans créer une liste de services parallèle.",
     tone: "cyan",
     heroLabel: "Solutions métier",
     heroImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
@@ -158,30 +157,30 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     sources: trustedSources,
     sections: [
       {
-        heading: "Chatbot intelligent pour entreprises",
+        heading: "Intelligence artificielle: chatbot et assistant documentaire",
         text:
-          "Le chatbot DTSC est conçu pour orienter les visiteurs, qualifier les besoins et préparer un échange plus structuré avec l'équipe. Il n'a pas vocation à promettre une prestation ou à remplacer une validation humaine. Il aide plutôt à clarifier le contexte, reformuler la demande et proposer une suite logique: contact, ticket, consultation ou approfondissement documentaire.",
-        bullets: ["Qualification des besoins", "Réponses claires", "Escalade humaine", "Historique des échanges"],
+          "Un chatbot ou un assistant documentaire est présenté comme une application du levier Intelligence artificielle. Il peut orienter les visiteurs, qualifier les besoins, rechercher dans des documents validés et préparer une suite logique, avec validation humaine pour les décisions importantes.",
+        bullets: ["Qualification des besoins", "Réponses claires", "Escalade humaine", "Recherche documentaire contrôlée"],
       },
       {
-        heading: "Dashboards et applications sur mesure",
+        heading: "Data & BI et Solutions digitales",
         text:
-          "Une solution professionnelle doit être adaptée à la façon dont les équipes travaillent. DTSC peut concevoir des tableaux de bord, des applications internes, des portails clients et des workflows d'automatisation. Le but est de centraliser l'information, réduire les pertes de temps et donner aux managers une lecture fiable de l'activité.",
-        bullets: ["Power BI et reporting", "Applications métier", "Portails clients", "Automatisation des tâches"],
+          "Les dashboards, KPI, reporting et tableaux de bord relèvent du levier Data & BI. Les applications web, ERP, CRM, portails clients et outils internes relèvent du levier Solutions digitales. Le but reste de centraliser l'information, réduire les pertes de temps et donner aux managers une lecture fiable de l'activité.",
+        bullets: ["Power BI et reporting dans Data & BI", "Applications web dans Solutions digitales", "ERP, CRM et portails clients", "Workflows numériques utiles"],
       },
       {
-        heading: "Assistant documentaire",
+        heading: "Audit & optimisation avant le déploiement",
         text:
-          "Vos documents contiennent souvent des réponses utiles: procédures, offres, rapports, FAQ ou supports internes. DTSC prépare des assistants capables d'aider les équipes à retrouver plus vite l'information, tout en gardant un cadre privé et une validation humaine pour les décisions importantes.",
-        bullets: ["Documents privés", "Réponses contextualisées", "Recherche sémantique", "Sécurité et confidentialité"],
+          "Avant de multiplier les outils, DTSC peut analyser les processus, les pertes de temps, les anomalies et les coûts. Cet audit rattache chaque solution au levier le plus pertinent et permet de prioriser ce qui produit un impact mesurable.",
+        bullets: ["Processus observés", "Anomalies identifiées", "Coûts à réduire", "Priorités de mise en œuvre"],
       },
     ],
   },
   secteurs: {
     eyebrow: "Secteurs",
-    title: "Des offres adaptées aux assurances, cliniques, pharmacies, PME et institutions.",
+    title: "Les 7 leviers DTSC adaptés à chaque réalité métier.",
     intro:
-      "DTSC accompagne les organisations qui ont besoin de mieux suivre leurs opérations, améliorer leur relation client, structurer leurs informations et gagner en efficacité au quotidien.",
+      "Les secteurs ne créent pas de nouveaux services DTSC: ils montrent comment les 7 leviers numériques peuvent être adaptés aux assurances, cliniques, pharmacies, PME, ONG, institutions, écoles, finances et administrations.",
     tone: "emerald",
     heroLabel: "Marchés cibles",
     heroImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80",
@@ -197,28 +196,28 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Santé, cliniques et pharmacies",
         text:
-          "Dans la santé, la technologie doit aider les équipes à mieux servir les patients, suivre les stocks, améliorer le reporting et gagner en visibilité sans compliquer le travail quotidien. DTSC apporte une approche attentive aux réalités des cliniques, pharmacies et projets médicaux.",
-        bullets: ["Reporting médical", "Gestion des stocks", "Confidentialité", "Validation métier santé"],
+          "Dans la santé, les 7 leviers DTSC peuvent soutenir le suivi des stocks, la qualité de service, le reporting sanitaire, la confidentialité et l'adoption des outils. Les exemples sont adaptés aux cliniques, pharmacies et projets médicaux sans créer une offre santé séparée.",
+        bullets: ["Data & BI pour le reporting médical", "Solutions digitales pour les stocks", "Audit & optimisation des coûts", "Formations et adoption"],
       },
       {
         heading: "Assurances et finance",
         text:
-          "Les assurances et organisations financières ont besoin de données fiables pour suivre les clients, renouvellements, ventes, sinistres, risques et anomalies. DTSC peut aider à définir les KPI, automatiser le reporting et construire des vues qui facilitent la décision. Cette approche s'inscrit dans une logique de performance, de contrôle et de meilleure expérience client.",
-        bullets: ["Portefeuille clients", "Suivi sinistres", "Analyse anomalies", "Performance commerciale"],
+          "Les assurances et organisations financières bénéficient surtout des leviers Data & BI, Audit & optimisation, Solutions digitales et Marketing digital: suivi portefeuille, renouvellements, sinistres, risques, anomalies et performance commerciale.",
+        bullets: ["KPI portefeuille et renouvellements", "Analyse sinistres et anomalies", "CRM comme exemple de Solutions digitales", "Performance commerciale"],
       },
       {
         heading: "PME, ONG et administrations",
         text:
-          "Les PME et institutions n'ont pas toujours besoin d'un grand système dès le départ. Elles ont souvent besoin d'un premier outil fiable: formulaire, base structurée, reporting, automatisation ou portail. DTSC accompagne cette progression par étapes afin de limiter les coûts et d'augmenter l'adoption.",
-        bullets: ["Démarrage progressif", "Reporting bailleurs", "Automatisation administrative", "Outils légers et évolutifs"],
+          "Les PME, ONG et administrations peuvent commencer par un cas d'usage simple: données structurées, tableau de bord, portail, workflow numérique, formation ou campagne digitale. Chaque exemple reste rattaché à l'un des 7 leviers DTSC.",
+        bullets: ["Démarrage progressif", "Reporting bailleurs dans Data & BI", "Portails dans Solutions digitales", "Marketing digital pour la visibilité"],
       },
     ],
   },
   projets: {
     eyebrow: "Projets & démonstrations",
-    title: "Des démonstrations pour passer rapidement d'une idée à une solution exploitable.",
+    title: "Des cas d'application des 7 leviers numériques DTSC.",
     intro:
-      "DTSC transforme les idées en démonstrations concrètes pour tester rapidement la valeur d'une solution avant d'investir dans un déploiement plus large.",
+      "Les projets et démonstrations DTSC servent à tester rapidement la valeur d'un levier numérique avant d'investir dans un déploiement plus large.",
     tone: "indigo",
     heroLabel: "Démos utiles",
     heroImage: "https://images.pexels.com/photos/7710140/pexels-photo-7710140.jpeg?auto=compress&cs=tinysrgb&w=1400",
@@ -229,19 +228,19 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=80",
     ],
     cards: [
-      { title: "Prototype chatbot DTSC", text: "Qualification des besoins, historique, support et orientation client.", icon: Bot },
-      { title: "Dashboard de reporting", text: "Suivi KPI, décisions et pilotage de performance.", icon: BarChart3 },
-      { title: "Application de gestion interne", text: "Centralisation des tâches, comptes, documents et workflows.", icon: Layers3 },
-      { title: "Système d'automatisation", text: "Réduction des relances manuelles et des erreurs de saisie.", icon: Workflow },
-      { title: "Plateforme client", text: "Espace sécurisé avec tickets, notifications, documents et factures.", icon: Building2 },
+      { title: "Prototype chatbot DTSC", text: "Cas d'application du levier Intelligence artificielle.", icon: Bot },
+      { title: "Dashboard de reporting", text: "Cas d'application du levier Data & BI.", icon: BarChart3 },
+      { title: "Application de gestion interne", text: "Cas d'application du levier Solutions digitales.", icon: Layers3 },
+      { title: "Workflow numérique", text: "Cas d'application des leviers Solutions digitales et IA.", icon: Workflow },
+      { title: "Plateforme client", text: "Cas d'application du levier Solutions digitales.", icon: Building2 },
     ],
     sources: trustedSources,
     sections: [
       {
         heading: "Prototyper pour réduire le risque",
         text:
-          "Un prototype permet de tester rapidement la valeur d'une idée avant d'engager un développement complet. DTSC peut cadrer le besoin, produire une première version, recueillir les retours utilisateurs et prioriser les évolutions. Cette méthode réduit les risques de construire un outil trop complexe ou mal aligné avec les usages réels.",
-        bullets: ["Prototype rapide", "Retours utilisateurs", "Priorisation", "Décision d'investissement"],
+          "Un prototype permet de tester rapidement la valeur d'un levier avant un déploiement complet. DTSC peut cadrer le besoin, produire une première version, recueillir les retours utilisateurs et prioriser les évolutions. Cette méthode réduit les risques de construire un outil trop complexe ou mal aligné avec les usages réels.",
+        bullets: ["Levier prioritaire", "Prototype rapide", "Retours utilisateurs", "Décision d'investissement"],
       },
       {
         heading: "Mesurer les gains",
@@ -252,7 +251,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Passer du projet au produit",
         text:
-          "Une démonstration réussie peut devenir une solution durable. DTSC aide à stabiliser les fonctionnalités, documenter les usages, former les équipes et préparer une amélioration continue après la mise en service.",
+          "Une démonstration réussie peut devenir une solution durable dans le levier concerné. DTSC aide à stabiliser les fonctionnalités, documenter les usages, former les équipes et préparer une amélioration continue après la mise en service.",
         bullets: ["Fonctionnalités utiles", "Documentation claire", "Formation", "Amélioration continue"],
       },
     ],
@@ -261,7 +260,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     eyebrow: "À propos",
     title: "DTSC, un cabinet de performance numérique basé à Kinshasa.",
     intro:
-      "Data and Tech Solutions Consulting est né pour aider les organisations africaines à améliorer leur performance grâce à la data, l'IA, l'automatisation, le marketing digital et les solutions métier.",
+      "Data and Tech Solutions Consulting aide les organisations à booster leur performance à travers 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
     tone: "slate",
     heroLabel: "Kinshasa · 2026",
     heroImage: "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
@@ -272,18 +271,18 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=80",
     ],
     cards: [
-      { title: "Vision", text: "Devenir un leader africain en transformation digitale et data consulting.", icon: Lightbulb },
-      { title: "Mission", text: "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité.", icon: Rocket },
+      { title: "Vision", text: "Devenir un leader africain de la performance mesurable par les 7 leviers numériques DTSC.", icon: Lightbulb },
+      { title: "Mission", text: "Aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité avec les 7 leviers.", icon: Rocket },
       { title: "Positionnement", text: "Combiner technologie et stratégie business pour créer un impact mesurable.", icon: BriefcaseBusiness },
       ...dtsc.organizationRoles.map((role) => ({ title: role.title, text: role.mission, icon: Building2 })),
     ],
     sources: trustedSources,
     sections: [
       {
-        heading: "Une expertise hybride",
+        heading: "Une expertise structurée autour de 7 leviers",
         text:
-          "DTSC réunit une compréhension du terrain, de la donnée et des solutions numériques. Cette combinaison permet d'aborder les projets avec une attention particulière à la qualité de service, à la confidentialité, à la simplicité d'usage et à l'impact mesurable pour le client.",
-        bullets: ["Médecine", "Data", "Business", "Technologie"],
+          "DTSC réunit une compréhension du terrain, de la donnée, de l'IA, des solutions digitales, de l'audit, de la formation, du marketing digital et de l'imprimerie numérique. Cette combinaison permet d'aborder les projets avec une attention particulière à la qualité de service, à la confidentialité, à la simplicité d'usage et à l'impact mesurable pour le client.",
+        bullets: ["Data & BI", "Intelligence artificielle", "Solutions digitales", "Audit & optimisation"],
       },
       {
         heading: "Organisation fonctionnelle",
@@ -294,8 +293,8 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       {
         heading: "Roadmap et croissance",
         text:
-          "DTSC avance avec une ambition claire: accompagner davantage d'organisations, améliorer continuellement ses solutions et développer des offres plus accessibles pour les entreprises qui veulent progresser rapidement sans perdre le contrôle de leurs opérations.",
-        bullets: ["Accompagnement client", "Solutions évolutives", "Formation", "Croissance maîtrisée"],
+          "DTSC avance avec une ambition claire: accompagner davantage d'organisations, améliorer continuellement ses cas d'application et rendre les 7 leviers plus accessibles aux entreprises qui veulent progresser rapidement sans perdre le contrôle de leurs opérations.",
+        bullets: ["Accompagnement client", "Cas d'application évolutifs", "Formations", "Croissance maîtrisée"],
       },
     ],
   },

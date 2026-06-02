@@ -2,6 +2,15 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-02
+
+### Modifié
+
+- Harmonisation des contenus publics DTSC autour des 7 leviers numériques officiels: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
+- Les pages Accueil, Services, Solutions, Secteurs, Projets, À propos, Contact, Ressources et les metadata SEO présentent désormais les solutions, secteurs et démonstrations comme des exemples ou cas d'application des 7 leviers, sans créer de liste concurrente de services.
+- Alignement de l'index de recherche publique, du contexte de l'assistant IA public, du prompt DTSC et des textes newsletter pour rattacher chatbot, dashboards, ERP, CRM, portails clients, assistant documentaire, reporting et workflows numériques aux leviers correspondants.
+- Mise à jour de la page `/offline`, du fallback `public/offline.html` et du cache service worker pour conserver les 7 leviers DTSC hors connexion.
+
 ## 2026-05-30
 
 ### Ajouté

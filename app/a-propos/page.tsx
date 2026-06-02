@@ -5,7 +5,7 @@ import { dtsc } from "@/lib/dtsc";
 
 export const metadata: Metadata = {
   title: "À propos de DTSC",
-  description: "Découvrez DTSC, sa vision, sa mission, son organisation et sa roadmap de croissance en transformation numérique, data et IA.",
+  description: "Découvrez DTSC, cabinet basé à Kinshasa qui aide les organisations à booster leur performance avec 7 leviers numériques officiels.",
   alternates: { canonical: "/a-propos" },
 };
 

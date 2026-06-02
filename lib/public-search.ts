@@ -8,19 +8,19 @@ export type PublicSearchItem = {
 export const publicSearchIndex: PublicSearchItem[] = [
   {
     title: "Accueil DTSC Platform",
-    description: "Présentation de DTSC, transformation numérique, data, IA, automatisation et consulting.",
+    description: "Présentation de DTSC et de ses 7 leviers numériques de performance.",
     href: "/",
     category: "Accueil",
   },
   {
     title: "Services DTSC",
-    description: "Conseil numérique, data, business intelligence, IA, automatisation, applications métier et conformité.",
+    description: "Les 7 leviers DTSC: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
     href: "/services",
     category: "Services",
   },
   {
     title: "Solutions entreprises",
-    description: "Chatbot intelligent, dashboards, portails clients, RAG documentaire et automatisation des processus.",
+    description: "Chatbot, dashboards, portails, ERP, CRM et assistant documentaire comme exemples rattachés aux 7 leviers.",
     href: "/solutions",
     category: "Solutions",
   },
@@ -32,7 +32,7 @@ export const publicSearchIndex: PublicSearchItem[] = [
   },
   {
     title: "Projets et démonstrations",
-    description: "Exemples de prototypes, plateformes, tableaux de bord et systèmes d'automatisation.",
+    description: "Cas d'application des 7 leviers numériques officiels de DTSC.",
     href: "/projets",
     category: "Projets",
   },
@@ -44,13 +44,13 @@ export const publicSearchIndex: PublicSearchItem[] = [
   },
   {
     title: "À propos de DTSC",
-    description: "Vision, mission, méthode, métiers et positionnement de Data and Tech Solutions Consulting.",
+    description: "Vision, mission, méthode et positionnement de DTSC autour des 7 leviers numériques.",
     href: "/a-propos",
     category: "Entreprise",
   },
   {
     title: "Contact DTSC",
-    description: "Contact, consultation, cadrage ou accompagnement numérique avec DTSC.",
+    description: "Contact, consultation et cadrage d'un besoin autour des 7 leviers DTSC.",
     href: "/contact",
     category: "Contact",
   },
@@ -62,13 +62,13 @@ export const publicSearchIndex: PublicSearchItem[] = [
   },
   {
     title: "BI et KPI",
-    description: "Indicateurs utiles, tableaux de bord, reporting et pilotage par la donnée.",
+    description: "Levier Data & BI: indicateurs utiles, tableaux de bord, reporting et pilotage par la donnée.",
     href: "/bi-kpi",
     category: "Ressources",
   },
   {
     title: "IA en entreprise",
-    description: "Cas d'usage IA, assistants métiers, automatisation et validation humaine.",
+    description: "Levier Intelligence artificielle: assistants, modèles prédictifs, automatisation intelligente et validation humaine.",
     href: "/ia-entreprise",
     category: "Ressources",
   },

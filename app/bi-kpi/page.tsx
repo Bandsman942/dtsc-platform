@@ -4,7 +4,7 @@ import { publicPages } from "@/lib/public-content";
 
 export const metadata: Metadata = {
   title: "BI, KPI et reporting",
-  description: "Tableaux de bord, KPI, reporting automatisé et pilotage de la performance pour les entreprises accompagnées par DTSC.",
+  description: "Levier Data & BI DTSC: tableaux de bord, KPI, reporting et pilotage de la performance pour les entreprises.",
   alternates: { canonical: "/bi-kpi" },
 };
 

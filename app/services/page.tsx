@@ -4,7 +4,7 @@ import { publicLongPages } from "@/lib/public-site";
 
 export const metadata: Metadata = {
   title: "Services DTSC",
-  description: "Services DTSC: transformation numérique, data, BI, IA, automatisation, applications métier, marketing digital, formation et optimisation.",
+  description: "Services DTSC structurés autour de 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
   alternates: { canonical: "/services" },
 };
 

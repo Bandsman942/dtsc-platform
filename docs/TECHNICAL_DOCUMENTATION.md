@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 30 mai 2026
+Derniere mise a jour: 2 juin 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -11,6 +11,7 @@ DTSC Platform est une application SaaS Next.js App Router pour DTSC - Data and T
 Objectifs couverts par le code actuel:
 
 - landing page publique DTSC refondue avec navigation corporate vers des pages dediees: Services, Solutions, Secteurs, Projets, Ressources, A propos et Contact;
+- vocabulaire public harmonise autour des 7 leviers numeriques officiels DTSC: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numerique; les solutions, secteurs et projets publics sont presentes comme des exemples ou cas d'application de ces leviers;
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
@@ -1628,8 +1629,8 @@ Pages publiques dediees:
 | Route | Objectif |
 | --- | --- |
 | `/` | Page d'accueil courte, conversion, FAQ publique et orientation vers les pages dediees |
-| `/services` | Services DTSC: transformation numerique, data, IA, marketing digital, audit, formation |
-| `/solutions` | Offres concretes: chatbot, dashboards, applications metier, automatisation, RAG documentaire |
+| `/services` | Services DTSC structures autour des 7 leviers officiels: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numerique |
+| `/solutions` | Exemples rattaches aux 7 leviers: chatbot, dashboards, ERP, CRM, portails clients, assistant documentaire et workflows numeriques |
 | `/secteurs` | Secteurs cibles: assurances, sante, pharmacies, PME, ONG, education, finance |
 | `/projets` | Demonstrations et types de projets livrables |
 | `/ressources` | Ressources publiques statiques, accordions par categorie et trois dernieres publications admin en cartes |
@@ -1982,8 +1983,8 @@ Agent IA public:
 - la route injecte un contexte FAQ issu de la landing page afin d'orienter les visiteurs vers les reponses publiques existantes sur DTSC, l'assistant, les tickets, la securite, les abonnements et les publications;
 - la route enrichit le prompt avec les publications publiques reellement publiees; l'agent ne doit citer que ces ressources et ne doit jamais inventer de guide, checklist, article, PDF ou etude de cas non redige par DTSC;
 - un filtre serveur refuse les messages manifestement hors perimetre DTSC avant l'appel OpenAI et renvoie la reponse officielle de recentrage;
-- l'agent est limite aux sujets DTSC: transformation numerique, data analytics, reporting, automatisation, IA appliquee, developpement web/applications metier, conseil technologique, gouvernance des donnees et prise de contact;
-- l'outil serveur `createLeadAndNotify` est appele uniquement apres confirmation du visiteur et exige les champs minimaux: nom complet, email, service recherche et description du besoin;
+- l'agent est limite aux sujets DTSC: les 7 leviers numeriques officiels, leurs exemples rattaches, les secteurs accompagnes, les ressources publiques et la prise de contact;
+- l'outil serveur `createLeadAndNotify` est appele uniquement apres confirmation du visiteur et exige les champs minimaux: nom complet, email, levier ou besoin recherche et description du besoin;
 - une conversation deja transmise envoie `leadSubmitted=true` afin d'eviter plusieurs notifications pour la meme demande dans le widget.
 
 Prospects et email:

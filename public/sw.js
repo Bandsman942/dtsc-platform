@@ -1,4 +1,4 @@
-const STATIC_CACHE = "dtsc-static-v5-20260521";
+const STATIC_CACHE = "dtsc-static-v6-20260602";
 const OFFLINE_URL = "/offline.html";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];

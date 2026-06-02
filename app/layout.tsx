@@ -22,22 +22,27 @@ export const metadata: Metadata = {
   applicationName: "DTSC Platform",
   manifest: "/manifest.webmanifest",
   title: {
-    default: "DTSC Platform | Data, IA et transformation digitale",
+    default: "DTSC Platform | 7 leviers numériques de performance",
     template: "%s | DTSC Platform",
   },
   description:
-    "DTSC accompagne les entreprises en transformation digitale, data, BI, dashboards KPI, intelligence artificielle, automatisation, marketing digital et applications métier.",
+    "DTSC aide les entreprises à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
   keywords: [
     "DTSC",
     "Data and Tech Solutions Consulting",
-    "transformation digitale",
+    "7 leviers numériques",
+    "Data & BI",
     "data consulting",
     "business intelligence",
     "Power BI",
     "dashboards KPI",
     "intelligence artificielle",
     "chatbot professionnel",
-    "automatisation des processus",
+    "Solutions digitales",
+    "Audit et optimisation",
+    "Formations numériques",
+    "Marketing digital",
+    "Imprimerie numérique",
     "Kinshasa",
     "RDC",
     "Afrique",
@@ -53,9 +58,9 @@ export const metadata: Metadata = {
     locale: "fr_CD",
     url: appUrl,
     siteName: "DTSC Platform",
-    title: "DTSC Platform | Data, IA et transformation digitale",
+    title: "DTSC Platform | 7 leviers numériques de performance",
     description:
-      "Cabinet DTSC basé à Kinshasa: conseil numérique, data, BI, IA, automatisation, dashboards et chatbot professionnel.",
+      "Cabinet DTSC basé à Kinshasa: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
     images: [
       {
         url: "/dtsc-logo.png",
@@ -67,9 +72,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "DTSC Platform | Data, IA et transformation digitale",
+    title: "DTSC Platform | 7 leviers numériques de performance",
     description:
-      "Le numérique au service de votre performance: data, BI, IA, automatisation et applications métier pour les entreprises.",
+      "Le numérique au service de votre performance avec Data & BI, IA, Solutions digitales, audit, formations, marketing digital et imprimerie numérique.",
     images: ["/dtsc-logo.png"],
   },
   robots: {

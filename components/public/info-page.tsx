@@ -53,7 +53,7 @@ export function InfoPage({
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Ce que vous devez retenir</h2>
           </div>
           <p className="leading-7 text-dtsc-muted">
-            Les contenus publics DTSC sont conçus pour aider les visiteurs à comprendre les enjeux data, BI, IA et transformation numérique avant de créer un compte. Les décisions sensibles restent orientées vers un échange humain.
+            Les contenus publics DTSC sont conçus pour aider les visiteurs à comprendre les 7 leviers numériques et leurs exemples d'application avant de créer un compte. Les décisions sensibles restent orientées vers un échange humain.
           </p>
         </div>
 

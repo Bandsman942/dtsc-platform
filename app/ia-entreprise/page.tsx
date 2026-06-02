@@ -4,7 +4,7 @@ import { publicPages } from "@/lib/public-content";
 
 export const metadata: Metadata = {
   title: "IA en entreprise",
-  description: "Intelligence artificielle responsable, chatbots professionnels, automatisation et cas d'usage IA pour les entreprises.",
+  description: "Levier Intelligence artificielle DTSC: chatbots, assistants documentaires, modèles prédictifs et automatisation intelligente comme cas d'usage.",
   alternates: { canonical: "/ia-entreprise" },
 };
 

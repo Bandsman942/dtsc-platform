@@ -4,9 +4,9 @@ Plateforme SaaS multi-tenant pour **DTSC — Data and Tech Solutions Consulting*
 
 Slogan: **Le numérique au service de votre performance**.
 
-L'application fournit un assistant IA professionnel pour aider les clients à clarifier leurs besoins en transformation digitale, data & BI, IA, marketing digital, applications métier, optimisation des coûts, fraude et accompagnement technologique.
+L'application fournit un assistant IA professionnel pour aider les clients à clarifier leurs besoins autour des 7 leviers numériques officiels DTSC: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
 
-DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une offre hybride combinant consulting, abonnements, développement, marketing, formation et produits digitaux.
+DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une offre hybride où les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires, workflows numériques et supports imprimés restent des exemples rattachés aux 7 leviers, pas des services séparés.
 
 ## Stack Technique
 
@@ -31,6 +31,7 @@ La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND
 ## Fonctionnalités
 
 - Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
+- Contenus publics harmonisés autour des 7 leviers numériques officiels DTSC, avec solutions, secteurs et projets présentés comme des cas d'application.
 - FAQ premium sur l'accueil avec composant Accordion accessible, catégories métier et données structurées SEO `FAQPage`
 - FAQ publique enrichie avec les questions sur l'assistant IA, le chatbot privé, les tickets, la sécurité, les ressources et les brouillons de publications
 - Sections publiques harmonisées avec bandes visuelles alternées et cartes contrastées pour éviter la confusion entre blocs et arrière-plan

@@ -25,7 +25,7 @@ const offlineFaq = [
   },
   {
     question: "Que fait DTSC ?",
-    answer: "DTSC accompagne les organisations dans la transformation numérique, la data, l'automatisation, l'IA, les applications métier, le marketing digital et l'imprimerie numérique.",
+    answer: "DTSC aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
   },
 ];
 
@@ -112,7 +112,7 @@ export default function OfflinePage() {
               <p className="mt-2 text-sm leading-7 text-dtsc-muted">
                 Email: {dtsc.email} · Site: {dtsc.website}. L&apos;envoi de message et les formulaires nécessitent une connexion.
               </p>
-              <p className="mt-1 text-xs font-bold text-dtsc-blue">Dernière mise à jour du cache: 21/05/2026</p>
+              <p className="mt-1 text-xs font-bold text-dtsc-blue">Dernière mise à jour du cache: 02/06/2026</p>
             </div>
             <Link href="/" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-dtsc-navy px-5 py-3 text-sm font-black text-white transition hover:bg-dtsc-blue">
               Réouvrir DTSC

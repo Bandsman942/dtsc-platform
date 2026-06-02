@@ -47,20 +47,20 @@ export const publicPages: Record<string, PublicPageContent> = {
       {
         heading: "Pourquoi la data devient urgente",
         text:
-          "La transformation numérique ne commence pas par l'achat d'un logiciel: elle commence par la clarté sur ce que l'entreprise veut mesurer. Une organisation qui ne suit pas ses ventes, ses stocks, ses délais, ses clients, ses incidents ou ses coûts avec rigueur prend des décisions lentes et souvent contradictoires. DTSC propose une approche progressive: cartographier les données disponibles, identifier les décisions critiques, nettoyer les sources prioritaires, puis construire des tableaux de bord utiles aux équipes.",
+          "Le levier Data & BI ne commence pas par l'achat d'un logiciel: il commence par la clarté sur ce que l'entreprise veut mesurer. Une organisation qui ne suit pas ses ventes, ses stocks, ses délais, ses clients, ses incidents ou ses coûts avec rigueur prend des décisions lentes et souvent contradictoires. DTSC propose une approche progressive: cartographier les données disponibles, identifier les décisions critiques, nettoyer les sources prioritaires, puis construire des tableaux de bord utiles aux équipes.",
         bullets: ["Identifier les données déjà disponibles", "Relier les indicateurs aux décisions métier", "Réduire les doubles saisies et les fichiers isolés", "Mettre en place un suivi régulier et compréhensible"],
       },
       {
         heading: "Ce que DTSC apporte aux dirigeants",
         text:
-          "DTSC combine conseil business, analyse de données et exécution technologique. L'objectif n'est pas de produire des rapports décoratifs, mais d'équiper les dirigeants avec des indicateurs lisibles: chiffre d'affaires, marges, satisfaction client, activité opérationnelle, productivité, risques, anomalies et opportunités commerciales. Le cabinet accompagne aussi la montée en compétence des équipes pour que les dashboards restent utilisés après le projet.",
-        bullets: ["Diagnostic data et maturité numérique", "KPI exécutifs et opérationnels", "Automatisation du reporting", "Formation des équipes internes"],
+          "DTSC rattache le pilotage des données aux 7 leviers numériques, avec un focus Data & BI pour les indicateurs lisibles: chiffre d'affaires, marges, satisfaction client, activité opérationnelle, productivité, risques, anomalies et opportunités commerciales. Le cabinet accompagne aussi la montée en compétence des équipes pour que les dashboards restent utilisés après le projet.",
+        bullets: ["Diagnostic Data & BI", "KPI exécutifs et opérationnels", "Reporting rattaché au pilotage", "Formation des équipes internes"],
       },
       {
         heading: "Une approche adaptée aux réalités locales",
         text:
-          "Dans les PME et institutions de services, les données peuvent être incomplètes, hétérogènes ou collectées dans des conditions très variables. DTSC privilégie donc des solutions robustes, compréhensibles et évolutives. Un premier projet peut commencer par un fichier structuré, un dashboard Power BI, un formulaire de collecte ou une application métier simple, puis évoluer vers une plateforme plus complète.",
-        bullets: ["Démarrage par cas d'usage prioritaire", "Architecture compatible avec l'évolution SaaS", "Documentation des définitions métier", "Accompagnement humain et validation continue"],
+          "Dans les PME et institutions de services, les données peuvent être incomplètes, hétérogènes ou collectées dans des conditions très variables. DTSC privilégie donc des cas d'usage robustes, compréhensibles et évolutifs. Un premier projet peut commencer par un fichier structuré, un dashboard Power BI, un formulaire de collecte ou une application web simple, chacun rattaché au levier approprié.",
+        bullets: ["Démarrage par cas d'usage prioritaire", "Exemples rattachés aux leviers", "Documentation des définitions métier", "Accompagnement humain et validation continue"],
       },
     ],
   },
@@ -87,13 +87,13 @@ export const publicPages: Record<string, PublicPageContent> = {
       {
         heading: "Cas d'usage prioritaires",
         text:
-          "Les tableaux de bord DTSC peuvent couvrir la performance commerciale, la trésorerie, les stocks, la fraude, le marketing, la productivité, la gestion médicale, les tickets clients ou le suivi des projets. L'approche premium consiste à créer des vues différentes pour les dirigeants, les managers et les équipes opérationnelles, afin que chacun accède au bon niveau de détail.",
+          "Les tableaux de bord DTSC sont des exemples du levier Data & BI. Ils peuvent couvrir la performance commerciale, la trésorerie, les stocks, la fraude, le marketing, la productivité, la gestion médicale, les tickets clients ou le suivi des projets. L'approche premium consiste à créer des vues différentes pour les dirigeants, les managers et les équipes opérationnelles, afin que chacun accède au bon niveau de détail.",
         bullets: ["Reporting exécutif pour la direction", "Vues opérationnelles pour les équipes", "Alertes sur anomalies et seuils critiques", "Suivi des tendances dans le temps"],
       },
       {
         heading: "Gouvernance et adoption",
         text:
-          "La BI échoue souvent lorsque les équipes ne comprennent pas les chiffres ou ne font pas confiance aux sources. DTSC intègre la gouvernance dès le départ: dictionnaire d'indicateurs, documentation, formation, rituels de revue et amélioration continue. Le tableau de bord devient un outil de management, pas seulement un livrable technique.",
+          "La BI échoue souvent lorsque les équipes ne comprennent pas les chiffres ou ne font pas confiance aux sources. DTSC intègre la gouvernance dès le départ: dictionnaire d'indicateurs, documentation, formations, rituels de revue et amélioration continue. Le tableau de bord devient un outil de management, pas seulement un livrable technique.",
         bullets: ["Dictionnaire KPI", "Formation à la lecture des dashboards", "Rituels de revue de performance", "Maintenance et évolution progressive"],
       },
     ],
@@ -104,7 +104,7 @@ export const publicPages: Record<string, PublicPageContent> = {
     intro:
       "L'intelligence artificielle devient utile lorsqu'elle est reliée à un processus métier clair, à des données maîtrisées et à une validation humaine pour les décisions sensibles.",
     narrative:
-      "DTSC positionne l'IA comme un levier d'assistance, d'automatisation et d'amélioration de la qualité de service. Le chatbot DTSC illustre cette approche: il qualifie les besoins, reformule les demandes, explique les services et recommande une escalade humaine lorsqu'une décision commerciale, technique ou stratégique est nécessaire. Cette philosophie évite les promesses irréalistes et installe une relation de confiance avec les clients.",
+      "DTSC positionne l'IA comme l'un de ses 7 leviers numériques officiels. Le chatbot DTSC illustre cette approche: il qualifie les besoins, reformule les demandes, explique les leviers et recommande une escalade humaine lorsqu'une décision commerciale, technique ou stratégique est nécessaire. Cette philosophie évite les promesses irréalistes et installe une relation de confiance avec les clients.",
     imageAlt: "Interface IA DTSC pour entreprises",
     highlights: [
       { label: "Usage", value: "Assisté" },
@@ -115,7 +115,7 @@ export const publicPages: Record<string, PublicPageContent> = {
       {
         heading: "Commencer par le problème métier",
         text:
-          "Un projet IA doit commencer par une question métier précise: réduire le temps de réponse, trier des demandes, détecter des anomalies, générer des synthèses, assister les équipes commerciales ou automatiser des documents. DTSC aide à choisir les cas d'usage où l'IA crée un gain réel sans complexité excessive.",
+          "Un cas d'usage IA doit commencer par une question métier précise: réduire le temps de réponse, trier des demandes, détecter des anomalies, générer des synthèses, assister les équipes commerciales ou automatiser intelligemment des documents. DTSC aide à choisir les exemples où le levier Intelligence artificielle crée un gain réel sans complexité excessive.",
         bullets: ["Qualification automatique des demandes", "Synthèse et analyse documentaire", "Support client assisté", "Aide à la décision avec validation humaine"],
       },
       {
@@ -136,9 +136,9 @@ export const publicPages: Record<string, PublicPageContent> = {
     eyebrow: "Marchés cibles",
     title: "Secteurs accompagnés",
     intro:
-      "DTSC cible les assurances, cliniques, pharmacies et PME: des organisations où la donnée, la visibilité et l'automatisation peuvent produire des gains rapides.",
+      "DTSC cible les assurances, cliniques, pharmacies et PME: des organisations où les 7 leviers numériques peuvent produire des gains rapides.",
     narrative:
-      "Le marché africain présente encore de fortes différences de maturité numérique, mais aussi une opportunité majeure pour les organisations capables de structurer leurs informations et d'améliorer leur service. DTSC concentre son accompagnement sur les secteurs où les opérations sont fréquentes, les données nombreuses et les décisions quotidiennes importantes. Le cabinet propose ainsi des solutions concrètes: reporting, applications métier, automatisation, assistance IA, marketing digital et accompagnement des équipes.",
+      "Le marché africain présente encore de fortes différences de maturité numérique, mais aussi une opportunité majeure pour les organisations capables de structurer leurs informations et d'améliorer leur service. DTSC adapte ses 7 leviers aux secteurs où les opérations sont fréquentes, les données nombreuses et les décisions quotidiennes importantes: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
     imageAlt: "Secteurs professionnels accompagnés par DTSC",
     highlights: [
       { label: "Santé", value: "Cliniques" },
@@ -149,7 +149,7 @@ export const publicPages: Record<string, PublicPageContent> = {
       {
         heading: "Assurances",
         text:
-          "Les assurances ont besoin d'une vision claire sur les portefeuilles, les sinistres, les ventes, les renouvellements et les anomalies. DTSC peut aider à construire des dashboards de pilotage, des outils de suivi commercial, des analyses de fraude potentielle et des indicateurs de performance par produit, canal ou équipe.",
+          "Les assurances ont besoin d'une vision claire sur les portefeuilles, les sinistres, les ventes, les renouvellements et les anomalies. DTSC applique surtout les leviers Data & BI, Audit & optimisation, Solutions digitales et Marketing digital pour construire des dashboards de pilotage, des outils de suivi commercial et des indicateurs de performance par produit, canal ou équipe.",
         bullets: ["Suivi portefeuille et renouvellements", "Analyse sinistres et anomalies", "Performance commerciale", "Segmentation clients"],
       },
       {
@@ -161,8 +161,8 @@ export const publicPages: Record<string, PublicPageContent> = {
       {
         heading: "PME et organisations en croissance",
         text:
-          "Les PME ont souvent besoin de solutions rapides, abordables et adaptées: visibilité marketing, formulaires de collecte, automatisation administrative, tableaux de bord financiers, applications métier et support client. DTSC les accompagne avec une logique progressive qui évite les projets trop lourds.",
-        bullets: ["Marketing digital et acquisition", "Applications métier légères", "Automatisation administrative", "Reporting dirigeant"],
+          "Les PME ont souvent besoin d'exemples rapides, abordables et adaptés: visibilité marketing, formulaires de collecte, workflows numériques, tableaux de bord financiers, applications web et support client. DTSC les rattache aux leviers Marketing digital, Solutions digitales, Data & BI, Intelligence artificielle ou Audit & optimisation selon le gain recherché.",
+        bullets: ["Marketing digital et acquisition", "Applications web comme Solutions digitales", "Workflows numériques", "Reporting dirigeant dans Data & BI"],
       },
     ],
   },
@@ -175,7 +175,7 @@ export const legalPages: Record<string, PublicPageContent> = {
     intro:
       "Ces conditions encadrent l'accès aux pages publiques, à l'espace client, au chatbot, aux modules support, annonces et notifications de la plateforme DTSC.",
     narrative:
-      "DTSC - Data and Tech Solutions Consulting - est un cabinet basé à Kinshasa dont la mission est d'aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité grâce aux technologies. Les présentes conditions expliquent les règles d'utilisation de la plateforme. Elles ne remplacent pas un contrat commercial signé avec DTSC; lorsqu'une prestation, un devis, un cadrage ou une obligation spécifique est nécessaire, la validation humaine de l'équipe DTSC demeure obligatoire.",
+      "DTSC - Data and Tech Solutions Consulting - est un cabinet basé à Kinshasa dont la mission est d'aider les entreprises à améliorer leur performance, réduire leurs coûts et accroître leur visibilité grâce aux 7 leviers numériques officiels. Les présentes conditions expliquent les règles d'utilisation de la plateforme. Elles ne remplacent pas un contrat commercial signé avec DTSC; lorsqu'une prestation, un devis, un cadrage ou une obligation spécifique est nécessaire, la validation humaine de l'équipe DTSC demeure obligatoire.",
     imageAlt: "Cadre contractuel DTSC",
     highlights: [
       { label: "Usage", value: "Professionnel" },
@@ -192,7 +192,7 @@ export const legalPages: Record<string, PublicPageContent> = {
       {
         heading: "Utilisation du chatbot",
         text:
-          "Le chatbot DTSC aide à comprendre les services, clarifier un besoin et préparer un échange avec l'équipe. Dans l'espace privé, il peut aussi aider à formuler un message à DTSC ou un ticket support, puis déclencher l'envoi ou la création uniquement après confirmation explicite de l'utilisateur. Il ne constitue pas une décision contractuelle, médicale, financière, juridique ou stratégique. Les réponses peuvent comporter des limites et doivent être validées par un interlocuteur DTSC lorsque la demande engage une prestation, un budget, une décision sensible ou un diagnostic spécialisé.",
+          "Le chatbot DTSC aide à comprendre les 7 leviers, clarifier un besoin et préparer un échange avec l'équipe. Dans l'espace privé, il peut aussi aider à formuler un message à DTSC ou un ticket support, puis déclencher l'envoi ou la création uniquement après confirmation explicite de l'utilisateur. Il ne constitue pas une décision contractuelle, médicale, financière, juridique ou stratégique. Les réponses peuvent comporter des limites et doivent être validées par un interlocuteur DTSC lorsque la demande engage une prestation, un budget, une décision sensible ou un diagnostic spécialisé.",
         bullets: ["Assistant de qualification et d'orientation", "Aucune promesse automatique de prestation", "Escalade possible vers un ticket", "Limites d'usage configurables par administrateur"],
       },
       {
@@ -221,7 +221,7 @@ export const legalPages: Record<string, PublicPageContent> = {
     intro:
       "Cette politique explique comment DTSC collecte, utilise, protège et conserve les données personnelles traitées dans le cadre de la plateforme.",
     narrative:
-      "La présente politique est rédigée en cohérence avec les principes du RGPD: transparence, limitation des finalités, minimisation des données, sécurité, droits des personnes et responsabilité du responsable de traitement. Elle est adaptée au contexte DTSC: conseil numérique, data, IA, automatisation, support client, comptes utilisateurs et conversations avec le chatbot. Elle doit être complétée par les informations légales propres à DTSC lorsque la structure juridique, l'adresse administrative ou les contacts officiels de protection des données seront finalisés.",
+      "La présente politique est rédigée en cohérence avec les principes du RGPD: transparence, limitation des finalités, minimisation des données, sécurité, droits des personnes et responsabilité du responsable de traitement. Elle est adaptée au contexte DTSC: 7 leviers numériques officiels, support client, comptes utilisateurs et conversations avec le chatbot. Elle doit être complétée par les informations légales propres à DTSC lorsque la structure juridique, l'adresse administrative ou les contacts officiels de protection des données seront finalisés.",
     imageAlt: "Protection des données DTSC",
     highlights: [
       { label: "Principe", value: "Minimisation" },

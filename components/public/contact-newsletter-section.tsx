@@ -43,7 +43,7 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
     });
     setIsNewsletterPending(false);
     if (response.ok) {
-      setNewsletterMessage("Inscription enregistrée. Vous recevrez les contenus DTSC liés à la data, l'IA et la transformation numérique.");
+      setNewsletterMessage("Inscription enregistrée. Vous recevrez les contenus DTSC liés aux 7 leviers numériques.");
       form.reset();
     } else {
       setNewsletterMessage("Impossible d'enregistrer cette inscription. Vérifiez les informations saisies puis réessayez.");
@@ -58,9 +58,9 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
             <Mail className="h-4 w-4" />
             Contact professionnel DTSC
           </p>
-          <h2 className="mt-5 text-3xl font-black">Parlez-nous de votre besoin numérique, data ou IA.</h2>
+          <h2 className="mt-5 text-3xl font-black">Parlez-nous de votre besoin autour des 7 leviers DTSC.</h2>
           <p className="mt-4 max-w-2xl leading-7 text-slate-300">
-            Les demandes issues du site sont transmises à l&apos;équipe DTSC pour qualification. Le chatbot peut aussi vous aider à structurer le contenu du message avant envoi.
+            Les demandes issues du site sont transmises à l&apos;équipe DTSC pour qualification. L&apos;assistant IA peut aussi vous aider à rattacher votre besoin au bon levier avant envoi.
           </p>
           <a href={`mailto:${contactEmail}`} className="mt-5 inline-flex font-black text-cyan-200 underline underline-offset-4 hover:text-white">
             {contactEmail}
@@ -91,13 +91,13 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
           </p>
           <h2 className="mt-5 text-2xl font-black text-dtsc-ink">Recevoir les analyses DTSC.</h2>
           <p className="mt-3 leading-7 text-dtsc-muted">
-            Inscrivez-vous pour recevoir des contenus utiles sur la data, les KPI, l&apos;IA en entreprise, l&apos;automatisation et la transformation numérique.
+            Inscrivez-vous pour recevoir des contenus utiles sur Data & BI, l&apos;IA en entreprise, les Solutions digitales, l&apos;Audit & optimisation, les Formations, le Marketing digital et l&apos;Imprimerie numérique.
           </p>
           <form onSubmit={submitNewsletter} className="mt-6 space-y-3">
             <Input name="name" placeholder="Nom complet" required />
             <Input name="email" type="email" placeholder="Email professionnel" required />
             <Input name="companyName" placeholder="Entreprise" />
-            <Input name="interest" placeholder="Sujet d'intérêt: BI, IA, automatisation..." />
+            <Input name="interest" placeholder="Sujet d'intérêt: Data & BI, IA, marketing..." />
             <label className="flex items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm leading-6 text-dtsc-muted">
               <input name="consent" type="checkbox" required className="mt-1 h-4 w-4 accent-cyan-500" />
               <span>J&apos;accepte de recevoir les communications professionnelles DTSC et je peux demander mon retrait à tout moment.</span>

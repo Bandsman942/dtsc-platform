@@ -9,7 +9,7 @@ import { trustedSources } from "@/lib/public-site";
 
 export const metadata: Metadata = {
   title: "Ressources DTSC",
-  description: "Articles, annonces, guides, veille Data & IA et cas pratiques publiés par DTSC.",
+  description: "Articles, annonces, guides et cas pratiques publiés par DTSC autour des 7 leviers numériques.",
   alternates: { canonical: "/ressources" },
 };
 
@@ -45,7 +45,7 @@ export default async function RessourcesPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(0,194,255,0.22),transparent_32%)]" />
         <div className="dtsc-premium-reveal relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Ressources & annonces</p>
-          <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre la data, l&apos;IA et la transformation numérique avant de lancer un projet.</h1>
+          <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre les 7 leviers numériques DTSC avant de lancer un projet.</h1>
           <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
             Cette page regroupe les contenus publics réguliers que DTSC peut publier depuis l&apos;administration: articles, guides, annonces, veille, cas pratiques et démonstrations.
           </p>
