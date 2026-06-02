@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
-import { UserRole, UserStatus } from "@prisma/client";
+import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
-import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
+import { canUserAccessSupportTicket } from "@/lib/support-access";
 import { ticketMessageSchema } from "@/lib/validators";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
-
-function canManageSupport(role: UserRole) {
-  return role === UserRole.ADMIN || role === UserRole.SUPPORT;
-}
 
 export async function POST(req: Request, { params }: Params) {
   const session = await getSession();
@@ -35,12 +32,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const activeOrganizationId = getActiveOrganizationId(session);
-  const canManageTicket = isDtscInternalSession(session) && canManageSupport(session.role);
-  const canUseOwnTicket =
-    ticket.userId === session.userId &&
-    (ticket.organizationId ? ticket.organizationId === activeOrganizationId : activeOrganizationId === null);
-  if (!canUseOwnTicket && !canManageTicket) {
+  if (!canUserAccessSupportTicket(ticket, session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

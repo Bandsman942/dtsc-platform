@@ -58,6 +58,7 @@ La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLI
 - Sessions sécurisées par cookie signé
 - Préparation multi-sous-domaines dans une seule app Vercel: site public, espace SaaS, console DTSC, compte/authentification et support peuvent être routés par host sans extraction monorepo.
 - Navigation inter-produits Console DTSC, SaaS, Support, Compte et Site public avec redirections post-login centralisées, `next` interne validé et déconnexion ramenée vers Account.
+- Console DTSC SaaS enrichie avec vue générale de pilotage: entreprises clientes actives, abonnements, tickets support, utilisateurs, modules, incidents API, audits sensibles et événements sécurité.
 - Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
 - Fondation SaaS hybride multi-entreprises: tenant interne `DTSC` créé comme organisation réelle, entreprises clientes créées par DTSC, memberships actifs, contexte d'accès optionnel à la connexion, sélecteur d'espace après connexion et isolation progressive par `organizationId`.
 - Isolation renforcée en contexte entreprise: Abonnement, Annonces et Profil restent communs au compte utilisateur, tandis que Dashboard, Chatbot, Entreprise, Documents, Paramètres, Notifications, Support, Calendrier interne et Mes collaborateurs restent visibles avec des données filtrées par le contexte actif et `organizationId`.
@@ -81,7 +82,7 @@ La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLI
 - Partage fonctionnel des conversations via API native du navigateur, copie du lien ou snapshot consultable dans un groupe Mes collaborateurs sans exposer la conversation privée originale
 - Support markdown pour les réponses IA
 - Copier une réponse assistant
-- Tickets support
+- Tickets support conversationnels avec historique propriétaire restauré même après changement de contexte d'organisation.
 - Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, HR & CFO, SCO, COO, CEO, MPO, CTO, LA, visites, activité et audits
 - Sous-modules admin HR & CFO, SCO, MPO, CTO et LA avec RBAC et permissions métier par poste officiel: collaborateurs liés aux membres internes, départements, postes DTSC, comptes financiers, budgets contrôlés, transactions, paie, factures automatiques, fournisseurs, achats, stocks, actifs, logistique, projets numériques, pilotage technique, dossiers juridiques, contrats, conformité, litiges et archivage confidentiel
 - Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque

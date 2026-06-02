@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -7,6 +8,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 
 export function SupportForm() {
+  const router = useRouter();
   const [message, setMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [open, setOpen] = useState(false);
@@ -28,6 +30,7 @@ export function SupportForm() {
     if (response.ok) {
       event.currentTarget.reset();
       setOpen(false);
+      router.refresh();
     }
   }
 

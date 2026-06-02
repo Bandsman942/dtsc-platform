@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, Building2, Code2, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
-import { DocumentStatus, PaymentStatus, UserRole, UserStatus } from "@prisma/client";
+import { BarChart3, BriefcaseBusiness, Building2, Code2, CreditCard, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
+import { DocumentStatus, PaymentStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
@@ -12,6 +12,7 @@ import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics"
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { CeoExecutiveSummary } from "@/components/admin/ceo-executive-summary";
 import { ClientOrganizationsPanel } from "@/components/admin/client-organizations-panel";
+import { ConsoleSaasOverview } from "@/components/admin/console-saas-overview";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
@@ -56,10 +57,11 @@ type RawModelRow = { model: string; count: number | bigint; tokens: number | big
 const adminSections: Array<{ id: AdminSectionId; label: string; description: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Vue générale", description: "KPIs et synthèse plateforme", icon: BarChart3 },
   { id: "access", label: "Accès RBAC", description: "Droits des rôles non-client", icon: ShieldCheck },
-  { id: "settings", label: "Paramètres", description: "Limites, OTP, diffusions", icon: Settings },
-  { id: "publications", label: "Publications", description: "Articles et ressources publiques", icon: FileText },
-  { id: "users", label: "Utilisateurs", description: "Comptes, rôles et limites", icon: Users },
+  { id: "settings", label: "Paramètres plateforme", description: "Limites, OTP, diffusions", icon: Settings },
+  { id: "publications", label: "Publications & contenus", description: "Articles et ressources publiques", icon: FileText },
+  { id: "users", label: "Utilisateurs & accès", description: "Comptes, rôles et limites", icon: Users },
   { id: "clientOrganizations", label: "Entreprises clientes", description: "Espaces client et admins", icon: Building2 },
+  { id: "billing", label: "Abonnements & facturation", description: "Plans, paiements et revenus", icon: CreditCard },
   { id: "hrCfo", label: "HR & CFO", description: "RH, finance et contrôle", icon: BriefcaseBusiness },
   { id: "sco", label: "SCO", description: "Achats, stocks et logistique", icon: PackageCheck },
   { id: "coo", label: "COO", description: "Opérations, tâches et workflows", icon: BarChart3 },
@@ -68,8 +70,8 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "cto", label: "CTO", description: "Technologie & développement", icon: Code2 },
   { id: "la", label: "LA", description: "Legal Advisor", icon: Scale },
   { id: "visits", label: "Visites", description: "Audience du site public", icon: BarChart3 },
-  { id: "activity", label: "Activité", description: "Conversations et tickets", icon: MessageSquare },
-  { id: "audits", label: "Audits", description: "Paiements, API et webhooks", icon: Megaphone },
+  { id: "activity", label: "Support client", description: "Conversations et tickets", icon: MessageSquare },
+  { id: "audits", label: "Sécurité & audit", description: "Paiements, API et webhooks", icon: Megaphone },
 ];
 
 export default async function AdminPage({
@@ -101,9 +103,58 @@ export default async function AdminPage({
   await ensureDefaultPositions();
   await syncPaidSubscriptionIncomeTransactions();
   await reconcileFinancialState();
+  const settings = await getAppSettings();
+  const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
+  const allowedAdminBlocks = new Set(
+    (await Promise.all(
+      adminSections
+        .filter((item): item is { id: AdminBlockId; label: string; description: string; icon: typeof BarChart3 } => item.id !== "access")
+        .map(async (item) => (await canAccessAdminSection(user, item.id, adminRoleAccess)) ? item.id : null)
+    )).filter((item): item is AdminBlockId => Boolean(item))
+  );
+  const canView = (blockId: AdminBlockId) => allowedAdminBlocks.has(blockId);
+  const canViewSection = (sectionId: AdminSectionId) => sectionId === "access" ? user.role === UserRole.ADMIN : canView(sectionId);
+  const visibleSections = adminSections.filter((item) => canViewSection(item.id));
+  const activeSection = visibleSections.some((item) => item.id === section)
+    ? (section as AdminSectionId)
+    : visibleSections[0]?.id || "overview";
+  const sectionHref = (sectionId: AdminSectionId) => {
+    const params = new URLSearchParams();
+    params.set("section", sectionId);
+    if (roleFilter) {
+      params.set("role", roleFilter);
+    }
+    if (selectedDate) {
+      params.set("date", selectedDate);
+    } else {
+      params.set("period", String(selectedPeriod));
+    }
+    if (selectedCeoStart) {
+      params.set("ceoStart", selectedCeoStart);
+    }
+    if (selectedCeoEnd) {
+      params.set("ceoEnd", selectedCeoEnd);
+    }
+    return `/admin?${params.toString()}`;
+  };
+  const loadUserDetails = activeSection === "users" || activeSection === "clientOrganizations";
+  const loadClientOrganizationDetails = activeSection === "clientOrganizations";
+  const loadActivityDetails = activeSection === "activity";
+  const loadBillingDetails = activeSection === "billing" || activeSection === "audits";
+  const loadAuditDetails = activeSection === "audits";
+  const loadPublicationDetails = activeSection === "publications";
+  const loadInternalOperations =
+    activeSection === "hrCfo" ||
+    activeSection === "sco" ||
+    activeSection === "coo" ||
+    activeSection === "ceo" ||
+    activeSection === "mpo" ||
+    activeSection === "cto" ||
+    activeSection === "la";
+  const subscriptionExpiryLimit = new Date();
+  subscriptionExpiryLimit.setDate(subscriptionExpiryLimit.getDate() + 30);
 
   const [
-    settings,
     users,
     clientOrganizations,
     billingPlans,
@@ -178,16 +229,24 @@ export default async function AdminPage({
     legalDisputes,
     legalRequests,
     legalReports,
+    consoleActiveClientOrganizations,
+    consoleActiveSubscriptions,
+    consoleExpiringSubscriptions,
+    consoleOpenTickets,
+    consoleCriticalTickets,
+    consoleEnabledModules,
+    consoleRecentIncidents,
+    consoleSensitiveAudits,
+    consoleSecurityEvents,
   ] =
     await Promise.all([
-      getAppSettings(),
-      prisma.user.findMany({
+      loadUserDetails ? prisma.user.findMany({
         where: roleFilter ? { role: roleFilter } : undefined,
         orderBy: { createdAt: "desc" },
         include: { _count: { select: { conversations: true } } },
         take: 200,
-      }),
-      prisma.organization.findMany({
+      }) : Promise.resolve([]),
+      loadClientOrganizationDetails ? prisma.organization.findMany({
         where: { organizationType: "CLIENT", deletedAt: null },
         orderBy: { createdAt: "desc" },
         include: {
@@ -200,32 +259,32 @@ export default async function AdminPage({
           businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
         },
         take: 200,
-      }),
-      prisma.billingPlan.findMany({
+      }) : Promise.resolve([]),
+      loadClientOrganizationDetails ? prisma.billingPlan.findMany({
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         select: { id: true, name: true, slug: true },
-      }),
-      prisma.businessSector.findMany({
+      }) : Promise.resolve([]),
+      loadClientOrganizationDetails ? prisma.businessSector.findMany({
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }],
         select: { id: true, code: true, labelFr: true, labelEn: true, descriptionFr: true, descriptionEn: true, icon: true, color: true },
-      }),
+      }) : Promise.resolve([]),
       prisma.user.count(),
       prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
       prisma.conversation.count(),
-      prisma.conversation.findMany({
+      loadActivityDetails ? prisma.conversation.findMany({
         orderBy: { updatedAt: "desc" },
         include: { user: true, _count: { select: { messages: true } } },
         take: 200,
-      }),
+      }) : Promise.resolve([]),
       prisma.message.count(),
       prisma.usageLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
-      prisma.supportTicket.findMany({
+      loadActivityDetails ? prisma.supportTicket.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: true },
         take: 200,
-      }),
+      }) : Promise.resolve([]),
       prisma.$queryRaw<Array<{ date: Date | string; count: number | bigint }>>`
         SELECT DATE("createdAt") AS date, COUNT(*)::int AS count
         FROM "SiteVisit"
@@ -272,115 +331,134 @@ export default async function AdminPage({
         ORDER BY tokens DESC
         LIMIT 5
       `,
-      prisma.payment.findMany({
+      loadBillingDetails ? prisma.payment.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: true, subscription: { include: { plan: true } } },
         take: 200,
-      }),
-      prisma.auditLog.findMany({
+      }) : Promise.resolve([]),
+      loadAuditDetails ? prisma.auditLog.findMany({
         orderBy: { createdAt: "desc" },
         include: { user: { select: { id: true, name: true, email: true, role: true } } },
         take: 300,
-      }),
-      prisma.apiLog.findMany({
+      }) : Promise.resolve([]),
+      loadAuditDetails ? prisma.apiLog.findMany({
         orderBy: { createdAt: "desc" },
         take: 200,
-      }),
-      prisma.webhookEvent.findMany({
+      }) : Promise.resolve([]),
+      loadAuditDetails ? prisma.webhookEvent.findMany({
         orderBy: { createdAt: "desc" },
         take: 200,
-      }),
-      prisma.publicPublication.findMany({
+      }) : Promise.resolve([]),
+      loadPublicationDetails ? prisma.publicPublication.findMany({
         orderBy: { createdAt: "desc" },
         include: { author: { select: { name: true, email: true } } },
         take: 40,
-      }),
-      prisma.hrcfoEmployee.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.hrcfoBudget.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.hrcfoExpense.findMany({
+      }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.hrcfoEmployee.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.hrcfoBudget.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.hrcfoExpense.findMany({
         orderBy: { updatedAt: "desc" },
         include: { account: true, department: true, budget: true, invoice: true },
         take: 200,
-      }),
-      prisma.hrcfoPayroll.findMany({
+      }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.hrcfoPayroll.findMany({
         orderBy: { updatedAt: "desc" },
         include: { employee: true, account: true, budget: true },
         take: 200,
-      }),
-      prisma.department.findMany({ orderBy: { name: "asc" }, take: 200 }),
-      prisma.financialAccount.findMany({ orderBy: { name: "asc" }, take: 200 }),
-      prisma.dtscPosition.findMany({ orderBy: [{ hierarchyLevel: "asc" }, { title: "asc" }], take: 200 }),
-      prisma.user.findMany({
+      }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.department.findMany({ orderBy: { name: "asc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.financialAccount.findMany({ orderBy: { name: "asc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.dtscPosition.findMany({ orderBy: [{ hierarchyLevel: "asc" }, { title: "asc" }], take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.user.findMany({
         where: { role: { not: UserRole.CLIENT } },
         orderBy: { name: "asc" },
         select: { id: true, name: true, email: true, role: true, status: true },
         take: 500,
+      }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.materialItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.scoVendor.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.scoPurchaseRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.scoInventoryItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.scoAsset.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.scoLogisticsEvent.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooOperation.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooRecurringTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooDepartmentRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooBlocker.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.collaborationGroup.findMany({ where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { shares: true } } }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.ceoObjective.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.ceoSupervisionLog.findMany({ orderBy: { logDate: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.mpoProject.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.mpoProjectRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { project: { select: { title: true } } }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.ctoTechnicalProject.findMany({ orderBy: { updatedAt: "desc" }, include: { mpoProject: { select: { title: true } } }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.ctoTechnicalRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalCase.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalContract.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalTemplate.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalRisk.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalDocument.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalDispute.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      loadInternalOperations ? prisma.legalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+      prisma.organization.count({ where: { organizationType: "CLIENT", status: "ACTIVE", deletedAt: null } }),
+      prisma.organizationSubscription.count({
+        where: {
+          status: "ACTIVE",
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          organization: { organizationType: "CLIENT", deletedAt: null },
+        },
       }),
-      prisma.materialItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.scoVendor.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.scoPurchaseRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.scoInventoryItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.scoAsset.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.scoLogisticsEvent.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooOperation.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooRecurringTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooDepartmentRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooBlocker.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.collaborationGroup.findMany({ where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { shares: true } } }, take: 200 }),
-      prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.ceoObjective.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.ceoSupervisionLog.findMany({ orderBy: { logDate: "desc" }, take: 200 }),
-      prisma.mpoProject.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.mpoProjectRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { project: { select: { title: true } } }, take: 200 }),
-      prisma.ctoTechnicalProject.findMany({ orderBy: { updatedAt: "desc" }, include: { mpoProject: { select: { title: true } } }, take: 200 }),
-      prisma.ctoTechnicalRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } }, take: 200 }),
-      prisma.legalCase.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalContract.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalTemplate.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalRisk.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalDocument.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalDispute.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
-      prisma.legalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.organizationSubscription.count({
+        where: {
+          status: "ACTIVE",
+          expiresAt: { gte: new Date(), lte: subscriptionExpiryLimit },
+          organization: { organizationType: "CLIENT", deletedAt: null },
+        },
+      }),
+      prisma.supportTicket.count({ where: { status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS] } } }),
+      prisma.supportTicket.count({ where: { priority: TicketPriority.URGENT, status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS] } } }),
+      prisma.enterpriseModule.count({ where: { isEnabled: true, organization: { organizationType: "CLIENT", deletedAt: null } } }),
+      prisma.apiLog.findMany({
+        where: { statusCode: { gte: 500 } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, method: true, path: true, statusCode: true, createdAt: true },
+        take: 6,
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          OR: [
+            { action: { contains: "DELETE" } },
+            { action: { contains: "ARCHIVE" } },
+            { action: { contains: "ROLE" } },
+            { action: { contains: "PERMISSION" } },
+            { action: { contains: "DENIED" } },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { name: true, email: true } } },
+        take: 6,
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          OR: [
+            { action: { contains: "ACCESS_DENIED" } },
+            { action: { contains: "FORBIDDEN" } },
+            { action: { contains: "UNAUTHORIZED" } },
+            { action: { contains: "LOGIN" } },
+            { action: { contains: "SECURITY" } },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { name: true, email: true } } },
+        take: 6,
+      }),
     ]);
 
   const totalTokens = usageLogs.reduce((sum, log) => sum + log.totalTokens, 0);
-  const adminRoleAccess = parseAdminRoleAccess(settings.adminRoleAccess);
-  const allowedAdminBlocks = new Set(
-    (await Promise.all(
-      adminSections
-        .filter((item): item is { id: AdminBlockId; label: string; description: string; icon: typeof BarChart3 } => item.id !== "access")
-        .map(async (item) => (await canAccessAdminSection(user, item.id, adminRoleAccess)) ? item.id : null)
-    )).filter((item): item is AdminBlockId => Boolean(item))
-  );
-  const canView = (blockId: AdminBlockId) => allowedAdminBlocks.has(blockId);
-  const canViewSection = (sectionId: AdminSectionId) => sectionId === "access" ? user.role === UserRole.ADMIN : canView(sectionId);
-  const visibleSections = adminSections.filter((item) => canViewSection(item.id));
-  const activeSection = visibleSections.some((item) => item.id === section)
-    ? (section as AdminSectionId)
-    : visibleSections[0]?.id || "overview";
-  const sectionHref = (sectionId: AdminSectionId) => {
-    const params = new URLSearchParams();
-    params.set("section", sectionId);
-    if (roleFilter) {
-      params.set("role", roleFilter);
-    }
-    if (selectedDate) {
-      params.set("date", selectedDate);
-    } else {
-      params.set("period", String(selectedPeriod));
-    }
-    if (selectedCeoStart) {
-      params.set("ceoStart", selectedCeoStart);
-    }
-    if (selectedCeoEnd) {
-      params.set("ceoEnd", selectedCeoEnd);
-    }
-    return `/admin?${params.toString()}`;
-  };
   const chartLength = selectedDate ? 1 : Math.min(selectedPeriod, 60);
   const buildPoints = (rows: RawMetricRow[]): VisitPoint[] => {
     const countsByDate = new Map(
@@ -445,6 +523,39 @@ export default async function AdminPage({
       model: item.model,
       count: Number(item.count),
       tokens: Number(item.tokens),
+    })),
+  };
+  const consoleSaasOverview = {
+    metrics: [
+      { label: "Entreprises clientes actives", value: consoleActiveClientOrganizations, helper: "Organisations CLIENT actives et non archivées.", icon: "organizations" as const },
+      { label: "Abonnements actifs", value: consoleActiveSubscriptions, helper: "Abonnements organisationnels actifs.", icon: "subscriptions" as const },
+      { label: "Expirent bientôt", value: consoleExpiringSubscriptions, helper: "Échéance dans les 30 prochains jours.", icon: "expiring" as const },
+      { label: "Tickets ouverts", value: consoleOpenTickets, helper: "Tickets OPEN ou IN_PROGRESS.", icon: "tickets" as const },
+      { label: "Tickets critiques", value: consoleCriticalTickets, helper: "Priorité urgente encore ouverte.", icon: "critical" as const },
+      { label: "Utilisateurs actifs", value: activeUserCount, helper: "Comptes avec statut ACTIVE.", icon: "users" as const },
+      { label: "Modules activés", value: consoleEnabledModules, helper: "Modules entreprise actifs côté clients.", icon: "modules" as const },
+      { label: "Indicateurs plateforme", value: apiErrorsInPeriod, helper: "Erreurs API sur la période filtrée.", icon: "platform" as const },
+    ],
+    incidents: consoleRecentIncidents.map((event) => ({
+      id: event.id,
+      title: `${event.method} ${event.path}`,
+      detail: `HTTP ${event.statusCode}`,
+      severity: event.statusCode >= 500 ? "CRITICAL" : "ERROR",
+      createdAt: event.createdAt.toISOString(),
+    })),
+    sensitiveAudits: consoleSensitiveAudits.map((event) => ({
+      id: event.id,
+      title: `${event.action} · ${event.entity}`,
+      detail: event.user ? `${event.user.name} · ${event.user.email}` : "Action système ou utilisateur supprimé",
+      severity: classifyAuditSeverity(event.action),
+      createdAt: event.createdAt.toISOString(),
+    })),
+    securityEvents: consoleSecurityEvents.map((event) => ({
+      id: event.id,
+      title: `${event.action} · ${event.entity}`,
+      detail: event.user ? `${event.user.name} · ${event.user.email}` : "Action système ou utilisateur supprimé",
+      severity: classifyAuditSeverity(event.action),
+      createdAt: event.createdAt.toISOString(),
     })),
   };
   const paymentAuditItems = payments.map((payment) => ({
@@ -748,10 +859,10 @@ export default async function AdminPage({
     <AppShell user={user}>
       <div className="space-y-6">
         <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">Administration</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Pilotage DTSC Platform</h1>
+          <p className="text-sm font-bold text-cyan-600">Console DTSC SaaS</p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Centre de pilotage DTSC Platform</h1>
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            Supervisez les utilisateurs, les rôles RBAC, les conversations, les tickets support et l&apos;usage IA.
+            Pilotez les entreprises clientes, les abonnements, le support, les accès, la sécurité, les contenus publics et les modules internes DTSC depuis une console unique.
           </p>
         </section>
 
@@ -794,19 +905,27 @@ export default async function AdminPage({
         </nav>
 
         {activeSection === "overview" && canView("overview") && (
-          <Accordion>
-            <AccordionItem title="Vue générale Administration" defaultOpen>
-              <AdminOverviewMetrics
-                selectedPeriod={selectedPeriod}
-                selectedDate={selectedDate}
-                totals={overviewMetrics.totals}
-                period={overviewMetrics.period}
-                series={overviewMetrics.series}
-                breakdowns={overviewMetrics.breakdowns}
-                topModels={overviewMetrics.topModels}
-              />
-            </AccordionItem>
-          </Accordion>
+          <div className="space-y-5">
+            <ConsoleSaasOverview
+              metrics={consoleSaasOverview.metrics}
+              incidents={consoleSaasOverview.incidents}
+              sensitiveAudits={consoleSaasOverview.sensitiveAudits}
+              securityEvents={consoleSaasOverview.securityEvents}
+            />
+            <Accordion>
+              <AccordionItem title="Indicateurs détaillés plateforme" defaultOpen>
+                <AdminOverviewMetrics
+                  selectedPeriod={selectedPeriod}
+                  selectedDate={selectedDate}
+                  totals={overviewMetrics.totals}
+                  period={overviewMetrics.period}
+                  series={overviewMetrics.series}
+                  breakdowns={overviewMetrics.breakdowns}
+                  topModels={overviewMetrics.topModels}
+                />
+              </AccordionItem>
+            </Accordion>
+          </div>
         )}
 
         {activeSection === "access" && user.role === UserRole.ADMIN && (
@@ -881,6 +1000,14 @@ export default async function AdminPage({
                 plans={billingPlans}
                 sectors={businessSectors}
               />
+            </AccordionItem>
+          </Accordion>
+        )}
+
+        {activeSection === "billing" && canView("billing") && (
+          <Accordion>
+            <AccordionItem title="Abonnements & facturation" defaultOpen>
+              <AdminAuditTables payments={paymentAuditItems} logs={[]} />
             </AccordionItem>
           </Accordion>
         )}

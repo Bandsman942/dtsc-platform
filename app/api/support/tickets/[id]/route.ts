@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notifications";
+import { canManageSupportRole } from "@/lib/support-access";
 import { supportTicketUpdateSchema } from "@/lib/validators";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
-
-function canManageSupport(role: UserRole) {
-  return role === UserRole.ADMIN || role === UserRole.SUPPORT;
-}
 
 function closesTicket(status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED") {
   return status === "RESOLVED" || status === "CLOSED";
@@ -20,7 +16,7 @@ function closesTicket(status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED") {
 
 export async function PATCH(req: Request, { params }: Params) {
   const session = await getSession();
-  if (!session || !isDtscInternalSession(session) || !canManageSupport(session.role)) {
+  if (!session || !isDtscInternalSession(session) || !canManageSupportRole(session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
