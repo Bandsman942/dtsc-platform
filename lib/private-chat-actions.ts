@@ -210,24 +210,28 @@ export async function performPrivateChatActionFromHistory({
       priority,
     },
   });
-  const supportUsers = await prisma.user.findMany({
-    where: {
-      status: UserStatus.ACTIVE,
-      OR: [{ role: UserRole.ADMIN }, { role: UserRole.SUPPORT }],
-      organizationMemberships: {
-        some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
+  try {
+    const supportUsers = await prisma.user.findMany({
+      where: {
+        status: UserStatus.ACTIVE,
+        OR: [{ role: UserRole.ADMIN }, { role: UserRole.SUPPORT }],
+        organizationMemberships: {
+          some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
+        },
       },
-    },
-    select: { id: true },
-  });
-  await notifyUsers({
-    userIds: supportUsers.map((supportUser) => supportUser.id),
-    title: "Nouveau ticket support",
-    body: subject,
-    type: "SUPPORT",
-    targetUrl: "/support",
-    organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
-  });
+      select: { id: true },
+    });
+    await notifyUsers({
+      userIds: supportUsers.map((supportUser) => supportUser.id),
+      title: "Nouveau ticket support",
+      body: subject,
+      type: "SUPPORT",
+      targetUrl: "/support",
+      organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
+    });
+  } catch (error) {
+    console.error("Private chatbot ticket notification failed", error);
+  }
   await writeAuditLog({
     userId,
     action: "PRIVATE_CHAT_TICKET_CREATED",

@@ -6,6 +6,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Correction de la création des tickets Support: la route `POST /api/support/tickets` valide désormais l'origine, applique un rate limiting, ignore les contextes organisation obsolètes au lieu de bloquer la persistance et ne fait plus échouer la réponse de création si la notification DTSC rencontre une erreur.
+- Le formulaire Support conserve la référence du formulaire avant l'appel réseau et gère les erreurs `fetch` afin d'éviter un état d'envoi bloqué après soumission.
 - Refactorisation de la Console DTSC: les chargements de données de `/admin` sont extraits dans `lib/console/*` par domaine fonctionnel afin de garder la page App Router comme orchestrateur d'authentification, de section active et de rendu.
 - Les règles Support corrigées sont conservées pendant le refactor: l'historique utilisateur reste basé sur `SupportTicket.userId`, tandis que `organizationId` demeure un contexte de triage et d'analyse.
 - Correction responsive mobile des cartes et formulaires récents: Console DTSC, journaux d'audit, KPI, support, calendrier interne, dialogues et champs partagés restent désormais bornés à la largeur de l'écran avec retour à la ligne des libellés longs.

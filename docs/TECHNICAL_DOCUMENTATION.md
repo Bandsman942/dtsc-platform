@@ -165,6 +165,8 @@ Règles de visibilité:
 
 Cause corrigée le 2 juin 2026: le filtrage historique exigeait `userId + organizationId actif`, ce qui masquait les tickets propres à l'utilisateur après changement de contexte (`GLOBAL_CLIENT` vers `ORGANIZATION`, ou inversement). Le formulaire de création ne déclenchait pas non plus de `router.refresh()` après `POST /api/support/tickets`, donnant l'impression que la création n'était pas persistée.
 
+Correction complémentaire du 3 juin 2026: la création d'un ticket pouvait être perçue comme échouée quand un effet secondaire post-création, notamment la notification des comptes Support DTSC, levait une erreur après la persistance. `POST /api/support/tickets` traite maintenant la création comme l'opération principale: validation Zod, contrôle d'origine, rate limiting, vérification de l'organisation active avant rattachement, audit/API log, réponse `201` dès que le ticket est créé et notifications rendues non bloquantes. Le formulaire client conserve aussi la référence du formulaire avant l'appel `fetch` pour éviter de réutiliser `event.currentTarget` après une attente réseau.
+
 Routes ajoutées:
 
 - `POST /api/auth/organizations`: retourne les organisations actives liées à l'email fourni. Accès public limité au login, sans annuaire global public.
@@ -886,7 +888,7 @@ Toutes les routes API retournent du JSON sauf `POST /api/chat`, qui retourne un 
 
 | Methode | Route | Acces | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/support/tickets` | session | Creation ticket |
+| `POST` | `/api/support/tickets` | session | Creation ticket avec validation Zod, controle d'origine, rate limiting et notifications DTSC non bloquantes |
 | `PATCH` | `/api/support/tickets/[id]` | `ADMIN` ou `SUPPORT` | Statut, priorite, resolution |
 | `POST` | `/api/support/tickets/[id]/messages` | participant ou equipe | Ajouter un message au ticket |
 

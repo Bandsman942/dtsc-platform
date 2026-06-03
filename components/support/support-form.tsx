@@ -15,22 +15,28 @@ export function SupportForm() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setIsPending(true);
     setMessage("");
 
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const response = await fetch("/api/support/tickets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const payload = Object.fromEntries(new FormData(form).entries());
+    try {
+      const response = await fetch("/api/support/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    setIsPending(false);
-    setMessage(response.ok ? "Demande transmise à l'équipe DTSC." : "Impossible d'envoyer la demande.");
-    if (response.ok) {
-      event.currentTarget.reset();
-      setOpen(false);
-      router.refresh();
+      setMessage(response.ok ? "Demande transmise à l'équipe DTSC." : "Impossible d'envoyer la demande.");
+      if (response.ok) {
+        form.reset();
+        setOpen(false);
+        router.refresh();
+      }
+    } catch {
+      setMessage("Impossible d'envoyer la demande.");
+    } finally {
+      setIsPending(false);
     }
   }
 
