@@ -10,7 +10,22 @@ import {
   hasActiveOrganizationSubscription,
 } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { collaborationGroupSchema } from "@/lib/validators";
+
+function isSameOriginRequest(req: Request) {
+  const origin = req.headers.get("origin");
+  if (!origin) {
+    return true;
+  }
+
+  const requestHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || new URL(req.url).host;
+  try {
+    return new URL(origin).host === requestHost;
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(req: Request) {
   const startedAt = Date.now();
@@ -126,10 +141,21 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "collaboration_group_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-group-create:${session.userId}`), 20, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many groups" }, { status: 429 });
   }
 
   const parsed = collaborationGroupSchema.safeParse(await req.json().catch(() => null));
@@ -168,7 +194,10 @@ export async function POST(req: Request) {
   await writeGroupAudit({ groupId: group.id, actorId: session.userId, action: "group.create", entityType: "CollaborationGroup", entityId: group.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.group.create", entity: "CollaborationGroup", entityId: group.id, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  await notifyUser({ userId: session.userId, title: "Groupe collaboratif créé", body: group.name, type: "COLLABORATION", targetUrl: "/collaborators", organizationId });
+  await notifyUser({ userId: session.userId, title: "Groupe collaboratif créé", body: group.name, type: "COLLABORATION", targetUrl: "/collaborators", organizationId }).catch((error) => {
+    console.error("Collaboration group notification failed", error);
+    return null;
+  });
 
   return NextResponse.json({ ok: true, group }, { status: 201 });
 }

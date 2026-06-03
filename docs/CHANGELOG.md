@@ -2,6 +2,15 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-04
+
+### Modifié
+
+- Navigation produit DTSC encapsulée dans un bouton menu avec liste verticale scrollable: Site public, SaaS, Console DTSC, Support et Compte ne prennent plus d'espace permanent dans la barre latérale desktop.
+- Le tableau Administration des utilisateurs garde un scroll horizontal et propose des colonnes redimensionnables manuellement, y compris au clavier, pour lire les emails, rôles, statuts et limites sans repli vertical illisible.
+- Correction de la visibilité des groupes `Mes collaborateurs` hors contexte organisation: les groupes globaux standards dont l'utilisateur est membre ne sont plus masqués par le filtre réservé aux groupes transversaux.
+- La création de groupe collaboratif applique désormais un rate limiting, un contrôle d'origine et une notification non bloquante afin qu'une erreur de notification ne fasse pas échouer la réponse après persistance.
+
 ## 2026-06-02
 
 ### Modifié

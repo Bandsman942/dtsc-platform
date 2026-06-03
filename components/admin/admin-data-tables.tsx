@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { TicketPriority, TicketStatus, UserRole, UserStatus } from "@prisma/client";
 import { ListControls } from "@/components/ui/list-controls";
 import { UserLimitsForm } from "@/components/admin/user-limits-form";
@@ -38,6 +39,17 @@ type AdminTicket = {
 };
 
 const userRoles: UserRole[] = ["ADMIN", "MANAGER", "CLIENT", "SUPPORT"];
+const userTableColumns = [
+  { key: "name", label: "Nom", width: 220, minWidth: 160 },
+  { key: "email", label: "Email", width: 300, minWidth: 220 },
+  { key: "role", label: "Rôle", width: 190, minWidth: 160 },
+  { key: "status", label: "Statut", width: 180, minWidth: 150 },
+  { key: "limits", label: "Limites / jour", width: 360, minWidth: 280 },
+  { key: "conversations", label: "Conversations", width: 150, minWidth: 130 },
+  { key: "createdAt", label: "Créé le", width: 170, minWidth: 140 },
+] as const;
+type UserTableColumnKey = (typeof userTableColumns)[number]["key"];
+const defaultUserColumnWidths = Object.fromEntries(userTableColumns.map((column) => [column.key, column.width])) as Record<UserTableColumnKey, number>;
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("fr-FR", {
@@ -77,11 +89,39 @@ export function AdminDataTables({
     pageSize: 8,
     getSearchText: (ticket) => `${ticket.subject} ${ticket.user.email} ${ticket.status} ${ticket.priority}`,
   });
+  const [userColumnWidths, setUserColumnWidths] = useState<Record<UserTableColumnKey, number>>(defaultUserColumnWidths);
+  const userTableWidth = userTableColumns.reduce((sum, column) => sum + userColumnWidths[column.key], 0);
+
+  function beginUserColumnResize(columnKey: UserTableColumnKey, startX: number) {
+    const column = userTableColumns.find((item) => item.key === columnKey);
+    if (!column) {
+      return;
+    }
+    const startWidth = userColumnWidths[columnKey];
+    const move = (moveEvent: MouseEvent | TouchEvent) => {
+      const nextX = "touches" in moveEvent ? moveEvent.touches[0]?.clientX : moveEvent.clientX;
+      if (typeof nextX !== "number") {
+        return;
+      }
+      const nextWidth = Math.max(column.minWidth, startWidth + nextX - startX);
+      setUserColumnWidths((current) => ({ ...current, [columnKey]: nextWidth }));
+    };
+    const stop = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", stop);
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", stop);
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", stop);
+    document.addEventListener("touchmove", move, { passive: false });
+    document.addEventListener("touchend", stop);
+  }
 
   return (
     <>
       {showUsers && (
-        <section className="dtsc-card p-6">
+        <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <h2 className="font-black text-dtsc-ink">Utilisateurs et RBAC</h2>
@@ -114,27 +154,58 @@ export function AdminDataTables({
               onPageChange={userList.setPage}
             />
           </div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <p className="mt-3 text-xs font-semibold text-dtsc-muted">Faites défiler horizontalement et tirez le bord droit d&apos;un en-tête pour ajuster une colonne.</p>
+          <div className="mt-4 max-w-full overflow-x-auto overscroll-x-contain rounded-2xl border border-dtsc-border">
+            <table className="text-left text-sm" style={{ minWidth: userTableWidth, width: userTableWidth, tableLayout: "fixed" }}>
+              <colgroup>
+                {userTableColumns.map((column) => (
+                  <col key={column.key} style={{ width: userColumnWidths[column.key] }} />
+                ))}
+              </colgroup>
               <thead className="text-dtsc-muted">
                 <tr>
-                  <th className="py-3">Nom</th>
-                  <th>Email</th>
-                  <th>Rôle</th>
-                  <th>Statut</th>
-                  <th>Limites / jour</th>
-                  <th>Conversations</th>
-                  <th>Créé le</th>
+                  {userTableColumns.map((column) => (
+                    <th key={column.key} className="relative select-none border-b border-dtsc-border bg-dtsc-page px-3 py-3 align-middle">
+                      <span className="block truncate pr-3">{column.label}</span>
+                      <span
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label={`Redimensionner ${column.label}`}
+                        tabIndex={0}
+                        onMouseDown={(mouseEvent) => {
+                          mouseEvent.preventDefault();
+                          beginUserColumnResize(column.key, mouseEvent.clientX);
+                        }}
+                        onTouchStart={(touchEvent) => {
+                          const firstTouch = touchEvent.touches[0];
+                          if (firstTouch) {
+                            beginUserColumnResize(column.key, firstTouch.clientX);
+                          }
+                        }}
+                        onKeyDown={(keyboardEvent) => {
+                          if (keyboardEvent.key !== "ArrowLeft" && keyboardEvent.key !== "ArrowRight") {
+                            return;
+                          }
+                          keyboardEvent.preventDefault();
+                          setUserColumnWidths((current) => ({
+                            ...current,
+                            [column.key]: Math.max(column.minWidth, current[column.key] + (keyboardEvent.key === "ArrowRight" ? 24 : -24)),
+                          }));
+                        }}
+                        className="absolute right-0 top-0 h-full w-3 cursor-col-resize touch-none border-r border-transparent hover:border-cyan-400"
+                      />
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-dtsc-border text-dtsc-muted">
                 {userList.paginatedItems.map((managedUser) => (
                   <tr key={managedUser.id}>
-                    <td className="py-3 font-bold text-dtsc-ink">{managedUser.name}</td>
-                    <td>{managedUser.email}</td>
-                    <td>{canManageUsers ? <UserRoleSelect userId={managedUser.id} role={managedUser.role} /> : formatEnumLabel(managedUser.role)}</td>
-                    <td>{canManageUsers ? <UserStatusSelect userId={managedUser.id} status={managedUser.status} /> : formatEnumLabel(managedUser.status)}</td>
-                    <td>
+                    <td className="truncate px-3 py-3 font-bold text-dtsc-ink" title={managedUser.name}>{managedUser.name}</td>
+                    <td className="truncate px-3 py-3" title={managedUser.email}>{managedUser.email}</td>
+                    <td className="px-3 py-3">{canManageUsers ? <UserRoleSelect userId={managedUser.id} role={managedUser.role} /> : formatEnumLabel(managedUser.role)}</td>
+                    <td className="px-3 py-3">{canManageUsers ? <UserStatusSelect userId={managedUser.id} status={managedUser.status} /> : formatEnumLabel(managedUser.status)}</td>
+                    <td className="px-3 py-3">
                       {canManageUsers ? (
                         <UserLimitsForm
                           userId={managedUser.id}
@@ -142,11 +213,11 @@ export function AdminDataTables({
                           dailyTokenLimit={managedUser.dailyTokenLimit}
                         />
                       ) : (
-                        <span>{managedUser.dailyMessageLimit} msg · {managedUser.dailyTokenLimit} tokens</span>
+                        <span className="whitespace-nowrap">{managedUser.dailyMessageLimit} msg · {managedUser.dailyTokenLimit} tokens</span>
                       )}
                     </td>
-                    <td>{managedUser._count.conversations}</td>
-                    <td>{formatDate(managedUser.createdAt)}</td>
+                    <td className="px-3 py-3">{managedUser._count.conversations}</td>
+                    <td className="whitespace-nowrap px-3 py-3">{formatDate(managedUser.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

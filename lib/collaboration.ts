@@ -42,7 +42,7 @@ export function collaborationGroupScopeWhere(
     return { OR: [{ organizationId: activeOrganizationId }, crossContextGroups] };
   }
 
-  return { organizationId: null, ...crossContextGroups };
+  return { OR: [{ organizationId: null }, crossContextGroups] };
 }
 
 export function canAccessGroupInSession(
@@ -58,7 +58,7 @@ export function canAccessGroupInSession(
     return group.organizationId === activeOrganizationId || isCrossContextGroup(group);
   }
 
-  return group.organizationId === null && isCrossContextGroup(group);
+  return group.organizationId === null || isCrossContextGroup(group);
 }
 
 export async function canAccessGroupInSessionWithSubscription(
