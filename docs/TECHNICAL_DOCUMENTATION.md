@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 2 juin 2026
+Derniere mise a jour: 4 juin 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -193,7 +193,7 @@ Première itération active: `HEALTH_CARE`.
   - `PATCH /api/enterprise/[organizationId]/healthcare/[recordId]` pour modifier;
   - `DELETE /api/enterprise/[organizationId]/healthcare/[recordId]` pour archiver logiquement.
 
-Ces routes vérifient la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module activé via `canAccessEnterpriseModule()`, la validation Zod et le rate limiting. Les créations/modifications/archivages journalisent `AuditLog` et créent une notification lorsqu'un responsable membre de l'organisation est assigné. Les incidents qualité critiques notifient également les rôles de gestion actifs de l'entreprise.
+Ces routes vérifient la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module activé via `canAccessEnterpriseModule()`, la validation Zod et le rate limiting. Les créations/modifications/archivages journalisent `AuditLog` et créent une notification non bloquante lorsqu'un responsable membre de l'organisation est assigné. Les incidents qualité critiques notifient également les rôles de gestion actifs de l'entreprise sans faire échouer l'écriture principale si la notification rencontre une erreur.
 
 Les actions `PATCH` métier mettent à jour le statut et l'historique léger dans `payloadJson`: confirmation ou annulation de rendez-vous, marquage absent, conversion en consultation, clôture/réouverture de consultation, validation labo, soumission/approbation/rejet de prise en charge, entrée/sortie/ajustement de stock et résolution d'incident. Les consultations clôturées, factures payées et résultats validés sont verrouillés contre modification libre jusqu'à réouverture autorisée.
 
@@ -213,6 +213,16 @@ Refactor Administration [Entreprise]:
 - Les types partagés sérialisables sont centralisés dans `lib/enterprise/enterprise-admin-types.ts` afin que les loaders serveur et les composants client ne dépendent pas d'un fichier `"use client"`.
 - `components/enterprise/enterprise-administration-module.tsx` orchestre désormais les mutations et les états UI, tandis que `components/enterprise/enterprise-admin-panels.tsx` isole les panels `EnterpriseDashboardSummary`, `EnterpriseMembersPanel`, `EnterpriseModulesPanel`, `EnterpriseDepartmentsPanel`, `EnterprisePositionsPanel`, `EnterpriseWorkflowsPanel`, `EnterpriseCalendarPanel`, `EnterpriseBrandingSettingsPanel` et `EnterpriseHealthcareSection`.
 - Les routes mutantes d'administration entreprise, modules, membres et santé vérifient l'origine de la requête et appliquent un rate limiting en plus des contrôles existants de session, `organizationId`, membership actif, rôle entreprise et module santé activé.
+
+Refactor Activités [Entreprise]:
+
+- `app/enterprise-activities/page.tsx` reste un orchestrateur App Router: lecture session, contexte `ORGANIZATION`, vérification du membership actif avec `requireEnterpriseMembership()`, appel du loader puis rendu du module.
+- Les chargements serveur sont isolés dans `lib/enterprise/*`: `enterprise-activities-loader.ts`, `enterprise-activity-blocks-loader.ts`, `enterprise-activity-requests-loader.ts`, `enterprise-activity-members-loader.ts`, `enterprise-activity-workflows-loader.ts` et `enterprise-activity-healthcare-loader.ts`.
+- `enterprise-activity-healthcare-loader.ts` ne lit les enregistrements santé que si l'organisation active possède `sectorCode = HEALTH_CARE`; les autres secteurs ne chargent pas les données patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialité ni rapports.
+- Les types JSON transmis aux composants client sont centralisés dans `lib/enterprise/enterprise-activities-types.ts`; le loader principal sérialise explicitement le dataset pour ne pas transmettre de `Date` Prisma brute aux composants client.
+- `components/enterprise/enterprise-activities-module.tsx` orchestre uniquement l'état UI, tandis que `components/enterprise/enterprise-activities-panels.tsx` isole les panels `EnterpriseActivitiesDashboard`, `EnterpriseActivityBlocksPanel`, `EnterpriseRequestsPanel`, `EnterpriseWorkflowsPanel`, `EnterpriseHealthcareActivitiesPanel` et `EnterpriseActivityFormDialog`.
+- `POST /api/enterprise/[organizationId]/activities` vérifie maintenant l'origine de la requête et applique un rate limiting avant la création. La route conserve la validation Zod, le contrôle `organizationId`, le membership actif, `canAccessEnterpriseActivity()`, la validation du destinataire actif de l'organisation et l'audit.
+- Les notifications liées aux demandes d'activité sont non bloquantes: une erreur de notification ne fait plus échouer une demande déjà persistée.
 
 Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
 

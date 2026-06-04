@@ -58,7 +58,7 @@ Routes:
 - `PATCH /api/enterprise/[organizationId]/healthcare/[recordId]`;
 - `DELETE /api/enterprise/[organizationId]/healthcare/[recordId]`.
 
-Chaque route vérifie la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module entreprise activé, la validation Zod, le rate limiting et l'audit.
+Chaque route vérifie la session, le membership actif, l'organisation cliente active, `sectorCode = HEALTH_CARE`, le module entreprise activé, la validation Zod, le rate limiting et l'audit. Les notifications d'assignation et d'incident critique restent non bloquantes par rapport à l'écriture principale.
 
 ## Actions métier
 

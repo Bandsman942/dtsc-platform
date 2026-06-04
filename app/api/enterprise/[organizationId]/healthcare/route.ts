@@ -266,16 +266,18 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   if (record.assignedToUserId && record.assignedToUserId !== session.userId) {
-    await prisma.notification.create({
-      data: {
-        userId: record.assignedToUserId,
-        organizationId,
-        title: "Nouvel élément santé",
-        body: record.title,
-        type: "ENTERPRISE_HEALTHCARE",
-        targetUrl: "/enterprise-admin",
-      },
-    });
+    await prisma.notification
+      .create({
+        data: {
+          userId: record.assignedToUserId,
+          organizationId,
+          title: "Nouvel élément santé",
+          body: record.title,
+          type: "ENTERPRISE_HEALTHCARE",
+          targetUrl: "/enterprise-admin",
+        },
+      })
+      .catch(() => null);
   }
   if (record.moduleCode === "QUALITY_INCIDENTS" && (record.priority === "CRITICAL" || data.severity === "CRITICAL")) {
     const managers = await prisma.organizationMember.findMany({
@@ -290,17 +292,19 @@ export async function POST(req: Request, { params }: Params) {
       take: 30,
     });
     if (managers.length) {
-      await prisma.notification.createMany({
-        data: managers.map((member) => ({
-          userId: member.userId,
-          organizationId,
-          title: "Incident santé critique",
-          body: record.title,
-          type: "ENTERPRISE_HEALTHCARE_CRITICAL",
-          targetUrl: "/enterprise-admin",
-        })),
-        skipDuplicates: true,
-      });
+      await prisma.notification
+        .createMany({
+          data: managers.map((member) => ({
+            userId: member.userId,
+            organizationId,
+            title: "Incident santé critique",
+            body: record.title,
+            type: "ENTERPRISE_HEALTHCARE_CRITICAL",
+            targetUrl: "/enterprise-admin",
+          })),
+          skipDuplicates: true,
+        })
+        .catch(() => null);
     }
   }
 

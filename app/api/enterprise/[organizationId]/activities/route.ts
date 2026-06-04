@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canAccessEnterpriseActivity, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseActivityRequestSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -61,11 +63,23 @@ export async function GET(req: Request, { params }: Params) {
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_activity_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const limited = await rateLimit(getRateLimitKey(req, `enterprise-activity:${session.userId}`), 80, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop de demandes entreprise sur une courte période." }, { status: 429 });
+  }
+
   const { organizationId } = await params;
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) {
@@ -132,17 +146,19 @@ export async function POST(req: Request, { params }: Params) {
         take: 20,
       });
   if (adminMembers.length) {
-    await prisma.notification.createMany({
-      data: adminMembers.map((member) => ({
-        userId: member.userId,
-        organizationId,
-        title: "Nouvelle demande entreprise",
-        body: data.title,
-        type: "ENTERPRISE_ACTIVITY",
-        targetUrl: "/enterprise-activities",
-      })),
-      skipDuplicates: true,
-    });
+    await prisma.notification
+      .createMany({
+        data: adminMembers.map((member) => ({
+          userId: member.userId,
+          organizationId,
+          title: "Nouvelle demande entreprise",
+          body: data.title,
+          type: "ENTERPRISE_ACTIVITY",
+          targetUrl: "/enterprise-activities",
+        })),
+        skipDuplicates: true,
+      })
+      .catch(() => null);
   }
 
   await writeAuditLog({

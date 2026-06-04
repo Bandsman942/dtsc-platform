@@ -147,6 +147,8 @@ Voir `docs/sectors/health-care.md` pour les workflows, permissions et limites de
 
 Le module `/enterprise-activities` est visible pour les membres actifs de l'organisation.
 
+La page est organisée comme un orchestrateur App Router: session, contexte organisation, membership actif, chargement du dataset puis rendu. Les loaders `lib/enterprise/enterprise-activities-loader.ts` et fichiers associés chargent séparément les blocs d'activités, demandes récentes, workflows partagés, membres actifs et données santé nécessaires uniquement pour `HEALTH_CARE`.
+
 Chaque bloc d'activité crée un vrai `EnterpriseActivityRequest` lié à:
 
 - `organizationId`;
@@ -157,6 +159,10 @@ Chaque bloc d'activité crée un vrai `EnterpriseActivityRequest` lié à:
 - module cible éventuel.
 
 Les admins entreprise et managers voient les demandes de l'organisation. Les membres voient leurs propres demandes ou celles qui leur sont assignées.
+
+L'interface est découpée en panels maintenables: dashboard, blocs d'activités, demandes, workflows, repères santé et dialogue de création. Les formulaires restent plein écran mobile-first, les demandes restent recherchables/paginées, et aucune action affichée ne doit être un placeholder.
+
+La route `POST /api/enterprise/[organizationId]/activities` vérifie l'origine de la requête, applique un rate limiting, valide le payload avec Zod, contrôle le membership actif, le bloc activé et le destinataire membre de la même entreprise. Les notifications sont non bloquantes afin de préserver la persistance de la demande.
 
 ## Sécurité multi-tenant
 

@@ -6,6 +6,11 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Refactorisation de `Activités [Entreprise]`: les loaders serveur sont extraits dans `lib/enterprise/*`, la page `/enterprise-activities` redevient un orchestrateur auth/contexte/membership/dataset/rendu, et les types sérialisables sont centralisés dans `lib/enterprise/enterprise-activities-types.ts`.
+- Découpage de l'interface Activités [Entreprise] en panels maintenables: dashboard, blocs d'activités, demandes, workflows, repères santé et dialogue de création responsive.
+- Préservation du secteur Santé dans Activités [Entreprise]: les données patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialité et rapports ne sont chargées que pour les organisations `HEALTH_CARE`.
+- Durcissement de `POST /api/enterprise/[organizationId]/activities` avec contrôle d'origine, rate limiting, validation du destinataire actif de l'entreprise et notifications non bloquantes après persistance.
+- Les notifications des créations, modifications et incidents critiques Santé sont non bloquantes afin qu'un effet secondaire de notification ne fasse pas échouer une écriture déjà validée.
 - Correction du build Vercel après le refactor Administration [Entreprise]: le loader `getEnterpriseAdministrationDataset()` sérialise maintenant explicitement ses données Prisma en `EnterpriseAdminDataset` JSON afin d'éviter l'incompatibilité TypeScript entre `Date` Prisma et chaînes côté client.
 - Refactorisation de `Administration [Entreprise]`: les loaders serveur sont extraits dans `lib/enterprise/*`, la page `/enterprise-admin` redevient un orchestrateur auth/contexte/rendu, et les types sérialisables sont partagés dans `lib/enterprise/enterprise-admin-types.ts`.
 - Découpage de l'interface Administration [Entreprise] en panels maintenables: dashboard, membres, modules, départements, postes, workflows, calendrier, paramètres et section santé dédiée.

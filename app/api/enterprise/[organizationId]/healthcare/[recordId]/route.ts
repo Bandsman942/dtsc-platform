@@ -267,16 +267,18 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   if (record.assignedToUserId && record.assignedToUserId !== session.userId) {
-    await prisma.notification.create({
-      data: {
-        userId: record.assignedToUserId,
-        organizationId,
-        title: "Élément santé mis à jour",
-        body: record.title,
-        type: "ENTERPRISE_HEALTHCARE",
-        targetUrl: "/enterprise-admin",
-      },
-    });
+    await prisma.notification
+      .create({
+        data: {
+          userId: record.assignedToUserId,
+          organizationId,
+          title: "Élément santé mis à jour",
+          body: record.title,
+          type: "ENTERPRISE_HEALTHCARE",
+          targetUrl: "/enterprise-admin",
+        },
+      })
+      .catch(() => null);
   }
 
   await writeAuditLog({
