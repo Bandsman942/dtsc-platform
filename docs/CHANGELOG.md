@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Correction du build Vercel après le refactor Administration [Entreprise]: le loader `getEnterpriseAdministrationDataset()` sérialise maintenant explicitement ses données Prisma en `EnterpriseAdminDataset` JSON afin d'éviter l'incompatibilité TypeScript entre `Date` Prisma et chaînes côté client.
 - Refactorisation de `Administration [Entreprise]`: les loaders serveur sont extraits dans `lib/enterprise/*`, la page `/enterprise-admin` redevient un orchestrateur auth/contexte/rendu, et les types sérialisables sont partagés dans `lib/enterprise/enterprise-admin-types.ts`.
 - Découpage de l'interface Administration [Entreprise] en panels maintenables: dashboard, membres, modules, départements, postes, workflows, calendrier, paramètres et section santé dédiée.
 - Optimisation du chargement Santé: les enregistrements `EnterpriseSectorRecord` ne sont chargés par la page Administration que pour les organisations `HEALTH_CARE`, sans modifier les sous-modules patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialité ni rapports.

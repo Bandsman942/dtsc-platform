@@ -6,7 +6,7 @@ import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
 import { prisma } from "@/lib/prisma";
 
-function toJson<T>(value: T): T {
+function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
@@ -55,7 +55,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
   ]);
 
-  return toJson({
+  return toJson<EnterpriseAdminDataset>({
     organization,
     dashboard: {
       membersCount: members.length,
@@ -73,5 +73,5 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     recentRequests: workflowDataset.recentRequests,
     calendarEvents,
     sectorRecords,
-  }) as EnterpriseAdminDataset;
+  });
 }
