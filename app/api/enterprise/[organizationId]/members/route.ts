@@ -5,16 +5,29 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseMemberInviteSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_member_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await rateLimit(getRateLimitKey(req, `enterprise-member:${session.userId}`), 40, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop d'invitations sur une courte période." }, { status: 429 });
   }
 
   const { organizationId } = await params;

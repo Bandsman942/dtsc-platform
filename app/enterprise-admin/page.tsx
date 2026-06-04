@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { EnterpriseAdministrationModule } from "@/components/enterprise/enterprise-administration-module";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
+import { getEnterpriseAdministrationDataset } from "@/lib/enterprise/enterprise-admin-loader";
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
-import { prisma } from "@/lib/prisma";
 
 export default async function EnterpriseAdminPage() {
   const user = await requireUser();
@@ -13,90 +13,26 @@ export default async function EnterpriseAdminPage() {
     redirect("/dashboard");
   }
 
-  const [organization, members, openRequestsCount, modules, departments, positions, activityBlocks, workflows, recentRequests, calendarEvents, sectorRecords] = await Promise.all([
-    prisma.organization.findFirst({
-      where: { id: organizationId, status: "ACTIVE", deletedAt: null },
-      select: {
-        id: true,
-        name: true,
-        sector: true,
-        sectorCode: true,
-        country: true,
-        city: true,
-        address: true,
-        phone: true,
-        email: true,
-        logoUrl: true,
-        timezone: true,
-        settingsJson: true,
-        brandingJson: true,
-        businessSector: { select: { labelFr: true, labelEn: true, icon: true, color: true } },
-      },
-    }),
-    prisma.organizationMember.findMany({
-      where: { organizationId, removedAt: null },
-      orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
-      include: { user: { select: { id: true, name: true, email: true } } },
-      take: 200,
-    }),
-    prisma.enterpriseActivityRequest.count({ where: { organizationId, status: { in: ["SUBMITTED", "IN_PROGRESS", "PENDING"] } } }),
-    prisma.enterpriseModule.findMany({ where: { organizationId }, orderBy: [{ moduleCategory: "asc" }, { sortOrder: "asc" }, { labelFr: "asc" }] }),
-    prisma.enterpriseDepartment.findMany({ where: { organizationId }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }] }),
-    prisma.enterprisePosition.findMany({
-      where: { organizationId },
-      orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }],
-      include: { department: { select: { labelFr: true, labelEn: true } } },
-    }),
-    prisma.enterpriseActivityBlock.findMany({ where: { organizationId }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }] }),
-    prisma.enterpriseWorkflow.findMany({ where: { organizationId }, orderBy: { labelFr: "asc" } }),
-    prisma.enterpriseActivityRequest.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      include: { createdBy: { select: { name: true, email: true } } },
-    }),
-    prisma.internalCalendarEvent.findMany({
-      where: { organizationId, deletedAt: null },
-      orderBy: [{ startDateTime: "asc" }, { createdAt: "desc" }],
-      take: 40,
-      include: { participants: true },
-    }),
-    prisma.enterpriseSectorRecord.findMany({
-      where: { organizationId, sectorCode: "HEALTH_CARE", deletedAt: null },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 300,
-      include: {
-        createdBy: { select: { name: true, email: true } },
-        assignedTo: { select: { id: true, name: true, email: true } },
-      },
-    }),
-  ]);
-
-  if (!organization) {
+  const dataset = await getEnterpriseAdministrationDataset(organizationId);
+  if (!dataset) {
     redirect("/dashboard");
   }
 
   return (
     <AppShell user={user}>
       <EnterpriseAdministrationModule
-        organization={organization}
-        dashboard={{
-          membersCount: members.length,
-          activeModulesCount: modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
-          modulesCount: modules.length,
-          openRequestsCount,
-          recentRequestsCount: recentRequests.length,
-        }}
+        organization={dataset.organization}
+        dashboard={dataset.dashboard}
         locale={user.locale}
-        members={JSON.parse(JSON.stringify(members))}
-        modules={JSON.parse(JSON.stringify(modules))}
-        departments={JSON.parse(JSON.stringify(departments))}
-        positions={JSON.parse(JSON.stringify(positions))}
-        activityBlocks={JSON.parse(JSON.stringify(activityBlocks))}
-        workflows={JSON.parse(JSON.stringify(workflows))}
-        recentRequests={JSON.parse(JSON.stringify(recentRequests))}
-        calendarEvents={JSON.parse(JSON.stringify(calendarEvents))}
-        sectorRecords={JSON.parse(JSON.stringify(sectorRecords))}
+        members={dataset.members}
+        modules={dataset.modules}
+        departments={dataset.departments}
+        positions={dataset.positions}
+        activityBlocks={dataset.activityBlocks}
+        workflows={dataset.workflows}
+        recentRequests={dataset.recentRequests}
+        calendarEvents={dataset.calendarEvents}
+        sectorRecords={dataset.sectorRecords}
       />
     </AppShell>
   );

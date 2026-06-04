@@ -27,23 +27,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import type { EnterpriseSectorRecordItem } from "@/lib/enterprise/enterprise-admin-types";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { translate } from "@/lib/i18n";
-
-export type EnterpriseSectorRecordItem = {
-  id: string;
-  moduleCode: string;
-  recordType: string;
-  title: string;
-  summary: string | null;
-  status: string;
-  priority: string;
-  payloadJson: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: { name: string; email: string };
-  assignedTo: { id: string; name: string; email: string } | null;
-};
 
 type HealthcareMember = {
   id: string;

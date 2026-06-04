@@ -205,6 +205,15 @@ Affinage santé:
 - `POST /api/enterprise/[organizationId]/members` crée une invitation `OrganizationMember.status = INVITED` pour un utilisateur existant au lieu de l'activer directement.
 - `POST /api/enterprise/[organizationId]/activities` accepte `assignedToUserId` et `metadata`; le destinataire doit être membre actif de la même entreprise et reçoit la notification ciblée.
 
+Refactor Administration [Entreprise]:
+
+- `app/enterprise-admin/page.tsx` reste un orchestrateur App Router: lecture session, contexte `ORGANIZATION`, vérification `canManageEnterpriseAdministration()`, appel du loader puis rendu du module.
+- Les chargements serveur sont regroupés dans `lib/enterprise/*`: `enterprise-admin-loader.ts`, `enterprise-members-loader.ts`, `enterprise-modules-loader.ts`, `enterprise-healthcare-loader.ts`, `enterprise-calendar-loader.ts` et `enterprise-workflows-loader.ts`.
+- `enterprise-healthcare-loader.ts` ne lit `EnterpriseSectorRecord` que si l'organisation active possède `sectorCode = HEALTH_CARE`; les autres secteurs ne chargent pas les 300 enregistrements santé.
+- Les types partagés sérialisables sont centralisés dans `lib/enterprise/enterprise-admin-types.ts` afin que les loaders serveur et les composants client ne dépendent pas d'un fichier `"use client"`.
+- `components/enterprise/enterprise-administration-module.tsx` orchestre désormais les mutations et les états UI, tandis que `components/enterprise/enterprise-admin-panels.tsx` isole les panels `EnterpriseDashboardSummary`, `EnterpriseMembersPanel`, `EnterpriseModulesPanel`, `EnterpriseDepartmentsPanel`, `EnterprisePositionsPanel`, `EnterpriseWorkflowsPanel`, `EnterpriseCalendarPanel`, `EnterpriseBrandingSettingsPanel` et `EnterpriseHealthcareSection`.
+- Les routes mutantes d'administration entreprise, modules, membres et santé vérifient l'origine de la requête et appliquent un rate limiting en plus des contrôles existants de session, `organizationId`, membership actif, rôle entreprise et module santé activé.
+
 Le bloc Administration `Entreprises clientes` est visible aux rôles DTSC autorisés par `AppSetting.adminRoleAccess`. Il ne donne pas accès aux données métier privées des clients: DTSC gère le contenant administratif, les admins entreprise, l'activation et l'abonnement.
 
 Règle de sécurité permanente: toute future route interne entreprise doit filtrer par `organizationId`, vérifier un `OrganizationMember` actif, appliquer le rôle organisationnel et ne jamais accepter le rôle global `ADMIN` comme passe-droit vers les données privées d'une entreprise cliente.

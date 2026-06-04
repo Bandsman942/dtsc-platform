@@ -6,6 +6,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Refactorisation de `Administration [Entreprise]`: les loaders serveur sont extraits dans `lib/enterprise/*`, la page `/enterprise-admin` redevient un orchestrateur auth/contexte/rendu, et les types sérialisables sont partagés dans `lib/enterprise/enterprise-admin-types.ts`.
+- Découpage de l'interface Administration [Entreprise] en panels maintenables: dashboard, membres, modules, départements, postes, workflows, calendrier, paramètres et section santé dédiée.
+- Optimisation du chargement Santé: les enregistrements `EnterpriseSectorRecord` ne sont chargés par la page Administration que pour les organisations `HEALTH_CARE`, sans modifier les sous-modules patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialité ni rapports.
+- Durcissement des routes mutantes Administration [Entreprise], modules, membres et santé avec contrôle d'origine et rate limiting, en conservant les validations `organizationId`, membership actif, rôle entreprise et module activé.
 - Navigation produit DTSC encapsulée dans un bouton menu avec liste verticale scrollable: Site public, SaaS, Console DTSC, Support et Compte ne prennent plus d'espace permanent dans la barre latérale desktop.
 - Le tableau Administration des utilisateurs garde un scroll horizontal et propose des colonnes redimensionnables manuellement, y compris au clavier, pour lire les emails, rôles, statuts et limites sans repli vertical illisible.
 - Correction de la visibilité des groupes `Mes collaborateurs` hors contexte organisation: les groupes globaux standards dont l'utilisateur est membre ne sont plus masqués par le filtre réservé aux groupes transversaux.

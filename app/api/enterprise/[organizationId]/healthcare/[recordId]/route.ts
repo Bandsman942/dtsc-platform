@@ -6,6 +6,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseHealthcareRecordUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string; recordId: string }> };
@@ -93,6 +94,11 @@ async function validateHealthcareReferences(organizationId: string, data: Health
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_healthcare_update_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
@@ -287,6 +293,11 @@ export async function PATCH(req: Request, { params }: Params) {
 
 export async function DELETE(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "enterprise_healthcare_delete_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
