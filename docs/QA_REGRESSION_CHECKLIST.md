@@ -1,0 +1,187 @@
+# Checklist QA regression DTSC Platform
+
+Cette checklist couvre les parcours critiques apres les refactors Console DTSC, Entreprise, Support, appels collaboratifs et sous-domaines. Elle complete la commande:
+
+```bash
+pnpm qa:regression
+```
+
+La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
+
+## 1. Socle technique
+
+- Executer `pnpm install --no-frozen-lockfile` si l'environnement local n'a pas encore `node_modules`.
+- Executer `pnpm type-check`.
+- Executer `pnpm lint`.
+- Executer `pnpm qa:regression`.
+- Executer `pnpm build`.
+- Executer `git diff --check`.
+- Verifier que Vercel lance toujours `pnpm prisma migrate deploy && pnpm build`.
+- Verifier qu'aucune migration Prisma destructive n'est ajoutee.
+
+## 2. Sous-domaines et auth
+
+- Domaine public `dtsc-platform.com`: ouvrir `/`, `/services`, `/solutions`, `/contact`.
+- Domaine public: ouvrir `/dashboard` et confirmer la redirection vers `app.dtsc-platform.com/dashboard`.
+- Domaine public: ouvrir `/admin` et confirmer la redirection vers `console.dtsc-platform.com/admin`.
+- Domaine public: ouvrir `/auth/sign-in` et confirmer la redirection vers `account.dtsc-platform.com/auth/sign-in`.
+- Account: login avec `next` vers app, support et console.
+- Account: tester un `next=https://example.com` et confirmer qu'il est refuse au profit d'une destination interne.
+- Logout: confirmer l'expiration du cookie host-only et du cookie partage quand `AUTH_COOKIE_DOMAIN=.dtsc-platform.com`.
+- Session expiree: ouvrir `/dashboard`, `/support`, `/collaborators`, `/enterprise-admin`, `/enterprise-activities`, `/calendar` et confirmer la redirection vers Account.
+
+## 3. Profils utilisateur
+
+### Utilisateur DTSC interne
+
+- Se connecter avec contexte `DTSC_INTERNAL`.
+- Ouvrir `console.dtsc-platform.com/admin`: acces autorise.
+- Ouvrir `app.dtsc-platform.com/dashboard`: acces SaaS autorise.
+- Ouvrir `support.dtsc-platform.com/support`: tickets Support visibles selon role.
+- Ouvrir `app.dtsc-platform.com/collaborators`: groupes DTSC et groupes autorises visibles.
+- Ouvrir `app.dtsc-platform.com/calendar`: calendrier interne visible selon role/poste.
+- Verifier que la navigation produit affiche Console, SaaS, Support, Compte et Site public.
+
+### Support DTSC
+
+- Se connecter avec role `SUPPORT` et contexte `DTSC_INTERNAL`.
+- Ouvrir Support: voir les tickets autorises.
+- Repondre a un ticket: message persiste, notification client non bloquante.
+- Tenter `/admin`: acces selon `AppSetting.adminRoleAccess`, sans passe-droit vers les donnees clientes.
+- Voir les disponibilites des collaborateurs DTSC dans le calendrier si autorise par les regles recentes.
+- Verifier qu'aucun ticket d'une autre organisation n'expose de donnees metier privees hors support autorise.
+
+### Admin entreprise
+
+- Se connecter avec contexte `ORGANIZATION`.
+- Ouvrir `/enterprise-admin`: acces autorise si role entreprise habilite.
+- Modifier un module, un departement, un poste ou un workflow: operation persistee et limitee a `organizationId`.
+- Ouvrir `/enterprise-activities`: voir les demandes de l'organisation selon permissions.
+- Ouvrir `/support`: voir ses tickets personnels et creer un nouveau ticket rattache au contexte actif.
+- Ouvrir `/admin`: redirection vers dashboard, pas d'acces Console DTSC.
+
+### Membre entreprise
+
+- Se connecter avec contexte `ORGANIZATION`.
+- Ouvrir `/enterprise-admin`: refus si non habilite.
+- Ouvrir `/enterprise-activities`: acces si membership actif.
+- Creer une demande d'activite: visible immediatement et apres rechargement.
+- Changer de contexte vers une autre organisation: les demandes, groupes et notifications changent de scope.
+- Verifier qu'aucune donnee de l'organisation precedente ne reste visible.
+
+### Client simple
+
+- Se connecter hors organisation.
+- Ouvrir `/dashboard`, `/chat`, `/company`, `/support`, `/collaborators`.
+- Ouvrir `/enterprise-admin` et `/enterprise-activities`: redirection/refus attendu.
+- Creer un ticket Support: visible immediatement, visible apres reconnexion, isole par `userId`.
+- Tenter `/admin`: redirection dashboard.
+
+### Utilisateur sans organisation
+
+- Login sans `organizationId`.
+- Confirmer la redirection par defaut vers `app.dtsc-platform.com/dashboard`.
+- Verifier que les modules Entreprise ne sont pas accessibles.
+- Verifier que Support reste accessible avec historique personnel.
+
+## 4. Acces interdit entre organisations
+
+- Utilisateur A de l'organisation A ne voit pas les demandes, membres, modules, workflows, records sante ou calendrier de l'organisation B.
+- Utilisateur A ne peut pas appeler les routes `/api/enterprise/[organizationId]/*` de B.
+- Un admin entreprise A ne peut pas ajouter, modifier ou lire des objets de B par changement manuel d'URL.
+- Les donnees `HEALTH_CARE` ne se chargent que si l'organisation active a `sectorCode = HEALTH_CARE`.
+- Un contexte `GLOBAL_CLIENT` ne peut pas lire les donnees d'une organisation via ancien `organizationId`.
+
+## 5. Console DTSC
+
+- `/admin` reste reserve a `DTSC_INTERNAL`.
+- Le chargement initial ne recupere que les KPIs essentiels et les datasets de la section active.
+- Les sections restent disponibles: Vue generale, Entreprises clientes, Abonnements & facturation, Support client, Publications & contenus, Utilisateurs & acces, Securite & audit, Modules internes DTSC, Parametres plateforme.
+- Les modules internes CEO, COO, CTO, MPO, HR & CFO, SCO et LA restent accessibles selon poste officiel et RBAC.
+- Les tableaux restent scrollables sur mobile et desktop.
+
+## 6. Administration [Entreprise]
+
+- Page visible uniquement en contexte `ORGANIZATION` et avec permission d'administration.
+- Les membres actifs, modules, departements, postes, workflows, calendrier et parametres sont filtres par `organizationId`.
+- Les formulaires longs restent en modale/panneau responsive.
+- Les routes mutantes refusent une origine externe.
+- Les routes mutantes appliquent rate limiting et validation Zod.
+- Le secteur Sante charge patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialite et rapports uniquement pour `HEALTH_CARE`.
+
+## 7. Activites [Entreprise]
+
+- Page visible uniquement pour membership actif.
+- Demandes recentes filtrees selon role entreprise et `organizationId`.
+- Workflows partages et blocs d'activites filtres par `organizationId`.
+- Creation/modification d'une demande: persistance, notification non bloquante, affichage apres rechargement.
+- Changement d'organisation: aucun objet de l'ancien contexte ne reste visible.
+- UX mobile: liste, recherche/pagination, detail et formulaire plein ecran restent dans la largeur de l'ecran.
+
+## 8. Support
+
+- Creation ticket client: persiste, visible immediatement, visible apres reconnexion.
+- Historique client: tous les tickets du createur restent visibles, meme apres changement de contexte.
+- Client A ne voit jamais les tickets de B.
+- Support DTSC voit les tickets autorises selon role `ADMIN` ou `SUPPORT` + contexte `DTSC_INTERNAL`.
+- `PATCH /api/support/tickets/[id]` refuse origine externe, utilisateur non Support DTSC et payload invalide.
+- `POST /api/support/tickets/[id]/messages` refuse origine externe, utilisateur non autorise et payload invalide.
+- Les notifications Support ne font pas echouer une creation ou une reponse deja persistee.
+
+## 9. Mes collaborateurs, groupes et messages
+
+- Liste de groupes limitee aux groupes actifs ou l'utilisateur est membre, dans le scope de session autorise.
+- Invitations visibles uniquement pour le destinataire ou email correspondant.
+- Messages: lecture/ecriture reservee aux membres actifs.
+- Mentions: notification uniquement des utilisateurs autorises a voir le groupe.
+- Partage chatbot: snapshot persistant limite aux membres du groupe, sans exposer la conversation privee originale.
+- Menus `...` et details de groupe restent utilisables sur mobile.
+
+## 10. Appels audio/video
+
+- Demarrage appel: session, origine, rate limit et membership verifies.
+- Rejoindre appel: token genere cote serveur uniquement apres verification membership.
+- Quitter: seul le participant courant passe a `LEFT`, l'appel continue.
+- Terminer: reserve au lanceur ou gestionnaire autorise, `endedAt` et `durationSeconds` persistés.
+- Notifications flottantes: visibles seulement aux membres du groupe, avec actions Rejoindre, Voir le groupe, Ignorer.
+- Polling global: intervalle leger documente, pas de boucle agressive.
+- UI: aucun libelle technique `LiveKit`, `room`, `token`, `provider` ou erreur brute visible.
+- Micro/camera: boutons pilotent les pistes reelles et synchronisent `microphoneEnabled` / `cameraEnabled`.
+- Mobile: controles accessibles, plein ecran utilisable, chat d'appel scrollable.
+
+## 11. Notifications
+
+- Les preferences utilisateur sont respectees: Support, usage, diffusions, push, sons d'appel, alertes flottantes.
+- Les notifications PWA utilisent service worker quand disponible et ne cassent pas le rendu.
+- Les filtres de notifications utilisent `type`, `targetUrl` ou une regle ciblee.
+- Les notifications ne melangent pas les contextes organisationnels.
+
+## 12. Calendrier interne
+
+- Page et API proteges par session et `canAccessInternalCalendar`.
+- Evenements filtres par organisation active.
+- Disponibilites filtrees par collaborateur autorise et organisation.
+- Un utilisateur `CLIENT` ne voit pas le calendrier interne si les regles de role l'interdisent.
+- Support DTSC voit les disponibilites des collaborateurs du tenant DTSC selon les regles prevues.
+- Formulaires de disponibilite et evenement restent responsive mobile.
+
+## 13. UX mobile
+
+- Dashboard: cartes sans depassement horizontal.
+- Support: formulaire et ticket board lisibles, cartes bornees.
+- Enterprise Admin: tableaux scrollables, dialogues hauts, actions dans menus.
+- Enterprise Activities: panels en liste/detail, formulaire plein ecran.
+- Collaborateurs: liste de groupes accessible, conversation plein ecran, composer visible.
+- Appels: controles tactiles, plein ecran portrait/paysage, chat d'appel borne.
+- Calendrier: listes et formulaires sans debordement.
+
+## 14. Sortie de validation
+
+Documenter dans le ticket ou la PR:
+
+- commandes executees et resultats;
+- comptes de test utilises;
+- domaines/sous-domaines testes;
+- captures mobiles si une regression visuelle etait suspectee;
+- migrations appliquees ou confirmation d'absence de migration;
+- risques restants et limites du polling temporaire.

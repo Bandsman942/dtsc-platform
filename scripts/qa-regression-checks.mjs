@@ -1,0 +1,228 @@
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const failures = [];
+
+function read(relativePath) {
+  const absolutePath = path.join(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    failures.push(`Fichier introuvable: ${relativePath}`);
+    return "";
+  }
+  return readFileSync(absolutePath, "utf8").replace(/\r\n/g, "\n");
+}
+
+function check(label, condition, hint) {
+  if (condition) {
+    console.log(`PASS ${label}`);
+    return;
+  }
+  failures.push(`${label}${hint ? `\n  ${hint}` : ""}`);
+  console.error(`FAIL ${label}`);
+}
+
+function containsAll(source, patterns) {
+  return patterns.every((pattern) => typeof pattern === "string" ? source.includes(pattern) : pattern.test(source));
+}
+
+function indexOrder(source, before, after) {
+  const beforeIndex = source.indexOf(before);
+  const afterIndex = source.indexOf(after);
+  return beforeIndex !== -1 && afterIndex !== -1 && beforeIndex < afterIndex;
+}
+
+const packageJson = JSON.parse(read("package.json") || "{}");
+const middleware = read("middleware.ts");
+const postLoginRedirect = read("lib/post-login-redirect.ts");
+const supportAccess = read("lib/support-access.ts");
+const supportPage = read("app/support/page.tsx");
+const supportCreateRoute = read("app/api/support/tickets/route.ts");
+const supportUpdateRoute = read("app/api/support/tickets/[id]/route.ts");
+const supportMessageRoute = read("app/api/support/tickets/[id]/messages/route.ts");
+const enterpriseAdminPage = read("app/enterprise-admin/page.tsx");
+const enterpriseActivitiesPage = read("app/enterprise-activities/page.tsx");
+const enterpriseAdminLoader = read("lib/enterprise/enterprise-admin-loader.ts");
+const enterpriseActivitiesLoader = read("lib/enterprise/enterprise-activities-loader.ts");
+const enterpriseHealthcareLoader = read("lib/enterprise/enterprise-healthcare-loader.ts");
+const enterpriseActivityHealthcareLoader = read("lib/enterprise/enterprise-activity-healthcare-loader.ts");
+const enterpriseAdminApi = read("app/api/enterprise/[organizationId]/administration/route.ts");
+const enterpriseHealthcareApi = read("app/api/enterprise/[organizationId]/healthcare/route.ts");
+const collaboratorsPage = read("app/collaborators/page.tsx");
+const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
+const collaboratorsMessagesRoute = read("app/api/collaborators/groups/[id]/messages/route.ts");
+const collaboratorsCallsRoute = read("app/api/collaborators/groups/[id]/calls/route.ts");
+const callJoinRoute = read("app/api/collaborators/calls/[id]/join/route.ts");
+const callLeaveRoute = read("app/api/collaborators/calls/[id]/leave/route.ts");
+const callEndRoute = read("app/api/collaborators/calls/[id]/end/route.ts");
+const callEventsRoute = read("app/api/collaborators/calls/events/route.ts");
+const callParticipantRoute = read("app/api/collaborators/calls/[id]/participants/route.ts");
+const callTelemetryRoute = read("app/api/collaborators/calls/[id]/events/route.ts");
+const globalCallToast = read("components/calls/global-call-toast.tsx");
+const appShell = read("components/layout/app-shell.tsx");
+const calendarRoute = read("app/api/calendar/route.ts");
+const calendarAvailabilityRoute = read("app/api/calendar/availabilities/route.ts");
+const internalCalendar = read("lib/internal-calendar.ts");
+const adminPage = read("app/admin/page.tsx");
+
+check(
+  "script qa:regression déclaré",
+  packageJson.scripts?.["qa:regression"] === "node scripts/qa-regression-checks.mjs",
+  "Ajouter le script npm pour pouvoir exécuter la suite QA sans dépendance externe."
+);
+
+check(
+  "middleware protège les routes privées critiques",
+  containsAll(middleware, [
+    '"/admin"',
+    '"/enterprise-admin"',
+    '"/enterprise-activities"',
+    '"/collaborators"',
+    '"/calendar"',
+    '"/support"',
+    '"/notifications"',
+  ])
+);
+
+check(
+  "middleware ne rewrite pas les API avant les gardes RBAC",
+  indexOrder(middleware, 'if (pathname.startsWith("/api/"))', "applyHostRouting(request, session, hostType)")
+);
+
+check(
+  "middleware réserve la Console DTSC au contexte interne",
+  containsAll(middleware, ["hasDtscInternalContext", 'activeContext === "DTSC_INTERNAL"', 'activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID'])
+);
+
+check(
+  "post-login refuse les redirects ouverts",
+  containsAll(postLoginRedirect, ['candidate.startsWith("//")', 'hostType === "unknown"', 'hostType === "local" && process.env.NODE_ENV === "production"'])
+);
+
+check(
+  "post-login oriente DTSC_INTERNAL vers la console et les autres vers le SaaS",
+  containsAll(postLoginRedirect, ['context === "DTSC_INTERNAL"', 'getConsoleUrl("/admin")', "getDashboardUrl()"])
+);
+
+check(
+  "Support isole les tickets par créateur sauf Support DTSC",
+  containsAll(supportAccess, ["ticket.userId === session.userId", "canManageSupportTickets(session)", "{ userId: session.userId }"])
+    && supportPage.includes("supportTicketVisibilityWhere(session)")
+);
+
+check(
+  "création ticket Support: session, origine, rate limit, Zod et organisation active",
+  containsAll(supportCreateRoute, ["isSameOriginRequest", "await rateLimit", "supportTicketSchema.safeParse", "resolveSupportTicketOrganizationId", "status: \"ACTIVE\""])
+);
+
+check(
+  "mise à jour ticket Support: DTSC_INTERNAL, rôle Support, origine et rate limit",
+  containsAll(supportUpdateRoute, ["isDtscInternalSession", "canManageSupportRole", "isSameOriginRequest", "await rateLimit", "supportTicketUpdateSchema.safeParse"])
+);
+
+check(
+  "messages ticket Support: accès ticket, origine, rate limit et validation Zod",
+  containsAll(supportMessageRoute, ["canUserAccessSupportTicket", "isSameOriginRequest", "await rateLimit", "ticketMessageSchema.safeParse"])
+);
+
+check(
+  "Enterprise Admin exige contexte ORGANIZATION et permission d'administration",
+  containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "canManageEnterpriseAdministration", "getEnterpriseAdministrationDataset(organizationId)"])
+);
+
+check(
+  "Enterprise Activities exige contexte ORGANIZATION et membership actif",
+  containsAll(enterpriseActivitiesPage, ['activeContext === "ORGANIZATION"', "requireEnterpriseMembership", "getEnterpriseActivitiesDataset"])
+);
+
+check(
+  "loaders Enterprise filtrent toutes les données par organizationId",
+  containsAll(enterpriseAdminLoader, ["where: { organizationId }", "getEnterpriseHealthcareDataset(organizationId, organization.sectorCode)"])
+    && containsAll(enterpriseActivitiesLoader, ["where: { id: organizationId", "getEnterpriseActivityRequests({ organizationId, userId, membershipRole })"])
+);
+
+check(
+  "données Santé non chargées hors HEALTH_CARE",
+  containsAll(enterpriseHealthcareLoader, ['sectorCode !== HEALTHCARE_SECTOR_CODE', "return [];"])
+    && containsAll(enterpriseActivityHealthcareLoader, ['sectorCode !== HEALTHCARE_SECTOR_CODE', "return [];"])
+);
+
+check(
+  "routes Enterprise mutantes: origine, rate limit, organizationId et permissions métier",
+  containsAll(enterpriseAdminApi, ["isSameOriginRequest", "await rateLimit", "canManageEnterpriseAdministration(session.userId, organizationId)"])
+    && containsAll(enterpriseHealthcareApi, ["isSameOriginRequest", "await rateLimit", "canAccessEnterpriseModule(session.userId, organizationId"])
+);
+
+check(
+  "Mes collaborateurs limite les groupes au scope autorisé",
+  containsAll(collaboratorsGroupsRoute, ["collaborationGroupScopeWhere(session)", 'members: { some: { userId: session.userId, status: "ACTIVE" } }'])
+    && containsAll(collaboratorsPage, ["collaborationGroupScopeWhere(session)", "members: { some: { userId: user.id"])
+);
+
+check(
+  "messages de groupe vérifient membership et contexte de conversation partagée",
+  containsAll(collaboratorsMessagesRoute, ["assertGroupMemberForSession", "getActiveOrganizationId(session)", "userId: session.userId", "organizationId"])
+);
+
+check(
+  "appels de groupe: démarrer/rejoindre/quitter/terminer vérifient origine, rate limit et membership",
+  [collaboratorsCallsRoute, callJoinRoute, callLeaveRoute, callEndRoute, callParticipantRoute, callTelemetryRoute].every((source) =>
+    containsAll(source, ["isSameOriginRequest", "await rateLimit", "assertGroupMemberForSession"])
+  )
+);
+
+check(
+  "terminer un appel reste réservé au lanceur ou gestionnaire de groupe",
+  containsAll(callEndRoute, ["call.startedById !== session.userId", "canManageGroup(member, session.role)", "durationSeconds"])
+);
+
+check(
+  "liste UI des appels n'expose pas roomName/provider",
+  !/roomName|provider/.test(read("components/collaborators/collaborators-workspace.tsx").split("type GroupCall =")[1]?.split("type JoinedCall =")[0] || "")
+    && !/roomName|provider/.test(read("components/collaborators/collaborators-workspace.tsx").split("type JoinedCall =")[1]?.split("type CallPreferences =")[0] || "")
+    && !/roomName|provider/.test(collaboratorsPage)
+    && !/roomName|provider/.test(collaboratorsGroupsRoute)
+    && !/roomName|provider/.test((collaboratorsCallsRoute.match(/return \{[\s\S]*?participants: call\.participants,[\s\S]*?events: call\.events,[\s\S]*?\};/) || [""])[0])
+);
+
+check(
+  "notifications d'appel: polling léger et visibilité par groupe autorisé",
+  containsAll(callEventsRoute, ["canAccessGroupInSessionWithSubscription", "take: 20", "MAX_EVENT_AGE_MS"])
+    && globalCallToast.includes("}, 6000)")
+);
+
+check(
+  "GlobalCallToast monté dans AppShell authentifié",
+  appShell.includes("<GlobalCallToast />")
+);
+
+check(
+  "calendrier interne: accès privé, contexte organisation et disponibilité filtrée",
+  containsAll(calendarRoute, ["canAccessInternalCalendar", "getCalendarContext", "organizationId: context.activeOrganizationId"])
+    && containsAll(calendarAvailabilityRoute, ["canAccessInternalCalendar", "collaboratorAvailabilityWhere"])
+    && containsAll(internalCalendar, ["activeOrganizationId", "organizationId"])
+);
+
+check(
+  "Console DTSC charge par datasets et détails conditionnels",
+  containsAll(adminPage, [
+    "isDtscInternalSession(session)",
+    "getConsoleOverviewMetrics",
+    "loadUserDetails",
+    "loadClientOrganizationDetails",
+    "loadActivityDetails",
+    "loadBillingDetails",
+    "loadAuditDetails",
+    "loadInternalOperations",
+  ])
+);
+
+if (failures.length) {
+  console.error("\nQA regression checks failed:");
+  for (const failure of failures) {
+    console.error(`- ${failure}`);
+  }
+  process.exit(1);
+}
+
+console.log("\nQA regression checks passed.");

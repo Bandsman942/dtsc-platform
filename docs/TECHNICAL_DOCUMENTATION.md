@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 4 juin 2026
+Derniere mise a jour: 5 juin 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -72,6 +72,22 @@ En local, `AUTH_COOKIE_DOMAIN` doit rester absent. En production, s'il est défi
 
 La matrice complète est documentée dans `docs/ROUTING_AND_SUBDOMAINS.md`.
 Les scenarios de verification manuelle sont documentes dans `docs/SUBDOMAIN_QA_CHECKLIST.md`.
+
+### QA regression et securite multi-tenant
+
+La suite `pnpm qa:regression` execute `scripts/qa-regression-checks.mjs`, un controle source-level sans dependance externe concu pour detecter les regressions critiques avant Vercel:
+
+- middleware host-aware: routes privees, Console DTSC reservee a `DTSC_INTERNAL`, API non rewritees;
+- redirections post-login: refus des domaines externes et defaults Console/SaaS;
+- Support: historique base sur `SupportTicket.userId`, gestion Support DTSC via contexte interne, origine/rate limit/Zod sur les routes mutantes;
+- Enterprise Admin et Enterprise Activities: contexte `ORGANIZATION`, membership actif, permissions, filtres `organizationId`;
+- Sante: loaders `HEALTH_CARE` conditionnels pour eviter des chargements inutiles hors secteur;
+- Mes collaborateurs: scope de session, membership groupe, messages, snapshots et appels proteges;
+- appels audio/video: origine, rate limit, membership, bouton Terminer reserve au lanceur/gestionnaire, duree persistante et absence de details techniques dans les donnees UI;
+- notifications d'appel: polling leger et filtrage par groupes visibles;
+- calendrier interne: acces prive, contexte organisation et disponibilites filtrees.
+
+La checklist manuelle globale est dans `docs/QA_REGRESSION_CHECKLIST.md`. Elle doit etre utilisee avec des comptes de staging couvrant DTSC interne, Support DTSC, admin entreprise, membre entreprise, client simple, utilisateur sans organisation et tentatives d'acces croise entre organisations. Cette suite ne remplace pas `pnpm type-check`, `pnpm lint`, `pnpm build` ni les tests E2E navigateur quand les comptes et donnees de staging sont disponibles.
 
 ### Design mobile/PWA premium
 

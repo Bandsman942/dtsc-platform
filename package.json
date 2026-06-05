@@ -12,7 +12,8 @@
     "prisma:studio": "prisma studio",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "qa:regression": "node scripts/qa-regression-checks.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

@@ -4,14 +4,21 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-06-05
 
+### Ajouté
+
+- Ajout de `docs/QA_REGRESSION_CHECKLIST.md`, checklist QA globale couvrant sous-domaines, auth, Console DTSC, Support, modules Entreprise, groupes, appels, notifications, calendrier, UX mobile et accès interdits entre organisations.
+- Ajout de `pnpm qa:regression` via `scripts/qa-regression-checks.mjs`, suite source-level sans dépendance externe pour vérifier les garde-fous critiques multi-tenant avant build Vercel.
+
 ### Amélioré
 
 - Stabilisation des appels audio/vidéo dans `Mes collaborateurs`: durée d'appel visible à partir de `startedAt`, reprise correcte dans un appel actif, messages humains côté interface et distinction claire entre `Quitter` et `Terminer`.
 - La notification flottante globale des appels ouvre désormais directement le groupe et l'appel concernés via `/collaborators?groupId=...&joinCall=...`, avec respect des préférences utilisateur d'alertes, de sons et d'affichage.
 - Les boutons micro/caméra pilotent maintenant les pistes média réelles et synchronisent l'état participant côté serveur afin d'alimenter les événements `PARTICIPANT_MUTED` et `PARTICIPANT_UNMUTED`.
+- Documentation README et technique complétée avec le flux de validation QA globale, les profils de test et les limites de la suite source-level.
 
 ### Sécurisé
 
+- Durcissement complémentaire des routes Support `PATCH /api/support/tickets/[id]` et `POST /api/support/tickets/[id]/messages`: contrôle d'origine, rate limiting, validation JSON robuste, journalisation API et notifications non bloquantes.
 - Ajout de routes protégées pour les événements d'appel et l'état média participant: contrôle d'origine, session, membership de groupe, validation Zod, rate limiting, audit de groupe et journalisation API.
 - Les réponses de liste d'appels ne renvoient plus les détails techniques internes de salle ou de fournisseur; les messages visibles restent orientés utilisateur.
 - La notification de démarrage d'appel est non bloquante afin qu'un effet secondaire de notification ne transforme pas un appel déjà créé en erreur utilisateur.

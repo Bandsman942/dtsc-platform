@@ -28,6 +28,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md).
 La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND_SUBDOMAINS.md](docs/ROUTING_AND_SUBDOMAINS.md).
 La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLIST.md](docs/SUBDOMAIN_QA_CHECKLIST.md).
+La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CHECKLIST.md](docs/QA_REGRESSION_CHECKLIST.md).
 
 ## Fonctionnalités
 
@@ -235,6 +236,18 @@ pnpm install
 pnpm prisma generate
 pnpm dev
 ```
+
+Validation avant livraison:
+
+```bash
+pnpm type-check
+pnpm lint
+pnpm qa:regression
+pnpm build
+git diff --check
+```
+
+`pnpm qa:regression` execute une suite source-level sans dependance externe pour verifier les garde-fous critiques: auth, middleware sous-domaines, Support, modules Entreprise, groupes, appels, notifications, calendrier et isolation multi-tenant.
 
 Puis ouvrir:
 
