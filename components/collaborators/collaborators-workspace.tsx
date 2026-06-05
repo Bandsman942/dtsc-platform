@@ -55,8 +55,6 @@ type GroupCall = {
   groupId: string;
   meetingId?: string | null;
   callType: "AUDIO" | "VIDEO";
-  provider: string;
-  roomName: string;
   status: string;
   startedById: string;
   startedAt: string;
@@ -68,7 +66,6 @@ type JoinedCall = {
   call: GroupCall;
   token: string;
   livekitUrl: string;
-  roomName: string;
 };
 type CallPreferences = {
   callSoundsEnabled?: boolean;
@@ -121,6 +118,7 @@ type SharedConversationSnapshot = {
 export function CollaboratorsWorkspace({
   currentUserId,
   initialActiveGroupId,
+  initialJoinCallId,
   userPreferences,
   initialGroups,
   initialInvitations,
@@ -130,6 +128,7 @@ export function CollaboratorsWorkspace({
 }: {
   currentUserId: string;
   initialActiveGroupId?: string | null;
+  initialJoinCallId?: string | null;
   userPreferences: UserDatePreferences;
   initialGroups: Group[];
   initialInvitations: Invitation[];
@@ -162,6 +161,7 @@ export function CollaboratorsWorkspace({
   const [callJoining, setCallJoining] = useState(false);
   const trackedActiveCallIds = useRef<Set<string>>(new Set());
   const hasTrackedInitialCalls = useRef(false);
+  const autoJoinCallIdRef = useRef(initialJoinCallId || "");
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMember = activeGroup?.members.find((member) => member.userId === currentUserId);
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
@@ -400,7 +400,7 @@ export function CollaboratorsWorkspace({
     await loadMessages(activeGroup.id);
   }
 
-  async function joinGroupCall(call: GroupCall) {
+  const joinGroupCall = useCallback(async (call: GroupCall) => {
     setCallJoining(true);
     const response = await fetch(`/api/collaborators/calls/${call.id}/join`, {
       method: "POST",
@@ -410,13 +410,13 @@ export function CollaboratorsWorkspace({
         cameraEnabled: call.callType === "VIDEO" && callPreferences.startCameraOffByDefault !== true,
       }),
     });
-    const body = await response.json().catch(() => null) as { token?: string; livekitUrl?: string; roomName?: string; message?: string } | null;
+    const body = await response.json().catch(() => null) as { token?: string; livekitUrl?: string; message?: string } | null;
     setCallJoining(false);
-    if (!response.ok || !body?.token || !body.livekitUrl || !body.roomName) {
+    if (!response.ok || !body?.token || !body.livekitUrl) {
       setFeedback(body?.message || "Impossible de rejoindre l'appel.");
       return;
     }
-    setJoinedCall({ call, token: body.token, livekitUrl: body.livekitUrl, roomName: body.roomName });
+    setJoinedCall({ call, token: body.token, livekitUrl: body.livekitUrl });
     setFeedback("Connexion à l'appel en cours.");
     if (callPreferences.callSoundsEnabled !== false) {
       void playCallSound("connected", callPreferences.callSoundVolume ?? 45);
@@ -425,7 +425,28 @@ export function CollaboratorsWorkspace({
     if (activeGroup) {
       await loadMessages(activeGroup.id);
     }
-  }
+  }, [
+    activeGroup,
+    callPreferences.callSoundVolume,
+    callPreferences.callSoundsEnabled,
+    callPreferences.startCameraOffByDefault,
+    callPreferences.startMutedByDefault,
+    loadMessages,
+    refresh,
+  ]);
+
+  useEffect(() => {
+    const targetCallId = autoJoinCallIdRef.current;
+    if (!targetCallId || joinedCall || callJoining) {
+      return;
+    }
+    const targetCall = groups.flatMap((group) => group.calls || []).find((call) => call.id === targetCallId && (call.status === "RINGING" || call.status === "ACTIVE"));
+    if (!targetCall) {
+      return;
+    }
+    autoJoinCallIdRef.current = "";
+    void joinGroupCall(targetCall);
+  }, [callJoining, groups, joinedCall, joinGroupCall]);
 
   async function leaveJoinedCall() {
     if (!joinedCall) {
@@ -1438,11 +1459,28 @@ function GroupCallRoom({
   const [compactFullscreenUi, setCompactFullscreenUi] = useState(false);
   const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
   const callShellRef = useRef<HTMLDivElement | null>(null);
+  const connectionWasInterruptedRef = useRef(false);
   const t = (key: string) => translate(userPreferences.locale, key);
   const starterMember = group?.members.find((member) => member.userId === joinedCall.call.startedById);
   const connectedParticipants = group?.calls
     ?.find((call) => call.id === joinedCall.call.id)
     ?.participants?.filter((participant) => participant.status === "JOINED") || joinedCall.call.participants?.filter((participant) => participant.status === "JOINED") || [];
+
+  const reportCallEvent = useCallback(async (eventType: "CALL_INTERRUPTED" | "CALL_RECONNECTED") => {
+    await fetch(`/api/collaborators/calls/${joinedCall.call.id}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventType }),
+    }).catch(() => null);
+  }, [joinedCall.call.id]);
+
+  const persistParticipantMediaState = useCallback(async (state: { microphoneEnabled?: boolean; cameraEnabled?: boolean }) => {
+    await fetch(`/api/collaborators/calls/${joinedCall.call.id}/participants`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state),
+    }).catch(() => null);
+  }, [joinedCall.call.id]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setDuration(callDurationFromStart(joinedCall.call.startedAt)), 1000);
@@ -1553,6 +1591,42 @@ function GroupCallRoom({
     }
   }
 
+  async function setMicrophoneState(nextEnabled: boolean) {
+    try {
+      if (room.state !== ConnectionState.Disconnected) {
+        await room.localParticipant.setMicrophoneEnabled(nextEnabled);
+      }
+      setMicrophoneEnabled(nextEnabled);
+      setCallError("");
+      void persistParticipantMediaState({ microphoneEnabled: nextEnabled });
+    } catch {
+      setMicrophoneEnabled(false);
+      setCallError("Micro inaccessible. Vérifiez les permissions de votre navigateur.");
+      void persistParticipantMediaState({ microphoneEnabled: false });
+      if (callPreferences.connectionIssueSoundsEnabled !== false && callPreferences.callSoundsEnabled !== false) {
+        void playCallSound("warning", callPreferences.callSoundVolume ?? 45);
+      }
+    }
+  }
+
+  async function setCameraState(nextEnabled: boolean) {
+    try {
+      if (room.state !== ConnectionState.Disconnected) {
+        await room.localParticipant.setCameraEnabled(nextEnabled);
+      }
+      setCameraEnabled(nextEnabled);
+      setCallError("");
+      void persistParticipantMediaState({ cameraEnabled: nextEnabled });
+    } catch {
+      setCameraEnabled(false);
+      setCallError("Caméra inaccessible. Vérifiez les permissions de votre navigateur.");
+      void persistParticipantMediaState({ cameraEnabled: false });
+      if (callPreferences.connectionIssueSoundsEnabled !== false && callPreferences.callSoundsEnabled !== false) {
+        void playCallSound("warning", callPreferences.callSoundVolume ?? 45);
+      }
+    }
+  }
+
   async function toggleFullscreen() {
     try {
       const element = callShellRef.current;
@@ -1623,6 +1697,10 @@ function GroupCallRoom({
             )}
             onConnected={() => {
               setConnectionLabel("Appel connecté");
+              if (connectionWasInterruptedRef.current) {
+                connectionWasInterruptedRef.current = false;
+                void reportCallEvent("CALL_RECONNECTED");
+              }
               if (callPreferences.callSoundsEnabled !== false) {
                 void playCallSound("connected", callPreferences.callSoundVolume ?? 45);
               }
@@ -1631,6 +1709,10 @@ function GroupCallRoom({
             onError={() => {
               setConnectionLabel("Connexion instable");
               setCallError("Impossible de rejoindre l'appel. Vérifiez votre connexion puis réessayez.");
+              if (!connectionWasInterruptedRef.current) {
+                connectionWasInterruptedRef.current = true;
+                void reportCallEvent("CALL_INTERRUPTED");
+              }
               if (callPreferences.connectionIssueSoundsEnabled !== false && callPreferences.callSoundsEnabled !== false) {
                 void playCallSound("warning", callPreferences.callSoundVolume ?? 45);
               }
@@ -1659,12 +1741,12 @@ function GroupCallRoom({
             <MessageSquare className="h-4 w-4" />
             {t("calls.chat")}
           </Button>
-          <Button type="button" variant="outline" onClick={() => setMicrophoneEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+          <Button type="button" variant="outline" onClick={() => { void setMicrophoneState(!microphoneEnabled); }} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
             {microphoneEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
             {microphoneEnabled ? t("calls.microphoneOn") : t("calls.microphoneMuted")}
           </Button>
           {joinedCall.call.callType === "VIDEO" && (
-            <Button type="button" variant="outline" onClick={() => setCameraEnabled((value) => !value)} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
+            <Button type="button" variant="outline" onClick={() => { void setCameraState(!cameraEnabled); }} className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/20">
               {cameraEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
               {cameraEnabled ? t("calls.cameraOn") : t("calls.cameraOff")}
             </Button>

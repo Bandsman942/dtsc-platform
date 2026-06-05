@@ -28,6 +28,7 @@ type CallToastSettings = {
   floatingCallAlertsEnabled: boolean;
   participantEventAlertsEnabled: boolean;
   callAlertSoundEnabled: boolean;
+  connectionIssueSoundsEnabled: boolean;
   callAlertDisplayDuration: number;
   callSoundVolume: number;
 };
@@ -82,7 +83,10 @@ export function GlobalCallToast() {
       const soundEnabled = body.settings?.callSoundsEnabled !== false && body.settings?.callAlertSoundEnabled !== false;
       if (soundEnabled) {
         const eventType = nextEvents[0]?.eventType;
-        const kind = eventType === "CALL_ENDED" ? "ended" : eventType === "USER_LEFT" ? "left" : eventType === "CALL_INTERRUPTED" ? "warning" : "incoming";
+        const kind = eventType === "CALL_ENDED" ? "ended" : eventType === "CALL_LEFT" || eventType === "USER_LEFT" ? "left" : eventType === "CALL_INTERRUPTED" ? "warning" : eventType === "CALL_RECONNECTED" ? "connected" : "incoming";
+        if (kind === "warning" && body.settings?.connectionIssueSoundsEnabled === false) {
+          return;
+        }
         void playCallSound(kind, body.settings?.callSoundVolume ?? 45);
       }
     }

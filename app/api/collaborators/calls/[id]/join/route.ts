@@ -4,18 +4,31 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { assertGroupMemberForSession, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { generateLiveKitParticipantToken, isLiveKitConfigured, liveKitUrl } from "@/lib/livekit-service";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { collaborationCallParticipantSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "collaboration_call_join_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   await touchUserPresence(session.userId);
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-call-join:${session.userId}`), 80, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ message: "Trop de tentatives pour rejoindre un appel sur une courte période." }, { status: 429 });
+  }
+
   const { id } = await params;
   const call = await prisma.collaborationGroupCall.findUnique({ where: { id } });
   if (!call || (call.status !== "RINGING" && call.status !== "ACTIVE")) {
@@ -56,7 +69,7 @@ export async function POST(req: Request, { params }: Params) {
         groupId: call.groupId,
         meetingId: call.meetingId,
         userId: session.userId,
-        eventType: "USER_JOINED",
+        eventType: "CALL_JOINED",
         message: `${session.name} a rejoint l'appel.`,
       },
     });
@@ -65,5 +78,5 @@ export async function POST(req: Request, { params }: Params) {
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: "call.join", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.call.join", entity: "CollaborationGroupCall", entityId: call.id, request: req });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, token, livekitUrl: liveKitUrl(), roomName: call.roomName });
+  return NextResponse.json({ ok: true, token, livekitUrl: liveKitUrl() });
 }

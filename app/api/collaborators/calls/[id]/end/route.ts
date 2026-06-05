@@ -3,17 +3,30 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { assertGroupMemberForSession, canManageGroup, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "collaboration_call_end_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   await touchUserPresence(session.userId);
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-call-end:${session.userId}`), 60, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ message: "Trop de tentatives de terminaison d'appel sur une courte période." }, { status: 429 });
+  }
+
   const { id } = await params;
   const call = await prisma.collaborationGroupCall.findUnique({ where: { id } });
   if (!call) {

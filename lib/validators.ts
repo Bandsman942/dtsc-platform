@@ -535,6 +535,10 @@ export const collaborationCallParticipantSchema = z.object({
   cameraEnabled: z.coerce.boolean().optional(),
 });
 
+export const collaborationCallEventSchema = z.object({
+  eventType: z.enum(["CALL_INTERRUPTED", "CALL_RECONNECTED"]),
+});
+
 export const announcementCopySchema = z.object({
   titlePrefix: z.string().max(40).default("Copie de"),
 });

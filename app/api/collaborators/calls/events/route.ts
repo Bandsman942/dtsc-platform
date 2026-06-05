@@ -34,6 +34,7 @@ export async function GET(req: Request) {
         floatingCallAlertsEnabled: true,
         participantEventAlertsEnabled: true,
         callAlertSoundEnabled: true,
+        connectionIssueSoundsEnabled: true,
         callAlertDisplayDuration: true,
         callSoundVolume: true,
       },
@@ -73,7 +74,7 @@ export async function GET(req: Request) {
   });
   const groupNameById = new Map(visibleGroups.map((group) => [group.id, group.name]));
   const filteredEvents = events.filter((event) => {
-    if (event.eventType === "USER_JOINED" || event.eventType === "USER_LEFT") {
+    if (event.eventType === "CALL_JOINED" || event.eventType === "CALL_LEFT" || event.eventType === "USER_JOINED" || event.eventType === "USER_LEFT" || event.eventType === "PARTICIPANT_MUTED" || event.eventType === "PARTICIPANT_UNMUTED") {
       return user?.participantEventAlertsEnabled !== false;
     }
     return true;
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
     message: humanCallEventMessage(event.eventType, event.message, event.call.callType),
     createdAt: event.createdAt.toISOString(),
     canJoin: event.call.status === "RINGING" || event.call.status === "ACTIVE",
-    actionUrl: `/collaborators?groupId=${encodeURIComponent(event.groupId)}`,
+    actionUrl: `/collaborators?groupId=${encodeURIComponent(event.groupId)}&joinCall=${encodeURIComponent(event.callId)}`,
   }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
@@ -103,6 +104,7 @@ export async function GET(req: Request) {
       floatingCallAlertsEnabled: user?.floatingCallAlertsEnabled ?? true,
       participantEventAlertsEnabled: user?.participantEventAlertsEnabled ?? true,
       callAlertSoundEnabled: user?.callAlertSoundEnabled ?? true,
+      connectionIssueSoundsEnabled: user?.connectionIssueSoundsEnabled ?? true,
       callAlertDisplayDuration: user?.callAlertDisplayDuration ?? 6000,
       callSoundVolume: user?.callSoundVolume ?? 45,
     },
@@ -116,10 +118,10 @@ function humanCallEventMessage(eventType: string, storedMessage: string, callTyp
   if (eventType === "CALL_ENDED") {
     return "L'appel est terminé";
   }
-  if (eventType === "USER_JOINED") {
+  if (eventType === "CALL_JOINED" || eventType === "USER_JOINED") {
     return storedMessage || "Un collaborateur a rejoint l'appel";
   }
-  if (eventType === "USER_LEFT") {
+  if (eventType === "CALL_LEFT" || eventType === "USER_LEFT") {
     return storedMessage || "Un collaborateur a quitté l'appel";
   }
   if (eventType === "CALL_INTERRUPTED") {
@@ -127,6 +129,12 @@ function humanCallEventMessage(eventType: string, storedMessage: string, callTyp
   }
   if (eventType === "CALL_RECONNECTED") {
     return "L'appel a repris";
+  }
+  if (eventType === "PARTICIPANT_MUTED") {
+    return storedMessage || "Un collaborateur a coupé son micro";
+  }
+  if (eventType === "PARTICIPANT_UNMUTED") {
+    return storedMessage || "Un collaborateur a réactivé son micro";
   }
   return "Événement d'appel";
 }

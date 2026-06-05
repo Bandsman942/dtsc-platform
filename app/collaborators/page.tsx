@@ -6,7 +6,7 @@ import { collaborationGroupScopeWhere, touchUserPresence } from "@/lib/collabora
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
-export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string }> }) {
+export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string; joinCall?: string }> }) {
   const user = await requireUser();
   const session = await getSession();
   const params = await searchParams;
@@ -37,7 +37,18 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
         calls: {
           orderBy: { startedAt: "desc" },
           take: 5,
-          include: { participants: true },
+          select: {
+            id: true,
+            groupId: true,
+            meetingId: true,
+            callType: true,
+            status: true,
+            startedById: true,
+            startedAt: true,
+            endedAt: true,
+            durationSeconds: true,
+            participants: true,
+          },
         },
         _count: { select: { messages: true, members: true } },
       },
@@ -126,6 +137,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
         <CollaboratorsWorkspace
           currentUserId={user.id}
           initialActiveGroupId={params?.groupId || null}
+          initialJoinCallId={params?.joinCall || null}
           userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
           initialGroups={JSON.parse(JSON.stringify(groupsWithMentionState))}
           initialInvitations={JSON.parse(JSON.stringify(invitations))}

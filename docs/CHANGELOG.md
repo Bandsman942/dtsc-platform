@@ -2,6 +2,20 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-05
+
+### Amélioré
+
+- Stabilisation des appels audio/vidéo dans `Mes collaborateurs`: durée d'appel visible à partir de `startedAt`, reprise correcte dans un appel actif, messages humains côté interface et distinction claire entre `Quitter` et `Terminer`.
+- La notification flottante globale des appels ouvre désormais directement le groupe et l'appel concernés via `/collaborators?groupId=...&joinCall=...`, avec respect des préférences utilisateur d'alertes, de sons et d'affichage.
+- Les boutons micro/caméra pilotent maintenant les pistes média réelles et synchronisent l'état participant côté serveur afin d'alimenter les événements `PARTICIPANT_MUTED` et `PARTICIPANT_UNMUTED`.
+
+### Sécurisé
+
+- Ajout de routes protégées pour les événements d'appel et l'état média participant: contrôle d'origine, session, membership de groupe, validation Zod, rate limiting, audit de groupe et journalisation API.
+- Les réponses de liste d'appels ne renvoient plus les détails techniques internes de salle ou de fournisseur; les messages visibles restent orientés utilisateur.
+- La notification de démarrage d'appel est non bloquante afin qu'un effet secondaire de notification ne transforme pas un appel déjà créé en erreur utilisateur.
+
 ## 2026-06-04
 
 ### Modifié

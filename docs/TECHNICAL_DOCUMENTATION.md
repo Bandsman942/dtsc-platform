@@ -97,6 +97,19 @@ Pendant un appel de groupe, le composant d'appel expose un panneau chat léger. 
 
 Le panneau `CallChatPanel` est autonome dans la zone d'appel: position absolue, déplacement par le header, redimensionnement par poignée, hauteur/largeur bornées par le conteneur d'appel et fil de messages avec scroll vertical indépendant. Le scroll du chat ne dépend pas du scroll global de la modale d'appel.
 
+Stabilisation appels du 5 juin 2026:
+
+- la durée affichée est calculée depuis `CollaborationGroupCall.startedAt` et la fin globale persiste `endedAt` + `durationSeconds`;
+- `Quitter` appelle `POST /api/collaborators/calls/[id]/leave` et ne met à jour que le participant courant; `Terminer` appelle `POST /api/collaborators/calls/[id]/end`, exige le lanceur ou un rôle autorisé dans le groupe, clôt l'appel pour tous et vide `CooMeeting.activeCallId` si nécessaire;
+- les listes d'appels servies à l'UI omettent les détails techniques internes de salle et de fournisseur; le jeton média n'est délivré qu'au moment de rejoindre l'appel via `POST /api/collaborators/calls/[id]/join`;
+- les boutons micro/caméra pilotent les pistes média locales puis synchronisent `CollaborationGroupCallParticipant.microphoneEnabled` et `cameraEnabled` via `PATCH /api/collaborators/calls/[id]/participants`;
+- les événements métier couverts sont `CALL_STARTED`, `CALL_JOINED`, `CALL_LEFT`, `CALL_ENDED`, `CALL_INTERRUPTED`, `CALL_RECONNECTED`, `PARTICIPANT_MUTED` et `PARTICIPANT_UNMUTED`; les anciens `USER_JOINED`/`USER_LEFT` restent lus uniquement pour compatibilité historique;
+- les incidents et reprises de connexion sont reportés par `POST /api/collaborators/calls/[id]/events` avec validation stricte du type autorisé;
+- le composant `GlobalCallToast` reste monté dans le shell authentifié et utilise un polling temporaire de `GET /api/collaborators/calls/events` toutes les 6 secondes, uniquement pour les groupes actifs dont l'utilisateur est membre et qu'il peut voir dans son contexte de session;
+- les préférences utilisateur existantes `callSoundsEnabled`, `callNotificationsEnabled`, `floatingCallAlertsEnabled`, `participantEventAlertsEnabled`, `incomingCallBannerEnabled`, `connectionIssueSoundsEnabled`, `startMutedByDefault`, `startCameraOffByDefault`, `callSoundVolume` et `callAlertDisplayDuration` pilotent l'affichage, les sons et les états de départ.
+
+Les routes mutantes d'appel appliquent contrôle d'origine, session, appartenance au groupe, rate limiting, validation Zod quand un payload existe, audit de groupe et journalisation `ApiLog`. Aucune migration destructive n'est nécessaire pour cette stabilisation: les champs de durée et de préférences ont déjà été ajoutés par la migration `20260520153000_call_ux_duration_settings`.
+
 Les demandes collaboratives de `/activities` peuvent contenir des pièces jointes dans `CollaboratorRequest.attachments` (JSON). Le formulaire téléverse chaque fichier via `POST /api/activities/files` avant création de la demande, puis stocke uniquement des métadonnées contrôlées (`name`, `url`, `type`, `size`, `uploadedAt`). La lecture passe par `GET /api/activities/files/[...path]`; cette route autorise l'auteur du fichier, `ADMIN`, LA/CEO selon les règles existantes, ainsi que le demandeur ou le destinataire d'une demande collaborative qui référence explicitement l'URL du fichier.
 
 Les préférences utilisateur mobiles/PWA sont sauvegardées via `PATCH /api/account/preferences`. Le composant client capture les erreurs de permission de notifications propres aux navigateurs mobiles et conserve l'application affichable. Les notifications visibles en PWA passent par `ServiceWorkerRegistration.showNotification()` quand disponible; le constructeur `Notification` n'est qu'un fallback protégé.
