@@ -1,4 +1,5 @@
 import { UserRole, type CollaboratorAvailability, type Prisma } from "@prisma/client";
+import { canUseFeature } from "@/lib/billing/entitlements";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { notifyUsers } from "@/lib/notifications";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
@@ -9,6 +10,13 @@ export type CalendarContext = Awaited<ReturnType<typeof getCalendarContext>>;
 
 export function canAccessInternalCalendar(user: { role: UserRole }, session?: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null) {
   return user.role !== UserRole.CLIENT || session?.activeContext === "ORGANIZATION";
+}
+
+export async function canUseInternalCalendarFeature(context: Pick<CalendarContext, "activeOrganizationId" | "dtscInternal">) {
+  if (context.dtscInternal) {
+    return { allowed: true, message: "Accès autorisé.", code: "OK" as const };
+  }
+  return canUseFeature(context.activeOrganizationId, "calendar");
 }
 
 export async function getCalendarContext(

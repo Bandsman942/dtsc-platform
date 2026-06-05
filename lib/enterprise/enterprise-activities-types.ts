@@ -61,4 +61,10 @@ export type EnterpriseActivitiesDataset = {
   members: EnterpriseActivityMemberItem[];
   sectorRecords: EnterpriseActivitySectorRecordItem[];
   workflows: EnterpriseActivityWorkflowItem[];
+  entitlements: {
+    planCode: string;
+    planLabel: string;
+    subscriptionStatus: string;
+    subscriptionActive: boolean;
+  };
 };

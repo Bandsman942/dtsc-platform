@@ -4,16 +4,20 @@ import { SubscriptionStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { BillingPlans } from "@/components/billing/billing-plans";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
-import { requireUser } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
 import { ensureBillingPlans } from "@/lib/billing";
+import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { isMaishaPayConfigured } from "@/lib/maishapay";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { formatEnumLabel } from "@/lib/labels";
 
 export default async function BillingPage() {
   const user = await requireUser();
+  const session = await getSession();
+  const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [plans, activeSubscription, recentInvoices] = await Promise.all([
+  const [plans, activeSubscription, recentInvoices, organizationEntitlements, organizationBillingRecords] = await Promise.all([
     ensureBillingPlans(),
     prisma.subscription.findFirst({
       where: { userId: user.id, status: SubscriptionStatus.ACTIVE },
@@ -25,6 +29,12 @@ export default async function BillingPage() {
       orderBy: { issuedAt: "desc" },
       take: 5,
     }),
+    getOrganizationEntitlements(activeOrganizationId),
+    activeOrganizationId ? prisma.billingRecord.findMany({
+      where: { organizationId: activeOrganizationId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }) : [],
   ]);
 
   return (
@@ -59,6 +69,44 @@ export default async function BillingPage() {
         />
 
         <Accordion>
+          {organizationEntitlements && !organizationEntitlements.isDtscInternal && (
+            <AccordionItem title="Abonnement de votre organisation" defaultOpen>
+              <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Espace organisation</p>
+                    <h2 className="mt-1 text-xl font-black text-dtsc-ink">Plan {organizationEntitlements.planLabel}</h2>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-dtsc-muted">
+                      Statut {formatEnumLabel(organizationEntitlements.subscriptionStatus)} · {organizationEntitlements.subscriptionActive ? "accès actif" : "vérification requise"}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${organizationEntitlements.subscriptionActive ? "bg-emerald-400/14 text-emerald-600" : "bg-amber-400/18 text-amber-700"}`}>
+                    {organizationEntitlements.subscriptionActive ? "Actif" : "Limité"}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-2 text-xs font-bold text-dtsc-muted sm:grid-cols-2 xl:grid-cols-4">
+                  <span>Modules: {organizationEntitlements.modules.filter((enterpriseModule) => enterpriseModule.allowed).length}/{organizationEntitlements.modules.length}</span>
+                  <span>Utilisateurs: {organizationEntitlements.limits.maxUsers}</span>
+                  <span>Documents: {organizationEntitlements.limits.maxDocuments}</span>
+                  <span>Stockage: {organizationEntitlements.limits.maxStorageMb} Mo</span>
+                  <span>Appels: {organizationEntitlements.limits.maxMonthlyCallMinutes} min/mois</span>
+                  <span>Support: {organizationEntitlements.limits.supportLevel}</span>
+                  <span>Fin: {organizationEntitlements.expiresAt ? new Date(organizationEntitlements.expiresAt).toLocaleDateString("fr-FR") : "Non définie"}</span>
+                  <span>Essai: {organizationEntitlements.trialEndsAt ? new Date(organizationEntitlements.trialEndsAt).toLocaleDateString("fr-FR") : "Non défini"}</span>
+                </div>
+                <div className="mt-4 divide-y divide-dtsc-border text-sm">
+                  {organizationBillingRecords.map((record) => (
+                    <div key={record.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <p className="font-bold text-dtsc-ink">{record.reference || record.id}</p>
+                      <p className="font-black text-dtsc-ink">{Number(record.amount).toFixed(2)} {record.currency}</p>
+                      <span className="rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-muted">{formatEnumLabel(record.status)}</span>
+                    </div>
+                  ))}
+                  {!organizationBillingRecords.length && <p className="py-4 text-sm text-dtsc-muted">Aucun enregistrement de facturation organisation pour le moment.</p>}
+                </div>
+              </section>
+            </AccordionItem>
+          )}
           <AccordionItem title="Factures récentes">
             <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
               <div className="divide-y divide-dtsc-border text-sm">

@@ -4,6 +4,7 @@ import { getEnterpriseActivityMembers } from "@/lib/enterprise/enterprise-activi
 import { getEnterpriseActivityRequests } from "@/lib/enterprise/enterprise-activity-requests-loader";
 import { getEnterpriseActivityWorkflows } from "@/lib/enterprise/enterprise-activity-workflows-loader";
 import type { EnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-types";
+import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 
 function toJson<T>(value: unknown): T {
@@ -34,6 +35,11 @@ export async function getEnterpriseActivitiesDataset({
     return null;
   }
 
+  const entitlements = await getOrganizationEntitlements(organizationId);
+  if (!entitlements) {
+    return null;
+  }
+
   const [blocks, requests, members, sectorRecords, workflows] = await Promise.all([
     getEnterpriseActivityBlocks(organizationId),
     getEnterpriseActivityRequests({ organizationId, userId, membershipRole }),
@@ -49,5 +55,11 @@ export async function getEnterpriseActivitiesDataset({
     members,
     sectorRecords,
     workflows,
+    entitlements: {
+      planCode: entitlements.planCode,
+      planLabel: entitlements.planLabel,
+      subscriptionStatus: entitlements.subscriptionStatus,
+      subscriptionActive: entitlements.subscriptionActive,
+    },
   });
 }

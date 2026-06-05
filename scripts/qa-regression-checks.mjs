@@ -64,6 +64,15 @@ const calendarRoute = read("app/api/calendar/route.ts");
 const calendarAvailabilityRoute = read("app/api/calendar/availabilities/route.ts");
 const internalCalendar = read("lib/internal-calendar.ts");
 const adminPage = read("app/admin/page.tsx");
+const billingPlans = read("lib/billing/plans.ts");
+const billingEntitlements = read("lib/billing/entitlements.ts");
+const billingModuleEntitlements = read("lib/billing/module-entitlements.ts");
+const consoleBilling = read("lib/console/console-billing.ts");
+const adminBillingSubscriptions = read("components/admin/admin-billing-subscriptions.tsx");
+const clientOrganizationCreateRoute = read("app/api/admin/client-organizations/route.ts");
+const clientOrganizationUpdateRoute = read("app/api/admin/client-organizations/[id]/route.ts");
+const billingCheckoutRoute = read("app/api/billing/checkout/route.ts");
+const enterpriseModuleToggleRoute = read("app/api/enterprise/[organizationId]/modules/[moduleId]/route.ts");
 
 check(
   "script qa:regression déclaré",
@@ -127,7 +136,7 @@ check(
 
 check(
   "Enterprise Admin exige contexte ORGANIZATION et permission d'administration",
-  containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "canManageEnterpriseAdministration", "getEnterpriseAdministrationDataset(organizationId)"])
+  containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "ENTERPRISE_MANAGER_ROLES", 'canUseFeature(organizationId, "enterprise-admin")', "getEnterpriseAdministrationDataset(organizationId)"])
 );
 
 check(
@@ -198,9 +207,57 @@ check(
 
 check(
   "calendrier interne: accès privé, contexte organisation et disponibilité filtrée",
-  containsAll(calendarRoute, ["canAccessInternalCalendar", "getCalendarContext", "organizationId: context.activeOrganizationId"])
-    && containsAll(calendarAvailabilityRoute, ["canAccessInternalCalendar", "collaboratorAvailabilityWhere"])
-    && containsAll(internalCalendar, ["activeOrganizationId", "organizationId"])
+  containsAll(calendarRoute, ["canAccessInternalCalendar", "canUseInternalCalendarFeature", "getCalendarContext", "organizationId: context.activeOrganizationId"])
+    && containsAll(calendarAvailabilityRoute, ["canAccessInternalCalendar", "canUseInternalCalendarFeature", "collaboratorAvailabilityWhere"])
+    && containsAll(internalCalendar, ["activeOrganizationId", "organizationId", 'canUseFeature(context.activeOrganizationId, "calendar")'])
+);
+
+check(
+  "calendrier interne: routes mutantes avec origine, rate limit et entitlements",
+  containsAll(calendarRoute, ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+    && containsAll(calendarAvailabilityRoute, ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+    && containsAll(read("app/api/calendar/events/[id]/route.ts"), ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+    && containsAll(read("app/api/calendar/availabilities/[id]/route.ts"), ["isSameOriginRequest", "await rateLimit", "canUseInternalCalendarFeature"])
+);
+
+check(
+  "SaaS: plans, limites et entitlements centralisés",
+  containsAll(billingPlans, ["STARTER", "BUSINESS", "ENTERPRISE", "resolveSaasPlanCode", "planMeetsRequirement"])
+    && containsAll(billingModuleEntitlements, ["FEATURE_ENTITLEMENTS", "requiredPlanForModule", "moduleRequiresActiveSubscription"])
+    && containsAll(billingEntitlements, ["getOrganizationEntitlements", "canUseModule", "canUseFeature", "assertCanUseModule", "getOrganizationUsageLimits", "isSubscriptionActive"])
+);
+
+check(
+  "SaaS: modules Enterprise et données sectorielles contrôlés par entitlements",
+  containsAll(enterpriseModuleToggleRoute, ["canUseModule", "PLAN_REQUIRED", "SUBSCRIPTION_REQUIRED"])
+    && containsAll(enterpriseAdminLoader, ["getOrganizationEntitlements", "entitlements"])
+    && containsAll(enterpriseActivitiesLoader, ["getOrganizationEntitlements", "entitlements"])
+    && containsAll(read("lib/enterprise/enterprise-healthcare-loader.ts"), ["getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+);
+
+check(
+  "SaaS: Console DTSC expose abonnements organisations, limites, modules et derniers paiements",
+  containsAll(consoleBilling, ["organizationSubscriptionItems", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
+    && containsAll(adminBillingSubscriptions, ["Abonnements organisations", "limite", "Dernier paiement", "maxMonthlyCallMinutes"])
+    && adminPage.includes("AdminBillingSubscriptions")
+);
+
+check(
+  "routes admin organisations: contexte DTSC interne, origine, rate limit et validation Zod",
+  containsAll(clientOrganizationCreateRoute, ["isDtscInternalSession", "isSameOriginRequest", "await rateLimit", "enterpriseOrganizationCreateSchema.safeParse"])
+    && containsAll(clientOrganizationUpdateRoute, ["isDtscInternalSession", "isSameOriginRequest", "await rateLimit", "enterpriseOrganizationUpdateSchema.safeParse"])
+);
+
+check(
+  "checkout facturation: origine, rate limit, validation Zod et maintenance MaishaPay explicite",
+  containsAll(billingCheckoutRoute, ["isSameOriginRequest", "await rateLimit", "checkoutSchema.safeParse", "MAISHAPAY_MAINTENANCE", "freePlanAvailable"])
+);
+
+check(
+  "collaboration SaaS: groupes et appels vérifient les entitlements organisation",
+  containsAll(collaboratorsGroupsRoute, ["canUseFeature", '"collaborators"', "featureAccess.message"])
+    && containsAll(collaboratorsCallsRoute, ["canUseFeature", '"collaboration-calls"', "featureAccess.message"])
+    && containsAll(callJoinRoute, ["canUseFeature", '"collaboration-calls"', "featureAccess.message"])
 );
 
 check(

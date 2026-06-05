@@ -17,6 +17,7 @@ import type {
   EnterpriseModuleItem,
   EnterprisePositionItem,
   EnterpriseRequestItem,
+  EnterpriseSaasEntitlements,
   EnterpriseSectorRecordItem,
   EnterpriseWorkflowItem,
 } from "@/lib/enterprise/enterprise-admin-types";
@@ -88,19 +89,17 @@ function nestedJsonText(value: unknown, key: string) {
 export function EnterpriseDashboardSummary({
   organization,
   dashboard,
+  entitlements,
   activeMembers,
   pendingMembers,
   visibleModules,
-  positions,
-  workflows,
 }: {
   organization: EnterpriseAdminOrganization;
   dashboard: EnterpriseAdminDashboard;
+  entitlements: EnterpriseSaasEntitlements;
   activeMembers: EnterpriseMemberItem[];
   pendingMembers: EnterpriseMemberItem[];
   visibleModules: EnterpriseModuleItem[];
-  positions: EnterprisePositionItem[];
-  workflows: EnterpriseWorkflowItem[];
 }) {
   return (
     <>
@@ -113,16 +112,20 @@ export function EnterpriseDashboardSummary({
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="rounded-full bg-cyan-400/14 px-3 py-1 text-xs font-black text-cyan-600">{organization.businessSector?.labelFr || organization.sector || "Secteur à préciser"}</span>
           <span className="rounded-full bg-dtsc-page px-3 py-1 text-xs font-black text-dtsc-muted">{organization.sectorCode || "NO_SECTOR"}</span>
+          <span className="rounded-full bg-dtsc-page px-3 py-1 text-xs font-black text-dtsc-muted">Plan {entitlements.planLabel}</span>
+          <span className={`rounded-full px-3 py-1 text-xs font-black ${entitlements.subscriptionActive ? "bg-emerald-400/14 text-emerald-600" : "bg-amber-400/18 text-amber-700"}`}>
+            {entitlements.subscriptionActive ? "Abonnement actif" : `Statut ${entitlements.subscriptionStatus}`}
+          </span>
         </div>
       </section>
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric label="Collaborateurs actifs" value={activeMembers.length} />
-        <Metric label="Invitations" value={pendingMembers.length} />
+        <Metric label="Limite utilisateurs" value={entitlements.limits.maxUsers} />
         <Metric label="Modules actifs" value={`${visibleModules.filter((enterpriseModule) => enterpriseModule.isEnabled).length}/${visibleModules.length}`} />
+        <Metric label="Limite modules" value={entitlements.limits.maxActiveModules} />
         <Metric label="Demandes ouvertes" value={dashboard.openRequestsCount} />
-        <Metric label="Postes" value={positions.length} />
-        <Metric label="Workflows" value={workflows.length} />
+        <Metric label="Invitations" value={pendingMembers.length} />
       </section>
     </>
   );
@@ -193,7 +196,7 @@ export function EnterpriseModulesPanel({
                     key: "toggle",
                     label: enterpriseModule.isEnabled ? "Désactiver" : "Activer",
                     icon: enterpriseModule.isEnabled ? ToggleLeft : ToggleRight,
-                    disabled: enterpriseModule.isCore && enterpriseModule.isEnabled,
+                    disabled: (enterpriseModule.isCore && enterpriseModule.isEnabled) || (!enterpriseModule.isEnabled && enterpriseModule.accessAllowed === false),
                     onSelect: () => void toggleModule(enterpriseModule),
                   },
                 ]}
@@ -204,7 +207,12 @@ export function EnterpriseModulesPanel({
                 {enterpriseModule.isEnabled ? "Activé" : "Désactivé"} {enterpriseModule.isCore ? "· socle" : ""}
               </span>
               {enterpriseModule.createdAt && <span className="inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">Activation {new Date(enterpriseModule.createdAt).toLocaleDateString("fr-FR")}</span>}
+              {enterpriseModule.requiredPlan && <span className="inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">Plan {enterpriseModule.requiredPlan}</span>}
+              {enterpriseModule.accessAllowed === false && <span className="inline-flex rounded-full bg-amber-400/18 px-2 py-1 text-[0.68rem] font-black text-amber-700">Non inclus</span>}
             </div>
+            {enterpriseModule.accessAllowed === false && enterpriseModule.accessMessage && (
+              <p className="mt-3 rounded-xl bg-amber-400/12 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">{enterpriseModule.accessMessage}</p>
+            )}
           </article>
         ))}
       </div>

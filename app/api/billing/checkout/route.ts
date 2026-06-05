@@ -5,17 +5,28 @@ import { buildPaymentReference, ensureBillingPlans, getNextBillingPeriod } from 
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { initiateMaishaPayPayment, getMaishaPayProviderReference, isMaishaPayConfigured } from "@/lib/maishapay";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { checkoutSchema } from "@/lib/validators";
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "billing_checkout_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `billing-checkout:${session.userId}`), 20, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many checkout attempts" }, { status: 429 });
+  }
 
-  const body = checkoutSchema.safeParse(await req.json());
+  const body = checkoutSchema.safeParse(await req.json().catch(() => null));
   if (!body.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid checkout request" }, { status: 400 });

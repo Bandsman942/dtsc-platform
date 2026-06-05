@@ -6,6 +6,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout d'une couche SaaS centralisee pour les organisations clientes: plans `STARTER`, `BUSINESS`, `ENTERPRISE`, limites d'usage, entitlements de modules et helpers `getOrganizationEntitlements`, `canUseModule`, `canUseFeature`, `assertCanUseModule`, `getOrganizationUsageLimits` et `isSubscriptionActive`.
+- Ajout de `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`, reference technique des plans, limites, modules controles, comportements d'acces, Console DTSC et QA associee.
 - Ajout de contenus commerciaux publics approfondis pour Accueil, Services, Solutions, Secteurs, Projets, À propos, Ressources, Contact, Data en Afrique, BI & KPI et IA en entreprise: blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
 - Ajout sur la page Contact d'une qualification par besoin client et par levier DTSC, avec mini-parcours de cadrage sans modifier le formulaire serveur existant.
 - Ajout sur la page Ressources de catégories éditoriales, d'une lecture par objectif et d'un état vide orienté visiteur.
@@ -14,6 +16,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- La Console DTSC `Abonnements & facturation` affiche maintenant les abonnements organisations avec plan resolu, statut, dates, limites, modules, utilisateurs actifs, dernier paiement et audit des paiements.
+- La page client `/billing` expose en lecture seule le plan de l'organisation active, son statut, ses limites, les modules disponibles et les enregistrements de facturation organisationnels recents.
 - `AGENTS.md` impose maintenant la vérification de `pnpm qa:regression` avant commit/push et le maintien de `docs/QA_REGRESSION_CHECKLIST.md` avant push quand les parcours ou règles QA changent.
 - Les pages publiques corporate utilisent désormais un modèle de contenu enrichi et réutilisable pour afficher problèmes, livrables, bénéfices, exemples, FAQ, parcours et CTA sans créer de route ni action placeholder.
 - Les pages pédagogiques publiques disposent de hero images thématiques, FAQ dédiées et liens internes vers Services, Solutions, Projets, Contact, Data en Afrique, BI & KPI et IA en entreprise.
@@ -24,6 +28,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Sécurisé
 
+- Les modules `Administration [Entreprise]`, `Activites [Entreprise]`, calendrier interne, collaboration et appels collaboratifs sont controles cote serveur par plan, abonnement actif, statut organisation et modules actives.
+- Les donnees sectorielles sante ne sont plus chargees si le module cible n'est pas autorise par le plan et les entitlements de l'organisation.
+- Les routes mutantes de gestion des organisations clientes exigent maintenant le contexte `DTSC_INTERNAL`, une origine valide, un rate limit et une validation Zod.
+- Le checkout facturation applique maintenant controle d'origine, rate limit et validation JSON robuste avant toute creation d'abonnement ou tentative MaishaPay.
 - Durcissement complémentaire des routes Support `PATCH /api/support/tickets/[id]` et `POST /api/support/tickets/[id]/messages`: contrôle d'origine, rate limiting, validation JSON robuste, journalisation API et notifications non bloquantes.
 - Ajout de routes protégées pour les événements d'appel et l'état média participant: contrôle d'origine, session, membership de groupe, validation Zod, rate limiting, audit de groupe et journalisation API.
 - Les réponses de liste d'appels ne renvoient plus les détails techniques internes de salle ou de fournisseur; les messages visibles restent orientés utilisateur.

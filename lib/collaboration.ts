@@ -1,4 +1,5 @@
 import { UserRole, type Prisma } from "@prisma/client";
+import { canUseFeature } from "@/lib/billing/entitlements";
 import type { SessionPayload } from "@/lib/session";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
@@ -65,7 +66,14 @@ export async function canAccessGroupInSessionWithSubscription(
   group: { organizationId: string | null; groupType: string },
   session: Pick<SessionPayload, "activeContext" | "activeOrganizationId"> | null | undefined
 ) {
-  return canAccessGroupInSession(group, session);
+  if (!canAccessGroupInSession(group, session)) {
+    return false;
+  }
+  if (!group.organizationId || isCrossContextGroup(group) || isDtscInternalSession(session)) {
+    return true;
+  }
+  const featureAccess = await canUseFeature(group.organizationId, "collaborators");
+  return featureAccess.allowed;
 }
 
 export async function assertGroupMemberForSession(groupId: string, session: SessionPayload) {

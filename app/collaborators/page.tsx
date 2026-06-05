@@ -1,9 +1,11 @@
 import { UserStatus } from "@prisma/client";
+import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { AppShell } from "@/components/layout/app-shell";
 import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
 import { getSession, requireUser } from "@/lib/auth";
+import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { collaborationGroupScopeWhere, touchUserPresence } from "@/lib/collaboration";
-import { getActiveOrganizationId } from "@/lib/organizations";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string; joinCall?: string }> }) {
@@ -12,6 +14,22 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
   const params = await searchParams;
   await touchUserPresence(user.id);
   const activeOrganizationId = getActiveOrganizationId(session);
+  if (activeOrganizationId && activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID) {
+    const featureAccess = await canUseFeature(activeOrganizationId, "collaborators");
+    if (!featureAccess.allowed) {
+      const entitlements = await getOrganizationEntitlements(activeOrganizationId);
+      return (
+        <AppShell user={user}>
+          <SaasAccessNotice
+            title="Collaboration indisponible"
+            message={featureAccess.message}
+            planLabel={entitlements?.planLabel}
+            subscriptionStatus={entitlements?.subscriptionStatus}
+          />
+        </AppShell>
+      );
+    }
+  }
   const scopedGroupFilter = collaborationGroupScopeWhere(session);
   const [groups, invitations, conversations] = await Promise.all([
     prisma.collaborationGroup.findMany({

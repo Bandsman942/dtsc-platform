@@ -4,6 +4,7 @@ import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
+import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
@@ -320,7 +321,7 @@ export default async function AdminPage({
         {activeSection === "billing" && canView("billing") && (
           <Accordion>
             <AccordionItem title="Abonnements & facturation" defaultOpen>
-              <AdminAuditTables payments={billingDataset.paymentAuditItems} logs={[]} />
+              <AdminBillingSubscriptions subscriptions={billingDataset.organizationSubscriptionItems} payments={billingDataset.paymentAuditItems} />
             </AccordionItem>
           </Accordion>
         )}

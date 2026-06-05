@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
+import { canUseFeature, canUseModule } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
-import { hasActiveOrganizationSubscription, requireActiveOrganizationMembership } from "@/lib/organizations";
+import { requireActiveOrganizationMembership } from "@/lib/organizations";
 
 export const ENTERPRISE_ADMIN_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
 export const ENTERPRISE_MANAGER_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
@@ -138,7 +139,11 @@ export async function canManageEnterpriseAdministration(userId: string, organiza
     select: { role: true },
   });
 
-  return isEnterpriseManagerRole(membership?.role);
+  if (!isEnterpriseManagerRole(membership?.role)) {
+    return false;
+  }
+  const featureAccess = await canUseFeature(organizationId, "enterprise-admin");
+  return featureAccess.allowed;
 }
 
 export async function canAccessEnterpriseModule(userId: string, organizationId: string, moduleCode: string, action: "read" | "submit" | "write" | "manage" = "read") {
@@ -158,13 +163,14 @@ export async function canAccessEnterpriseModule(userId: string, organizationId: 
 
   const enterpriseModule = await prisma.enterpriseModule.findUnique({
     where: { organizationId_moduleCode: { organizationId, moduleCode } },
-    select: { isEnabled: true, requiresPlanLevel: true },
+    select: { isEnabled: true },
   });
   if (!enterpriseModule?.isEnabled) {
     return false;
   }
 
-  if (enterpriseModule.requiresPlanLevel && !(await hasActiveOrganizationSubscription(organizationId))) {
+  const moduleAccess = await canUseModule(organizationId, moduleCode);
+  if (!moduleAccess.allowed) {
     return false;
   }
 
@@ -189,6 +195,11 @@ export async function canAccessEnterpriseActivity(userId: string, organizationId
     select: { role: true },
   });
   if (!membership) {
+    return false;
+  }
+
+  const featureAccess = await canUseFeature(organizationId, "enterprise-activities");
+  if (!featureAccess.allowed) {
     return false;
   }
 

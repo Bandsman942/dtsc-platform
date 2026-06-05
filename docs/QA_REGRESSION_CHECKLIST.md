@@ -18,6 +18,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Executer `git diff --check`.
 - Verifier que Vercel lance toujours `pnpm prisma migrate deploy && pnpm build`.
 - Verifier qu'aucune migration Prisma destructive n'est ajoutee.
+- Verifier que `docs/SAAS_PLANS_AND_ENTITLEMENTS.md` reste aligne avec `lib/billing/plans.ts`, `lib/billing/plan-limits.ts`, `lib/billing/module-entitlements.ts` et `lib/billing/entitlements.ts`.
 
 ## 2. Sous-domaines et auth
 
@@ -99,8 +100,20 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - `/admin` reste reserve a `DTSC_INTERNAL`.
 - Le chargement initial ne recupere que les KPIs essentiels et les datasets de la section active.
 - Les sections restent disponibles: Vue generale, Entreprises clientes, Abonnements & facturation, Support client, Publications & contenus, Utilisateurs & acces, Securite & audit, Modules internes DTSC, Parametres plateforme.
+- Abonnements & facturation: verifier organisation, plan, statut abonnement, dates d'essai/renouvellement, limites utilisateurs/stockage/appels/documents, modules actifs, dernier paiement et audit des paiements.
+- Entreprises clientes: verifier qu'une creation, suspension, archivage ou mise a jour d'abonnement exige un compte DTSC interne autorise et ne permet pas d'editer les donnees metier privees du client.
 - Les modules internes CEO, COO, CTO, MPO, HR & CFO, SCO et LA restent accessibles selon poste officiel et RBAC.
 - Les tableaux restent scrollables sur mobile et desktop.
+
+## 5 bis. Plans SaaS et entitlements
+
+- Organisation `STARTER` active sans abonnement actif: Support et collaboration de base restent lisibles, mais calendrier, appels, Administration [Entreprise], Activites [Entreprise] avancees et modules sectoriels sont bloques avec message clair.
+- Organisation `BUSINESS` active avec abonnement actif: Administration [Entreprise], Activites [Entreprise], calendrier, workflows et appels collaboratifs sont disponibles selon membership/RBAC.
+- Organisation `ENTERPRISE` active avec abonnement actif: modules sectoriels sante inclus et donnees `EnterpriseSectorRecord` visibles uniquement pour les modules actives.
+- Organisation suspendue: modules prives bloques avec message de regularisation, Support accessible.
+- Activation d'un module hors plan depuis Administration [Entreprise]: refus serveur 402/403 avec message lisible, meme si le bouton est force manuellement.
+- Page `/billing` client: affichage en lecture seule du plan organisation, statut, limites, modules et enregistrements de facturation, sans action de modification autonome.
+- Routes `/api/calendar/*`, `/api/collaborators/groups/*/calls`, `/api/enterprise/*` et `/api/admin/client-organizations/*`: verifier qu'un changement manuel d'URL ne contourne ni plan, ni abonnement, ni membership.
 
 ## 6. Administration [Entreprise]
 

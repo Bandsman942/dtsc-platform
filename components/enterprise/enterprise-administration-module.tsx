@@ -30,6 +30,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
     recentRequests,
     calendarEvents,
     sectorRecords,
+    entitlements,
     locale,
   } = props;
   const router = useRouter();
@@ -71,6 +72,10 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
 
   async function toggleModule(enterpriseModule: EnterpriseModuleItem) {
     setMessage("");
+    if (!enterpriseModule.accessAllowed && !enterpriseModule.isEnabled) {
+      setMessage(enterpriseModule.accessMessage || "Ce module n'est pas inclus dans le plan actif.");
+      return;
+    }
     const response = await fetch(`/api/enterprise/${organization.id}/modules/${enterpriseModule.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -106,11 +111,10 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
       <EnterpriseDashboardSummary
         organization={organization}
         dashboard={dashboard}
+        entitlements={entitlements}
         activeMembers={activeMembers}
         pendingMembers={pendingMembers}
         visibleModules={visibleModules}
-        positions={positions}
-        workflows={workflows}
       />
 
       <Accordion>

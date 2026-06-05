@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { UserStatus, type Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { canUseFeature } from "@/lib/billing/entitlements";
 import { collaborationGroupScopeWhere, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { notifyUser } from "@/lib/notifications";
 import {
   DTSC_INTERNAL_ORGANIZATION_ID,
   getActiveOrganizationId,
-  hasActiveOrganizationSubscription,
 } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -176,11 +176,13 @@ export async function POST(req: Request) {
   }
 
   const activeOrganizationId = getActiveOrganizationId(session);
-  const organizationSubscriptionActive = await hasActiveOrganizationSubscription(activeOrganizationId);
   const isCrossOrganizationGroup = parsed.data.groupType === "CROSS_ORGANIZATION" || parsed.data.groupType === "PRIVATE_NETWORK" || parsed.data.groupType === "DTSC_SUPPORT";
-  if (activeOrganizationId && activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID && !organizationSubscriptionActive && !isCrossOrganizationGroup) {
-    await writeApiLog({ request: req, statusCode: 402, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Subscription required" }, { status: 402 });
+  if (activeOrganizationId && activeOrganizationId !== DTSC_INTERNAL_ORGANIZATION_ID && !isCrossOrganizationGroup) {
+    const featureAccess = await canUseFeature(activeOrganizationId, "collaborators");
+    if (!featureAccess.allowed) {
+      await writeApiLog({ request: req, statusCode: featureAccess.code === "PLAN_REQUIRED" || featureAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+      return NextResponse.json({ error: featureAccess.code, message: featureAccess.message }, { status: featureAccess.code === "PLAN_REQUIRED" || featureAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+    }
   }
 
   const organizationId = activeOrganizationId && (!isCrossOrganizationGroup || activeOrganizationId === DTSC_INTERNAL_ORGANIZATION_ID)

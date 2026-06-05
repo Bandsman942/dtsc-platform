@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { canUseFeature } from "@/lib/billing/entitlements";
 import { assertGroupMemberForSession, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { generateLiveKitParticipantToken, isLiveKitConfigured, liveKitUrl } from "@/lib/livekit-service";
 import { prisma } from "@/lib/prisma";
@@ -39,6 +40,13 @@ export async function POST(req: Request, { params }: Params) {
   if (!member) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (member.group.organizationId && !["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"].includes(member.group.groupType)) {
+    const featureAccess = await canUseFeature(member.group.organizationId, "collaboration-calls");
+    if (!featureAccess.allowed) {
+      await writeApiLog({ request: req, statusCode: featureAccess.code === "PLAN_REQUIRED" || featureAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+      return NextResponse.json({ error: featureAccess.code, message: featureAccess.message }, { status: featureAccess.code === "PLAN_REQUIRED" || featureAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+    }
   }
   if (!isLiveKitConfigured()) {
     await writeApiLog({ request: req, statusCode: 503, userId: session.userId, startedAt });

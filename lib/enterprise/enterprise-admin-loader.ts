@@ -4,6 +4,7 @@ import { getEnterpriseHealthcareDataset } from "@/lib/enterprise/enterprise-heal
 import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members-loader";
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
+import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 
 function toJson<T>(value: unknown): T {
@@ -38,9 +39,14 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     return null;
   }
 
+  const entitlements = await getOrganizationEntitlements(organizationId);
+  if (!entitlements) {
+    return null;
+  }
+
   const [members, moduleDataset, departments, positions, workflowDataset, calendarEvents, sectorRecords] = await Promise.all([
     getEnterpriseMembersDataset(organizationId),
-    getEnterpriseModulesDataset(organizationId),
+    getEnterpriseModulesDataset(organizationId, entitlements),
     prisma.enterpriseDepartment.findMany({
       where: { organizationId },
       orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }],
@@ -73,5 +79,14 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     recentRequests: workflowDataset.recentRequests,
     calendarEvents,
     sectorRecords,
+    entitlements: {
+      planCode: entitlements.planCode,
+      planLabel: entitlements.planLabel,
+      subscriptionStatus: entitlements.subscriptionStatus,
+      subscriptionActive: entitlements.subscriptionActive,
+      trialEndsAt: entitlements.trialEndsAt,
+      expiresAt: entitlements.expiresAt,
+      limits: entitlements.limits,
+    },
   });
 }

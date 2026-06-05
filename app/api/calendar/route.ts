@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import {
   canAccessInternalCalendar,
+  canUseInternalCalendarFeature,
   canManageCollaboratorCalendar,
   calendarEventInclude,
   collaboratorAvailabilityWhere,
@@ -15,6 +16,8 @@ import {
   validateCalendarCollaborators,
 } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { internalCalendarEventSchema } from "@/lib/validators";
 
 export async function GET(req: Request) {
@@ -33,6 +36,11 @@ export async function GET(req: Request) {
   if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Aucun espace calendrier actif." }, { status: 403 });
+  }
+  const calendarAccess = await canUseInternalCalendarFeature(context);
+  if (!calendarAccess.allowed) {
+    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
   }
   const url = new URL(req.url);
   const startParam = url.searchParams.get("start");
@@ -98,10 +106,19 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "calendar_event_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `calendar-event-create:${session.userId}`), 80, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations calendrier sur une courte période." }, { status: 429 });
   }
   if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
@@ -112,6 +129,11 @@ export async function POST(req: Request) {
   if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Aucun espace calendrier actif." }, { status: 403 });
+  }
+  const calendarAccess = await canUseInternalCalendarFeature(context);
+  if (!calendarAccess.allowed) {
+    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
   }
   const parsed = internalCalendarEventSchema.safeParse(await req.json());
   if (!parsed.success) {

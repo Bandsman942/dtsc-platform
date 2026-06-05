@@ -32,7 +32,7 @@ Objectifs couverts par le code actuel:
 - calendrier interne prive contextualise par organisation pour suivre disponibilites, evenements, participants, missions, absences, reunions, conflits de planning et synchronisations métier sans API calendrier externe;
 - editeur de texte riche reutilisable avec barre d'outils fixe, zone d'ecriture scrollable, polices modernes, tailles, alignements, puces avancees, numerotations, checklist, tirets, gras, italique, souligne, palette de couleurs controlee et collage de contenus riches;
 - support sous forme de tickets conversationnels;
-- fondation SaaS hybride multi-entreprises avec tenant interne DTSC, organisations clientes, memberships actifs, contexte de session optionnel et administration des entreprises clientes strictement côté DTSC;
+- fondation SaaS hybride multi-entreprises avec tenant interne DTSC, organisations clientes, memberships actifs, contexte de session optionnel, plans organisationnels `STARTER`/`BUSINESS`/`ENTERPRISE`, entitlements centralises et administration des entreprises clientes strictement côté DTSC;
 - administration utilisateurs, limites d'usage, parametres globaux, vue generale avec filtres periode/date, visites publiques, diffusions, HR & CFO, SCO, COO, CEO, MPO, CTO, LA et acces par blocs/postes pour les roles non-client;
 - fondations techniques pour audit log et historisation de webhooks;
 - protections production: headers securite, blocage cross-origin des requetes API mutantes, blocage `x-middleware-subrequest`, rate limiting Upstash Redis optionnel avec fallback local;
@@ -89,6 +89,29 @@ La suite `pnpm qa:regression` execute `scripts/qa-regression-checks.mjs`, un con
 - calendrier interne: acces prive, contexte organisation et disponibilites filtrees.
 
 La checklist manuelle globale est dans `docs/QA_REGRESSION_CHECKLIST.md`. Elle doit etre utilisee avec des comptes de staging couvrant DTSC interne, Support DTSC, admin entreprise, membre entreprise, client simple, utilisateur sans organisation et tentatives d'acces croise entre organisations. Cette suite ne remplace pas `pnpm type-check`, `pnpm lint`, `pnpm build` ni les tests E2E navigateur quand les comptes et donnees de staging sont disponibles.
+
+### Plans SaaS et entitlements organisation
+
+La logique SaaS organisationnelle est centralisee sans migration destructive:
+
+- `lib/billing/plans.ts`: plans `STARTER`, `BUSINESS`, `ENTERPRISE`, compatibilite avec anciens slugs de plans et comparaison de niveaux;
+- `lib/billing/plan-limits.ts`: limites utilisateurs, stockage, minutes d'appels, modules actifs, documents et niveau de support;
+- `lib/billing/module-entitlements.ts`: features et modules soumis a Starter, Business ou Enterprise;
+- `lib/billing/entitlements.ts`: service serveur `getOrganizationEntitlements`, `canUseModule`, `canUseFeature`, `assertCanUseModule`, `getOrganizationUsageLimits` et `isSubscriptionActive`.
+
+Les decisions prennent en compte le statut de l'organisation, le statut d'abonnement, les dates d'essai/expiration, le plan resolu, les modules actives et le niveau requis. Le tenant `DTSC_INTERNAL` conserve l'acces complet; une organisation active sans abonnement conserve un acces minimal lisible; les modules Business/Enterprise exigent un abonnement actif ou un essai valide; une organisation suspendue est restreinte avec message clair et support disponible.
+
+Les controles sont appliques cote serveur sur:
+
+- `/enterprise-admin`, `/enterprise-activities` et routes `/api/enterprise/[organizationId]/*`;
+- modules sectoriels sante et chargements `EnterpriseSectorRecord`;
+- `/calendar` et routes `/api/calendar/*`;
+- `/collaborators`, creation de groupes et appels collaboratifs;
+- activation de modules entreprise via `/api/enterprise/[organizationId]/modules/[moduleId]`.
+
+La Console DTSC `Abonnements & facturation` utilise `lib/console/console-billing.ts` pour afficher les abonnements organisations, plans resolus, statuts, dates, limites, modules, utilisateurs actifs et derniers paiements. La page client `/billing` expose en lecture seule le plan organisationnel actif, ses limites, modules et enregistrements de facturation. Le flux MaishaPay existant reste celui des abonnements utilisateur chatbot; aucun flux organisationnel parallele n'a ete ajoute.
+
+La reference complete est dans `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`.
 
 ### Design mobile/PWA premium
 

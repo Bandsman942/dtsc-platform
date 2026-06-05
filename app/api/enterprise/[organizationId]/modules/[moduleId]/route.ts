@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { canUseModule } from "@/lib/billing/entitlements";
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -48,6 +49,13 @@ export async function PATCH(req: Request, { params }: Params) {
   if (enterpriseModule.isCore && !parsed.data.isEnabled) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Core module", message: "Un module socle ne peut pas être désactivé." }, { status: 400 });
+  }
+  if (parsed.data.isEnabled && !enterpriseModule.isEnabled) {
+    const moduleAccess = await canUseModule(organizationId, enterpriseModule.moduleCode);
+    if (!moduleAccess.allowed && moduleAccess.code !== "MODULE_DISABLED") {
+      await writeApiLog({ request: req, statusCode: moduleAccess.code === "PLAN_REQUIRED" || moduleAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+      return NextResponse.json({ error: moduleAccess.code, message: moduleAccess.message }, { status: moduleAccess.code === "PLAN_REQUIRED" || moduleAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+    }
   }
 
   const updated = await prisma.enterpriseModule.update({

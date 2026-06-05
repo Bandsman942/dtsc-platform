@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { applySectorTemplateToOrganization } from "@/lib/enterprise-sector-templates";
-import { canManageClientOrganizations } from "@/lib/organizations";
+import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseOrganizationUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -18,14 +20,23 @@ function parseOptionalDate(value: string | undefined | null) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "client_organization_update_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canManageClientOrganizations(session.role)) {
+  if (!isDtscInternalSession(session) || !canManageClientOrganizations(session.role)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Seul DTSC peut gérer les entreprises clientes." }, { status: 403 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `client-organization-update:${session.userId}`), 60, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations organisations sur une courte période." }, { status: 429 });
   }
 
   const { id } = await params;

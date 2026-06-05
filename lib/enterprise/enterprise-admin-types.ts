@@ -23,6 +23,23 @@ export type EnterpriseAdminDashboard = {
   recentRequestsCount: number;
 };
 
+export type EnterpriseSaasEntitlements = {
+  planCode: string;
+  planLabel: string;
+  subscriptionStatus: string;
+  subscriptionActive: boolean;
+  trialEndsAt: string | null;
+  expiresAt: string | null;
+  limits: {
+    maxUsers: number;
+    maxStorageMb: number;
+    maxMonthlyCallMinutes: number;
+    maxActiveModules: number;
+    maxDocuments: number;
+    supportLevel: string;
+  };
+};
+
 export type EnterpriseModuleItem = {
   id: string;
   moduleCode: string;
@@ -33,6 +50,10 @@ export type EnterpriseModuleItem = {
   icon: string | null;
   isEnabled: boolean;
   isCore: boolean;
+  requiredPlan?: string | null;
+  includedInPlan?: boolean;
+  accessAllowed?: boolean;
+  accessMessage?: string | null;
   createdAt?: string;
 };
 
@@ -134,4 +155,5 @@ export type EnterpriseAdminDataset = {
   recentRequests: EnterpriseRequestItem[];
   calendarEvents: EnterpriseCalendarEventItem[];
   sectorRecords: EnterpriseSectorRecordItem[];
+  entitlements: EnterpriseSaasEntitlements;
 };

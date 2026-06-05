@@ -3,7 +3,9 @@ import type { CollaboratorAvailability, Prisma } from "@prisma/client";
 import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
-import { canAccessInternalCalendar, calendarEventInclude, collaboratorAvailabilityWhere, getCalendarCollaborators, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
+import { canAccessInternalCalendar, calendarEventInclude, canUseInternalCalendarFeature, collaboratorAvailabilityWhere, getCalendarCollaborators, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
+import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
+import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 
 export default async function CalendarPage() {
@@ -17,6 +19,20 @@ export default async function CalendarPage() {
 
   if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
     redirect("/dashboard");
+  }
+  const calendarAccess = await canUseInternalCalendarFeature(context);
+  if (!calendarAccess.allowed) {
+    const entitlements = await getOrganizationEntitlements(context.activeOrganizationId);
+    return (
+      <AppShell user={user}>
+        <SaasAccessNotice
+          title="Calendrier indisponible"
+          message={calendarAccess.message}
+          planLabel={entitlements?.planLabel}
+          subscriptionStatus={entitlements?.subscriptionStatus}
+        />
+      </AppShell>
+    );
   }
 
   const [events, availabilities, collaborators] = await Promise.all([

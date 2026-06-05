@@ -27,6 +27,7 @@ DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une
 
 La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md).
 La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND_SUBDOMAINS.md](docs/ROUTING_AND_SUBDOMAINS.md).
+La logique SaaS des plans et entitlements est documentee dans [docs/SAAS_PLANS_AND_ENTITLEMENTS.md](docs/SAAS_PLANS_AND_ENTITLEMENTS.md).
 La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLIST.md](docs/SUBDOMAIN_QA_CHECKLIST.md).
 La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CHECKLIST.md](docs/QA_REGRESSION_CHECKLIST.md).
 
@@ -70,6 +71,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Formulaires privés guidés: les formulaires longs des modules Entreprise, Support, Paramètres, Activités DTSC, Administration DTSC et Activités [Entreprise] utilisent des dialogues hauts responsive avec étiquettes visibles et aides contextuelles.
 - Accès DTSC interne limité aux utilisateurs possédant un membership actif sur l'organisation `DTSC`, généré à partir des dossiers collaborateurs RH actifs; un membre d'une entreprise cliente ne voit plus les données internes DTSC.
 - Administration DTSC des entreprises clientes: création, activation/suspension/archivage, attribution/retrait du rôle `ADMIN_ENTREPRISE` et liaison d'un plan sans accès aux données métier privées des clients.
+- Plans SaaS organisationnels centralises: `STARTER`, `BUSINESS`, `ENTERPRISE`, entitlements par feature/module, limites utilisateurs/stockage/appels/documents, Console DTSC enrichie et acces client lecture seule dans `/billing`.
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.

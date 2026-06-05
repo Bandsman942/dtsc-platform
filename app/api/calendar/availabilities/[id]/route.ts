@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canAccessInternalCalendar, canManageCollaboratorCalendar, collaboratorAvailabilityWhere, getCalendarContext, validateCalendarCollaborators } from "@/lib/internal-calendar";
+import { canAccessInternalCalendar, canManageCollaboratorCalendar, canUseInternalCalendarFeature, collaboratorAvailabilityWhere, getCalendarContext, validateCalendarCollaborators } from "@/lib/internal-calendar";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { internalCalendarAvailabilitySchema, internalCalendarAvailabilityUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -25,6 +27,11 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const calendarAccess = await canUseInternalCalendarFeature(context);
+  if (!calendarAccess.allowed) {
+    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+  }
 
   const availability = await prisma.collaboratorAvailability.findFirst({
     where: { AND: [collaboratorAvailabilityWhere(context), { id }] },
@@ -40,10 +47,19 @@ export async function GET(req: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "calendar_availability_update_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `calendar-availability-update:${session.userId}`), 120, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations calendrier sur une courte période." }, { status: 429 });
   }
   if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
@@ -55,6 +71,11 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const calendarAccess = await canUseInternalCalendarFeature(context);
+  if (!calendarAccess.allowed) {
+    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
   }
 
   const existing = await prisma.collaboratorAvailability.findFirst({
@@ -128,10 +149,19 @@ export async function PATCH(req: Request, { params }: Params) {
 
 export async function DELETE(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "calendar_availability_delete_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `calendar-availability-delete:${session.userId}`), 60, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations calendrier sur une courte période." }, { status: 429 });
   }
   if (!canAccessInternalCalendar({ role: session.role }, session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
@@ -143,6 +173,11 @@ export async function DELETE(req: Request, { params }: Params) {
   if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const calendarAccess = await canUseInternalCalendarFeature(context);
+  if (!calendarAccess.allowed) {
+    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
   }
 
   const existing = await prisma.collaboratorAvailability.findFirst({
