@@ -6,6 +6,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 
 ## Garde-fous obligatoires
 
+- Avant tout commit ou push, vérifier le script de non-régression avec `pnpm qa:regression` quand `pnpm` est disponible. Si `pnpm` est absent, lancer directement `node scripts/qa-regression-checks.mjs` avec le Node disponible et signaler tout blocage.
 - Avant tout push, vérifier au minimum `git diff --check` et `git diff --cached --check`.
 - Sur Windows PowerShell, lire les routes dynamiques Next.js avec `-LiteralPath`, par exemple:
   `Get-Content -LiteralPath app\api\support\tickets\[id]\route.ts`.
@@ -113,6 +114,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Toute évolution fonctionnelle, API, schéma Prisma, variable d'environnement, intégration externe, règle de sécurité, workflow CI/CD ou comportement admin/client doit être documentée dans le même travail.
 - Mettre à jour en priorité `docs/TECHNICAL_DOCUMENTATION.md` pour les détails techniques, puis `README.md` pour les changements utiles à l'installation, au déploiement ou à l'utilisation.
 - Mettre à jour `docs/CHANGELOG.md` avant chaque commit avec un résumé professionnel en français des ajouts, modifications, corrections, suppressions ou améliorations livrés.
+- Avant chaque push, relire et actualiser `docs/QA_REGRESSION_CHECKLIST.md` dès qu'un parcours critique, une règle de sécurité, une route API, un module privé, un script QA ou une procédure de validation change.
 - Mettre aussi à jour `app/conditions-utilisation/page.tsx`, `app/politique-confidentialite/page.tsx` et `app/politique-cookies/page.tsx` quand une modification impacte les conditions d'utilisation, les données personnelles, les cookies, le suivi, les emails, les paiements, les notifications, les documents ou les intégrations externes.
 - Si une modification ajoute ou change une API, documenter la route, la méthode HTTP, le niveau d'accès, le payload attendu, la réponse et les variables d'environnement nécessaires.
 - Si une modification ajoute ou change une intégration externe, documenter les secrets requis, le flux d'authentification, les endpoints appelés, les fallbacks et les règles de sécurité.
@@ -174,12 +176,14 @@ Dans cet environnement Codex Windows, `pnpm` peut être absent. Si `pnpm build` 
 
 - `git diff --check`
 - `git diff --cached --check`
+- `node scripts/qa-regression-checks.mjs` avec le Node disponible si `pnpm qa:regression` ne peut pas être lancé
 - inspection des imports inutilisés et des erreurs TypeScript évidentes
 - lecture des logs Vercel après push
 
 Quand `pnpm` est disponible, lancer:
 
 ```bash
+pnpm qa:regression
 pnpm build
 ```
 

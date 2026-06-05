@@ -11,6 +11,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- `AGENTS.md` impose maintenant la vérification de `pnpm qa:regression` avant commit/push et le maintien de `docs/QA_REGRESSION_CHECKLIST.md` avant push quand les parcours ou règles QA changent.
 - Stabilisation des appels audio/vidéo dans `Mes collaborateurs`: durée d'appel visible à partir de `startedAt`, reprise correcte dans un appel actif, messages humains côté interface et distinction claire entre `Quitter` et `Terminer`.
 - La notification flottante globale des appels ouvre désormais directement le groupe et l'appel concernés via `/collaborators?groupId=...&joinCall=...`, avec respect des préférences utilisateur d'alertes, de sons et d'affichage.
 - Les boutons micro/caméra pilotent maintenant les pistes média réelles et synchronisent l'état participant côté serveur afin d'alimenter les événements `PARTICIPANT_MUTED` et `PARTICIPANT_UNMUTED`.
