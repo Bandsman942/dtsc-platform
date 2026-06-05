@@ -34,6 +34,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 
 - Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
 - Contenus publics harmonisés autour des 7 leviers numériques officiels DTSC, avec solutions, secteurs et projets présentés comme des cas d'application.
+- Pages publiques Services, Solutions, Secteurs, Projets et À propos enrichies avec blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
 - FAQ premium sur l'accueil avec composant Accordion accessible, catégories métier et données structurées SEO `FAQPage`
 - FAQ publique enrichie avec les questions sur l'assistant IA, le chatbot privé, les tickets, la sécurité, les ressources et les brouillons de publications
 - Sections publiques harmonisées avec bandes visuelles alternées et cartes contrastées pour éviter la confusion entre blocs et arrière-plan
@@ -43,7 +44,8 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
 - Éditeur riche pour les publications publiques et annonces: gras, italique, soulignement, palette de couleurs contrôlée, listes avancées, liens, emojis, collage/dépôt d'images, upload d'images optimisées via Supabase Storage et aperçu mobile/desktop avant publication
 - Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
-- Page Ressources organisée avec accordions par catégorie et mise en avant des 3 dernières publications
+- Page Ressources organisée comme vitrine média avec catégories éditoriales, lecture par objectif, ressources pédagogiques, accordions par catégorie et mise en avant des 3 dernières publications
+- Page Contact transformée en qualification client avec besoins par levier, mini-parcours de cadrage, formulaire existant et FAQ.
 - Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
 - Agent IA public sur la landing page pour répondre aux questions DTSC, qualifier les prospects, enregistrer les demandes dans les inscrits newsletter et notifier l'équipe par email après confirmation
 - Réponses progressives en streaming pour l'agent IA public, réglage admin permettant de l'activer/désactiver avec fallback informatif et garde-fous serveur contre les questions hors DTSC ou les ressources inventées

@@ -3,6 +3,7 @@ import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { HeroImageCarousel } from "@/components/public/hero-image-carousel";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { Button } from "@/components/ui/button";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import type { PublicLongPage } from "@/lib/public-site";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +64,13 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-3xl">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Vue d&apos;ensemble</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Les points clés à explorer avant de passer à l&apos;action.</h2>
+            <p className="mt-3 leading-7 text-dtsc-muted">
+              Chaque carte résume un levier, un cas d&apos;usage ou une responsabilité. Les sections suivantes détaillent le problème traité, le livrable possible et le résultat client attendu.
+            </p>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {page.cards.map((card, index) => (
               <article
@@ -82,6 +90,96 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
           </div>
         </div>
       </section>
+
+      {page.deepDives && (
+        <section className="border-b border-dtsc-border dtsc-public-band-light">
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+            <div className="mb-9 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Approfondir</p>
+                <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Problème client, réponse DTSC et résultat mesurable.</h2>
+              </div>
+              <p className="leading-7 text-dtsc-muted">
+                Ces blocs relient chaque besoin à une action concrète. Les exemples restent des cas d&apos;application rattachés aux 7 leviers numériques officiels, avec des liens vers les pages existantes pour poursuivre la lecture.
+              </p>
+            </div>
+
+            <div className="grid gap-5">
+              {page.deepDives.map((item, index) => (
+                <article
+                  key={item.title}
+                  className={cn(
+                    "dtsc-premium-reveal overflow-hidden rounded-[1.5rem] border border-dtsc-border shadow-[0_18px_60px_rgba(0,43,91,0.08)]",
+                    index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft"
+                  )}
+                  style={{ animationDelay: `${index * 60}ms` }}
+                >
+                  <div className="grid gap-0 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+                    <div className={cn("bg-gradient-to-br p-6 text-white sm:p-7", toneClasses[page.tone])}>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{item.eyebrow}</p>
+                      <h3 className="mt-4 text-2xl font-black leading-tight sm:text-3xl">{item.title}</h3>
+                      <p className="mt-5 text-sm font-black uppercase tracking-[0.16em] text-cyan-200">Problème</p>
+                      <p className="mt-2 text-sm leading-6 text-blue-50">{item.problem}</p>
+                    </div>
+                    <div className="grid gap-5 p-6 sm:p-7">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Ce que DTSC fait</p>
+                        <p className="mt-2 text-base leading-8 text-dtsc-muted">{item.dtscAction}</p>
+                      </div>
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        <DetailList title="Livrables" items={item.deliverables} />
+                        <DetailList title="Résultats" items={item.benefits} />
+                        <DetailList title="Exemples" items={item.examples} />
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {(item.links || [{ label: "Contacter DTSC", href: "/contact" }]).map((link) => (
+                          <Link
+                            key={`${item.title}-${link.href}`}
+                            href={link.href}
+                            className="inline-flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-2 text-sm font-black text-dtsc-blue underline-offset-4 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-surface hover:underline"
+                          >
+                            {link.label}
+                            <ArrowRight className="h-4 w-4" />
+                          </Link>
+                        ))}
+                        <Link
+                          href="/contact"
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-4 py-2 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-[#001736]"
+                        >
+                          Demander une consultation
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {page.journey && (
+        <section className="border-b border-dtsc-border dtsc-public-band-cyan">
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+            <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Méthode DTSC</p>
+                <h2 className="mt-2 text-3xl font-black text-dtsc-ink">{page.journey.heading}</h2>
+                <p className="mt-4 leading-7 text-dtsc-muted">{page.journey.text}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {page.journey.steps.map((step, index) => (
+                  <div key={step} className="dtsc-card-hover rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Étape {String(index + 1).padStart(2, "0")}</p>
+                    <p className="mt-2 text-base font-black text-dtsc-ink">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="border-y border-dtsc-border dtsc-public-band-soft">
         <div className="mx-auto grid max-w-7xl gap-5 px-4 py-16 sm:px-6 lg:px-8">
@@ -111,6 +209,55 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
         </div>
       </section>
 
+      {page.faqs && (
+        <section className="border-b border-dtsc-border dtsc-public-band-light">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions utiles</p>
+              <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Clarifier avant de démarrer.</h2>
+              <p className="mt-4 leading-7 text-dtsc-muted">
+                Les réponses restent orientées client: choisir le bon levier, définir un livrable concret et mesurer un résultat.
+              </p>
+            </div>
+            <Accordion>
+              {page.faqs.map((item, index) => (
+                <AccordionItem key={item.question} title={item.question} defaultOpen={index === 0}>
+                  {item.answer}
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </section>
+      )}
+
+      {page.ctaLinks && (
+        <section className="border-b border-dtsc-border dtsc-public-band-soft">
+          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+            <div className="rounded-[1.5rem] bg-[#002b5b] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] sm:p-8">
+              <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">Prochaine étape</p>
+                  <h2 className="mt-2 text-3xl font-black">Choisissez une page utile ou demandez un cadrage.</h2>
+                  <p className="mt-3 max-w-3xl leading-7 text-blue-100">
+                    Les liens ci-dessous renvoient uniquement vers des pages publiques existantes pour poursuivre la découverte ou préparer un échange commercial.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {page.ctaLinks.map((link) => (
+                    <Button key={link.href} asChild className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
+                      <Link href={link.href}>
+                        {link.label}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {page.sources && (
         <section className="dtsc-public-band-light">
           <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -133,5 +280,21 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
 
       <PublicFooter />
     </main>
+  );
+}
+
+function DetailList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-dtsc-blue">{title}</p>
+      <ul className="mt-3 grid gap-2">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2 text-sm font-bold leading-6 text-dtsc-muted">
+            <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-cyan-500" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

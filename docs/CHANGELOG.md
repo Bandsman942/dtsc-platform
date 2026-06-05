@@ -6,12 +6,17 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout de contenus commerciaux publics approfondis pour Accueil, Services, Solutions, Secteurs, Projets, À propos, Ressources, Contact, Data en Afrique, BI & KPI et IA en entreprise: blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
+- Ajout sur la page Contact d'une qualification par besoin client et par levier DTSC, avec mini-parcours de cadrage sans modifier le formulaire serveur existant.
+- Ajout sur la page Ressources de catégories éditoriales, d'une lecture par objectif et d'un état vide orienté visiteur.
 - Ajout de `docs/QA_REGRESSION_CHECKLIST.md`, checklist QA globale couvrant sous-domaines, auth, Console DTSC, Support, modules Entreprise, groupes, appels, notifications, calendrier, UX mobile et accès interdits entre organisations.
 - Ajout de `pnpm qa:regression` via `scripts/qa-regression-checks.mjs`, suite source-level sans dépendance externe pour vérifier les garde-fous critiques multi-tenant avant build Vercel.
 
 ### Amélioré
 
 - `AGENTS.md` impose maintenant la vérification de `pnpm qa:regression` avant commit/push et le maintien de `docs/QA_REGRESSION_CHECKLIST.md` avant push quand les parcours ou règles QA changent.
+- Les pages publiques corporate utilisent désormais un modèle de contenu enrichi et réutilisable pour afficher problèmes, livrables, bénéfices, exemples, FAQ, parcours et CTA sans créer de route ni action placeholder.
+- Les pages pédagogiques publiques disposent de hero images thématiques, FAQ dédiées et liens internes vers Services, Solutions, Projets, Contact, Data en Afrique, BI & KPI et IA en entreprise.
 - Stabilisation des appels audio/vidéo dans `Mes collaborateurs`: durée d'appel visible à partir de `startedAt`, reprise correcte dans un appel actif, messages humains côté interface et distinction claire entre `Quitter` et `Terminer`.
 - La notification flottante globale des appels ouvre désormais directement le groupe et l'appel concernés via `/collaborators?groupId=...&joinCall=...`, avec respect des préférences utilisateur d'alertes, de sons et d'affichage.
 - Les boutons micro/caméra pilotent maintenant les pistes média réelles et synchronisent l'état participant côté serveur afin d'alimenter les événements `PARTICIPANT_MUTED` et `PARTICIPANT_UNMUTED`.

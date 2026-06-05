@@ -5,9 +5,15 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  ClipboardCheck,
   Database,
+  FileText,
+  GraduationCap,
   HelpCircle,
+  Layers3,
+  Megaphone,
   MessageCircleQuestion,
+  Network,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -31,6 +37,36 @@ const homeHeroImages = [
   "https://images.pexels.com/photos/36733421/pexels-photo-36733421.jpeg?auto=compress&cs=tinysrgb&w=1400",
   "https://images.pexels.com/photos/7693688/pexels-photo-7693688.jpeg?auto=compress&cs=tinysrgb&w=1400",
   "https://images.pexels.com/photos/3931865/pexels-photo-3931865.jpeg?auto=compress&cs=tinysrgb&w=1400",
+];
+
+const leverCards = [
+  { title: "Data & BI", text: "Piloter avec des KPI fiables, des dashboards utiles et un reporting compréhensible.", icon: Database },
+  { title: "Intelligence artificielle", text: "Gagner du temps avec chatbot, assistant documentaire et automatisation intelligente.", icon: BrainCircuit },
+  { title: "Solutions digitales", text: "Centraliser les processus avec applications web, ERP, CRM, portails et workflows.", icon: Layers3 },
+  { title: "Audit & optimisation", text: "Repérer pertes, coûts, anomalies et blocages pour prioriser les améliorations.", icon: ClipboardCheck },
+  { title: "Formations", text: "Rendre les équipes autonomes sur data, IA, KPI et adoption des outils.", icon: GraduationCap },
+  { title: "Marketing digital", text: "Structurer visibilité, acquisition, branding, contenus et campagnes.", icon: Network },
+  { title: "Imprimerie numérique", text: "Produire flyers, brochures, cartes et supports commerciaux professionnels.", icon: FileText },
+];
+
+const problemCards = [
+  { title: "Je veux mieux piloter mon activité", levers: "Data & BI + Audit & optimisation", href: "/bi-kpi" },
+  { title: "Je veux automatiser mes processus", levers: "Intelligence artificielle + Solutions digitales", href: "/solutions" },
+  { title: "Je veux attirer plus de clients", levers: "Marketing digital + Imprimerie numérique", href: "/services" },
+  { title: "Je veux former mon équipe", levers: "Formations + Data & BI + IA", href: "/ressources" },
+  { title: "Je veux réduire mes pertes", levers: "Audit & optimisation + Data & BI", href: "/services" },
+  { title: "Je veux créer un outil digital", levers: "Solutions digitales", href: "/solutions" },
+  { title: "Je veux améliorer mes supports", levers: "Imprimerie numérique + Marketing digital", href: "/contact" },
+];
+
+const useCaseCards = [
+  { title: "Dashboard exécutif", text: "Une vue synthétique pour direction, finances, opérations ou ventes.", href: "/bi-kpi" },
+  { title: "Chatbot client", text: "Un assistant pour qualifier, orienter et escalader les demandes utiles.", href: "/ia-entreprise" },
+  { title: "Application de gestion interne", text: "Un outil digital pour centraliser formulaires, validations et suivi.", href: "/solutions" },
+  { title: "Campagne digitale", text: "Des contenus, visuels et CTA pour gagner en visibilité.", href: "/services" },
+  { title: "Audit des processus", text: "Une analyse des pertes, retards, coûts et points de friction.", href: "/projets" },
+  { title: "Formation équipe", text: "Un atelier pratique pour lire les KPI, comprendre l'IA ou adopter un outil.", href: "/ressources" },
+  { title: "Kit de supports imprimés", text: "Flyers, brochures, cartes et supports commerciaux cohérents.", href: "/contact" },
 ];
 
 const faqCategories = [
@@ -62,6 +98,31 @@ const faqCategories = [
         question: "Quels types d'organisations peuvent travailler avec DTSC ?",
         answer:
           "DTSC vise les PME, startups, assurances, cliniques, pharmacies, ONG, institutions, écoles, structures financières et administrations qui veulent appliquer les 7 leviers numériques à leur performance réelle.",
+      },
+      {
+        question: "Quel levier choisir en premier ?",
+        answer:
+          "Le premier levier dépend du problème le plus urgent. Data & BI aide si vos chiffres sont dispersés, l'IA si les tâches répétitives bloquent les équipes, les Solutions digitales si un processus manuel doit être centralisé, et l'Audit & optimisation si les pertes ne sont pas encore visibles.",
+      },
+      {
+        question: "DTSC travaille-t-il avec des PME ?",
+        answer:
+          "Oui. Les PME font partie des cibles prioritaires de DTSC, avec des formats progressifs: diagnostic, dashboard, campagne, formation, prototype ou kit de supports professionnels.",
+      },
+      {
+        question: "Peut-on commencer avec un petit budget ?",
+        answer:
+          "Oui, lorsque le besoin est bien cadré. DTSC peut recommander un premier livrable limité pour tester la valeur avant d'élargir le projet.",
+      },
+      {
+        question: "Combien de temps prend un projet ?",
+        answer:
+          "Le délai dépend du périmètre, des données disponibles et des validations. Un audit ou prototype peut démarrer plus vite qu'une solution complète; DTSC précise le délai après cadrage.",
+      },
+      {
+        question: "Les formations sont-elles adaptées aux non-techniciens ?",
+        answer:
+          "Oui. Les formations DTSC peuvent être conçues pour des dirigeants, managers et équipes opérationnelles qui veulent comprendre les KPI, la data, l'IA ou l'adoption des outils sans jargon inutile.",
       },
     ],
   },
@@ -207,12 +268,12 @@ export default function Page() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] shadow-[0_16px_40px_rgba(0,194,255,0.2)] hover:bg-cyan-300">
                 <Link href="/contact">
-                  Contacter DTSC
+                  Demander une consultation
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15">
-                <Link href="/services">Découvrir nos services</Link>
+                <Link href="/services">Découvrir les 7 leviers</Link>
               </Button>
             </div>
             <div className="mt-10 grid gap-3 border-t border-white/10 pt-8 sm:grid-cols-3">
@@ -269,6 +330,103 @@ export default function Page() {
       </section>
 
       <PublicPWAInstallCard />
+
+      <section className="dtsc-public-band-light border-b border-dtsc-border">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Les 7 leviers numériques DTSC</p>
+              <h2 className="dtsc-ink-shimmer mt-2 text-3xl font-black text-dtsc-ink">
+                Une grille simple pour transformer un besoin en résultat mesurable.
+              </h2>
+            </div>
+            <p className="leading-7 text-dtsc-muted">
+              DTSC aide les entreprises à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {leverCards.map((item, index) => (
+              <Link
+                key={item.title}
+                href="/services"
+                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                style={{ animationDelay: `${index * 55}ms` }}
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
+                  <item.icon className="h-6 w-6" />
+                </div>
+                <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-dtsc-muted">{item.text}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Voir le levier
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-dtsc-border dtsc-public-band-soft">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-3xl">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Quel problème voulez-vous résoudre ?</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Partez de votre besoin, DTSC rattache le bon levier.</h2>
+            <p className="mt-4 leading-7 text-dtsc-muted">
+              Les exemples ci-dessous orientent vers des pages existantes pour approfondir sans créer de faux parcours ni de bouton placeholder.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {problemCards.map((item, index) => (
+              <Link
+                key={item.title}
+                href={item.href}
+                className="dtsc-card-hover dtsc-premium-reveal rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-[0_12px_34px_rgba(0,43,91,0.08)]"
+                style={{ animationDelay: `${index * 55}ms` }}
+              >
+                <p className="text-lg font-black text-dtsc-ink">{item.title}</p>
+                <p className="mt-3 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-black text-dtsc-blue">{item.levers}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Explorer la réponse DTSC
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-dtsc-border dtsc-public-band-cyan">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Cas d&apos;usage rapides</p>
+              <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Des projets concrets pour lancer une première action.</h2>
+            </div>
+            <p className="leading-7 text-dtsc-muted">
+              Chaque cas d&apos;usage renvoie vers une page existante: services, solutions, projets, ressources, BI & KPI, IA ou contact.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {useCaseCards.map((item, index) => (
+              <Link
+                key={item.title}
+                href={item.href}
+                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                style={{ animationDelay: `${index * 55}ms` }}
+              >
+                <Megaphone className="h-6 w-6 text-cyan-500" />
+                <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-dtsc-muted">{item.text}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Voir le cas
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">

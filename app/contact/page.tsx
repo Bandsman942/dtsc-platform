@@ -1,13 +1,58 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowRight, BarChart3, Bot, ClipboardCheck, FileText, GraduationCap, Layers3, Megaphone } from "lucide-react";
 import { ContactNewsletterSection } from "@/components/public/contact-newsletter-section";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
 
 export const metadata: Metadata = {
-  title: "Contact DTSC",
-  description: "Contactez DTSC pour cadrer votre besoin autour des 7 leviers numériques: Data & BI, IA, Solutions digitales, audit, formations, marketing et imprimerie.",
+  title: "Contact DTSC — cadrer votre besoin et choisir le bon levier",
+  description: "Contactez DTSC pour qualifier votre besoin client et choisir le bon levier numérique: Data & BI, IA, Solutions digitales, audit, formations, marketing ou imprimerie.",
   alternates: { canonical: "/contact" },
 };
+
+const qualificationCards = [
+  { title: "Je veux mieux piloter mon entreprise", lever: "Data & BI", icon: BarChart3 },
+  { title: "Je veux intégrer l'IA", lever: "Intelligence artificielle", icon: Bot },
+  { title: "Je veux créer une solution digitale", lever: "Solutions digitales", icon: Layers3 },
+  { title: "Je veux auditer mes processus", lever: "Audit & optimisation", icon: ClipboardCheck },
+  { title: "Je veux former mon équipe", lever: "Formations", icon: GraduationCap },
+  { title: "Je veux améliorer ma visibilité", lever: "Marketing digital", icon: Megaphone },
+  { title: "Je veux des supports imprimés professionnels", lever: "Imprimerie numérique", icon: FileText },
+];
+
+const contactSteps = [
+  "Vous décrivez le besoin",
+  "DTSC analyse le contexte",
+  "DTSC propose le levier prioritaire",
+  "DTSC recommande une première action",
+  "DTSC accompagne l'exécution",
+];
+
+const contactFaqs = [
+  {
+    question: "Que faut-il préparer avant de contacter DTSC ?",
+    answer:
+      "Préparez votre objectif, vos contraintes, les processus ou données concernés, les personnes impliquées et le résultat que vous voulez mesurer.",
+  },
+  {
+    question: "Peut-on demander seulement un audit ?",
+    answer:
+      "Oui. Un audit peut être le premier livrable pour identifier les pertes, coûts, anomalies et leviers prioritaires avant toute solution.",
+  },
+  {
+    question: "Peut-on commencer par une formation ?",
+    answer:
+      "Oui. Une formation peut être pertinente si vos équipes doivent comprendre la data, les KPI, l'IA ou l'adoption d'un nouvel outil.",
+  },
+  {
+    question: "DTSC accompagne-t-il les petites structures ?",
+    answer:
+      "Oui. DTSC peut proposer un cadrage progressif avec un premier livrable limité, utile et mesurable pour les PME et organisations en croissance.",
+  },
+];
 
 export default function ContactPage() {
   return (
@@ -21,6 +66,17 @@ export default function ContactPage() {
           <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
             DTSC qualifie les demandes avec une logique conseil: contexte, objectifs, contraintes, urgence et prochaines étapes. Les échanges commerciaux ou stratégiques restent validés par l&apos;équipe humaine.
           </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
+              <Link href="#contact-form">
+                Décrire mon besoin
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15">
+              <Link href="/services">Comparer les 7 leviers</Link>
+            </Button>
+          </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {[
               ["Email", dtsc.email],
@@ -35,9 +91,78 @@ export default function ContactPage() {
           </div>
         </div>
       </section>
-      <div className="dtsc-public-band-light pt-16">
+
+      <section className="border-b border-dtsc-border dtsc-public-band-light">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Avant de nous écrire</p>
+              <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Choisissez le besoin qui ressemble le plus à votre situation.</h2>
+            </div>
+            <p className="leading-7 text-dtsc-muted">
+              Ces cartes ne remplacent pas le formulaire: elles vous aident à formuler votre demande avec le bon levier DTSC et à obtenir une réponse plus exploitable.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {qualificationCards.map((item, index) => (
+              <Link
+                key={item.title}
+                href="#contact-form"
+                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                style={{ animationDelay: `${index * 60}ms` }}
+              >
+                <item.icon className="h-6 w-6 text-cyan-500" />
+                <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
+                <p className="mt-3 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-black text-dtsc-blue">{item.lever}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Préparer ma demande
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-dtsc-border dtsc-public-band-cyan">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Mini-parcours</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">De votre message à une action prioritaire.</h2>
+            <p className="mt-4 leading-7 text-dtsc-muted">
+              DTSC transforme une demande générale en cadrage exploitable: problème, levier, livrable, résultat à mesurer et prochaine étape.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {contactSteps.map((step, index) => (
+              <div key={step} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Étape {String(index + 1).padStart(2, "0")}</p>
+                <p className="mt-2 font-black text-dtsc-ink">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="contact-form" className="dtsc-public-band-light pt-16">
         <ContactNewsletterSection contactEmail={dtsc.email} />
-      </div>
+      </section>
+
+      <section className="border-t border-dtsc-border dtsc-public-band-soft">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions contact</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Clarifier votre demande avant l&apos;envoi.</h2>
+          </div>
+          <Accordion>
+            {contactFaqs.map((item, index) => (
+              <AccordionItem key={item.question} title={item.question} defaultOpen={index === 0}>
+                {item.answer}
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </section>
       <PublicFooter />
     </main>
   );

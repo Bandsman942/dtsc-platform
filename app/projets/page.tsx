@@ -3,8 +3,8 @@ import { CorporatePage } from "@/components/public/corporate-page";
 import { publicLongPages } from "@/lib/public-site";
 
 export const metadata: Metadata = {
-  title: "Projets et démonstrations DTSC",
-  description: "Projets et démonstrations DTSC présentés comme des cas d'application des 7 leviers numériques officiels.",
+  title: "Projets DTSC — démonstrations et projets numériques prêts à cadrer",
+  description: "Projets types DTSC rattachés aux 7 leviers numériques: dashboard exécutif, chatbot IA, clinique digitalisée, reporting ONG, audit, formation et supports commerciaux.",
   alternates: { canonical: "/projets" },
 };
 

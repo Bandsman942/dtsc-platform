@@ -21,7 +21,9 @@ La commande effectue des controles source-level sans dependance externe: middlew
 
 ## 2. Sous-domaines et auth
 
-- Domaine public `dtsc-platform.com`: ouvrir `/`, `/services`, `/solutions`, `/contact`.
+- Domaine public `dtsc-platform.com`: ouvrir `/`, `/services`, `/solutions`, `/secteurs`, `/projets`, `/a-propos`, `/ressources`, `/contact`, `/data-afrique`, `/bi-kpi` et `/ia-entreprise`.
+- Domaine public: verifier que les liens internes visibles pointent uniquement vers des routes existantes et que les CTA principaux renvoient vers `/contact`, `/services`, `/solutions`, `/ressources`, `/projets` ou les pages pedagogiques.
+- Domaine public: verifier sur mobile que les blocs de cartes, accordions, carrousels hero et CTA ne creent pas de debordement horizontal.
 - Domaine public: ouvrir `/dashboard` et confirmer la redirection vers `app.dtsc-platform.com/dashboard`.
 - Domaine public: ouvrir `/admin` et confirmer la redirection vers `console.dtsc-platform.com/admin`.
 - Domaine public: ouvrir `/auth/sign-in` et confirmer la redirection vers `account.dtsc-platform.com/auth/sign-in`.

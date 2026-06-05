@@ -12,12 +12,13 @@ Objectifs couverts par le code actuel:
 
 - landing page publique DTSC refondue avec navigation corporate vers des pages dediees: Services, Solutions, Secteurs, Projets, Ressources, A propos et Contact;
 - vocabulaire public harmonise autour des 7 leviers numeriques officiels DTSC: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numerique; les solutions, secteurs et projets publics sont presentes comme des exemples ou cas d'application de ces leviers;
+- pages publiques corporate enrichies avec blocs "probleme client -> action DTSC -> livrables -> resultats mesurables", parcours de methode, FAQ dediees, liens internes de conversion et CTA vers les pages existantes;
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
 - publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec recherche instantanee, pagination, images optimisees, partage, reactions, commentaires et reponses aux commentaires;
 - recherche intelligente publique via le header pour orienter les visiteurs vers les pages, services, solutions et publications utiles;
-- page Ressources organisee par categories en accordion, avec seulement les trois dernieres publications mises en avant sous forme de cartes;
+- page Ressources organisee comme vitrine media avec categories editoriales, lecture par objectif, ressources pedagogiques statiques, accordions par categorie et seulement les trois dernieres publications mises en avant sous forme de cartes;
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
@@ -1725,15 +1726,18 @@ Pages publiques dediees:
 
 | Route | Objectif |
 | --- | --- |
-| `/` | Page d'accueil courte, conversion, FAQ publique et orientation vers les pages dediees |
-| `/services` | Services DTSC structures autour des 7 leviers officiels: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numerique |
-| `/solutions` | Exemples rattaches aux 7 leviers: chatbot, dashboards, ERP, CRM, portails clients, assistant documentaire et workflows numeriques |
-| `/secteurs` | Secteurs cibles: assurances, sante, pharmacies, PME, ONG, education, finance |
-| `/projets` | Demonstrations et types de projets livrables |
-| `/ressources` | Ressources publiques statiques, accordions par categorie et trois dernieres publications admin en cartes |
+| `/` | Page d'accueil de conversion avec promesse des 7 leviers, problemes a resoudre, cas d'usage rapides, FAQ publique et orientation vers les pages dediees |
+| `/services` | Page centrale des 7 leviers officiels avec problemes clients, actions DTSC, livrables, benefices, exemples, FAQ et CTA |
+| `/solutions` | Cas d'application rattaches aux 7 leviers: chatbot, dashboard, application/ERP/CRM, assistant documentaire, workflow, kit marketing et supports imprimes |
+| `/secteurs` | Secteurs cibles avec douleurs typiques, leviers prioritaires, solutions possibles, resultats attendus et premier projet recommande |
+| `/projets` | Projets types prets a cadrer avec objectif, levier principal, livrables, duree indicative qualitative, benefices et parcours de suivi KPI |
+| `/ressources` | Vitrine media avec categories editoriales, lecture par objectif, ressources pedagogiques, accordions par categorie et trois dernieres publications admin en cartes |
 | `/ressources/[slug]` | Lecture detaillee d'une publication admin publiee |
-| `/a-propos` | Presentation DTSC, vision, mission, business model et postes de l'organisation sans noms individuels |
-| `/contact` | Contact professionnel et inscription newsletter |
+| `/a-propos` | Presentation DTSC, vision, origine a Kinshasa, methode des 7 leviers, organisation interne et ambition sans noms individuels |
+| `/contact` | Page de qualification client avec besoins par levier, mini-parcours de cadrage, formulaire existant et FAQ contact |
+| `/data-afrique` | Page pedagogique Data & BI sur la valeur strategique des donnees en Afrique, FAQ, liens internes et hero image thematique |
+| `/bi-kpi` | Page pedagogique sur donnees, KPI, reporting, dashboards, erreurs frequentes, formation et liens vers services/solutions/projets |
+| `/ia-entreprise` | Page pedagogique sur IA utile, chatbot, assistant documentaire, automatisation intelligente, validation humaine, securite et liens internes |
 | `/politique-cookies` | Cookies essentiels, stockage local, PWA, statistiques publiques et choix utilisateur |
 
 La politique des cookies decrit les cookies strictement necessaires, le stockage local, la PWA, les statistiques de visites publiques et les futurs traceurs non essentiels. Elle s'appuie sur les recommandations CNIL et rappelle qu'aucun cookie publicitaire n'est utilise actuellement.

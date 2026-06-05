@@ -3,8 +3,8 @@ import { InfoPage } from "@/components/public/info-page";
 import { publicPages } from "@/lib/public-content";
 
 export const metadata: Metadata = {
-  title: "BI, KPI et reporting",
-  description: "Levier Data & BI DTSC: tableaux de bord, KPI, reporting et pilotage de la performance pour les entreprises.",
+  title: "BI, KPI et reporting — tableaux de bord utiles avec DTSC",
+  description: "Comprendre données, KPI, reporting et dashboards pour choisir des indicateurs fiables, éviter les erreurs fréquentes et former les équipes.",
   alternates: { canonical: "/bi-kpi" },
 };
 

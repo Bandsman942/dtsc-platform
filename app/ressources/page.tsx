@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, FileText, Megaphone, Newspaper } from "lucide-react";
+import { ArrowRight, BarChart3, Bot, ClipboardCheck, FileText, GraduationCap, Layers3, Megaphone, Newspaper, Network } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { prisma } from "@/lib/prisma";
@@ -8,8 +8,8 @@ import { formatEnumLabel } from "@/lib/labels";
 import { trustedSources } from "@/lib/public-site";
 
 export const metadata: Metadata = {
-  title: "Ressources DTSC",
-  description: "Articles, annonces, guides et cas pratiques publiés par DTSC autour des 7 leviers numériques.",
+  title: "Ressources DTSC — guides, cas pratiques et contenus sur les 7 leviers",
+  description: "Ressources DTSC pour comprendre et appliquer les 7 leviers numériques: articles, guides, cas pratiques, démonstrations, projets, annonces et réflexions business-tech.",
   alternates: { canonical: "/ressources" },
 };
 
@@ -19,6 +19,18 @@ const staticResources = [
   { title: "Data en Afrique", href: "/data-afrique", text: "Comprendre les enjeux de structuration des données et de décision en Afrique.", icon: Newspaper },
   { title: "BI & KPI", href: "/bi-kpi", text: "Construire des indicateurs utiles et des tableaux de bord orientés action.", icon: FileText },
   { title: "IA en entreprise", href: "/ia-entreprise", text: "Identifier les bons cas d'usage IA et garder une validation humaine.", icon: Megaphone },
+];
+
+const editorialCategories = ["Articles", "Guides", "Cas pratiques", "Démonstrations", "Projets", "Annonces", "Réflexions business-tech"];
+
+const objectiveResources = [
+  { title: "Mieux piloter", lever: "Data & BI", href: "/bi-kpi", icon: BarChart3 },
+  { title: "Automatiser", lever: "Intelligence artificielle", href: "/ia-entreprise", icon: Bot },
+  { title: "Digitaliser", lever: "Solutions digitales", href: "/solutions", icon: Layers3 },
+  { title: "Réduire les pertes", lever: "Audit & optimisation", href: "/services", icon: ClipboardCheck },
+  { title: "Former", lever: "Formations", href: "/services", icon: GraduationCap },
+  { title: "Attirer des clients", lever: "Marketing digital", href: "/contact", icon: Network },
+  { title: "Améliorer les supports", lever: "Imprimerie numérique", href: "/contact", icon: FileText },
 ];
 
 export default async function RessourcesPage() {
@@ -47,13 +59,26 @@ export default async function RessourcesPage() {
           <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Ressources & annonces</p>
           <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre les 7 leviers numériques DTSC avant de lancer un projet.</h1>
           <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
-            Cette page regroupe les contenus publics réguliers que DTSC peut publier depuis l&apos;administration: articles, guides, annonces, veille, cas pratiques et démonstrations.
+            DTSC publie des contenus pour aider les dirigeants à comprendre, choisir et appliquer les 7 leviers: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
           </p>
         </div>
       </section>
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Catégories éditoriales</p>
+              <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Lire selon le format qui vous aide le plus.</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editorialCategories.map((category) => (
+                <span key={category} className="rounded-full border border-dtsc-border bg-dtsc-soft px-3 py-1.5 text-sm font-black text-dtsc-blue">
+                  {category}
+                </span>
+              ))}
+            </div>
+          </div>
           <div className="grid gap-4 md:grid-cols-3">
             {staticResources.map((resource, index) => (
               <Link
@@ -65,6 +90,33 @@ export default async function RessourcesPage() {
                 <resource.icon className="h-6 w-6 text-cyan-500" />
                 <h2 className="mt-5 text-xl font-black text-dtsc-ink">{resource.title}</h2>
                 <p className="mt-3 text-sm leading-6 text-dtsc-muted">{resource.text}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                  Lire
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-dtsc-border dtsc-public-band-cyan">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-3xl">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Lire selon votre objectif</p>
+            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Choisissez un objectif, retrouvez le levier DTSC associé.</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {objectiveResources.map((item, index) => (
+              <Link
+                key={item.title}
+                href={item.href}
+                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                style={{ animationDelay: `${index * 60}ms` }}
+              >
+                <item.icon className="h-6 w-6 text-cyan-500" />
+                <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
+                <p className="mt-3 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-black text-dtsc-blue">{item.lever}</p>
                 <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
                   Lire
                   <ArrowRight className="h-4 w-4" />
@@ -125,9 +177,21 @@ export default async function RessourcesPage() {
                   ))}
                 </Accordion>
               ) : (
-                <p className="p-6 text-sm leading-7 text-dtsc-muted">
-                  Aucune publication publique n&apos;est encore publiée. L&apos;administrateur peut ajouter des articles, guides, annonces et cas pratiques depuis le module Administration.
-                </p>
+                <div className="p-6">
+                  <p className="text-sm leading-7 text-dtsc-muted">
+                    Les premières ressources publiques DTSC seront bientôt disponibles. En attendant, vous pouvez découvrir nos 7 leviers numériques ou nous contacter pour cadrer votre besoin.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link href="/services" className="inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-4 py-2 text-sm font-black text-white hover:bg-[#001736]">
+                      Découvrir les 7 leviers
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                    <Link href="/contact" className="inline-flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-2 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">
+                      Contacter DTSC
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
               )}
             </div>
 

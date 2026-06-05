@@ -1,7 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BarChart3, CheckCircle2, Database, Layers3, ShieldCheck } from "lucide-react";
+import { HeroImageCarousel } from "@/components/public/hero-image-carousel";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { type PublicPageContent, sources } from "@/lib/public-content";
 
 export function InfoPage({
@@ -9,9 +10,13 @@ export function InfoPage({
   eyebrow,
   intro,
   narrative,
+  heroImage,
+  heroImages,
   imageAlt,
   highlights,
   sections,
+  faqs,
+  relatedLinks,
   sourceList = sources,
 }: PublicPageContent & {
   sourceList?: Array<{ label: string; href: string }>;
@@ -41,7 +46,7 @@ export function InfoPage({
             </div>
           </div>
 
-          <InteractiveVisual title={title} imageAlt={imageAlt} />
+          <InteractiveVisual title={title} imageAlt={imageAlt} heroImage={heroImage} heroImages={heroImages} />
         </div>
       </section>
 
@@ -92,6 +97,41 @@ export function InfoPage({
         </div>
 
         <div className="mt-10 rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,0.08)]">
+          <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions pratiques</p>
+              <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Passer de la compréhension à l&apos;action.</h2>
+              <p className="mt-4 leading-7 text-dtsc-muted">
+                Les réponses aident à relier le sujet au bon levier DTSC et à préparer un premier échange utile.
+              </p>
+              {relatedLinks && (
+                <div className="mt-6 flex flex-wrap gap-3">
+                  {relatedLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-4 py-2 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-[#001736]"
+                    >
+                      {link.label}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+            {faqs && (
+              <Accordion>
+                {faqs.map((item, index) => (
+                  <AccordionItem key={item.question} title={item.question} defaultOpen={index === 0}>
+                    {item.answer}
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-10 rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,0.08)]">
           <h2 className="font-black text-dtsc-ink">Sources vérifiables</h2>
           <div className="mt-4 grid gap-2">
             {sourceList.map((source) => (
@@ -109,19 +149,22 @@ export function InfoPage({
   );
 }
 
-function InteractiveVisual({ title, imageAlt }: { title: string; imageAlt: string }) {
+function InteractiveVisual({
+  title,
+  imageAlt,
+  heroImage,
+  heroImages,
+}: {
+  title: string;
+  imageAlt: string;
+  heroImage?: string;
+  heroImages?: string[];
+}) {
   return (
     <div className="group relative">
       <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-cyan-300/30 via-blue-500/10 to-emerald-300/20 blur-2xl transition duration-500 group-hover:scale-105" />
       <div className="relative overflow-hidden rounded-[1.5rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.16)]">
-        <div className="relative h-72 overflow-hidden bg-[#001736]">
-          <Image src="/dtsc-logo.png" alt={imageAlt} fill className="object-cover opacity-90 transition duration-700 group-hover:scale-105" sizes="(max-width: 1024px) 100vw, 50vw" priority />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#001736] via-[#001736]/35 to-transparent" />
-          <div className="absolute bottom-5 left-5 right-5">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">DTSC Insight</p>
-            <h2 className="mt-2 text-2xl font-black text-white">{title}</h2>
-          </div>
-        </div>
+        <HeroImageCarousel images={heroImages || [heroImage || "/dtsc-logo.png"]} label={imageAlt || title} eyebrow="DTSC Insight" priority className="h-72" />
         <div className="grid gap-3 p-5 sm:grid-cols-3">
           {["Diagnostic", "Architecture", "Exécution"].map((step) => (
             <div key={step} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 transition hover:border-cyan-300 hover:bg-dtsc-soft">

@@ -3,8 +3,8 @@ import { InfoPage } from "@/components/public/info-page";
 import { publicPages } from "@/lib/public-content";
 
 export const metadata: Metadata = {
-  title: "Data en Afrique",
-  description: "Comprendre pourquoi la data devient stratégique pour les entreprises africaines et comment DTSC accompagne la structuration des données.",
+  title: "Data en Afrique — structurer les données pour mieux décider",
+  description: "Comprendre pourquoi la data devient stratégique en Afrique et comment DTSC relie Data & BI, audit et indicateurs pour PME, santé, assurances et ONG.",
   alternates: { canonical: "/data-afrique" },
 };
 

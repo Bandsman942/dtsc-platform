@@ -9,9 +9,13 @@ export type PublicPageContent = {
   eyebrow: string;
   intro: string;
   narrative: string;
+  heroImage?: string;
+  heroImages?: string[];
   imageAlt: string;
   highlights: Array<{ label: string; value: string }>;
   sections: PublicPageSection[];
+  faqs?: Array<{ question: string; answer: string }>;
+  relatedLinks?: Array<{ label: string; href: string }>;
 };
 
 export const sources = [
@@ -37,6 +41,12 @@ export const publicPages: Record<string, PublicPageContent> = {
       "La donnée devient un actif stratégique pour les entreprises africaines: elle permet de comprendre les clients, réduire les gaspillages, fiabiliser les décisions et créer une gouvernance plus lisible.",
     narrative:
       "Beaucoup d'organisations disposent déjà d'informations utiles, mais elles restent dispersées dans des fichiers, des conversations, des outils non connectés ou des processus manuels. DTSC aide les dirigeants à transformer cette matière brute en indicateurs exploitables, en actions concrètes et en décisions plus fiables. À Kinshasa et plus largement en Afrique, cette approche est particulièrement importante pour les assurances, cliniques, pharmacies et PME, où la visibilité sur les opérations influence directement la qualité de service, la maîtrise des coûts et la croissance.",
+    heroImage: "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImages: [
+      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1400&q=80",
+    ],
     imageAlt: "Carte visuelle des flux data DTSC",
     highlights: [
       { label: "Priorité", value: "Structurer" },
@@ -63,6 +73,28 @@ export const publicPages: Record<string, PublicPageContent> = {
         bullets: ["Démarrage par cas d'usage prioritaire", "Exemples rattachés aux leviers", "Documentation des définitions métier", "Accompagnement humain et validation continue"],
       },
     ],
+    faqs: [
+      {
+        question: "Pourquoi la data est-elle stratégique en Afrique ?",
+        answer:
+          "Parce que beaucoup d'organisations ont déjà des informations utiles mais peu structurées. Les rendre fiables aide à mieux décider, réduire les pertes et améliorer la qualité de service.",
+      },
+      {
+        question: "Faut-il un logiciel complexe pour commencer ?",
+        answer:
+          "Non. Un premier projet peut commencer par un fichier structuré, une définition claire des KPI et un dashboard simple avant d'aller vers une solution plus complète.",
+      },
+      {
+        question: "Quels secteurs peuvent démarrer rapidement ?",
+        answer:
+          "Les PME, cliniques, pharmacies, assurances, ONG et institutions peuvent souvent démarrer avec un reporting d'activité, de stock, de ventes, de projets ou de relation client.",
+      },
+    ],
+    relatedLinks: [
+      { label: "Approfondir BI & KPI", href: "/bi-kpi" },
+      { label: "Voir les services", href: "/services" },
+      { label: "Contacter DTSC", href: "/contact" },
+    ],
   },
   bi: {
     eyebrow: "Pilotage & performance",
@@ -71,6 +103,12 @@ export const publicPages: Record<string, PublicPageContent> = {
       "Un tableau de bord professionnel ne se limite pas à afficher des chiffres: il relie stratégie, opérations et décisions quotidiennes avec des indicateurs fiables.",
     narrative:
       "La Business Intelligence permet aux dirigeants de sortir du pilotage intuitif et de créer une discipline de suivi. Pour DTSC, un bon dashboard doit répondre à trois questions: que se passe-t-il, pourquoi cela se passe-t-il, et quelle action doit être prise. Les KPI ne sont pas choisis pour remplir un écran, mais pour éclairer une décision: réduire un coût, prioriser une agence, améliorer un service, détecter une anomalie, suivre une campagne ou mesurer la productivité.",
+    heroImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
+    heroImages: [
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
+      "https://images.pexels.com/photos/590022/pexels-photo-590022.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.pexels.com/photos/7567434/pexels-photo-7567434.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    ],
     imageAlt: "Dashboard BI premium DTSC",
     highlights: [
       { label: "KPI", value: "Actionnables" },
@@ -97,6 +135,29 @@ export const publicPages: Record<string, PublicPageContent> = {
         bullets: ["Dictionnaire KPI", "Formation à la lecture des dashboards", "Rituels de revue de performance", "Maintenance et évolution progressive"],
       },
     ],
+    faqs: [
+      {
+        question: "Quelle différence entre donnée, KPI, reporting et dashboard ?",
+        answer:
+          "La donnée est l'information brute, le KPI est l'indicateur choisi pour décider, le reporting organise le suivi régulier et le dashboard rend ces indicateurs lisibles pour agir.",
+      },
+      {
+        question: "Comment choisir un bon KPI ?",
+        answer:
+          "Un bon KPI doit être compréhensible, fiable, rattaché à une décision, mis à jour à une fréquence connue et suivi par un responsable.",
+      },
+      {
+        question: "Faut-il former les équipes ?",
+        answer:
+          "Oui. Un dashboard utile doit être compris par les managers et les équipes. DTSC prévoit des formations de lecture des indicateurs lorsque cela aide l'adoption.",
+      },
+    ],
+    relatedLinks: [
+      { label: "Voir les services", href: "/services" },
+      { label: "Explorer les solutions", href: "/solutions" },
+      { label: "Voir les projets", href: "/projets" },
+      { label: "Contacter DTSC", href: "/contact" },
+    ],
   },
   ai: {
     eyebrow: "IA responsable",
@@ -105,6 +166,12 @@ export const publicPages: Record<string, PublicPageContent> = {
       "L'intelligence artificielle devient utile lorsqu'elle est reliée à un processus métier clair, à des données maîtrisées et à une validation humaine pour les décisions sensibles.",
     narrative:
       "DTSC positionne l'IA comme l'un de ses 7 leviers numériques officiels. Le chatbot DTSC illustre cette approche: il qualifie les besoins, reformule les demandes, explique les leviers et recommande une escalade humaine lorsqu'une décision commerciale, technique ou stratégique est nécessaire. Cette philosophie évite les promesses irréalistes et installe une relation de confiance avec les clients.",
+    heroImage: "https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImages: [
+      "https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=1400",
+      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80",
+      "https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    ],
     imageAlt: "Interface IA DTSC pour entreprises",
     highlights: [
       { label: "Usage", value: "Assisté" },
@@ -130,6 +197,28 @@ export const publicPages: Record<string, PublicPageContent> = {
           "L'IA ne doit pas remplacer les décisions humaines lorsqu'une demande engage un contrat, une prestation, un diagnostic critique ou une stratégie d'entreprise. DTSC prévoit des tickets, des escalades et une validation par l'équipe. Cette posture est essentielle pour maintenir la qualité, la confiance et la conformité.",
         bullets: ["Pas de promesse commerciale automatique", "Escalade vers un ticket support", "Journalisation de l'usage", "Limites de messages et tokens configurables"],
       },
+    ],
+    faqs: [
+      {
+        question: "Comment distinguer une IA utile d'une IA gadget ?",
+        answer:
+          "Une IA utile répond à un problème métier précis, utilise des informations contrôlées, fait gagner du temps et garde une validation humaine pour les décisions sensibles.",
+      },
+      {
+        question: "Quels premiers cas d'usage sont réalistes ?",
+        answer:
+          "Support client, qualification prospect, assistant documentaire, synthèse de demandes, analyse d'anomalies et automatisation intelligente de tâches répétitives sont des points de départ fréquents.",
+      },
+      {
+        question: "Comment protéger la confidentialité ?",
+        answer:
+          "DTSC recommande des contenus validés, des permissions claires, une séparation des données et une escalade humaine lorsque la demande devient contractuelle, stratégique ou sensible.",
+      },
+    ],
+    relatedLinks: [
+      { label: "Voir les solutions", href: "/solutions" },
+      { label: "Voir les services", href: "/services" },
+      { label: "Contacter DTSC", href: "/contact" },
     ],
   },
   sectors: {

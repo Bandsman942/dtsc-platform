@@ -4,8 +4,8 @@ import { publicLongPages } from "@/lib/public-site";
 import { dtsc } from "@/lib/dtsc";
 
 export const metadata: Metadata = {
-  title: "À propos de DTSC",
-  description: "Découvrez DTSC, cabinet basé à Kinshasa qui aide les organisations à booster leur performance avec 7 leviers numériques officiels.",
+  title: "À propos de DTSC — performance numérique mesurable depuis Kinshasa",
+  description: "Découvrez la vision, l'origine, la méthode et l'organisation de DTSC autour des 7 leviers numériques pour les entreprises africaines.",
   alternates: { canonical: "/a-propos" },
 };
 
