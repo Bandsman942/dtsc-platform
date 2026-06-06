@@ -15,6 +15,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Le dataset facturation de la Console couvre désormais toutes les entreprises clientes, y compris celles sans abonnement, et fournit les plans actifs ainsi que les KPI d'abonnements et le MRR estimé.
 - La QA source-level contrôle désormais les protections backend et les opérations du centre de contrôle des abonnements.
 
+### Corrigé
+
+- Correction du build Vercel du centre de contrôle: le fallback de limites utilise désormais le plan SaaS minimal typé `STARTER` au lieu de la valeur invalide `FREE`.
+
 ### Sécurisé
 
 - La suppression d'un abonnement est traitée comme une annulation métier auditée; aucun abonnement, paiement ou historique n'est supprimé physiquement.

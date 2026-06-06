@@ -240,6 +240,7 @@ check(
 check(
   "SaaS: Console DTSC expose le centre de contrôle abonnements, limites, modules et derniers paiements",
   containsAll(consoleBilling, ["organizationSubscriptionItems", "billingPlanOptions", "billingSummary", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
+    && !consoleBilling.includes('getPlanUsageLimits("FREE")')
     && containsAll(adminBillingSubscriptions, ["Centre de contrôle SaaS", "Créer un abonnement", "Renouveler avec historique", "Annuler l'abonnement", "maxActiveModules"])
     && adminPage.includes("AdminBillingSubscriptions")
 );

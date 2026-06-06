@@ -58,7 +58,7 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
           id: subscription.id,
           planId: subscription.planId,
           planName: subscription.plan.name,
-          planCode: planCode || "FREE",
+          planCode: planCode || "STARTER",
           priceUsd: Number(subscription.plan.priceUsd),
           status: subscription.status,
           startedAt: subscription.startedAt?.toISOString() || null,
@@ -66,7 +66,7 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
           expiresAt: subscription.expiresAt?.toISOString() || null,
           createdAt: subscription.createdAt.toISOString(),
           updatedAt: subscription.updatedAt.toISOString(),
-          limits: limits || getPlanUsageLimits("FREE"),
+          limits: limits || getPlanUsageLimits("STARTER"),
         } : null,
         history: organization.subscriptions.map((historyItem) => ({
           id: historyItem.id,
