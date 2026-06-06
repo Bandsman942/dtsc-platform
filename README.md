@@ -71,7 +71,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Formulaires privés guidés: les formulaires longs des modules Entreprise, Support, Paramètres, Activités DTSC, Administration DTSC et Activités [Entreprise] utilisent des dialogues hauts responsive avec étiquettes visibles et aides contextuelles.
 - Accès DTSC interne limité aux utilisateurs possédant un membership actif sur l'organisation `DTSC`, généré à partir des dossiers collaborateurs RH actifs; un membre d'une entreprise cliente ne voit plus les données internes DTSC.
 - Administration DTSC des entreprises clientes: création, activation/suspension/archivage, attribution/retrait du rôle `ADMIN_ENTREPRISE` et liaison d'un plan sans accès aux données métier privées des clients.
-- Plans SaaS organisationnels centralises: `STARTER`, `BUSINESS`, `ENTERPRISE`, entitlements par feature/module, limites utilisateurs/stockage/appels/documents, Console DTSC enrichie et acces client lecture seule dans `/billing`.
+- Plans SaaS organisationnels centralises: `STARTER`, `BUSINESS`, `ENTERPRISE`, entitlements par feature/module, limites utilisateurs/stockage/appels/documents, Console DTSC enrichie, gestion tarifaire `ADMIN` auditée et acces client lecture seule dans `/billing`.
 - Middleware de protection des routes privées
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.

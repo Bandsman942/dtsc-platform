@@ -109,7 +109,7 @@ Les controles sont appliques cote serveur sur:
 - `/collaborators`, creation de groupes et appels collaboratifs;
 - activation de modules entreprise via `/api/enterprise/[organizationId]/modules/[moduleId]`.
 
-La Console DTSC `Abonnements & facturation` utilise `lib/console/console-billing.ts` pour afficher les abonnements organisations, plans resolus, statuts, dates, limites, modules, utilisateurs actifs et derniers paiements. La page client `/billing` expose en lecture seule le plan organisationnel actif, ses limites, modules et enregistrements de facturation. Le flux MaishaPay existant reste celui des abonnements utilisateur chatbot; aucun flux organisationnel parallele n'a ete ajoute.
+La Console DTSC `Abonnements & facturation` utilise `lib/console/console-billing.ts` pour afficher les abonnements organisations, plans resolus, statuts, dates, limites, modules, utilisateurs actifs et derniers paiements. Le gestionnaire `components/admin/billing-plan-manager.tsx` permet uniquement au role `ADMIN` de modifier les tarifs, descriptions, quotas, ordre et activation via `PATCH /api/admin/billing-plans/[id]`. La route exige contexte `DTSC_INTERNAL`, origine valide, Zod, rate limit et journalise les valeurs avant/apres. `ensureBillingPlans()` utilise une creation avec `skipDuplicates` et ne modifie jamais un plan existant. La page client `/billing` expose en lecture seule le plan organisationnel actif, ses limites, modules et enregistrements de facturation. Le flux MaishaPay existant reste celui des abonnements utilisateur chatbot; aucun flux organisationnel parallele n'a ete ajoute.
 
 La reference complete est dans `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`.
 
@@ -2205,6 +2205,7 @@ Etat actuel:
 - emails transactionnels: mode direct ajoute au service Zoho.
 - socle commercial: plans chatbot, MaishaPay, callback, activation automatique, factures email, logs API, exports et audit paiement ajoutes.
 - centre de controle des abonnements organisations actif dans `/admin`: creation, modification et transitions de cycle de vie via routes DTSC internes, renouvellement avec historique et annulation metier non destructive.
+- gestion tarifaire des `BillingPlan` active dans la Console DTSC, reservee au role `ADMIN`; les prix administres ne sont plus reinitialises par les parcours d'inscription, de billing ou de checkout.
 - intelligence documentaire: upload TXT/Markdown/CSV/JSON, extraction texte, embeddings OpenAI, stockage pgvector et injection RAG dans le chatbot ajoutes.
 
 Fonctionnalites qui exigent des informations externes avant activation complete:

@@ -26,14 +26,43 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
     take: 200,
   }) : [];
   const plans = loadBillingDetails ? await prisma.billingPlan.findMany({
-    where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { priceUsd: "asc" }],
-    select: { id: true, name: true, slug: true, priceUsd: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+      priceUsd: true,
+      dailyMessageLimit: true,
+      dailyTokenLimit: true,
+      maxDocuments: true,
+      isActive: true,
+      sortOrder: true,
+      updatedAt: true,
+      _count: { select: { subscriptions: true, organizationSubscriptions: true } },
+    },
   }) : [];
 
   return {
     payments,
-    billingPlanOptions: plans.map((plan) => ({
+    billingPlans: plans.map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      slug: plan.slug,
+      description: plan.description,
+      priceUsd: Number(plan.priceUsd),
+      dailyMessageLimit: plan.dailyMessageLimit,
+      dailyTokenLimit: plan.dailyTokenLimit,
+      maxDocuments: plan.maxDocuments,
+      isActive: plan.isActive,
+      sortOrder: plan.sortOrder,
+      updatedAt: plan.updatedAt.toISOString(),
+      userSubscriptionCount: plan._count.subscriptions,
+      organizationSubscriptionCount: plan._count.organizationSubscriptions,
+      planCode: resolveSaasPlanCode(plan),
+      limits: getPlanUsageLimits(resolveSaasPlanCode(plan)),
+    })),
+    billingPlanOptions: plans.filter((plan) => plan.isActive).map((plan) => ({
       id: plan.id,
       name: plan.name,
       slug: plan.slug,

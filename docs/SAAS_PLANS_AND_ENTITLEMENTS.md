@@ -98,12 +98,26 @@ Elle constitue aussi le centre de controle DTSC des abonnements:
 
 La suppression physique n'est pas exposee. L'operation de suppression fonctionnelle est une annulation metier (`CANCELED`) qui conserve les paiements, l'historique et les preuves d'audit.
 
+### Administration des plans et tarifs
+
+Le bloc `Plans et tarifs` de `/admin?section=billing` affiche tous les plans, y compris les plans inactifs, et permet au role `ADMIN` de modifier:
+
+- nom commercial et description;
+- prix mensuel USD, avec deux decimales maximum;
+- quotas chatbot: messages, tokens et documents;
+- ordre d'affichage et activation.
+
+Les identifiants et slugs restent immuables pour préserver les abonnements, factures et mappings SaaS. Le plan `freemium` doit rester actif et gratuit. Un plan inactif reste visible dans l'historique mais n'est plus propose pour les nouveaux abonnements.
+
+`ensureBillingPlans()` initialise uniquement les plans absents avec `createMany(..., skipDuplicates: true)`. Les chargements de `/billing`, le checkout et l'inscription ne peuvent donc plus ecraser les tarifs administres.
+
 ### API de controle DTSC
 
 | Methode | Route | Acces | Payload principal | Reponse |
 | --- | --- | --- | --- | --- |
 | `POST` | `/api/admin/organization-subscriptions` | session `DTSC_INTERNAL`, role `ADMIN` ou `MANAGER` | `organizationId`, `planId`, `status`, dates optionnelles, `reason` | `{ ok, subscriptionId }` |
 | `PATCH` | `/api/admin/organization-subscriptions/[id]` | session `DTSC_INTERNAL`, role `ADMIN` ou `MANAGER` | `action`, plan/statut/dates selon action, `reason` | `{ ok, subscriptionId }` |
+| `PATCH` | `/api/admin/billing-plans/[id]` | session `DTSC_INTERNAL`, role `ADMIN` | `name`, `description`, `priceUsd`, quotas, `sortOrder`, `isActive`, `reason` | `{ ok, planId }` |
 
 Actions `PATCH`: `update`, `activate`, `start_trial`, `renew`, `suspend`, `mark_past_due`, `cancel`, `expire`.
 
@@ -124,6 +138,7 @@ Le checkout MaishaPay existant reste celui des abonnements utilisateur chatbot. 
 - Console DTSC abonnee aux datasets organisation;
 - routes organisations et checkout protegees par origine, rate limit et Zod.
 - CRUD metier des abonnements protege par contexte DTSC, origine, rate limit, Zod et audit.
+- initialisation des plans non destructive et administration tarifaire reservee au role `ADMIN`.
 
 Executer avant commit/push:
 

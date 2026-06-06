@@ -53,15 +53,10 @@ export async function ensureBillingPlans() {
     },
   ];
 
-  await Promise.all(
-    plans.map((plan) =>
-      prisma.billingPlan.upsert({
-        where: { id: plan.id },
-        update: plan,
-        create: plan,
-      })
-    )
-  );
+  await prisma.billingPlan.createMany({
+    data: plans,
+    skipDuplicates: true,
+  });
 
   return prisma.billingPlan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
 }

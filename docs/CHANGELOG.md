@@ -9,11 +9,14 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Transformation de `/admin` > `Abonnements & facturation` en centre de contrôle SaaS par entreprise: indicateurs d'exploitation, recherche, création, modification, activation, essai, retard de paiement, suspension, renouvellement avec historique, expiration et annulation métier.
 - Ajout des routes DTSC internes `POST /api/admin/organization-subscriptions` et `PATCH /api/admin/organization-subscriptions/[id]`, protégées par session, contexte interne, rôle autorisé, origine, validation Zod, rate limiting, `ApiLog` et `AuditLog`.
 - Ajout d'une vue d'historique des abonnements et de motifs obligatoires pour chaque opération sensible.
+- Ajout dans `/admin` > `Abonnements & facturation` d'un gestionnaire professionnel des plans et tarifs: prix USD, nom commercial, description, quotas chatbot, ordre et activation.
+- Ajout de `PATCH /api/admin/billing-plans/[id]`, réservé au rôle `ADMIN`, avec origine, Zod, rate limit, `ApiLog` et audit avant/après.
 
 ### Amélioré
 
 - Le dataset facturation de la Console couvre désormais toutes les entreprises clientes, y compris celles sans abonnement, et fournit les plans actifs ainsi que les KPI d'abonnements et le MRR estimé.
 - La QA source-level contrôle désormais les protections backend et les opérations du centre de contrôle des abonnements.
+- `ensureBillingPlans()` crée uniquement les plans absents avec `createMany(..., skipDuplicates: true)` et ne réécrit plus les tarifs ou quotas administrés.
 
 ### Corrigé
 

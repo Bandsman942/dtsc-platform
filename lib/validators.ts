@@ -153,6 +153,18 @@ export const organizationSubscriptionUpdateSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
+export const billingPlanUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().min(10).max(1000),
+  priceUsd: z.coerce.number().min(0).max(1_000_000).refine((value) => Math.round(value * 100) / 100 === value, "Le prix accepte au maximum deux décimales."),
+  dailyMessageLimit: z.coerce.number().int().min(1).max(1_000_000),
+  dailyTokenLimit: z.coerce.number().int().min(1_000).max(1_000_000_000),
+  maxDocuments: z.coerce.number().int().min(0).max(1_000_000),
+  sortOrder: z.coerce.number().int().min(0).max(10_000),
+  isActive: z.boolean(),
+  reason: z.string().trim().min(3).max(500),
+});
+
 export const enterpriseModuleToggleSchema = z.object({
   isEnabled: z.coerce.boolean(),
 });

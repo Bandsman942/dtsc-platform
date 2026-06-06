@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
+import { BillingPlanManager } from "@/components/admin/billing-plan-manager";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
@@ -321,12 +322,15 @@ export default async function AdminPage({
         {activeSection === "billing" && canView("billing") && (
           <Accordion>
             <AccordionItem title="Abonnements & facturation" defaultOpen>
-              <AdminBillingSubscriptions
-                subscriptions={billingDataset.organizationSubscriptionItems}
-                plans={billingDataset.billingPlanOptions}
-                summary={billingDataset.billingSummary}
-                payments={billingDataset.paymentAuditItems}
-              />
+              <div className="space-y-6">
+                <BillingPlanManager plans={billingDataset.billingPlans} canManage={user.role === UserRole.ADMIN} locale={user.locale} />
+                <AdminBillingSubscriptions
+                  subscriptions={billingDataset.organizationSubscriptionItems}
+                  plans={billingDataset.billingPlanOptions}
+                  summary={billingDataset.billingSummary}
+                  payments={billingDataset.paymentAuditItems}
+                />
+              </div>
             </AccordionItem>
           </Accordion>
         )}

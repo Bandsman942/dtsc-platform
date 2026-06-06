@@ -106,6 +106,10 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Abonnements & facturation: renouveler et verifier que l'ancienne periode passe a `EXPIRED` tandis qu'une nouvelle periode est creee et visible dans l'historique.
 - Abonnements & facturation: annuler et verifier qu'aucun abonnement, paiement ou historique n'est supprime physiquement.
 - Routes `/api/admin/organization-subscriptions*`: refuser origine externe, session non DTSC, role non autorise, payload invalide et creation concurrente d'une seconde periode courante.
+- Plans et tarifs: un `ADMIN` modifie un prix, recharge `/admin` puis `/billing` et retrouve le prix persiste.
+- Plans et tarifs: verifier qu'un `MANAGER`, une origine externe et un payload invalide sont refuses par `PATCH /api/admin/billing-plans/[id]`.
+- Plans et tarifs: desactiver un plan payant et verifier qu'il reste visible dans la Console mais disparait des nouveaux abonnements; le plan `freemium` ne peut etre ni payant ni inactif.
+- Plans et tarifs: appeler un parcours utilisant `ensureBillingPlans()` et verifier que les tarifs administres ne sont pas reinitialises.
 - Entreprises clientes: verifier qu'une creation, suspension, archivage ou mise a jour d'abonnement exige un compte DTSC interne autorise et ne permet pas d'editer les donnees metier privees du client.
 - Les modules internes CEO, COO, CTO, MPO, HR & CFO, SCO et LA restent accessibles selon poste officiel et RBAC.
 - Les tableaux restent scrollables sur mobile et desktop.

@@ -65,14 +65,17 @@ const calendarAvailabilityRoute = read("app/api/calendar/availabilities/route.ts
 const internalCalendar = read("lib/internal-calendar.ts");
 const adminPage = read("app/admin/page.tsx");
 const billingPlans = read("lib/billing/plans.ts");
+const billingDefaults = read("lib/billing.ts");
 const billingEntitlements = read("lib/billing/entitlements.ts");
 const billingModuleEntitlements = read("lib/billing/module-entitlements.ts");
 const consoleBilling = read("lib/console/console-billing.ts");
 const adminBillingSubscriptions = read("components/admin/admin-billing-subscriptions.tsx");
+const billingPlanManager = read("components/admin/billing-plan-manager.tsx");
 const clientOrganizationCreateRoute = read("app/api/admin/client-organizations/route.ts");
 const clientOrganizationUpdateRoute = read("app/api/admin/client-organizations/[id]/route.ts");
 const organizationSubscriptionCreateRoute = read("app/api/admin/organization-subscriptions/route.ts");
 const organizationSubscriptionUpdateRoute = read("app/api/admin/organization-subscriptions/[id]/route.ts");
+const billingPlanUpdateRoute = read("app/api/admin/billing-plans/[id]/route.ts");
 const billingCheckoutRoute = read("app/api/billing/checkout/route.ts");
 const enterpriseModuleToggleRoute = read("app/api/enterprise/[organizationId]/modules/[moduleId]/route.ts");
 
@@ -230,6 +233,28 @@ check(
 );
 
 check(
+  "SaaS: initialisation des plans non destructive",
+  containsAll(billingDefaults, ["prisma.billingPlan.createMany", "skipDuplicates: true"])
+    && !billingDefaults.includes("update: plan")
+);
+
+check(
+  "SaaS: gestion des plans et tarifs réservée ADMIN, sécurisée et auditée",
+  containsAll(billingPlanUpdateRoute, [
+    "UserRole.ADMIN",
+    "isDtscInternalSession",
+    "isSameOriginRequest",
+    "await rateLimit",
+    "billingPlanUpdateSchema.safeParse",
+    "BILLING_PLAN_UPDATED",
+    "writeApiLog",
+    'current.id === "freemium"',
+  ])
+    && containsAll(billingPlanManager, ["translate(locale", "plansAndPricing", "editPlanPricing", "/api/admin/billing-plans/", "pricingReason"])
+    && containsAll(adminPage, ["BillingPlanManager", "user.role === UserRole.ADMIN"])
+);
+
+check(
   "SaaS: modules Enterprise et données sectorielles contrôlés par entitlements",
   containsAll(enterpriseModuleToggleRoute, ["canUseModule", "PLAN_REQUIRED", "SUBSCRIPTION_REQUIRED"])
     && containsAll(enterpriseAdminLoader, ["getOrganizationEntitlements", "entitlements"])
@@ -240,6 +265,7 @@ check(
 check(
   "SaaS: Console DTSC expose le centre de contrôle abonnements, limites, modules et derniers paiements",
   containsAll(consoleBilling, ["organizationSubscriptionItems", "billingPlanOptions", "billingSummary", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
+    && consoleBilling.includes("plans.filter((plan) => plan.isActive)")
     && !consoleBilling.includes('getPlanUsageLimits("FREE")')
     && containsAll(adminBillingSubscriptions, ["Centre de contrôle SaaS", "Créer un abonnement", "Renouveler avec historique", "Annuler l'abonnement", "maxActiveModules"])
     && adminPage.includes("AdminBillingSubscriptions")
