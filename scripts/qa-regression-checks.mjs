@@ -71,6 +71,8 @@ const consoleBilling = read("lib/console/console-billing.ts");
 const adminBillingSubscriptions = read("components/admin/admin-billing-subscriptions.tsx");
 const clientOrganizationCreateRoute = read("app/api/admin/client-organizations/route.ts");
 const clientOrganizationUpdateRoute = read("app/api/admin/client-organizations/[id]/route.ts");
+const organizationSubscriptionCreateRoute = read("app/api/admin/organization-subscriptions/route.ts");
+const organizationSubscriptionUpdateRoute = read("app/api/admin/organization-subscriptions/[id]/route.ts");
 const billingCheckoutRoute = read("app/api/billing/checkout/route.ts");
 const enterpriseModuleToggleRoute = read("app/api/enterprise/[organizationId]/modules/[moduleId]/route.ts");
 
@@ -236,10 +238,32 @@ check(
 );
 
 check(
-  "SaaS: Console DTSC expose abonnements organisations, limites, modules et derniers paiements",
-  containsAll(consoleBilling, ["organizationSubscriptionItems", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
-    && containsAll(adminBillingSubscriptions, ["Abonnements organisations", "limite", "Dernier paiement", "maxMonthlyCallMinutes"])
+  "SaaS: Console DTSC expose le centre de contrôle abonnements, limites, modules et derniers paiements",
+  containsAll(consoleBilling, ["organizationSubscriptionItems", "billingPlanOptions", "billingSummary", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
+    && containsAll(adminBillingSubscriptions, ["Centre de contrôle SaaS", "Créer un abonnement", "Renouveler avec historique", "Annuler l'abonnement", "maxActiveModules"])
     && adminPage.includes("AdminBillingSubscriptions")
+);
+
+check(
+  "SaaS: CRUD abonnements admin protégé, validé, rate limité et audité",
+  containsAll(organizationSubscriptionCreateRoute, [
+    "isDtscInternalSession",
+    "canManageClientOrganizations",
+    "isSameOriginRequest",
+    "await rateLimit",
+    "organizationSubscriptionCreateSchema.safeParse",
+    "ORGANIZATION_SUBSCRIPTION_CREATED",
+  ])
+    && containsAll(organizationSubscriptionUpdateRoute, [
+      "isDtscInternalSession",
+      "canManageClientOrganizations",
+      "isSameOriginRequest",
+      "await rateLimit",
+      "organizationSubscriptionUpdateSchema.safeParse",
+      "ORGANIZATION_SUBSCRIPTION_RENEWED",
+      '"CANCELED"',
+      '"EXPIRED"',
+    ])
 );
 
 check(

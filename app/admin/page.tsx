@@ -321,7 +321,12 @@ export default async function AdminPage({
         {activeSection === "billing" && canView("billing") && (
           <Accordion>
             <AccordionItem title="Abonnements & facturation" defaultOpen>
-              <AdminBillingSubscriptions subscriptions={billingDataset.organizationSubscriptionItems} payments={billingDataset.paymentAuditItems} />
+              <AdminBillingSubscriptions
+                subscriptions={billingDataset.organizationSubscriptionItems}
+                plans={billingDataset.billingPlanOptions}
+                summary={billingDataset.billingSummary}
+                payments={billingDataset.paymentAuditItems}
+              />
             </AccordionItem>
           </Accordion>
         )}

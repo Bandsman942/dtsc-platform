@@ -338,5 +338,30 @@
     "videoStarted": "Appel vidéo lancé",
     "joined": "a rejoint l'appel",
     "left": "a quitté l'appel"
+  },
+  "adminBillingControl": {
+    "eyebrow": "Centre de contrôle SaaS",
+    "title": "Abonnements & facturation",
+    "description": "Pilotez le cycle de vie des abonnements clients. Les annulations et renouvellements conservent l'historique pour l'audit.",
+    "organizations": "Entreprises",
+    "active": "Actifs",
+    "trials": "Essais",
+    "attention": "À traiter",
+    "withoutSubscription": "Sans abonnement",
+    "estimatedMrr": "MRR estimé",
+    "create": "Créer un abonnement",
+    "edit": "Modifier",
+    "renew": "Renouveler avec historique",
+    "activate": "Activer",
+    "startTrial": "Démarrer un essai",
+    "markPastDue": "Signaler un retard",
+    "suspend": "Suspendre",
+    "history": "Voir l'historique",
+    "expire": "Clôturer comme expiré",
+    "cancel": "Annuler l'abonnement",
+    "reason": "Motif",
+    "saved": "Opération d'abonnement enregistrée et journalisée.",
+    "historicalImmutable": "Une période historique est immuable.",
+    "businessCancellation": "Cette opération termine l'accès courant sans supprimer l'historique, les paiements ni les journaux."
   }
 }

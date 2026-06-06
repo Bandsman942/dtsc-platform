@@ -8,51 +8,78 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
     include: { user: true, subscription: { include: { plan: true } } },
     take: 200,
   }) : [];
-  const subscriptions = loadBillingDetails ? await prisma.organizationSubscription.findMany({
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  const organizations = loadBillingDetails ? await prisma.organization.findMany({
+    where: { organizationType: "CLIENT", deletedAt: null },
+    orderBy: { name: "asc" },
     include: {
-      plan: { select: { id: true, name: true, slug: true } },
-      organization: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          status: true,
-          organizationType: true,
-          members: { where: { status: "ACTIVE", removedAt: null }, select: { id: true } },
-          enterpriseModules: { select: { id: true, isEnabled: true } },
+      members: { where: { status: "ACTIVE", removedAt: null }, select: { id: true } },
+      enterpriseModules: { select: { id: true, isEnabled: true } },
+      billingRecords: { orderBy: { createdAt: "desc" }, take: 1 },
+      subscriptions: {
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        include: {
+          plan: { select: { id: true, name: true, slug: true, priceUsd: true } },
           billingRecords: { orderBy: { createdAt: "desc" }, take: 1 },
         },
       },
-      billingRecords: { orderBy: { createdAt: "desc" }, take: 1 },
     },
     take: 200,
+  }) : [];
+  const plans = loadBillingDetails ? await prisma.billingPlan.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { priceUsd: "asc" }],
+    select: { id: true, name: true, slug: true, priceUsd: true },
   }) : [];
 
   return {
     payments,
-    subscriptions,
-    organizationSubscriptionItems: subscriptions.map((subscription) => {
-      const planCode = resolveSaasPlanCode(subscription.plan);
-      const limits = getPlanUsageLimits(planCode);
-      const latestBillingRecord = subscription.billingRecords[0] || subscription.organization.billingRecords[0] || null;
+    billingPlanOptions: plans.map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      slug: plan.slug,
+      priceUsd: Number(plan.priceUsd),
+      planCode: resolveSaasPlanCode(plan),
+      limits: getPlanUsageLimits(resolveSaasPlanCode(plan)),
+    })),
+    organizationSubscriptionItems: organizations.map((organization) => {
+      const subscription = organization.subscriptions[0] || null;
+      const planCode = subscription ? resolveSaasPlanCode(subscription.plan) : null;
+      const limits = planCode ? getPlanUsageLimits(planCode) : null;
+      const latestBillingRecord = subscription?.billingRecords[0] || organization.billingRecords[0] || null;
       return {
-        id: subscription.id,
-        organizationId: subscription.organizationId,
-        organizationName: subscription.organization.name,
-        organizationSlug: subscription.organization.slug || subscription.organization.id,
-        organizationStatus: subscription.organization.status,
-        subscriptionStatus: subscription.status,
-        planName: subscription.plan.name,
-        planCode,
-        startedAt: subscription.startedAt?.toISOString() || null,
-        trialEndsAt: subscription.trialEndsAt?.toISOString() || null,
-        expiresAt: subscription.expiresAt?.toISOString() || null,
-        nextRenewalAt: subscription.expiresAt?.toISOString() || subscription.trialEndsAt?.toISOString() || null,
-        activeUsers: subscription.organization.members.length,
-        enabledModules: subscription.organization.enterpriseModules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
-        totalModules: subscription.organization.enterpriseModules.length,
-        limits,
+        organizationId: organization.id,
+        organizationName: organization.name,
+        organizationSlug: organization.slug || organization.id,
+        organizationStatus: organization.status,
+        activeUsers: organization.members.length,
+        enabledModules: organization.enterpriseModules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
+        totalModules: organization.enterpriseModules.length,
+        subscription: subscription ? {
+          id: subscription.id,
+          planId: subscription.planId,
+          planName: subscription.plan.name,
+          planCode: planCode || "FREE",
+          priceUsd: Number(subscription.plan.priceUsd),
+          status: subscription.status,
+          startedAt: subscription.startedAt?.toISOString() || null,
+          trialEndsAt: subscription.trialEndsAt?.toISOString() || null,
+          expiresAt: subscription.expiresAt?.toISOString() || null,
+          createdAt: subscription.createdAt.toISOString(),
+          updatedAt: subscription.updatedAt.toISOString(),
+          limits: limits || getPlanUsageLimits("FREE"),
+        } : null,
+        history: organization.subscriptions.map((historyItem) => ({
+          id: historyItem.id,
+          planName: historyItem.plan.name,
+          planCode: resolveSaasPlanCode(historyItem.plan),
+          priceUsd: Number(historyItem.plan.priceUsd),
+          status: historyItem.status,
+          startedAt: historyItem.startedAt?.toISOString() || null,
+          trialEndsAt: historyItem.trialEndsAt?.toISOString() || null,
+          expiresAt: historyItem.expiresAt?.toISOString() || null,
+          createdAt: historyItem.createdAt.toISOString(),
+          updatedAt: historyItem.updatedAt.toISOString(),
+        })),
         latestBillingRecord: latestBillingRecord ? {
           id: latestBillingRecord.id,
           amount: Number(latestBillingRecord.amount),
@@ -63,6 +90,20 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
         } : null,
       };
     }),
+    billingSummary: {
+      organizations: organizations.length,
+      active: organizations.filter((organization) => organization.subscriptions[0]?.status === "ACTIVE").length,
+      trial: organizations.filter((organization) => organization.subscriptions[0]?.status === "TRIAL").length,
+      attention: organizations.filter((organization) => {
+        const status = organization.subscriptions[0]?.status;
+        return status === "PAST_DUE" || status === "PENDING_PAYMENT" || status === "SUSPENDED";
+      }).length,
+      withoutSubscription: organizations.filter((organization) => !organization.subscriptions[0]).length,
+      monthlyRecurringRevenueUsd: organizations.reduce((total, organization) => {
+        const subscription = organization.subscriptions[0];
+        return subscription?.status === "ACTIVE" ? total + Number(subscription.plan.priceUsd) : total;
+      }, 0),
+    },
     paymentAuditItems: payments.map((payment) => ({
       id: payment.id,
       reference: payment.reference,

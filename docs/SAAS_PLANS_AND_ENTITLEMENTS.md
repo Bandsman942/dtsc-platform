@@ -1,6 +1,6 @@
 # Plans SaaS et entitlements
 
-Derniere mise a jour: 5 juin 2026
+Derniere mise a jour: 6 juin 2026
 
 Ce document decrit la logique SaaS active pour les organisations clientes DTSC Platform. Elle centralise les plans, les limites, les modules autorises et les controles serveur sans migration destructive.
 
@@ -87,6 +87,28 @@ La section `Abonnements & facturation` de `/admin` affiche maintenant les abonne
 - dernier enregistrement de facturation organisation;
 - audit des paiements utilisateur existant.
 
+Elle constitue aussi le centre de controle DTSC des abonnements:
+
+- creation d'un abonnement pour une entreprise sans periode courante;
+- modification du plan, statut et des dates;
+- activation, essai, suspension, retard de paiement, expiration et annulation;
+- renouvellement avec cloture de la periode courante et creation d'une nouvelle periode;
+- consultation de l'historique complet par entreprise;
+- motif obligatoire, `ApiLog` et `AuditLog` pour chaque mutation.
+
+La suppression physique n'est pas exposee. L'operation de suppression fonctionnelle est une annulation metier (`CANCELED`) qui conserve les paiements, l'historique et les preuves d'audit.
+
+### API de controle DTSC
+
+| Methode | Route | Acces | Payload principal | Reponse |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/admin/organization-subscriptions` | session `DTSC_INTERNAL`, role `ADMIN` ou `MANAGER` | `organizationId`, `planId`, `status`, dates optionnelles, `reason` | `{ ok, subscriptionId }` |
+| `PATCH` | `/api/admin/organization-subscriptions/[id]` | session `DTSC_INTERNAL`, role `ADMIN` ou `MANAGER` | `action`, plan/statut/dates selon action, `reason` | `{ ok, subscriptionId }` |
+
+Actions `PATCH`: `update`, `activate`, `start_trial`, `renew`, `suspend`, `mark_past_due`, `cancel`, `expire`.
+
+Les deux routes exigent une origine valide, appliquent un rate limit, valident avec Zod et journalisent les acces et mutations. Elles ne necessitent aucune variable d'environnement supplementaire.
+
 Les clients voient leur statut organisation, limites, modules et derniers enregistrements de facturation dans `/billing`, sans action de modification autonome.
 
 ## MaishaPay
@@ -101,6 +123,7 @@ Le checkout MaishaPay existant reste celui des abonnements utilisateur chatbot. 
 - controle des modules Enterprise, sante, calendrier, collaboration et appels;
 - Console DTSC abonnee aux datasets organisation;
 - routes organisations et checkout protegees par origine, rate limit et Zod.
+- CRUD metier des abonnements protege par contexte DTSC, origine, rate limit, Zod et audit.
 
 Executer avant commit/push:
 

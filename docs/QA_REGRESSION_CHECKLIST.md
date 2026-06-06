@@ -101,6 +101,11 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Le chargement initial ne recupere que les KPIs essentiels et les datasets de la section active.
 - Les sections restent disponibles: Vue generale, Entreprises clientes, Abonnements & facturation, Support client, Publications & contenus, Utilisateurs & acces, Securite & audit, Modules internes DTSC, Parametres plateforme.
 - Abonnements & facturation: verifier organisation, plan, statut abonnement, dates d'essai/renouvellement, limites utilisateurs/stockage/appels/documents, modules actifs, dernier paiement et audit des paiements.
+- Abonnements & facturation: creer un abonnement pour une entreprise sans periode courante, modifier plan/statut/dates, puis verifier la persistance apres rechargement.
+- Abonnements & facturation: activer, demarrer un essai, suspendre, signaler un retard et verifier que chaque transition exige un motif et produit des journaux.
+- Abonnements & facturation: renouveler et verifier que l'ancienne periode passe a `EXPIRED` tandis qu'une nouvelle periode est creee et visible dans l'historique.
+- Abonnements & facturation: annuler et verifier qu'aucun abonnement, paiement ou historique n'est supprime physiquement.
+- Routes `/api/admin/organization-subscriptions*`: refuser origine externe, session non DTSC, role non autorise, payload invalide et creation concurrente d'une seconde periode courante.
 - Entreprises clientes: verifier qu'une creation, suspension, archivage ou mise a jour d'abonnement exige un compte DTSC interne autorise et ne permet pas d'editer les donnees metier privees du client.
 - Les modules internes CEO, COO, CTO, MPO, HR & CFO, SCO et LA restent accessibles selon poste officiel et RBAC.
 - Les tableaux restent scrollables sur mobile et desktop.

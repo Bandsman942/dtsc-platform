@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-06
+
+### Ajouté
+
+- Transformation de `/admin` > `Abonnements & facturation` en centre de contrôle SaaS par entreprise: indicateurs d'exploitation, recherche, création, modification, activation, essai, retard de paiement, suspension, renouvellement avec historique, expiration et annulation métier.
+- Ajout des routes DTSC internes `POST /api/admin/organization-subscriptions` et `PATCH /api/admin/organization-subscriptions/[id]`, protégées par session, contexte interne, rôle autorisé, origine, validation Zod, rate limiting, `ApiLog` et `AuditLog`.
+- Ajout d'une vue d'historique des abonnements et de motifs obligatoires pour chaque opération sensible.
+
+### Amélioré
+
+- Le dataset facturation de la Console couvre désormais toutes les entreprises clientes, y compris celles sans abonnement, et fournit les plans actifs ainsi que les KPI d'abonnements et le MRR estimé.
+- La QA source-level contrôle désormais les protections backend et les opérations du centre de contrôle des abonnements.
+
+### Sécurisé
+
+- La suppression d'un abonnement est traitée comme une annulation métier auditée; aucun abonnement, paiement ou historique n'est supprimé physiquement.
+- Le renouvellement clôture l'abonnement courant et crée une nouvelle période afin de préserver la traçabilité.
+
 ## 2026-06-05
 
 ### Ajouté

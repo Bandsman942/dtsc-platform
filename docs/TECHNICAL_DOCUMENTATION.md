@@ -2204,6 +2204,7 @@ Etat actuel:
 - securite inscription: OTP email configurable ajoute;
 - emails transactionnels: mode direct ajoute au service Zoho.
 - socle commercial: plans chatbot, MaishaPay, callback, activation automatique, factures email, logs API, exports et audit paiement ajoutes.
+- centre de controle des abonnements organisations actif dans `/admin`: creation, modification et transitions de cycle de vie via routes DTSC internes, renouvellement avec historique et annulation metier non destructive.
 - intelligence documentaire: upload TXT/Markdown/CSV/JSON, extraction texte, embeddings OpenAI, stockage pgvector et injection RAG dans le chatbot ajoutes.
 
 Fonctionnalites qui exigent des informations externes avant activation complete:

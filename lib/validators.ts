@@ -123,6 +123,36 @@ export const enterpriseOrganizationUpdateSchema = z.object({
   notes: z.string().max(1000).optional().or(z.literal("")),
 });
 
+const organizationSubscriptionStatusSchema = z.enum([
+  "ACTIVE",
+  "PENDING_PAYMENT",
+  "PAST_DUE",
+  "CANCELED",
+  "EXPIRED",
+  "SUSPENDED",
+  "TRIAL",
+]);
+
+export const organizationSubscriptionCreateSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  planId: z.string().min(1).max(160),
+  status: organizationSubscriptionStatusSchema.default("PENDING_PAYMENT"),
+  startedAt: z.string().optional().or(z.literal("")),
+  expiresAt: z.string().optional().or(z.literal("")),
+  trialEndsAt: z.string().optional().or(z.literal("")),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const organizationSubscriptionUpdateSchema = z.object({
+  action: z.enum(["update", "activate", "start_trial", "renew", "suspend", "mark_past_due", "cancel", "expire"]),
+  planId: z.string().max(160).optional().or(z.literal("")),
+  status: organizationSubscriptionStatusSchema.optional(),
+  startedAt: z.string().optional().or(z.literal("")),
+  expiresAt: z.string().optional().or(z.literal("")),
+  trialEndsAt: z.string().optional().or(z.literal("")),
+  reason: z.string().trim().min(3).max(500),
+});
+
 export const enterpriseModuleToggleSchema = z.object({
   isEnabled: z.coerce.boolean(),
 });

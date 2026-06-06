@@ -338,5 +338,30 @@
     "videoStarted": "Video call started",
     "joined": "joined the call",
     "left": "left the call"
+  },
+  "adminBillingControl": {
+    "eyebrow": "SaaS control center",
+    "title": "Subscriptions & billing",
+    "description": "Manage the client subscription lifecycle. Cancellations and renewals preserve history for audit purposes.",
+    "organizations": "Organizations",
+    "active": "Active",
+    "trials": "Trials",
+    "attention": "Needs attention",
+    "withoutSubscription": "Without subscription",
+    "estimatedMrr": "Estimated MRR",
+    "create": "Create subscription",
+    "edit": "Edit",
+    "renew": "Renew with history",
+    "activate": "Activate",
+    "startTrial": "Start trial",
+    "markPastDue": "Mark past due",
+    "suspend": "Suspend",
+    "history": "View history",
+    "expire": "Close as expired",
+    "cancel": "Cancel subscription",
+    "reason": "Reason",
+    "saved": "Subscription operation saved and audited.",
+    "historicalImmutable": "A historical period is immutable.",
+    "businessCancellation": "This operation ends current access without deleting history, payments, or logs."
   }
 }
