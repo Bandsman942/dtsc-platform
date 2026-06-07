@@ -54,6 +54,7 @@ export function PublicationEngagement({
   const [editingComment, setEditingComment] = useState<PublicationComment | null>(null);
   const [deletingComment, setDeletingComment] = useState<PublicationComment | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const isAdmin = currentUser?.role === "ADMIN";
   const likes = reactions.filter((reaction) => reaction.value === 1).length;
   const dislikes = reactions.filter((reaction) => reaction.value === -1).length;
@@ -66,6 +67,7 @@ export function PublicationEngagement({
     return byParent;
   }, [comments]);
   const rootComments = useMemo(() => commentTree.get("root") || [], [commentTree]);
+  const commentById = useMemo(() => new Map(comments.map((comment) => [comment.id, comment])), [comments]);
   const commentList = useSmartList({
     items: rootComments,
     pageSize: 6,
@@ -153,13 +155,24 @@ export function PublicationEngagement({
     }
   }
 
+  function jumpToComment(commentId: string) {
+    const target = document.querySelector<HTMLElement>(`[data-publication-comment-id="${commentId}"]`);
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedCommentId(commentId);
+    window.setTimeout(() => setHighlightedCommentId((current) => current === commentId ? null : current), 1800);
+  }
+
   function renderComment(comment: PublicationComment, depth = 0) {
     const replies = commentTree.get(comment.id) || [];
+    const parentComment = comment.parentId ? commentById.get(comment.parentId) : null;
     const canEdit = isAdmin || (currentUser?.id === comment.user.id && isInsideEditWindow(comment.createdAt, commentEditWindowMinutes));
 
     return (
       <div key={comment.id} className={`${depth > 0 ? "ml-6 border-l border-dtsc-border pl-4" : ""}`}>
-        <div className="relative rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 pr-16">
+        <div data-publication-comment-id={comment.id} className={`relative rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 pr-16 transition ${highlightedCommentId === comment.id ? "dtsc-message-focus-pulse" : ""}`}>
           <div className="flex items-start gap-3">
             <div className="flex gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-dtsc-soft text-xs font-black text-dtsc-blue">
@@ -167,6 +180,12 @@ export function PublicationEngagement({
               </span>
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-blue">{comment.user.name} · {formatEnumLabel(comment.user.role)}</p>
+                {parentComment && (
+                  <button type="button" onClick={() => jumpToComment(parentComment.id)} className="mt-2 block w-full rounded-xl border-l-4 border-cyan-300 bg-dtsc-page p-2 text-left text-xs text-dtsc-muted transition hover:border-emerald-300">
+                    <span className="block font-black text-dtsc-blue">{parentComment.user.name}</span>
+                    <span className="mt-1 line-clamp-2 block">{parentComment.content}</span>
+                  </button>
+                )}
                 <p className="mt-1 text-sm leading-6 text-dtsc-muted">{comment.content}</p>
                 <p className="mt-2 text-xs font-bold text-dtsc-muted">{new Date(comment.createdAt).toLocaleString("fr-FR")}</p>
               </div>

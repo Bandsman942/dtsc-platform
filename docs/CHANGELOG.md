@@ -2,6 +2,29 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-07
+
+### Ajouté
+
+- Ajout du CRUD complet des messages Support dans les menus `...`: réponse ciblée, copie, modification et suppression logique auditée.
+- Ajout des réponses persistées aux commentaires opérationnels `CooComment`, avec aperçu cliquable du commentaire source, chargement progressif et mise en évidence de la cible.
+- Alignement des commentaires de publications publiques: une réponse affiche maintenant un aperçu cliquable qui recentre et met en évidence le commentaire source.
+- Ajout de la route privée `/enterprise-modules/[moduleCode]`, qui fournit une page dédiée aux modules activés d'une entreprise et réunit leurs blocs opérationnels et données sectorielles autorisées.
+- Ajout d'une migration Prisma additive pour `TicketMessage.replyToId`, `TicketMessage.updatedAt`, `TicketMessage.deletedAt`, `CooComment.replyToId` et `CooComment.deletedAt`.
+
+### Amélioré
+
+- Les discussions Support chargent uniquement les messages récents, restent bornées et scrollables, puis permettent de charger les échanges précédents par curseur.
+- La navigation desktop et mobile des entreprises affiche dynamiquement les modules réellement activés et inclus dans l'abonnement; les modules sectoriels proviennent uniquement du modèle appliqué à l'entreprise.
+- Le menu d'actions partagé est maintenant rendu dans un portail au niveau du document avec un premier plan global, ce qui évite son masquage par les conteneurs scrollables ou les cartes.
+- Le contexte système du chatbot distingue désormais la navigation entreprise active et le Support conversationnel paginé des fonctionnalités non activées.
+
+### Sécurisé
+
+- Les mutations de messages Support et de commentaires opérationnels vérifient session, accès à l'objet, origine, validation Zod, rate limiting et propriété ou rôle administrateur avant modification.
+- Les suppressions de messages et commentaires sont non destructives afin de préserver les réponses, la chronologie et les audits.
+- L'accès à une page de module entreprise réapplique côté serveur l'appartenance, l'activation du module et les entitlements du plan.
+
 ## 2026-06-06
 
 ### Ajouté

@@ -751,6 +751,8 @@ export default async function ActivitiesPage() {
   return (
     <AppShell user={user}>
       <ActivitiesDashboard
+        currentUserId={user.id}
+        currentUserRole={user.role}
         sections={sections}
         collaborators={collaborators.map((collaborator) => ({ id: collaborator.id, userId: collaborator.userId, label: `${collaborator.fullName} · ${collaborator.email}` }))}
         operations={operationOptions.map((operation) => ({ id: operation.id, label: operation.title }))}

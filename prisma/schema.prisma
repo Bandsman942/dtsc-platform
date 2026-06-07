@@ -1044,13 +1044,19 @@ model TicketMessage {
   id        String        @id @default(cuid())
   ticketId  String
   userId    String
+  replyToId String?
   content   String
   createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
   ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyTo   TicketMessage? @relation("TicketMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   TicketMessage[] @relation("TicketMessageReplies")
 
   @@index([ticketId, createdAt])
   @@index([userId])
+  @@index([replyToId])
 }
 
 model SiteVisit {
@@ -2107,14 +2113,19 @@ model CooComment {
   entityType          String
   entityId            String
   authorId            String
+  replyToId           String?
   content             String
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  deletedAt           DateTime?
   author              User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo             CooComment? @relation("CooCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies             CooComment[] @relation("CooCommentReplies")
   mentions            CooCommentMention[]
 
   @@index([entityType, entityId, createdAt])
   @@index([authorId])
+  @@index([replyToId])
 }
 
 model CooCommentMention {

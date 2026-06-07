@@ -2,15 +2,23 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { writeApiLog } from "@/lib/audit";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 
 const commentSchema = z.object({
   entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "COLLAB_REQUEST", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD", "LEGAL_CASE", "LEGAL_CONTRACT", "LEGAL_TEMPLATE", "LEGAL_RISK", "LEGAL_DOCUMENT", "LEGAL_DISPUTE", "LEGAL_REQUEST", "LEGAL_REPORT"]),
   entityId: z.string().min(5),
   content: z.string().min(2).max(2000),
   mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
+  replyToId: z.string().min(5).max(120).optional().or(z.literal("")),
+});
+
+const commentMutationSchema = z.object({
+  id: z.string().min(5).max(120),
+  content: z.string().min(2).max(2000).optional(),
 });
 
 export async function GET(req: Request) {
@@ -18,6 +26,10 @@ export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized", message: "Connexion requise." }, { status: 401 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `activity-comments-read:${user.id}`), 600, 60 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Too many requests", message: "Trop de chargements de commentaires sur une courte période." }, { status: 429 });
   }
   const url = new URL(req.url);
   const parsed = commentSchema.pick({ entityType: true, entityId: true }).safeParse({
@@ -35,10 +47,11 @@ export async function GET(req: Request) {
   const records = await prisma.cooComment.findMany({
     where: parsed.data,
     include: {
-      author: { select: { name: true, role: true, avatarUrl: true } },
+      author: { select: { id: true, name: true, role: true, avatarUrl: true } },
+      replyTo: { select: { id: true, content: true, deletedAt: true, author: { select: { name: true } } } },
       mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
@@ -51,6 +64,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized", message: "Connexion requise." }, { status: 401 });
@@ -62,6 +78,19 @@ export async function POST(req: Request) {
   if (!(await canAccessEntity(user, parsed.data.entityType, parsed.data.entityId))) {
     return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à commenter cet élément." }, { status: 403 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `activity-comment:${user.id}`), 120, 60 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Too many requests", message: "Trop de commentaires sur une courte période." }, { status: 429 });
+  }
+  if (parsed.data.replyToId) {
+    const replyTarget = await prisma.cooComment.findFirst({
+      where: { id: parsed.data.replyToId, entityType: parsed.data.entityType, entityId: parsed.data.entityId },
+      select: { id: true },
+    });
+    if (!replyTarget) {
+      return NextResponse.json({ error: "Invalid reply target", message: "Le commentaire source est introuvable." }, { status: 400 });
+    }
+  }
   const allowedUserIds = await relatedUserIds(parsed.data.entityType, parsed.data.entityId);
   const mentionedUserIds = [...new Set(parsed.data.mentionedUserIds.filter((id) => allowedUserIds.includes(id)))];
   const comment = await prisma.cooComment.create({
@@ -70,10 +99,12 @@ export async function POST(req: Request) {
       entityId: parsed.data.entityId,
       authorId: user.id,
       content: parsed.data.content,
+      replyToId: parsed.data.replyToId || null,
       mentions: { create: mentionedUserIds.map((mentionedUserId) => ({ mentionedUserId })) },
     },
     include: {
-      author: { select: { name: true, role: true, avatarUrl: true } },
+      author: { select: { id: true, name: true, role: true, avatarUrl: true } },
+      replyTo: { select: { id: true, content: true, deletedAt: true, author: { select: { name: true } } } },
       mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
     },
   });
@@ -93,6 +124,60 @@ export async function POST(req: Request) {
   }
   await writeApiLog({ request: req, statusCode: 201, userId: user.id, startedAt, metadata: { entityType: parsed.data.entityType, entityId: parsed.data.entityId } });
   return NextResponse.json({ ok: true, comment }, { status: 201 });
+}
+
+export async function PATCH(req: Request) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized", message: "Connexion requise." }, { status: 401 });
+  }
+  const parsed = commentMutationSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success || !parsed.data.content) {
+    return NextResponse.json({ error: "Invalid payload", message: "Le commentaire est invalide." }, { status: 400 });
+  }
+  const comment = await prisma.cooComment.findUnique({ where: { id: parsed.data.id } });
+  if (!comment || !(await canAccessEntity(user, comment.entityType, comment.entityId)) || (comment.authorId !== user.id && user.role !== UserRole.ADMIN) || comment.deletedAt) {
+    return NextResponse.json({ error: "Forbidden", message: "Modification non autorisée." }, { status: 403 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `activity-comment-update:${user.id}`), 120, 60 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Too many requests", message: "Trop de modifications sur une courte période." }, { status: 429 });
+  }
+  const updated = await prisma.cooComment.update({ where: { id: comment.id }, data: { content: parsed.data.content } });
+  await writeAuditLog({ userId: user.id, action: "OPERATIONAL_COMMENT_UPDATED", entity: "CooComment", entityId: comment.id, request: req, metadata: { entityType: comment.entityType, entityId: comment.entityId } });
+  await writeApiLog({ request: req, statusCode: 200, userId: user.id, startedAt, metadata: { commentId: comment.id, entityType: comment.entityType, entityId: comment.entityId } });
+  return NextResponse.json({ ok: true, comment: updated });
+}
+
+export async function DELETE(req: Request) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized", message: "Connexion requise." }, { status: 401 });
+  }
+  const parsed = commentMutationSchema.pick({ id: true }).safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+  const comment = await prisma.cooComment.findUnique({ where: { id: parsed.data.id } });
+  if (!comment || !(await canAccessEntity(user, comment.entityType, comment.entityId)) || (comment.authorId !== user.id && user.role !== UserRole.ADMIN)) {
+    return NextResponse.json({ error: "Forbidden", message: "Suppression non autorisée." }, { status: 403 });
+  }
+  const limited = await rateLimit(getRateLimitKey(req, `activity-comment-delete:${user.id}`), 60, 60 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Too many requests", message: "Trop de suppressions sur une courte période." }, { status: 429 });
+  }
+  await prisma.cooComment.update({ where: { id: comment.id }, data: { content: "Commentaire supprimé", deletedAt: new Date() } });
+  await writeAuditLog({ userId: user.id, action: "OPERATIONAL_COMMENT_DELETED", entity: "CooComment", entityId: comment.id, request: req, metadata: { entityType: comment.entityType, entityId: comment.entityId } });
+  await writeApiLog({ request: req, statusCode: 200, userId: user.id, startedAt, metadata: { commentId: comment.id, entityType: comment.entityType, entityId: comment.entityId } });
+  return NextResponse.json({ ok: true });
 }
 
 async function canAccessEntity(user: { id: string; role: UserRole }, entityType: string, entityId: string) {

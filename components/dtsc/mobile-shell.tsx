@@ -168,7 +168,7 @@ export function MobileBottomNavigation({
   showEmployeeActivities: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
-  enterpriseContext?: { organizationName: string; showAdmin: boolean } | null;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean }> } | null;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
@@ -199,6 +199,7 @@ export function MobileBottomNavigation({
         { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
         { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
         { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support" },
+        ...enterpriseContext.modules.map((enterpriseModule) => ({ href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`, labelKey: "", fallback: enterpriseModule.label })),
         ...(enterpriseContext.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Admin entreprise" }] : []),
       ]
     : [

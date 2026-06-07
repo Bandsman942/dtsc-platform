@@ -15,8 +15,12 @@ export default async function SupportPage() {
     include: {
       user: { select: { name: true, email: true, role: true } },
       messages: {
-        orderBy: { createdAt: "asc" },
-        include: { user: { select: { name: true, role: true } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 21,
+        include: {
+          user: { select: { id: true, name: true, role: true } },
+          replyTo: { select: { id: true, content: true, deletedAt: true, user: { select: { name: true } } } },
+        },
       },
     },
     take: canManageTickets ? 200 : 100,
@@ -52,7 +56,7 @@ export default async function SupportPage() {
             {canManageTickets ? "Tickets utilisateurs" : "Mes tickets"}
           </h2>
         </div>
-        <TicketBoard tickets={JSON.parse(JSON.stringify(tickets))} canManage={canManageTickets} />
+        <TicketBoard tickets={JSON.parse(JSON.stringify(tickets))} canManage={canManageTickets} currentUserId={user.id} />
       </section>
     </AppShell>
   );

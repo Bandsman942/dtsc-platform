@@ -20,6 +20,7 @@ import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
 import { canAccessOrganizationAdministration, isDtscInternalSession } from "@/lib/organizations";
+import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { prisma } from "@/lib/prisma";
 
 export async function AppShell({
@@ -44,20 +45,13 @@ export async function AppShell({
   const productBranding = getProductBranding(currentHostType);
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
-  const enterpriseContext =
-    session?.activeContext === "ORGANIZATION" && activeOrganizationId
-      ? {
-          organizationName: session.activeOrganizationName || "Entreprise",
-          showAdmin: canAccessOrganizationAdministration(session.activeOrganizationRole),
-        }
-      : null;
   const showCollaborationModule = Boolean(session);
   const notificationContextWhere: Prisma.NotificationWhereInput = activeOrganizationId
     ? dtscInternalContext
       ? { OR: [{ organizationId: activeOrganizationId }, { organizationId: null }] }
       : { organizationId: activeOrganizationId }
     : { organizationId: null };
-  const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships] = await Promise.all([
+  const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships, enterpriseModules] = await Promise.all([
     prisma.notification.count({
       where: {
         userId: user.id,
@@ -91,7 +85,18 @@ export async function AppShell({
       orderBy: { organization: { name: "asc" } },
       take: 12,
     }),
+    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      ? getEnterpriseNavigationModules(activeOrganizationId, user.locale)
+      : Promise.resolve([]),
   ]);
+  const enterpriseContext =
+    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      ? {
+          organizationName: session.activeOrganizationName || "Entreprise",
+          showAdmin: canAccessOrganizationAdministration(session.activeOrganizationRole),
+          modules: enterpriseModules,
+        }
+      : null;
   const organizationOptions = organizationMemberships
     .filter((membership) => membership.organization.organizationType !== "DTSC_INTERNAL" || user.role !== "CLIENT")
     .map((membership) => ({ id: membership.organization.id, label: membership.organization.name, role: membership.role }));

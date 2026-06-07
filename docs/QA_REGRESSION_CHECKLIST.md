@@ -18,6 +18,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Executer `git diff --check`.
 - Verifier que Vercel lance toujours `pnpm prisma migrate deploy && pnpm build`.
 - Verifier qu'aucune migration Prisma destructive n'est ajoutee.
+- Verifier que la migration `20260607143000_support_and_operational_comment_threads` ajoute uniquement des colonnes, index et clés étrangères.
 - Verifier que `docs/SAAS_PLANS_AND_ENTITLEMENTS.md` reste aligne avec `lib/billing/plans.ts`, `lib/billing/plan-limits.ts`, `lib/billing/module-entitlements.ts` et `lib/billing/entitlements.ts`.
 
 ## 2. Sous-domaines et auth
@@ -58,6 +59,9 @@ La commande effectue des controles source-level sans dependance externe: middlew
 
 - Se connecter avec contexte `ORGANIZATION`.
 - Ouvrir `/enterprise-admin`: acces autorise si role entreprise habilite.
+- Activer un module non socle inclus dans le plan: il apparait dans la navigation de tous les collaborateurs autorises et ouvre `/enterprise-modules/[moduleCode]`.
+- Desactiver ce module: il disparait de la navigation et sa page dédiée retourne un accès introuvable/interdit.
+- Confirmer qu'une entreprise ne voit que ses modules socle et ceux de son propre secteur, jamais les modules spécifiques d'un autre secteur.
 - Modifier un module, un departement, un poste ou un workflow: operation persistee et limitee a `organizationId`.
 - Ouvrir `/enterprise-activities`: voir les demandes de l'organisation selon permissions.
 - Ouvrir `/support`: voir ses tickets personnels et creer un nouveau ticket rattache au contexte actif.
@@ -151,6 +155,23 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - `PATCH /api/support/tickets/[id]` refuse origine externe, utilisateur non Support DTSC et payload invalide.
 - `POST /api/support/tickets/[id]/messages` refuse origine externe, utilisateur non autorise et payload invalide.
 - Les notifications Support ne font pas echouer une creation ou une reponse deja persistee.
+- La discussion d'un ticket reste bornée et scrollable; seuls les messages récents sont chargés initialement.
+- `Charger les précédents` ajoute les anciens messages sans remplacer les messages récents.
+- Depuis `...`, répondre, modifier et supprimer logiquement un message; vérifier les refus pour un utilisateur non propriétaire.
+- Cliquer sur l'aperçu d'un message répondu charge progressivement les anciens messages si nécessaire, puis centre et met en évidence le message source.
+
+## 8.1 Commentaires opérationnels
+
+- Dans chaque fil basé sur `CooComment`, répondre à un commentaire et vérifier la persistance après rechargement.
+- Cliquer sur l'aperçu de réponse et vérifier le retour vers le commentaire source, y compris quand il faut charger des commentaires précédents.
+- Vérifier le CRUD dans `...`: auteur autorisé sur son commentaire, `ADMIN` autorisé, autre utilisateur refusé côté API.
+- Vérifier qu'une suppression masque le contenu sans supprimer les réponses associées.
+- Dans les annonces et publications publiques, cliquer sur l'aperçu d'une réponse et vérifier le centrage et la mise en évidence du commentaire source.
+
+## 8.2 Menus d'actions
+
+- Ouvrir les menus `...` dans une carte, un fil scrollable, une modale et près du bas de l'écran.
+- Vérifier que le menu reste au premier plan, n'est pas coupé par `overflow-hidden` et se ferme au scroll, au redimensionnement, au clic extérieur et avec `Escape`.
 
 ## 9. Mes collaborateurs, groupes et messages
 

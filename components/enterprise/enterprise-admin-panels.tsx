@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Building2, CalendarDays, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
+import { Building2, CalendarDays, ExternalLink, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
 import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
 import { AccordionItem } from "@/components/ui/accordion";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -192,6 +192,13 @@ export function EnterpriseModulesPanel({
               <ActionMenu
                 label="Actions module"
                 items={[
+                  {
+                    key: "open",
+                    label: "Ouvrir le module",
+                    icon: ExternalLink,
+                    disabled: !enterpriseModule.isEnabled || enterpriseModule.accessAllowed === false,
+                    onSelect: () => window.location.assign(`/enterprise-modules/${encodeURIComponent(enterpriseModule.moduleCode)}`),
+                  },
                   {
                     key: "toggle",
                     label: enterpriseModule.isEnabled ? "Désactiver" : "Activer",

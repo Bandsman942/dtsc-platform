@@ -544,6 +544,11 @@ export const siteVisitSchema = z.object({
 
 export const ticketMessageSchema = z.object({
   content: z.string().min(1).max(2_000),
+  replyToId: z.string().min(1).max(120).optional().or(z.literal("")),
+});
+
+export const ticketMessageUpdateSchema = z.object({
+  content: z.string().min(1).max(2_000),
 });
 
 export const announcementSchema = z.object({

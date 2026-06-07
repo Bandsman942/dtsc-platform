@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ElementType } from "react";
-import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
+import { Bell, Blocks, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
@@ -48,7 +48,7 @@ export function NavLinks({
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
-  enterpriseContext?: { organizationName: string; showAdmin: boolean } | null;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean }> } | null;
   locale?: string | null;
 }) {
   const pathname = usePathname();
@@ -68,8 +68,14 @@ export function NavLinks({
     ? [...visibleBaseItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...visibleBaseItems, ...employeeItems];
   const enterpriseItems: NavItem[] = enterpriseContext
-    ? [
+      ? [
         { href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
+        ...enterpriseContext.modules.map((enterpriseModule) => ({
+          href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`,
+          label: enterpriseModule.label,
+          icon: Blocks,
+          help: enterpriseModule.description,
+        })),
         ...(enterpriseContext.showAdmin
           ? [{ href: "/enterprise-admin", label: `Administration ${enterpriseContext.organizationName}`, icon: Shield, help: "Administrer les modules, postes et workflows de votre entreprise." }]
           : []),
@@ -129,7 +135,9 @@ export function NavLinks({
                 ? translate(locale, "navigation.enterpriseActivitiesNamed").replace("{organization}", enterpriseContext?.organizationName || "")
                 : itemPath === "/enterprise-admin"
                   ? translate(locale, "navigation.enterpriseAdminNamed").replace("{organization}", enterpriseContext?.organizationName || "")
-                  : translate(locale, translationByHref[itemPath] || item.label)}
+                  : itemPath.startsWith("/enterprise-modules/")
+                    ? item.label
+                    : translate(locale, translationByHref[itemPath] || item.label)}
             {showNotificationSignal && (
               <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
                 {unreadNotifications > 99 ? "99+" : unreadNotifications}

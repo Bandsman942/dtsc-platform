@@ -40,8 +40,15 @@ const supportPage = read("app/support/page.tsx");
 const supportCreateRoute = read("app/api/support/tickets/route.ts");
 const supportUpdateRoute = read("app/api/support/tickets/[id]/route.ts");
 const supportMessageRoute = read("app/api/support/tickets/[id]/messages/route.ts");
+const supportMessageMutationRoute = read("app/api/support/tickets/[id]/messages/[messageId]/route.ts");
+const supportTicketBoard = read("components/support/ticket-board.tsx");
+const activityCommentsRoute = read("app/api/activities/comments/route.ts");
+const actionMenu = read("components/ui/action-menu.tsx");
+const publicPublicationEngagement = read("components/public/publication-engagement.tsx");
 const enterpriseAdminPage = read("app/enterprise-admin/page.tsx");
 const enterpriseActivitiesPage = read("app/enterprise-activities/page.tsx");
+const enterpriseModulePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
+const enterpriseNavigation = read("lib/enterprise/enterprise-navigation.ts");
 const enterpriseAdminLoader = read("lib/enterprise/enterprise-admin-loader.ts");
 const enterpriseActivitiesLoader = read("lib/enterprise/enterprise-activities-loader.ts");
 const enterpriseHealthcareLoader = read("lib/enterprise/enterprise-healthcare-loader.ts");
@@ -140,6 +147,28 @@ check(
 );
 
 check(
+  "messages ticket Support: pagination, réponses et CRUD non destructif",
+  containsAll(supportMessageRoute, ["export async function GET", "replyToId", "nextCursor", "hasMore"])
+    && containsAll(supportMessageMutationRoute, ["export async function PATCH", "export async function DELETE", "deletedAt: new Date()", "writeAuditLog"])
+    && containsAll(supportTicketBoard, ["Charger les précédents", "jumpToMessage", "setReplyingTo", "setEditing", "setDeleting"])
+);
+
+check(
+  "commentaires opérationnels: réponses, pagination et CRUD protégé",
+  containsAll(activityCommentsRoute, ["replyToId", "export async function PATCH", "export async function DELETE", "isSameOriginRequest", "await rateLimit", "deletedAt: new Date()"])
+);
+
+check(
+  "commentaires publics: les réponses permettent de revenir au commentaire source",
+  containsAll(publicPublicationEngagement, ["jumpToComment", "data-publication-comment-id", "parentComment"])
+);
+
+check(
+  "menus d'actions rendus au premier plan hors des conteneurs",
+  containsAll(actionMenu, ["createPortal", "document.body", 'className=\"fixed z-[1000]'])
+);
+
+check(
   "Enterprise Admin exige contexte ORGANIZATION et permission d'administration",
   containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "ENTERPRISE_MANAGER_ROLES", 'canUseFeature(organizationId, "enterprise-admin")', "getEnterpriseAdministrationDataset(organizationId)"])
 );
@@ -147,6 +176,13 @@ check(
 check(
   "Enterprise Activities exige contexte ORGANIZATION et membership actif",
   containsAll(enterpriseActivitiesPage, ['activeContext === "ORGANIZATION"', "requireEnterpriseMembership", "getEnterpriseActivitiesDataset"])
+);
+
+check(
+  "navigation Enterprise expose uniquement les modules actifs et autorisés",
+  containsAll(enterpriseNavigation, ["enterpriseModule.isEnabled && enterpriseModule.accessAllowed", "getOrganizationEntitlements", "getEnterpriseModulesDataset"])
+    && containsAll(enterpriseModulePage, ["canAccessEnterpriseModule", "requireEnterpriseMembership", "organizationId_moduleCode"])
+    && middleware.includes('"/enterprise-modules"')
 );
 
 check(

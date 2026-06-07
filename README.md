@@ -122,6 +122,9 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires scrollables, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert intelligent multi-destinataires, indicateurs, signalement, archivage et épinglage
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
+- Support conversationnel paginé avec réponses ciblées et CRUD non destructif des messages depuis les menus `...`.
+- Navigation entreprise dynamique: chaque module actif et inclus dans le plan apparaît dans la navigation et possède une page privée dédiée; sa désactivation le retire pour tous les collaborateurs.
+- Menus d'actions globaux rendus au premier plan afin de rester utilisables dans les cartes, modales et fils scrollables.
 - Discussions de tickets support contenues dans un fil scrollable pour éviter les pages mobiles infinies.
 - Paramètres complets: profil, mot de passe, mode clair/sombre/système, page de démarrage, densité d'interface, langue, fuseau horaire, format de date, synthèse email, modèle LLM préféré, style IA et préférences de notifications persistantes
 - Logo officiel DTSC et copyright 2026 sur les footers essentiels

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
-import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, Download, Eye, FileText, GitBranch, MessageSquare, Send, UploadCloud, Users, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, CircleAlert, ClipboardList, Copy, Download, Eye, FileText, GitBranch, MessageCircle, MessageSquare, Pencil, Send, Trash2, UploadCloud, Users, X } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -53,18 +53,25 @@ type CommentItem = {
   id: string;
   content: string;
   createdAt: string;
-  author: { name: string; role: string; avatarUrl?: string | null };
+  updatedAt?: string;
+  deletedAt?: string | null;
+  author: { id: string; name: string; role: string; avatarUrl?: string | null };
+  replyTo?: { id: string; content: string; deletedAt?: string | null; author: { name: string } } | null;
   mentions?: Array<{ mentionedUser: { id: string; name: string } }>;
 };
 
 type CollaboratorOption = { id: string; userId?: string | null; label: string };
 
 export function ActivitiesDashboard({
+  currentUserId,
+  currentUserRole,
   sections,
   collaborators,
   operations,
   metrics,
 }: {
+  currentUserId: string;
+  currentUserRole: string;
   sections: ActivitySection[];
   collaborators: CollaboratorOption[];
   operations: CollaboratorOption[];
@@ -140,13 +147,15 @@ export function ActivitiesDashboard({
           onClose={() => setActiveSection(null)}
           collaborators={collaborators}
           operations={operations}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
         />
       )}
     </div>
   );
 }
 
-function SectionDialog({ section, onClose, collaborators, operations }: { section: ActivitySection; onClose: () => void; collaborators: CollaboratorOption[]; operations: CollaboratorOption[] }) {
+function SectionDialog({ section, onClose, collaborators, operations, currentUserId, currentUserRole }: { section: ActivitySection; onClose: () => void; collaborators: CollaboratorOption[]; operations: CollaboratorOption[]; currentUserId: string; currentUserRole: string }) {
   const [selected, setSelected] = useState<ActivityItem | null>(section.items[0] || null);
   const [detailOpen, setDetailOpen] = useState(false);
   const getSearchText = useCallback((item: ActivityItem) => [item.title, item.status, item.detail, item.body].join(" "), []);
@@ -201,7 +210,7 @@ function SectionDialog({ section, onClose, collaborators, operations }: { sectio
                 <ArrowLeft className="h-4 w-4" />
                 Retour à la liste
               </Button>
-              {selected ? <ActivityDetail item={selected} collaborators={collaborators} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
+              {selected ? <ActivityDetail item={selected} collaborators={collaborators} currentUserId={currentUserId} currentUserRole={currentUserRole} /> : <p className="text-sm text-dtsc-muted">Sélectionnez un élément.</p>}
             </div>
           </div>
         </div>
@@ -566,7 +575,7 @@ function legalWorkflowTitle(workflowType: string) {
   return "Soumettre un dossier juridique";
 }
 
-function ActivityDetail({ item, collaborators }: { item: ActivityItem; collaborators: CollaboratorOption[] }) {
+function ActivityDetail({ item, collaborators, currentUserId, currentUserRole }: { item: ActivityItem; collaborators: CollaboratorOption[]; currentUserId: string; currentUserRole: string }) {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [commentsCursor, setCommentsCursor] = useState<string | null>(null);
   const [hasOlderComments, setHasOlderComments] = useState(false);
@@ -576,10 +585,19 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
   const [requestResponse, setRequestResponse] = useState("");
   const [visibleRequestResponse, setVisibleRequestResponse] = useState(item.requestResponse || "");
   const [statusMessage, setStatusMessage] = useState("");
+  const [replyingTo, setReplyingTo] = useState<CommentItem | null>(null);
+  const [editingComment, setEditingComment] = useState<CommentItem | null>(null);
+  const [deletingComment, setDeletingComment] = useState<CommentItem | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  const commentsThreadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setRequestResponse("");
     setVisibleRequestResponse(item.requestResponse || "");
+    setReplyingTo(null);
+    setEditingComment(null);
+    setDeletingComment(null);
+    setHighlightedCommentId(null);
   }, [item.id, item.requestResponse]);
 
   const loadComments = useCallback(async (cursor?: string | null) => {
@@ -597,6 +615,7 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
     setCommentsCursor(body?.nextCursor || null);
     setHasOlderComments(Boolean(body?.hasMore));
     setIsLoadingOlderComments(false);
+    return body;
   }, [item.entityType, item.id]);
 
   useEffect(() => {
@@ -611,13 +630,48 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
     const response = await fetch("/api/activities/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entityType: item.entityType, entityId: item.id, content: message, mentionedUserIds }),
+      body: JSON.stringify({ entityType: item.entityType, entityId: item.id, content: message, mentionedUserIds, replyToId: replyingTo?.id || "" }),
     });
     setStatusMessage(response.ok ? "Commentaire ajouté." : "Impossible d'ajouter le commentaire.");
     if (response.ok) {
       setMessage("");
       setMentionedUserIds([]);
+      setReplyingTo(null);
       await loadComments();
+    }
+  }
+
+  async function mutateComment(method: "PATCH" | "DELETE", comment: CommentItem, content?: string) {
+    const response = await fetch("/api/activities/comments", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: comment.id, content }),
+    });
+    setStatusMessage(response.ok ? "Commentaire mis à jour." : "Action impossible sur ce commentaire.");
+    if (response.ok) {
+      setEditingComment(null);
+      setDeletingComment(null);
+      await loadComments();
+    }
+  }
+
+  async function jumpToComment(commentId: string) {
+    let target = commentsThreadRef.current?.querySelector<HTMLElement>(`[data-activity-comment-id="${commentId}"]`);
+    let nextCursor = commentsCursor;
+    let canLoadMore = hasOlderComments;
+    let attempts = 0;
+    while (!target && canLoadMore && nextCursor && attempts < 20) {
+      const page = await loadComments(nextCursor);
+      nextCursor = page?.nextCursor || null;
+      canLoadMore = Boolean(page?.hasMore);
+      attempts += 1;
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      target = commentsThreadRef.current?.querySelector<HTMLElement>(`[data-activity-comment-id="${commentId}"]`);
+    }
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (target) {
+      setHighlightedCommentId(commentId);
+      window.setTimeout(() => setHighlightedCommentId(null), 1800);
     }
   }
 
@@ -708,7 +762,7 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
 
       <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <h4 className="flex items-center gap-2 font-black text-dtsc-ink"><MessageSquare className="h-4 w-4 text-cyan-500" /> Commentaires</h4>
-        <div className="mt-3 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page/50 p-2 pr-1">
+        <div ref={commentsThreadRef} className="mt-3 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-page/50 p-2 pr-1">
           {hasOlderComments && (
             <div className="flex justify-center">
               <Button type="button" variant="outline" size="sm" onClick={() => loadComments(commentsCursor)} disabled={isLoadingOlderComments} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
@@ -717,16 +771,24 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
             </div>
           )}
           {comments.map((comment) => (
-            <div key={comment.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+            <div key={comment.id} data-activity-comment-id={comment.id} className={`relative rounded-xl border border-dtsc-border bg-dtsc-page p-3 pr-14 transition ${highlightedCommentId === comment.id ? "dtsc-message-focus-pulse" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <p className="min-w-0 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{comment.author.name} · {formatEnumLabel(comment.author.role)} · {new Date(comment.createdAt).toLocaleString("fr-FR")}</p>
                 <ActionMenu
                   label="Actions du commentaire"
                   items={[
+                    { key: "reply", label: "Répondre", icon: MessageCircle, onSelect: () => setReplyingTo(comment) },
                     { key: "copy", label: "Copier le texte", icon: Copy, onSelect: () => copyText(comment.content) },
+                    ...(!comment.deletedAt && (comment.author.id === currentUserId || currentUserRole === "ADMIN") ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => setEditingComment(comment) }, { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setDeletingComment(comment) }] : []),
                   ]}
                 />
               </div>
+              {comment.replyTo && (
+                <button type="button" onClick={() => jumpToComment(comment.replyTo!.id)} className="mt-2 block w-full rounded-xl border-l-4 border-cyan-300 bg-dtsc-surface p-2 text-left text-xs text-dtsc-muted">
+                  <span className="block font-black text-dtsc-blue">{comment.replyTo.author.name}</span>
+                  <span className="mt-1 line-clamp-2 block">{comment.replyTo.deletedAt ? "Commentaire supprimé" : comment.replyTo.content}</span>
+                </button>
+              )}
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">
                 <ActivityMentionText content={comment.content} mentions={comment.mentions?.map((mention) => mention.mentionedUser) || []} />
               </p>
@@ -734,6 +796,7 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
           ))}
           {comments.length === 0 && <p className="text-sm text-dtsc-muted">Aucun commentaire pour le moment.</p>}
         </div>
+        {replyingTo && <div className="mt-3 flex items-start justify-between gap-3 rounded-xl border-l-4 border-cyan-300 bg-dtsc-page p-3 text-xs text-dtsc-muted"><span><strong className="text-dtsc-blue">Réponse à {replyingTo.author.name}</strong><span className="mt-1 line-clamp-2 block">{replyingTo.content}</span></span><button type="button" onClick={() => setReplyingTo(null)} className="font-black text-dtsc-blue">Annuler</button></div>}
         <form onSubmit={addComment} className="relative mt-3 flex flex-col gap-2 sm:flex-row">
           {mentionSuggestions.length > 0 && (
             <div className="absolute bottom-14 left-0 z-20 w-[min(26rem,100%)] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_18px_60px_rgba(0,23,54,0.18)]">
@@ -749,6 +812,15 @@ function ActivityDetail({ item, collaborators }: { item: ActivityItem; collabora
         </form>
         {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
       </div>
+      <Dialog open={Boolean(editingComment)} title="Modifier le commentaire" onClose={() => setEditingComment(null)} className="max-w-xl">
+        <form onSubmit={(event) => { event.preventDefault(); const value = String(new FormData(event.currentTarget).get("content") || ""); if (editingComment) void mutateComment("PATCH", editingComment, value); }} className="space-y-4">
+          <textarea name="content" defaultValue={editingComment?.content || ""} className="min-h-32 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" required />
+          <Button className="rounded-xl bg-[#002b5b] text-white">Enregistrer</Button>
+        </form>
+      </Dialog>
+      <Dialog open={Boolean(deletingComment)} title="Supprimer le commentaire" description="Le contenu sera masqué, sans casser les réponses associées." onClose={() => setDeletingComment(null)} className="max-w-xl">
+        <Button type="button" onClick={() => deletingComment && void mutateComment("DELETE", deletingComment)} className="rounded-xl bg-red-600 text-white hover:bg-red-700">Confirmer la suppression</Button>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 5 juin 2026
+Derniere mise a jour: 7 juin 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -216,6 +216,14 @@ Règles de visibilité:
 - les comptes `ADMIN` ou `SUPPORT` connectés en session `DTSC_INTERNAL` peuvent gérer les tickets support;
 - les messages utilisent `canUserAccessSupportTicket()` dans `lib/support-access.ts`, ce qui autorise le propriétaire du ticket ou l'équipe support DTSC interne uniquement.
 
+Depuis le 7 juin 2026, `TicketMessage` est un fil conversationnel paginé: `GET /api/support/tickets/[id]/messages?cursor=&limit=` retourne les messages visibles, `nextCursor` et `hasMore`; `POST` accepte `content` et `replyToId`; `PATCH` et `DELETE /api/support/tickets/[id]/messages/[messageId]` assurent le CRUD selon propriété ou rôle Support. La suppression renseigne `deletedAt` et remplace le contenu sans supprimer physiquement le message, afin de conserver les réponses et l'audit. Toutes les mutations vérifient origine, Zod, rate limiting et accès au ticket.
+
+### Commentaires opérationnels et menus contextuels
+
+Les fils métiers partagés utilisent `CooComment`. Le modèle possède désormais `replyToId` et `deletedAt`; `GET /api/activities/comments` reste paginé par curseur et retourne aussi le commentaire source. `POST` accepte une réponse, tandis que `PATCH` et `DELETE` appliquent propriété/RBAC, accès à l'objet, origine et rate limiting. La suppression est logique.
+
+`components/ui/action-menu.tsx` rend les menus `...` avec `createPortal(..., document.body)` et une position fixe `z-[1000]`. Cette primitive évite que les menus soient coupés par les conteneurs scrollables ou les contextes d'empilement; elle ferme le menu au scroll, au redimensionnement, au clic extérieur et avec `Escape`.
+
 Cause corrigée le 2 juin 2026: le filtrage historique exigeait `userId + organizationId actif`, ce qui masquait les tickets propres à l'utilisateur après changement de contexte (`GLOBAL_CLIENT` vers `ORGANIZATION`, ou inversement). Le formulaire de création ne déclenchait pas non plus de `router.refresh()` après `POST /api/support/tickets`, donnant l'impression que la création n'était pas persistée.
 
 Correction complémentaire du 3 juin 2026: la création d'un ticket pouvait être perçue comme échouée quand un effet secondaire post-création, notamment la notification des comptes Support DTSC, levait une erreur après la persistance. `POST /api/support/tickets` traite maintenant la création comme l'opération principale: validation Zod, contrôle d'origine, rate limiting, vérification de l'organisation active avant rattachement, audit/API log, réponse `201` dès que le ticket est créé et notifications rendues non bloquantes. Le formulaire client conserve aussi la référence du formulaire avant l'appel `fetch` pour éviter de réutiliser `event.currentTarget` après une attente réseau.
@@ -262,6 +270,9 @@ Refactor Administration [Entreprise]:
 
 - `app/enterprise-admin/page.tsx` reste un orchestrateur App Router: lecture session, contexte `ORGANIZATION`, vérification `canManageEnterpriseAdministration()`, appel du loader puis rendu du module.
 - Les chargements serveur sont regroupés dans `lib/enterprise/*`: `enterprise-admin-loader.ts`, `enterprise-members-loader.ts`, `enterprise-modules-loader.ts`, `enterprise-healthcare-loader.ts`, `enterprise-calendar-loader.ts` et `enterprise-workflows-loader.ts`.
+- `lib/enterprise/enterprise-navigation.ts` produit la navigation latérale à partir des modules de l'organisation qui sont simultanément activés et autorisés par les entitlements.
+- `/enterprise-modules/[moduleCode]` est une route privée dédiée. Elle réapplique l'appartenance, `canAccessEnterpriseModule()`, l'activation et le plan avant d'afficher les blocs d'activité et données sectorielles du module.
+- La désactivation via `PATCH /api/enterprise/[organizationId]/modules/[moduleId]` retire le module de la navigation de tous les collaborateurs au prochain rendu serveur. Les modules disponibles restent ceux du socle commun et du modèle sectoriel appliqué à l'organisation.
 - `enterprise-healthcare-loader.ts` ne lit `EnterpriseSectorRecord` que si l'organisation active possède `sectorCode = HEALTH_CARE`; les autres secteurs ne chargent pas les 300 enregistrements santé.
 - Les types partagés sérialisables sont centralisés dans `lib/enterprise/enterprise-admin-types.ts` afin que les loaders serveur et les composants client ne dépendent pas d'un fichier `"use client"`.
 - `components/enterprise/enterprise-administration-module.tsx` orchestre désormais les mutations et les états UI, tandis que `components/enterprise/enterprise-admin-panels.tsx` isole les panels `EnterpriseDashboardSummary`, `EnterpriseMembersPanel`, `EnterpriseModulesPanel`, `EnterpriseDepartmentsPanel`, `EnterprisePositionsPanel`, `EnterpriseWorkflowsPanel`, `EnterpriseCalendarPanel`, `EnterpriseBrandingSettingsPanel` et `EnterpriseHealthcareSection`.
@@ -2065,6 +2076,12 @@ Routes API ajoutees ou modifiees:
 | --- | --- | --- | --- |
 | `GET` | `/api/activities/comments?entityType=&entityId=` | session collaborateur ou role autorise | Lire les commentaires d'un element operationnel autorise |
 | `POST` | `/api/activities/comments` | session collaborateur ou role autorise | Ajouter un commentaire et notifier les participants concernes |
+| `PATCH` | `/api/activities/comments` | auteur du commentaire ou `ADMIN` autorise sur l'objet | Modifier le contenu d'un commentaire |
+| `DELETE` | `/api/activities/comments` | auteur du commentaire ou `ADMIN` autorise sur l'objet | Masquer logiquement un commentaire sans casser ses réponses |
+| `GET` | `/api/support/tickets/[id]/messages?cursor=&limit=` | propriétaire du ticket ou Support DTSC interne | Lire une tranche paginée de messages et leurs réponses |
+| `POST` | `/api/support/tickets/[id]/messages` | propriétaire du ticket ou Support DTSC interne | Créer un message ou une réponse avec `content` et `replyToId` optionnel |
+| `PATCH` | `/api/support/tickets/[id]/messages/[messageId]` | auteur du message ou Support DTSC interne | Modifier un message non supprimé |
+| `DELETE` | `/api/support/tickets/[id]/messages/[messageId]` | auteur du message ou Support DTSC interne | Masquer logiquement un message et conserver le fil |
 | `POST` | `/api/activities/requests` | collaborateur DTSC | Creer une demande directe vers un autre collaborateur avec notification ciblee |
 | `PATCH` | `/api/activities/requests/[id]` | demandeur ou destinataire implique | Mettre a jour une demande collaborateur: le destinataire peut repondre et faire avancer le statut, le demandeur peut annuler |
 | `PATCH` | `/api/activities/tasks/[id]` | collaborateur assigne/responsable | Changer l'avancement d'une tache et declarer un blocage lie si necessaire |
