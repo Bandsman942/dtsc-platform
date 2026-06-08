@@ -98,7 +98,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const record = await prisma.$transaction(async (tx) => {
       const previous = objectPayload(existing.payloadJson);
       const impacted = data.action ? await applyStockImpact(tx, organizationId, existing, data.action, session.userId) : previous;
-      const nextPayload: Prisma.InputJsonObject = {};
+      const nextPayload: Record<string, Prisma.InputJsonValue | null> = {};
       for (const [key, value] of Object.entries(impacted)) {
         if (value !== undefined) {
           nextPayload[key] = value;
