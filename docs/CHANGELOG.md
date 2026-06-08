@@ -414,6 +414,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Documentation AGENTS, README, documentation technique et pages légales actualisées pour les nouvelles données, notifications, messagerie et standards UX.
 # 2026-06-08
 
+- Correction du build Vercel PHARMACY: normalisation explicite du payload JSON Prisma lors des modifications afin d'exclure les valeurs `undefined` incompatibles avec `InputJsonObject`.
 - Implémentation de l'itération sectorielle `PHARMACY` dans Administration et Activités Entreprise: quinze sous-modules pharmacie, dashboard KPI, listes recherchables, formulaires responsives, détails et actions persistées.
 - Ajout des routes sécurisées `GET/POST/PATCH/DELETE /api/enterprise/[organizationId]/pharmacy`, avec validation Zod, contrôle des références par `organizationId`, permissions de module, rate limiting, audit et archivage logique.
 - Ajout des impacts stock transactionnels et idempotents pour ventes, réceptions et annulations, avec blocage des lots expirés, rappelés, en quarantaine ou insuffisants.
