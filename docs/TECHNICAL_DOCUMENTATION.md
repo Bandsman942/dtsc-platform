@@ -245,6 +245,15 @@ La migration `20260529113000_enterprise_department_responsible` ajoute `Enterpri
 
 Première itération active: `HEALTH_CARE`.
 
+Deuxième itération active: `PHARMACY`.
+
+- Stockage: `EnterpriseSectorRecord` avec `sectorCode = PHARMACY`, chargé uniquement par les loaders conditionnels `enterprise-pharmacy-loader.ts` et `enterprise-activity-pharmacy-loader.ts`.
+- API: `GET/POST /api/enterprise/[organizationId]/pharmacy` et `PATCH/DELETE /api/enterprise/[organizationId]/pharmacy/[recordId]`.
+- Sécurité: organisation cliente active, membership, entitlement, module activé, origine sur mutations, rate limiting, validation Zod, références même `organizationId`, audit et archivage logique.
+- Stock: ventes, réceptions et annulations appliquent leur impact de façon transactionnelle et idempotente sur le lot lié; les lots expirés, rappelés ou en quarantaine sont bloqués.
+- Interface: `components/enterprise/pharmacy-admin-workspace.tsx` fournit les sous-modules, dashboard, recherche, pagination, détails, formulaires responsives, combobox et actions persistées.
+- Migration: `20260608143000_pharmacy_sector_iteration` enrichit le template et les organisations PHARMACY existantes sans suppression de données.
+
 - Interface: `components/enterprise/healthcare-admin-workspace.tsx`, affichée dans `Administration [Entreprise]` uniquement pour les organisations `HEALTH_CARE`.
 - Sous-modules Administration santé: dashboard santé, patients, rendez-vous, consultations, dossiers médicaux, équipe médicale, laboratoire, pharmacie interne, facturation médicale, assurances/prises en charge, incidents qualité, documents médicaux, confidentialité médicale, paramètres santé et rapports santé.
 - Activités santé: les blocs santé de `Activités [Entreprise]` peuvent collecter des champs métier contextualisés et créent toujours une vraie `EnterpriseActivityRequest` liée à `organizationId`.

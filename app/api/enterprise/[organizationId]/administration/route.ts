@@ -286,11 +286,12 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, workflow });
   }
 
-  const previous = await prisma.organization.findUnique({ where: { id: organizationId }, select: { settingsJson: true, brandingJson: true } });
+  const previous = await prisma.organization.findUnique({ where: { id: organizationId }, select: { sectorCode: true, settingsJson: true, brandingJson: true } });
+  const previousSettings = jsonObject(previous?.settingsJson);
   const settingsJson = {
-    ...jsonObject(previous?.settingsJson),
+    ...previousSettings,
     defaultLanguage: data.defaultLanguage,
-    health: {
+    ...(previous?.sectorCode === "HEALTH_CARE" ? { health: {
       establishmentType: data.establishmentType,
       patientPrefix: data.patientPrefix,
       invoicePrefix: data.invoicePrefix,
@@ -304,7 +305,17 @@ export async function POST(req: Request, { params }: Params) {
       pharmacyAlertOptions: data.pharmacyAlertOptions || null,
       laboratoryAlertOptions: data.laboratoryAlertOptions || null,
       criticalIncidentOptions: data.criticalIncidentOptions || null,
-    },
+    } } : {}),
+    ...(previous?.sectorCode === "PHARMACY" ? { pharmacy: {
+      pharmacyType: data.pharmacyType || null,
+      currency: data.pharmacyCurrency || "USD",
+      salePrefix: data.pharmacySalePrefix || "VTE-",
+      orderPrefix: data.pharmacyOrderPrefix || "CMD-",
+      receiptPrefix: data.pharmacyReceiptPrefix || "REC-",
+      expiryAlertDays: data.pharmacyExpiryAlertDays,
+      fefoEnabled: data.pharmacyFefoEnabled,
+      negativeStockBlocked: data.pharmacyNegativeStockBlocked,
+    } } : {}),
   };
   const brandingJson = {
     ...jsonObject(previous?.brandingJson),
@@ -326,7 +337,7 @@ export async function POST(req: Request, { params }: Params) {
     },
   });
 
-  await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SETTINGS_UPDATED", entity: "Organization", entityId: organization.id, request: req, metadata: { organizationId, sector: "HEALTH_CARE" } });
+  await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SETTINGS_UPDATED", entity: "Organization", entityId: organization.id, request: req, metadata: { organizationId, sector: organization.sectorCode } });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, organization });
 }

@@ -412,3 +412,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout des helpers `lib/user-format.ts` pour afficher les dates du chatbot, messages et historiques selon la langue, le fuseau horaire et le format utilisateur.
 - Ajout des dictionnaires `locales/fr.json` et `locales/en.json`, avec application sur la navigation privée et les nouvelles interactions.
 - Documentation AGENTS, README, documentation technique et pages légales actualisées pour les nouvelles données, notifications, messagerie et standards UX.
+# 2026-06-08
+
+- Implémentation de l'itération sectorielle `PHARMACY` dans Administration et Activités Entreprise: quinze sous-modules pharmacie, dashboard KPI, listes recherchables, formulaires responsives, détails et actions persistées.
+- Ajout des routes sécurisées `GET/POST/PATCH/DELETE /api/enterprise/[organizationId]/pharmacy`, avec validation Zod, contrôle des références par `organizationId`, permissions de module, rate limiting, audit et archivage logique.
+- Ajout des impacts stock transactionnels et idempotents pour ventes, réceptions et annulations, avec blocage des lots expirés, rappelés, en quarantaine ou insuffisants.
+- Ajout de la migration idempotente `20260608143000_pharmacy_sector_iteration`, des loaders conditionnels PHARMACY, des blocs Activités spécifiques et de la documentation sectorielle.

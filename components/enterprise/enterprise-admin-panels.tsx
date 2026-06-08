@@ -3,6 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Building2, CalendarDays, ExternalLink, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
 import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
+import { PharmacyAdminWorkspace } from "@/components/enterprise/pharmacy-admin-workspace";
 import { AccordionItem } from "@/components/ui/accordion";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,11 @@ export const healthcareModuleCodes = new Set([
   "HEALTH_REPORTS",
 ]);
 
+export const pharmacyModuleCodes = new Set([
+  "MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_INVENTORY", "STOCK_RECEIPTS", "SALES_DISPENSATION", "PRESCRIPTIONS", "SUPPLIERS_ORDERS",
+  "CASH_INVOICES_PAYMENTS", "RETURNS_ADJUSTMENTS_LOSSES", "ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE", "PHARMACY_DOCUMENTS", "PHARMACY_REPORTS", "PHARMACY_SETTINGS",
+]);
+
 const healthcarePermissions = [
   "health.patients.view",
   "health.patients.create",
@@ -57,6 +63,15 @@ const healthcarePermissions = [
   "health.incidents.manage",
   "health.documents.download",
   "health.settings.manage",
+];
+const pharmacyPermissions = [
+  "pharmacy.products.view", "pharmacy.products.create", "pharmacy.products.update", "pharmacy.products.archive",
+  "pharmacy.batches.view", "pharmacy.batches.create", "pharmacy.batches.update", "pharmacy.batches.quarantine", "pharmacy.batches.recall",
+  "pharmacy.stock.view", "pharmacy.stock.inventory", "pharmacy.stock.adjust", "pharmacy.receipts.create", "pharmacy.receipts.validate",
+  "pharmacy.sales.view", "pharmacy.sales.create", "pharmacy.sales.validate", "pharmacy.sales.cancel",
+  "pharmacy.prescriptions.view", "pharmacy.prescriptions.validate", "pharmacy.suppliers.view", "pharmacy.purchase_orders.validate",
+  "pharmacy.cash.view", "pharmacy.cash.close", "pharmacy.adjustments.validate", "pharmacy.alerts.manage", "pharmacy.quality.manage",
+  "pharmacy.documents.view", "pharmacy.reports.view", "pharmacy.settings.update",
 ];
 
 const workflowCategories = [
@@ -167,6 +182,15 @@ export function EnterpriseHealthcareSection({
       />
     </AccordionItem>
   );
+}
+
+export function EnterprisePharmacySection({
+  organizationId, sectorCode, sectorRecords, activeMembers, departments, activePharmacyModuleCodes,
+}: {
+  organizationId: string; sectorCode: string | null; sectorRecords: EnterpriseSectorRecordItem[]; activeMembers: EnterpriseMemberItem[]; departments: EnterpriseDepartmentItem[]; activePharmacyModuleCodes: Set<string>;
+}) {
+  if (sectorCode !== "PHARMACY") return null;
+  return <AccordionItem title="Pharmacie - sous-modules métier" defaultOpen><PharmacyAdminWorkspace organizationId={organizationId} records={sectorRecords} members={activeMembers} departments={departments} activeModuleCodes={activePharmacyModuleCodes} /></AccordionItem>;
 }
 
 export function EnterpriseModulesPanel({
@@ -329,10 +353,12 @@ export function EnterpriseMembersPanel({
 }
 
 export function EnterprisePositionsPanel({
+  sectorCode,
   departments,
   positions,
   submitAdminMutation,
 }: {
+  sectorCode?: string | null;
   departments: EnterpriseDepartmentItem[];
   positions: EnterprisePositionItem[];
   submitAdminMutation: AdminMutationHandler;
@@ -360,7 +386,7 @@ export function EnterprisePositionsPanel({
           <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isKeyPosition" type="checkbox" /> Poste clé</label>
           <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isActive" type="checkbox" defaultChecked /> Poste actif</label>
           <div className="max-h-44 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-surface p-3">
-            {healthcarePermissions.map((permission) => (
+            {(sectorCode === "PHARMACY" ? pharmacyPermissions : healthcarePermissions).map((permission) => (
               <label key={permission} className="mb-2 flex items-center gap-2 text-xs font-bold text-dtsc-ink">
                 <input name="permissions" value={permission} type="checkbox" />
                 {permission}
@@ -441,11 +467,13 @@ export function EnterpriseDepartmentsPanel({
 }
 
 export function EnterpriseWorkflowsPanel({
+  sectorCode,
   workflows,
   departments,
   activeMembers,
   submitAdminMutation,
 }: {
+  sectorCode?: string | null;
   workflows: EnterpriseWorkflowItem[];
   departments: EnterpriseDepartmentItem[];
   activeMembers: EnterpriseMemberItem[];
@@ -460,7 +488,7 @@ export function EnterpriseWorkflowsPanel({
           <Input name="labelFr" placeholder="Titre de la procédure" required />
           <Input name="labelEn" placeholder="Procedure title" required />
           <select name="category" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            {workflowCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+            {(sectorCode === "PHARMACY" ? ["Vente comptoir", "Réception stock", "Inventaire", "Gestion péremptions", "Réapprovisionnement", "Gestion retour client", "Gestion rappel de lot", "Caisse", "Incident qualité", "Ordonnance / prescription", "Conservation / stockage", "Administration"] : workflowCategories).map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
           <select name="departmentId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
             <option value="">Département concerné</option>
@@ -500,14 +528,17 @@ export function EnterpriseWorkflowsPanel({
 }
 
 export function EnterpriseBrandingSettingsPanel({
+  sectorCode,
   organization,
   submitAdminMutation,
 }: {
+  sectorCode?: string | null;
   organization: EnterpriseAdminOrganization;
   submitAdminMutation: AdminMutationHandler;
 }) {
   const settings = jsonObject(organization.settingsJson);
   const healthSettings = jsonObject(settings.health);
+  const pharmacySettings = jsonObject(settings.pharmacy);
   const branding = jsonObject(organization.brandingJson);
 
   return (
@@ -531,7 +562,19 @@ export function EnterpriseBrandingSettingsPanel({
             </select>
             <Input name="timezone" defaultValue={organization.timezone || "Africa/Kinshasa"} placeholder="Fuseau horaire" />
           </section>
-          <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+          {sectorCode === "PHARMACY" ? <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-600 md:col-span-2">Paramètres pharmacie</h3>
+            <Input name="pharmacyType" defaultValue={nestedJsonText(pharmacySettings, "pharmacyType")} placeholder="Officine, pharmacie interne, dépôt léger..." />
+            <Input name="pharmacyCurrency" defaultValue={nestedJsonText(pharmacySettings, "currency") || "USD"} placeholder="Devise" />
+            <Input name="pharmacySalePrefix" defaultValue={nestedJsonText(pharmacySettings, "salePrefix") || "VTE-"} placeholder="Préfixe vente" />
+            <Input name="pharmacyOrderPrefix" defaultValue={nestedJsonText(pharmacySettings, "orderPrefix") || "CMD-"} placeholder="Préfixe commande" />
+            <Input name="pharmacyReceiptPrefix" defaultValue={nestedJsonText(pharmacySettings, "receiptPrefix") || "REC-"} placeholder="Préfixe réception" />
+            <Input name="pharmacyExpiryAlertDays" type="number" defaultValue={String(pharmacySettings.expiryAlertDays || 90)} placeholder="Alerte péremption en jours" />
+            <input type="hidden" name="pharmacyFefoEnabled" value="off" />
+            <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="pharmacyFefoEnabled" type="checkbox" defaultChecked={pharmacySettings.fefoEnabled !== false} /> Rotation FEFO activée</label>
+            <input type="hidden" name="pharmacyNegativeStockBlocked" value="off" />
+            <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="pharmacyNegativeStockBlocked" type="checkbox" defaultChecked={pharmacySettings.negativeStockBlocked !== false} /> Bloquer le stock négatif</label>
+          </section> : <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
             <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-600 md:col-span-2">Paramètres santé</h3>
             <select name="establishmentType" defaultValue={nestedJsonText(healthSettings, "establishmentType") || "CLINIC"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
               <option value="CABINET">Cabinet</option>
@@ -552,7 +595,7 @@ export function EnterpriseBrandingSettingsPanel({
             <Input name="criticalIncidentOptions" defaultValue={nestedJsonText(healthSettings, "criticalIncidentOptions")} placeholder="Incidents critiques" />
             <input type="hidden" name="enhancedMedicalPrivacy" value="off" />
             <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="enhancedMedicalPrivacy" type="checkbox" defaultChecked={healthSettings.enhancedMedicalPrivacy !== false} /> Confidentialité médicale renforcée</label>
-          </section>
+          </section>}
           <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <SlidersHorizontal className="h-4 w-4" />
             Enregistrer les paramètres

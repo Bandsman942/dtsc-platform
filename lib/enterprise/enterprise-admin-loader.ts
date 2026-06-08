@@ -1,6 +1,7 @@
 import type { EnterpriseAdminDataset } from "@/lib/enterprise/enterprise-admin-types";
 import { getEnterpriseCalendarDataset } from "@/lib/enterprise/enterprise-calendar-loader";
 import { getEnterpriseHealthcareDataset } from "@/lib/enterprise/enterprise-healthcare-loader";
+import { getEnterprisePharmacyDataset } from "@/lib/enterprise/enterprise-pharmacy-loader";
 import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members-loader";
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
@@ -58,7 +59,9 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     }),
     getEnterpriseWorkflowsDataset(organizationId),
     getEnterpriseCalendarDataset(organizationId),
-    getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
+    organization.sectorCode === "PHARMACY"
+      ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode)
+      : getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
   ]);
 
   return toJson<EnterpriseAdminDataset>({

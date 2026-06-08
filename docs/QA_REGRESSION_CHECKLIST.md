@@ -97,6 +97,11 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Utilisateur A ne peut pas appeler les routes `/api/enterprise/[organizationId]/*` de B.
 - Un admin entreprise A ne peut pas ajouter, modifier ou lire des objets de B par changement manuel d'URL.
 - Les donnees `HEALTH_CARE` ne se chargent que si l'organisation active a `sectorCode = HEALTH_CARE`.
+- Les donnees `PHARMACY` ne se chargent que si l'organisation active a `sectorCode = PHARMACY`.
+- Les routes PHARMACY refusent les produits, lots, fournisseurs, commandes, ventes et ordonnances d'une autre organisation.
+- Une vente PHARMACY validee diminue le lot une seule fois; une annulation restaure le stock; une reception validee augmente le lot une seule fois.
+- Les lots expires, rappeles, en quarantaine ou insuffisants sont refuses lors d'une vente.
+- Administration PHARMACY affiche uniquement ses sous-modules pharmacie et Activites PHARMACY utilise des formulaires distincts avec destinataire.
 - Un contexte `GLOBAL_CLIENT` ne peut pas lire les donnees d'une organisation via ancien `organizationId`.
 
 ## 5. Console DTSC

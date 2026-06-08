@@ -8,12 +8,14 @@ import {
   EnterpriseDashboardSummary,
   EnterpriseDepartmentsPanel,
   EnterpriseHealthcareSection,
+  EnterprisePharmacySection,
   EnterpriseMembersPanel,
   EnterpriseModulesPanel,
   EnterprisePositionsPanel,
   EnterpriseRecentRequestsPanel,
   EnterpriseWorkflowsPanel,
   healthcareModuleCodes,
+  pharmacyModuleCodes,
 } from "@/components/enterprise/enterprise-admin-panels";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
@@ -39,10 +41,11 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "INVITED"), [members]);
   const memberNameById = useMemo(() => new Map(activeMembers.map((member) => [member.user.id, member.user.name])), [activeMembers]);
   const visibleModules = useMemo(
-    () => modules.filter((enterpriseModule) => enterpriseModule.isCore || organization.sectorCode !== "HEALTH_CARE" || healthcareModuleCodes.has(enterpriseModule.moduleCode)),
+    () => modules.filter((enterpriseModule) => enterpriseModule.isCore || (organization.sectorCode !== "HEALTH_CARE" && organization.sectorCode !== "PHARMACY") || (organization.sectorCode === "HEALTH_CARE" ? healthcareModuleCodes.has(enterpriseModule.moduleCode) : pharmacyModuleCodes.has(enterpriseModule.moduleCode))),
     [modules, organization.sectorCode],
   );
   const activeHealthcareModuleCodes = useMemo(() => new Set(modules.filter((enterpriseModule) => enterpriseModule.isEnabled).map((enterpriseModule) => enterpriseModule.moduleCode)), [modules]);
+  const activePharmacyModuleCodes = activeHealthcareModuleCodes;
 
   async function submitAdminMutation(event: FormEvent<HTMLFormElement>, successMessage: string) {
     event.preventDefault();
@@ -57,6 +60,8 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
     payload.isEnabled = formData.getAll("isEnabled").includes("on") || !formData.has("isEnabled");
     payload.isKeyPosition = formData.getAll("isKeyPosition").includes("on");
     payload.enhancedMedicalPrivacy = formData.getAll("enhancedMedicalPrivacy").includes("on") || !formData.has("enhancedMedicalPrivacy");
+    payload.pharmacyFefoEnabled = formData.getAll("pharmacyFefoEnabled").includes("on") || !formData.has("pharmacyFefoEnabled");
+    payload.pharmacyNegativeStockBlocked = formData.getAll("pharmacyNegativeStockBlocked").includes("on") || !formData.has("pharmacyNegativeStockBlocked");
     const response = await fetch(`/api/enterprise/${organization.id}/administration`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -128,6 +133,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
           activeHealthcareModuleCodes={activeHealthcareModuleCodes}
           locale={locale}
         />
+        <EnterprisePharmacySection organizationId={organization.id} sectorCode={organization.sectorCode} sectorRecords={sectorRecords} activeMembers={activeMembers} departments={departments} activePharmacyModuleCodes={activePharmacyModuleCodes} />
 
         <EnterpriseModulesPanel organization={organization} visibleModules={visibleModules} toggleModule={toggleModule} />
 
@@ -136,7 +142,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
         <AccordionItem title="Collaborateurs, postes et permissions" defaultOpen>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.75fr)]">
             <EnterpriseMembersPanel members={members} pendingMembers={pendingMembers} activeMembers={activeMembers} inviteMember={inviteMember} />
-            <EnterprisePositionsPanel departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} />
+            <EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} />
           </div>
         </AccordionItem>
 
@@ -148,13 +154,14 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
         />
 
         <EnterpriseWorkflowsPanel
+          sectorCode={organization.sectorCode}
           workflows={workflows}
           departments={departments}
           activeMembers={activeMembers}
           submitAdminMutation={submitAdminMutation}
         />
 
-        <EnterpriseBrandingSettingsPanel organization={organization} submitAdminMutation={submitAdminMutation} />
+        <EnterpriseBrandingSettingsPanel sectorCode={organization.sectorCode} organization={organization} submitAdminMutation={submitAdminMutation} />
       </Accordion>
 
       <EnterpriseRecentRequestsPanel recentRequests={recentRequests} />

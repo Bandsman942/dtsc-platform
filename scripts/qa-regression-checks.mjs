@@ -53,8 +53,12 @@ const enterpriseAdminLoader = read("lib/enterprise/enterprise-admin-loader.ts");
 const enterpriseActivitiesLoader = read("lib/enterprise/enterprise-activities-loader.ts");
 const enterpriseHealthcareLoader = read("lib/enterprise/enterprise-healthcare-loader.ts");
 const enterpriseActivityHealthcareLoader = read("lib/enterprise/enterprise-activity-healthcare-loader.ts");
+const enterprisePharmacyLoader = read("lib/enterprise/enterprise-pharmacy-loader.ts");
+const enterpriseActivityPharmacyLoader = read("lib/enterprise/enterprise-activity-pharmacy-loader.ts");
 const enterpriseAdminApi = read("app/api/enterprise/[organizationId]/administration/route.ts");
 const enterpriseHealthcareApi = read("app/api/enterprise/[organizationId]/healthcare/route.ts");
+const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
+const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
 const collaboratorsMessagesRoute = read("app/api/collaborators/groups/[id]/messages/route.ts");
@@ -296,6 +300,26 @@ check(
     && containsAll(enterpriseAdminLoader, ["getOrganizationEntitlements", "entitlements"])
     && containsAll(enterpriseActivitiesLoader, ["getOrganizationEntitlements", "entitlements"])
     && containsAll(read("lib/enterprise/enterprise-healthcare-loader.ts"), ["getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+);
+
+check(
+  "PHARMACY: données chargées uniquement pour le secteur et modules autorisés",
+  containsAll(enterprisePharmacyLoader, ['sectorCode !== PHARMACY_SECTOR_CODE', "getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+    && containsAll(enterpriseActivityPharmacyLoader, ['sectorCode !== PHARMACY_SECTOR_CODE', "getOrganizationEntitlements", "moduleCode: { in: allowedModuleCodes }"])
+    && containsAll(enterpriseAdminLoader, ["getEnterprisePharmacyDataset", 'organization.sectorCode === "PHARMACY"'])
+    && containsAll(enterpriseActivitiesLoader, ["getEnterpriseActivityPharmacyRecords", 'organization.sectorCode === "PHARMACY"'])
+);
+
+check(
+  "PHARMACY: routes sécurisées, relations isolées et stock transactionnel",
+  containsAll(enterprisePharmacyApi, ["isSameOriginRequest", "await rateLimit", "enterprisePharmacyRecordSchema.safeParse", "canAccessEnterpriseModule", "organizationId", "validateReferences"])
+    && containsAll(enterprisePharmacyRecordApi, ["isSameOriginRequest", "await rateLimit", "canAccessEnterpriseModule", "prisma.$transaction", "BATCH_NOT_SELLABLE", "INSUFFICIENT_STOCK", "stockImpactApplied"])
+);
+
+check(
+  "PHARMACY: Administration et Activités utilisent des vues et formulaires dédiés",
+  containsAll(read("components/enterprise/pharmacy-admin-workspace.tsx"), ["PHARMACY_DASHBOARD", "ListControls", "RecordSelect", "SALES_DISPENSATION", "STOCK_RECEIPTS", "BATCH_EXPIRY"])
+    && containsAll(read("components/enterprise/enterprise-activities-panels.tsx"), ["pharmacyActivityFields", "REQUEST_REPLENISHMENT", "REQUEST_STOCK_ADJUSTMENT_VALIDATION", "REQUEST_PHARMACIST_OPINION", "SUBMIT_INVENTORY"])
 );
 
 check(

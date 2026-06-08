@@ -1,5 +1,6 @@
 import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
 import { getEnterpriseActivityHealthcareRecords } from "@/lib/enterprise/enterprise-activity-healthcare-loader";
+import { getEnterpriseActivityPharmacyRecords } from "@/lib/enterprise/enterprise-activity-pharmacy-loader";
 import { getEnterpriseActivityMembers } from "@/lib/enterprise/enterprise-activity-members-loader";
 import { getEnterpriseActivityRequests } from "@/lib/enterprise/enterprise-activity-requests-loader";
 import { getEnterpriseActivityWorkflows } from "@/lib/enterprise/enterprise-activity-workflows-loader";
@@ -44,7 +45,9 @@ export async function getEnterpriseActivitiesDataset({
     getEnterpriseActivityBlocks(organizationId),
     getEnterpriseActivityRequests({ organizationId, userId, membershipRole }),
     getEnterpriseActivityMembers(organizationId),
-    getEnterpriseActivityHealthcareRecords(organizationId, organization.sectorCode),
+    organization.sectorCode === "PHARMACY"
+      ? getEnterpriseActivityPharmacyRecords(organizationId, organization.sectorCode)
+      : getEnterpriseActivityHealthcareRecords(organizationId, organization.sectorCode),
     getEnterpriseActivityWorkflows(organizationId),
   ]);
 

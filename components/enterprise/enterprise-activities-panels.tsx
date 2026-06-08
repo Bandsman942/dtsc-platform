@@ -24,7 +24,7 @@ type ActivityField = {
   label: string;
   placeholder: string;
   type?: "textarea" | "text" | "number" | "select";
-  source?: "patients" | "labRequests" | "pharmacyItems" | "members";
+  source?: "patients" | "labRequests" | "pharmacyItems" | "members" | "pharmacyProducts" | "pharmacyBatches" | "pharmacySuppliers" | "pharmacySales" | "pharmacyPrescriptions" | "pharmacyInventories" | "pharmacyCash";
   options?: string[];
   required?: boolean;
 };
@@ -76,13 +76,73 @@ const healthActivityFields: Record<string, ActivityField[]> = {
   ],
 };
 
+const pharmacyActivityFields: Record<string, ActivityField[]> = {
+  REPORT_LOW_STOCK: [
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts", required: true },
+    { name: "batch", label: "Lot", placeholder: "Sélectionner un lot", source: "pharmacyBatches" },
+    { name: "remainingQuantity", label: "Quantité restante", placeholder: "Quantité restante", type: "number", required: true },
+    { name: "urgency", label: "Urgence", placeholder: "Urgence", type: "select", options: ["LOW", "NORMAL", "HIGH", "CRITICAL"], required: true },
+  ],
+  REQUEST_REPLENISHMENT: [
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts", required: true },
+    { name: "quantity", label: "Quantité demandée", placeholder: "Quantité demandée", type: "number", required: true },
+    { name: "supplier", label: "Fournisseur suggéré", placeholder: "Sélectionner un fournisseur", source: "pharmacySuppliers" },
+    { name: "desiredDate", label: "Date souhaitée", placeholder: "Date souhaitée", required: true },
+  ],
+  DECLARE_NEAR_EXPIRY: [
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts", required: true },
+    { name: "batch", label: "Lot", placeholder: "Sélectionner un lot", source: "pharmacyBatches", required: true },
+    { name: "quantity", label: "Quantité concernée", placeholder: "Quantité concernée", type: "number", required: true },
+    { name: "proposedAction", label: "Action proposée", placeholder: "Retour, promotion contrôlée, quarantaine...", type: "textarea", required: true },
+  ],
+  REQUEST_PURCHASE_VALIDATION: [
+    { name: "supplier", label: "Fournisseur", placeholder: "Sélectionner un fournisseur", source: "pharmacySuppliers", required: true },
+    { name: "products", label: "Produits demandés", placeholder: "Produits et quantités", type: "textarea", required: true },
+    { name: "estimatedAmount", label: "Montant estimé", placeholder: "Montant estimé", type: "number", required: true },
+  ],
+  REQUEST_STOCK_ADJUSTMENT_VALIDATION: [
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts", required: true },
+    { name: "batch", label: "Lot", placeholder: "Sélectionner un lot", source: "pharmacyBatches", required: true },
+    { name: "adjustmentType", label: "Type ajustement", placeholder: "Perte, casse, inventaire...", required: true },
+    { name: "quantity", label: "Quantité", placeholder: "Quantité", type: "number", required: true },
+  ],
+  SUBMIT_CASH_REPORT: [
+    { name: "period", label: "Période", placeholder: "Période concernée", required: true },
+    { name: "cashSession", label: "Caisse concernée", placeholder: "Sélectionner une caisse", source: "pharmacyCash" },
+    { name: "declaredAmount", label: "Montant déclaré", placeholder: "Montant déclaré", type: "number", required: true },
+    { name: "variance", label: "Écart éventuel", placeholder: "Écart éventuel", type: "number" },
+  ],
+  REPORT_SALE_ANOMALY: [
+    { name: "sale", label: "Vente liée", placeholder: "Sélectionner une vente", source: "pharmacySales" },
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts" },
+    { name: "anomalyType", label: "Type anomalie", placeholder: "Type anomalie", required: true },
+    { name: "criticity", label: "Criticité", placeholder: "Criticité", type: "select", options: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], required: true },
+  ],
+  REPORT_QUALITY_INCIDENT: [
+    { name: "incidentType", label: "Type incident", placeholder: "Qualité, effet indésirable, conservation...", required: true },
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts" },
+    { name: "batch", label: "Lot", placeholder: "Sélectionner un lot", source: "pharmacyBatches" },
+    { name: "immediateAction", label: "Action immédiate", placeholder: "Action immédiate réalisée", type: "textarea", required: true },
+  ],
+  REQUEST_PHARMACIST_OPINION: [
+    { name: "product", label: "Produit", placeholder: "Sélectionner un produit", source: "pharmacyProducts" },
+    { name: "prescription", label: "Ordonnance", placeholder: "Sélectionner une ordonnance", source: "pharmacyPrescriptions" },
+    { name: "context", label: "Contexte", placeholder: "Contexte de dispensation", type: "textarea", required: true },
+    { name: "question", label: "Question", placeholder: "Avis attendu", type: "textarea", required: true },
+  ],
+  SUBMIT_INVENTORY: [
+    { name: "inventory", label: "Session inventaire", placeholder: "Sélectionner un inventaire", source: "pharmacyInventories", required: true },
+    { name: "varianceSummary", label: "Écarts constatés", placeholder: "Résumé des écarts", type: "textarea", required: true },
+  ],
+};
+
 function payloadText(record: EnterpriseActivitySectorRecordItem, key: string) {
   const value = record.payloadJson?.[key];
   return typeof value === "string" ? value : "";
 }
 
 function activityFields(blockCode: string) {
-  return healthActivityFields[blockCode] || defaultActivityFields;
+  return healthActivityFields[blockCode] || pharmacyActivityFields[blockCode] || defaultActivityFields;
 }
 
 export function EnterpriseActivitiesDashboard({ organization }: { organization: EnterpriseActivitiesOrganization }) {
@@ -101,12 +161,14 @@ export function EnterpriseActivitiesDashboard({ organization }: { organization: 
 }
 
 export function EnterpriseActivityBlocksPanel({
+  sectorCode,
   blocks,
   selectedBlockCode,
   selectedBlock,
   onSelectBlock,
   onOpenForm,
 }: {
+  sectorCode?: string | null;
   blocks: EnterpriseActivityBlockItem[];
   selectedBlockCode: string;
   selectedBlock: EnterpriseActivityBlockItem | null;
@@ -114,7 +176,7 @@ export function EnterpriseActivityBlocksPanel({
   onOpenForm: () => void;
 }) {
   return (
-    <AccordionItem title="Actions santé" defaultOpen>
+    <AccordionItem title={sectorCode === "PHARMACY" ? "Actions pharmacie" : sectorCode === "HEALTH_CARE" ? "Actions santé" : "Actions entreprise"} defaultOpen>
       <div className="flex max-w-full gap-2 overflow-x-auto pb-2">
         {blocks.map((block) => {
           const active = selectedBlockCode === block.blockCode;
@@ -246,6 +308,22 @@ export function EnterpriseHealthcareActivitiesPanel({ sectorRecords }: { sectorR
   );
 }
 
+export function EnterprisePharmacyActivitiesPanel({ sectorRecords }: { sectorRecords: EnterpriseActivitySectorRecordItem[] }) {
+  if (!sectorRecords.length) return null;
+  const batches = sectorRecords.filter((record) => record.moduleCode === "BATCH_EXPIRY");
+  const today = new Date().toISOString().slice(0, 10);
+  const near = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+  const metrics = [
+    ["Produits", sectorRecords.filter((record) => record.moduleCode === "MEDICINES_PRODUCTS").length],
+    ["Lots actifs", batches.filter((record) => record.status === "ACTIVE").length],
+    ["Ruptures", sectorRecords.filter((record) => record.status === "OUT_OF_STOCK" || record.status === "DEPLETED").length],
+    ["Péremptions proches", batches.filter((record) => payloadText(record, "expiryDate") >= today && payloadText(record, "expiryDate") <= near).length],
+    ["Ventes", sectorRecords.filter((record) => record.moduleCode === "SALES_DISPENSATION").length],
+    ["Alertes ouvertes", sectorRecords.filter((record) => record.moduleCode === "ALERTS_EXPIRY_LOW_STOCK" && !["RESOLVED", "CLOSED"].includes(record.status)).length],
+  ];
+  return <AccordionItem title="Repères pharmacie"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{metrics.map(([label, value]) => <article key={label} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-600">{label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{value}</p></article>)}</div></AccordionItem>;
+}
+
 export function EnterpriseActivityFormDialog({
   organization,
   selectedBlockCode,
@@ -270,6 +348,13 @@ export function EnterpriseActivityFormDialog({
   const patients = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [sectorRecords]);
   const labRequests = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "LABORATORY"), [sectorRecords]);
   const pharmacyItems = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "INTERNAL_PHARMACY"), [sectorRecords]);
+  const pharmacyProducts = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "MEDICINES_PRODUCTS"), [sectorRecords]);
+  const pharmacyBatches = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "BATCH_EXPIRY"), [sectorRecords]);
+  const pharmacySuppliers = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "SUPPLIERS_ORDERS" && payloadText(record, "recordKind") === "SUPPLIER"), [sectorRecords]);
+  const pharmacySales = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "SALES_DISPENSATION"), [sectorRecords]);
+  const pharmacyPrescriptions = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "PRESCRIPTIONS"), [sectorRecords]);
+  const pharmacyInventories = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "STOCK_INVENTORY"), [sectorRecords]);
+  const pharmacyCash = useMemo(() => sectorRecords.filter((record) => record.moduleCode === "CASH_INVOICES_PAYMENTS"), [sectorRecords]);
 
   function fieldOptions(field: ActivityField) {
     if (field.source === "patients") {
@@ -283,6 +368,10 @@ export function EnterpriseActivityFormDialog({
     }
     if (field.source === "members") {
       return members.map((member) => ({ value: member.user.id, label: member.user.name }));
+    }
+    const pharmacySources: Partial<Record<NonNullable<ActivityField["source"]>, EnterpriseActivitySectorRecordItem[]>> = { pharmacyProducts, pharmacyBatches, pharmacySuppliers, pharmacySales, pharmacyPrescriptions, pharmacyInventories, pharmacyCash };
+    if (field.source && pharmacySources[field.source]) {
+      return pharmacySources[field.source]?.map((record) => ({ value: record.id, label: record.title })) || [];
     }
     return (field.options || []).map((option) => ({ value: option, label: option }));
   }

@@ -7,6 +7,7 @@ import {
   EnterpriseActivityBlocksPanel,
   EnterpriseActivityFormDialog,
   EnterpriseHealthcareActivitiesPanel,
+  EnterprisePharmacyActivitiesPanel,
   EnterpriseRequestsPanel,
   EnterpriseWorkflowsPanel,
 } from "@/components/enterprise/enterprise-activities-panels";
@@ -24,13 +25,15 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
 
       <Accordion>
         <EnterpriseActivityBlocksPanel
+          sectorCode={organization.sectorCode}
           blocks={blocks}
           selectedBlockCode={selectedBlockCode}
           selectedBlock={selectedBlock}
           onSelectBlock={setSelectedBlockCode}
           onOpenForm={() => setFormOpen(true)}
         />
-        <EnterpriseHealthcareActivitiesPanel sectorRecords={sectorRecords} />
+        {organization.sectorCode === "HEALTH_CARE" && <EnterpriseHealthcareActivitiesPanel sectorRecords={sectorRecords} />}
+        {organization.sectorCode === "PHARMACY" && <EnterprisePharmacyActivitiesPanel sectorRecords={sectorRecords} />}
         <EnterpriseWorkflowsPanel workflows={workflows} />
         <EnterpriseRequestsPanel requests={requests} />
       </Accordion>
