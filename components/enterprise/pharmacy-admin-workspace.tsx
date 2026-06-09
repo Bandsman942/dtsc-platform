@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import type { EnterpriseDepartmentItem, EnterpriseMemberItem, EnterpriseSectorRecordItem } from "@/lib/enterprise/enterprise-admin-types";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { PharmacyProductsWorkspace } from "@/components/enterprise/pharmacy-products-workspace";
 
 type ModuleCode =
   | "PHARMACY_DASHBOARD"
@@ -140,7 +141,7 @@ export function PharmacyAdminWorkspace({ organizationId, records, members, depar
       <div className="flex max-w-full gap-2 overflow-x-auto pb-2">
         {enabled.map((item) => <button key={item.code} type="button" onClick={() => setActiveCode(item.code)} className={`shrink-0 rounded-2xl border px-4 py-3 text-left ${activeCode === item.code ? "border-emerald-300 bg-emerald-400/14 text-emerald-700" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}><span className="block max-w-56 truncate text-sm font-black">{item.label}</span><span className="mt-1 block max-w-56 truncate text-xs font-semibold text-dtsc-muted">{item.description}</span></button>)}
       </div>
-      {activeCode === "PHARMACY_DASHBOARD" ? <Dashboard records={records} /> : (
+      {activeCode === "PHARMACY_DASHBOARD" ? <Dashboard records={records} /> : activeCode === "MEDICINES_PRODUCTS" ? <PharmacyProductsWorkspace organizationId={organizationId} /> : (
         <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black text-dtsc-ink">{active?.label}</h3><p className="text-sm text-dtsc-muted">{active?.description}</p></div><Button type="button" onClick={() => openCreate(activeCode)} className="rounded-xl bg-[#002b5b] text-white"><Plus className="h-4 w-4" />{active?.createLabel}</Button></div>
           <div className="mt-4"><ListControls query={list.query} onQueryChange={list.setQuery} page={list.page} pageCount={list.pageCount} totalCount={list.totalCount} filteredCount={list.filteredCount} placeholder="Rechercher..." onPageChange={list.setPage} /></div>

@@ -1,4 +1,13 @@
 import { z } from "zod";
+import {
+  PHARMACY_ADMINISTRATION_ROUTES,
+  PHARMACY_CURRENCIES,
+  PHARMACY_PRODUCT_CATEGORIES,
+  PHARMACY_PRODUCT_FORMS,
+  PHARMACY_PRODUCT_STATUSES,
+  PHARMACY_PRODUCT_UNITS,
+  PHARMACY_STORAGE_TYPES,
+} from "@/lib/pharmacy-products";
 
 export const signUpSchema = z.object({
   name: z.string().min(2).max(120),
@@ -485,6 +494,74 @@ export const enterprisePharmacyRecordUpdateSchema = enterprisePharmacyRecordBase
   action: z.enum(["submit", "validate", "receive", "pay", "cancel", "close", "resolve", "quarantine", "recall", "archive"]).optional(),
   actionReason: z.string().max(800).optional().or(z.literal("")),
 });
+
+const optionalProductNumber = z.union([z.literal(""), z.coerce.number().min(0)]).optional().nullable();
+const pharmacyProductBaseSchema = z.object({
+  name: z.string().trim().min(2).max(180),
+  genericName: z.string().trim().max(180).optional().or(z.literal("")),
+  internalCode: z.string().trim().min(1).max(100),
+  barcode: z.string().trim().max(160).optional().or(z.literal("")),
+  manufacturer: z.string().trim().max(180).optional().or(z.literal("")),
+  brand: z.string().trim().max(180).optional().or(z.literal("")),
+  shortDescription: z.string().trim().max(1000).optional().or(z.literal("")),
+  category: z.enum(PHARMACY_PRODUCT_CATEGORIES),
+  subcategory: z.string().trim().max(140).optional().or(z.literal("")),
+  pharmaceuticalForm: z.enum(PHARMACY_PRODUCT_FORMS),
+  dosage: z.string().trim().max(120).optional().or(z.literal("")),
+  saleUnit: z.enum(PHARMACY_PRODUCT_UNITS),
+  stockUnit: z.enum(PHARMACY_PRODUCT_UNITS),
+  packaging: z.string().trim().max(180).optional().or(z.literal("")),
+  administrationRoute: z.enum(PHARMACY_ADMINISTRATION_ROUTES).optional().or(z.literal("")),
+  prescriptionRequired: z.coerce.boolean().default(false),
+  pharmacistValidationRequired: z.coerce.boolean().default(false),
+  controlledProduct: z.coerce.boolean().default(false),
+  otcAllowed: z.coerce.boolean().default(true),
+  maxQuantityPerSale: z.union([z.literal(""), z.coerce.number().int().min(1).max(1_000_000)]).optional().nullable(),
+  genericSubstitutionAllowed: z.coerce.boolean().default(false),
+  saleWarningMessage: z.string().trim().max(1000).optional().or(z.literal("")),
+  stockTrackingEnabled: z.coerce.boolean().default(true),
+  minStock: z.coerce.number().min(0).max(1_000_000_000).default(0),
+  maxStock: optionalProductNumber,
+  safetyStock: optionalProductNumber,
+  defaultLocation: z.string().trim().max(180).optional().or(z.literal("")),
+  shelf: z.string().trim().max(120).optional().or(z.literal("")),
+  unitsPerPackage: optionalProductNumber,
+  storageType: z.enum(PHARMACY_STORAGE_TYPES).optional().or(z.literal("")),
+  tempMin: z.union([z.literal(""), z.coerce.number().min(-100).max(100)]).optional().nullable(),
+  tempMax: z.union([z.literal(""), z.coerce.number().min(-100).max(100)]).optional().nullable(),
+  lightSensitive: z.coerce.boolean().default(false),
+  humiditySensitive: z.coerce.boolean().default(false),
+  refrigerated: z.coerce.boolean().default(false),
+  storageNotes: z.string().trim().max(1200).optional().or(z.literal("")),
+  referencePurchasePrice: optionalProductNumber,
+  referenceSalePrice: optionalProductNumber,
+  currency: z.enum(PHARMACY_CURRENCIES).default("USD"),
+  targetMargin: z.union([z.literal(""), z.coerce.number().min(0).max(10000)]).optional().nullable(),
+  taxRate: z.union([z.literal(""), z.coerce.number().min(0).max(100)]).optional().nullable(),
+  priceEditableAtSale: z.coerce.boolean().default(false),
+  discountAllowed: z.coerce.boolean().default(true),
+  maxDiscountRate: z.union([z.literal(""), z.coerce.number().min(0).max(100)]).optional().nullable(),
+  status: z.enum(PHARMACY_PRODUCT_STATUSES).default("ACTIVE"),
+  deactivationReason: z.string().trim().max(1000).optional().or(z.literal("")),
+  notes: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+
+function validPharmacyProductRanges(data: z.infer<typeof pharmacyProductBaseSchema>) {
+  const maxStockValid = data.maxStock === "" || data.maxStock === null || data.maxStock === undefined || data.maxStock > data.minStock;
+  const temperatureValid = data.tempMin === "" || data.tempMin === null || data.tempMin === undefined || data.tempMax === "" || data.tempMax === null || data.tempMax === undefined || data.tempMin < data.tempMax;
+  return maxStockValid && temperatureValid;
+}
+
+export const pharmacyProductSchema = pharmacyProductBaseSchema.refine(validPharmacyProductRanges, {
+  message: "Le stock maximal doit dépasser le stock minimal et la température maximale doit dépasser la minimale.",
+});
+export const pharmacyProductUpdateSchema = pharmacyProductBaseSchema.partial().refine((data) => {
+  if (data.minStock === undefined || data.maxStock === undefined || data.maxStock === "" || data.maxStock === null) return true;
+  return data.maxStock > data.minStock;
+}, { message: "Le stock maximal doit dépasser le stock minimal." }).refine((data) => {
+  if (data.tempMin === undefined || data.tempMax === undefined || data.tempMin === "" || data.tempMin === null || data.tempMax === "" || data.tempMax === null) return true;
+  return data.tempMin < data.tempMax;
+}, { message: "La température maximale doit dépasser la température minimale." });
 
 const internalCalendarAvailabilityBaseSchema = z.object({
   collaboratorId: z.string().min(1),

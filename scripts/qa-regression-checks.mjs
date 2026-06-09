@@ -59,6 +59,11 @@ const enterpriseAdminApi = read("app/api/enterprise/[organizationId]/administrat
 const enterpriseHealthcareApi = read("app/api/enterprise/[organizationId]/healthcare/route.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
+const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
+const pharmacyProductApi = read("app/api/enterprise/[organizationId]/pharmacy/products/[productId]/route.ts");
+const pharmacyProductsWorkspace = read("components/enterprise/pharmacy-products-workspace.tsx");
+const pharmacyProductAccess = read("lib/pharmacy-product-access.ts");
+const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
 const collaboratorsMessagesRoute = read("app/api/collaborators/groups/[id]/messages/route.ts");
@@ -320,6 +325,15 @@ check(
   "PHARMACY: Administration et Activités utilisent des vues et formulaires dédiés",
   containsAll(read("components/enterprise/pharmacy-admin-workspace.tsx"), ["PHARMACY_DASHBOARD", "ListControls", "RecordSelect", "SALES_DISPENSATION", "STOCK_RECEIPTS", "BATCH_EXPIRY"])
     && containsAll(read("components/enterprise/enterprise-activities-panels.tsx"), ["pharmacyActivityFields", "REQUEST_REPLENISHMENT", "REQUEST_STOCK_ADJUSTMENT_VALIDATION", "REQUEST_PHARMACIST_OPINION", "SUBMIT_INVENTORY"])
+);
+
+check(
+  "PHARMACY Produits: catalogue dédié, sécurisé et non destructif",
+  containsAll(prismaSchema, ["model PharmacyProduct", "@@unique([organizationId, internalCode])", "@@unique([organizationId, barcode])"])
+    && containsAll(pharmacyProductsApi, ["canAccessPharmacyProducts", "pharmacyProductSchema.safeParse", "isSameOriginRequest", "await rateLimit", "organizationId"])
+    && containsAll(pharmacyProductApi, ["pharmacyProductUpdateSchema.safeParse", 'status: "ARCHIVED"', "PHARMACY_PRODUCT_ARCHIVED"])
+    && containsAll(pharmacyProductAccess, ["MEDICINES_PRODUCTS", "organization: { sectorCode: \"PHARMACY\""])
+    && containsAll(pharmacyProductsWorkspace, ["Catalogue central", "PHARMACY_PRODUCT_CATEGORIES", "Nouveau produit", "Lots", "Historique"])
 );
 
 check(

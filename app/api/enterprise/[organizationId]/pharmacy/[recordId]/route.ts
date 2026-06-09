@@ -33,6 +33,11 @@ async function validateUpdateReferences(organizationId: string, data: Record<str
   for (const [key, moduleCode] of references) {
     const id = typeof data[key] === "string" ? data[key] : "";
     if (!id) continue;
+    if (moduleCode === "MEDICINES_PRODUCTS") {
+      const product = await prisma.pharmacyProduct.findFirst({ where: { id, organizationId, status: { not: "ARCHIVED" } }, select: { id: true } });
+      if (!product) return "Une référence sélectionnée n'appartient pas à cette pharmacie.";
+      continue;
+    }
     const record = await prisma.enterpriseSectorRecord.findFirst({ where: { id, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode, deletedAt: null }, select: { id: true } });
     if (!record) return "Une référence sélectionnée n'appartient pas à cette pharmacie.";
   }
@@ -87,6 +92,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const { organizationId, recordId } = await params;
   const existing = await prisma.enterpriseSectorRecord.findFirst({ where: { id: recordId, organizationId, sectorCode: PHARMACY_SECTOR_CODE, deletedAt: null, organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: PHARMACY_SECTOR_CODE } } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (existing.moduleCode === "MEDICINES_PRODUCTS") return NextResponse.json({ error: "Dedicated product API required", message: "Utilisez le catalogue Produits & médicaments dédié." }, { status: 400 });
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, existing.moduleCode, "write"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = enterprisePharmacyRecordUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les modifications pharmacie sont invalides." }, { status: 400 });
@@ -133,6 +139,7 @@ export async function DELETE(req: Request, { params }: Params) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId, recordId } = await params;
   const existing = await prisma.enterpriseSectorRecord.findFirst({ where: { id: recordId, organizationId, sectorCode: PHARMACY_SECTOR_CODE, deletedAt: null } });
+  if (existing?.moduleCode === "MEDICINES_PRODUCTS") return NextResponse.json({ error: "Dedicated product API required", message: "Utilisez le catalogue Produits & médicaments dédié." }, { status: 400 });
   if (!existing || !(await canAccessEnterpriseModule(session.userId, organizationId, existing.moduleCode, "manage"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   await prisma.enterpriseSectorRecord.update({ where: { id: existing.id }, data: { status: "ARCHIVED", deletedAt: new Date(), updatedById: session.userId } });
   await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PHARMACY_RECORD_ARCHIVED", entity: "EnterpriseSectorRecord", entityId: existing.id, request: req, metadata: { organizationId, moduleCode: existing.moduleCode } });

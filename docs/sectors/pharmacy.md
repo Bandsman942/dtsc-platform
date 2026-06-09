@@ -24,11 +24,19 @@ Les organisations `PHARMACY` disposent uniquement des sous-modules sectoriels pe
 - rapports pharmacie;
 - paramètres pharmacie.
 
-Chaque sous-module utilise `EnterpriseSectorRecord`, une liste recherchable et paginée, un détail, un formulaire haut responsive, des combobox liées aux enregistrements de la même organisation et des actions persistées via menu `...`.
+Les sous-modules opérationnels utilisent `EnterpriseSectorRecord`. Le sous-module **Produits & médicaments** utilise désormais la table dédiée `PharmacyProduct`, avec catalogue recherchable et paginé, filtres contrôlés, fiche détaillée, formulaire haut responsive et actions persistées via menu `...`.
+
+## Module Produits & médicaments
+
+Le catalogue central couvre l'identification, la classification, la présentation, les règles de dispensation, les seuils de stock, les conditions de conservation, les prix indicatifs et le statut. Les catégories, formes pharmaceutiques, voies d'administration, unités, types de conservation, devises et statuts proviennent de listes contrôlées partagées.
+
+Le code interne et le code-barres sont uniques par organisation. Les validations refusent notamment les prix ou stocks négatifs, un stock maximal inférieur au stock minimal, une température maximale inférieure à la minimale et un taux de remise hors de l'intervalle 0 à 100.
+
+Les produits archivés restent conservés pour l'audit. Les autres sous-modules et les Activités utilisent le catalogue dédié dans leurs combobox; une référence produit est toujours vérifiée dans la même organisation.
 
 ## Stockage et relations
 
-Les données sont stockées dans `EnterpriseSectorRecord` avec `sectorCode = PHARMACY`, `organizationId`, `moduleCode`, `recordType`, statut, priorité, responsable et `payloadJson`.
+Les produits sont stockés dans `PharmacyProduct`. Les autres données sont stockées dans `EnterpriseSectorRecord` avec `sectorCode = PHARMACY`, `organizationId`, `moduleCode`, `recordType`, statut, priorité, responsable et `payloadJson`.
 
 Relations logiques validées côté serveur:
 
@@ -84,6 +92,8 @@ Routes:
 
 - `GET/POST /api/enterprise/[organizationId]/pharmacy`;
 - `PATCH/DELETE /api/enterprise/[organizationId]/pharmacy/[recordId]`.
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/products`;
+- `GET/PATCH/DELETE /api/enterprise/[organizationId]/pharmacy/products/[productId]`.
 
 Les routes vérifient session, organisation cliente active, `sectorCode = PHARMACY`, membership, module actif, entitlement, origine sur mutations, rate limiting, Zod, références même organisation, audit et verrouillage métier. Les impacts stock vente/réception sont appliqués dans une transaction Prisma.
 
@@ -91,9 +101,11 @@ Les routes vérifient session, organisation cliente active, `sectorCode = PHARMA
 
 `20260608143000_pharmacy_sector_iteration` enrichit de façon idempotente le template PHARMACY et les organisations PHARMACY existantes avec les modules, sections Administration, blocs Activités et postes clés.
 
+`20260609110000_pharmacy_products_module` crée le catalogue dédié et migre sans suppression les anciens produits génériques possédant un code interne.
+
 ## Limites restantes
 
-- `EnterpriseSectorRecord` reste un stockage sectoriel générique; des tables dédiées seront nécessaires pour les ventes multi-lignes, inventaires ligne par ligne, factures PDF et traçabilité réglementaire avancée.
+- `EnterpriseSectorRecord` reste le stockage des opérations; des tables dédiées seront nécessaires pour les ventes multi-lignes, inventaires ligne par ligne, factures PDF et traçabilité réglementaire avancée.
 - L'upload de documents doit continuer à passer par une route privée de stockage contrôlé avant activation dans les formulaires.
 - Le calcul avancé de marge, taxe, caisse et rapports financiers consolidés reste à approfondir.
 

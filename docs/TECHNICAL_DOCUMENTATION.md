@@ -2234,6 +2234,19 @@ Etat actuel:
 - gestion tarifaire des `BillingPlan` active dans la Console DTSC, reservee au role `ADMIN`; les prix administres ne sont plus reinitialises par les parcours d'inscription, de billing ou de checkout.
 - intelligence documentaire: upload TXT/Markdown/CSV/JSON, extraction texte, embeddings OpenAI, stockage pgvector et injection RAG dans le chatbot ajoutes.
 
+## 20.3 Catalogue Produits & medicaments PHARMACY - 9 juin 2026
+
+Le module `MEDICINES_PRODUCTS` repose sur la table dediee `PharmacyProduct`, isolee par `organizationId`. Les contraintes uniques `(organizationId, internalCode)` et `(organizationId, barcode)` empechent les doublons dans une pharmacie sans imposer une unicite globale.
+
+Routes:
+
+| Methode | Route | Acces | Usage |
+| --- | --- | --- | --- |
+| `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/products` | membre autorise sur `MEDICINES_PRODUCTS` | rechercher/lister ou creer un produit |
+| `GET`, `PATCH`, `DELETE` | `/api/enterprise/[organizationId]/pharmacy/products/[productId]` | membre autorise selon l'action | consulter, modifier ou archiver logiquement |
+
+Les mutations appliquent origine identique, rate limiting, validation Zod, controle du secteur `PHARMACY`, entitlement du module, membership actif et audit. `DELETE` ne supprime aucune ligne: il applique le statut `ARCHIVED`. La migration `20260609110000_pharmacy_products_module` reprend sans destruction les produits generiques possedant un code interne.
+
 Fonctionnalites qui exigent des informations externes avant activation complete:
 
 - rate limit distribue Redis/Upstash: le code est pret; fournir `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` pour eviter le fallback memoire en production multi-instance;

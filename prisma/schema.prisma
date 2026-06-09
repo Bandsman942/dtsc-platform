@@ -165,6 +165,8 @@ model User {
   createdEnterpriseSectorRecords EnterpriseSectorRecord[] @relation("EnterpriseSectorRecordCreatedBy")
   updatedEnterpriseSectorRecords EnterpriseSectorRecord[] @relation("EnterpriseSectorRecordUpdatedBy")
   assignedEnterpriseSectorRecords EnterpriseSectorRecord[] @relation("EnterpriseSectorRecordAssignedTo")
+  createdPharmacyProducts PharmacyProduct[] @relation("PharmacyProductCreatedBy")
+  updatedPharmacyProducts PharmacyProduct[] @relation("PharmacyProductUpdatedBy")
 
   @@index([role])
   @@index([status])
@@ -520,6 +522,7 @@ model Organization {
   enterpriseWorkflows EnterpriseWorkflow[]
   enterpriseActivityRequests EnterpriseActivityRequest[]
   enterpriseSectorRecords EnterpriseSectorRecord[]
+  pharmacyProducts PharmacyProduct[]
 
   @@index([status, organizationType])
   @@index([sectorId])
@@ -884,6 +887,71 @@ model EnterpriseSectorRecord {
   @@index([createdById, createdAt])
   @@index([assignedToUserId, status])
   @@index([deletedAt])
+}
+
+model PharmacyProduct {
+  id                           String   @id @default(cuid())
+  organizationId               String
+  name                         String
+  genericName                  String?
+  internalCode                 String
+  barcode                      String?
+  manufacturer                 String?
+  brand                        String?
+  shortDescription             String?
+  category                     String
+  subcategory                  String?
+  pharmaceuticalForm           String
+  dosage                       String?
+  saleUnit                     String
+  stockUnit                    String
+  packaging                    String?
+  administrationRoute          String?
+  prescriptionRequired         Boolean  @default(false)
+  pharmacistValidationRequired Boolean  @default(false)
+  controlledProduct            Boolean  @default(false)
+  otcAllowed                   Boolean  @default(true)
+  maxQuantityPerSale           Int?
+  genericSubstitutionAllowed   Boolean  @default(false)
+  saleWarningMessage           String?
+  stockTrackingEnabled         Boolean  @default(true)
+  minStock                     Decimal  @default(0) @db.Decimal(14, 3)
+  maxStock                     Decimal? @db.Decimal(14, 3)
+  safetyStock                  Decimal? @db.Decimal(14, 3)
+  defaultLocation              String?
+  shelf                        String?
+  unitsPerPackage              Decimal? @db.Decimal(14, 3)
+  storageType                  String?
+  tempMin                      Decimal? @db.Decimal(8, 2)
+  tempMax                      Decimal? @db.Decimal(8, 2)
+  lightSensitive               Boolean  @default(false)
+  humiditySensitive            Boolean  @default(false)
+  refrigerated                 Boolean  @default(false)
+  storageNotes                 String?
+  referencePurchasePrice       Decimal? @db.Decimal(14, 2)
+  referenceSalePrice           Decimal? @db.Decimal(14, 2)
+  currency                     String   @default("USD")
+  targetMargin                 Decimal? @db.Decimal(8, 2)
+  taxRate                      Decimal? @db.Decimal(8, 2)
+  priceEditableAtSale          Boolean  @default(false)
+  discountAllowed              Boolean  @default(true)
+  maxDiscountRate              Decimal? @db.Decimal(8, 2)
+  status                       String   @default("ACTIVE")
+  deactivationReason           String?
+  notes                        String?
+  createdById                  String
+  updatedById                  String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  organization                 Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy                    User @relation("PharmacyProductCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User? @relation("PharmacyProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, internalCode])
+  @@unique([organizationId, barcode])
+  @@index([organizationId, category, status])
+  @@index([organizationId, pharmaceuticalForm])
+  @@index([organizationId, createdAt])
 }
 
 model OrganizationMember {

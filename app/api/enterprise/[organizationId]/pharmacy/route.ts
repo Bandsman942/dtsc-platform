@@ -81,6 +81,10 @@ async function pharmacyOrganization(organizationId: string) {
 
 async function validateReference(organizationId: string, id: string | undefined, moduleCode: string, message: string) {
   if (!id) return null;
+  if (moduleCode === "MEDICINES_PRODUCTS") {
+    const product = await prisma.pharmacyProduct.findFirst({ where: { id, organizationId, status: { not: "ARCHIVED" } }, select: { id: true } });
+    return product ? null : message;
+  }
   const record = await prisma.enterpriseSectorRecord.findFirst({
     where: { id, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode, deletedAt: null },
     select: { id: true },
@@ -153,6 +157,9 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid payload", message: "Les informations pharmacie sont invalides." }, { status: 400 });
   }
   const data = parsed.data;
+  if (data.moduleCode === "MEDICINES_PRODUCTS") {
+    return NextResponse.json({ error: "Dedicated product API required", message: "Utilisez le catalogue Produits & médicaments dédié." }, { status: 400 });
+  }
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, data.moduleCode, "write"))) {
     return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à gérer ce sous-module pharmacie." }, { status: 403 });
   }

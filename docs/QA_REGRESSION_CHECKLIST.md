@@ -235,3 +235,14 @@ Documenter dans le ticket ou la PR:
 - captures mobiles si une regression visuelle etait suspectee;
 - migrations appliquees ou confirmation d'absence de migration;
 - risques restants et limites du polling temporaire.
+# Itération PHARMACY Produits & médicaments - 9 juin 2026
+
+- [ ] Vérifier que le catalogue Produits & médicaments liste uniquement les produits de l'organisation PHARMACY active.
+- [ ] Vérifier recherche, filtres catégorie/forme/statut/règle, tri et pagination sur desktop et mobile.
+- [ ] Créer puis modifier un produit avec les sections identification, classification, dispensation, stock, conservation, prix et statut.
+- [ ] Vérifier le refus d'un code interne ou code-barres déjà utilisé dans la même organisation.
+- [ ] Vérifier les contrôles stock minimal/maximal, températures, prix et taux de remise.
+- [ ] Archiver puis réactiver un produit et vérifier qu'aucune suppression physique n'a lieu.
+- [ ] Vérifier qu'un produit du catalogue est sélectionnable dans lots, ventes, réceptions et Activités Pharmacie.
+- [ ] Vérifier qu'un membre non autorisé ne peut pas créer, modifier ou archiver un produit via l'API.
+- [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.

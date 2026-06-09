@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-09
+
+### Ajouté
+
+- Ajout du catalogue dédié `PharmacyProduct` pour le module Pharmacie > Produits & médicaments, avec migration additive des anciens produits génériques.
+- Ajout des routes privées produits pour la recherche, la création, la consultation, la modification, l'archivage logique et la réactivation.
+- Ajout d'une interface catalogue responsive avec recherche, filtres, pagination, fiche produit et formulaire métier structuré.
+
+### Amélioré
+
+- Les lots, ventes, réceptions et Activités Pharmacie utilisent désormais le catalogue produit central dans leurs sélections.
+- Les catégories, formes, unités, voies d'administration, conditions de conservation, statuts et devises utilisent des listes contrôlées partagées.
+
+### Sécurisé
+
+- Les opérations produit vérifient session, organisation PHARMACY active, membership, module autorisé, origine, rate limit, validation Zod, unicité par organisation et droits d'action.
+- L'archivage produit est non destructif et chaque mutation importante est auditée.
+
 ## 2026-06-07
 
 ### Ajouté
