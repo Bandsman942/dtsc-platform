@@ -23,6 +23,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Corrigé
 
 - Correction du build Vercel du catalogue Produits & médicaments en remplaçant deux constantes utilisées uniquement comme types, refusées par `@typescript-eslint/no-unused-vars`.
+- Correction du typage Prisma à la création d'un produit en séparant la normalisation des champs texte et numériques optionnels.
 
 ## 2026-06-07
 

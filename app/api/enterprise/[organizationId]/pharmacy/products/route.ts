@@ -10,40 +10,44 @@ import { pharmacyProductSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
-function nullable(value: string | number | null | undefined) {
+function nullableText(value: string | null | undefined) {
   return value === "" || value === undefined ? null : value;
 }
 
-function productData(data: ReturnType<typeof pharmacyProductSchema.parse>, userId: string) {
+function nullableNumber(value: string | number | null | undefined) {
+  return value === "" || value === undefined ? null : value;
+}
+
+function productData(data: ReturnType<typeof pharmacyProductSchema.parse>, userId: string): Omit<Prisma.PharmacyProductUncheckedCreateInput, "organizationId"> {
   return {
     ...data,
-    genericName: nullable(data.genericName),
-    barcode: nullable(data.barcode),
-    manufacturer: nullable(data.manufacturer),
-    brand: nullable(data.brand),
-    shortDescription: nullable(data.shortDescription),
-    subcategory: nullable(data.subcategory),
-    dosage: nullable(data.dosage),
-    packaging: nullable(data.packaging),
-    administrationRoute: nullable(data.administrationRoute),
-    maxQuantityPerSale: nullable(data.maxQuantityPerSale),
-    saleWarningMessage: nullable(data.saleWarningMessage),
-    maxStock: nullable(data.maxStock),
-    safetyStock: nullable(data.safetyStock),
-    defaultLocation: nullable(data.defaultLocation),
-    shelf: nullable(data.shelf),
-    unitsPerPackage: nullable(data.unitsPerPackage),
-    storageType: nullable(data.storageType),
-    tempMin: nullable(data.tempMin),
-    tempMax: nullable(data.tempMax),
-    storageNotes: nullable(data.storageNotes),
-    referencePurchasePrice: nullable(data.referencePurchasePrice),
-    referenceSalePrice: nullable(data.referenceSalePrice),
-    targetMargin: nullable(data.targetMargin),
-    taxRate: nullable(data.taxRate),
-    maxDiscountRate: nullable(data.maxDiscountRate),
-    deactivationReason: nullable(data.deactivationReason),
-    notes: nullable(data.notes),
+    genericName: nullableText(data.genericName),
+    barcode: nullableText(data.barcode),
+    manufacturer: nullableText(data.manufacturer),
+    brand: nullableText(data.brand),
+    shortDescription: nullableText(data.shortDescription),
+    subcategory: nullableText(data.subcategory),
+    dosage: nullableText(data.dosage),
+    packaging: nullableText(data.packaging),
+    administrationRoute: nullableText(data.administrationRoute),
+    maxQuantityPerSale: nullableNumber(data.maxQuantityPerSale),
+    saleWarningMessage: nullableText(data.saleWarningMessage),
+    maxStock: nullableNumber(data.maxStock),
+    safetyStock: nullableNumber(data.safetyStock),
+    defaultLocation: nullableText(data.defaultLocation),
+    shelf: nullableText(data.shelf),
+    unitsPerPackage: nullableNumber(data.unitsPerPackage),
+    storageType: nullableText(data.storageType),
+    tempMin: nullableNumber(data.tempMin),
+    tempMax: nullableNumber(data.tempMax),
+    storageNotes: nullableText(data.storageNotes),
+    referencePurchasePrice: nullableNumber(data.referencePurchasePrice),
+    referenceSalePrice: nullableNumber(data.referenceSalePrice),
+    targetMargin: nullableNumber(data.targetMargin),
+    taxRate: nullableNumber(data.taxRate),
+    maxDiscountRate: nullableNumber(data.maxDiscountRate),
+    deactivationReason: nullableText(data.deactivationReason),
+    notes: nullableText(data.notes),
     createdById: userId,
     updatedById: userId,
   };
