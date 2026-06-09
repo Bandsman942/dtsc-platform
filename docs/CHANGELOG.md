@@ -20,6 +20,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Les opérations produit vérifient session, organisation PHARMACY active, membership, module autorisé, origine, rate limit, validation Zod, unicité par organisation et droits d'action.
 - L'archivage produit est non destructif et chaque mutation importante est auditée.
 
+### Corrigé
+
+- Correction du build Vercel du catalogue Produits & médicaments en remplaçant deux constantes utilisées uniquement comme types, refusées par `@typescript-eslint/no-unused-vars`.
+
 ## 2026-06-07
 
 ### Ajouté
