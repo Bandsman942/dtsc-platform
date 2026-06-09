@@ -165,13 +165,6 @@ export async function POST(req: Request, { params }: Params) {
   }
   const referenceError = await validateReferences(organizationId, data);
   if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
-  if (data.moduleCode === "MEDICINES_PRODUCTS" && data.internalCode) {
-    const duplicate = await prisma.enterpriseSectorRecord.findFirst({
-      where: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: "MEDICINES_PRODUCTS", deletedAt: null, payloadJson: { path: ["internalCode"], equals: data.internalCode } },
-      select: { id: true },
-    });
-    if (duplicate) return NextResponse.json({ error: "Duplicate product", message: "Ce code produit existe déjà dans cette pharmacie." }, { status: 409 });
-  }
   if (data.moduleCode === "BATCH_EXPIRY" && (!data.productId || !data.batchNumber || !data.expiryDate)) {
     return NextResponse.json({ error: "Invalid batch", message: "Produit, numéro de lot et date de péremption sont obligatoires." }, { status: 400 });
   }
