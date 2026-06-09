@@ -16,10 +16,10 @@ const nullableNumberKeys = ["minQuantityAlert", "expiryAlertDays", "tempMin", "t
 const nullableDateKeys = ["manufacturingDate", "receivedAt", "stockEntryDate", "recallDate"] as const;
 
 function batchData(data: BatchInput, userId: string): Omit<Prisma.PharmacyBatchUncheckedCreateInput, "organizationId"> {
-  const normalized: Record<string, unknown> = { ...data, createdById: userId, updatedById: userId, totalCost: data.purchasePrice === "" || data.purchasePrice === null || data.purchasePrice === undefined ? null : data.receivedQuantity * data.purchasePrice };
+  const normalized: Record<string, unknown> = { ...data, createdById: userId, updatedById: userId, totalCost: data.purchasePrice === null || data.purchasePrice === undefined ? null : data.receivedQuantity * data.purchasePrice };
   for (const key of nullableTextKeys) normalized[key] = data[key] || null;
-  for (const key of nullableNumberKeys) normalized[key] = data[key] === "" || data[key] === undefined ? null : data[key];
-  for (const key of nullableDateKeys) normalized[key] = data[key] === "" || data[key] === undefined ? null : data[key];
+  for (const key of nullableNumberKeys) normalized[key] = data[key] ?? null;
+  for (const key of nullableDateKeys) normalized[key] = data[key] ?? null;
   if (data.recall) normalized.status = "RECALLED";
   else if (data.quarantine) normalized.status = "QUARANTINED";
   return normalized as Omit<Prisma.PharmacyBatchUncheckedCreateInput, "organizationId">;

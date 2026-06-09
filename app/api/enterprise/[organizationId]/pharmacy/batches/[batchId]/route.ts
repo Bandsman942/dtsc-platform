@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!product) return NextResponse.json({ error: "Invalid product", message: "Le produit sélectionné n'appartient pas à cette pharmacie." }, { status: 400 });
   const data: Record<string, unknown> = { ...parsed.data, updatedById: session.userId };
   for (const [key, value] of Object.entries(data)) if (nullableKeys.has(key) && value === "") data[key] = null;
-  if (parsed.data.purchasePrice !== undefined || parsed.data.receivedQuantity !== undefined) data.totalCost = merged.data.purchasePrice === "" || merged.data.purchasePrice === null || merged.data.purchasePrice === undefined ? null : merged.data.receivedQuantity * merged.data.purchasePrice;
+  if (parsed.data.purchasePrice !== undefined || parsed.data.receivedQuantity !== undefined) data.totalCost = merged.data.purchasePrice === null || merged.data.purchasePrice === undefined ? null : merged.data.receivedQuantity * merged.data.purchasePrice;
   try {
     const batch = await prisma.pharmacyBatch.update({ where: { id: batchId }, data: data as Prisma.PharmacyBatchUncheckedUpdateInput, include: { product: true } });
     await writeAuditLog({ userId: session.userId, action: "PHARMACY_BATCH_UPDATED", entity: "PharmacyBatch", entityId: batch.id, request: req, metadata: { organizationId } });
