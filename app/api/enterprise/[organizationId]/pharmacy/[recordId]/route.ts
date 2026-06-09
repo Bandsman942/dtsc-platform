@@ -38,6 +38,11 @@ async function validateUpdateReferences(organizationId: string, data: Record<str
       if (!product) return "Une référence sélectionnée n'appartient pas à cette pharmacie.";
       continue;
     }
+    if (moduleCode === "BATCH_EXPIRY") {
+      const batch = await prisma.pharmacyBatch.findFirst({ where: { id, organizationId }, select: { id: true } });
+      if (!batch) return "Une référence sélectionnée n'appartient pas à cette pharmacie.";
+      continue;
+    }
     const record = await prisma.enterpriseSectorRecord.findFirst({ where: { id, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode, deletedAt: null }, select: { id: true } });
     if (!record) return "Une référence sélectionnée n'appartient pas à cette pharmacie.";
   }
@@ -53,13 +58,12 @@ async function applyStockImpact(tx: Prisma.TransactionClient, organizationId: st
   const recordPayload = objectPayload(record.payloadJson);
   const batchId = typeof recordPayload.batchId === "string" ? recordPayload.batchId : "";
   if (!batchId || !["SALES_DISPENSATION", "STOCK_RECEIPTS", "RETURNS_ADJUSTMENTS_LOSSES"].includes(record.moduleCode)) return recordPayload;
-  const batch = await tx.enterpriseSectorRecord.findFirst({ where: { id: batchId, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: "BATCH_EXPIRY", deletedAt: null } });
+  const batch = await tx.pharmacyBatch.findFirst({ where: { id: batchId, organizationId } });
   if (!batch) throw new Error("INVALID_BATCH");
-  const batchPayload = objectPayload(batch.payloadJson);
-  const available = numberValue(batchPayload.availableQuantity);
+  const available = Number(batch.availableQuantity);
   const quantity = numberValue(recordPayload.quantity);
   const impactApplied = recordPayload.stockImpactApplied === true;
-  const blocked = ["EXPIRED", "RECALLED", "QUARANTINED"].includes(batch.status) || (typeof batchPayload.expiryDate === "string" && batchPayload.expiryDate < new Date().toISOString().slice(0, 10));
+  const blocked = batch.recall || batch.quarantine || ["EXPIRED", "RECALLED", "QUARANTINED", "BLOCKED", "CANCELLED"].includes(batch.status) || batch.expiryDate < new Date();
   let delta = 0;
   if (record.moduleCode === "SALES_DISPENSATION" && ["validate", "pay"].includes(action) && !impactApplied) {
     if (blocked) throw new Error("BATCH_NOT_SELLABLE");
@@ -76,7 +80,8 @@ async function applyStockImpact(tx: Prisma.TransactionClient, organizationId: st
   }
   if (delta !== 0) {
     const nextAvailable = available + delta;
-    await tx.enterpriseSectorRecord.update({ where: { id: batch.id }, data: { status: nextAvailable <= 0 ? "DEPLETED" : batch.status, updatedById: actorId, payloadJson: { ...batchPayload, availableQuantity: nextAvailable, lastStockMovementAt: new Date().toISOString() } } });
+    await tx.pharmacyBatch.update({ where: { id: batch.id }, data: { status: nextAvailable <= 0 ? "DEPLETED" : batch.status, availableQuantity: nextAvailable, updatedById: actorId } });
+    await tx.pharmacyStockMovement.create({ data: { organizationId, productId: batch.productId, batchId: batch.id, movementType: record.moduleCode === "SALES_DISPENSATION" ? "SALE" : record.moduleCode === "STOCK_RECEIPTS" ? "RECEIPT" : "ADJUSTMENT", quantity: Math.abs(delta), quantityBefore: available, quantityAfter: nextAvailable, reason: `${record.moduleCode} · ${action}`, relatedEntityType: "EnterpriseSectorRecord", relatedEntityId: record.id, createdById: actorId } });
     return { ...recordPayload, stockImpactApplied: action !== "cancel", stockImpactAt: new Date().toISOString(), stockImpactDelta: delta };
   }
   return recordPayload;

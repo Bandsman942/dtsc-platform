@@ -8,6 +8,10 @@ import {
   PHARMACY_PRODUCT_UNITS,
   PHARMACY_STORAGE_TYPES,
 } from "@/lib/pharmacy-products";
+import {
+  PHARMACY_BATCH_MANUAL_STATUSES,
+  PHARMACY_BATCH_STORAGE_CONDITIONS,
+} from "@/lib/pharmacy-batch-options";
 
 export const signUpSchema = z.object({
   name: z.string().min(2).max(120),
@@ -562,6 +566,79 @@ export const pharmacyProductUpdateSchema = pharmacyProductBaseSchema.partial().r
   if (data.tempMin === undefined || data.tempMax === undefined || data.tempMin === "" || data.tempMin === null || data.tempMax === "" || data.tempMax === null) return true;
   return data.tempMin < data.tempMax;
 }, { message: "La température maximale doit dépasser la température minimale." });
+
+const optionalBatchNumber = z.union([z.literal(""), z.coerce.number().min(0).max(1_000_000_000)]).optional().nullable();
+const optionalBatchDate = z.union([z.literal(""), z.coerce.date()]).optional().nullable();
+const optionalBatchUrl = z.string().trim().max(2000).optional().or(z.literal(""));
+const pharmacyBatchBaseSchema = z.object({
+  productId: z.string().min(1),
+  supplierId: z.string().max(120).optional().or(z.literal("")),
+  purchaseOrderId: z.string().max(120).optional().or(z.literal("")),
+  receiptId: z.string().max(120).optional().or(z.literal("")),
+  batchNumber: z.string().trim().min(1).max(160),
+  serialNumber: z.string().trim().max(160).optional().or(z.literal("")),
+  barcode: z.string().trim().max(160).optional().or(z.literal("")),
+  internalReference: z.string().trim().max(160).optional().or(z.literal("")),
+  manufacturerReference: z.string().trim().max(160).optional().or(z.literal("")),
+  manufacturingDate: optionalBatchDate,
+  expiryDate: z.coerce.date(),
+  receivedAt: optionalBatchDate,
+  stockEntryDate: optionalBatchDate,
+  receivedById: z.string().max(120).optional().or(z.literal("")),
+  receivedQuantity: z.coerce.number().gt(0).max(1_000_000_000),
+  availableQuantity: z.coerce.number().min(0).max(1_000_000_000),
+  reservedQuantity: z.coerce.number().min(0).max(1_000_000_000).default(0),
+  damagedQuantity: z.coerce.number().min(0).max(1_000_000_000).default(0),
+  unit: z.string().trim().min(1).max(80),
+  minQuantityAlert: optionalBatchNumber,
+  expiryAlertDays: z.union([z.literal(""), z.coerce.number().int().min(1).max(3650)]).optional().nullable(),
+  location: z.string().trim().max(180).optional().or(z.literal("")),
+  shelf: z.string().trim().max(120).optional().or(z.literal("")),
+  zone: z.string().trim().max(120).optional().or(z.literal("")),
+  storageConditions: z.enum(PHARMACY_BATCH_STORAGE_CONDITIONS).optional().or(z.literal("")),
+  tempMin: z.union([z.literal(""), z.coerce.number().min(-100).max(100)]).optional().nullable(),
+  tempMax: z.union([z.literal(""), z.coerce.number().min(-100).max(100)]).optional().nullable(),
+  storageNotes: z.string().trim().max(1200).optional().or(z.literal("")),
+  purchasePrice: optionalBatchNumber,
+  salePrice: optionalBatchNumber,
+  currency: z.enum(PHARMACY_CURRENCIES).default("USD"),
+  status: z.enum(PHARMACY_BATCH_MANUAL_STATUSES).default("ACTIVE"),
+  quarantine: z.coerce.boolean().default(false),
+  recall: z.coerce.boolean().default(false),
+  quarantineReason: z.string().trim().max(1200).optional().or(z.literal("")),
+  recallReason: z.string().trim().max(1200).optional().or(z.literal("")),
+  recallDate: optionalBatchDate,
+  statusReason: z.string().trim().max(1200).optional().or(z.literal("")),
+  decisionResponsibleId: z.string().max(120).optional().or(z.literal("")),
+  supplierInvoiceRef: z.string().trim().max(180).optional().or(z.literal("")),
+  deliveryNoteRef: z.string().trim().max(180).optional().or(z.literal("")),
+  qualityDocumentUrl: optionalBatchUrl,
+  supplierInvoiceUrl: optionalBatchUrl,
+  deliveryNoteUrl: optionalBatchUrl,
+  certificateUrl: optionalBatchUrl,
+  notes: z.string().trim().max(3000).optional().or(z.literal("")),
+});
+
+function validPharmacyBatch(data: z.infer<typeof pharmacyBatchBaseSchema>) {
+  const quantitiesValid = data.availableQuantity + data.reservedQuantity + data.damagedQuantity <= data.receivedQuantity;
+  const datesValid = !data.manufacturingDate || data.manufacturingDate === "" || data.expiryDate > data.manufacturingDate;
+  const temperaturesValid = data.tempMin === "" || data.tempMin === null || data.tempMin === undefined || data.tempMax === "" || data.tempMax === null || data.tempMax === undefined || data.tempMin < data.tempMax;
+  return quantitiesValid && datesValid && temperaturesValid;
+}
+
+export const pharmacyBatchSchema = pharmacyBatchBaseSchema.refine(validPharmacyBatch, {
+  message: "Vérifiez les quantités, les dates et les températures du lot.",
+});
+export const pharmacyBatchUpdateSchema = pharmacyBatchBaseSchema.partial().refine((data) => {
+  if (data.receivedQuantity === undefined) return true;
+  return (data.availableQuantity || 0) + (data.reservedQuantity || 0) + (data.damagedQuantity || 0) <= data.receivedQuantity;
+}, { message: "Les quantités disponibles, réservées et endommagées dépassent la quantité reçue." }).refine((data) => {
+  return !data.manufacturingDate || data.manufacturingDate === "" || !data.expiryDate || data.expiryDate > data.manufacturingDate;
+}, { message: "La date de péremption doit être postérieure à la fabrication." });
+export const pharmacyBatchActionSchema = z.object({
+  reason: z.string().trim().min(3).max(1200),
+  decisionResponsibleId: z.string().max(120).optional().or(z.literal("")),
+});
 
 const internalCalendarAvailabilityBaseSchema = z.object({
   collaboratorId: z.string().min(1),

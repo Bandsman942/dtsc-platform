@@ -64,6 +64,11 @@ const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/p
 const pharmacyProductApi = read("app/api/enterprise/[organizationId]/pharmacy/products/[productId]/route.ts");
 const pharmacyProductsWorkspace = read("components/enterprise/pharmacy-products-workspace.tsx");
 const pharmacyProductAccess = read("lib/pharmacy-product-access.ts");
+const pharmacyBatchesApi = read("app/api/enterprise/[organizationId]/pharmacy/batches/route.ts");
+const pharmacyBatchApi = read("app/api/enterprise/[organizationId]/pharmacy/batches/[batchId]/route.ts");
+const pharmacyBatchesWorkspace = read("components/enterprise/pharmacy-batches-workspace.tsx");
+const pharmacyBatchAccess = read("lib/pharmacy-batch-access.ts");
+const pharmacyBatchesService = read("lib/pharmacy-batches.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -348,6 +353,20 @@ check(
   containsAll(pharmacyProductsWorkspace, ["FIELD_HELP", "CircleHelp", "Ordonnance obligatoire", "Seuil d'alerte de stock", "Nombre d'unités par emballage", "fieldLabel(key)"])
     && !pharmacyProductsWorkspace.includes("labelText={field}")
     && !pharmacyProductsWorkspace.includes(">{field}</label>")
+);
+
+check(
+  "PHARMACY Lots: tables dédiées, isolation multi-tenant et mouvement initial",
+  containsAll(prismaSchema, ["model PharmacyBatch", "model PharmacyStockMovement", "@@unique([organizationId, productId, batchNumber])", "@@unique([organizationId, barcode])"])
+    && containsAll(pharmacyBatchesApi, ["canAccessPharmacyBatches", "pharmacyBatchSchema.safeParse", "organizationId", "INITIAL_BATCH_CREATION", "pharmacyStockMovement.create"])
+    && containsAll(pharmacyBatchApi, ["pharmacyBatchUpdateSchema.safeParse", "organizationId", "PHARMACY_BATCH_UPDATED"])
+    && containsAll(pharmacyBatchAccess, ["BATCH_EXPIRY", "organization: { sectorCode: \"PHARMACY\""])
+);
+
+check(
+  "PHARMACY Lots: interface métier, actions réelles et FEFO",
+  containsAll(pharmacyBatchesWorkspace, ["Lots & péremptions", "Aucun lot n&apos;est encore enregistré", "Mettre en quarantaine", "Marquer comme rappelé", "Mouvements stock", "h-[94dvh]", "CircleHelp"])
+    && containsAll(pharmacyBatchesService, ["getSellableBatchesForProduct", 'orderBy: [{ expiryDate: "asc" }', 'status: { notIn: ["RECALLED", "QUARANTINED", "BLOCKED", "CANCELLED", "EXPIRED"] }'])
 );
 
 check(

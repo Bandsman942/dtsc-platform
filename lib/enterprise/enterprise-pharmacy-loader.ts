@@ -13,7 +13,7 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     return [];
   }
 
-  const [records, products] = await Promise.all([prisma.enterpriseSectorRecord.findMany({
+  const [records, products, batches] = await Promise.all([prisma.enterpriseSectorRecord.findMany({
     where: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: { in: allowedModuleCodes }, deletedAt: null },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     take: 500,
@@ -25,6 +25,11 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     where: { organizationId, status: { not: "ARCHIVED" } },
     orderBy: { name: "asc" },
     include: { createdBy: { select: { name: true, email: true } } },
+    take: 500,
+  }) : Promise.resolve([]), allowedModuleCodes.includes("BATCH_EXPIRY") ? prisma.pharmacyBatch.findMany({
+    where: { organizationId },
+    orderBy: { expiryDate: "asc" },
+    include: { product: { select: { name: true } }, createdBy: { select: { name: true, email: true } } },
     take: 500,
   }) : Promise.resolve([])]);
   const productRecords = products.map((product) => ({
@@ -47,5 +52,25 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     createdBy: product.createdBy,
     assignedTo: null,
   }));
-  return [...productRecords, ...records.filter((record) => record.moduleCode !== "MEDICINES_PRODUCTS")];
+  const batchRecords = batches.map((batch) => ({
+    id: batch.id,
+    organizationId,
+    sectorCode: PHARMACY_SECTOR_CODE,
+    moduleCode: "BATCH_EXPIRY",
+    recordType: "PHARMACY_BATCH",
+    title: `${batch.product.name} · lot ${batch.batchNumber}`,
+    summary: batch.notes,
+    status: batch.status,
+    priority: batch.recall || batch.quarantine ? "CRITICAL" : "NORMAL",
+    assignedToUserId: batch.decisionResponsibleId,
+    payloadJson: { productId: batch.productId, batchNumber: batch.batchNumber, expiryDate: batch.expiryDate.toISOString().slice(0, 10), availableQuantity: Number(batch.availableQuantity), unit: batch.unit, location: batch.location },
+    createdById: batch.createdById,
+    updatedById: batch.updatedById,
+    createdAt: batch.createdAt,
+    updatedAt: batch.updatedAt,
+    deletedAt: null,
+    createdBy: batch.createdBy,
+    assignedTo: null,
+  }));
+  return [...productRecords, ...batchRecords, ...records.filter((record) => record.moduleCode !== "MEDICINES_PRODUCTS" && record.moduleCode !== "BATCH_EXPIRY")];
 }

@@ -167,6 +167,11 @@ model User {
   assignedEnterpriseSectorRecords EnterpriseSectorRecord[] @relation("EnterpriseSectorRecordAssignedTo")
   createdPharmacyProducts PharmacyProduct[] @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts PharmacyProduct[] @relation("PharmacyProductUpdatedBy")
+  createdPharmacyBatches PharmacyBatch[] @relation("PharmacyBatchCreatedBy")
+  updatedPharmacyBatches PharmacyBatch[] @relation("PharmacyBatchUpdatedBy")
+  receivedPharmacyBatches PharmacyBatch[] @relation("PharmacyBatchReceivedBy")
+  decidedPharmacyBatches PharmacyBatch[] @relation("PharmacyBatchDecisionResponsible")
+  pharmacyStockMovements PharmacyStockMovement[] @relation("PharmacyStockMovementCreatedBy")
 
   @@index([role])
   @@index([status])
@@ -522,7 +527,9 @@ model Organization {
   enterpriseWorkflows EnterpriseWorkflow[]
   enterpriseActivityRequests EnterpriseActivityRequest[]
   enterpriseSectorRecords EnterpriseSectorRecord[]
-  pharmacyProducts PharmacyProduct[]
+    pharmacyProducts PharmacyProduct[]
+    pharmacyBatches PharmacyBatch[]
+    pharmacyStockMovements PharmacyStockMovement[]
 
   @@index([status, organizationType])
   @@index([sectorId])
@@ -946,12 +953,110 @@ model PharmacyProduct {
   organization                 Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy                    User @relation("PharmacyProductCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy                    User? @relation("PharmacyProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  batches                      PharmacyBatch[]
+  stockMovements               PharmacyStockMovement[]
 
   @@unique([organizationId, internalCode])
   @@unique([organizationId, barcode])
   @@index([organizationId, category, status])
   @@index([organizationId, pharmaceuticalForm])
   @@index([organizationId, createdAt])
+}
+
+model PharmacyBatch {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  productId             String
+  supplierId            String?
+  purchaseOrderId       String?
+  receiptId             String?
+  batchNumber           String
+  serialNumber          String?
+  barcode               String?
+  internalReference     String?
+  manufacturerReference String?
+  manufacturingDate     DateTime?
+  expiryDate            DateTime
+  receivedAt            DateTime?
+  stockEntryDate        DateTime?
+  receivedById          String?
+  receivedQuantity      Decimal  @db.Decimal(14, 3)
+  availableQuantity     Decimal  @db.Decimal(14, 3)
+  reservedQuantity      Decimal  @default(0) @db.Decimal(14, 3)
+  damagedQuantity       Decimal  @default(0) @db.Decimal(14, 3)
+  unit                  String
+  minQuantityAlert      Decimal? @db.Decimal(14, 3)
+  expiryAlertDays       Int?
+  location              String?
+  shelf                 String?
+  zone                  String?
+  storageConditions     String?
+  tempMin               Decimal? @db.Decimal(8, 2)
+  tempMax               Decimal? @db.Decimal(8, 2)
+  storageNotes          String?
+  purchasePrice         Decimal? @db.Decimal(14, 2)
+  salePrice             Decimal? @db.Decimal(14, 2)
+  totalCost             Decimal? @db.Decimal(14, 2)
+  currency              String   @default("USD")
+  status                String   @default("ACTIVE")
+  quarantine            Boolean  @default(false)
+  recall                Boolean  @default(false)
+  quarantineReason      String?
+  recallReason          String?
+  recallDate            DateTime?
+  statusReason          String?
+  decisionResponsibleId String?
+  supplierInvoiceRef    String?
+  deliveryNoteRef       String?
+  qualityDocumentUrl    String?
+  supplierInvoiceUrl    String?
+  deliveryNoteUrl       String?
+  certificateUrl        String?
+  notes                 String?
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product               PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  receivedBy            User? @relation("PharmacyBatchReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull)
+  decisionResponsible   User? @relation("PharmacyBatchDecisionResponsible", fields: [decisionResponsibleId], references: [id], onDelete: SetNull)
+  createdBy             User @relation("PharmacyBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             User? @relation("PharmacyBatchUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  stockMovements        PharmacyStockMovement[]
+
+  @@unique([organizationId, productId, batchNumber])
+  @@unique([organizationId, barcode])
+  @@index([organizationId])
+  @@index([organizationId, productId])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, expiryDate])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+}
+
+model PharmacyStockMovement {
+  id                String   @id @default(cuid())
+  organizationId    String
+  productId         String
+  batchId           String?
+  movementType      String
+  quantity          Decimal  @db.Decimal(14, 3)
+  quantityBefore    Decimal? @db.Decimal(14, 3)
+  quantityAfter     Decimal? @db.Decimal(14, 3)
+  reason            String
+  relatedEntityType String?
+  relatedEntityId   String?
+  createdById       String
+  createdAt         DateTime @default(now())
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product           PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch             PharmacyBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  createdBy         User @relation("PharmacyStockMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, productId, createdAt])
+  @@index([organizationId, batchId, createdAt])
+  @@index([organizationId, movementType, createdAt])
 }
 
 model OrganizationMember {

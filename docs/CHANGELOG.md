@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Lots & péremptions avec tables `PharmacyBatch` et `PharmacyStockMovement`, migration additive des anciens lots et mouvement initial traçable.
+- Ajout des routes lots isolées par organisation pour la liste, la création, le détail, la modification, la quarantaine, la levée de quarantaine, le rappel, le blocage, l'annulation et la sélection FEFO.
+- Ajout d'une interface Lots responsive avec recherche, filtres, badges de sécurité, formulaire plein écran, détail, mouvements et actions métier persistées avec motif.
 - Ajout du catalogue dédié `PharmacyProduct` pour le module Pharmacie > Produits & médicaments, avec migration additive des anciens produits génériques.
 - Ajout des routes privées produits pour la recherche, la création, la consultation, la modification, l'archivage logique et la réactivation.
 - Ajout d'une interface catalogue responsive avec recherche, filtres, pagination, fiche produit et formulaire métier structuré.
@@ -21,6 +24,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Sécurisé
 
+- Les lots refusent les produits, fournisseurs, commandes, réceptions et collaborateurs d'une autre organisation; les actions sensibles réappliquent les permissions backend et l'audit.
+- Les lots expirés, rappelés, bloqués ou en quarantaine sont exclus de la sélection FEFO et ne sont plus vendables via les impacts stock existants.
 - Les opérations produit vérifient session, organisation PHARMACY active, membership, module autorisé, origine, rate limit, validation Zod, unicité par organisation et droits d'action.
 - L'archivage produit est non destructif et chaque mutation importante est auditée.
 

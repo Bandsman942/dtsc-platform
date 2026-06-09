@@ -8,6 +8,17 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Pharmacie - Lots & péremptions
+
+- [ ] Une organisation PHARMACY crée et modifie un lot lié à un produit actif de la même organisation.
+- [ ] Les doublons produit + numéro de lot et les codes-barres de lot dupliqués sont refusés.
+- [ ] Les quantités négatives, incohérentes ou supérieures à la quantité reçue sont refusées.
+- [ ] Les lots expirés, rappelés, bloqués et en quarantaine sont exclus de l'endpoint FEFO.
+- [ ] Les lots vendables sont triés par date de péremption croissante.
+- [ ] Les actions quarantaine, levée, rappel, blocage et annulation exigent un motif et créent une trace.
+- [ ] Une organisation ne peut consulter ou modifier aucun lot d'une autre organisation.
+- [ ] Le formulaire lots reste plein écran sur mobile et utilise les référentiels réels pour ses relations.
+
 ## Navigation et socle commun Enterprise
 
 - Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.

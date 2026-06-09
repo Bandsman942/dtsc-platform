@@ -2238,6 +2238,8 @@ Etat actuel:
 
 Le module `MEDICINES_PRODUCTS` repose sur la table dediee `PharmacyProduct`, isolee par `organizationId`. Les contraintes uniques `(organizationId, internalCode)` et `(organizationId, barcode)` empechent les doublons dans une pharmacie sans imposer une unicite globale.
 
+Le module `BATCH_EXPIRY` repose sur `PharmacyBatch` et `PharmacyStockMovement`. Les lots sont uniques par `(organizationId, productId, batchNumber)`, leurs références sont vérifiées dans le même tenant et chaque création génère un mouvement `INITIAL_BATCH_CREATION`. Les statuts de sécurité forts restent prioritaires sur les statuts calculés. `getSellableBatchesForProduct()` applique la préparation FEFO en excluant les lots non vendables et en triant les résultats par péremption croissante.
+
 Routes:
 
 | Methode | Route | Acces | Usage |

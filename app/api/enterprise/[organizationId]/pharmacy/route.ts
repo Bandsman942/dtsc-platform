@@ -85,6 +85,10 @@ async function validateReference(organizationId: string, id: string | undefined,
     const product = await prisma.pharmacyProduct.findFirst({ where: { id, organizationId, status: { not: "ARCHIVED" } }, select: { id: true } });
     return product ? null : message;
   }
+  if (moduleCode === "BATCH_EXPIRY") {
+    const batch = await prisma.pharmacyBatch.findFirst({ where: { id, organizationId }, select: { id: true } });
+    return batch ? null : message;
+  }
   const record = await prisma.enterpriseSectorRecord.findFirst({
     where: { id, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode, deletedAt: null },
     select: { id: true },
@@ -107,9 +111,8 @@ async function validateReferences(organizationId: string, data: PharmacyInput) {
     if (error) return error;
   }
   if (data.batchId && data.productId) {
-    const batch = await prisma.enterpriseSectorRecord.findFirst({ where: { id: data.batchId, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: "BATCH_EXPIRY", deletedAt: null }, select: { payloadJson: true } });
-    const batchPayload = batch?.payloadJson as Record<string, unknown> | null;
-    if (batchPayload?.productId !== data.productId) return "Le lot sélectionné n'appartient pas au produit choisi.";
+    const batch = await prisma.pharmacyBatch.findFirst({ where: { id: data.batchId, organizationId }, select: { productId: true } });
+    if (batch?.productId !== data.productId) return "Le lot sélectionné n'appartient pas au produit choisi.";
   }
   if (data.departmentId) {
     const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
@@ -165,8 +168,8 @@ export async function POST(req: Request, { params }: Params) {
   }
   const referenceError = await validateReferences(organizationId, data);
   if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
-  if (data.moduleCode === "BATCH_EXPIRY" && (!data.productId || !data.batchNumber || !data.expiryDate)) {
-    return NextResponse.json({ error: "Invalid batch", message: "Produit, numéro de lot et date de péremption sont obligatoires." }, { status: 400 });
+  if (data.moduleCode === "BATCH_EXPIRY") {
+    return NextResponse.json({ error: "Dedicated batch API required", message: "Utilisez le module Lots & péremptions dédié." }, { status: 400 });
   }
   const record = await prisma.enterpriseSectorRecord.create({
     data: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: data.moduleCode, recordType: data.recordType, title: data.title, summary: data.summary || null, status: data.status, priority: data.priority, assignedToUserId: data.assignedToUserId || data.responsibleUserId || null, createdById: session.userId, payloadJson: payload(data) },
