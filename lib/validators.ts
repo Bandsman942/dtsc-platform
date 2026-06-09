@@ -622,7 +622,7 @@ const pharmacyBatchBaseSchema = z.object({
 function validPharmacyBatch(data: z.infer<typeof pharmacyBatchBaseSchema>) {
   const quantitiesValid = data.availableQuantity + data.reservedQuantity + data.damagedQuantity <= data.receivedQuantity;
   const datesValid = !data.manufacturingDate || data.expiryDate > data.manufacturingDate;
-  const temperaturesValid = data.tempMin === null || data.tempMin === undefined || data.tempMax === null || data.tempMax === undefined || data.tempMin < data.tempMax;
+  const temperaturesValid = data.tempMin === "" || data.tempMin === null || data.tempMin === undefined || data.tempMax === "" || data.tempMax === null || data.tempMax === undefined || Number(data.tempMin) < Number(data.tempMax);
   return quantitiesValid && datesValid && temperaturesValid;
 }
 
@@ -631,7 +631,7 @@ export const pharmacyBatchSchema = pharmacyBatchBaseSchema.refine(validPharmacyB
 });
 export const pharmacyBatchUpdateSchema = pharmacyBatchBaseSchema.partial().refine((data) => {
   if (data.receivedQuantity === undefined) return true;
-  return (data.availableQuantity || 0) + (data.reservedQuantity || 0) + (data.damagedQuantity || 0) <= data.receivedQuantity;
+  return Number(data.availableQuantity || 0) + Number(data.reservedQuantity || 0) + Number(data.damagedQuantity || 0) <= Number(data.receivedQuantity);
 }, { message: "Les quantités disponibles, réservées et endommagées dépassent la quantité reçue." }).refine((data) => {
   return !data.manufacturingDate || !data.expiryDate || data.expiryDate > data.manufacturingDate;
 }, { message: "La date de péremption doit être postérieure à la fabrication." });
