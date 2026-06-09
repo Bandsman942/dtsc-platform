@@ -49,6 +49,7 @@ const enterpriseAdminPage = read("app/enterprise-admin/page.tsx");
 const enterpriseActivitiesPage = read("app/enterprise-activities/page.tsx");
 const enterpriseModulePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
 const enterpriseNavigation = read("lib/enterprise/enterprise-navigation.ts");
+const enterpriseModuleWorkspace = read("components/enterprise/enterprise-module-workspace.tsx");
 const enterpriseAdminLoader = read("lib/enterprise/enterprise-admin-loader.ts");
 const enterpriseActivitiesLoader = read("lib/enterprise/enterprise-activities-loader.ts");
 const enterpriseHealthcareLoader = read("lib/enterprise/enterprise-healthcare-loader.ts");
@@ -189,9 +190,15 @@ check(
 
 check(
   "navigation Enterprise expose uniquement les modules actifs et autorisés",
-  containsAll(enterpriseNavigation, ["enterpriseModule.isEnabled && enterpriseModule.accessAllowed", "getOrganizationEntitlements", "getEnterpriseModulesDataset"])
-    && containsAll(enterpriseModulePage, ["canAccessEnterpriseModule", "requireEnterpriseMembership", "organizationId_moduleCode"])
+  containsAll(enterpriseNavigation, ["enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed", "getOrganizationEntitlements", "getEnterpriseModulesDataset"])
+    && containsAll(enterpriseModulePage, ["canAccessEnterpriseModule", "requireEnterpriseMembership", "organizationId_moduleCode", "!enterpriseModule.isCore", "internalCalendarEvent", "auditLog.findMany"])
     && middleware.includes('"/enterprise-modules"')
+);
+
+check(
+  "socle commun Enterprise: pages alimentées par les données réelles de l'organisation",
+  containsAll(enterpriseModuleWorkspace, ["Données actuelles de l'entreprise", "Collaborateurs actifs", "Départements actifs", "resolveModuleItems", "Aucune donnée n'est encore enregistrée"])
+    && !enterpriseModuleWorkspace.includes("Espace opérationnel")
 );
 
 check(

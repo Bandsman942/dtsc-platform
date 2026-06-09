@@ -12,6 +12,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- La navigation latérale des entreprises clientes et le panneau générique des modules affichent uniquement le socle commun; les modules sectoriels restent regroupés dans leurs sous-modules Administration dédiés.
+- Les pages du socle commun remplacent l'espace générique superficiel par des indicateurs et listes issus des collaborateurs, départements, postes, workflows, demandes, réunions et audits réels de l'entreprise.
 - Les lots, ventes, réceptions et Activités Pharmacie utilisent désormais le catalogue produit central dans leurs sélections.
 - Les catégories, formes, unités, voies d'administration, conditions de conservation, statuts et devises utilisent des listes contrôlées partagées.
 - Les champs, options, filtres et détails du formulaire Produits & médicaments affichent des libellés métier en français et des infos-bulles d'orientation, sans exposer les noms techniques internes.

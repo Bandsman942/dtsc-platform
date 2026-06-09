@@ -8,6 +8,14 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Navigation et socle commun Enterprise
+
+- Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.
+- Vérifier que les modules sectoriels Santé et Pharmacie restent accessibles dans `Administration [entreprise]` sans carte ou lien latéral répété.
+- Ouvrir plusieurs pages `/enterprise-modules/[moduleCode]` du socle commun et vérifier les KPI/listes issus de l'organisation active.
+- Vérifier qu'une page générique refuse un module sectoriel même avec une URL saisie manuellement.
+- Vérifier qu'aucune donnée d'une autre organisation n'apparaît dans les collaborateurs, départements, workflows, demandes, réunions ou audits.
+
 ## 1. Socle technique
 
 - Executer `pnpm install --no-frozen-lockfile` si l'environnement local n'a pas encore `node_modules`.

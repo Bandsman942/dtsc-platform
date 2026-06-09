@@ -16,13 +16,20 @@ export default async function EnterpriseModulePage({ params }: Params) {
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership || !(await canAccessEnterpriseModule(user.id, organizationId, moduleCode, "read"))) notFound();
 
-  const [organization, enterpriseModule, activityBlocks, records] = await Promise.all([
+  const [organization, enterpriseModule, activityBlocks, records, members, departments, positions, workflows, requests, calendarEvents, audits] = await Promise.all([
     prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
     prisma.enterpriseModule.findUnique({ where: { organizationId_moduleCode: { organizationId, moduleCode } } }),
     prisma.enterpriseActivityBlock.findMany({ where: { organizationId, isEnabled: true, targetModuleCode: moduleCode }, orderBy: { sortOrder: "asc" }, select: { id: true, labelFr: true, labelEn: true, blockCode: true } }),
     prisma.enterpriseSectorRecord.findMany({ where: { organizationId, moduleCode, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 20, select: { id: true, title: true, summary: true, status: true, updatedAt: true } }),
+    prisma.organizationMember.findMany({ where: { organizationId, removedAt: null }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, role: true, status: true, joinedAt: true, user: { select: { name: true, email: true } } } }),
+    prisma.enterpriseDepartment.findMany({ where: { organizationId }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }], take: 30, select: { id: true, labelFr: true, departmentCode: true, isActive: true } }),
+    prisma.enterprisePosition.findMany({ where: { organizationId }, orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }], take: 30, select: { id: true, labelFr: true, positionCode: true, isActive: true } }),
+    prisma.enterpriseWorkflow.findMany({ where: { organizationId }, orderBy: { updatedAt: "desc" }, take: 20, select: { id: true, labelFr: true, isEnabled: true, updatedAt: true } }),
+    prisma.enterpriseActivityRequest.findMany({ where: { organizationId }, orderBy: { updatedAt: "desc" }, take: 30, select: { id: true, title: true, status: true, priority: true, blockCode: true, updatedAt: true } }),
+    prisma.internalCalendarEvent.findMany({ where: { organizationId, deletedAt: null }, orderBy: { startDateTime: "desc" }, take: 20, select: { id: true, title: true, status: true, startDateTime: true } }),
+    prisma.auditLog.findMany({ where: { metadata: { path: ["organizationId"], equals: organizationId } }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, action: true, entity: true, createdAt: true } }),
   ]);
-  if (!organization || !enterpriseModule) notFound();
+  if (!organization || !enterpriseModule || !enterpriseModule.isCore) notFound();
 
   return (
     <AppShell user={user}>
@@ -31,6 +38,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
         enterpriseModule={{ code: enterpriseModule.moduleCode, label: user.locale === "en" ? enterpriseModule.labelEn : enterpriseModule.labelFr, description: user.locale === "en" ? enterpriseModule.descriptionEn || enterpriseModule.moduleCode : enterpriseModule.descriptionFr || enterpriseModule.moduleCode, category: enterpriseModule.moduleCategory, isCore: enterpriseModule.isCore }}
         activityBlocks={activityBlocks}
         records={records}
+        coreData={{ members, departments, positions, workflows, requests, calendarEvents, audits }}
         canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)}
         locale={user.locale}
       />

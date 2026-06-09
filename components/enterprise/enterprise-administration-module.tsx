@@ -14,8 +14,6 @@ import {
   EnterprisePositionsPanel,
   EnterpriseRecentRequestsPanel,
   EnterpriseWorkflowsPanel,
-  healthcareModuleCodes,
-  pharmacyModuleCodes,
 } from "@/components/enterprise/enterprise-admin-panels";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
@@ -41,8 +39,8 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "INVITED"), [members]);
   const memberNameById = useMemo(() => new Map(activeMembers.map((member) => [member.user.id, member.user.name])), [activeMembers]);
   const visibleModules = useMemo(
-    () => modules.filter((enterpriseModule) => enterpriseModule.isCore || (organization.sectorCode !== "HEALTH_CARE" && organization.sectorCode !== "PHARMACY") || (organization.sectorCode === "HEALTH_CARE" ? healthcareModuleCodes.has(enterpriseModule.moduleCode) : pharmacyModuleCodes.has(enterpriseModule.moduleCode))),
-    [modules, organization.sectorCode],
+    () => modules.filter((enterpriseModule) => enterpriseModule.isCore),
+    [modules],
   );
   const activeHealthcareModuleCodes = useMemo(() => new Set(modules.filter((enterpriseModule) => enterpriseModule.isEnabled).map((enterpriseModule) => enterpriseModule.moduleCode)), [modules]);
   const activePharmacyModuleCodes = activeHealthcareModuleCodes;

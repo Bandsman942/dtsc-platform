@@ -16,7 +16,7 @@ export async function getEnterpriseNavigationModules(organizationId: string, loc
   }
   const dataset = await getEnterpriseModulesDataset(organizationId, entitlements);
   return dataset.modules
-    .filter((enterpriseModule) => enterpriseModule.isEnabled && enterpriseModule.accessAllowed)
+    .filter((enterpriseModule) => enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed)
     .map((enterpriseModule) => ({
       code: enterpriseModule.moduleCode,
       label: locale === "en" ? enterpriseModule.labelEn : enterpriseModule.labelFr,
