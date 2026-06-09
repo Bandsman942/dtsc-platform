@@ -61,6 +61,25 @@ Les permissions lots couvrent consultation, création, modification, archivage, 
 
 Les alertes proches péremption, expiré, rappelé, quarantaine, quantité faible et épuisé sont calculées depuis les données réelles du lot. La persistance dédiée dans un futur référentiel `pharmacy_alerts` reste à réaliser lors de l'itération Alertes.
 
+## Module Stock & inventaire
+
+Le stock théorique est calculé depuis `PharmacyBatch`; il n'est jamais inventé dans l'interface. La vue globale agrège les quantités disponibles, réservées et endommagées, la valeur estimée, les ruptures, stocks faibles, surstocks, péremptions, quarantaines, rappels, écarts et ajustements en attente.
+
+Le stock par produit additionne les lots du produit et détermine le statut `AVAILABLE`, `LOW_STOCK`, `OUT_OF_STOCK`, `OVERSTOCK`, `BLOCKED` ou `NOT_TRACKED` à partir des seuils du référentiel produit. Le stock par lot expose les quantités, la péremption, l'emplacement et le dernier mouvement.
+
+Les mouvements `PharmacyStockMovement` sont enrichis avec direction, statut et commentaire. Ils restent immuables; une annulation d'ajustement crée un mouvement inverse au lieu de supprimer l'ancien impact.
+
+Les sessions `PharmacyInventorySession` génèrent des lignes `PharmacyInventoryLine` depuis les lots du tenant. Chaque comptage persiste la quantité physique, calcule `variance = countedQuantity - systemQuantity` et classe l'écart. La validation d'un ajustement `PharmacyStockAdjustment` modifie le lot dans une transaction et crée le mouvement correspondant; une sortie qui rendrait le stock négatif est refusée.
+
+Les emplacements `PharmacyStockLocation` utilisent un code unique par organisation et peuvent représenter rayon, étagère, armoire, réfrigérateur, réserve, comptoir, quarantaine, produits expirés ou réception. Leur archivage est logique.
+
+Route dédiée:
+
+- `GET /api/enterprise/[organizationId]/pharmacy/stock`: KPI, stock produit/lot, mouvements, sessions, lignes, ajustements, emplacements et référentiels;
+- `POST /api/enterprise/[organizationId]/pharmacy/stock`: création de session, ajustement ou emplacement, génération de lignes, comptage, soumission/validation, application ou annulation d'ajustement et archivage d'emplacement.
+
+Chaque opération vérifie session, module `STOCK_INVENTORY`, rôle, origine, rate limit, références de la même organisation et audit. Les départements et collaborateurs sont réutilisés depuis le socle commun ERP.
+
 ## Stockage et relations
 
 Les produits, lots et mouvements de stock sont stockés dans `PharmacyProduct`, `PharmacyBatch` et `PharmacyStockMovement`. Les autres opérations restent stockées dans `EnterpriseSectorRecord`.
@@ -131,6 +150,8 @@ Les routes vérifient session, organisation cliente active, `sectorCode = PHARMA
 `20260609110000_pharmacy_products_module` crée le catalogue dédié et migre sans suppression les anciens produits génériques possédant un code interne.
 
 `20260609173000_pharmacy_batches_module` crée les tables lots et mouvements, puis copie sans suppression les anciens lots génériques valides et génère leur mouvement initial.
+
+`20260609203000_pharmacy_stock_inventory_module` enrichit les mouvements et crée les sessions, lignes, ajustements et emplacements de stock sans supprimer les données existantes.
 
 ## Limites restantes
 

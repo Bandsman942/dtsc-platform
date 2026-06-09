@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Stock & inventaire avec agrégats stock réels, mouvements consultables, sessions et lignes d'inventaire, écarts, ajustements, emplacements et alertes calculées.
+- Ajout des tables `PharmacyInventorySession`, `PharmacyInventoryLine`, `PharmacyStockAdjustment` et `PharmacyStockLocation`, avec enrichissement non destructif des mouvements de stock.
+- Ajout de la route privée `/api/enterprise/[organizationId]/pharmacy/stock` pour charger le stock et exécuter les opérations sensibles isolées par organisation.
 - Ajout du module dédié Pharmacie > Lots & péremptions avec tables `PharmacyBatch` et `PharmacyStockMovement`, migration additive des anciens lots et mouvement initial traçable.
 - Ajout des routes lots isolées par organisation pour la liste, la création, le détail, la modification, la quarantaine, la levée de quarantaine, le rappel, le blocage, l'annulation et la sélection FEFO.
 - Ajout d'une interface Lots responsive avec recherche, filtres, badges de sécurité, formulaire plein écran, détail, mouvements et actions métier persistées avec motif.
@@ -15,6 +18,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Le sous-module Stock & inventaire remplace son formulaire générique par dix sous-vues fonctionnelles, des cartes mobiles, des formulaires plein écran et des actions historisées.
 - La navigation latérale des entreprises clientes et le panneau générique des modules affichent uniquement le socle commun; les modules sectoriels restent regroupés dans leurs sous-modules Administration dédiés.
 - Les pages du socle commun remplacent l'espace générique superficiel par des indicateurs et listes issus des collaborateurs, départements, postes, workflows, demandes, réunions et audits réels de l'entreprise.
 - Les lots, ventes, réceptions et Activités Pharmacie utilisent désormais le catalogue produit central dans leurs sélections.
@@ -24,6 +28,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Sécurisé
 
+- Les comptages, ajustements, emplacements, sessions et références produit/lot/département/collaborateur sont validés côté serveur dans le tenant actif; un ajustement ne peut jamais rendre le stock négatif.
 - Les lots refusent les produits, fournisseurs, commandes, réceptions et collaborateurs d'une autre organisation; les actions sensibles réappliquent les permissions backend et l'audit.
 - Les lots expirés, rappelés, bloqués ou en quarantaine sont exclus de la sélection FEFO et ne sont plus vendables via les impacts stock existants.
 - Les opérations produit vérifient session, organisation PHARMACY active, membership, module autorisé, origine, rate limit, validation Zod, unicité par organisation et droits d'action.

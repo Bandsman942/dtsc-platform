@@ -172,6 +172,16 @@ model User {
   receivedPharmacyBatches PharmacyBatch[] @relation("PharmacyBatchReceivedBy")
   decidedPharmacyBatches PharmacyBatch[] @relation("PharmacyBatchDecisionResponsible")
   pharmacyStockMovements PharmacyStockMovement[] @relation("PharmacyStockMovementCreatedBy")
+  createdPharmacyInventorySessions PharmacyInventorySession[] @relation("PharmacyInventorySessionCreatedBy")
+  updatedPharmacyInventorySessions PharmacyInventorySession[] @relation("PharmacyInventorySessionUpdatedBy")
+  pharmacyInventoryResponsibilities PharmacyInventorySession[] @relation("PharmacyInventorySessionResponsible")
+  validatedPharmacyInventorySessions PharmacyInventorySession[] @relation("PharmacyInventorySessionValidatedBy")
+  countedPharmacyInventoryLines PharmacyInventoryLine[] @relation("PharmacyInventoryLineCountedBy")
+  requestedPharmacyStockAdjustments PharmacyStockAdjustment[] @relation("PharmacyStockAdjustmentRequestedBy")
+  approvedPharmacyStockAdjustments PharmacyStockAdjustment[] @relation("PharmacyStockAdjustmentApprovedBy")
+  createdPharmacyStockLocations PharmacyStockLocation[] @relation("PharmacyStockLocationCreatedBy")
+  updatedPharmacyStockLocations PharmacyStockLocation[] @relation("PharmacyStockLocationUpdatedBy")
+  pharmacyStockLocationResponsibilities PharmacyStockLocation[] @relation("PharmacyStockLocationResponsible")
 
   @@index([role])
   @@index([status])
@@ -530,6 +540,10 @@ model Organization {
     pharmacyProducts PharmacyProduct[]
     pharmacyBatches PharmacyBatch[]
     pharmacyStockMovements PharmacyStockMovement[]
+    pharmacyInventorySessions PharmacyInventorySession[]
+    pharmacyInventoryLines PharmacyInventoryLine[]
+    pharmacyStockAdjustments PharmacyStockAdjustment[]
+    pharmacyStockLocations PharmacyStockLocation[]
 
   @@index([status, organizationType])
   @@index([sectorId])
@@ -955,6 +969,8 @@ model PharmacyProduct {
   updatedBy                    User? @relation("PharmacyProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   batches                      PharmacyBatch[]
   stockMovements               PharmacyStockMovement[]
+  inventoryLines               PharmacyInventoryLine[]
+  stockAdjustments             PharmacyStockAdjustment[]
 
   @@unique([organizationId, internalCode])
   @@unique([organizationId, barcode])
@@ -1024,6 +1040,8 @@ model PharmacyBatch {
   createdBy             User @relation("PharmacyBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy             User? @relation("PharmacyBatchUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   stockMovements        PharmacyStockMovement[]
+  inventoryLines        PharmacyInventoryLine[]
+  stockAdjustments      PharmacyStockAdjustment[]
 
   @@unique([organizationId, productId, batchNumber])
   @@unique([organizationId, barcode])
@@ -1041,12 +1059,15 @@ model PharmacyStockMovement {
   productId         String
   batchId           String?
   movementType      String
+  direction         String   @default("NEUTRAL")
   quantity          Decimal  @db.Decimal(14, 3)
   quantityBefore    Decimal? @db.Decimal(14, 3)
   quantityAfter     Decimal? @db.Decimal(14, 3)
   reason            String
   relatedEntityType String?
   relatedEntityId   String?
+  status            String   @default("APPLIED")
+  comment           String?
   createdById       String
   createdAt         DateTime @default(now())
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1057,6 +1078,133 @@ model PharmacyStockMovement {
   @@index([organizationId, productId, createdAt])
   @@index([organizationId, batchId, createdAt])
   @@index([organizationId, movementType, createdAt])
+}
+
+model PharmacyInventorySession {
+  id                String   @id @default(cuid())
+  organizationId    String
+  title             String
+  inventoryDate     DateTime
+  inventoryType     String
+  departmentId      String?
+  locationId        String?
+  responsibleUserId String
+  participantsJson  Json?
+  scopeType         String
+  scopeJson         Json?
+  status            String   @default("DRAFT")
+  notes             String?
+  submittedAt       DateTime?
+  validatedAt       DateTime?
+  validatedById     String?
+  rejectionReason   String?
+  createdById       String
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  responsible       User @relation("PharmacyInventorySessionResponsible", fields: [responsibleUserId], references: [id], onDelete: Restrict)
+  validatedBy       User? @relation("PharmacyInventorySessionValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
+  createdBy         User @relation("PharmacyInventorySessionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy         User? @relation("PharmacyInventorySessionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  lines             PharmacyInventoryLine[]
+  adjustments       PharmacyStockAdjustment[]
+
+  @@index([organizationId, status, inventoryDate])
+  @@index([organizationId, responsibleUserId])
+  @@index([organizationId, locationId])
+}
+
+model PharmacyInventoryLine {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  inventorySessionId String
+  productId          String
+  batchId            String?
+  locationId         String?
+  systemQuantity     Decimal  @db.Decimal(14, 3)
+  countedQuantity    Decimal? @db.Decimal(14, 3)
+  variance           Decimal? @db.Decimal(14, 3)
+  varianceType       String?
+  varianceReason     String?
+  countedById        String?
+  countedAt          DateTime?
+  status             String   @default("TO_COUNT")
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  session            PharmacyInventorySession @relation(fields: [inventorySessionId], references: [id], onDelete: Cascade)
+  product            PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch              PharmacyBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  countedBy          User? @relation("PharmacyInventoryLineCountedBy", fields: [countedById], references: [id], onDelete: SetNull)
+  adjustments        PharmacyStockAdjustment[]
+
+  @@unique([inventorySessionId, batchId])
+  @@index([organizationId, inventorySessionId, status])
+  @@index([organizationId, productId])
+  @@index([organizationId, batchId])
+}
+
+model PharmacyStockAdjustment {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  productId          String
+  batchId            String?
+  inventorySessionId String?
+  inventoryLineId    String?
+  adjustmentType     String
+  direction          String
+  quantity           Decimal  @db.Decimal(14, 3)
+  reason             String
+  status             String   @default("DRAFT")
+  requestedById      String
+  approvedById       String?
+  approvedAt         DateTime?
+  rejectedReason     String?
+  documentUrl        String?
+  notes              String?
+  reversedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product            PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch              PharmacyBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  inventorySession   PharmacyInventorySession? @relation(fields: [inventorySessionId], references: [id], onDelete: SetNull)
+  inventoryLine      PharmacyInventoryLine? @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
+  requestedBy        User @relation("PharmacyStockAdjustmentRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy         User? @relation("PharmacyStockAdjustmentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, productId])
+  @@index([organizationId, batchId])
+  @@index([organizationId, inventorySessionId])
+}
+
+model PharmacyStockLocation {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  name                  String
+  code                  String
+  locationType          String
+  parentLocationId      String?
+  responsibleUserId     String?
+  temperatureControlled Boolean  @default(false)
+  refrigerated          Boolean  @default(false)
+  description           String?
+  status                String   @default("ACTIVE")
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  responsible           User? @relation("PharmacyStockLocationResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  createdBy             User @relation("PharmacyStockLocationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             User? @relation("PharmacyStockLocationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([organizationId, parentLocationId])
 }
 
 model OrganizationMember {

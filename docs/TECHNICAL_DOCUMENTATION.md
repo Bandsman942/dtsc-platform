@@ -2240,6 +2240,8 @@ Le module `MEDICINES_PRODUCTS` repose sur la table dediee `PharmacyProduct`, iso
 
 Le module `BATCH_EXPIRY` repose sur `PharmacyBatch` et `PharmacyStockMovement`. Les lots sont uniques par `(organizationId, productId, batchNumber)`, leurs références sont vérifiées dans le même tenant et chaque création génère un mouvement `INITIAL_BATCH_CREATION`. Les statuts de sécurité forts restent prioritaires sur les statuts calculés. `getSellableBatchesForProduct()` applique la préparation FEFO en excluant les lots non vendables et en triant les résultats par péremption croissante.
 
+Le module `STOCK_INVENTORY` centralise ses calculs dans `lib/pharmacy-stock.ts` et persiste les opérations physiques dans `PharmacyInventorySession`, `PharmacyInventoryLine`, `PharmacyStockAdjustment` et `PharmacyStockLocation`. Les ajustements sont appliqués par transaction sur le lot et `PharmacyStockMovement`; les annulations créent un mouvement inverse. Toutes les conversions arithmétiques issues de valeurs Prisma/Zod passent explicitement par `Number(...)` afin de préserver le type-check Vercel.
+
 Routes:
 
 | Methode | Route | Acces | Usage |

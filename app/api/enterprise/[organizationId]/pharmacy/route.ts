@@ -171,6 +171,9 @@ export async function POST(req: Request, { params }: Params) {
   if (data.moduleCode === "BATCH_EXPIRY") {
     return NextResponse.json({ error: "Dedicated batch API required", message: "Utilisez le module Lots & péremptions dédié." }, { status: 400 });
   }
+  if (data.moduleCode === "STOCK_INVENTORY") {
+    return NextResponse.json({ error: "Dedicated stock API required", message: "Utilisez le module Stock & inventaire dédié." }, { status: 400 });
+  }
   const record = await prisma.enterpriseSectorRecord.create({
     data: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: data.moduleCode, recordType: data.recordType, title: data.title, summary: data.summary || null, status: data.status, priority: data.priority, assignedToUserId: data.assignedToUserId || data.responsibleUserId || null, createdById: session.userId, payloadJson: payload(data) },
     include: { createdBy: { select: { name: true, email: true } }, assignedTo: { select: { id: true, name: true, email: true } } },

@@ -69,6 +69,9 @@ const pharmacyBatchApi = read("app/api/enterprise/[organizationId]/pharmacy/batc
 const pharmacyBatchesWorkspace = read("components/enterprise/pharmacy-batches-workspace.tsx");
 const pharmacyBatchAccess = read("lib/pharmacy-batch-access.ts");
 const pharmacyBatchesService = read("lib/pharmacy-batches.ts");
+const pharmacyStockApi = read("app/api/enterprise/[organizationId]/pharmacy/stock/route.ts");
+const pharmacyStockWorkspace = read("components/enterprise/pharmacy-stock-workspace.tsx");
+const pharmacyStockService = read("lib/pharmacy-stock.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -367,6 +370,18 @@ check(
   "PHARMACY Lots: interface métier, actions réelles et FEFO",
   containsAll(pharmacyBatchesWorkspace, ["Lots & péremptions", "Aucun lot n&apos;est encore enregistré", "Mettre en quarantaine", "Marquer comme rappelé", "Mouvements stock", "h-[94dvh]", "CircleHelp"])
     && containsAll(pharmacyBatchesService, ["getSellableBatchesForProduct", 'orderBy: [{ expiryDate: "asc" }', 'status: { notIn: ["RECALLED", "QUARANTINED", "BLOCKED", "CANCELLED", "EXPIRED"] }'])
+);
+
+check(
+  "PHARMACY Stock: modèles dédiés, calculs réels et ajustements transactionnels",
+  containsAll(prismaSchema, ["model PharmacyInventorySession", "model PharmacyInventoryLine", "model PharmacyStockAdjustment", "model PharmacyStockLocation", 'direction         String   @default("NEUTRAL")'])
+    && containsAll(pharmacyStockService, ["getPharmacyStockDataset", "calculateProductStockStatus", "generateInventoryLines", "Number(batch.availableQuantity)"])
+    && containsAll(pharmacyStockApi, ["canAccessPharmacyStock", "isSameOriginRequest", "await rateLimit", "prisma.$transaction", "NEGATIVE_STOCK", "PharmacyStockAdjustment"])
+);
+
+check(
+  "PHARMACY Stock: dix vues fonctionnelles et formulaires plein écran",
+  containsAll(pharmacyStockWorkspace, ["Vue stock global", "Stock par produit", "Stock par lot", "Mouvements de stock", "Sessions d'inventaire", "Écarts d'inventaire", "Ajustements stock", "Emplacements", "Alertes stock", "Historique stock", "h-[94dvh]", "Enregistrer le comptage"])
 );
 
 check(

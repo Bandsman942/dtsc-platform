@@ -19,6 +19,17 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Une organisation ne peut consulter ou modifier aucun lot d'une autre organisation.
 - [ ] Le formulaire lots reste plein écran sur mobile et utilise les référentiels réels pour ses relations.
 
+## Pharmacie - Stock & inventaire
+
+- [ ] Les KPI stock, ruptures, stocks faibles, surstocks et valeurs proviennent des lots de l'organisation active.
+- [ ] La vue stock par produit additionne les quantités disponibles, réservées et endommagées des lots.
+- [ ] Une session d'inventaire génère des lignes depuis les lots de la même organisation.
+- [ ] Un comptage calcule et persiste l'écart sans modifier directement le stock.
+- [ ] Un ajustement validé crée un mouvement et modifie le lot; son annulation crée un mouvement inverse.
+- [ ] Aucun ajustement ne peut produire une quantité disponible négative.
+- [ ] Les emplacements, collaborateurs, départements, produits et lots d'une autre organisation sont refusés.
+- [ ] Les dix sous-vues Stock & inventaire restent lisibles en cartes mobiles et les formulaires s'ouvrent en plein écran.
+
 ## Navigation et socle commun Enterprise
 
 - Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.
