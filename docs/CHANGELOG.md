@@ -14,6 +14,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - Les lots, ventes, réceptions et Activités Pharmacie utilisent désormais le catalogue produit central dans leurs sélections.
 - Les catégories, formes, unités, voies d'administration, conditions de conservation, statuts et devises utilisent des listes contrôlées partagées.
+- Les champs, options, filtres et détails du formulaire Produits & médicaments affichent des libellés métier en français et des infos-bulles d'orientation, sans exposer les noms techniques internes.
+- La QA de régression contrôle désormais la présence des libellés métier et aides contextuelles du catalogue Produits.
 
 ### Sécurisé
 

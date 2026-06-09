@@ -337,6 +337,13 @@ check(
 );
 
 check(
+  "PHARMACY Produits: libellés métier et aides contextuelles sans clés techniques visibles",
+  containsAll(pharmacyProductsWorkspace, ["FIELD_HELP", "CircleHelp", "Ordonnance obligatoire", "Seuil d'alerte de stock", "Nombre d'unités par emballage", "fieldLabel(key)"])
+    && !pharmacyProductsWorkspace.includes("labelText={field}")
+    && !pharmacyProductsWorkspace.includes(">{field}</label>")
+);
+
+check(
   "SaaS: Console DTSC expose le centre de contrôle abonnements, limites, modules et derniers paiements",
   containsAll(consoleBilling, ["organizationSubscriptionItems", "billingPlanOptions", "billingSummary", "getPlanUsageLimits", "resolveSaasPlanCode", "enabledModules", "latestBillingRecord"])
     && consoleBilling.includes("plans.filter((plan) => plan.isActive)")

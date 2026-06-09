@@ -325,6 +325,7 @@ Conserver une hiérarchie visible pour:
 - La PWA privée doit autoriser portrait et paysage quand l'expérience métier le justifie, notamment pour les appels vidéo; ne pas verrouiller `orientation` sur portrait si cela dégrade les appels.
 - Toute nouvelle copie visible du design doit respecter i18n FR/EN et éviter les textes hardcodés lorsque l'interface est réutilisable.
 - Quand un module privé reçoit de nouveaux libellés visibles, ajouter les clés dans `locales/fr.json` et `locales/en.json`, puis utiliser `translate(locale, key)` avec la préférence utilisateur quand elle est disponible.
+- Les formulaires et fiches détail ne doivent jamais afficher directement des noms de champs techniques, identifiants de code, clés JSON, noms camelCase ou libellés ambigus. Chaque champ visible doit avoir un libellé métier facilement interprétable par l'utilisateur, traduit selon la langue de l'interface, et une info-bulle ou aide contextuelle courte expliquant la valeur attendue ou l'effet de l'option.
 
 ## Règles DTSC — Calendrier interne
 
