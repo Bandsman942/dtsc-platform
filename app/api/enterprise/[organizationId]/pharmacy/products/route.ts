@@ -14,8 +14,8 @@ function nullableText(value: string | null | undefined) {
   return value === "" || value === undefined ? null : value;
 }
 
-function nullableNumber(value: string | number | null | undefined) {
-  return value === "" || value === undefined ? null : value;
+function nullableNumber(value: string | number | null | undefined): number | null {
+  return typeof value === "number" ? value : null;
 }
 
 function productData(data: ReturnType<typeof pharmacyProductSchema.parse>, userId: string): Omit<Prisma.PharmacyProductUncheckedCreateInput, "organizationId"> {
