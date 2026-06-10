@@ -23,6 +23,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du build Vercel des infos-bulles de vente en portant le titre accessible sur un conteneur HTML compatible plutôt que sur l'icône Lucide.
 - Correction du build Vercel des remboursements de vente en conservant le narrowing TypeScript du montant et du motif avant la transaction Prisma.
 - Correction du build Vercel en supprimant la clé `QUARANTINE` dupliquée dans les libellés Stock & inventaire.
 

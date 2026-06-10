@@ -437,6 +437,7 @@ check(
 check(
   "PHARMACY Ventes: onze vues métier, FEFO, aides et formulaire mobile",
   containsAll(pharmacySalesWorkspace, ["Tableau de bord", "Nouvelle vente / dispensation", "Ventes du jour", "Historique des ventes", "Lignes de vente", "Validations pharmacien", "Annulations & remboursements", "Sorties exceptionnelles", "Reçus / factures", "Anomalies de vente", "Historique des mouvements", "Lot vendable FEFO", "CircleHelp", "h-[96dvh]", "min-w-0", "overflow-x-hidden"])
+    && !pharmacySalesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(
