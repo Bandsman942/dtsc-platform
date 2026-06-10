@@ -23,6 +23,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du build Vercel des remboursements de vente en conservant le narrowing TypeScript du montant et du motif avant la transaction Prisma.
 - Correction du build Vercel en supprimant la clé `QUARANTINE` dupliquée dans les libellés Stock & inventaire.
 
 ## 2026-06-09
