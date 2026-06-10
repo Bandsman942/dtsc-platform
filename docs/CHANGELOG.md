@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Ordonnances / prescriptions avec réception structurée, lignes prescrites référencées ou libres, rapprochement produits, substitution générique traçable, contrôle pharmacien, dispensation, documents et audit.
+- Ajout des modèles et de la migration additive `PharmacyPrescription`, `PharmacyPrescriptionLine`, `PharmacyPrescriptionDocument` et `PharmacyPrescriptionAuditEvent`.
+- Ajout des routes privées de création, consultation, soumission, validation, rejet, demande d'information, rapprochement, substitution, indisponibilité, dispensation, archivage et génération de vente brouillon.
 - Ajout du module dédié Pharmacie > Sorties, ventes & dispensation avec panier multi-produit, lots vendables FEFO, validation pharmacien, paiements, annulations, remboursements, anomalies et mouvements de stock.
 - Ajout des modèles et de la migration additive `PharmacySale`, `PharmacySaleLine`, `PharmacySaleRefund`, `PharmacySaleRefundLine` et `PharmacySaleAnomaly`.
 - Ajout des routes privées de création, consultation, confirmation, validation pharmacien, annulation et remboursement des ventes.
@@ -15,6 +18,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les ventes utilisent désormais les ordonnances dédiées de la même organisation et une ordonnance validée peut générer une vente brouillon préremplie selon FEFO sans impacter le stock.
+- L'espace Ordonnances fournit onze vues métier responsives, des cartes mobiles, des libellés français, des aides contextuelles et un formulaire plein écran.
 - Les ventes contrôlent les produits, lots, ordonnances, collaborateurs et départements dans la même organisation avant d'appliquer une sortie stock transactionnelle et idempotente.
 - Les formulaires de vente affichent des libellés commerciaux français, des aides contextuelles et des conteneurs mobiles bornés.
 - La validation d'une réception crée ou alimente les lots, augmente réellement le stock, crée les mouvements `RECEIPT` et met à jour les commandes fournisseurs liées.

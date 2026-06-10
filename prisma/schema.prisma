@@ -1365,6 +1365,129 @@ model PharmacyReceiptDocument {
   @@index([organizationId, batchId])
 }
 
+model PharmacyPrescription {
+  id                          String   @id @default(cuid())
+  organizationId              String
+  prescriptionNumber          String
+  prescriptionType            String
+  prescriptionDate            DateTime
+  receivedAt                  DateTime
+  priority                    String   @default("NORMAL")
+  customerId                  String?
+  patientId                   String?
+  patientName                 String
+  patientAge                  Int?
+  patientSex                  String?
+  patientPhone                String?
+  patientAddress              String?
+  patientType                 String?
+  patientNotes                String?
+  prescriberName              String
+  prescriberType              String?
+  prescriberIdentifier        String?
+  prescriberPhone             String?
+  prescriberFacility          String?
+  prescriberSpeciality        String?
+  prescriberAddress           String?
+  prescriberNotes             String?
+  pharmacistId                String?
+  validationStatus            String   @default("NOT_SUBMITTED")
+  pharmacistComment           String?
+  pharmacistValidatedAt       DateTime?
+  rejectionReason             String?
+  riskDetected                String?
+  recommendedAction           String?
+  status                      String   @default("DRAFT")
+  linkedSaleId                String?
+  mainDocumentUrl             String?
+  notes                       String?
+  createdById                 String
+  updatedById                 String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  lines                       PharmacyPrescriptionLine[]
+  documents                   PharmacyPrescriptionDocument[]
+  auditEvents                 PharmacyPrescriptionAuditEvent[]
+
+  @@unique([organizationId, prescriptionNumber])
+  @@index([organizationId, prescriptionDate])
+  @@index([organizationId, receivedAt])
+  @@index([organizationId, status, validationStatus])
+  @@index([organizationId, pharmacistId])
+  @@index([organizationId, linkedSaleId])
+}
+
+model PharmacyPrescriptionLine {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  prescriptionId             String
+  prescribedProductText      String
+  prescribedGenericName      String?
+  productId                  String?
+  matchedProductId           String?
+  substituteProductId        String?
+  substitutionApplied        Boolean  @default(false)
+  substitutionReason         String?
+  dosage                     String?
+  pharmaceuticalForm         String?
+  prescribedQuantity         Decimal? @db.Decimal(14, 3)
+  prescribedUnit             String?
+  dispensedQuantity          Decimal  @default(0) @db.Decimal(14, 3)
+  frequency                  String?
+  duration                   String?
+  administrationRoute        String?
+  posology                   String?
+  substitutionAllowed        Boolean  @default(false)
+  matchingStatus             String   @default("UNMATCHED")
+  dispensingStatus           String   @default("NOT_DISPENSED")
+  notes                      String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  prescription               PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, prescriptionId])
+  @@index([organizationId, productId])
+  @@index([organizationId, matchedProductId])
+  @@index([organizationId, substituteProductId])
+  @@index([organizationId, matchingStatus, dispensingStatus])
+}
+
+model PharmacyPrescriptionDocument {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  prescriptionId       String
+  documentType         String
+  title                String
+  fileUrl              String
+  reference            String?
+  documentDate         DateTime?
+  confidentialityLevel String   @default("CONFIDENTIAL")
+  notes                String?
+  createdById          String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  prescription         PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, prescriptionId])
+  @@index([organizationId, confidentialityLevel])
+}
+
+model PharmacyPrescriptionAuditEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  prescriptionId String
+  actorId        String
+  action         String
+  oldValue       Json?
+  newValue       Json?
+  notes          String?
+  createdAt      DateTime @default(now())
+  prescription   PharmacyPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, prescriptionId, createdAt])
+  @@index([organizationId, actorId, createdAt])
+}
+
 model PharmacySale {
   id                           String   @id @default(cuid())
   organizationId               String
@@ -1415,6 +1538,7 @@ model PharmacySale {
   @@index([organizationId, paymentStatus])
   @@index([organizationId, cashierId])
   @@index([organizationId, pharmacistId])
+  @@index([organizationId, prescriptionId])
 }
 
 model PharmacySaleLine {

@@ -177,6 +177,8 @@ Les routes vérifient session, organisation cliente active, `sectorCode = PHARMA
 
 `20260610150000_pharmacy_sales_module` crée les ventes, lignes, remboursements, lignes remboursées et anomalies sans supprimer les anciens enregistrements.
 
+`20260610183000_pharmacy_prescriptions_module` crée les ordonnances, lignes prescrites, documents liés et événements d'audit sans supprimer les anciens enregistrements génériques.
+
 ## Module Sorties, ventes & dispensation
 
 Le module `SALES_DISPENSATION` centralise les ventes comptoir, dispensations sur ordonnance, prises en charge, crédits et sorties internes ou exceptionnelles. Chaque ligne sélectionne un produit actif et un lot vendable proposé selon FEFO.
@@ -190,9 +192,26 @@ Routes privées:
 
 Les mutations vérifient l'origine, le rate limiting, Zod, le secteur `PHARMACY`, le membership, l'accès à `SALES_DISPENSATION`, les références du même tenant et l'audit.
 
+## Module Ordonnances / prescriptions
+
+Le module `PRESCRIPTIONS` couvre le flux pharmaceutique depuis la réception d'une ordonnance jusqu'à sa dispensation, sans devenir un dossier médical. Il conserve les informations minimales du patient ou client, le prescripteur structuré, les lignes prescrites, le rapprochement avec `PharmacyProduct`, la substitution générique autorisée, le contrôle pharmacien, les documents et l'historique.
+
+Les lignes peuvent rester libres quand un médicament n'existe pas encore dans le référentiel. Tout rapprochement, produit substitut ou collaborateur responsable est validé dans le même `organizationId`. Une substitution garde le produit prescrit, le produit servi, le motif et l'événement d'audit.
+
+Une ordonnance validée peut générer une seule vente brouillon active via `createSaleFromPrescription()`. Les lots vendables sont proposés selon FEFO, mais la génération ne modifie jamais le stock; seule la validation du module Ventes & dispensation applique la sortie réelle.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/prescriptions`;
+- `GET/PATCH /api/enterprise/[organizationId]/pharmacy/prescriptions/[prescriptionId]`.
+
+Les actions PATCH couvrent soumission, validation, rejet motivé, demande d'information, rapprochement, substitution, indisponibilité, génération de vente, dispensation partielle ou totale et archivage. Chaque mutation vérifie session, origine, rate limiting, secteur et module actifs, membership, permission, Zod, références du tenant et audit.
+
+Les documents d'ordonnance sont stockés dans `PharmacyPrescriptionDocument` et affichés selon leur confidentialité. Aucun champ URL libre ni faux téléversement n'est exposé; l'ajout de nouveaux fichiers reste conditionné à la route privée de stockage documentaire contrôlé.
+
 ## Limites restantes
 
-- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions et ventes; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.
+- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions, ventes et ordonnances; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.
 - Les alertes lots sont calculées à la lecture; leur workflow persistant sera ajouté dans l'itération Alertes.
 - L'upload de documents doit continuer à passer par une route privée de stockage contrôlé avant activation dans les formulaires.
 - Le calcul avancé de marge, taxe, caisse et rapports financiers consolidés reste à approfondir.

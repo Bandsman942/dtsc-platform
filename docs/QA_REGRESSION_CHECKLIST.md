@@ -301,3 +301,14 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier le refus des références d'une autre organisation et d'un lot expiré, bloqué, rappelé ou insuffisant.
 - [ ] Vérifier les onze vues, les libellés français, les infos-bulles et l'absence de dépassement horizontal sur mobile.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
+
+# Itération PHARMACY Ordonnances / prescriptions - 10 juin 2026
+
+- [ ] Créer des ordonnances avec produit référencé et ligne libre, puis vérifier l'isolation par organisation.
+- [ ] Vérifier l'unicité du numéro d'ordonnance dans une pharmacie et le refus des produits ou collaborateurs externes.
+- [ ] Soumettre, valider, rejeter avec motif et demander une information complémentaire selon les permissions.
+- [ ] Rapprocher une ligne, appliquer une substitution autorisée et vérifier la traçabilité du produit prescrit et servi.
+- [ ] Générer une vente brouillon depuis une ordonnance validée et vérifier qu'aucun impact stock n'est appliqué.
+- [ ] Vérifier le refus de génération depuis une ordonnance rejetée ou déjà liée à une vente active.
+- [ ] Vérifier les onze vues, les documents persistés, l'audit, les libellés français, les infos-bulles et le plein écran mobile.
+- [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.

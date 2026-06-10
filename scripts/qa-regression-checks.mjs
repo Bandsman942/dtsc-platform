@@ -83,6 +83,11 @@ const pharmacySaleApi = read("app/api/enterprise/[organizationId]/pharmacy/sales
 const pharmacySalesWorkspace = read("components/enterprise/pharmacy-sales-workspace.tsx");
 const pharmacySalesService = read("lib/pharmacy-sales.ts");
 const pharmacySaleAccess = read("lib/pharmacy-sale-access.ts");
+const pharmacyPrescriptionsApi = read("app/api/enterprise/[organizationId]/pharmacy/prescriptions/route.ts");
+const pharmacyPrescriptionApi = read("app/api/enterprise/[organizationId]/pharmacy/prescriptions/[prescriptionId]/route.ts");
+const pharmacyPrescriptionsWorkspace = read("components/enterprise/pharmacy-prescriptions-workspace.tsx");
+const pharmacyPrescriptionsService = read("lib/pharmacy-prescriptions.ts");
+const pharmacyPrescriptionAccess = read("lib/pharmacy-prescription-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -438,6 +443,25 @@ check(
   "PHARMACY Ventes: onze vues métier, FEFO, aides et formulaire mobile",
   containsAll(pharmacySalesWorkspace, ["Tableau de bord", "Nouvelle vente / dispensation", "Ventes du jour", "Historique des ventes", "Lignes de vente", "Validations pharmacien", "Annulations & remboursements", "Sorties exceptionnelles", "Reçus / factures", "Anomalies de vente", "Historique des mouvements", "Lot vendable FEFO", "CircleHelp", "h-[96dvh]", "min-w-0", "overflow-x-hidden"])
     && !pharmacySalesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Ordonnances: modèles dédiés, audit et vente brouillon sans impact stock",
+  containsAll(prismaSchema, ["model PharmacyPrescription", "model PharmacyPrescriptionLine", "model PharmacyPrescriptionDocument", "model PharmacyPrescriptionAuditEvent", "@@unique([organizationId, prescriptionNumber])"])
+    && containsAll(pharmacyPrescriptionsService, ["createPharmacyPrescription", "createSaleFromPrescription", "effectivePharmacyBatchStatus", "stockImpactApplied", "pharmacyPrescriptionAuditEvent"])
+);
+
+check(
+  "PHARMACY Ordonnances: routes multi-tenant sécurisées, validées et auditées",
+  containsAll(pharmacyPrescriptionsApi, ["canAccessPharmacyPrescriptions", "isSameOriginRequest", "await rateLimit", "pharmacyPrescriptionSchema.safeParse", "validatePrescriptionReferences", "writeAuditLog"])
+    && containsAll(pharmacyPrescriptionApi, ["organizationId", "prescriptionActionSchema.safeParse", "createSaleFromPrescription", "SUBSTITUTION_NOT_ALLOWED", "const selectedLineId = lineId", "writeAuditLog"])
+    && containsAll(pharmacyPrescriptionAccess, ["PRESCRIPTIONS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Ordonnances: onze vues, libellés français, aides et formulaire mobile",
+  containsAll(pharmacyPrescriptionsWorkspace, ["Tableau de bord ordonnances", "Nouvelle ordonnance", "Ordonnances reçues", "Ordonnances en validation", "Ordonnances validées", "Ordonnances partiellement servies", "Ordonnances servies", "Ordonnances rejetées", "Lignes de prescription", "Documents d'ordonnance", "Historique & audit", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden", "Générer une vente brouillon"])
+    && !pharmacyPrescriptionsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

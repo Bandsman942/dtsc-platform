@@ -2246,6 +2246,8 @@ Le module `STOCK_RECEIPTS` persiste les réceptions dans `PharmacyReceipt`, leur
 
 Le module `SALES_DISPENSATION` persiste les ventes multi-lignes, remboursements et anomalies dans les modèles `PharmacySale*`. `validateSaleReferences()` contrôle toutes les références dans le tenant actif et interdit les lots expirés, bloqués, rappelés ou insuffisants. `applySaleStockImpact()` décrémente les lots et écrit des mouvements `SALE` de façon transactionnelle et idempotente; `reverseSaleStockImpact()` restaure les quantités avec des mouvements `SALE_CANCELLATION`. Une vente réglementée reste sans impact stock tant que le pharmacien ne l'a pas validée.
 
+Le module `PRESCRIPTIONS` persiste les ordonnances, lignes prescrites, documents et événements d'audit dans les modèles `PharmacyPrescription*`. `validatePrescriptionReferences()` refuse les produits et collaborateurs externes au tenant. `createSaleFromPrescription()` accepte uniquement une ordonnance validée, sélectionne les produits rapprochés et les lots vendables selon FEFO, crée une vente brouillon liée et n'applique aucun impact stock.
+
 Routes:
 
 | Methode | Route | Acces | Usage |
@@ -2256,6 +2258,8 @@ Routes:
 | `GET`, `PATCH` | `/api/enterprise/[organizationId]/pharmacy/receipts/[receiptId]` | membre autorise selon l'action | consulter, modifier, soumettre, valider, rejeter ou annuler |
 | `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/sales` | membre autorisé sur `SALES_DISPENSATION` | lister ou créer une vente |
 | `GET`, `PATCH` | `/api/enterprise/[organizationId]/pharmacy/sales/[saleId]` | membre autorisé selon l'action | consulter, confirmer, valider, annuler ou rembourser |
+| `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/prescriptions` | membre autorisé sur `PRESCRIPTIONS` | lister ou créer une ordonnance |
+| `GET`, `PATCH` | `/api/enterprise/[organizationId]/pharmacy/prescriptions/[prescriptionId]` | membre autorisé selon l'action | consulter, soumettre, valider, rejeter, rapprocher, substituer, servir ou générer une vente |
 
 Les mutations appliquent origine identique, rate limiting, validation Zod, controle du secteur `PHARMACY`, entitlement du module, membership actif et audit. `DELETE` ne supprime aucune ligne: il applique le statut `ARCHIVED`. La migration `20260609110000_pharmacy_products_module` reprend sans destruction les produits generiques possedant un code interne.
 
