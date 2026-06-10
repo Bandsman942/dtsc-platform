@@ -119,21 +119,12 @@ export async function PATCH(req: Request, { params }: Params) {
         updatedById: session.userId,
       },
     });
-  } else if (data.action === "confirm" || data.action === "pay") {
-    if (data.action === "pay") {
-      const paid = Number(data.paidAmount ?? sale.paidAmount);
-      await prisma.pharmacySale.update({
-        where: { id: saleId },
-        data: {
-          paidAmount: paid,
-          remainingAmount: Math.max(0, Number(sale.totalAmount) - paid),
-          paymentStatus:
-            paid >= Number(sale.totalAmount) ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "UNPAID",
-          paymentMethod: data.paymentMethod || sale.paymentMethod,
-          updatedById: session.userId,
-        },
-      });
-    }
+  } else if (data.action === "pay") {
+    return NextResponse.json(
+      { error: "Cash payment required", message: "Enregistrez le paiement dans le module Caisse, factures & paiements." },
+      { status: 400 },
+    );
+  } else if (data.action === "confirm") {
     await applySaleStockImpact(organizationId, saleId, session.userId);
   } else if (data.action === "cancel") {
     const cancellationReason = data.reason;

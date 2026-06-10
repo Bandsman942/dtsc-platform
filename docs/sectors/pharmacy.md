@@ -243,3 +243,30 @@ Les documents fournisseurs sont liés par `organizationId` au fournisseur, à la
 4. Ajouter les blocs Activités nécessaires et leurs champs dédiés.
 5. Documenter les relations, permissions et règles de stock.
 6. Étendre `scripts/qa-regression-checks.mjs` et exécuter la QA.
+# Module Caisse, factures & paiements
+
+Le module organise la finance opérationnelle du comptoir sans devenir un ERP comptable complet. Il relie les ventes aux paiements persistés, reçus, factures, sessions de caisse, remboursements, clôtures et écarts.
+
+## Parcours et règles
+
+- Une session est ouverte pour un caissier actif, un point de vente, une devise et un solde initial. Un même caissier ne peut pas posséder plusieurs sessions actives.
+- Les paiements supportent espèces, Mobile Money, carte, virement, crédit client, assurance, bon/coupon et autre. Les encaissements comptoir exigent une session ouverte.
+- Les paiements recalculent côté serveur les montants payé/restant et le statut de la vente. Une facture active unique peut être générée depuis une vente et un reçu depuis un paiement validé.
+- Les remboursements sont persistés et plafonnés au montant réellement payé. La remise en stock reste traitée par le workflow Ventes/Stock afin de conserver les mouvements auditables.
+- La clôture agrège les paiements par mode, les remboursements et les ventes, calcule le cash théorique, le cash compté et l'écart. Un écart significatif exige une justification.
+- La validation de clôture est réservée aux rôles de gestion; le caissier ne peut pas valider sa propre clôture.
+
+## Interface
+
+Administration Entreprise expose treize vues: tableau de bord, sessions, ouverture, encaissements, paiements, factures, reçus, remboursements, clôture, écarts, validation, historique et rapports. Les formulaires relationnels utilisent les ventes, sessions, paiements, collaborateurs et départements de l'organisation active.
+
+## API et multi-tenant
+
+- `GET|POST /api/enterprise/[organizationId]/pharmacy/cash`
+- `PATCH /api/enterprise/[organizationId]/pharmacy/cash/[entity]/[id]`
+
+Toutes les routes vérifient le membership actif, le secteur PHARMACY, l'activation de `CASH_INVOICES_PAYMENTS`, les permissions, Zod et les références de la même organisation. Les mutations sont protégées par origine, rate limit et audit.
+
+## Intégration finances et limites
+
+Les champs de liaison aux finances communes sont présents, mais aucune synchronisation n'est affichée tant qu'un compte financier multi-tenant entreprise n'est pas disponible. Le reçu HTML est persisté et consultable; aucun faux téléchargement PDF n'est proposé.

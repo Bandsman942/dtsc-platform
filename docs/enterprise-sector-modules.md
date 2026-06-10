@@ -57,6 +57,7 @@ Les secteurs suivants sont seedés de manière idempotente:
 - `AGRI_FOOD`
 - `HOSPITALITY_EVENTS`
 - `FINANCE_MICROFINANCE`
+- `CASH_INVOICES_PAYMENTS` pour PHARMACY utilise désormais des sessions, paiements, factures, reçus, remboursements et écarts dédiés, isolés par `organizationId`.
 - `PUBLIC_ADMIN`
 - `OTHER`
 

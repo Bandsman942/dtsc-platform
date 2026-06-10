@@ -498,3 +498,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout des routes sécurisées `GET/POST/PATCH/DELETE /api/enterprise/[organizationId]/pharmacy`, avec validation Zod, contrôle des références par `organizationId`, permissions de module, rate limiting, audit et archivage logique.
 - Ajout des impacts stock transactionnels et idempotents pour ventes, réceptions et annulations, avec blocage des lots expirés, rappelés, en quarantaine ou insuffisants.
 - Ajout de la migration idempotente `20260608143000_pharmacy_sector_iteration`, des loaders conditionnels PHARMACY, des blocs Activités spécifiques et de la documentation sectorielle.
+# 10 juin 2026 - Caisse, factures et paiements PHARMACY
+
+- Ajout des sessions de caisse, paiements multi-modes, factures, reçus de caisse, remboursements, écarts et validation de clôture isolés par entreprise.
+- Remplacement du placeholder `CASH_INVOICES_PAYMENTS` par treize vues métier responsives et des formulaires plein écran guidés.
+- Ajout des calculs transactionnels de clôture, du recalcul du statut de paiement des ventes, de la génération facture/reçu et des garde-fous contre doubles sessions et remboursements excessifs.

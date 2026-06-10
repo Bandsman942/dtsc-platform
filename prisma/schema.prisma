@@ -1708,6 +1708,8 @@ model PharmacySale {
   customerPhone                String?
   customerType                 String?
   prescriptionId               String?
+  cashSessionId                String?
+  invoiceId                    String?
   prescriberName               String?
   cashierId                    String
   pharmacistId                 String?
@@ -1743,6 +1745,11 @@ model PharmacySale {
   lines                        PharmacySaleLine[]
   refunds                      PharmacySaleRefund[]
   anomalies                    PharmacySaleAnomaly[]
+  cashSession                  PharmacyCashSession? @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+  generatedInvoice             PharmacyInvoice? @relation("InvoiceSale")
+  payments                     PharmacyPayment[]
+  cashReceipts                 PharmacyCashReceipt[]
+  cashRefunds                  PharmacyRefund[]
 
   @@unique([organizationId, saleNumber])
   @@index([organizationId, status, saleDate])
@@ -1750,6 +1757,8 @@ model PharmacySale {
   @@index([organizationId, cashierId])
   @@index([organizationId, pharmacistId])
   @@index([organizationId, prescriptionId])
+  @@index([organizationId, cashSessionId])
+  @@index([organizationId, invoiceId])
 }
 
 model PharmacySaleLine {
@@ -1840,6 +1849,213 @@ model PharmacySaleAnomaly {
 
   @@index([organizationId, saleId, status])
   @@index([organizationId, criticality, status])
+}
+
+model PharmacyCashSession {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  cashSessionNumber        String
+  cashPointName            String?
+  cashPointType            String?
+  cashierId                String
+  departmentId             String?
+  financialAccountId       String?
+  openedAt                 DateTime
+  closedAt                 DateTime?
+  openingAmount            Decimal  @default(0) @db.Decimal(14, 2)
+  currency                 String   @default("USD")
+  theoreticalCashAmount    Decimal? @db.Decimal(14, 2)
+  countedCashAmount        Decimal? @db.Decimal(14, 2)
+  totalCashPayments        Decimal? @db.Decimal(14, 2)
+  totalMobileMoneyPayments Decimal? @db.Decimal(14, 2)
+  totalCardPayments        Decimal? @db.Decimal(14, 2)
+  totalTransferPayments    Decimal? @db.Decimal(14, 2)
+  totalCreditPayments      Decimal? @db.Decimal(14, 2)
+  totalInsurancePayments   Decimal? @db.Decimal(14, 2)
+  totalRefunds             Decimal? @db.Decimal(14, 2)
+  totalSales               Decimal? @db.Decimal(14, 2)
+  totalPayments            Decimal? @db.Decimal(14, 2)
+  varianceAmount           Decimal? @db.Decimal(14, 2)
+  varianceCriticity        String?
+  varianceJustification    String?
+  status                   String   @default("OPEN")
+  submittedAt              DateTime?
+  validatedById            String?
+  validatedAt              DateTime?
+  rejectedById             String?
+  rejectedAt               DateTime?
+  rejectionReason          String?
+  financeSyncStatus        String?
+  financeTransactionId     String?
+  notes                    String?
+  createdById              String
+  updatedById              String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  sales                    PharmacySale[]
+  payments                 PharmacyPayment[]
+  refunds                  PharmacyRefund[]
+  discrepancies            PharmacyCashDiscrepancy[]
+
+  @@unique([organizationId, cashSessionNumber])
+  @@index([organizationId, status, openedAt])
+  @@index([organizationId, cashierId, status])
+}
+
+model PharmacyPayment {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  paymentNumber      String
+  saleId             String?
+  invoiceId          String?
+  cashSessionId      String?
+  customerId         String?
+  cashierId          String
+  paymentMethod      String
+  amount             Decimal  @db.Decimal(14, 2)
+  currency           String   @default("USD")
+  paymentReference   String?
+  payerName          String?
+  payerPhone         String?
+  paymentDate        DateTime
+  status             String   @default("PAID")
+  cancellationReason String?
+  cancelledById      String?
+  cancelledAt        DateTime?
+  notes              String?
+  createdById        String
+  updatedById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  sale               PharmacySale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  invoice            PharmacyInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  cashSession        PharmacyCashSession? @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+  cashReceipts        PharmacyCashReceipt[]
+  refunds            PharmacyRefund[]
+
+  @@unique([organizationId, paymentNumber])
+  @@index([organizationId, cashSessionId, status])
+  @@index([organizationId, saleId])
+  @@index([organizationId, invoiceId])
+  @@index([organizationId, paymentMethod, paymentDate])
+}
+
+model PharmacyInvoice {
+  id              String   @id @default(cuid())
+  organizationId  String
+  invoiceNumber   String
+  saleId          String?  @unique
+  customerId      String?
+  customerName    String?
+  invoiceDate     DateTime
+  dueDate         DateTime?
+  subtotal        Decimal  @db.Decimal(14, 2)
+  discount        Decimal? @db.Decimal(14, 2)
+  taxAmount       Decimal? @db.Decimal(14, 2)
+  totalAmount     Decimal  @db.Decimal(14, 2)
+  paidAmount      Decimal  @default(0) @db.Decimal(14, 2)
+  remainingAmount Decimal  @db.Decimal(14, 2)
+  currency        String   @default("USD")
+  status          String   @default("DRAFT")
+  notes           String?
+  createdById     String
+  updatedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  sale            PharmacySale? @relation("InvoiceSale", fields: [saleId], references: [id], onDelete: SetNull)
+  payments        PharmacyPayment[]
+  cashReceipts     PharmacyCashReceipt[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, status, invoiceDate])
+}
+
+model PharmacyCashReceipt {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  receiptNumber      String
+  saleId             String?
+  paymentId          String?
+  invoiceId          String?
+  customerName       String?
+  cashierId          String
+  amount             Decimal  @db.Decimal(14, 2)
+  paymentMethod      String?
+  htmlContent        String?
+  pdfUrl             String?
+  status             String   @default("GENERATED")
+  generatedAt        DateTime @default(now())
+  generatedById      String
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  sale               PharmacySale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  payment            PharmacyPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  invoice            PharmacyInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId, saleId])
+  @@index([organizationId, paymentId])
+  @@index([organizationId, status, generatedAt])
+}
+
+model PharmacyRefund {
+  id              String   @id @default(cuid())
+  organizationId  String
+  refundNumber    String
+  saleId          String
+  paymentId       String?
+  cashSessionId   String?
+  refundType      String
+  amount          Decimal  @db.Decimal(14, 2)
+  currency        String   @default("USD")
+  reason          String
+  restockItems    Boolean  @default(false)
+  status          String   @default("SUBMITTED")
+  requestedById   String
+  validatedById   String?
+  validatedAt     DateTime?
+  rejectedById    String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  paidAt          DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  sale            PharmacySale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  payment         PharmacyPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  cashSession     PharmacyCashSession? @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, refundNumber])
+  @@index([organizationId, saleId, status])
+  @@index([organizationId, cashSessionId])
+}
+
+model PharmacyCashDiscrepancy {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  cashSessionId         String
+  cashierId             String
+  discrepancyType       String
+  theoreticalAmount     Decimal  @db.Decimal(14, 2)
+  countedAmount         Decimal  @db.Decimal(14, 2)
+  varianceAmount        Decimal  @db.Decimal(14, 2)
+  criticity             String
+  justification         String?
+  status                String   @default("OPEN")
+  responsibleUserId     String?
+  resolvedAt            DateTime?
+  notes                 String?
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  cashSession           PharmacyCashSession @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, cashSessionId, status])
+  @@index([organizationId, criticity, status])
 }
 
 model OrganizationMember {

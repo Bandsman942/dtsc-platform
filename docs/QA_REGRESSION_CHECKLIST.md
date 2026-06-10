@@ -324,3 +324,13 @@ Documenter dans le ticket ou la PR:
 - [ ] Annuler une réception validée et vérifier la contre-passation du stock et des quantités de commande.
 - [ ] Vérifier les alertes de retard réelles, documents persistés, onze vues, infos-bulles et formulaires mobiles.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
+# Itération PHARMACY 8 - Caisse, factures et paiements
+
+- [x] Les sessions, paiements, factures, reçus, remboursements et écarts utilisent des modèles dédiés isolés par `organizationId`.
+- [x] Un caissier ne peut pas ouvrir deux sessions simultanées et un paiement comptoir exige une session ouverte.
+- [x] Un paiement validé recalcule le payé, le reste et le statut de la vente.
+- [x] La clôture recalcule les montants réels, crée l'écart et exige une justification significative.
+- [x] Le caissier ne peut pas valider sa propre clôture.
+- [x] Le remboursement ne dépasse pas le montant payé.
+- [x] Les routes mutantes appliquent origine, rate limit, Zod, RBAC et audit.
+- [x] Les treize vues caisse et formulaires plein écran restent mobiles, bornés et sans placeholder.

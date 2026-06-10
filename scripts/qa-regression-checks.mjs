@@ -93,6 +93,11 @@ const pharmacyPurchaseApi = read("app/api/enterprise/[organizationId]/pharmacy/p
 const pharmacyPurchasesWorkspace = read("components/enterprise/pharmacy-purchases-workspace.tsx");
 const pharmacyPurchasesService = read("lib/pharmacy-purchases.ts");
 const pharmacyPurchaseAccess = read("lib/pharmacy-purchase-access.ts");
+const pharmacyCashApi = read("app/api/enterprise/[organizationId]/pharmacy/cash/route.ts");
+const pharmacyCashActionApi = read("app/api/enterprise/[organizationId]/pharmacy/cash/[entity]/[id]/route.ts");
+const pharmacyCashWorkspace = read("components/enterprise/pharmacy-cash-workspace.tsx");
+const pharmacyCashService = read("lib/pharmacy-cash.ts");
+const pharmacyCashAccess = read("lib/pharmacy-cash-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -492,6 +497,26 @@ check(
   "PHARMACY Achats: onze vues, combobox, aides et formulaires plein écran",
   containsAll(pharmacyPurchasesWorkspace, ["Tableau de bord achats pharmacie", "Fournisseurs", "Produits par fournisseur", "Demandes de réapprovisionnement", "Commandes fournisseurs", "Lignes de commande", "Suivi de livraison", "Commandes partiellement reçues", "Documents fournisseurs", "Historique fournisseurs & achats", "Alertes achats", "h-[96dvh]", "CircleHelp", "Créer une réception", "min-w-0", "overflow-x-hidden"])
     && !pharmacyPurchasesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Caisse: modèles dédiés, ventes reliées et clôture transactionnelle",
+  containsAll(prismaSchema, ["model PharmacyCashSession", "model PharmacyPayment", "model PharmacyInvoice", "model PharmacyCashReceipt", "model PharmacyRefund", "model PharmacyCashDiscrepancy", "@@unique([organizationId, cashSessionNumber])", "@@unique([organizationId, paymentNumber])"])
+    && containsAll(pharmacyCashService, ["openCashSession", "createPayment", "recalculateSalePaymentStatus", "generateInvoiceFromSale", "generateReceiptForPayment", "createRefund", "validateCashRefund", "closeCashSession", "calculateCashSessionTotals", 'movementType: "RETURN_CUSTOMER"', "prisma.$transaction", "REFUND_EXCEEDS_PAID"])
+    && containsAll(pharmacySaleApi, ["Cash payment required", "Caisse, factures & paiements"])
+);
+
+check(
+  "PHARMACY Caisse: routes multi-tenant sécurisées, validées et auditées",
+  containsAll(pharmacyCashApi, ["canAccessPharmacyCash", "isSameOriginRequest", "await rateLimit", "cashCreateSchema.safeParse", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyCashActionApi, ["cashActionSchema.safeParse", "const countedCashAmount", "SELF_VALIDATION_FORBIDDEN", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyCashAccess, ["CASH_INVOICES_PAYMENTS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Caisse: treize vues, combobox, aides et formulaires plein écran",
+  containsAll(pharmacyCashWorkspace, ["Tableau de bord caisse", "Sessions de caisse", "Ouverture de caisse", "Encaissements", "Paiements", "Factures", "Reçus", "Remboursements", "Clôture de caisse", "Écarts de caisse", "Validation de clôture", "Historique caisse", "Rapports caisse", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyCashWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

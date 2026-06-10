@@ -2279,3 +2279,10 @@ Fonctionnalites qui exigent des informations externes avant activation complete:
 - facturation/abonnements: socle MaishaPay actif; completer taxes, mentions legales locales et renouvellement automatique selon contrat marchand;
 - exports PDF: definir les templates et informations legalement affichables;
 - tests automatises API/e2e: ajouter Playwright/Vitest ou equivalent selon le niveau de couverture souhaite.
+# Module caisse PHARMACY
+
+Le sous-module `CASH_INVOICES_PAYMENTS` utilise les modèles dédiés `PharmacyCashSession`, `PharmacyPayment`, `PharmacyInvoice`, `PharmacyCashReceipt`, `PharmacyRefund` et `PharmacyCashDiscrepancy`. La migration additive est `20260610230000_pharmacy_cash_invoices_payments`.
+
+Les routes consolidées `GET|POST /api/enterprise/[organizationId]/pharmacy/cash` et `PATCH /api/enterprise/[organizationId]/pharmacy/cash/[entity]/[id]` vérifient la session, le membership actif, le secteur PHARMACY, le module actif, l'origine, le rate limit, Zod et `organizationId`. Les services dans `lib/pharmacy-cash.ts` centralisent ouverture, paiement, facture, reçu, remboursement, calcul de clôture, écart et recalcul du statut paiement de la vente.
+
+La synchronisation vers les finances communes reste préparée par les champs `financialAccountId`, `financeSyncStatus` et `financeTransactionId`, mais aucune transaction financière n'est créée tant qu'un référentiel financier multi-tenant dédié aux entreprises clientes n'est pas disponible.
