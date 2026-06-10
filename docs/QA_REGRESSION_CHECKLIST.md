@@ -32,6 +32,17 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Chaque étiquette des formulaires Stock & inventaire possède une info-bulle compréhensible et chaque option de liste est affichée en français métier, sans code interne.
 - [ ] Sur un écran mobile étroit, les formulaires Stock, les filtres Produits et le sélecteur d'entreprise de connexion restent entièrement contenus dans leur zone sans débordement horizontal.
 
+## Pharmacie - Entrées stock / réceptions
+
+- [ ] Une organisation PHARMACY peut créer et modifier une réception en brouillon liée uniquement à ses fournisseurs, commandes, produits, collaborateurs, départements et emplacements.
+- [ ] La soumission n'impacte pas le stock; la validation augmente les lots et crée un mouvement `RECEIPT` par lot reçu.
+- [ ] Valider deux fois la même réception ne double jamais le stock.
+- [ ] L'annulation après validation crée les mouvements inverses et refuse une quantité disponible négative.
+- [ ] Une réception partielle conserve la quantité restante attendue et met la commande liée à `PARTIALLY_RECEIVED`.
+- [ ] Les écarts de quantité sont persistés et les écarts critiques apparaissent dans les KPI.
+- [ ] Les documents de réception utilisent le système documentaire privé sans champ URL libre.
+- [ ] La liste utilise des cartes mobiles, le formulaire est plein écran et aucun sous-bloc n'est un placeholder.
+
 ## Navigation et socle commun Enterprise
 
 - Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.

@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-10
+
+### Ajouté
+
+- Ajout du module dédié Pharmacie > Entrées stock / réceptions avec tableau de bord, réceptions fournisseurs, lignes, réceptions partielles, écarts, documents et historique.
+- Ajout des modèles et de la migration additive `PharmacyReceipt`, `PharmacyReceiptLine`, `PharmacyReceiptBatch`, `PharmacyReceiptDiscrepancy` et `PharmacyReceiptDocument`.
+- Ajout des routes privées de création, modification de brouillon, soumission, validation, rejet, annulation et traitement des écarts de réception.
+
+### Amélioré
+
+- La validation d'une réception crée ou alimente les lots, augmente réellement le stock, crée les mouvements `RECEIPT` et met à jour les commandes fournisseurs liées.
+- Les réceptions partielles, écarts automatiques de quantité, combobox multi-tenant et formulaires plein écran mobiles remplacent l'ancien formulaire générique.
+- Les formulaires Lots utilisent désormais les réceptions dédiées comme référentiel.
+
+### Corrigé
+
+- Correction du build Vercel en supprimant la clé `QUARANTINE` dupliquée dans les libellés Stock & inventaire.
+
 ## 2026-06-09
 
 ### Ajouté

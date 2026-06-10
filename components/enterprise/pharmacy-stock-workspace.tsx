@@ -32,12 +32,12 @@ const labels: Record<string, string> = {
   ENTRY_ERROR: "Correction d'une erreur de saisie", LOSS: "Perte", BREAKAGE: "Casse", DAMAGED: "Produit endommagé", EXPIRY_REMOVAL: "Retrait d'un produit expiré",
   RETURN_CUSTOMER: "Retour client", RETURN_SUPPLIER: "Retour fournisseur", EXCEPTIONAL_OUT: "Sortie exceptionnelle", TRANSFER_LOCATION: "Transfert d'emplacement",
   SHELF: "Rayon", RACK: "Étagère", CABINET: "Armoire", REFRIGERATOR: "Réfrigérateur", STORAGE: "Réserve", COUNTER: "Comptoir",
-  QUARANTINE: "Zone de quarantaine", RECEIVING: "Zone de réception",
+  QUARANTINE: "Mise en quarantaine", RECEIVING: "Zone de réception",
   INITIAL_BATCH_CREATION: "Création initiale du lot", RECEIPT: "Réception fournisseur", SALE: "Vente client", SALE_CANCELLATION: "Annulation d'une vente",
   ADJUSTMENT: "Ajustement de stock", ADJUSTMENT_POSITIVE: "Ajustement positif", ADJUSTMENT_NEGATIVE: "Ajustement négatif", DAMAGE: "Produit endommagé",
   RELEASE_QUARANTINE: "Sortie de quarantaine", RECALL: "Rappel de produit", MANUAL_CORRECTION: "Correction manuelle", APPLIED: "Appliqué",
   REJECTED: "Rejeté", PLANNED: "Planifié", IN_REVIEW: "En vérification", TO_COUNT: "À compter", COUNTED: "Compté",
-  QUARANTINE: "Mise en quarantaine", CANCELLATION: "Annulation d'une opération",
+  CANCELLATION: "Annulation d'une opération",
 };
 const FIELD_HELP: Record<string, string> = {
   title: "Nom clair permettant d'identifier cette opération d'inventaire.",

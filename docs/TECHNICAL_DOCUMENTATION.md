@@ -2242,12 +2242,16 @@ Le module `BATCH_EXPIRY` repose sur `PharmacyBatch` et `PharmacyStockMovement`. 
 
 Le module `STOCK_INVENTORY` centralise ses calculs dans `lib/pharmacy-stock.ts` et persiste les opérations physiques dans `PharmacyInventorySession`, `PharmacyInventoryLine`, `PharmacyStockAdjustment` et `PharmacyStockLocation`. Les ajustements sont appliqués par transaction sur le lot et `PharmacyStockMovement`; les annulations créent un mouvement inverse. Toutes les conversions arithmétiques issues de valeurs Prisma/Zod passent explicitement par `Number(...)` afin de préserver le type-check Vercel.
 
+Le module `STOCK_RECEIPTS` persiste les réceptions dans `PharmacyReceipt`, leurs lignes, répartitions par lots, écarts et documents. `applyReceiptStockImpact()` applique une validation idempotente dans une transaction Prisma, crée ou alimente les lots et écrit les mouvements `RECEIPT`. `reverseReceiptStockImpact()` crée les sorties inverses `CANCELLATION` et bloque tout stock négatif. Les fournisseurs et commandes sont validés depuis `EnterpriseSectorRecord` dans le même `organizationId`.
+
 Routes:
 
 | Methode | Route | Acces | Usage |
 | --- | --- | --- | --- |
 | `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/products` | membre autorise sur `MEDICINES_PRODUCTS` | rechercher/lister ou creer un produit |
 | `GET`, `PATCH`, `DELETE` | `/api/enterprise/[organizationId]/pharmacy/products/[productId]` | membre autorise selon l'action | consulter, modifier ou archiver logiquement |
+| `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/receipts` | membre autorise sur `STOCK_RECEIPTS` | lister ou créer un brouillon de réception |
+| `GET`, `PATCH` | `/api/enterprise/[organizationId]/pharmacy/receipts/[receiptId]` | membre autorise selon l'action | consulter, modifier, soumettre, valider, rejeter ou annuler |
 
 Les mutations appliquent origine identique, rate limiting, validation Zod, controle du secteur `PHARMACY`, entitlement du module, membership actif et audit. `DELETE` ne supprime aucune ligne: il applique le statut `ARCHIVED`. La migration `20260609110000_pharmacy_products_module` reprend sans destruction les produits generiques possedant un code interne.
 

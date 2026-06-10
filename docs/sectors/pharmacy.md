@@ -80,6 +80,26 @@ Route dédiée:
 
 Chaque opération vérifie session, module `STOCK_INVENTORY`, rôle, origine, rate limit, références de la même organisation et audit. Les départements et collaborateurs sont réutilisés depuis le socle commun ERP.
 
+## Module Entrées stock / réceptions
+
+Le sous-module `STOCK_RECEIPTS` gère l'arrivée officielle des produits dans le stock. Il utilise les modèles dédiés `PharmacyReceipt`, `PharmacyReceiptLine`, `PharmacyReceiptBatch`, `PharmacyReceiptDiscrepancy` et `PharmacyReceiptDocument`.
+
+- Une réception peut être liée à une commande fournisseur existante ou être saisie sans commande selon les permissions.
+- Chaque ligne référence un produit de la même organisation et répartit exactement la quantité reçue entre un ou plusieurs lots.
+- La validation est transactionnelle et idempotente: elle crée ou alimente les lots, augmente le stock et écrit un mouvement `RECEIPT`.
+- Une annulation validée crée des mouvements inverses `CANCELLATION` et refuse toute opération qui rendrait le stock négatif.
+- Les quantités commandées, déjà reçues et reçues maintenant déterminent les réceptions partielles et le statut de la commande liée.
+- Les écarts de quantité sont créés automatiquement; les autres écarts peuvent être persistés avec criticité, responsable et statut.
+- Les documents fournisseur sont liés à la réception. Leur téléversement doit passer par le système documentaire privé; aucun champ URL libre ou faux bouton d'upload n'est affiché.
+- Les fournisseurs et commandes réutilisent les enregistrements `SUPPLIERS_ORDERS` existants afin de ne pas dupliquer le socle achats.
+
+Routes dédiées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/receipts`;
+- `GET/PATCH /api/enterprise/[organizationId]/pharmacy/receipts/[receiptId]`.
+
+Toutes les routes vérifient session, origine pour les mutations, rate limit, membership actif, module PHARMACY, permission, validation Zod et appartenance des clés étrangères à `organizationId`.
+
 ## Stockage et relations
 
 Les produits, lots et mouvements de stock sont stockés dans `PharmacyProduct`, `PharmacyBatch` et `PharmacyStockMovement`. Les autres opérations restent stockées dans `EnterpriseSectorRecord`.
@@ -153,9 +173,11 @@ Les routes vérifient session, organisation cliente active, `sectorCode = PHARMA
 
 `20260609203000_pharmacy_stock_inventory_module` enrichit les mouvements et crée les sessions, lignes, ajustements et emplacements de stock sans supprimer les données existantes.
 
+`20260610113000_pharmacy_receipts_module` crée les réceptions, lignes, répartitions par lots, écarts et documents sans supprimer les anciens enregistrements.
+
 ## Limites restantes
 
-- `EnterpriseSectorRecord` reste le stockage des opérations hors produits/lots; des tables dédiées seront nécessaires pour les ventes multi-lignes, inventaires ligne par ligne, factures PDF et traçabilité réglementaire avancée.
+- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock et réceptions; des tables dédiées seront nécessaires pour les ventes multi-lignes, factures PDF et traçabilité réglementaire avancée.
 - Les alertes lots sont calculées à la lecture; leur workflow persistant sera ajouté dans l'itération Alertes.
 - L'upload de documents doit continuer à passer par une route privée de stockage contrôlé avant activation dans les formulaires.
 - Le calcul avancé de marge, taxe, caisse et rapports financiers consolidés reste à approfondir.

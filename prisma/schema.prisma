@@ -1207,6 +1207,164 @@ model PharmacyStockLocation {
   @@index([organizationId, parentLocationId])
 }
 
+model PharmacyReceipt {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  receiptNumber            String
+  receiptType              String
+  supplierId               String
+  purchaseOrderId          String?
+  departmentId             String?
+  mainLocationId           String?
+  receivedById             String
+  receivedAt               DateTime
+  supplierInvoiceReference String?
+  deliveryNoteReference    String?
+  invoiceDate              DateTime?
+  deliveryNoteDate         DateTime?
+  totalAmount              Decimal? @db.Decimal(14, 2)
+  totalItems               Decimal? @db.Decimal(14, 3)
+  status                   String   @default("DRAFT")
+  submittedById            String?
+  submittedAt              DateTime?
+  validatedById            String?
+  validatedAt              DateTime?
+  rejectedById             String?
+  rejectedAt               DateTime?
+  rejectionReason          String?
+  cancelledById            String?
+  cancelledAt              DateTime?
+  cancellationReason       String?
+  stockImpactApplied       Boolean  @default(false)
+  notes                    String?
+  createdById              String
+  updatedById              String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  lines                    PharmacyReceiptLine[]
+  receiptBatches           PharmacyReceiptBatch[]
+  discrepancies            PharmacyReceiptDiscrepancy[]
+  documents                PharmacyReceiptDocument[]
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId, status, receivedAt])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, purchaseOrderId])
+}
+
+model PharmacyReceiptLine {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  receiptId                  String
+  productId                  String
+  purchaseOrderLineId        String?
+  orderedQuantity            Decimal? @db.Decimal(14, 3)
+  previouslyReceivedQuantity Decimal? @db.Decimal(14, 3)
+  receivedQuantity           Decimal  @db.Decimal(14, 3)
+  unit                       String
+  purchasePrice              Decimal? @db.Decimal(14, 2)
+  supplierDiscount           Decimal? @db.Decimal(8, 2)
+  totalLine                  Decimal? @db.Decimal(14, 2)
+  notes                      String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  receipt                    PharmacyReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptBatches             PharmacyReceiptBatch[]
+  discrepancies              PharmacyReceiptDiscrepancy[]
+
+  @@index([organizationId, receiptId])
+  @@index([organizationId, productId])
+  @@index([organizationId, purchaseOrderLineId])
+}
+
+model PharmacyReceiptBatch {
+  id                String   @id @default(cuid())
+  organizationId    String
+  receiptId         String
+  receiptLineId     String
+  productId         String
+  batchId           String?
+  createNewBatch    Boolean  @default(true)
+  batchNumber       String
+  manufacturingDate DateTime?
+  expiryDate        DateTime
+  barcode           String?
+  receivedQuantity  Decimal  @db.Decimal(14, 3)
+  locationId        String?
+  initialStatus     String   @default("ACTIVE")
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  receipt           PharmacyReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptLine       PharmacyReceiptLine @relation(fields: [receiptLineId], references: [id], onDelete: Cascade)
+  discrepancies     PharmacyReceiptDiscrepancy[]
+  documents         PharmacyReceiptDocument[]
+
+  @@index([organizationId, receiptId])
+  @@index([organizationId, receiptLineId])
+  @@index([organizationId, productId])
+  @@index([organizationId, batchId])
+  @@index([organizationId, expiryDate])
+}
+
+model PharmacyReceiptDiscrepancy {
+  id                String   @id @default(cuid())
+  organizationId    String
+  receiptId         String
+  receiptLineId     String?
+  productId         String?
+  receiptBatchId    String?
+  batchId           String?
+  discrepancyType   String
+  description       String
+  affectedQuantity  Decimal? @db.Decimal(14, 3)
+  criticality       String   @default("MEDIUM")
+  responsibleUserId String?
+  status            String   @default("OPEN")
+  proposedAction    String?
+  notes             String?
+  createdById       String
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  receipt           PharmacyReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptLine       PharmacyReceiptLine? @relation(fields: [receiptLineId], references: [id], onDelete: SetNull)
+  receiptBatch      PharmacyReceiptBatch? @relation(fields: [receiptBatchId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, receiptId, status])
+  @@index([organizationId, criticality, status])
+  @@index([organizationId, productId])
+  @@index([organizationId, batchId])
+}
+
+model PharmacyReceiptDocument {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  receiptId            String
+  supplierId           String?
+  purchaseOrderId      String?
+  receiptBatchId       String?
+  batchId              String?
+  documentType         String
+  title                String
+  fileUrl              String
+  reference            String?
+  documentDate         DateTime?
+  expiryDate           DateTime?
+  confidentialityLevel String   @default("INTERNAL")
+  notes                String?
+  createdById          String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  receipt              PharmacyReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptBatch         PharmacyReceiptBatch? @relation(fields: [receiptBatchId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, receiptId])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, batchId])
+}
+
 model OrganizationMember {
   id             String   @id @default(cuid())
   organizationId String

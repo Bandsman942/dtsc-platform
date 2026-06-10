@@ -72,5 +72,5 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     createdBy: batch.createdBy,
     assignedTo: null,
   }));
-  return [...productRecords, ...batchRecords, ...records.filter((record) => record.moduleCode !== "MEDICINES_PRODUCTS" && record.moduleCode !== "BATCH_EXPIRY")];
+  return [...productRecords, ...batchRecords, ...records.filter((record) => !["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_RECEIPTS"].includes(record.moduleCode))];
 }

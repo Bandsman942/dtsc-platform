@@ -73,6 +73,11 @@ const pharmacyBatchesService = read("lib/pharmacy-batches.ts");
 const pharmacyStockApi = read("app/api/enterprise/[organizationId]/pharmacy/stock/route.ts");
 const pharmacyStockWorkspace = read("components/enterprise/pharmacy-stock-workspace.tsx");
 const pharmacyStockService = read("lib/pharmacy-stock.ts");
+const pharmacyReceiptsApi = read("app/api/enterprise/[organizationId]/pharmacy/receipts/route.ts");
+const pharmacyReceiptApi = read("app/api/enterprise/[organizationId]/pharmacy/receipts/[receiptId]/route.ts");
+const pharmacyReceiptsWorkspace = read("components/enterprise/pharmacy-receipts-workspace.tsx");
+const pharmacyReceiptsService = read("lib/pharmacy-receipts.ts");
+const pharmacyReceiptAccess = read("lib/pharmacy-receipt-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -390,6 +395,25 @@ check(
   containsAll(pharmacyStockWorkspace, ["FIELD_HELP", "LabelWithHelp", "CircleHelp", "Inventaire complet", "Tous les produits", "Entrée en stock", "Zone des produits expirés", "overflow-x-hidden", "min-w-0"])
     && containsAll(pharmacyProductsWorkspace, ["w-full min-w-0 max-w-full overflow-hidden", "Toutes les catégories", "Toutes les règles"])
     && containsAll(pharmacyProductsLabels, ["Ordonnance obligatoire", "Produit soumis à contrôle renforcé", "Nom commercial", "Date de création"])
+);
+
+check(
+  "PHARMACY Réceptions: modèles dédiés et impact stock idempotent",
+  containsAll(prismaSchema, ["model PharmacyReceipt", "model PharmacyReceiptLine", "model PharmacyReceiptBatch", "model PharmacyReceiptDiscrepancy", "model PharmacyReceiptDocument", "@@unique([organizationId, receiptNumber])"])
+    && containsAll(pharmacyReceiptsService, ["applyReceiptStockImpact", "reverseReceiptStockImpact", "receipt.stockImpactApplied", 'movementType: "RECEIPT"', "NEGATIVE_STOCK", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Réceptions: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacyReceiptsApi, ["canAccessPharmacyReceipts", "isSameOriginRequest", "await rateLimit", "pharmacyReceiptSchema.safeParse", "validateReceiptReferences", "writeAuditLog"])
+    && containsAll(pharmacyReceiptApi, ["organizationId", "receiptActionSchema.safeParse", "applyReceiptStockImpact", "reverseReceiptStockImpact", "writeAuditLog"])
+    && containsAll(pharmacyReceiptAccess, ["STOCK_RECEIPTS", "organizationMember", "sectorCode: \"PHARMACY\""])
+);
+
+check(
+  "PHARMACY Réceptions: sept vues fonctionnelles, combobox et formulaire mobile plein écran",
+  containsAll(pharmacyReceiptsWorkspace, ["Tableau de bord", "Réceptions fournisseurs", "Lignes de réception", "Réceptions partielles", "Écarts de réception", "Documents de réception", "Historique des réceptions", "h-[96dvh]", "CircleHelp", "Ajouter un lot", "Enregistrer en brouillon"])
+    && !pharmacyReceiptsWorkspace.includes('type="url"')
 );
 
 check(
