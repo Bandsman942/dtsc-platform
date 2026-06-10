@@ -6,12 +6,17 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Sorties, ventes & dispensation avec panier multi-produit, lots vendables FEFO, validation pharmacien, paiements, annulations, remboursements, anomalies et mouvements de stock.
+- Ajout des modèles et de la migration additive `PharmacySale`, `PharmacySaleLine`, `PharmacySaleRefund`, `PharmacySaleRefundLine` et `PharmacySaleAnomaly`.
+- Ajout des routes privées de création, consultation, confirmation, validation pharmacien, annulation et remboursement des ventes.
 - Ajout du module dédié Pharmacie > Entrées stock / réceptions avec tableau de bord, réceptions fournisseurs, lignes, réceptions partielles, écarts, documents et historique.
 - Ajout des modèles et de la migration additive `PharmacyReceipt`, `PharmacyReceiptLine`, `PharmacyReceiptBatch`, `PharmacyReceiptDiscrepancy` et `PharmacyReceiptDocument`.
 - Ajout des routes privées de création, modification de brouillon, soumission, validation, rejet, annulation et traitement des écarts de réception.
 
 ### Amélioré
 
+- Les ventes contrôlent les produits, lots, ordonnances, collaborateurs et départements dans la même organisation avant d'appliquer une sortie stock transactionnelle et idempotente.
+- Les formulaires de vente affichent des libellés commerciaux français, des aides contextuelles et des conteneurs mobiles bornés.
 - La validation d'une réception crée ou alimente les lots, augmente réellement le stock, crée les mouvements `RECEIPT` et met à jour les commandes fournisseurs liées.
 - Les réceptions partielles, écarts automatiques de quantité, combobox multi-tenant et formulaires plein écran mobiles remplacent l'ancien formulaire générique.
 - Les formulaires Lots utilisent désormais les réceptions dédiées comme référentiel.

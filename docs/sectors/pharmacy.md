@@ -175,9 +175,24 @@ Les routes vérifient session, organisation cliente active, `sectorCode = PHARMA
 
 `20260610113000_pharmacy_receipts_module` crée les réceptions, lignes, répartitions par lots, écarts et documents sans supprimer les anciens enregistrements.
 
+`20260610150000_pharmacy_sales_module` crée les ventes, lignes, remboursements, lignes remboursées et anomalies sans supprimer les anciens enregistrements.
+
+## Module Sorties, ventes & dispensation
+
+Le module `SALES_DISPENSATION` centralise les ventes comptoir, dispensations sur ordonnance, prises en charge, crédits et sorties internes ou exceptionnelles. Chaque ligne sélectionne un produit actif et un lot vendable proposé selon FEFO.
+
+La confirmation applique une sortie stock idempotente dans une transaction Prisma. Une vente exigeant une validation pharmacien reste bloquée jusqu'à validation. L'annulation restaure les quantités par mouvement inverse; un remboursement peut aussi remettre en stock les lignes autorisées.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/sales`;
+- `GET/PATCH /api/enterprise/[organizationId]/pharmacy/sales/[saleId]`.
+
+Les mutations vérifient l'origine, le rate limiting, Zod, le secteur `PHARMACY`, le membership, l'accès à `SALES_DISPENSATION`, les références du même tenant et l'audit.
+
 ## Limites restantes
 
-- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock et réceptions; des tables dédiées seront nécessaires pour les ventes multi-lignes, factures PDF et traçabilité réglementaire avancée.
+- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions et ventes; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.
 - Les alertes lots sont calculées à la lecture; leur workflow persistant sera ajouté dans l'itération Alertes.
 - L'upload de documents doit continuer à passer par une route privée de stockage contrôlé avant activation dans les formulaires.
 - Le calcul avancé de marge, taxe, caisse et rapports financiers consolidés reste à approfondir.

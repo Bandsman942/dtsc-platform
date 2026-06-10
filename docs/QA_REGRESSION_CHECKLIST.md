@@ -289,3 +289,15 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier qu'un produit du catalogue est sélectionnable dans lots, ventes, réceptions et Activités Pharmacie.
 - [ ] Vérifier qu'un membre non autorisé ne peut pas créer, modifier ou archiver un produit via l'API.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
+
+# Itération PHARMACY Sorties, ventes & dispensation - 10 juin 2026
+
+- [ ] Vérifier que les ventes listées appartiennent uniquement à l'organisation PHARMACY active.
+- [ ] Créer une vente multi-produit et vérifier que seuls les lots vendables sont proposés selon FEFO.
+- [ ] Confirmer une vente simple et vérifier les mouvements `SALE` ainsi que la diminution du stock.
+- [ ] Vérifier qu'une vente réglementée n'impacte pas le stock avant validation pharmacien.
+- [ ] Annuler une vente et vérifier la restauration idempotente du stock avec `SALE_CANCELLATION`.
+- [ ] Rembourser des lignes avec et sans remise en stock puis vérifier les quantités et la traçabilité.
+- [ ] Vérifier le refus des références d'une autre organisation et d'un lot expiré, bloqué, rappelé ou insuffisant.
+- [ ] Vérifier les onze vues, les libellés français, les infos-bulles et l'absence de dépassement horizontal sur mobile.
+- [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.

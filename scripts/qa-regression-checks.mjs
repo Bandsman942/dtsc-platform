@@ -78,6 +78,11 @@ const pharmacyReceiptApi = read("app/api/enterprise/[organizationId]/pharmacy/re
 const pharmacyReceiptsWorkspace = read("components/enterprise/pharmacy-receipts-workspace.tsx");
 const pharmacyReceiptsService = read("lib/pharmacy-receipts.ts");
 const pharmacyReceiptAccess = read("lib/pharmacy-receipt-access.ts");
+const pharmacySalesApi = read("app/api/enterprise/[organizationId]/pharmacy/sales/route.ts");
+const pharmacySaleApi = read("app/api/enterprise/[organizationId]/pharmacy/sales/[saleId]/route.ts");
+const pharmacySalesWorkspace = read("components/enterprise/pharmacy-sales-workspace.tsx");
+const pharmacySalesService = read("lib/pharmacy-sales.ts");
+const pharmacySaleAccess = read("lib/pharmacy-sale-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -414,6 +419,24 @@ check(
   "PHARMACY Réceptions: sept vues fonctionnelles, combobox et formulaire mobile plein écran",
   containsAll(pharmacyReceiptsWorkspace, ["Tableau de bord", "Réceptions fournisseurs", "Lignes de réception", "Réceptions partielles", "Écarts de réception", "Documents de réception", "Historique des réceptions", "h-[96dvh]", "CircleHelp", "Ajouter un lot", "Enregistrer en brouillon"])
     && !pharmacyReceiptsWorkspace.includes('type="url"')
+);
+
+check(
+  "PHARMACY Ventes: modèles dédiés et sorties stock idempotentes",
+  containsAll(prismaSchema, ["model PharmacySale", "model PharmacySaleLine", "model PharmacySaleRefund", "model PharmacySaleRefundLine", "model PharmacySaleAnomaly", "@@unique([organizationId, saleNumber])"])
+    && containsAll(pharmacySalesService, ["applySaleStockImpact", "reverseSaleStockImpact", "sale.stockImpactApplied", 'movementType: "SALE"', 'movementType: "SALE_CANCELLATION"', "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Ventes: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacySalesApi, ["canAccessPharmacySales", "isSameOriginRequest", "await rateLimit", "pharmacySaleSchema.safeParse", "validateSaleReferences", "writeAuditLog"])
+    && containsAll(pharmacySaleApi, ["organizationId", "saleActionSchema.safeParse", "applySaleStockImpact", "reverseSaleStockImpact", "writeAuditLog"])
+    && containsAll(pharmacySaleAccess, ["SALES_DISPENSATION", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Ventes: onze vues métier, FEFO, aides et formulaire mobile",
+  containsAll(pharmacySalesWorkspace, ["Tableau de bord", "Nouvelle vente / dispensation", "Ventes du jour", "Historique des ventes", "Lignes de vente", "Validations pharmacien", "Annulations & remboursements", "Sorties exceptionnelles", "Reçus / factures", "Anomalies de vente", "Historique des mouvements", "Lot vendable FEFO", "CircleHelp", "h-[96dvh]", "min-w-0", "overflow-x-hidden"])
 );
 
 check(

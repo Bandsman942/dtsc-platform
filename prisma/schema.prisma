@@ -1365,6 +1365,148 @@ model PharmacyReceiptDocument {
   @@index([organizationId, batchId])
 }
 
+model PharmacySale {
+  id                           String   @id @default(cuid())
+  organizationId               String
+  saleNumber                   String
+  saleType                     String
+  customerName                 String?
+  customerPhone                String?
+  customerType                 String?
+  prescriptionId               String?
+  prescriberName               String?
+  cashierId                    String
+  pharmacistId                 String?
+  departmentId                 String?
+  saleDate                     DateTime
+  subtotal                     Decimal  @db.Decimal(14, 2)
+  globalDiscount               Decimal? @db.Decimal(8, 2)
+  taxAmount                    Decimal? @db.Decimal(14, 2)
+  totalAmount                  Decimal  @db.Decimal(14, 2)
+  paidAmount                   Decimal  @default(0) @db.Decimal(14, 2)
+  remainingAmount              Decimal  @db.Decimal(14, 2)
+  changeAmount                 Decimal? @db.Decimal(14, 2)
+  paymentMethod                String?
+  paymentReference             String?
+  paymentStatus                String   @default("UNPAID")
+  validationRequired           Boolean  @default(false)
+  pharmacistValidationStatus   String   @default("NOT_REQUIRED")
+  pharmacistValidationComment  String?
+  pharmacistValidatedAt        DateTime?
+  pharmacistRejectionReason    String?
+  status                       String   @default("DRAFT")
+  stockImpactApplied           Boolean  @default(false)
+  receiptGenerated             Boolean  @default(false)
+  notes                        String?
+  cancellationReason           String?
+  cancelledById                String?
+  cancelledAt                  DateTime?
+  refundedAmount               Decimal? @db.Decimal(14, 2)
+  createdById                  String
+  updatedById                  String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  lines                        PharmacySaleLine[]
+  refunds                      PharmacySaleRefund[]
+  anomalies                    PharmacySaleAnomaly[]
+
+  @@unique([organizationId, saleNumber])
+  @@index([organizationId, status, saleDate])
+  @@index([organizationId, paymentStatus])
+  @@index([organizationId, cashierId])
+  @@index([organizationId, pharmacistId])
+}
+
+model PharmacySaleLine {
+  id                           String   @id @default(cuid())
+  organizationId               String
+  saleId                       String
+  productId                    String
+  batchId                      String
+  quantity                     Decimal  @db.Decimal(14, 3)
+  unit                         String
+  unitPrice                    Decimal  @db.Decimal(14, 2)
+  lineDiscount                 Decimal? @db.Decimal(8, 2)
+  totalLine                    Decimal  @db.Decimal(14, 2)
+  lineStatus                   String   @default("DRAFT")
+  requiresPrescription         Boolean  @default(false)
+  requiresPharmacistValidation Boolean  @default(false)
+  notes                        String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  sale                         PharmacySale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  refundLines                  PharmacySaleRefundLine[]
+  anomalies                    PharmacySaleAnomaly[]
+
+  @@index([organizationId, saleId])
+  @@index([organizationId, productId])
+  @@index([organizationId, batchId])
+}
+
+model PharmacySaleRefund {
+  id             String   @id @default(cuid())
+  organizationId String
+  saleId         String
+  refundType     String
+  refundAmount   Decimal  @db.Decimal(14, 2)
+  restockItems   Boolean  @default(false)
+  reason         String
+  validatedById  String?
+  status         String   @default("VALIDATED")
+  notes          String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sale           PharmacySale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  lines          PharmacySaleRefundLine[]
+
+  @@index([organizationId, saleId])
+  @@index([organizationId, status])
+}
+
+model PharmacySaleRefundLine {
+  id               String   @id @default(cuid())
+  organizationId   String
+  refundId         String
+  saleLineId       String
+  productId        String
+  batchId          String
+  quantityReturned Decimal  @db.Decimal(14, 3)
+  restocked        Boolean  @default(false)
+  itemCondition    String?
+  notes            String?
+  refund           PharmacySaleRefund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  saleLine         PharmacySaleLine @relation(fields: [saleLineId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, refundId])
+  @@index([organizationId, saleLineId])
+}
+
+model PharmacySaleAnomaly {
+  id                String   @id @default(cuid())
+  organizationId    String
+  saleId            String
+  saleLineId        String?
+  productId         String?
+  batchId           String?
+  anomalyType       String
+  description       String
+  criticality       String   @default("MEDIUM")
+  responsibleUserId String?
+  status            String   @default("OPEN")
+  proposedAction    String?
+  notes             String?
+  createdById       String
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  sale              PharmacySale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleLine          PharmacySaleLine? @relation(fields: [saleLineId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, saleId, status])
+  @@index([organizationId, criticality, status])
+}
+
 model OrganizationMember {
   id             String   @id @default(cuid())
   organizationId String

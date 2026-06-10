@@ -2244,6 +2244,8 @@ Le module `STOCK_INVENTORY` centralise ses calculs dans `lib/pharmacy-stock.ts` 
 
 Le module `STOCK_RECEIPTS` persiste les réceptions dans `PharmacyReceipt`, leurs lignes, répartitions par lots, écarts et documents. `applyReceiptStockImpact()` applique une validation idempotente dans une transaction Prisma, crée ou alimente les lots et écrit les mouvements `RECEIPT`. `reverseReceiptStockImpact()` crée les sorties inverses `CANCELLATION` et bloque tout stock négatif. Les fournisseurs et commandes sont validés depuis `EnterpriseSectorRecord` dans le même `organizationId`.
 
+Le module `SALES_DISPENSATION` persiste les ventes multi-lignes, remboursements et anomalies dans les modèles `PharmacySale*`. `validateSaleReferences()` contrôle toutes les références dans le tenant actif et interdit les lots expirés, bloqués, rappelés ou insuffisants. `applySaleStockImpact()` décrémente les lots et écrit des mouvements `SALE` de façon transactionnelle et idempotente; `reverseSaleStockImpact()` restaure les quantités avec des mouvements `SALE_CANCELLATION`. Une vente réglementée reste sans impact stock tant que le pharmacien ne l'a pas validée.
+
 Routes:
 
 | Methode | Route | Acces | Usage |
@@ -2252,6 +2254,8 @@ Routes:
 | `GET`, `PATCH`, `DELETE` | `/api/enterprise/[organizationId]/pharmacy/products/[productId]` | membre autorise selon l'action | consulter, modifier ou archiver logiquement |
 | `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/receipts` | membre autorise sur `STOCK_RECEIPTS` | lister ou créer un brouillon de réception |
 | `GET`, `PATCH` | `/api/enterprise/[organizationId]/pharmacy/receipts/[receiptId]` | membre autorise selon l'action | consulter, modifier, soumettre, valider, rejeter ou annuler |
+| `GET`, `POST` | `/api/enterprise/[organizationId]/pharmacy/sales` | membre autorisé sur `SALES_DISPENSATION` | lister ou créer une vente |
+| `GET`, `PATCH` | `/api/enterprise/[organizationId]/pharmacy/sales/[saleId]` | membre autorisé selon l'action | consulter, confirmer, valider, annuler ou rembourser |
 
 Les mutations appliquent origine identique, rate limiting, validation Zod, controle du secteur `PHARMACY`, entitlement du module, membership actif et audit. `DELETE` ne supprime aucune ligne: il applique le statut `ARCHIVED`. La migration `20260609110000_pharmacy_products_module` reprend sans destruction les produits generiques possedant un code interne.
 
