@@ -10,17 +10,18 @@ function nullable<T>(value: T | "" | undefined) {
 }
 
 export async function validateReceiptReferences(organizationId: string, data: PharmacyReceiptInput) {
-  const [supplier, purchaseOrder, receiver, department, mainLocation, products, locations] = await Promise.all([
-    prisma.enterpriseSectorRecord.findFirst({ where: { id: data.supplierId, organizationId, sectorCode: "PHARMACY", moduleCode: "SUPPLIERS_ORDERS", deletedAt: null }, select: { payloadJson: true } }),
-    data.purchaseOrderId ? prisma.enterpriseSectorRecord.findFirst({ where: { id: data.purchaseOrderId, organizationId, sectorCode: "PHARMACY", moduleCode: "SUPPLIERS_ORDERS", deletedAt: null }, select: { id: true } }) : null,
+  const purchaseOrderLineIds = data.lines.flatMap((line) => line.purchaseOrderLineId ? [line.purchaseOrderLineId] : []);
+  const [supplier, purchaseOrder, receiver, department, mainLocation, products, locations, purchaseOrderLines] = await Promise.all([
+    prisma.pharmacySupplier.findFirst({ where: { id: data.supplierId, organizationId, status: { notIn: ["SUSPENDED", "ARCHIVED", "INACTIVE"] } }, select: { id: true } }),
+    data.purchaseOrderId ? prisma.pharmacyPurchaseOrder.findFirst({ where: { id: data.purchaseOrderId, organizationId, supplierId: data.supplierId, status: { notIn: ["REJECTED", "CANCELLED", "ARCHIVED"] } }, select: { id: true } }) : null,
     prisma.organizationMember.findFirst({ where: { organizationId, userId: data.receivedById, status: "ACTIVE", removedAt: null }, select: { id: true } }),
     data.departmentId ? prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } }) : null,
     data.mainLocationId ? prisma.pharmacyStockLocation.findFirst({ where: { id: data.mainLocationId, organizationId, status: "ACTIVE" }, select: { id: true } }) : null,
     prisma.pharmacyProduct.findMany({ where: { organizationId, id: { in: data.lines.map((line) => line.productId) }, status: { not: "ARCHIVED" } }, select: { id: true } }),
     prisma.pharmacyStockLocation.findMany({ where: { organizationId, id: { in: data.lines.flatMap((line) => line.batches.map((batch) => batch.locationId).filter(Boolean) as string[]) }, status: "ACTIVE" }, select: { id: true } }),
+    prisma.pharmacyPurchaseOrderLine.findMany({ where: { organizationId, id: { in: purchaseOrderLineIds } }, select: { id: true, purchaseOrderId: true, productId: true, remainingQuantity: true } }),
   ]);
-  const supplierPayload = supplier?.payloadJson as Record<string, unknown> | null;
-  if (!supplier || supplierPayload?.recordKind !== "SUPPLIER") return "Le fournisseur sélectionné n'appartient pas à cette pharmacie.";
+  if (!supplier) return "Le fournisseur sélectionné n'appartient pas à cette pharmacie ou n'est pas actif.";
   if (data.purchaseOrderId && !purchaseOrder) return "La commande sélectionnée n'appartient pas à cette pharmacie.";
   if (!receiver) return "Le réceptionnaire sélectionné n'appartient pas à cette pharmacie.";
   if (data.departmentId && !department) return "Le département sélectionné n'appartient pas à cette pharmacie.";
@@ -28,6 +29,13 @@ export async function validateReceiptReferences(organizationId: string, data: Ph
   if (new Set(products.map((product) => product.id)).size !== new Set(data.lines.map((line) => line.productId)).size) return "Un produit sélectionné n'appartient pas à cette pharmacie.";
   const locationIds = new Set(locations.map((location) => location.id));
   if (data.lines.some((line) => line.batches.some((batch) => batch.locationId && !locationIds.has(batch.locationId)))) return "Un emplacement de lot n'appartient pas à cette pharmacie.";
+  const purchaseOrderLineMap = new Map(purchaseOrderLines.map((line) => [line.id, line]));
+  for (const line of data.lines) {
+    if (!line.purchaseOrderLineId) continue;
+    const orderLine = purchaseOrderLineMap.get(line.purchaseOrderLineId);
+    if (!orderLine || orderLine.purchaseOrderId !== data.purchaseOrderId || orderLine.productId !== line.productId) return "Une ligne de commande ne correspond pas à cette réception.";
+    if (line.receivedQuantity > Number(orderLine.remainingQuantity)) return "La quantité reçue dépasse la quantité restante de la commande.";
+  }
   for (const line of data.lines) for (const batchInput of line.batches) {
     if (!batchInput.batchId) continue;
     const batch = await prisma.pharmacyBatch.findFirst({ where: { id: batchInput.batchId, organizationId, productId: line.productId }, select: { id: true } });
@@ -75,23 +83,22 @@ export async function updatePharmacyReceipt(organizationId: string, receiptId: s
 }
 
 export async function getPharmacyReceiptsDataset(organizationId: string) {
-  const [receipts, products, batches, members, departments, locations, supplierRecords, movements] = await Promise.all([
+  const [receipts, products, batches, members, departments, locations, suppliers, purchaseOrders, movements] = await Promise.all([
     prisma.pharmacyReceipt.findMany({ where: { organizationId }, orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }], include: { lines: true, receiptBatches: true, discrepancies: true, documents: true } }),
     prisma.pharmacyProduct.findMany({ where: { organizationId, status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true, stockUnit: true, referencePurchasePrice: true } }),
     prisma.pharmacyBatch.findMany({ where: { organizationId, status: { not: "CANCELLED" } }, orderBy: { expiryDate: "asc" }, select: { id: true, productId: true, batchNumber: true, expiryDate: true } }),
     prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, orderBy: { user: { name: "asc" } }, select: { user: { select: { id: true, name: true, email: true } } } }),
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, orderBy: { labelFr: "asc" }, select: { id: true, labelFr: true } }),
     prisma.pharmacyStockLocation.findMany({ where: { organizationId, status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),
-    prisma.enterpriseSectorRecord.findMany({ where: { organizationId, sectorCode: "PHARMACY", moduleCode: "SUPPLIERS_ORDERS", deletedAt: null }, orderBy: { title: "asc" }, select: { id: true, title: true, status: true, payloadJson: true } }),
+    prisma.pharmacySupplier.findMany({ where: { organizationId, status: { notIn: ["ARCHIVED", "INACTIVE"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.pharmacyPurchaseOrder.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "CANCELLED", "ARCHIVED"] } }, orderBy: { orderDate: "desc" }, select: { id: true, orderNumber: true, status: true, supplierId: true } }),
     prisma.pharmacyStockMovement.findMany({ where: { organizationId, relatedEntityType: "PharmacyReceipt" }, orderBy: { createdAt: "desc" }, take: 300, select: { id: true, relatedEntityId: true, movementType: true, direction: true, quantity: true, createdAt: true } }),
   ]);
-  const suppliers = supplierRecords.filter((record) => (record.payloadJson as Record<string, unknown> | null)?.recordKind === "SUPPLIER").map(({ id, title }) => ({ id, title }));
-  const purchaseOrders = supplierRecords.filter((record) => (record.payloadJson as Record<string, unknown> | null)?.recordKind !== "SUPPLIER").map(({ id, title, status, payloadJson }) => ({ id, title, status, payloadJson }));
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const today = now.toISOString().slice(0, 10);
   const metrics = { today: receipts.filter((receipt) => receipt.receivedAt.toISOString().slice(0, 10) === today).length, month: receipts.filter((receipt) => receipt.receivedAt >= monthStart).length, drafts: receipts.filter((receipt) => receipt.status === "DRAFT").length, submitted: receipts.filter((receipt) => receipt.status === "SUBMITTED").length, validated: receipts.filter((receipt) => ["VALIDATED", "PARTIALLY_VALIDATED"].includes(receipt.status)).length, cancelled: receipts.filter((receipt) => receipt.status === "CANCELLED").length, partial: receipts.filter((receipt) => receipt.status === "PARTIALLY_VALIDATED" || receipt.receiptType === "PARTIAL").length, pendingOrders: purchaseOrders.filter((order) => !["RECEIVED", "CANCELLED", "ARCHIVED"].includes(order.status)).length, productsThisMonth: receipts.filter((receipt) => receipt.receivedAt >= monthStart && receipt.stockImpactApplied).reduce((sum, receipt) => sum + Number(receipt.totalItems || 0), 0), valueThisMonth: receipts.filter((receipt) => receipt.receivedAt >= monthStart && receipt.stockImpactApplied).reduce((sum, receipt) => sum + Number(receipt.totalAmount || 0), 0), openDiscrepancies: receipts.flatMap((receipt) => receipt.discrepancies).filter((item) => !["RESOLVED", "REJECTED", "CANCELLED"].includes(item.status)).length, createdBatches: receipts.flatMap((receipt) => receipt.receiptBatches).filter((item) => item.createNewBatch && item.batchId).length, missingDocuments: receipts.filter((receipt) => !receipt.documents.length).length };
-  return { metrics, receipts, products, batches, members: members.map((member) => member.user), departments, locations, suppliers, purchaseOrders, movements };
+  return { metrics, receipts, products, batches, members: members.map((member) => member.user), departments, locations, suppliers: suppliers.map((supplier) => ({ id: supplier.id, title: supplier.name })), purchaseOrders: purchaseOrders.map((order) => ({ id: order.id, title: order.orderNumber, status: order.status, supplierId: order.supplierId })), movements };
 }
 
 export async function applyReceiptStockImpact(organizationId: string, receiptId: string, userId: string) {
@@ -119,7 +126,20 @@ export async function applyReceiptStockImpact(organizationId: string, receiptId:
       await tx.pharmacyStockMovement.create({ data: { organizationId, productId: entry.productId, batchId, movementType: "RECEIPT", direction: "IN", quantity, quantityBefore: before, quantityAfter: before + quantity, reason: `Validation de la réception ${receipt.receiptNumber}`, relatedEntityType: "PharmacyReceipt", relatedEntityId: receipt.id, createdById: userId } });
     }
     const partial = receipt.lines.some((line) => line.orderedQuantity !== null && Number(line.receivedQuantity) + Number(line.previouslyReceivedQuantity || 0) < Number(line.orderedQuantity));
-    if (receipt.purchaseOrderId) await tx.enterpriseSectorRecord.update({ where: { id: receipt.purchaseOrderId }, data: { status: partial ? "PARTIALLY_RECEIVED" : "RECEIVED", updatedById: userId } });
+    const purchaseOrderId = receipt.purchaseOrderId;
+    if (purchaseOrderId) {
+      for (const line of receipt.lines) {
+        if (!line.purchaseOrderLineId) continue;
+        const orderLine = await tx.pharmacyPurchaseOrderLine.findFirst({ where: { id: line.purchaseOrderLineId, purchaseOrderId, organizationId } });
+        if (!orderLine) throw new Error("PURCHASE_ORDER_LINE_NOT_FOUND");
+        const receivedQuantity = Number(orderLine.receivedQuantity) + Number(line.receivedQuantity);
+        const remainingQuantity = Math.max(0, Number(orderLine.orderedQuantity) - receivedQuantity);
+        await tx.pharmacyPurchaseOrderLine.update({ where: { id: orderLine.id }, data: { receivedQuantity, remainingQuantity } });
+      }
+      const orderLines = await tx.pharmacyPurchaseOrderLine.findMany({ where: { purchaseOrderId, organizationId }, select: { remainingQuantity: true } });
+      const orderFullyReceived = orderLines.length > 0 && orderLines.every((line) => Number(line.remainingQuantity) === 0);
+      await tx.pharmacyPurchaseOrder.update({ where: { id: purchaseOrderId }, data: { status: orderFullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED", updatedById: userId } });
+    }
     return tx.pharmacyReceipt.update({ where: { id: receipt.id }, data: { status: partial ? "PARTIALLY_VALIDATED" : "VALIDATED", stockImpactApplied: true, validatedById: userId, validatedAt: new Date(), updatedById: userId } });
   });
 }
@@ -139,7 +159,20 @@ export async function reverseReceiptStockImpact(organizationId: string, receiptI
       await tx.pharmacyBatch.update({ where: { id: batch.id }, data: { availableQuantity: before - quantity, status: before - quantity === 0 ? "DEPLETED" : batch.status, updatedById: userId } });
       await tx.pharmacyStockMovement.create({ data: { organizationId, productId: entry.productId, batchId: batch.id, movementType: "CANCELLATION", direction: "OUT", quantity, quantityBefore: before, quantityAfter: before - quantity, reason, relatedEntityType: "PharmacyReceipt", relatedEntityId: receipt.id, createdById: userId } });
     }
-    if (receipt.purchaseOrderId) await tx.enterpriseSectorRecord.update({ where: { id: receipt.purchaseOrderId }, data: { status: "PARTIALLY_RECEIVED", updatedById: userId } });
+    const purchaseOrderId = receipt.purchaseOrderId;
+    if (purchaseOrderId) {
+      const lines = await tx.pharmacyReceiptLine.findMany({ where: { receiptId: receipt.id, organizationId } });
+      for (const line of lines) {
+        if (!line.purchaseOrderLineId) continue;
+        const orderLine = await tx.pharmacyPurchaseOrderLine.findFirst({ where: { id: line.purchaseOrderLineId, purchaseOrderId, organizationId } });
+        if (!orderLine) continue;
+        const receivedQuantity = Math.max(0, Number(orderLine.receivedQuantity) - Number(line.receivedQuantity));
+        await tx.pharmacyPurchaseOrderLine.update({ where: { id: orderLine.id }, data: { receivedQuantity, remainingQuantity: Math.max(0, Number(orderLine.orderedQuantity) - receivedQuantity) } });
+      }
+      const orderLines = await tx.pharmacyPurchaseOrderLine.findMany({ where: { purchaseOrderId, organizationId }, select: { receivedQuantity: true } });
+      const orderHasReceipts = orderLines.some((line) => Number(line.receivedQuantity) > 0);
+      await tx.pharmacyPurchaseOrder.update({ where: { id: purchaseOrderId }, data: { status: orderHasReceipts ? "PARTIALLY_RECEIVED" : "ORDERED", updatedById: userId } });
+    }
     return tx.pharmacyReceipt.update({ where: { id: receipt.id }, data: { status: "CANCELLED", stockImpactApplied: false, cancelledById: userId, cancelledAt: new Date(), cancellationReason: reason, updatedById: userId } });
   });
 }

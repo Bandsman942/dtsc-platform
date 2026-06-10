@@ -312,3 +312,15 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier le refus de génération depuis une ordonnance rejetée ou déjà liée à une vente active.
 - [ ] Vérifier les onze vues, les documents persistés, l'audit, les libellés français, les infos-bulles et le plein écran mobile.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
+
+# Itération PHARMACY Fournisseurs & commandes - 10 juin 2026
+
+- [ ] Créer un fournisseur et vérifier l'unicité du code ainsi que l'isolation par organisation.
+- [ ] Associer plusieurs produits à un fournisseur et refuser produit ou fournisseur d'un autre tenant.
+- [ ] Créer, soumettre et valider une demande de réapprovisionnement, puis la convertir en commande.
+- [ ] Créer une commande multi-lignes, vérifier les totaux serveur, puis soumettre, valider et marquer commandée.
+- [ ] Créer une réception brouillon depuis une commande et vérifier qu'aucun impact stock n'est appliqué.
+- [ ] Valider une réception partielle puis complète et vérifier les quantités reçues/restantes et statuts de commande.
+- [ ] Annuler une réception validée et vérifier la contre-passation du stock et des quantités de commande.
+- [ ] Vérifier les alertes de retard réelles, documents persistés, onze vues, infos-bulles et formulaires mobiles.
+- [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.

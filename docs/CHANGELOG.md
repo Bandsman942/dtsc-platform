@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Fournisseurs & commandes avec référentiel fournisseurs, produits associés, demandes de réapprovisionnement, commandes multi-lignes, suivi livraison, documents et alertes réelles.
+- Ajout des modèles et de la migration additive `PharmacySupplier`, `PharmacySupplierProduct`, `PharmacyReplenishmentRequest`, `PharmacyPurchaseOrder`, `PharmacyPurchaseOrderLine`, `PharmacySupplierDocument` et `PharmacyPurchaseAlert`.
+- Ajout des routes privées achats pour créer les référentiels, gérer les transitions de validation et préparer une réception brouillon depuis une commande.
 - Ajout du module dédié Pharmacie > Ordonnances / prescriptions avec réception structurée, lignes prescrites référencées ou libres, rapprochement produits, substitution générique traçable, contrôle pharmacien, dispensation, documents et audit.
 - Ajout des modèles et de la migration additive `PharmacyPrescription`, `PharmacyPrescriptionLine`, `PharmacyPrescriptionDocument` et `PharmacyPrescriptionAuditEvent`.
 - Ajout des routes privées de création, consultation, soumission, validation, rejet, demande d'information, rapprochement, substitution, indisponibilité, dispensation, archivage et génération de vente brouillon.
@@ -18,6 +21,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les lots et réceptions consomment désormais les fournisseurs et commandes dédiés de la pharmacie; la validation et l'annulation d'une réception synchronisent les quantités reçues et restantes de la commande.
+- Le module achats fournit onze vues responsives, des libellés métier français, des aides contextuelles et des formulaires plein écran sans faux téléversement.
 - Les ventes utilisent désormais les ordonnances dédiées de la même organisation et une ordonnance validée peut générer une vente brouillon préremplie selon FEFO sans impacter le stock.
 - L'espace Ordonnances fournit onze vues métier responsives, des cartes mobiles, des libellés français, des aides contextuelles et un formulaire plein écran.
 - Les ventes contrôlent les produits, lots, ordonnances, collaborateurs et départements dans la même organisation avant d'appliquer une sortie stock transactionnelle et idempotente.

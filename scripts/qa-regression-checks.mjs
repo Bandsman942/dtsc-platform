@@ -88,6 +88,11 @@ const pharmacyPrescriptionApi = read("app/api/enterprise/[organizationId]/pharma
 const pharmacyPrescriptionsWorkspace = read("components/enterprise/pharmacy-prescriptions-workspace.tsx");
 const pharmacyPrescriptionsService = read("lib/pharmacy-prescriptions.ts");
 const pharmacyPrescriptionAccess = read("lib/pharmacy-prescription-access.ts");
+const pharmacyPurchasesApi = read("app/api/enterprise/[organizationId]/pharmacy/purchases/route.ts");
+const pharmacyPurchaseApi = read("app/api/enterprise/[organizationId]/pharmacy/purchases/[entity]/[id]/route.ts");
+const pharmacyPurchasesWorkspace = read("components/enterprise/pharmacy-purchases-workspace.tsx");
+const pharmacyPurchasesService = read("lib/pharmacy-purchases.ts");
+const pharmacyPurchaseAccess = read("lib/pharmacy-purchase-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -462,6 +467,31 @@ check(
   "PHARMACY Ordonnances: onze vues, libellés français, aides et formulaire mobile",
   containsAll(pharmacyPrescriptionsWorkspace, ["Tableau de bord ordonnances", "Nouvelle ordonnance", "Ordonnances reçues", "Ordonnances en validation", "Ordonnances validées", "Ordonnances partiellement servies", "Ordonnances servies", "Ordonnances rejetées", "Lignes de prescription", "Documents d'ordonnance", "Historique & audit", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden", "Générer une vente brouillon"])
     && !pharmacyPrescriptionsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Achats: modèles fournisseurs, demandes, commandes, documents et alertes",
+  containsAll(prismaSchema, ["model PharmacySupplier", "model PharmacySupplierProduct", "model PharmacyReplenishmentRequest", "model PharmacyPurchaseOrder", "model PharmacyPurchaseOrderLine", "model PharmacySupplierDocument", "model PharmacyPurchaseAlert", "@@unique([organizationId, supplierCode])", "@@unique([organizationId, orderNumber])"])
+    && containsAll(pharmacyPurchasesService, ["validatePurchaseReferences", "createPurchaseEntity", "createReceiptFromPurchaseOrder", "getPurchasesDataset", "remainingQuantity", "ORDER_NOT_RECEIVABLE"])
+);
+
+check(
+  "PHARMACY Achats: réceptions synchronisées et quantités restantes protégées",
+  containsAll(pharmacyReceiptsService, ["pharmacyPurchaseOrderLine.findMany", "purchaseOrderLineMap", "remainingQuantity", "const purchaseOrderId = receipt.purchaseOrderId", "pharmacyPurchaseOrder.update"])
+    && containsAll(pharmacyBatchesApi, ["pharmacySupplier.findFirst", "pharmacyPurchaseOrder.findFirst"])
+);
+
+check(
+  "PHARMACY Achats: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacyPurchasesApi, ["canAccessPharmacyPurchases", "isSameOriginRequest", "await rateLimit", "purchaseCreateSchema.safeParse", "validatePurchaseReferences", "writeAuditLog"])
+    && containsAll(pharmacyPurchaseApi, ["organizationId", "purchaseActionSchema.safeParse", "const suggestedSupplierId", "createReceiptFromPurchaseOrder", "writeAuditLog"])
+    && containsAll(pharmacyPurchaseAccess, ["SUPPLIERS_ORDERS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Achats: onze vues, combobox, aides et formulaires plein écran",
+  containsAll(pharmacyPurchasesWorkspace, ["Tableau de bord achats pharmacie", "Fournisseurs", "Produits par fournisseur", "Demandes de réapprovisionnement", "Commandes fournisseurs", "Lignes de commande", "Suivi de livraison", "Commandes partiellement reçues", "Documents fournisseurs", "Historique fournisseurs & achats", "Alertes achats", "h-[96dvh]", "CircleHelp", "Créer une réception", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyPurchasesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

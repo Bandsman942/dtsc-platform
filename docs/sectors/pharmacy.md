@@ -91,7 +91,7 @@ Le sous-module `STOCK_RECEIPTS` gère l'arrivée officielle des produits dans le
 - Les quantités commandées, déjà reçues et reçues maintenant déterminent les réceptions partielles et le statut de la commande liée.
 - Les écarts de quantité sont créés automatiquement; les autres écarts peuvent être persistés avec criticité, responsable et statut.
 - Les documents fournisseur sont liés à la réception. Leur téléversement doit passer par le système documentaire privé; aucun champ URL libre ou faux bouton d'upload n'est affiché.
-- Les fournisseurs et commandes réutilisent les enregistrements `SUPPLIERS_ORDERS` existants afin de ne pas dupliquer le socle achats.
+- Les fournisseurs et commandes utilisent désormais les modèles dédiés `PharmacySupplier*` et `PharmacyPurchaseOrder*`; les anciens enregistrements génériques restent non destructivement conservés mais ne sont plus affichés dans le module dédié.
 
 Routes dédiées:
 
@@ -108,7 +108,7 @@ Relations logiques validées côté serveur:
 
 - `productId` vers `MEDICINES_PRODUCTS`;
 - `batchId` vers `BATCH_EXPIRY`, avec vérification du produit;
-- `supplierId` et `purchaseOrderId` vers `SUPPLIERS_ORDERS`;
+- `supplierId` vers `PharmacySupplier` et `purchaseOrderId` vers `PharmacyPurchaseOrder`;
 - `receiptId` vers `STOCK_RECEIPTS`;
 - `saleId` vers `SALES_DISPENSATION`;
 - `prescriptionId` vers `PRESCRIPTIONS`;
@@ -179,6 +179,8 @@ Les routes vérifient session, organisation cliente active, `sectorCode = PHARMA
 
 `20260610183000_pharmacy_prescriptions_module` crée les ordonnances, lignes prescrites, documents liés et événements d'audit sans supprimer les anciens enregistrements génériques.
 
+`20260610213000_pharmacy_suppliers_purchase_orders` crée les fournisseurs, associations produits, demandes de réapprovisionnement, commandes, lignes, documents et alertes achats sans supprimer les anciens enregistrements génériques.
+
 ## Module Sorties, ventes & dispensation
 
 Le module `SALES_DISPENSATION` centralise les ventes comptoir, dispensations sur ordonnance, prises en charge, crédits et sorties internes ou exceptionnelles. Chaque ligne sélectionne un produit actif et un lot vendable proposé selon FEFO.
@@ -209,9 +211,26 @@ Les actions PATCH couvrent soumission, validation, rejet motivé, demande d'info
 
 Les documents d'ordonnance sont stockés dans `PharmacyPrescriptionDocument` et affichés selon leur confidentialité. Aucun champ URL libre ni faux téléversement n'est exposé; l'ajout de nouveaux fichiers reste conditionné à la route privée de stockage documentaire contrôlé.
 
+## Module Fournisseurs & commandes
+
+Le module `SUPPLIERS_ORDERS` structure le flux depuis le besoin de réapprovisionnement jusqu'à la préparation d'une réception. Les fournisseurs sont stockés dans `PharmacySupplier`; les produits proposés restent ceux de `PharmacyProduct` et sont associés par `PharmacySupplierProduct`, sans duplication du catalogue.
+
+Les demandes de réapprovisionnement identifient le produit, la quantité, la source réelle du besoin, le demandeur, le département et le fournisseur suggéré. Une demande validée peut créer une commande liée. Les commandes et leurs lignes calculent les montants estimés côté serveur, suivent les quantités commandées, reçues et restantes, ainsi que la date de livraison attendue.
+
+`createReceiptFromPurchaseOrder()` accepte uniquement une commande validée, commandée ou partiellement reçue. Il crée une réception brouillon avec les lignes restantes, sans lot et sans impact stock. Le contrôle des lots et l'entrée réelle restent dans Entrées stock / réceptions. À validation, la réception synchronise les quantités reçues/restantes et le statut de commande; une annulation validée contre-passe aussi ces quantités.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/purchases`;
+- `PATCH /api/enterprise/[organizationId]/pharmacy/purchases/[entity]/[id]`.
+
+Les actions couvrent soumission, validation, rejet motivé, annulation motivée, suspension/réactivation fournisseur, conversion d'une demande, commande fournisseur, création de réception et résolution d'alerte persistée. Les retards sont également détectés depuis les dates attendues réelles.
+
+Les documents fournisseurs sont liés par `organizationId` au fournisseur, à la commande ou à la réception. Aucun champ URL libre ni faux bouton d'upload n'est affiché: les futurs ajouts doivent réutiliser le stockage documentaire privé.
+
 ## Limites restantes
 
-- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions, ventes et ordonnances; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.
+- `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions, ventes, ordonnances et achats; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.
 - Les alertes lots sont calculées à la lecture; leur workflow persistant sera ajouté dans l'itération Alertes.
 - L'upload de documents doit continuer à passer par une route privée de stockage contrôlé avant activation dans les formulaires.
 - Le calcul avancé de marge, taxe, caisse et rapports financiers consolidés reste à approfondir.

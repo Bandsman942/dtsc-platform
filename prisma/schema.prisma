@@ -1207,6 +1207,217 @@ model PharmacyStockLocation {
   @@index([organizationId, parentLocationId])
 }
 
+model PharmacySupplier {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  supplierCode          String
+  name                  String
+  supplierType          String
+  category              String?
+  taxNumber             String?
+  legalIdentifier       String?
+  description           String?
+  mainContactName       String?
+  mainContactRole       String?
+  phone                 String?
+  email                 String?
+  whatsapp              String?
+  secondaryContact      String?
+  country               String?
+  city                  String?
+  area                  String?
+  address               String?
+  deliveryZone          String?
+  averageDeliveryDays   Int?
+  paymentTerms          String?
+  mainCurrency          String   @default("USD")
+  minimumOrderAmount    Decimal? @db.Decimal(14, 2)
+  usualDiscountRate     Decimal? @db.Decimal(8, 2)
+  deliveryFees          Decimal? @db.Decimal(14, 2)
+  supplierCreditAllowed Boolean  @default(false)
+  complianceStatus      String   @default("NOT_VERIFIED")
+  complianceNotes       String?
+  status                String   @default("ACTIVE")
+  suspensionReason      String?
+  notes                 String?
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  products              PharmacySupplierProduct[]
+  purchaseOrders        PharmacyPurchaseOrder[]
+  replenishmentRequests PharmacyReplenishmentRequest[]
+  documents             PharmacySupplierDocument[]
+  alerts                PharmacyPurchaseAlert[]
+
+  @@unique([organizationId, supplierCode])
+  @@index([organizationId, status, name])
+  @@index([organizationId, supplierType])
+}
+
+model PharmacySupplierProduct {
+  id                String   @id @default(cuid())
+  organizationId    String
+  supplierId        String
+  productId         String
+  supplierReference String?
+  supplierPrice     Decimal? @db.Decimal(14, 2)
+  deliveryDays      Int?
+  minimumQuantity   Decimal? @db.Decimal(14, 3)
+  status            String   @default("ACTIVE")
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  supplier          PharmacySupplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, supplierId, productId])
+  @@index([organizationId, productId, status])
+}
+
+model PharmacyReplenishmentRequest {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  requestNumber       String
+  productId           String
+  requestedQuantity   Decimal  @db.Decimal(14, 3)
+  unit                String
+  source              String
+  reason              String
+  priority            String   @default("NORMAL")
+  suggestedSupplierId String?
+  estimatedPrice      Decimal? @db.Decimal(14, 2)
+  requestedById       String
+  departmentId        String?
+  desiredDate         DateTime?
+  status              String   @default("DRAFT")
+  validatedById       String?
+  validatedAt         DateTime?
+  rejectionReason     String?
+  purchaseOrderId     String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  suggestedSupplier   PharmacySupplier? @relation(fields: [suggestedSupplierId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, requestNumber])
+  @@index([organizationId, status, priority])
+  @@index([organizationId, productId])
+  @@index([organizationId, suggestedSupplierId])
+}
+
+model PharmacyPurchaseOrder {
+  id                          String   @id @default(cuid())
+  organizationId              String
+  orderNumber                 String
+  supplierId                  String
+  requestId                   String?
+  requestedById               String
+  departmentId                String?
+  priority                    String   @default("NORMAL")
+  orderDate                   DateTime
+  expectedDeliveryDate        DateTime?
+  deliveryAddress             String?
+  deliveryMode                String?
+  deliveryContact             String?
+  budgetId                    String?
+  estimatedTotal              Decimal  @default(0) @db.Decimal(14, 2)
+  currency                    String   @default("USD")
+  financialValidationRequired Boolean  @default(false)
+  status                      String   @default("DRAFT")
+  submittedById               String?
+  submittedAt                 DateTime?
+  validatedById               String?
+  validatedAt                 DateTime?
+  rejectionReason             String?
+  cancelledById               String?
+  cancelledAt                 DateTime?
+  cancellationReason          String?
+  notes                       String?
+  createdById                 String
+  updatedById                 String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  supplier                    PharmacySupplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines                       PharmacyPurchaseOrderLine[]
+  documents                   PharmacySupplierDocument[]
+  alerts                      PharmacyPurchaseAlert[]
+
+  @@unique([organizationId, orderNumber])
+  @@index([organizationId, status, expectedDeliveryDate])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, requestId])
+}
+
+model PharmacyPurchaseOrderLine {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  purchaseOrderId        String
+  productId              String
+  supplierProductId      String?
+  orderedQuantity        Decimal  @db.Decimal(14, 3)
+  receivedQuantity       Decimal  @default(0) @db.Decimal(14, 3)
+  remainingQuantity      Decimal  @db.Decimal(14, 3)
+  unit                   String
+  estimatedUnitPrice     Decimal? @db.Decimal(14, 2)
+  discountRate           Decimal? @db.Decimal(8, 2)
+  totalLine              Decimal? @db.Decimal(14, 2)
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  purchaseOrder          PharmacyPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, productId])
+}
+
+model PharmacySupplierDocument {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  supplierId           String?
+  purchaseOrderId      String?
+  receiptId            String?
+  documentType         String
+  title                String
+  fileUrl              String
+  reference            String?
+  documentDate         DateTime?
+  expiryDate           DateTime?
+  confidentialityLevel String   @default("INTERNAL")
+  notes                String?
+  createdById          String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  supplier             PharmacySupplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseOrder        PharmacyPurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, supplierId])
+  @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, receiptId])
+}
+
+model PharmacyPurchaseAlert {
+  id                String   @id @default(cuid())
+  organizationId    String
+  alertType         String
+  supplierId        String?
+  purchaseOrderId   String?
+  productId         String?
+  criticality       String   @default("MEDIUM")
+  status            String   @default("OPEN")
+  message           String
+  recommendedAction String?
+  assignedToId      String?
+  resolvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  supplier          PharmacySupplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseOrder     PharmacyPurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, criticality])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, purchaseOrderId])
+}
+
 model PharmacyReceipt {
   id                       String   @id @default(cuid())
   organizationId           String

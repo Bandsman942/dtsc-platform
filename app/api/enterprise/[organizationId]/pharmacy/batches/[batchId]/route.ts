@@ -41,6 +41,14 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!merged.success) return NextResponse.json({ error: "Invalid payload", message: merged.error.issues[0]?.message || "Modification incohérente." }, { status: 400 });
   const product = await prisma.pharmacyProduct.findFirst({ where: { id: merged.data.productId, organizationId }, select: { id: true } });
   if (!product) return NextResponse.json({ error: "Invalid product", message: "Le produit sélectionné n'appartient pas à cette pharmacie." }, { status: 400 });
+  const [supplier, purchaseOrder, receipt] = await Promise.all([
+    merged.data.supplierId ? prisma.pharmacySupplier.findFirst({ where: { id: merged.data.supplierId, organizationId }, select: { id: true } }) : null,
+    merged.data.purchaseOrderId ? prisma.pharmacyPurchaseOrder.findFirst({ where: { id: merged.data.purchaseOrderId, organizationId }, select: { id: true } }) : null,
+    merged.data.receiptId ? prisma.pharmacyReceipt.findFirst({ where: { id: merged.data.receiptId, organizationId }, select: { id: true } }) : null,
+  ]);
+  if (merged.data.supplierId && !supplier) return NextResponse.json({ error: "Invalid supplier", message: "Le fournisseur sélectionné n'appartient pas à cette pharmacie." }, { status: 400 });
+  if (merged.data.purchaseOrderId && !purchaseOrder) return NextResponse.json({ error: "Invalid order", message: "La commande sélectionnée n'appartient pas à cette pharmacie." }, { status: 400 });
+  if (merged.data.receiptId && !receipt) return NextResponse.json({ error: "Invalid receipt", message: "La réception sélectionnée n'appartient pas à cette pharmacie." }, { status: 400 });
   const data: Record<string, unknown> = { ...parsed.data, updatedById: session.userId };
   for (const [key, value] of Object.entries(data)) if (nullableKeys.has(key) && value === "") data[key] = null;
   if (parsed.data.purchasePrice !== undefined || parsed.data.receivedQuantity !== undefined) data.totalCost = merged.data.purchasePrice === "" || merged.data.purchasePrice === null || merged.data.purchasePrice === undefined ? null : Number(merged.data.receivedQuantity) * Number(merged.data.purchasePrice);

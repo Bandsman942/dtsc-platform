@@ -33,13 +33,12 @@ async function validateReferences(organizationId: string, data: BatchInput) {
     const member = await prisma.organizationMember.findFirst({ where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { id: true } });
     if (!member) return "Le collaborateur sélectionné n'appartient pas à cette pharmacie.";
   }
-  const references: Array<[string | undefined, string, string?]> = [[data.supplierId || undefined, "SUPPLIERS_ORDERS", "SUPPLIER"], [data.purchaseOrderId || undefined, "SUPPLIERS_ORDERS"]];
-  for (const [id, moduleCode, kind] of references) {
-    if (!id) continue;
-    const record = await prisma.enterpriseSectorRecord.findFirst({ where: { id, organizationId, sectorCode: "PHARMACY", moduleCode, deletedAt: null }, select: { payloadJson: true } });
-    const payload = record?.payloadJson as Record<string, unknown> | null;
-    if (!record || (kind && payload?.recordKind !== kind)) return "Une référence fournisseur ou réception n'appartient pas à cette pharmacie.";
-  }
+  const [supplier, purchaseOrder] = await Promise.all([
+    data.supplierId ? prisma.pharmacySupplier.findFirst({ where: { id: data.supplierId, organizationId }, select: { id: true } }) : null,
+    data.purchaseOrderId ? prisma.pharmacyPurchaseOrder.findFirst({ where: { id: data.purchaseOrderId, organizationId }, select: { id: true } }) : null,
+  ]);
+  if (data.supplierId && !supplier) return "Le fournisseur sélectionné n'appartient pas à cette pharmacie.";
+  if (data.purchaseOrderId && !purchaseOrder) return "La commande sélectionnée n'appartient pas à cette pharmacie.";
   if (data.receiptId) {
     const receipt = await prisma.pharmacyReceipt.findFirst({ where: { id: data.receiptId, organizationId }, select: { id: true } });
     if (!receipt) return "La réception sélectionnée n'appartient pas à cette pharmacie.";
@@ -87,17 +86,18 @@ export async function GET(req: Request, { params }: Params) {
       { product: { internalCode: { contains: query, mode: "insensitive" } } },
     ] } : {}),
   };
-  const [rawBatches, totalCount, products, members, supplierRecords, receiptRecords] = await Promise.all([
+  const [rawBatches, totalCount, products, members, supplierRecords, purchaseOrderRecords, receiptRecords] = await Promise.all([
     prisma.pharmacyBatch.findMany({ where, orderBy: [{ expiryDate: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { product: true, createdBy: { select: { name: true, email: true } }, stockMovements: { orderBy: { createdAt: "desc" }, take: 20 } } }),
     prisma.pharmacyBatch.count({ where }),
     prisma.pharmacyProduct.findMany({ where: { organizationId, status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true, genericName: true, internalCode: true, category: true, pharmaceuticalForm: true, dosage: true, stockUnit: true, defaultLocation: true, shelf: true, storageType: true, tempMin: true, tempMax: true, refrigerated: true, currency: true } }),
     prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, orderBy: { user: { name: "asc" } }, select: { user: { select: { id: true, name: true, email: true } } } }),
-    prisma.enterpriseSectorRecord.findMany({ where: { organizationId, sectorCode: "PHARMACY", moduleCode: "SUPPLIERS_ORDERS", deletedAt: null }, orderBy: { title: "asc" }, select: { id: true, title: true, payloadJson: true } }),
+    prisma.pharmacySupplier.findMany({ where: { organizationId, status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.pharmacyPurchaseOrder.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "CANCELLED", "ARCHIVED"] } }, orderBy: { orderDate: "desc" }, select: { id: true, orderNumber: true } }),
     prisma.pharmacyReceipt.findMany({ where: { organizationId }, orderBy: { receivedAt: "desc" }, select: { id: true, receiptNumber: true } }),
   ]);
   const batches = rawBatches.map((batch) => ({ ...batch, effectiveStatus: effectivePharmacyBatchStatus(batch) }));
-  const suppliers = supplierRecords.filter((record) => (record.payloadJson as Record<string, unknown> | null)?.recordKind === "SUPPLIER").map(({ id, title }) => ({ id, title }));
-  const purchaseOrders = supplierRecords.filter((record) => (record.payloadJson as Record<string, unknown> | null)?.recordKind !== "SUPPLIER").map(({ id, title }) => ({ id, title }));
+  const suppliers = supplierRecords.map(({ id, name }) => ({ id, title: name }));
+  const purchaseOrders = purchaseOrderRecords.map(({ id, orderNumber }) => ({ id, title: orderNumber }));
   const receipts = receiptRecords.map(({ id, receiptNumber }) => ({ id, title: receiptNumber }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ batches, products, members: members.map((member) => member.user), suppliers, purchaseOrders, receipts, totalCount, page, pageCount: Math.max(1, Math.ceil(totalCount / pageSize)) });
