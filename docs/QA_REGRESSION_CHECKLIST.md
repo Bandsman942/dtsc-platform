@@ -29,6 +29,8 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Aucun ajustement ne peut produire une quantité disponible négative.
 - [ ] Les emplacements, collaborateurs, départements, produits et lots d'une autre organisation sont refusés.
 - [ ] Les dix sous-vues Stock & inventaire restent lisibles en cartes mobiles et les formulaires s'ouvrent en plein écran.
+- [ ] Chaque étiquette des formulaires Stock & inventaire possède une info-bulle compréhensible et chaque option de liste est affichée en français métier, sans code interne.
+- [ ] Sur un écran mobile étroit, les formulaires Stock, les filtres Produits et le sélecteur d'entreprise de connexion restent entièrement contenus dans leur zone sans débordement horizontal.
 
 ## Navigation et socle commun Enterprise
 

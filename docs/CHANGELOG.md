@@ -18,6 +18,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les formulaires Stock & inventaire affichent désormais des libellés métier français, des listes commerciales traduites et une info-bulle d'orientation sur chaque champ.
+- Les filtres Produits & médicaments traduisent aussi les règles et critères de tri afin de ne plus exposer de clés techniques.
 - Le sous-module Stock & inventaire remplace son formulaire générique par dix sous-vues fonctionnelles, des cartes mobiles, des formulaires plein écran et des actions historisées.
 - La navigation latérale des entreprises clientes et le panneau générique des modules affichent uniquement le socle commun; les modules sectoriels restent regroupés dans leurs sous-modules Administration dédiés.
 - Les pages du socle commun remplacent l'espace générique superficiel par des indicateurs et listes issus des collaborateurs, départements, postes, workflows, demandes, réunions et audits réels de l'entreprise.
@@ -36,6 +38,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction des débordements mobiles des formulaires Stock, des filtres Produits & médicaments et du sélecteur d'entreprise sur la page de connexion.
 - Correction des comparaisons impossibles entre dates/nombres déjà normalisés par Zod et chaînes vides, afin de rétablir le contrôle TypeScript du build Vercel.
 - Normalisation explicite en nombres des calculs de quantités, températures et coût total des lots pour éviter les unions Zod non arithmétiques pendant le build Vercel.
 - Correction du build Vercel du catalogue Produits & médicaments en remplaçant deux constantes utilisées uniquement comme types, refusées par `@typescript-eslint/no-unused-vars`.

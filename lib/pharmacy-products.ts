@@ -28,4 +28,6 @@ export const PHARMACY_PRODUCT_LABELS: Record<string, string> = {
   G: "g", KG: "kg", AMBIENT: "Température ambiante", REFRIGERATED: "Réfrigéré", FROZEN: "Congelé",
   LIGHT_PROTECTED: "À l'abri de la lumière", HUMIDITY_PROTECTED: "À l'abri de l'humidité", SPECIFIC: "Conditions spécifiques",
   ACTIVE: "Actif", INACTIVE: "Inactif", SUSPENDED: "Suspendu", ARCHIVED: "Archivé",
+  prescriptionRequired: "Ordonnance obligatoire", controlledProduct: "Produit soumis à contrôle renforcé", refrigerated: "Conservation au réfrigérateur",
+  name: "Nom commercial", category: "Catégorie", status: "Statut du produit", createdAt: "Date de création",
 };

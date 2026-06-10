@@ -63,6 +63,7 @@ const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/ph
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
 const pharmacyProductApi = read("app/api/enterprise/[organizationId]/pharmacy/products/[productId]/route.ts");
 const pharmacyProductsWorkspace = read("components/enterprise/pharmacy-products-workspace.tsx");
+const pharmacyProductsLabels = read("lib/pharmacy-products.ts");
 const pharmacyProductAccess = read("lib/pharmacy-product-access.ts");
 const pharmacyBatchesApi = read("app/api/enterprise/[organizationId]/pharmacy/batches/route.ts");
 const pharmacyBatchApi = read("app/api/enterprise/[organizationId]/pharmacy/batches/[batchId]/route.ts");
@@ -382,6 +383,13 @@ check(
 check(
   "PHARMACY Stock: dix vues fonctionnelles et formulaires plein écran",
   containsAll(pharmacyStockWorkspace, ["Vue stock global", "Stock par produit", "Stock par lot", "Mouvements de stock", "Sessions d'inventaire", "Écarts d'inventaire", "Ajustements stock", "Emplacements", "Alertes stock", "Historique stock", "h-[94dvh]", "Enregistrer le comptage"])
+);
+
+check(
+  "PHARMACY Stock: formulaires guidés, listes françaises et confinement mobile",
+  containsAll(pharmacyStockWorkspace, ["FIELD_HELP", "LabelWithHelp", "CircleHelp", "Inventaire complet", "Tous les produits", "Entrée en stock", "Zone des produits expirés", "overflow-x-hidden", "min-w-0"])
+    && containsAll(pharmacyProductsWorkspace, ["w-full min-w-0 max-w-full overflow-hidden", "Toutes les catégories", "Toutes les règles"])
+    && containsAll(pharmacyProductsLabels, ["Ordonnance obligatoire", "Produit soumis à contrôle renforcé", "Nom commercial", "Date de création"])
 );
 
 check(

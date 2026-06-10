@@ -328,6 +328,7 @@ Conserver une hiérarchie visible pour:
 - Toute nouvelle copie visible du design doit respecter i18n FR/EN et éviter les textes hardcodés lorsque l'interface est réutilisable.
 - Quand un module privé reçoit de nouveaux libellés visibles, ajouter les clés dans `locales/fr.json` et `locales/en.json`, puis utiliser `translate(locale, key)` avec la préférence utilisateur quand elle est disponible.
 - Les formulaires et fiches détail ne doivent jamais afficher directement des noms de champs techniques, identifiants de code, clés JSON, noms camelCase ou libellés ambigus. Chaque champ visible doit avoir un libellé métier facilement interprétable par l'utilisateur, traduit selon la langue de l'interface, et une info-bulle ou aide contextuelle courte expliquant la valeur attendue ou l'effet de l'option.
+- Les options visibles des listes, filtres, dropdowns et combobox doivent toujours passer par un dictionnaire de libellés métier traduit; ne jamais afficher directement une valeur d'enum, un code interne, une clé camelCase ou une valeur anglaise quand l'interface est en français.
 - Dans le contexte d'une entreprise cliente, la navigation latérale doit afficher uniquement les modules du socle commun. Les modules sectoriels Santé, Pharmacie ou futurs secteurs restent regroupés dans leurs sous-modules dédiés de `Administration [entreprise]` afin d'éviter toute répétition.
 
 ## Règles DTSC — Calendrier interne

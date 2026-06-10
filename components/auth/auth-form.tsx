@@ -174,13 +174,13 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
             onBlur={(event) => void loadOrganizations(event.target.value)}
           />
           {!isSignUp && (
-            <label className="grid gap-1">
-              <span className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">Entreprise</span>
+            <label className="grid min-w-0 max-w-full gap-1 overflow-hidden">
+              <span className="min-w-0 max-w-full text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">Entreprise</span>
               <select
                 name="organizationId"
                 value={selectedOrganizationId}
                 onChange={(event) => setSelectedOrganizationId(event.target.value)}
-                className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-200"
+                className="h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-200"
               >
                 <option value="">{organizationLoading ? "Chargement des espaces..." : "Choisir une entreprise"}</option>
                 {organizations.map((organization) => (
@@ -189,7 +189,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
                   </option>
                 ))}
               </select>
-              <span className="text-xs leading-5 text-dtsc-muted">
+              <span className="min-w-0 max-w-full break-words text-xs leading-5 text-dtsc-muted">
                 {selectedOrganizationId
                   ? `Vous vous connecterez à l'espace privé de ${organizations.find((item) => item.id === selectedOrganizationId)?.name || "cette entreprise"}.`
                   : "Laissez vide pour accéder à votre espace client standard."}
