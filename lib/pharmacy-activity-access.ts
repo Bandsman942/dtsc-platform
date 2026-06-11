@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { canUseFeature } from "@/lib/billing/entitlements";
 
 export const pharmacyActivityPermissions = [
   "pharmacy.activities.view", "pharmacy.activities.dashboard", "pharmacy.activities.view_own", "pharmacy.activities.view_department",
@@ -13,6 +14,8 @@ export const pharmacyActivityPermissions = [
 const managers = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
 
 export async function getPharmacyActivityAccess(userId: string, organizationId: string) {
+  const featureAccess = await canUseFeature(organizationId, "enterprise-activities");
+  if (!featureAccess.allowed) return null;
   const member = await prisma.organizationMember.findFirst({
     where: { userId, organizationId, status: "ACTIVE", removedAt: null, organization: { sectorCode: "PHARMACY", status: "ACTIVE", deletedAt: null } },
     select: { role: true },

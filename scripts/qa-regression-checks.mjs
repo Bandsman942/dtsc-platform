@@ -754,7 +754,7 @@ check(
 check(
   "PHARMACY Activités: modèles, permissions et connexions métier réelles",
   containsAll(prismaSchema, ["model PharmacyActivityItem", "model PharmacyActivityComment", "model PharmacyActivityDocument", "model PharmacyActivityEvent", "model PharmacyPharmacistAdviceRequest"])
-    && containsAll(pharmacyActivityAccess, ["pharmacy.activities.view_own", "pharmacy.activities.validate", "pharmacy.activities.attach_document", 'sectorCode: "PHARMACY"'])
+    && containsAll(pharmacyActivityAccess, ["pharmacy.activities.view_own", "pharmacy.activities.validate", "pharmacy.activities.attach_document", 'canUseFeature(organizationId, "enterprise-activities")', 'sectorCode: "PHARMACY"'])
     && containsAll(pharmacyActivitiesService, ["createPharmacyActivityRequest", "getPharmacyActivityDashboard", "resolvePharmacyActivityAction", "pharmacyReplenishmentRequest.create", "pharmacyAlert.upsert", "pharmacyInventoryLine.update", "pharmacyStockAdjustment.create", "pharmacyCashSession.update", "pharmacySaleAnomaly.create", "pharmacyQualityIncident.create", "pharmacyPharmacistAdviceRequest.create", "pharmacyActivityDocument.create", "notifyUsers"])
 );
 
