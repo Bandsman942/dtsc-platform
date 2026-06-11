@@ -228,6 +228,19 @@ Les actions couvrent soumission, validation, rejet motivé, annulation motivée,
 
 Les documents fournisseurs sont liés par `organizationId` au fournisseur, à la commande ou à la réception. Aucun champ URL libre ni faux bouton d'upload n'est affiché: les futurs ajouts doivent réutiliser le stockage documentaire privé.
 
+## Module Incidents qualité & pharmacovigilance
+
+Le module `QUALITY_PHARMACOVIGILANCE` est désormais un registre dédié et structuré. Il relie les incidents aux produits, lots, ventes, ordonnances, réceptions, retours/pertes, fournisseurs, alertes, collaborateurs, départements et emplacements de la même organisation.
+
+Les quatorze vues couvrent le tableau de bord, le registre, la création, les erreurs de dispensation, la pharmacovigilance, les produits suspects, les plaintes, la conservation, les investigations, les CAPA, les escalades, les documents privés, l'audit et les rapports. Les règles fortes empêchent la clôture d'un incident critique sans résolution, d'un incident élevé/critique sans investigation terminée ou d'un dossier avec CAPA obligatoire non validée.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/quality`;
+- `PATCH /api/enterprise/[organizationId]/pharmacy/quality/[entity]/[id]`.
+
+La création d'un incident ne modifie jamais automatiquement le lot. La quarantaine, le blocage et la création d'alerte sont des actions explicites, motivées et auditées. La documentation complète est dans `docs/sectors/pharmacy-quality-incidents.md`.
+
 ## Limites restantes
 
 - `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions, ventes, ordonnances et achats; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.

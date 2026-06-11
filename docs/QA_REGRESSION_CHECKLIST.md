@@ -43,6 +43,19 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Les documents de réception utilisent le système documentaire privé sans champ URL libre.
 - [ ] La liste utilise des cartes mobiles, le formulaire est plein écran et aucun sous-bloc n'est un placeholder.
 
+## Pharmacie - Incidents qualité & pharmacovigilance
+
+- [ ] Les quatorze vues qualité utilisent uniquement les données de l'organisation PHARMACY active.
+- [ ] Une suspicion de contrefaçon ou un produit rappelé devient critique; un effet indésirable grave, un mauvais produit servi ou un produit périmé servi est au minimum élevé.
+- [ ] Un incident critique sans action immédiate documentée ne peut pas être signalé.
+- [ ] Un incident élevé ou critique ne peut pas être clôturé sans investigation terminée.
+- [ ] Un incident critique ne peut pas être clôturé sans résumé de résolution.
+- [ ] Un incident avec CAPA obligatoire ouverte ou non validée ne peut pas être clôturé.
+- [ ] La création d'un incident ne modifie pas le lot; les actions quarantaine et blocage exigent un lot, un motif, une permission et un audit.
+- [ ] Une alerte qualité créée depuis l'incident est persistée et dédupliquée.
+- [ ] Le formulaire est plein écran, mobile-first, avec étiquettes françaises, info-bulles et combobox réelles.
+- [ ] Aucun faux téléversement ou champ URL libre n'est visible dans Documents qualité.
+
 ## Navigation et socle commun Enterprise
 
 - Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.

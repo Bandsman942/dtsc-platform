@@ -2302,3 +2302,11 @@ Le module `ALERTS_EXPIRY_LOW_STOCK` utilise `PharmacyAlert`, `PharmacyAlertEvent
 `detectAllPharmacyAlerts(organizationId)` lit les données dédiées produits, lots, achats, réceptions, ventes, inventaire, retours/pertes et caisse. Chaque condition produit une clé de déduplication tenant compte du type, du module source, de l'objet source, du produit et du lot. Une alerte active est mise à jour; une alerte résolue est rouverte si la condition revient; une condition disparue peut être résolue automatiquement selon les paramètres.
 
 Les routes `GET|POST /api/enterprise/[organizationId]/pharmacy/alerts` et `PATCH /api/enterprise/[organizationId]/pharmacy/alerts/[entity]/[id]` contrôlent session, membership, secteur et module actifs, origine, rate limit, Zod, RBAC, tenant et audit. Les alertes critiques peuvent notifier les responsables actifs de l'organisation sans exposer de données à un autre tenant.
+
+# Module incidents qualité & pharmacovigilance PHARMACY
+
+Le module `QUALITY_PHARMACOVIGILANCE` utilise les modèles dédiés `PharmacyQualityIncident`, `PharmacyQualityInvestigation`, `PharmacyQualityCapaAction`, `PharmacyAdverseReactionReport`, `PharmacyCustomerComplaint`, `PharmacyQualityDocument` et `PharmacyQualityEvent`. La migration additive est `20260611143000_pharmacy_quality_pharmacovigilance`.
+
+Le service `lib/pharmacy-quality.ts` centralise la validation multi-tenant des références, la normalisation de criticité, les règles d'action immédiate, d'investigation, de CAPA et de clôture, la création d'alerte dédiée ainsi que les actions explicites de quarantaine et blocage des lots. Les routes `GET|POST /api/enterprise/[organizationId]/pharmacy/quality` et `PATCH /api/enterprise/[organizationId]/pharmacy/quality/[entity]/[id]` appliquent session, entitlement, secteur PHARMACY, membership actif, origine, rate limit, Zod, permissions et audit.
+
+La documentation métier et les limites sont détaillées dans `docs/sectors/pharmacy-quality-incidents.md`.

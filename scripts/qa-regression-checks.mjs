@@ -108,6 +108,11 @@ const pharmacyAlertActionApi = read("app/api/enterprise/[organizationId]/pharmac
 const pharmacyAlertsWorkspace = read("components/enterprise/pharmacy-alerts-workspace.tsx");
 const pharmacyAlertsService = read("lib/pharmacy-alerts.ts");
 const pharmacyAlertAccess = read("lib/pharmacy-alert-access.ts");
+const pharmacyQualityApi = read("app/api/enterprise/[organizationId]/pharmacy/quality/route.ts");
+const pharmacyQualityActionApi = read("app/api/enterprise/[organizationId]/pharmacy/quality/[entity]/[id]/route.ts");
+const pharmacyQualityWorkspace = read("components/enterprise/pharmacy-quality-workspace.tsx");
+const pharmacyQualityService = read("lib/pharmacy-quality.ts");
+const pharmacyQualityAccess = read("lib/pharmacy-quality-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -410,7 +415,7 @@ check(
 
 check(
   "PHARMACY Stock: modèles dédiés, calculs réels et ajustements transactionnels",
-  containsAll(prismaSchema, ["model PharmacyInventorySession", "model PharmacyInventoryLine", "model PharmacyStockAdjustment", "model PharmacyStockLocation", 'direction         String   @default("NEUTRAL")'])
+  containsAll(prismaSchema, ["model PharmacyInventorySession", "model PharmacyInventoryLine", "model PharmacyStockAdjustment", "model PharmacyStockLocation", /direction\s+String\s+@default\("NEUTRAL"\)/])
     && containsAll(pharmacyStockService, ["getPharmacyStockDataset", "calculateProductStockStatus", "generateInventoryLines", "Number(batch.availableQuantity)"])
     && containsAll(pharmacyStockApi, ["canAccessPharmacyStock", "isSameOriginRequest", "await rateLimit", "prisma.$transaction", "NEGATIVE_STOCK", "PharmacyStockAdjustment"])
 );
@@ -570,6 +575,25 @@ check(
   "PHARMACY Alertes: quatorze vues, aides et détail mobile",
   containsAll(pharmacyAlertsWorkspace, ["Tableau de bord alertes", "Alertes ouvertes", "Alertes critiques", "Alertes stock", "Alertes péremption", "Alertes rappels / quarantaine", "Alertes achats & réapprovisionnement", "Alertes ventes & dispensation", "Alertes inventaire & ajustements", "Alertes retours, pertes & destructions", "Alertes caisse", "Règles de détection", "Affectations & notifications", "Historique des alertes", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
     && !pharmacyAlertsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Qualité: modèles dédiés et règles de clôture fortes",
+  containsAll(prismaSchema, ["model PharmacyQualityIncident", "model PharmacyQualityInvestigation", "model PharmacyQualityCapaAction", "model PharmacyAdverseReactionReport", "model PharmacyCustomerComplaint", "model PharmacyQualityDocument", "model PharmacyQualityEvent", "@@unique([organizationId, incidentNumber])"])
+    && containsAll(pharmacyQualityService, ["validateQualityReferences", "normalizedCriticality", "IMMEDIATE_ACTION_REQUIRED", "INVESTIGATION_REQUIRED", "CAPA_OPEN", "RESOLUTION_REQUIRED", "quarantine-batch", "block-batch", "createQualityAlert"])
+);
+
+check(
+  "PHARMACY Qualité: routes multi-tenant sécurisées et auditées",
+  containsAll(pharmacyQualityApi, ["canAccessPharmacyQuality", "isSameOriginRequest", "await rateLimit", "pharmacyQualityIncidentSchema.safeParse", "validateQualityReferences", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyQualityActionApi, ["pharmacyQualityActionSchema.safeParse", "transitionQualityEntity", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyQualityAccess, ["QUALITY_PHARMACOVIGILANCE", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Qualité: quatorze vues, aides et formulaires mobiles",
+  containsAll(pharmacyQualityWorkspace, ["Tableau de bord qualité", "Registre des incidents", "Nouvel incident", "Erreurs de dispensation", "Effets indésirables", "Produits suspects / non conformes", "Plaintes clients", "Ruptures de conservation", "Investigations", "Actions correctives & préventives", "Escalades & notifications", "Documents qualité", "Historique & audit", "Rapports qualité", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyQualityWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

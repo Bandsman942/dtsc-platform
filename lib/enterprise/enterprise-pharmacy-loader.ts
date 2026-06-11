@@ -13,7 +13,7 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     return [];
   }
 
-  const [records, products, batches] = await Promise.all([prisma.enterpriseSectorRecord.findMany({
+  const [records, products, batches, qualityIncidents] = await Promise.all([prisma.enterpriseSectorRecord.findMany({
     where: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: { in: allowedModuleCodes }, deletedAt: null },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     take: 500,
@@ -30,6 +30,10 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     where: { organizationId },
     orderBy: { expiryDate: "asc" },
     include: { product: { select: { name: true } }, createdBy: { select: { name: true, email: true } } },
+    take: 500,
+  }) : Promise.resolve([]), allowedModuleCodes.includes("QUALITY_PHARMACOVIGILANCE") ? prisma.pharmacyQualityIncident.findMany({
+    where: { organizationId },
+    orderBy: { reportedAt: "desc" },
     take: 500,
   }) : Promise.resolve([])]);
   const productRecords = products.map((product) => ({
@@ -72,5 +76,11 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     createdBy: batch.createdBy,
     assignedTo: null,
   }));
-  return [...productRecords, ...batchRecords, ...records.filter((record) => !["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_RECEIPTS", "SALES_DISPENSATION", "PRESCRIPTIONS", "SUPPLIERS_ORDERS", "CASH_INVOICES_PAYMENTS", "RETURNS_ADJUSTMENTS_LOSSES", "ALERTS_EXPIRY_LOW_STOCK"].includes(record.moduleCode))];
+  const qualityRecords = qualityIncidents.map((incident) => ({
+    id: incident.id, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: "QUALITY_PHARMACOVIGILANCE", recordType: "PHARMACY_QUALITY_INCIDENT",
+    title: incident.title, summary: incident.description, status: incident.status, priority: incident.priority, assignedToUserId: incident.assignedToId,
+    payloadJson: { incidentNumber: incident.incidentNumber, incidentType: incident.incidentType, category: incident.category, criticality: incident.criticality, productId: incident.productId, batchId: incident.batchId },
+    createdById: incident.createdById, updatedById: incident.updatedById, createdAt: incident.createdAt, updatedAt: incident.updatedAt, deletedAt: null, createdBy: { name: null, email: "" }, assignedTo: null,
+  }));
+  return [...productRecords, ...batchRecords, ...qualityRecords, ...records.filter((record) => !["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_RECEIPTS", "SALES_DISPENSATION", "PRESCRIPTIONS", "SUPPLIERS_ORDERS", "CASH_INVOICES_PAYMENTS", "RETURNS_ADJUSTMENTS_LOSSES", "ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE"].includes(record.moduleCode))];
 }

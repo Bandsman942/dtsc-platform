@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Incidents qualité & pharmacovigilance avec quatorze vues, registre structuré, investigations, CAPA, effets indésirables, plaintes, actions lots et audit.
+- Ajout des modèles `PharmacyQualityIncident`, `PharmacyQualityInvestigation`, `PharmacyQualityCapaAction`, `PharmacyAdverseReactionReport`, `PharmacyCustomerComplaint`, `PharmacyQualityDocument`, `PharmacyQualityEvent` et de la migration additive associée.
+- Ajout des routes privées permettant de créer, consulter et traiter les incidents qualité, leurs suivis et leurs escalades.
 - Ajout du moteur persistant Pharmacie > Alertes stock / péremption / rappel avec détection multi-modules, déduplication, cycle de vie, assignation, notifications critiques et historique.
 - Ajout des modèles `PharmacyAlert`, `PharmacyAlertEvent`, `PharmacyAlertRule`, `PharmacyAlertSetting` et de la migration additive associée.
 - Ajout des routes privées de consultation, détection, traitement, gestion des règles et paramètres d'alertes.
@@ -15,6 +18,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les incidents qualité appliquent désormais les règles fortes de criticité, d'action immédiate, d'investigation obligatoire, de CAPA et de clôture, avec références strictement filtrées par organisation.
+- Les actions de quarantaine et de blocage de lot depuis un incident sont explicites, motivées, historisées et ne modifient jamais les quantités.
 - Le module Alertes fournit désormais quatorze vues fonctionnelles, des cartes mobiles, des libellés français, des aides contextuelles et des actions persistées.
 - Les détecteurs consolident les ruptures, stocks faibles, surstocks, prix/lots manquants, péremptions, rappels, quarantaines, commandes, réceptions, ventes, inventaires, ajustements, pertes, destructions et caisse.
 - Les retours clients et fournisseurs, ajustements, pertes, casses, retraits, rappels et destructions appliquent désormais des mouvements stock transactionnels, idempotents et réversibles.
