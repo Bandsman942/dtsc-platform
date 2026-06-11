@@ -241,6 +241,18 @@ Routes privées:
 
 La création d'un incident ne modifie jamais automatiquement le lot. La quarantaine, le blocage et la création d'alerte sont des actions explicites, motivées et auditées. La documentation complète est dans `docs/sectors/pharmacy-quality-incidents.md`.
 
+## Module Documents & conformité
+
+Le module `PHARMACY_DOCUMENTS` est désormais un référentiel privé structuré avec quinze vues: tableau de bord, bibliothèque, regroupement par module, vues métier, conformité administrative, expirations, documents manquants, confidentialité et historique. Les nouveaux documents utilisent un modèle unifié et peuvent être liés aux produits, lots, fournisseurs, commandes, réceptions, ventes, paiements, factures, ordonnances, inventaires, retours/pertes/destructions, incidents qualité, alertes et caisses de la même organisation.
+
+Les fichiers sont téléversés uniquement si Supabase Storage est configuré et sont téléchargés par une route privée auditée. Les documents spécialisés historiques restent dans leurs modules d'origine et sont agrégés dans les KPI sans duplication. Les règles complètes sont dans `docs/sectors/pharmacy-documents-compliance.md`.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/documents`;
+- `PATCH /api/enterprise/[organizationId]/pharmacy/documents/actions/[entity]/[id]`;
+- `GET /api/enterprise/[organizationId]/pharmacy/documents/[id]/download`.
+
 ## Limites restantes
 
 - `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions, ventes, ordonnances et achats; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.

@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module dédié Pharmacie > Documents & conformité avec quinze vues, bibliothèque privée, classification, liens métier, conformité, expiration, documents manquants, confidentialité, versioning et audit des téléchargements sensibles.
+- Ajout des modèles `PharmacyDocument`, `PharmacyDocumentLink`, `PharmacyDocumentVersion`, `PharmacyDocumentAccessLog`, `PharmacyDocumentComplianceRule`, `PharmacyMissingDocument` et de la migration additive associée.
+- Ajout des routes privées de création avec fichier sécurisé, traitement documentaire, détection conformité et téléchargement contrôlé.
 - Ajout du module dédié Pharmacie > Incidents qualité & pharmacovigilance avec quatorze vues, registre structuré, investigations, CAPA, effets indésirables, plaintes, actions lots et audit.
 - Ajout des modèles `PharmacyQualityIncident`, `PharmacyQualityInvestigation`, `PharmacyQualityCapaAction`, `PharmacyAdverseReactionReport`, `PharmacyCustomerComplaint`, `PharmacyQualityDocument`, `PharmacyQualityEvent` et de la migration additive associée.
 - Ajout des routes privées permettant de créer, consulter et traiter les incidents qualité, leurs suivis et leurs escalades.
@@ -18,6 +21,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les documents spécialisés existants sont désormais agrégés dans les métriques du référentiel sans duplication ni suppression.
+- Les expirations, renouvellements et documents obligatoires manquants sont détectés depuis des règles actives et des objets réels, avec alertes dédupliquées.
 - Les incidents qualité appliquent désormais les règles fortes de criticité, d'action immédiate, d'investigation obligatoire, de CAPA et de clôture, avec références strictement filtrées par organisation.
 - Les actions de quarantaine et de blocage de lot depuis un incident sont explicites, motivées, historisées et ne modifient jamais les quantités.
 - Le module Alertes fournit désormais quatorze vues fonctionnelles, des cartes mobiles, des libellés français, des aides contextuelles et des actions persistées.

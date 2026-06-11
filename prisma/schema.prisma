@@ -2482,6 +2482,161 @@ model PharmacyQualityEvent {
   @@index([organizationId, eventType])
 }
 
+model PharmacyDocument {
+  id                         String                      @id @default(cuid())
+  organizationId             String
+  documentNumber             String
+  title                      String
+  description                String?
+  documentType               String
+  category                   String
+  subcategory                String?
+  moduleSource               String?
+  sourceEntityType           String?
+  sourceEntityId             String?
+  reference                  String?
+  documentDate               DateTime?
+  issuer                     String?
+  fileUrl                    String?
+  storageKey                 String?
+  filename                   String?
+  mimeType                   String?
+  fileSize                   Int?
+  checksum                   String?
+  versionNumber              Int                         @default(1)
+  replacedByDocumentId       String?
+  renewedByDocumentId        String?
+  language                   String?
+  tagsJson                   Json?
+  importance                 String                      @default("NORMAL")
+  confidentialityLevel       String                      @default("INTERNAL")
+  restrictedRolesJson        Json?
+  restrictedUsersJson        Json?
+  restrictedDepartmentsJson  Json?
+  downloadRequiresPermission Boolean                     @default(true)
+  sensitiveDownloadAudit     Boolean                     @default(false)
+  visibleInActivities        Boolean                     @default(false)
+  complianceRequired         Boolean                     @default(false)
+  complianceStatus           String                      @default("NOT_REQUIRED")
+  expiryDate                 DateTime?
+  renewalRequired            Boolean                     @default(false)
+  renewalDueDate             DateTime?
+  verificationRequired       Boolean                     @default(false)
+  verifiedById               String?
+  verifiedAt                 DateTime?
+  validationComment          String?
+  rejectionReason            String?
+  status                     String                      @default("DRAFT")
+  notes                      String?
+  createdById                String
+  updatedById                String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  links                      PharmacyDocumentLink[]
+  versions                   PharmacyDocumentVersion[]
+  accessLogs                 PharmacyDocumentAccessLog[]
+  missingResolutions         PharmacyMissingDocument[]
+
+  @@unique([organizationId, documentNumber])
+  @@index([organizationId, documentType, category])
+  @@index([organizationId, moduleSource, sourceEntityType, sourceEntityId])
+  @@index([organizationId, confidentialityLevel, status])
+  @@index([organizationId, complianceStatus, expiryDate])
+  @@index([organizationId, createdById, createdAt])
+}
+
+model PharmacyDocumentLink {
+  id             String           @id @default(cuid())
+  organizationId String
+  documentId     String
+  entityType     String
+  entityId       String
+  linkRole       String           @default("PRIMARY")
+  createdById    String
+  createdAt      DateTime         @default(now())
+  document       PharmacyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, documentId, entityType, entityId, linkRole])
+  @@index([organizationId, entityType, entityId])
+}
+
+model PharmacyDocumentVersion {
+  id             String           @id @default(cuid())
+  organizationId String
+  documentId     String
+  versionNumber  Int
+  fileUrl        String?
+  storageKey     String?
+  filename       String?
+  mimeType       String?
+  fileSize       Int?
+  checksum       String?
+  uploadedById   String
+  uploadedAt     DateTime         @default(now())
+  changeReason   String?
+  isCurrent      Boolean          @default(false)
+  document       PharmacyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, documentId, versionNumber])
+  @@index([organizationId, documentId, isCurrent])
+}
+
+model PharmacyDocumentAccessLog {
+  id             String           @id @default(cuid())
+  organizationId String
+  documentId     String
+  actorId        String
+  action         String
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime         @default(now())
+  document       PharmacyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, documentId, createdAt])
+  @@index([organizationId, actorId, action])
+}
+
+model PharmacyDocumentComplianceRule {
+  id                          String   @id @default(cuid())
+  organizationId              String
+  ruleCode                    String
+  label                       String
+  description                 String?
+  entityType                  String
+  documentType                String
+  required                    Boolean  @default(true)
+  expiryRequired              Boolean  @default(false)
+  verificationRequired        Boolean  @default(false)
+  defaultConfidentialityLevel String   @default("INTERNAL")
+  enabled                     Boolean  @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@unique([organizationId, ruleCode])
+  @@index([organizationId, entityType, enabled])
+}
+
+model PharmacyMissingDocument {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  ruleId               String?
+  entityType           String
+  entityId             String
+  expectedDocumentType String
+  criticality          String            @default("MEDIUM")
+  status               String            @default("OPEN")
+  assignedToId         String?
+  resolvedByDocumentId String?
+  resolvedAt           DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  resolvedByDocument   PharmacyDocument? @relation(fields: [resolvedByDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, entityType, entityId, expectedDocumentType])
+  @@index([organizationId, status, criticality])
+  @@index([organizationId, entityType, entityId])
+}
+
 model OrganizationMember {
   id             String       @id @default(cuid())
   organizationId String

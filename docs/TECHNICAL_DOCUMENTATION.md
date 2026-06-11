@@ -2310,3 +2310,11 @@ Le module `QUALITY_PHARMACOVIGILANCE` utilise les modèles dédiés `PharmacyQua
 Le service `lib/pharmacy-quality.ts` centralise la validation multi-tenant des références, la normalisation de criticité, les règles d'action immédiate, d'investigation, de CAPA et de clôture, la création d'alerte dédiée ainsi que les actions explicites de quarantaine et blocage des lots. Les routes `GET|POST /api/enterprise/[organizationId]/pharmacy/quality` et `PATCH /api/enterprise/[organizationId]/pharmacy/quality/[entity]/[id]` appliquent session, entitlement, secteur PHARMACY, membership actif, origine, rate limit, Zod, permissions et audit.
 
 La documentation métier et les limites sont détaillées dans `docs/sectors/pharmacy-quality-incidents.md`.
+
+# Module Documents & conformité PHARMACY
+
+Le module `PHARMACY_DOCUMENTS` utilise `PharmacyDocument`, `PharmacyDocumentLink`, `PharmacyDocumentVersion`, `PharmacyDocumentAccessLog`, `PharmacyDocumentComplianceRule` et `PharmacyMissingDocument`. La migration additive est `20260611193000_pharmacy_documents_compliance`.
+
+`lib/pharmacy-documents.ts` centralise création, validation des références multi-tenant, renouvellement non destructif, liens métier, métriques, règles de documents obligatoires, détection des expirations et création d'alertes dédupliquées. `lib/pharmacy-document-access.ts` protège la lecture et le téléchargement selon l'entitlement et la confidentialité.
+
+Les fichiers sont stockés côté serveur via `uploadPharmacyDocumentToSupabase()` puis servis uniquement par `GET /api/enterprise/[organizationId]/pharmacy/documents/[id]/download`. Les routes de création et d'action appliquent origine, rate limit, Zod, RBAC, tenant, AuditLog et ApiLog. La documentation détaillée est dans `docs/sectors/pharmacy-documents-compliance.md`.

@@ -113,6 +113,12 @@ const pharmacyQualityActionApi = read("app/api/enterprise/[organizationId]/pharm
 const pharmacyQualityWorkspace = read("components/enterprise/pharmacy-quality-workspace.tsx");
 const pharmacyQualityService = read("lib/pharmacy-quality.ts");
 const pharmacyQualityAccess = read("lib/pharmacy-quality-access.ts");
+const pharmacyDocumentsApi = read("app/api/enterprise/[organizationId]/pharmacy/documents/route.ts");
+const pharmacyDocumentActionApi = read("app/api/enterprise/[organizationId]/pharmacy/documents/actions/[entity]/[id]/route.ts");
+const pharmacyDocumentDownloadApi = read("app/api/enterprise/[organizationId]/pharmacy/documents/[id]/download/route.ts");
+const pharmacyDocumentsWorkspace = read("components/enterprise/pharmacy-documents-workspace.tsx");
+const pharmacyDocumentsService = read("lib/pharmacy-documents.ts");
+const pharmacyDocumentAccess = read("lib/pharmacy-document-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -594,6 +600,26 @@ check(
   "PHARMACY Qualité: quatorze vues, aides et formulaires mobiles",
   containsAll(pharmacyQualityWorkspace, ["Tableau de bord qualité", "Registre des incidents", "Nouvel incident", "Erreurs de dispensation", "Effets indésirables", "Produits suspects / non conformes", "Plaintes clients", "Ruptures de conservation", "Investigations", "Actions correctives & préventives", "Escalades & notifications", "Documents qualité", "Historique & audit", "Rapports qualité", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
     && !pharmacyQualityWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Documents: référentiel, liens, versions, accès et conformité",
+  containsAll(prismaSchema, ["model PharmacyDocument", "model PharmacyDocumentLink", "model PharmacyDocumentVersion", "model PharmacyDocumentAccessLog", "model PharmacyDocumentComplianceRule", "model PharmacyMissingDocument", "@@unique([organizationId, documentNumber])"])
+    && containsAll(pharmacyDocumentsService, ["createPharmacyDocument", "validatePharmacyDocumentReference", "detectPharmacyDocumentCompliance", "detectMissingRequiredDocuments", "logPharmacyDocumentAccess", "DOCUMENT_EXPIRED", "DOCUMENT_EXPIRING_SOON", "DESTRUCTION_MINUTES", "CRITICAL_INCIDENT_PROOF", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Documents: routes privées, upload et téléchargement audité",
+  containsAll(pharmacyDocumentsApi, ["canAccessPharmacyDocuments", "isSameOriginRequest", "await rateLimit", "pharmacyDocumentMetadataSchema.safeParse", "validatePharmacyDocumentReference", "isSupabaseStorageConfigured", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyDocumentActionApi, ["pharmacyDocumentActionSchema.safeParse", "detectPharmacyDocumentCompliance", "transitionPharmacyDocument", "writeAuditLog"])
+    && containsAll(pharmacyDocumentDownloadApi, ["canAccessPharmacyDocumentRecord", "downloadPharmacyDocumentFromSupabase", "logPharmacyDocumentAccess", "Cache-Control", "private, no-store"])
+    && containsAll(pharmacyDocumentAccess, ["PHARMACY_DOCUMENTS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Documents: quinze vues, aides, fichier privé et mobile",
+  containsAll(pharmacyDocumentsWorkspace, ["Tableau de bord documentaire", "Bibliothèque documents", "Documents par module", "Documents produits & lots", "Documents fournisseurs & achats", "Documents réceptions", "Documents ventes, reçus & factures", "Documents ordonnances", "Documents retours, pertes & destructions", "Documents incidents qualité", "Documents administratifs & conformité", "Documents expirés / à renouveler", "Documents manquants", "Accès & confidentialité", "Historique documentaire", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden", "stockage privé Supabase"])
+    && !pharmacyDocumentsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

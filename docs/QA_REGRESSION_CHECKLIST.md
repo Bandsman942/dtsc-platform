@@ -56,6 +56,19 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Le formulaire est plein écran, mobile-first, avec étiquettes françaises, info-bulles et combobox réelles.
 - [ ] Aucun faux téléversement ou champ URL libre n'est visible dans Documents qualité.
 
+## Pharmacie - Documents & conformité
+
+- [ ] Les quinze vues documentaires utilisent uniquement les données et objets métier de l'organisation PHARMACY active.
+- [ ] Un fichier est accepté uniquement si Supabase Storage est configuré, son type est autorisé et sa taille ne dépasse pas 10 Mo.
+- [ ] Sans stockage privé, le formulaire permet seulement les métadonnées et n'affiche aucun faux téléversement.
+- [ ] Le téléchargement passe par la route privée, applique RBAC/confidentialité et journalise les documents sensibles.
+- [ ] Un document très confidentiel, financier, qualité ou ordonnance sensible n'est pas exposé à un membre non autorisé.
+- [ ] Le renouvellement crée un nouveau document brouillon et conserve le lien avec l'ancien document.
+- [ ] Les alertes d'expiration sont dédupliquées dans `PharmacyAlert`.
+- [ ] Les documents manquants proviennent uniquement de règles actives et d'objets réels de la même organisation.
+- [ ] Les documents spécialisés existants restent dans leurs modules et sont agrégés sans duplication dans les KPI.
+- [ ] Les formulaires et détails sont plein écran, mobiles, avec libellés français, info-bulles et combobox réelles.
+
 ## Navigation et socle commun Enterprise
 
 - Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.
