@@ -401,3 +401,14 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier les libellés métier français, infos-bulles, combobox référentielles et l'absence de dépassement horizontal mobile.
 - [ ] Vérifier qu'un membre non autorisé ne peut ni modifier les paramètres ni consulter l'historique critique.
 - [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build` et les contrôles Git.
+
+# Itération PHARMACY 15 - Activités pharmacie
+
+- [ ] Vérifier que le tableau de bord, les tâches, validations, alertes, ventes, caisses, documents, workflows et historiques sont limités à l'organisation et à l'utilisateur autorisé.
+- [ ] Créer une demande de réapprovisionnement, un signalement de rupture/péremption, une soumission d'inventaire et une demande d'ajustement; vérifier les objets métier liés et l'absence d'impact stock non validé.
+- [ ] Soumettre un rapport caisse depuis la session ouverte du caissier; vérifier le recalcul serveur et l'attente de validation.
+- [ ] Signaler une anomalie de vente et un incident qualité, puis demander et répondre à un avis pharmacien.
+- [ ] Commenter une activité et lui associer un document autorisé; refuser un document confidentiel ou d'une autre organisation.
+- [ ] Vérifier les permissions de validation/assignation, le masquage financier et sensible, les notifications, AuditLog et ApiLog.
+- [ ] Vérifier les dix-sept vues, libellés français, infos-bulles, menus `...`, combobox relationnelles et l'absence de dépassement horizontal mobile.
+- [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build` et les contrôles Git.

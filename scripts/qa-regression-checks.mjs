@@ -130,6 +130,11 @@ const pharmacySettingsActionsApi = read("app/api/enterprise/[organizationId]/pha
 const pharmacySettingsWorkspace = read("components/enterprise/pharmacy-settings-workspace.tsx");
 const pharmacySettingsService = read("lib/pharmacy-settings.ts");
 const pharmacySettingAccess = read("lib/pharmacy-setting-access.ts");
+const pharmacyActivitiesApi = read("app/api/enterprise/[organizationId]/pharmacy/activities/route.ts");
+const pharmacyActivityActionApi = read("app/api/enterprise/[organizationId]/pharmacy/activities/[id]/route.ts");
+const pharmacyActivitiesWorkspace = read("components/enterprise/pharmacy-activities-workspace.tsx");
+const pharmacyActivitiesService = read("lib/pharmacy-activities.ts");
+const pharmacyActivityAccess = read("lib/pharmacy-activity-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -744,6 +749,26 @@ check(
     && containsAll(pharmacyBatchesService, ["getEffectivePharmacySettings"])
     && containsAll(pharmacyDocumentsService, ["getEffectivePharmacySettings"])
     && containsAll(pharmacyQualityService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+);
+
+check(
+  "PHARMACY Activités: modèles, permissions et connexions métier réelles",
+  containsAll(prismaSchema, ["model PharmacyActivityItem", "model PharmacyActivityComment", "model PharmacyActivityDocument", "model PharmacyActivityEvent", "model PharmacyPharmacistAdviceRequest"])
+    && containsAll(pharmacyActivityAccess, ["pharmacy.activities.view_own", "pharmacy.activities.validate", "pharmacy.activities.attach_document", 'sectorCode: "PHARMACY"'])
+    && containsAll(pharmacyActivitiesService, ["createPharmacyActivityRequest", "getPharmacyActivityDashboard", "resolvePharmacyActivityAction", "pharmacyReplenishmentRequest.create", "pharmacyAlert.upsert", "pharmacyInventoryLine.update", "pharmacyStockAdjustment.create", "pharmacyCashSession.update", "pharmacySaleAnomaly.create", "pharmacyQualityIncident.create", "pharmacyPharmacistAdviceRequest.create", "pharmacyActivityDocument.create", "notifyUsers"])
+);
+
+check(
+  "PHARMACY Activités: routes privées, multi-tenant, validées et auditées",
+  containsAll(pharmacyActivitiesApi, ["getPharmacyActivityAccess", "pharmacyActivityCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyActivityActionApi, ["getPharmacyActivityAccess", "pharmacyActivityActionSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+);
+
+check(
+  "PHARMACY Activités: dix-sept vues, français, aides, actions et mobile",
+  containsAll(pharmacyActivitiesWorkspace, ["Mon tableau de bord pharmacie", "Mes tâches pharmacie", "Mes ventes / actions du jour", "Mes validations en attente", "Mes alertes assignées", "Demander réapprovisionnement", "Signaler rupture de stock", "Déclarer produit proche péremption", "Soumettre inventaire", "Demander ajustement stock", "Soumettre rapport caisse", "Signaler anomalie vente", "Déclarer incident qualité", "Demander avis pharmacien", "Mes documents & procédures", "Mes workflows pharmacie", "Historique de mes demandes", "ActionMenu", "CircleHelp", "ListControls", "Associer un document", "Répondre à l'avis", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyActivitiesWorkspace.includes("item.id.replaceAll")
+    && !pharmacyActivitiesWorkspace.includes("window.prompt")
 );
 
 if (failures.length) {

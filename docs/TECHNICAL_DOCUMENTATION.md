@@ -2328,3 +2328,11 @@ Les fichiers sont stockés côté serveur via `uploadPharmacyDocumentToSupabase(
 Le module `PHARMACY_SETTINGS` utilise `PharmacySetting`, `PharmacySettingsProfile`, `PharmacyNumberingSequence` et `PharmacySettingsAuditLog`. `lib/pharmacy-settings.ts` initialise les valeurs par défaut, calcule la configuration effective, contrôle les changements critiques, synchronise les seuils d'alertes et génère les numéros métier par incrément atomique.
 
 Les routes `GET|PATCH /api/enterprise/[organizationId]/pharmacy/settings` et `POST /api/enterprise/[organizationId]/pharmacy/settings/actions` vérifient session, membership, secteur et module actifs, origine, rate limit, Zod, permissions et `organizationId`. Toute modification critique exige un motif et produit un historique détaillé. Voir `docs/sectors/pharmacy-settings.md`.
+
+# Activités collaborateurs PHARMACY
+
+Le workspace `components/enterprise/pharmacy-activities-workspace.tsx` remplace le formulaire PHARMACY générique dans `Activités [Entreprise]`. Le chargement et les mutations passent par `GET|POST /api/enterprise/[organizationId]/pharmacy/activities` et `PATCH /api/enterprise/[organizationId]/pharmacy/activities/[id]`.
+
+`lib/pharmacy-activities.ts` centralise le filtrage par organisation et implication, les KPI personnels, les références multi-tenant, les notifications et les connexions vers réapprovisionnement, alertes, inventaire, ajustement, caisse, anomalies de vente, qualité et avis pharmacien. Les modèles `PharmacyActivityItem`, `PharmacyActivityComment`, `PharmacyActivityDocument`, `PharmacyActivityEvent` et `PharmacyPharmacistAdviceRequest` conservent la traçabilité. La migration additive est `20260612013000_pharmacy_activities_workspace`.
+
+Les mutations vérifient session, secteur PHARMACY, membership actif, origine, rate limit, Zod, implication ou permission et audit. Les montants et documents sensibles sont masqués sans permission. Voir `docs/sectors/pharmacy-activities.md`.

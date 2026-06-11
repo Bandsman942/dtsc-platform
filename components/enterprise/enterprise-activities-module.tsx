@@ -12,12 +12,15 @@ import {
   EnterpriseWorkflowsPanel,
 } from "@/components/enterprise/enterprise-activities-panels";
 import type { EnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-types";
+import { PharmacyActivitiesWorkspace } from "@/components/enterprise/pharmacy-activities-workspace";
 
 export function EnterpriseActivitiesModule({ organization, blocks, requests, members, sectorRecords, workflows }: EnterpriseActivitiesDataset) {
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
   const [message, setMessage] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
+
+  if (organization.sectorCode === "PHARMACY") return <PharmacyActivitiesWorkspace organizationId={organization.id} />;
 
   return (
     <div className="min-w-0 space-y-5 overflow-x-hidden">

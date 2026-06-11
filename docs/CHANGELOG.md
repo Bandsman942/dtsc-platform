@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout de l'espace collaborateur Activités pharmacie avec dix-sept vues opérationnelles, tableau de bord personnalisé, tâches, validations, alertes assignées, documents, workflows et historique.
+- Ajout des modèles `PharmacyActivityItem`, `PharmacyActivityComment`, `PharmacyActivityDocument`, `PharmacyActivityEvent` et `PharmacyPharmacistAdviceRequest` avec migration additive.
+- Ajout des routes privées Activités pharmacie pour charger le tableau de bord, créer une action reliée à son module métier, commenter, joindre un document, répondre à un avis et traiter le cycle de validation.
 - Ajout du centre métier Paramètres pharmacie avec dix-sept sections, profils par organisation, numérotation transactionnelle, historique audité et règles critiques motivées.
 - Ajout des modèles `PharmacySetting`, `PharmacyNumberingSequence`, `PharmacySettingsAuditLog` et `PharmacySettingsProfile` avec migration additive.
 - Ajout des routes privées permettant de consulter, modifier, réinitialiser, prévisualiser et administrer les paramètres et séquences de numérotation.
@@ -27,6 +30,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les collaborateurs PHARMACY disposent désormais d'une interface mobile orientée action, avec libellés français, aides contextuelles, combobox multi-tenant et menus d'actions persistées.
+- Les demandes de réapprovisionnement, ruptures, péremptions, inventaires, ajustements, rapports caisse, anomalies de vente, incidents qualité et avis pharmacien alimentent directement les modèles métier concernés sans contourner leurs validations sensibles.
 - Les paramètres pharmacie pilotent désormais réellement les ventes, lots, réceptions, caisse, documents, qualité, alertes et exports sensibles côté serveur.
 - Les numéros de ventes, réceptions, sessions caisse, paiements, factures, reçus, remboursements et incidents qualité sont générés par séquences atomiques propres à chaque organisation.
 - Les ventes annulées sont exclues des ventes nettes, les encaissements proviennent des paiements réels et le stock est valorisé depuis les lots sans exposer les montants aux utilisateurs non autorisés.

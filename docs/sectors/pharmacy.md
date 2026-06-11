@@ -329,6 +329,12 @@ Le sous-module `PHARMACY_SETTINGS` remplace le placeholder par un centre de conf
 
 Les paramètres sont isolés par `organizationId`, appliqués côté serveur et audités lorsqu'ils sont critiques. Les séquences de numérotation alimentent les objets métier concernés sans dépendre d'un numéro saisi par le client. Voir `docs/sectors/pharmacy-settings.md`.
 
+## Module Activités pharmacie
+
+`Activités [Entreprise]` fournit aux collaborateurs PHARMACY un espace opérationnel distinct de l'administration sensible. Les dix-sept vues couvrent tableau de bord personnel, tâches, ventes et caisses du jour, validations, alertes assignées, demandes et signalements, documents/procédures, workflows et historique.
+
+Chaque action est persistée dans `PharmacyActivityItem` et `PharmacyActivityEvent`. Les demandes alimentent les modèles métier concernés, sans appliquer directement un ajustement de stock, valider une commande, bloquer un lot ou approuver une clôture de caisse. La visibilité reste limitée au demandeur, au responsable assigné ou aux rôles de gestion autorisés. Voir `docs/sectors/pharmacy-activities.md`.
+
 ## Module Alertes stock / péremption / rappel
 
 Le module `ALERTS_EXPIRY_LOW_STOCK` centralise des alertes persistées issues de données réelles: stock, péremption, rappel/quarantaine, achats, réceptions, ventes, inventaire, ajustements, retours/pertes et caisse. `PharmacyAlert` garde la condition, la source, la criticité, le responsable, les dates et le traitement; `PharmacyAlertEvent` conserve chaque détection et transition.
