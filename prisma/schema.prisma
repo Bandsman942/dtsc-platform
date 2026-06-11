@@ -2058,6 +2058,107 @@ model PharmacyCashDiscrepancy {
   @@index([organizationId, criticity, status])
 }
 
+model PharmacyReturnLossEvent {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  eventNumber           String
+  eventType             String
+  saleId                String?
+  saleLineId            String?
+  refundId              String?
+  supplierId            String?
+  purchaseOrderId       String?
+  receiptId             String?
+  inventorySessionId    String?
+  inventoryLineId       String?
+  productId             String
+  batchId               String?
+  targetLocationId      String?
+  quantity              Decimal  @db.Decimal(14, 3)
+  unit                  String
+  direction             String
+  itemCondition         String?
+  stockDecision         String?
+  reason                String
+  estimatedValue        Decimal? @db.Decimal(14, 2)
+  criticality           String   @default("MEDIUM")
+  refundRequested       Boolean  @default(false)
+  responsibleUserId     String?
+  witnessUserId         String?
+  destructionMethod     String?
+  destructionDate       DateTime?
+  status                String   @default("DRAFT")
+  stockImpactApplied    Boolean  @default(false)
+  submittedById         String?
+  submittedAt           DateTime?
+  validatedById         String?
+  validatedAt           DateTime?
+  rejectedById          String?
+  rejectedAt            DateTime?
+  rejectionReason       String?
+  cancellationReason    String?
+  cancelledById         String?
+  cancelledAt           DateTime?
+  notes                 String?
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  documents             PharmacyReturnLossDocument[]
+  alerts                PharmacyReturnLossAlert[]
+
+  @@unique([organizationId, eventNumber])
+  @@index([organizationId, eventType, status])
+  @@index([organizationId, productId, batchId])
+  @@index([organizationId, saleId])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, createdAt])
+}
+
+model PharmacyReturnLossDocument {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  eventId              String
+  productId            String?
+  batchId              String?
+  supplierId           String?
+  documentType         String
+  title                String
+  fileUrl              String
+  reference            String?
+  documentDate         DateTime?
+  confidentialityLevel String   @default("INTERNAL")
+  notes                String?
+  createdById          String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  event                PharmacyReturnLossEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, eventId])
+  @@index([organizationId, productId, batchId])
+}
+
+model PharmacyReturnLossAlert {
+  id                String   @id @default(cuid())
+  organizationId    String
+  eventId           String?
+  productId         String?
+  batchId           String?
+  alertType         String
+  criticality       String   @default("MEDIUM")
+  status            String   @default("OPEN")
+  message           String
+  recommendedAction String?
+  assignedToId      String?
+  resolvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  event             PharmacyReturnLossEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, criticality])
+  @@index([organizationId, eventId])
+}
+
 model OrganizationMember {
   id             String   @id @default(cuid())
   organizationId String

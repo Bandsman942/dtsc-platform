@@ -270,3 +270,16 @@ Toutes les routes vérifient le membership actif, le secteur PHARMACY, l'activat
 ## Intégration finances et limites
 
 Les champs de liaison aux finances communes sont présents, mais aucune synchronisation n'est affichée tant qu'un compte financier multi-tenant entreprise n'est pas disponible. Le reçu HTML est persisté et consultable; aucun faux téléchargement PDF n'est proposé.
+
+## Module Retours, ajustements & pertes
+
+Le module `RETURNS_ADJUSTMENTS_LOSSES` centralise les retours clients et fournisseurs, ajustements de stock, pertes, casses, produits expirés retirés, rappels de lots, destructions et transferts exceptionnels. Il conserve le motif, la criticité, les références métier, les validations, les documents et alertes dans des modèles dédiés isolés par `organizationId`.
+
+La validation applique l'entrée ou la sortie de stock dans une transaction idempotente et crée un mouvement traçable. Une annulation après validation crée le mouvement inverse `RETURN_LOSS_REVERSAL`; elle ne réécrit pas silencieusement l'historique. Les références vers vente, remboursement, fournisseur, commande, réception, inventaire, produit, lot, emplacement, responsable et témoin sont vérifiées dans la même pharmacie.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/returns-losses`;
+- `PATCH /api/enterprise/[organizationId]/pharmacy/returns-losses/[entity]/[id]`.
+
+Les mutations contrôlent l'origine, le rate limiting, Zod, le secteur et module actifs, le membership, les permissions et l'audit. L'interface fournit douze vues, des libellés français, des aides contextuelles et des formulaires plein écran bornés sur mobile.

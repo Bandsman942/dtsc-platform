@@ -2,6 +2,23 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-11
+
+### Ajouté
+
+- Ajout du module Pharmacie > Retours, ajustements & pertes avec douze vues métier, déclarations, validations, alertes, justificatifs et historique des mouvements.
+- Ajout des modèles et de la migration additive `PharmacyReturnLossEvent`, `PharmacyReturnLossDocument` et `PharmacyReturnLossAlert`.
+- Ajout des routes privées permettant de créer, soumettre, valider, rejeter, annuler et résoudre les alertes du module.
+
+### Amélioré
+
+- Les retours clients et fournisseurs, ajustements, pertes, casses, retraits, rappels et destructions appliquent désormais des mouvements stock transactionnels, idempotents et réversibles.
+- Toutes les références liées sont vérifiées dans l'organisation PHARMACY active; l'interface fournit des libellés métier français, aides contextuelles et formulaires mobiles bornés.
+
+### Corrigé
+
+- Correction de l'apostrophe JSX non échappée dans le formulaire Ventes & dispensation qui bloquait ESLint lors du déploiement Vercel.
+
 ## 2026-06-10
 
 ### Ajouté

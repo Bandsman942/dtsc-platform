@@ -1,0 +1,13 @@
+import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
+import { prisma } from "@/lib/prisma";
+
+export type PharmacyReturnLossAction = "view" | "create" | "submit" | "validate" | "reject" | "cancel" | "resolve";
+
+export async function canAccessPharmacyReturnLoss(userId: string, organizationId: string, action: PharmacyReturnLossAction) {
+  const enterpriseAction = action === "view" ? "read" : action === "validate" || action === "reject" || action === "resolve" ? "manage" : "write";
+  if (!(await canAccessEnterpriseModule(userId, organizationId, "RETURNS_ADJUSTMENTS_LOSSES", enterpriseAction))) return false;
+  const membership = await prisma.organizationMember.findFirst({ where: { userId, organizationId, status: "ACTIVE", removedAt: null, organization: { sectorCode: "PHARMACY", status: "ACTIVE", deletedAt: null } }, select: { role: true } });
+  if (!membership) return false;
+  if (membership.role === "OWNER" || membership.role === "ADMIN_ENTREPRISE" || membership.role === "ADMIN_ENTERPRISE" || membership.role === "MANAGER") return true;
+  return action === "view" || action === "create" || action === "submit";
+}

@@ -334,3 +334,14 @@ Documenter dans le ticket ou la PR:
 - [x] Le remboursement ne dépasse pas le montant payé.
 - [x] Les routes mutantes appliquent origine, rate limit, Zod, RBAC et audit.
 - [x] Les treize vues caisse et formulaires plein écran restent mobiles, bornés et sans placeholder.
+
+# Itération PHARMACY 9 - Retours, ajustements et pertes
+
+- [ ] Vérifier que les déclarations, documents, alertes et mouvements listés appartiennent uniquement à l'organisation PHARMACY active.
+- [ ] Créer et soumettre un retour client lié à une vente réelle; refuser une quantité supérieure à la quantité vendue restante.
+- [ ] Valider un retour, un ajustement positif et une perte; vérifier les mouvements stock et l'idempotence d'une seconde validation.
+- [ ] Annuler un événement validé et vérifier le mouvement inverse `RETURN_LOSS_REVERSAL` sans stock négatif.
+- [ ] Vérifier le refus des produits, lots, remboursements, fournisseurs, commandes, réceptions, inventaires, emplacements et collaborateurs d'une autre organisation.
+- [ ] Vérifier les retraits expirés, rappels, destructions, alertes critiques et leur résolution.
+- [ ] Vérifier les douze vues, les libellés français, les infos-bulles et l'absence de dépassement horizontal sur mobile.
+- [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.

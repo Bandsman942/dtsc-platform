@@ -98,6 +98,11 @@ const pharmacyCashActionApi = read("app/api/enterprise/[organizationId]/pharmacy
 const pharmacyCashWorkspace = read("components/enterprise/pharmacy-cash-workspace.tsx");
 const pharmacyCashService = read("lib/pharmacy-cash.ts");
 const pharmacyCashAccess = read("lib/pharmacy-cash-access.ts");
+const pharmacyReturnLossApi = read("app/api/enterprise/[organizationId]/pharmacy/returns-losses/route.ts");
+const pharmacyReturnLossActionApi = read("app/api/enterprise/[organizationId]/pharmacy/returns-losses/[entity]/[id]/route.ts");
+const pharmacyReturnLossWorkspace = read("components/enterprise/pharmacy-return-loss-workspace.tsx");
+const pharmacyReturnLossService = read("lib/pharmacy-return-losses.ts");
+const pharmacyReturnLossAccess = read("lib/pharmacy-return-loss-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -517,6 +522,30 @@ check(
   "PHARMACY Caisse: treize vues, combobox, aides et formulaires plein écran",
   containsAll(pharmacyCashWorkspace, ["Tableau de bord caisse", "Sessions de caisse", "Ouverture de caisse", "Encaissements", "Paiements", "Factures", "Reçus", "Remboursements", "Clôture de caisse", "Écarts de caisse", "Validation de clôture", "Historique caisse", "Rapports caisse", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
     && !pharmacyCashWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Retours et pertes: modèles dédiés et impacts stock réversibles",
+  containsAll(prismaSchema, ["model PharmacyReturnLossEvent", "model PharmacyReturnLossDocument", "model PharmacyReturnLossAlert", "@@unique([organizationId, eventNumber])", "stockImpactApplied"])
+    && containsAll(pharmacyReturnLossService, ["validateReturnLossReferences", "applyReturnLossStockImpact", "reverseReturnLossStockImpact", "RETURN_LOSS_REVERSAL", "RETURN_CUSTOMER", "RETURN_SUPPLIER", "ADJUSTMENT_POSITIVE", "EXPIRY_REMOVAL", "DESTRUCTION", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Retours et pertes: routes multi-tenant sécurisées, validées et auditées",
+  containsAll(pharmacyReturnLossApi, ["canAccessPharmacyReturnLoss", "isSameOriginRequest", "await rateLimit", "returnLossEventSchema.safeParse", "validateReturnLossReferences", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyReturnLossActionApi, ["returnLossActionSchema.safeParse", "applyReturnLossStockImpact", "reverseReturnLossStockImpact", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyReturnLossAccess, ["RETURNS_ADJUSTMENTS_LOSSES", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Retours et pertes: douze vues, aides et formulaires mobiles",
+  containsAll(pharmacyReturnLossWorkspace, ["Tableau de bord retours & pertes", "Retours clients", "Retours fournisseurs", "Ajustements stock", "Pertes & casses", "Produits expirés retirés", "Produits rappelés / retraits de lots", "Destructions / mises au rebut", "Validations en attente", "Documents justificatifs", "Historique des mouvements", "Alertes retours & pertes", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyReturnLossWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Ventes: le texte JSX d'audit échappe son apostrophe",
+  pharmacySalesWorkspace.includes("l&apos;audit") && !pharmacySalesWorkspace.includes("et l'audit.</p>")
 );
 
 check(

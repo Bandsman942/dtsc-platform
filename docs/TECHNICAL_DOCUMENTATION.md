@@ -2286,3 +2286,11 @@ Le sous-module `CASH_INVOICES_PAYMENTS` utilise les modèles dédiés `PharmacyC
 Les routes consolidées `GET|POST /api/enterprise/[organizationId]/pharmacy/cash` et `PATCH /api/enterprise/[organizationId]/pharmacy/cash/[entity]/[id]` vérifient la session, le membership actif, le secteur PHARMACY, le module actif, l'origine, le rate limit, Zod et `organizationId`. Les services dans `lib/pharmacy-cash.ts` centralisent ouverture, paiement, facture, reçu, remboursement, calcul de clôture, écart et recalcul du statut paiement de la vente.
 
 La synchronisation vers les finances communes reste préparée par les champs `financialAccountId`, `financeSyncStatus` et `financeTransactionId`, mais aucune transaction financière n'est créée tant qu'un référentiel financier multi-tenant dédié aux entreprises clientes n'est pas disponible.
+
+# Module retours, ajustements et pertes PHARMACY
+
+Le sous-module `RETURNS_ADJUSTMENTS_LOSSES` utilise `PharmacyReturnLossEvent`, `PharmacyReturnLossDocument` et `PharmacyReturnLossAlert`. La migration additive est `20260611013000_pharmacy_returns_adjustments_losses`.
+
+Les routes `GET|POST /api/enterprise/[organizationId]/pharmacy/returns-losses` et `PATCH /api/enterprise/[organizationId]/pharmacy/returns-losses/[entity]/[id]` vérifient session, membership actif, secteur PHARMACY, activation du module, origine, rate limit, validation Zod, permissions et `organizationId`. Les références vers vente, remboursement, fournisseur, commande, réception, inventaire, produit, lot, emplacement et collaborateurs sont contrôlées dans le même tenant.
+
+`applyReturnLossStockImpact()` applique une seule fois le mouvement validé dans une transaction Prisma. `reverseReturnLossStockImpact()` contre-passe un impact validé avec `RETURN_LOSS_REVERSAL` et bloque tout stock négatif. Les événements critiques et rappels créent des alertes persistées.
