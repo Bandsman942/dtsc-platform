@@ -2318,3 +2318,7 @@ Le module `PHARMACY_DOCUMENTS` utilise `PharmacyDocument`, `PharmacyDocumentLink
 `lib/pharmacy-documents.ts` centralise création, validation des références multi-tenant, renouvellement non destructif, liens métier, métriques, règles de documents obligatoires, détection des expirations et création d'alertes dédupliquées. `lib/pharmacy-document-access.ts` protège la lecture et le téléchargement selon l'entitlement et la confidentialité.
 
 Les fichiers sont stockés côté serveur via `uploadPharmacyDocumentToSupabase()` puis servis uniquement par `GET /api/enterprise/[organizationId]/pharmacy/documents/[id]/download`. Les routes de création et d'action appliquent origine, rate limit, Zod, RBAC, tenant, AuditLog et ApiLog. La documentation détaillée est dans `docs/sectors/pharmacy-documents-compliance.md`.
+
+# Module Rapports pharmacie PHARMACY
+
+`lib/pharmacy-reports.ts` agrège côté serveur les tables opérationnelles PHARMACY sans recopier leurs données. Les vues sauvegardées, exports CSV audités et snapshots utilisent `PharmacySavedReportView`, `PharmacyReportExport` et `PharmacyReportSnapshot`. Les routes vérifient le module `PHARMACY_REPORTS`, le membership actif, `organizationId`, les permissions financières/sensibles, Zod, l'origine, le rate limit et l'audit. Voir `docs/sectors/pharmacy-reports.md`.

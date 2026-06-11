@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Rapports pharmacie avec quinze vues décisionnelles, indicateurs issus des tables métier réelles, filtres multi-tenant, vues sauvegardées, snapshots et exports CSV audités.
+- Ajout des modèles `PharmacySavedReportView`, `PharmacyReportExport` et `PharmacyReportSnapshot` avec migration additive.
+- Ajout des routes privées de reporting, sauvegarde de vue, snapshot et export CSV avec protection financière et sensible côté serveur.
 - Ajout du module dédié Pharmacie > Documents & conformité avec quinze vues, bibliothèque privée, classification, liens métier, conformité, expiration, documents manquants, confidentialité, versioning et audit des téléchargements sensibles.
 - Ajout des modèles `PharmacyDocument`, `PharmacyDocumentLink`, `PharmacyDocumentVersion`, `PharmacyDocumentAccessLog`, `PharmacyDocumentComplianceRule`, `PharmacyMissingDocument` et de la migration additive associée.
 - Ajout des routes privées de création avec fichier sécurisé, traitement documentaire, détection conformité et téléchargement contrôlé.
@@ -21,6 +24,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les ventes annulées sont exclues des ventes nettes, les encaissements proviennent des paiements réels et le stock est valorisé depuis les lots sans exposer les montants aux utilisateurs non autorisés.
 - Les documents spécialisés existants sont désormais agrégés dans les métriques du référentiel sans duplication ni suppression.
 - Les expirations, renouvellements et documents obligatoires manquants sont détectés depuis des règles actives et des objets réels, avec alertes dédupliquées.
 - Les incidents qualité appliquent désormais les règles fortes de criticité, d'action immédiate, d'investigation obligatoire, de CAPA et de clôture, avec références strictement filtrées par organisation.

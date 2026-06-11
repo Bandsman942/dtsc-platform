@@ -2637,6 +2637,62 @@ model PharmacyMissingDocument {
   @@index([organizationId, entityType, entityId])
 }
 
+model PharmacySavedReportView {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  reportType     String
+  filtersJson    Json
+  columnsJson    Json?
+  sortJson       Json?
+  visibility     String   @default("PRIVATE")
+  status         String   @default("ACTIVE")
+  createdById    String
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, reportType, status])
+  @@index([organizationId, createdById, createdAt])
+}
+
+model PharmacyReportExport {
+  id              String   @id @default(cuid())
+  organizationId  String
+  reportType      String
+  reportName      String
+  filtersJson     Json
+  format          String
+  status          String   @default("COMPLETED")
+  fileUrl         String?
+  exportedById    String
+  exportedAt      DateTime @default(now())
+  errorMessage    String?
+  sensitiveExport Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, reportType, status])
+  @@index([organizationId, exportedById, exportedAt])
+}
+
+model PharmacyReportSnapshot {
+  id             String    @id @default(cuid())
+  organizationId String
+  reportType     String
+  snapshotName   String
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  dataJson       Json
+  generatedById  String
+  generatedAt    DateTime  @default(now())
+  notes          String?
+
+  @@index([organizationId, reportType, generatedAt])
+  @@index([organizationId, generatedById, generatedAt])
+}
+
 model OrganizationMember {
   id             String       @id @default(cuid())
   organizationId String

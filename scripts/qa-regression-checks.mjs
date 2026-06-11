@@ -119,6 +119,12 @@ const pharmacyDocumentDownloadApi = read("app/api/enterprise/[organizationId]/ph
 const pharmacyDocumentsWorkspace = read("components/enterprise/pharmacy-documents-workspace.tsx");
 const pharmacyDocumentsService = read("lib/pharmacy-documents.ts");
 const pharmacyDocumentAccess = read("lib/pharmacy-document-access.ts");
+const pharmacyReportsApi = read("app/api/enterprise/[organizationId]/pharmacy/reports/route.ts");
+const pharmacyReportActionApi = read("app/api/enterprise/[organizationId]/pharmacy/reports/actions/[entity]/[id]/route.ts");
+const pharmacyReportExportApi = read("app/api/enterprise/[organizationId]/pharmacy/reports/export/route.ts");
+const pharmacyReportsWorkspace = read("components/enterprise/pharmacy-reports-workspace.tsx");
+const pharmacyReportsService = read("lib/pharmacy-reports.ts");
+const pharmacyReportAccess = read("lib/pharmacy-report-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -620,6 +626,27 @@ check(
   "PHARMACY Documents: quinze vues, aides, fichier privé et mobile",
   containsAll(pharmacyDocumentsWorkspace, ["Tableau de bord documentaire", "Bibliothèque documents", "Documents par module", "Documents produits & lots", "Documents fournisseurs & achats", "Documents réceptions", "Documents ventes, reçus & factures", "Documents ordonnances", "Documents retours, pertes & destructions", "Documents incidents qualité", "Documents administratifs & conformité", "Documents expirés / à renouveler", "Documents manquants", "Accès & confidentialité", "Historique documentaire", "h-[96dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden", "stockage privé Supabase"])
     && !pharmacyDocumentsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Rapports: modèles, agrégations réelles et isolation tenant",
+  containsAll(prismaSchema, ["model PharmacySavedReportView", "model PharmacyReportExport", "model PharmacyReportSnapshot", "@@index([organizationId, reportType, status])"])
+    && containsAll(pharmacyReportsService, ["getPharmacyReportsDataset", "createSavedReportView", "createPharmacyReportSnapshot", "logReportExport", "rowsToCsv", "organizationId", "prisma.pharmacyPayment", "activeSaleStatuses"])
+    && !pharmacyReportsService.includes("Math.random")
+);
+
+check(
+  "PHARMACY Rapports: routes sécurisées, données sensibles et export audité",
+  containsAll(pharmacyReportsApi, ["canAccessPharmacyReports", "pharmacyReportFiltersSchema.safeParse", "pharmacySavedReportSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog"])
+    && containsAll(pharmacyReportActionApi, ["pharmacyReportActionSchema.safeParse", "createPharmacyReportSnapshot", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyReportExportApi, ["pharmacyReportExportSchema.safeParse", "export_sensitive", "logReportExport", "writeAuditLog", "private, no-store"])
+    && containsAll(pharmacyReportAccess, ["PHARMACY_REPORTS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Rapports: quinze vues, filtres, combobox, sauvegarde et CSV",
+  containsAll(pharmacyReportsWorkspace, ["Tableau de bord rapports", "Rapports ventes", "Rapports stock", "Rapports lots & péremptions", "Rapports achats & fournisseurs", "Rapports réceptions", "Rapports caisse & paiements", "Rapports ordonnances", "Rapports retours, pertes & destructions", "Rapports qualité & pharmacovigilance", "Rapports alertes", "Rapports documents & conformité", "Rapports collaborateurs / activité", "Rapports personnalisés simples", "Exports & historiques", "Sauvegarder la vue", "Exporter CSV", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !pharmacyReportsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

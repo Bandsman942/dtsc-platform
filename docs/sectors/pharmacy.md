@@ -253,6 +253,20 @@ Routes privées:
 - `PATCH /api/enterprise/[organizationId]/pharmacy/documents/actions/[entity]/[id]`;
 - `GET /api/enterprise/[organizationId]/pharmacy/documents/[id]/download`.
 
+## Module Rapports pharmacie
+
+Le module `PHARMACY_REPORTS` remplace le placeholder historique par quinze vues de pilotage alimentées uniquement depuis les tables métier Pharmacie. Il couvre le tableau de bord, ventes, stock, lots/péremptions, achats/fournisseurs, réceptions, caisse/paiements, ordonnances, retours/pertes/destructions, qualité, alertes, documents/conformité, activité collaborateurs, vues personnalisées simples et historique des exports.
+
+Les filtres période, produit, lot, fournisseur, collaborateur, département et statut sont appliqués côté serveur et restent confinés à `organizationId`. Les montants financiers et rapports sensibles sont masqués sans permission. Les ventes annulées ne participent pas aux ventes nettes, les encaissements viennent de `PharmacyPayment` et les stocks viennent des lots.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/reports`;
+- `PATCH /api/enterprise/[organizationId]/pharmacy/reports/actions/[entity]/[id]`;
+- `POST /api/enterprise/[organizationId]/pharmacy/reports/export`.
+
+La documentation et le dictionnaire KPI sont dans `docs/sectors/pharmacy-reports.md`.
+
 ## Limites restantes
 
 - `EnterpriseSectorRecord` reste le stockage des opérations hors produits, lots, stock, réceptions, ventes, ordonnances et achats; des tables dédiées seront nécessaires pour les factures PDF et la traçabilité réglementaire avancée.

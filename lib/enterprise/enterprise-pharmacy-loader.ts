@@ -82,5 +82,5 @@ export async function getEnterprisePharmacyDataset(organizationId: string, secto
     payloadJson: { incidentNumber: incident.incidentNumber, incidentType: incident.incidentType, category: incident.category, criticality: incident.criticality, productId: incident.productId, batchId: incident.batchId },
     createdById: incident.createdById, updatedById: incident.updatedById, createdAt: incident.createdAt, updatedAt: incident.updatedAt, deletedAt: null, createdBy: { name: null, email: "" }, assignedTo: null,
   }));
-  return [...productRecords, ...batchRecords, ...qualityRecords, ...records.filter((record) => !["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_RECEIPTS", "SALES_DISPENSATION", "PRESCRIPTIONS", "SUPPLIERS_ORDERS", "CASH_INVOICES_PAYMENTS", "RETURNS_ADJUSTMENTS_LOSSES", "ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE", "PHARMACY_DOCUMENTS"].includes(record.moduleCode))];
+  return [...productRecords, ...batchRecords, ...qualityRecords, ...records.filter((record) => !["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_RECEIPTS", "SALES_DISPENSATION", "PRESCRIPTIONS", "SUPPLIERS_ORDERS", "CASH_INVOICES_PAYMENTS", "RETURNS_ADJUSTMENTS_LOSSES", "ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE", "PHARMACY_DOCUMENTS", "PHARMACY_REPORTS"].includes(record.moduleCode))];
 }

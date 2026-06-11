@@ -8,6 +8,12 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Pharmacie - Rapports
+
+- [ ] Les indicateurs viennent des tables réelles; ventes annulées exclues du net, encaissements issus des paiements et stocks issus des lots.
+- [ ] Les montants et données sensibles sont masqués sans permission; vues, snapshots et exports restent isolés par `organizationId`.
+- [ ] L'export CSV fonctionne, respecte les filtres et journalise les exports sensibles.
+
 ## Pharmacie - Lots & péremptions
 
 - [ ] Une organisation PHARMACY crée et modifie un lot lié à un produit actif de la même organisation.
