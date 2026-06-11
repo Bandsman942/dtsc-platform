@@ -21,6 +21,12 @@ export type EnterpriseAdminDashboard = {
   modulesCount: number;
   openRequestsCount: number;
   recentRequestsCount: number;
+  openTasksCount: number;
+  overdueTasksCount: number;
+  pendingValidationsCount: number;
+  recentDocumentsCount: number;
+  activeBudgetsCount: number;
+  activeSuppliersCount: number;
 };
 
 export type EnterpriseSaasEntitlements = {

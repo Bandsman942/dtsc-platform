@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canAccessEnterpriseActivity, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { createEnterpriseCoreRecord } from "@/lib/enterprise/enterprise-core";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -129,6 +130,22 @@ export async function POST(req: Request, { params }: Params) {
       assignedToUserId: data.assignedToUserId || null,
       createdById: session.userId,
       metadataJson: { membershipRole: membership.role, ...data.metadata },
+    },
+  });
+  await createEnterpriseCoreRecord({
+    organizationId,
+    actorUserId: session.userId,
+    data: {
+      moduleCode: "INTERNAL_REQUESTS",
+      recordType: "INTERNAL_REQUEST",
+      title: data.title,
+      description: data.description,
+      priority: data.priority,
+      assignedToUserId: data.assignedToUserId || undefined,
+      sourceModule: "ENTERPRISE_ACTIVITIES",
+      sourceEntityType: "EnterpriseActivityRequest",
+      sourceEntityId: requestRecord.id,
+      metadata: { blockCode: block.blockCode, targetModuleCode: block.targetModuleCode },
     },
   });
 

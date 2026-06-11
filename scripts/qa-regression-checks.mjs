@@ -166,6 +166,10 @@ const organizationSubscriptionUpdateRoute = read("app/api/admin/organization-sub
 const billingPlanUpdateRoute = read("app/api/admin/billing-plans/[id]/route.ts");
 const billingCheckoutRoute = read("app/api/billing/checkout/route.ts");
 const enterpriseModuleToggleRoute = read("app/api/enterprise/[organizationId]/modules/[moduleId]/route.ts");
+const enterpriseCoreApi = read("app/api/enterprise/[organizationId]/core/route.ts");
+const enterpriseCoreActionApi = read("app/api/enterprise/[organizationId]/core/[id]/route.ts");
+const enterpriseCoreWorkspace = read("components/enterprise/enterprise-core-workspace.tsx");
+const enterpriseCoreService = read("lib/enterprise/enterprise-core.ts");
 
 check(
   "script qa:regression déclaré",
@@ -769,6 +773,25 @@ check(
   containsAll(pharmacyActivitiesWorkspace, ["Mon tableau de bord pharmacie", "Mes tâches pharmacie", "Mes ventes / actions du jour", "Mes validations en attente", "Mes alertes assignées", "Demander réapprovisionnement", "Signaler rupture de stock", "Déclarer produit proche péremption", "Soumettre inventaire", "Demander ajustement stock", "Soumettre rapport caisse", "Signaler anomalie vente", "Déclarer incident qualité", "Demander avis pharmacien", "Mes documents & procédures", "Mes workflows pharmacie", "Historique de mes demandes", "ActionMenu", "CircleHelp", "ListControls", "Associer un document", "Répondre à l'avis", "min-w-0", "overflow-x-hidden"])
     && !pharmacyActivitiesWorkspace.includes("item.id.replaceAll")
     && !pharmacyActivitiesWorkspace.includes("window.prompt")
+);
+
+check(
+  "Socle commun ERP: modèles, historique, commentaires et liens transversaux",
+  containsAll(prismaSchema, ["model EnterpriseCoreRecord", "model EnterpriseCoreEvent", "model EnterpriseCoreComment", "model EnterpriseEntityLink"])
+    && containsAll(enterpriseCoreService, ["createEnterpriseCoreRecord", "enterpriseCoreVisibilityWhere", "sourceModule", "sourceEntityType", "sourceEntityId"])
+);
+
+check(
+  "Socle commun ERP: routes privées, multi-tenant, validées et auditées",
+  containsAll(enterpriseCoreApi, ["getEnterpriseCoreAccess", "enterpriseCoreCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(enterpriseCoreActionApi, ["getEnterpriseCoreAccess", "enterpriseCoreUpdateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+);
+
+check(
+  "Socle commun ERP: interface française, actions réelles et mobile",
+  containsAll(enterpriseCoreWorkspace, ["Créer un élément", "ListControls", "ActionMenu", "CircleHelp", "Demander une validation", "min-w-0", "overflow-x-hidden"])
+    && !enterpriseCoreWorkspace.includes("window.prompt")
+    && !enterpriseCoreWorkspace.includes("window.confirm")
 );
 
 if (failures.length) {

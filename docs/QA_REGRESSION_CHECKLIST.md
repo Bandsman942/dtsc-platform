@@ -8,6 +8,18 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Socle commun ERP
+
+- [ ] Une entreprise ne peut lire, créer ou modifier aucun objet commun d’une autre entreprise.
+- [ ] Un membre voit uniquement les objets qu’il a créés, demandés, reçus ou qu’il doit valider.
+- [ ] Un responsable voit les objets communs de son entreprise et peut prendre les décisions autorisées.
+- [ ] Un invité peut consulter les objets visibles mais ne voit aucune action de création ou mutation.
+- [ ] Un rejet exige un motif et les changements de statut créent un événement ainsi qu’un audit.
+- [ ] Les collaborateurs et départements sélectionnés appartiennent obligatoirement à l’entreprise active.
+- [ ] Une demande Activités entreprise crée une demande commune liée.
+- [ ] Une activité PHARMACY crée une tâche, demande ou rapport commun lié sans modifier sa source spécialisée.
+- [ ] Les formulaires communs restent contenus sur mobile, affichent des libellés français et une info-bulle par étiquette.
+
 ## Pharmacie - Rapports
 
 - [ ] Les indicateurs viennent des tables réelles; ventes annulées exclues du net, encaissements issus des paiements et stocks issus des lots.

@@ -347,3 +347,9 @@ Routes privées:
 - `PATCH /api/enterprise/[organizationId]/pharmacy/alerts/[entity]/[id]`.
 
 Le cycle de vie couvre ouverture, vue, assignation, prise en charge, commentaire, résolution, ignorance motivée, annulation motivée et archivage. Toutes les mutations sont protégées par origine, rate limiting, Zod, RBAC et audit. Les règles détaillées sont documentées dans `docs/sectors/pharmacy-alert-rules.md`.
+
+## Dépendances avec le socle commun ERP
+
+PHARMACY conserve ses référentiels spécialisés comme sources métier. Chaque activité pharmacie crée également un objet transversal lié par `EnterpriseEntityLink` : les demandes de réapprovisionnement, ajustements, avis pharmacien et documents alimentent Demandes internes ; les rapports caisse et inventaires alimentent Rapports entreprise ; les ruptures, péremptions, anomalies et incidents qualité alimentent Tâches & opérations.
+
+Cette liaison rend le travail visible dans les modules communs aux collaborateurs concernés sans contourner les validations ni modifier directement les lots, stocks, ventes, caisses ou incidents. Les règles détaillées sont documentées dans `docs/enterprise-core.md`.

@@ -157,6 +157,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Dans `Activités DTSC`, le formulaire `Formuler une demande à un collaborateur` doit rester centralisé dans le bloc `Demandes collaboratives`; les autres blocs peuvent seulement préremplir ou pointer vers ce formulaire central, sans le dupliquer.
 - Tout menu, modale et formulaire ajouté doit rester mobile-first: conteneurs `min-w-0`, hauteur bornée, scroll interne si nécessaire, interactions tactiles et fermeture claire.
 - Masquer un bouton côté interface ne suffit jamais: chaque route sensible doit réappliquer RBAC, propriété ou appartenance côté serveur.
+- Les suivis transversaux des entreprises clientes doivent utiliser `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`, toujours filtrés par `organizationId`. Un module sectoriel conserve sa table métier comme source et crée un lien vers le socle commun sans dupliquer ni modifier directement sa donnée spécialisée.
 
 ## Conversation, comments and content UX standards
 

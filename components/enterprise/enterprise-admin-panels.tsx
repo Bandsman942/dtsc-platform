@@ -134,13 +134,19 @@ export function EnterpriseDashboardSummary({
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Metric label="Collaborateurs actifs" value={activeMembers.length} />
         <Metric label="Limite utilisateurs" value={entitlements.limits.maxUsers} />
         <Metric label="Modules actifs" value={`${visibleModules.filter((enterpriseModule) => enterpriseModule.isEnabled).length}/${visibleModules.length}`} />
         <Metric label="Limite modules" value={entitlements.limits.maxActiveModules} />
         <Metric label="Demandes ouvertes" value={dashboard.openRequestsCount} />
         <Metric label="Invitations" value={pendingMembers.length} />
+        <Metric label="Tâches ouvertes" value={dashboard.openTasksCount} />
+        <Metric label="Tâches en retard" value={dashboard.overdueTasksCount} />
+        <Metric label="Validations en attente" value={dashboard.pendingValidationsCount} />
+        <Metric label="Documents récents" value={dashboard.recentDocumentsCount} />
+        <Metric label="Budgets actifs" value={dashboard.activeBudgetsCount} />
+        <Metric label="Fournisseurs actifs" value={dashboard.activeSuppliersCount} />
       </section>
     </>
   );

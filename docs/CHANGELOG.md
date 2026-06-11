@@ -6,6 +6,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du noyau ERP transversal `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`, avec migration additive, isolation par entreprise, historique et liens sectoriels.
+- Ajout des routes privées et de l’espace frontend commun pour créer, rechercher, commenter et traiter les tâches, réunions, demandes, validations, documents, rapports, budgets, fournisseurs et achats communs.
+- Ajout des modules communs Validations et Notifications métier dans les modèles sectoriels et les organisations clientes existantes.
+- Ajout de la documentation `docs/enterprise-core.md` sur le modèle transversal, les permissions, les API et les intégrations sectorielles.
 - Ajout de l'espace collaborateur Activités pharmacie avec dix-sept vues opérationnelles, tableau de bord personnalisé, tâches, validations, alertes assignées, documents, workflows et historique.
 - Ajout des modèles `PharmacyActivityItem`, `PharmacyActivityComment`, `PharmacyActivityDocument`, `PharmacyActivityEvent` et `PharmacyPharmacistAdviceRequest` avec migration additive.
 - Ajout des routes privées Activités pharmacie pour charger le tableau de bord, créer une action reliée à son module métier, commenter, joindre un document, répondre à un avis et traiter le cycle de validation.
@@ -30,6 +34,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Le tableau de bord Administration entreprise affiche désormais des compteurs réels de tâches ouvertes ou en retard, validations en attente, documents récents, budgets actifs et fournisseurs actifs.
+- Les demandes créées dans Activités entreprise et les activités PHARMACY génèrent désormais un objet commun lié, sans remplacer leur source métier spécialisée.
+- Les membres voient uniquement les objets communs qui les concernent, les responsables disposent d’une vue entreprise, et les invités restent limités à la lecture.
 - Les collaborateurs PHARMACY disposent désormais d'une interface mobile orientée action, avec libellés français, aides contextuelles, combobox multi-tenant et menus d'actions persistées.
 - Les demandes de réapprovisionnement, ruptures, péremptions, inventaires, ajustements, rapports caisse, anomalies de vente, incidents qualité et avis pharmacien alimentent directement les modèles métier concernés sans contourner leurs validations sensibles.
 - Les paramètres pharmacie pilotent désormais réellement les ventes, lots, réceptions, caisse, documents, qualité, alertes et exports sensibles côté serveur.

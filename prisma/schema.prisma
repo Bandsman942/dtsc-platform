@@ -910,6 +910,104 @@ model EnterpriseSectorRecord {
   @@index([deletedAt])
 }
 
+model EnterpriseCoreRecord {
+  id               String                  @id @default(cuid())
+  organizationId   String
+  moduleCode       String
+  recordType       String
+  reference        String?
+  title            String
+  description      String?
+  status           String                  @default("DRAFT")
+  priority         String                  @default("NORMAL")
+  departmentId     String?
+  assignedToUserId String?
+  requestedById    String?
+  validatorUserId  String?
+  sourceModule     String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  sectorCode       String?
+  dueAt            DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  amount           Decimal?                @db.Decimal(18, 2)
+  currency         String?
+  metadataJson     Json?
+  createdById      String
+  updatedById      String?
+  archivedAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  events           EnterpriseCoreEvent[]
+  comments         EnterpriseCoreComment[]
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, moduleCode, status])
+  @@index([organizationId, recordType, createdAt])
+  @@index([organizationId, assignedToUserId, status])
+  @@index([organizationId, requestedById, status])
+  @@index([organizationId, validatorUserId, status])
+  @@index([organizationId, sourceModule, sourceEntityType, sourceEntityId])
+  @@index([organizationId, dueAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseCoreEvent {
+  id             String               @id @default(cuid())
+  organizationId String
+  recordId       String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime             @default(now())
+  record         EnterpriseCoreRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, recordId, createdAt])
+  @@index([organizationId, eventType, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model EnterpriseCoreComment {
+  id             String               @id @default(cuid())
+  organizationId String
+  recordId       String
+  authorUserId   String
+  content        String
+  visibility     String               @default("INTERNAL")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  deletedAt      DateTime?
+  record         EnterpriseCoreRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, recordId, createdAt])
+  @@index([authorUserId, createdAt])
+  @@index([deletedAt])
+}
+
+model EnterpriseEntityLink {
+  id               String   @id @default(cuid())
+  organizationId   String
+  sourceModule     String
+  sourceEntityType String
+  sourceEntityId   String
+  targetModule     String
+  targetEntityType String
+  targetEntityId   String
+  linkType         String   @default("RELATED_TO")
+  label            String?
+  createdById      String
+  createdAt        DateTime @default(now())
+
+  @@unique([organizationId, sourceEntityType, sourceEntityId, targetEntityType, targetEntityId, linkType])
+  @@index([organizationId, sourceModule, sourceEntityType, sourceEntityId])
+  @@index([organizationId, targetModule, targetEntityType, targetEntityId])
+  @@index([createdById, createdAt])
+}
+
 model PharmacyProduct {
   id                           String                    @id @default(cuid())
   organizationId               String

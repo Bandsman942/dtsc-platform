@@ -2336,3 +2336,9 @@ Le workspace `components/enterprise/pharmacy-activities-workspace.tsx` remplace 
 `lib/pharmacy-activities.ts` centralise le filtrage par organisation et implication, les KPI personnels, les références multi-tenant, les notifications et les connexions vers réapprovisionnement, alertes, inventaire, ajustement, caisse, anomalies de vente, qualité et avis pharmacien. Les modèles `PharmacyActivityItem`, `PharmacyActivityComment`, `PharmacyActivityDocument`, `PharmacyActivityEvent` et `PharmacyPharmacistAdviceRequest` conservent la traçabilité. La migration additive est `20260612013000_pharmacy_activities_workspace`.
 
 Les mutations vérifient session, secteur PHARMACY, membership actif, origine, rate limit, Zod, implication ou permission et audit. Les montants et documents sensibles sont masqués sans permission. Voir `docs/sectors/pharmacy-activities.md`.
+
+# Noyau ERP transversal des entreprises clientes
+
+La migration additive `20260611143000_add_enterprise_core_kernel` ajoute `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`. Le service `lib/enterprise/enterprise-core.ts` centralise la création d’objets communs et leurs liens avec les entités sectorielles.
+
+Les routes `GET|POST /api/enterprise/[organizationId]/core` et `PATCH /api/enterprise/[organizationId]/core/[id]` appliquent session, membership actif, module et entitlement, mapping de rôle, visibilité par implication, origine, rate limit, Zod, références du même tenant, `AuditLog` et `ApiLog`. Les activités génériques et PHARMACY créent automatiquement un objet commun lié. Voir `docs/enterprise-core.md`.

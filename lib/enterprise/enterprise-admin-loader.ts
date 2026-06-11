@@ -45,7 +45,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     return null;
   }
 
-  const [members, moduleDataset, departments, positions, workflowDataset, calendarEvents, sectorRecords] = await Promise.all([
+  const [members, moduleDataset, departments, positions, workflowDataset, calendarEvents, sectorRecords, coreRecords] = await Promise.all([
     getEnterpriseMembersDataset(organizationId),
     getEnterpriseModulesDataset(organizationId, entitlements),
     prisma.enterpriseDepartment.findMany({
@@ -62,7 +62,14 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     organization.sectorCode === "PHARMACY"
       ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode)
       : getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
+    prisma.enterpriseCoreRecord.findMany({
+      where: { organizationId, archivedAt: null },
+      select: { moduleCode: true, recordType: true, status: true, dueAt: true, updatedAt: true },
+    }),
   ]);
+  const closedStatuses = new Set(["COMPLETED", "APPROVED", "REJECTED", "CANCELLED", "ARCHIVED"]);
+  const now = new Date();
+  const recentThreshold = new Date(now.getTime() - 30 * 86400000);
 
   return toJson<EnterpriseAdminDataset>({
     organization,
@@ -72,6 +79,12 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
       modulesCount: moduleDataset.modules.length,
       openRequestsCount: workflowDataset.openRequestsCount,
       recentRequestsCount: workflowDataset.recentRequests.length,
+      openTasksCount: coreRecords.filter((record) => record.moduleCode === "TASKS_OPERATIONS" && !closedStatuses.has(record.status)).length,
+      overdueTasksCount: coreRecords.filter((record) => record.moduleCode === "TASKS_OPERATIONS" && !closedStatuses.has(record.status) && record.dueAt && record.dueAt < now).length,
+      pendingValidationsCount: coreRecords.filter((record) => record.status === "PENDING_VALIDATION").length,
+      recentDocumentsCount: coreRecords.filter((record) => record.recordType === "DOCUMENT" && record.updatedAt >= recentThreshold).length,
+      activeBudgetsCount: coreRecords.filter((record) => record.recordType === "BUDGET" && !closedStatuses.has(record.status)).length,
+      activeSuppliersCount: coreRecords.filter((record) => record.recordType === "SUPPLIER" && !closedStatuses.has(record.status)).length,
     },
     members,
     modules: moduleDataset.modules,
