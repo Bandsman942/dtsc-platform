@@ -103,6 +103,11 @@ const pharmacyReturnLossActionApi = read("app/api/enterprise/[organizationId]/ph
 const pharmacyReturnLossWorkspace = read("components/enterprise/pharmacy-return-loss-workspace.tsx");
 const pharmacyReturnLossService = read("lib/pharmacy-return-losses.ts");
 const pharmacyReturnLossAccess = read("lib/pharmacy-return-loss-access.ts");
+const pharmacyAlertsApi = read("app/api/enterprise/[organizationId]/pharmacy/alerts/route.ts");
+const pharmacyAlertActionApi = read("app/api/enterprise/[organizationId]/pharmacy/alerts/[entity]/[id]/route.ts");
+const pharmacyAlertsWorkspace = read("components/enterprise/pharmacy-alerts-workspace.tsx");
+const pharmacyAlertsService = read("lib/pharmacy-alerts.ts");
+const pharmacyAlertAccess = read("lib/pharmacy-alert-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -546,6 +551,25 @@ check(
 check(
   "PHARMACY Ventes: le texte JSX d'audit échappe son apostrophe",
   pharmacySalesWorkspace.includes("l&apos;audit") && !pharmacySalesWorkspace.includes("et l'audit.</p>")
+);
+
+check(
+  "PHARMACY Alertes: modèles persistants, règles et déduplication",
+  containsAll(prismaSchema, ["model PharmacyAlert", "model PharmacyAlertEvent", "model PharmacyAlertRule", "model PharmacyAlertSetting", "@@unique([organizationId, deduplicationKey])"])
+    && containsAll(pharmacyAlertsService, ["detectAllPharmacyAlerts", "PRODUCT_OUT_OF_STOCK", "BATCH_EXPIRED", "BATCH_RECALLED", "PURCHASE_ORDER_OVERDUE", "RECEIPT_DISCREPANCY_OPEN", "PHARMACIST_VALIDATION_PENDING", "INVENTORY_VARIANCE_CRITICAL", "LOSS_CRITICAL", "CASH_DISCREPANCY_CRITICAL", "detectedCount: { increment: 1 }"])
+);
+
+check(
+  "PHARMACY Alertes: routes sécurisées et cycle de vie audité",
+  containsAll(pharmacyAlertsApi, ["canAccessPharmacyAlerts", "isSameOriginRequest", "await rateLimit", "detectAllPharmacyAlerts", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacyAlertActionApi, ["pharmacyAlertActionSchema.safeParse", "pharmacyAlertRuleSchema.safeParse", "pharmacyAlertSettingSchema.safeParse", "transitionPharmacyAlert", "writeAuditLog"])
+    && containsAll(pharmacyAlertAccess, ["ALERTS_EXPIRY_LOW_STOCK", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Alertes: quatorze vues, aides et détail mobile",
+  containsAll(pharmacyAlertsWorkspace, ["Tableau de bord alertes", "Alertes ouvertes", "Alertes critiques", "Alertes stock", "Alertes péremption", "Alertes rappels / quarantaine", "Alertes achats & réapprovisionnement", "Alertes ventes & dispensation", "Alertes inventaire & ajustements", "Alertes retours, pertes & destructions", "Alertes caisse", "Règles de détection", "Affectations & notifications", "Historique des alertes", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !pharmacyAlertsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

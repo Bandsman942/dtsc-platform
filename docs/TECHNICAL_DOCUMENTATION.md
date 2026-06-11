@@ -2294,3 +2294,11 @@ Le sous-module `RETURNS_ADJUSTMENTS_LOSSES` utilise `PharmacyReturnLossEvent`, `
 Les routes `GET|POST /api/enterprise/[organizationId]/pharmacy/returns-losses` et `PATCH /api/enterprise/[organizationId]/pharmacy/returns-losses/[entity]/[id]` vérifient session, membership actif, secteur PHARMACY, activation du module, origine, rate limit, validation Zod, permissions et `organizationId`. Les références vers vente, remboursement, fournisseur, commande, réception, inventaire, produit, lot, emplacement et collaborateurs sont contrôlées dans le même tenant.
 
 `applyReturnLossStockImpact()` applique une seule fois le mouvement validé dans une transaction Prisma. `reverseReturnLossStockImpact()` contre-passe un impact validé avec `RETURN_LOSS_REVERSAL` et bloque tout stock négatif. Les événements critiques et rappels créent des alertes persistées.
+
+# Module alertes PHARMACY
+
+Le module `ALERTS_EXPIRY_LOW_STOCK` utilise `PharmacyAlert`, `PharmacyAlertEvent`, `PharmacyAlertRule` et `PharmacyAlertSetting`. La migration additive est `20260611093000_pharmacy_alerts_engine`.
+
+`detectAllPharmacyAlerts(organizationId)` lit les données dédiées produits, lots, achats, réceptions, ventes, inventaire, retours/pertes et caisse. Chaque condition produit une clé de déduplication tenant compte du type, du module source, de l'objet source, du produit et du lot. Une alerte active est mise à jour; une alerte résolue est rouverte si la condition revient; une condition disparue peut être résolue automatiquement selon les paramètres.
+
+Les routes `GET|POST /api/enterprise/[organizationId]/pharmacy/alerts` et `PATCH /api/enterprise/[organizationId]/pharmacy/alerts/[entity]/[id]` contrôlent session, membership, secteur et module actifs, origine, rate limit, Zod, RBAC, tenant et audit. Les alertes critiques peuvent notifier les responsables actifs de l'organisation sans exposer de données à un autre tenant.

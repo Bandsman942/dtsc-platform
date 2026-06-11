@@ -345,3 +345,16 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier les retraits expirés, rappels, destructions, alertes critiques et leur résolution.
 - [ ] Vérifier les douze vues, les libellés français, les infos-bulles et l'absence de dépassement horizontal sur mobile.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
+
+# Itération PHARMACY 10 - Alertes stock, péremption et rappel
+
+- [ ] Lancer la détection et vérifier l'isolation stricte par `organizationId`.
+- [ ] Vérifier rupture, stock faible, surstock, produit sans prix et sans lot.
+- [ ] Vérifier péremption proche, lot expiré avec stock, rappel, quarantaine et blocage.
+- [ ] Vérifier commande en retard, demande de réapprovisionnement et écart réception ouvert.
+- [ ] Vérifier validation pharmacien, anomalie vente, écart inventaire et ajustement en attente.
+- [ ] Vérifier perte critique, destruction en attente, caisse ouverte trop longtemps et écart caisse critique.
+- [ ] Relancer la détection et vérifier la déduplication, `detectedCount` et `lastDetectedAt`.
+- [ ] Assigner, prendre en charge, commenter, résoudre, ignorer et annuler une alerte; vérifier l'historique.
+- [ ] Vérifier les quatorze vues, les règles persistées et le rendu mobile sans dépassement horizontal.
+- [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm build` et les contrôles Git.

@@ -2159,6 +2159,127 @@ model PharmacyReturnLossAlert {
   @@index([organizationId, eventId])
 }
 
+model PharmacyAlert {
+  id                            String   @id @default(cuid())
+  organizationId                String
+  alertNumber                   String
+  deduplicationKey              String
+  alertType                     String
+  category                      String
+  title                         String
+  message                       String
+  criticality                   String   @default("MEDIUM")
+  status                        String   @default("OPEN")
+  sourceModule                  String?
+  sourceEntityType              String?
+  sourceEntityId                String?
+  productId                     String?
+  batchId                       String?
+  supplierId                    String?
+  purchaseOrderId               String?
+  receiptId                     String?
+  saleId                        String?
+  inventorySessionId            String?
+  adjustmentId                  String?
+  cashSessionId                 String?
+  returnEntityType              String?
+  returnEntityId                String?
+  recommendedAction             String?
+  assignedToId                  String?
+  assignedById                  String?
+  assignedAt                    DateTime?
+  firstDetectedAt               DateTime @default(now())
+  lastDetectedAt                DateTime @default(now())
+  detectedCount                 Int      @default(1)
+  dueAt                         DateTime?
+  seenAt                        DateTime?
+  takenAt                       DateTime?
+  resolvedAt                    DateTime?
+  resolvedById                  String?
+  resolutionComment             String?
+  ignoredAt                     DateTime?
+  ignoredById                   String?
+  ignoredReason                 String?
+  cancelledAt                   DateTime?
+  cancelledById                 String?
+  cancellationReason            String?
+  relatedTaskId                 String?
+  relatedInternalRequestId      String?
+  relatedReplenishmentRequestId String?
+  metadataJson                  Json?
+  createdById                   String?
+  updatedById                   String?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  events                        PharmacyAlertEvent[]
+
+  @@unique([organizationId, alertNumber])
+  @@unique([organizationId, deduplicationKey])
+  @@index([organizationId, status, criticality])
+  @@index([organizationId, category, alertType])
+  @@index([organizationId, assignedToId, status])
+  @@index([organizationId, productId, batchId])
+  @@index([organizationId, sourceModule, sourceEntityType, sourceEntityId])
+  @@index([organizationId, firstDetectedAt, lastDetectedAt])
+  @@index([organizationId, dueAt])
+}
+
+model PharmacyAlertEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  alertId        String
+  actorId        String?
+  eventType      String
+  oldStatus      String?
+  newStatus      String?
+  comment        String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+  alert          PharmacyAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, alertId, createdAt])
+  @@index([organizationId, eventType])
+}
+
+model PharmacyAlertRule {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  ruleCode              String
+  category              String
+  alertType             String
+  label                 String
+  description           String?
+  enabled               Boolean  @default(true)
+  defaultCriticality    String   @default("MEDIUM")
+  thresholdJson         Json?
+  defaultAssigneeRole   String?
+  defaultAssigneeUserId String?
+  notifyEnabled         Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, ruleCode])
+  @@index([organizationId, category, enabled])
+}
+
+model PharmacyAlertSetting {
+  id                                String   @id @default(cuid())
+  organizationId                    String   @unique
+  nearExpiryThresholdDays           Int      @default(90)
+  criticalCashVarianceThreshold     Decimal  @default(100) @db.Decimal(14, 2)
+  criticalLossValueThreshold        Decimal  @default(500) @db.Decimal(14, 2)
+  maxCashSessionHours               Int      @default(16)
+  maxPharmacistValidationHours      Int      @default(24)
+  maxReceiptValidationHours         Int      @default(48)
+  autoResolveAlertsEnabled          Boolean  @default(true)
+  criticalAlertNotificationsEnabled Boolean  @default(true)
+  alertSettingsJson                 Json?
+  updatedById                       String?
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+}
+
 model OrganizationMember {
   id             String   @id @default(cuid())
   organizationId String

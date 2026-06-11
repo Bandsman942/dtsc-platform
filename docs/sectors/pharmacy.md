@@ -283,3 +283,16 @@ Routes privées:
 - `PATCH /api/enterprise/[organizationId]/pharmacy/returns-losses/[entity]/[id]`.
 
 Les mutations contrôlent l'origine, le rate limiting, Zod, le secteur et module actifs, le membership, les permissions et l'audit. L'interface fournit douze vues, des libellés français, des aides contextuelles et des formulaires plein écran bornés sur mobile.
+
+## Module Alertes stock / péremption / rappel
+
+Le module `ALERTS_EXPIRY_LOW_STOCK` centralise des alertes persistées issues de données réelles: stock, péremption, rappel/quarantaine, achats, réceptions, ventes, inventaire, ajustements, retours/pertes et caisse. `PharmacyAlert` garde la condition, la source, la criticité, le responsable, les dates et le traitement; `PharmacyAlertEvent` conserve chaque détection et transition.
+
+La déduplication utilise `organizationId`, le type, le module et objet source, le produit et le lot. Une nouvelle détection met à jour `lastDetectedAt` et `detectedCount`; une condition réapparue rouvre l'alerte. Les règles et seuils sont persistés par organisation. Les alertes critiques peuvent notifier les gérants actifs.
+
+Routes privées:
+
+- `GET/POST /api/enterprise/[organizationId]/pharmacy/alerts`;
+- `PATCH /api/enterprise/[organizationId]/pharmacy/alerts/[entity]/[id]`.
+
+Le cycle de vie couvre ouverture, vue, assignation, prise en charge, commentaire, résolution, ignorance motivée, annulation motivée et archivage. Toutes les mutations sont protégées par origine, rate limiting, Zod, RBAC et audit. Les règles détaillées sont documentées dans `docs/sectors/pharmacy-alert-rules.md`.

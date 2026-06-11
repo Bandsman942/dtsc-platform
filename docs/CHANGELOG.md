@@ -6,12 +6,17 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du moteur persistant Pharmacie > Alertes stock / péremption / rappel avec détection multi-modules, déduplication, cycle de vie, assignation, notifications critiques et historique.
+- Ajout des modèles `PharmacyAlert`, `PharmacyAlertEvent`, `PharmacyAlertRule`, `PharmacyAlertSetting` et de la migration additive associée.
+- Ajout des routes privées de consultation, détection, traitement, gestion des règles et paramètres d'alertes.
 - Ajout du module Pharmacie > Retours, ajustements & pertes avec douze vues métier, déclarations, validations, alertes, justificatifs et historique des mouvements.
 - Ajout des modèles et de la migration additive `PharmacyReturnLossEvent`, `PharmacyReturnLossDocument` et `PharmacyReturnLossAlert`.
 - Ajout des routes privées permettant de créer, soumettre, valider, rejeter, annuler et résoudre les alertes du module.
 
 ### Amélioré
 
+- Le module Alertes fournit désormais quatorze vues fonctionnelles, des cartes mobiles, des libellés français, des aides contextuelles et des actions persistées.
+- Les détecteurs consolident les ruptures, stocks faibles, surstocks, prix/lots manquants, péremptions, rappels, quarantaines, commandes, réceptions, ventes, inventaires, ajustements, pertes, destructions et caisse.
 - Les retours clients et fournisseurs, ajustements, pertes, casses, retraits, rappels et destructions appliquent désormais des mouvements stock transactionnels, idempotents et réversibles.
 - Toutes les références liées sont vérifiées dans l'organisation PHARMACY active; l'interface fournit des libellés métier français, aides contextuelles et formulaires mobiles bornés.
 
