@@ -125,6 +125,11 @@ const pharmacyReportExportApi = read("app/api/enterprise/[organizationId]/pharma
 const pharmacyReportsWorkspace = read("components/enterprise/pharmacy-reports-workspace.tsx");
 const pharmacyReportsService = read("lib/pharmacy-reports.ts");
 const pharmacyReportAccess = read("lib/pharmacy-report-access.ts");
+const pharmacySettingsApi = read("app/api/enterprise/[organizationId]/pharmacy/settings/route.ts");
+const pharmacySettingsActionsApi = read("app/api/enterprise/[organizationId]/pharmacy/settings/actions/route.ts");
+const pharmacySettingsWorkspace = read("components/enterprise/pharmacy-settings-workspace.tsx");
+const pharmacySettingsService = read("lib/pharmacy-settings.ts");
+const pharmacySettingAccess = read("lib/pharmacy-setting-access.ts");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -422,7 +427,7 @@ check(
 check(
   "PHARMACY Lots: interface métier, actions réelles et FEFO",
   containsAll(pharmacyBatchesWorkspace, ["Lots & péremptions", "Aucun lot n&apos;est encore enregistré", "Mettre en quarantaine", "Marquer comme rappelé", "Mouvements stock", "h-[94dvh]", "CircleHelp"])
-    && containsAll(pharmacyBatchesService, ["getSellableBatchesForProduct", 'orderBy: [{ expiryDate: "asc" }', 'status: { notIn: ["RECALLED", "QUARANTINED", "BLOCKED", "CANCELLED", "EXPIRED"] }'])
+    && containsAll(pharmacyBatchesService, ["getSellableBatchesForProduct", 'orderBy: [{ expiryDate: "asc" }', "getEffectivePharmacySettings", "blockExpiredBatchSale", "blockRecalledBatchSale", "blockQuarantinedBatchSale", "blockBlockedBatchSale"])
 );
 
 check(
@@ -710,6 +715,35 @@ check(
     "loadAuditDetails",
     "loadInternalOperations",
   ])
+);
+
+check(
+  "PHARMACY Paramètres: modèles, audit critique et numérotation transactionnelle",
+  containsAll(prismaSchema, ["model PharmacySetting", "model PharmacyNumberingSequence", "model PharmacySettingsAuditLog", "model PharmacySettingsProfile", "@@unique([organizationId, entityType])"])
+    && containsAll(pharmacySettingsService, ["getEffectivePharmacySettings", "updatePharmacySettingsSection", "generatePharmacyEntityNumber", "previewPharmacyEntityNumber", "criticalPharmacySettingKeys", "pharmacySettingsAuditLog", "prisma.$transaction"])
+);
+
+check(
+  "PHARMACY Paramètres: routes privées, validées, limitées et auditées",
+  containsAll(pharmacySettingsApi, ["canAccessPharmacySettings", "pharmacySettingsUpdateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(pharmacySettingsActionsApi, ["canAccessPharmacySettings", "pharmacySettingsActionSchema.safeParse", "previewPharmacyEntityNumber", "updatePharmacyNumberingSequence", "writeAuditLog"])
+    && containsAll(pharmacySettingAccess, ["PHARMACY_SETTINGS", "organizationMember", 'sectorCode: "PHARMACY"'])
+);
+
+check(
+  "PHARMACY Paramètres: dix-sept sections, aides, historique et mobile",
+  containsAll(pharmacySettingsWorkspace, ["Général", "Numérotation & préfixes", "Produits & lots", "Stock & inventaire", "Péremptions & FEFO", "Ventes & dispensation", "Ordonnances", "Réceptions & achats", "Caisse, factures & paiements", "Retours, ajustements & pertes", "Alertes & notifications", "Documents & conformité", "Qualité & pharmacovigilance", "Rapports & exports", "Confidentialité & sécurité", "Intégrations ERP", "Historique des paramètres", "CircleHelp", "ListControls", "Prévisualiser", "Réinitialiser la section", "min-w-0", "overflow-x-hidden"])
+    && !pharmacySettingsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "PHARMACY Paramètres: règles et numérotation connectées aux modules métier",
+  containsAll(pharmacySalesService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+    && containsAll(pharmacyReceiptsService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+    && containsAll(pharmacyCashService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
+    && containsAll(pharmacyBatchesService, ["getEffectivePharmacySettings"])
+    && containsAll(pharmacyDocumentsService, ["getEffectivePharmacySettings"])
+    && containsAll(pharmacyQualityService, ["getEffectivePharmacySettings", "generatePharmacyEntityNumber"])
 );
 
 if (failures.length) {

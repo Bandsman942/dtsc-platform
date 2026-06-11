@@ -323,6 +323,12 @@ Routes privées:
 
 Les mutations contrôlent l'origine, le rate limiting, Zod, le secteur et module actifs, le membership, les permissions et l'audit. L'interface fournit douze vues, des libellés français, des aides contextuelles et des formulaires plein écran bornés sur mobile.
 
+## Paramètres pharmacie
+
+Le sous-module `PHARMACY_SETTINGS` remplace le placeholder par un centre de configuration réel. Il couvre les informations générales, numérotations, produits et lots, stock, FEFO, ventes, ordonnances, achats, caisse, pertes, alertes, documents, qualité, rapports, sécurité, intégrations ERP et historique.
+
+Les paramètres sont isolés par `organizationId`, appliqués côté serveur et audités lorsqu'ils sont critiques. Les séquences de numérotation alimentent les objets métier concernés sans dépendre d'un numéro saisi par le client. Voir `docs/sectors/pharmacy-settings.md`.
+
 ## Module Alertes stock / péremption / rappel
 
 Le module `ALERTS_EXPIRY_LOW_STOCK` centralise des alertes persistées issues de données réelles: stock, péremption, rappel/quarantaine, achats, réceptions, ventes, inventaire, ajustements, retours/pertes et caisse. `PharmacyAlert` garde la condition, la source, la criticité, le responsable, les dates et le traitement; `PharmacyAlertEvent` conserve chaque détection et transition.

@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { notifyUsers } from "@/lib/notifications";
 import type { pharmacyQualityCreateSchema, pharmacyQualityIncidentSchema } from "@/lib/pharmacy-quality-validators";
 import { prisma } from "@/lib/prisma";
+import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
 
 type IncidentInput = z.infer<typeof pharmacyQualityIncidentSchema>;
 type RelatedInput = z.infer<typeof pharmacyQualityCreateSchema>;
@@ -53,9 +54,8 @@ export async function validateQualityReferences(organizationId: string, data: In
 
 export async function createQualityIncident(organizationId: string, userId: string, data: IncidentInput) {
   const criticality = normalizedCriticality(data);
-  const count = await prisma.pharmacyQualityIncident.count({ where: { organizationId } });
   const incident = await prisma.pharmacyQualityIncident.create({ data: {
-    organizationId, incidentNumber: data.incidentNumber || `IQ-${new Date().getFullYear()}-${String(count + 1).padStart(6, "0")}`,
+    organizationId, incidentNumber: data.incidentNumber || await generatePharmacyEntityNumber(organizationId, "QUALITY_INCIDENT"),
     title: data.title, incidentType: data.incidentType, category: data.category, criticality, priority: criticality === "CRITICAL" ? "URGENT" : data.priority,
     incidentDate: new Date(data.incidentDate), reportedById: data.reportedById, reportingSource: data.reportingSource,
     departmentId: nil(data.departmentId), locationId: nil(data.locationId), sourceModule: nil(data.sourceModule), sourceEntityType: nil(data.sourceEntityType), sourceEntityId: nil(data.sourceEntityId),
@@ -140,8 +140,10 @@ export async function transitionQualityEntity(organizationId: string, entity: st
   if (assignedToId && !(await activeMember(organizationId, assignedToId))) throw new Error("ASSIGNEE_INVALID");
   if (action === "submit" && incident.immediateActionRequired && !incident.immediateActionTaken && !incident.immediateAction?.trim()) throw new Error("IMMEDIATE_ACTION_REQUIRED");
   if (action === "close") {
+    const qualitySettings = (await getEffectivePharmacySettings(organizationId, userId)).sections.quality;
     if (incident.criticality === "CRITICAL" && !incident.resolutionSummary?.trim() && !comment?.trim()) throw new Error("RESOLUTION_REQUIRED");
     if (incident.investigationRequired && !incident.investigations.some((item) => item.status === "COMPLETED")) throw new Error("INVESTIGATION_REQUIRED");
+    if (qualitySettings.criticalIncidentRequiresCapa && incident.criticality === "CRITICAL" && !incident.capaActions.some((item) => item.required)) throw new Error("CAPA_OPEN");
     if (incident.capaActions.some((item) => item.required && item.status !== "VALIDATED")) throw new Error("CAPA_OPEN");
   }
   if (["reject", "cancel", "resolve", "close"].includes(action) && !comment?.trim() && action !== "close") throw new Error("COMMENT_REQUIRED");

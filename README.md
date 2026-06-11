@@ -286,6 +286,10 @@ Ouvrir Prisma Studio:
 pnpm prisma studio
 ```
 
+## Paramètres pharmacie
+
+Le sous-module `PHARMACY_SETTINGS` fournit un centre de configuration métier isolé par organisation. Les valeurs sont appliquées côté serveur aux ventes, réceptions, lots, caisse, alertes, documents, qualité et rapports. Les changements critiques sont motivés et audités; les numéros métier sont générés avec des séquences transactionnelles.
+
 ## OpenAI
 
 Le chatbot utilise l'endpoint OpenAI **Responses API** côté serveur dans `app/api/chat/route.ts`.

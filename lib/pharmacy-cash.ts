@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { cashCreateSchema } from "@/lib/pharmacy-cash-validators";
 import { prisma } from "@/lib/prisma";
+import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
 
 type CashInput = z.infer<typeof cashCreateSchema>;
 const nil = <T>(value: T | "" | undefined) => value === "" || value === undefined ? null : value;
@@ -33,6 +34,7 @@ export async function calculateCashSessionTotals(organizationId: string, cashSes
 }
 
 export async function openCashSession(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "session" }>) {
+  const cashSettings = (await getEffectivePharmacySettings(organizationId, userId)).sections["cash-payments"];
   const [cashier, department, existing] = await Promise.all([
     prisma.organizationMember.findFirst({ where: { organizationId, userId: data.cashierId, status: "ACTIVE", removedAt: null }, select: { id: true } }),
     data.departmentId ? prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } }) : null,
@@ -40,12 +42,13 @@ export async function openCashSession(organizationId: string, userId: string, da
   ]);
   if (!cashier) throw new Error("CASHIER_NOT_FOUND");
   if (data.departmentId && !department) throw new Error("DEPARTMENT_NOT_FOUND");
-  if (existing) throw new Error("CASHIER_ALREADY_OPEN");
-  const count = await prisma.pharmacyCashSession.count({ where: { organizationId } });
-  return prisma.pharmacyCashSession.create({ data: { organizationId, cashSessionNumber: data.cashSessionNumber || `CAI-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, cashPointName: nil(data.cashPointName), cashPointType: data.cashPointType, cashierId: data.cashierId, departmentId: nil(data.departmentId), financialAccountId: nil(data.financialAccountId), openedAt: data.openedAt, openingAmount: data.openingAmount, currency: data.currency, status: "OPEN", notes: nil(data.notes), createdById: userId, updatedById: userId } });
+  if (existing && !cashSettings.allowMultipleOpenCashSessionsPerCashier) throw new Error("CASHIER_ALREADY_OPEN");
+  if (cashSettings.cashSessionRequiresOpeningAmount && data.openingAmount < 0) throw new Error("OPENING_AMOUNT_REQUIRED");
+  return prisma.pharmacyCashSession.create({ data: { organizationId, cashSessionNumber: data.cashSessionNumber || await generatePharmacyEntityNumber(organizationId, "CASH_SESSION"), cashPointName: nil(data.cashPointName), cashPointType: data.cashPointType, cashierId: data.cashierId, departmentId: nil(data.departmentId), financialAccountId: nil(data.financialAccountId), openedAt: data.openedAt, openingAmount: data.openingAmount, currency: data.currency, status: "OPEN", notes: nil(data.notes), createdById: userId, updatedById: userId } });
 }
 
 export async function createPayment(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "payment" }>) {
+  const cashSettings = (await getEffectivePharmacySettings(organizationId, userId)).sections["cash-payments"];
   const saleId = nil(data.saleId);
   const invoiceId = nil(data.invoiceId);
   const cashSessionId = nil(data.cashSessionId);
@@ -59,13 +62,12 @@ export async function createPayment(organizationId: string, userId: string, data
   if (invoiceId && !invoice) throw new Error("INVOICE_NOT_FOUND");
   if (saleId && invoice?.saleId && invoice.saleId !== saleId) throw new Error("SALE_INVOICE_MISMATCH");
   if (!cashier) throw new Error("CASHIER_NOT_FOUND");
-  if (data.paymentMethod !== "CREDIT" && !cashSessionId) throw new Error("SESSION_REQUIRED");
+  if (data.paymentMethod !== "CREDIT" && !cashSessionId && cashSettings.requireCashSessionForSales && !cashSettings.allowPaymentWithoutCashSession) throw new Error("SESSION_REQUIRED");
   if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
   const targetRemaining = sale ? Number(sale.remainingAmount) : invoice ? Number(invoice.remainingAmount) : data.amount;
   if (data.amount > targetRemaining) throw new Error("PAYMENT_EXCEEDS_REMAINING");
   const effectiveSaleId = saleId || invoice?.saleId || null;
-  const count = await prisma.pharmacyPayment.count({ where: { organizationId } });
-  const payment = await prisma.pharmacyPayment.create({ data: { organizationId, paymentNumber: `PAY-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, saleId: effectiveSaleId, invoiceId, cashSessionId, cashierId: data.cashierId, paymentMethod: data.paymentMethod, amount: data.amount, currency: data.currency, paymentReference: nil(data.paymentReference), payerName: nil(data.payerName), payerPhone: nil(data.payerPhone), paymentDate: data.paymentDate, status: "PAID", notes: nil(data.notes), createdById: userId, updatedById: userId } });
+  const payment = await prisma.pharmacyPayment.create({ data: { organizationId, paymentNumber: await generatePharmacyEntityNumber(organizationId, "PAYMENT"), saleId: effectiveSaleId, invoiceId, cashSessionId, cashierId: data.cashierId, paymentMethod: data.paymentMethod, amount: data.amount, currency: data.currency, paymentReference: nil(data.paymentReference), payerName: nil(data.payerName), payerPhone: nil(data.payerPhone), paymentDate: data.paymentDate, status: "PAID", notes: nil(data.notes), createdById: userId, updatedById: userId } });
   if (effectiveSaleId) {
     await prisma.pharmacySale.updateMany({ where: { id: effectiveSaleId, organizationId }, data: { cashSessionId, paymentMethod: data.paymentMethod, updatedById: userId } });
     await recalculateSalePaymentStatus(organizationId, effectiveSaleId);
@@ -79,9 +81,9 @@ export async function generateInvoiceFromSale(organizationId: string, saleId: st
   const existing = await prisma.pharmacyInvoice.findFirst({ where: { organizationId, saleId, status: { notIn: ["CANCELLED", "ARCHIVED"] } } });
   if (existing) return existing;
   const paid = sale.payments.reduce((sum, item) => sum + Number(item.amount), 0);
-  const count = await prisma.pharmacyInvoice.count({ where: { organizationId } });
+  const invoiceNumber = await generatePharmacyEntityNumber(organizationId, "INVOICE");
   return prisma.$transaction(async (transaction) => {
-    const invoice = await transaction.pharmacyInvoice.create({ data: { organizationId, invoiceNumber: `FAC-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, saleId: sale.id, customerName: sale.customerName, invoiceDate: new Date(), subtotal: sale.subtotal, discount: sale.globalDiscount, taxAmount: sale.taxAmount, totalAmount: sale.totalAmount, paidAmount: paid, remainingAmount: Math.max(0, Number(sale.totalAmount) - paid), currency: "USD", status: paid >= Number(sale.totalAmount) ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED", createdById: userId, updatedById: userId } });
+    const invoice = await transaction.pharmacyInvoice.create({ data: { organizationId, invoiceNumber, saleId: sale.id, customerName: sale.customerName, invoiceDate: new Date(), subtotal: sale.subtotal, discount: sale.globalDiscount, taxAmount: sale.taxAmount, totalAmount: sale.totalAmount, paidAmount: paid, remainingAmount: Math.max(0, Number(sale.totalAmount) - paid), currency: "USD", status: paid >= Number(sale.totalAmount) ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED", createdById: userId, updatedById: userId } });
     await transaction.pharmacySale.update({ where: { id: sale.id }, data: { invoiceId: invoice.id, updatedById: userId } });
     return invoice;
   });
@@ -92,12 +94,13 @@ export async function generateReceiptForPayment(organizationId: string, paymentI
   if (!payment) throw new Error("PAYMENT_NOT_FOUND");
   const existing = await prisma.pharmacyCashReceipt.findFirst({ where: { organizationId, paymentId, status: { not: "CANCELLED" } } });
   if (existing) return existing;
-  const count = await prisma.pharmacyCashReceipt.count({ where: { organizationId } });
+  const receiptNumber = await generatePharmacyEntityNumber(organizationId, "CASH_RECEIPT");
   const htmlContent = `<main><h1>Reçu ${payment.paymentNumber}</h1><p>Montant payé: ${Number(payment.amount).toFixed(2)} ${payment.currency}</p><p>Mode: ${payment.paymentMethod}</p><p>Powered by DTSC Platform</p></main>`;
-  return prisma.pharmacyCashReceipt.create({ data: { organizationId, receiptNumber: `REC-CAI-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, saleId: payment.saleId, paymentId: payment.id, invoiceId: payment.invoiceId, customerName: payment.sale?.customerName, cashierId: payment.cashierId, amount: payment.amount, paymentMethod: payment.paymentMethod, htmlContent, generatedById: userId } });
+  return prisma.pharmacyCashReceipt.create({ data: { organizationId, receiptNumber, saleId: payment.saleId, paymentId: payment.id, invoiceId: payment.invoiceId, customerName: payment.sale?.customerName, cashierId: payment.cashierId, amount: payment.amount, paymentMethod: payment.paymentMethod, htmlContent, generatedById: userId } });
 }
 
 export async function createRefund(organizationId: string, userId: string, data: Extract<CashInput, { entityType: "refund" }>) {
+  const cashSettings = (await getEffectivePharmacySettings(organizationId, userId)).sections["cash-payments"];
   const paymentId = nil(data.paymentId);
   const cashSessionId = nil(data.cashSessionId);
   const [sale, payment, session, aggregate] = await Promise.all([
@@ -111,8 +114,7 @@ export async function createRefund(organizationId: string, userId: string, data:
   if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
   if (Number(aggregate._sum.amount || 0) + data.amount > Number(sale.paidAmount)) throw new Error("REFUND_EXCEEDS_PAID");
   if (data.restockItems && data.amount < Number(sale.paidAmount)) throw new Error("RESTOCK_REQUIRES_FULL_REFUND");
-  const count = await prisma.pharmacyRefund.count({ where: { organizationId } });
-  return prisma.pharmacyRefund.create({ data: { organizationId, refundNumber: `RMB-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, saleId: data.saleId, paymentId, cashSessionId, refundType: data.refundType, amount: data.amount, currency: data.currency, reason: data.reason, restockItems: data.restockItems, status: "SUBMITTED", requestedById: userId, notes: nil(data.notes) } });
+  return prisma.pharmacyRefund.create({ data: { organizationId, refundNumber: await generatePharmacyEntityNumber(organizationId, "REFUND"), saleId: data.saleId, paymentId, cashSessionId, refundType: data.refundType, amount: data.amount, currency: data.currency, reason: data.reason, restockItems: data.restockItems, status: cashSettings.refundRequiresValidation ? "SUBMITTED" : "VALIDATED", requestedById: userId, validatedById: cashSettings.refundRequiresValidation ? null : userId, validatedAt: cashSettings.refundRequiresValidation ? null : new Date(), notes: nil(data.notes) } });
 }
 
 export async function validateCashRefund(organizationId: string, refundId: string, userId: string) {
@@ -138,13 +140,14 @@ export async function validateCashRefund(organizationId: string, refundId: strin
 }
 
 export async function closeCashSession(organizationId: string, cashSessionId: string, userId: string, countedCashAmount: number, justification?: string) {
+  const cashSettings = (await getEffectivePharmacySettings(organizationId, userId)).sections["cash-payments"];
   const session = await prisma.pharmacyCashSession.findFirst({ where: { id: cashSessionId, organizationId, status: "OPEN" } });
   if (!session) throw new Error("SESSION_NOT_OPEN");
   const totals = await calculateCashSessionTotals(organizationId, cashSessionId);
   const varianceAmount = countedCashAmount - totals.theoreticalCashAmount;
   const absolute = Math.abs(varianceAmount);
-  const varianceCriticity = absolute === 0 ? "LOW" : absolute <= 10 ? "MEDIUM" : absolute <= 100 ? "HIGH" : "CRITICAL";
-  if (absolute > 10 && !justification?.trim()) throw new Error("JUSTIFICATION_REQUIRED");
+  const criticalThreshold = Number(cashSettings.criticalCashVarianceThreshold); const varianceCriticity = absolute === 0 ? "LOW" : absolute <= 10 ? "MEDIUM" : absolute < criticalThreshold ? "HIGH" : "CRITICAL";
+  if (cashSettings.cashVarianceRequiresJustification && absolute > 10 && !justification?.trim()) throw new Error("JUSTIFICATION_REQUIRED");
   return prisma.$transaction(async (transaction) => {
     const closed = await transaction.pharmacyCashSession.update({ where: { id: session.id }, data: { ...totals, countedCashAmount, varianceAmount, varianceCriticity, varianceJustification: justification || null, closedAt: new Date(), status: "CLOSED", updatedById: userId } });
     if (absolute > 0) await transaction.pharmacyCashDiscrepancy.create({ data: { organizationId, cashSessionId: session.id, cashierId: session.cashierId, discrepancyType: varianceAmount < 0 ? "CASH_SHORTAGE" : "CASH_SURPLUS", theoreticalAmount: totals.theoreticalCashAmount, countedAmount: countedCashAmount, varianceAmount, criticity: varianceCriticity, justification: justification || null, createdById: userId, updatedById: userId } });

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { pharmacyReceiptSchema } from "@/lib/pharmacy-receipt-validators";
+import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
 
 export type PharmacyReceiptInput = z.infer<typeof pharmacyReceiptSchema>;
 
@@ -10,6 +11,7 @@ function nullable<T>(value: T | "" | undefined) {
 }
 
 export async function validateReceiptReferences(organizationId: string, data: PharmacyReceiptInput) {
+  const settings = (await getEffectivePharmacySettings(organizationId)).sections; const receiptSettings = settings["receipts-purchases"]; const expirySettings = settings["expiry-fefo"];
   const purchaseOrderLineIds = data.lines.flatMap((line) => line.purchaseOrderLineId ? [line.purchaseOrderLineId] : []);
   const [supplier, purchaseOrder, receiver, department, mainLocation, products, locations, purchaseOrderLines] = await Promise.all([
     prisma.pharmacySupplier.findFirst({ where: { id: data.supplierId, organizationId, status: { notIn: ["SUSPENDED", "ARCHIVED", "INACTIVE"] } }, select: { id: true } }),
@@ -21,7 +23,8 @@ export async function validateReceiptReferences(organizationId: string, data: Ph
     prisma.pharmacyStockLocation.findMany({ where: { organizationId, id: { in: data.lines.flatMap((line) => line.batches.map((batch) => batch.locationId).filter(Boolean) as string[]) }, status: "ACTIVE" }, select: { id: true } }),
     prisma.pharmacyPurchaseOrderLine.findMany({ where: { organizationId, id: { in: purchaseOrderLineIds } }, select: { id: true, purchaseOrderId: true, productId: true, remainingQuantity: true } }),
   ]);
-  if (!supplier) return "Le fournisseur sélectionné n'appartient pas à cette pharmacie ou n'est pas actif.";
+  if (!supplier && receiptSettings.receiptRequiresSupplier) return "Le fournisseur sélectionné n'appartient pas à cette pharmacie ou n'est pas actif.";
+  if (!data.purchaseOrderId && !receiptSettings.allowReceiptWithoutPurchaseOrder) return "Une commande fournisseur est obligatoire selon les paramètres pharmacie.";
   if (data.purchaseOrderId && !purchaseOrder) return "La commande sélectionnée n'appartient pas à cette pharmacie.";
   if (!receiver) return "Le réceptionnaire sélectionné n'appartient pas à cette pharmacie.";
   if (data.departmentId && !department) return "Le département sélectionné n'appartient pas à cette pharmacie.";
@@ -37,6 +40,7 @@ export async function validateReceiptReferences(organizationId: string, data: Ph
     if (line.receivedQuantity > Number(orderLine.remainingQuantity)) return "La quantité reçue dépasse la quantité restante de la commande.";
   }
   for (const line of data.lines) for (const batchInput of line.batches) {
+    const minimumExpiry = new Date(Date.now() + Number(expirySettings.minimumAcceptableExpiryDaysOnReceipt) * 86400000); if (!receiptSettings.allowShortExpiryReceipt && batchInput.expiryDate < minimumExpiry) return "La péremption du lot est trop proche selon les paramètres pharmacie.";
     if (!batchInput.batchId) continue;
     const batch = await prisma.pharmacyBatch.findFirst({ where: { id: batchInput.batchId, organizationId, productId: line.productId }, select: { id: true } });
     if (!batch) return "Un lot existant ne correspond pas au produit ou à cette pharmacie.";
@@ -45,8 +49,7 @@ export async function validateReceiptReferences(organizationId: string, data: Ph
 }
 
 export async function createPharmacyReceipt(organizationId: string, userId: string, data: PharmacyReceiptInput) {
-  const count = await prisma.pharmacyReceipt.count({ where: { organizationId } });
-  const receiptNumber = data.receiptNumber || `REC-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
+  const receiptNumber = data.receiptNumber || await generatePharmacyEntityNumber(organizationId, "RECEIPT");
   const totalItems = data.lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
   const totalAmount = data.lines.reduce((sum, line) => sum + line.receivedQuantity * Number(line.purchasePrice || 0) * (1 - Number(line.supplierDiscount || 0) / 100), 0);
   return prisma.$transaction(async (tx) => {

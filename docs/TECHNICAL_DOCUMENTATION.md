@@ -2322,3 +2322,9 @@ Les fichiers sont stockés côté serveur via `uploadPharmacyDocumentToSupabase(
 # Module Rapports pharmacie PHARMACY
 
 `lib/pharmacy-reports.ts` agrège côté serveur les tables opérationnelles PHARMACY sans recopier leurs données. Les vues sauvegardées, exports CSV audités et snapshots utilisent `PharmacySavedReportView`, `PharmacyReportExport` et `PharmacyReportSnapshot`. Les routes vérifient le module `PHARMACY_REPORTS`, le membership actif, `organizationId`, les permissions financières/sensibles, Zod, l'origine, le rate limit et l'audit. Voir `docs/sectors/pharmacy-reports.md`.
+
+# Paramètres métier PHARMACY
+
+Le module `PHARMACY_SETTINGS` utilise `PharmacySetting`, `PharmacySettingsProfile`, `PharmacyNumberingSequence` et `PharmacySettingsAuditLog`. `lib/pharmacy-settings.ts` initialise les valeurs par défaut, calcule la configuration effective, contrôle les changements critiques, synchronise les seuils d'alertes et génère les numéros métier par incrément atomique.
+
+Les routes `GET|PATCH /api/enterprise/[organizationId]/pharmacy/settings` et `POST /api/enterprise/[organizationId]/pharmacy/settings/actions` vérifient session, membership, secteur et module actifs, origine, rate limit, Zod, permissions et `organizationId`. Toute modification critique exige un motif et produit un historique détaillé. Voir `docs/sectors/pharmacy-settings.md`.

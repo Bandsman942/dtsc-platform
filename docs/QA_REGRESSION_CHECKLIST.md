@@ -390,3 +390,14 @@ Documenter dans le ticket ou la PR:
 - [ ] Assigner, prendre en charge, commenter, résoudre, ignorer et annuler une alerte; vérifier l'historique.
 - [ ] Vérifier les quatorze vues, les règles persistées et le rendu mobile sans dépassement horizontal.
 - [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm build` et les contrôles Git.
+
+# Itération PHARMACY 14 - Paramètres pharmacie
+
+- [ ] Vérifier que les dix-sept sections chargent et enregistrent uniquement les paramètres de l'organisation active.
+- [ ] Modifier un paramètre normal puis un paramètre critique; vérifier que le second exige un motif et crée un historique audité.
+- [ ] Prévisualiser puis modifier une séquence; vérifier que les numéros générés restent uniques et progressifs dans l'organisation.
+- [ ] Vérifier que ventes, réceptions, lots, caisse, documents, qualité, alertes et exports appliquent leurs paramètres côté serveur.
+- [ ] Réinitialiser une section avec motif et vérifier que les valeurs par défaut sont restaurées sans supprimer l'historique.
+- [ ] Vérifier les libellés métier français, infos-bulles, combobox référentielles et l'absence de dépassement horizontal mobile.
+- [ ] Vérifier qu'un membre non autorisé ne peut ni modifier les paramètres ni consulter l'historique critique.
+- [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build` et les contrôles Git.

@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du centre métier Paramètres pharmacie avec dix-sept sections, profils par organisation, numérotation transactionnelle, historique audité et règles critiques motivées.
+- Ajout des modèles `PharmacySetting`, `PharmacyNumberingSequence`, `PharmacySettingsAuditLog` et `PharmacySettingsProfile` avec migration additive.
+- Ajout des routes privées permettant de consulter, modifier, réinitialiser, prévisualiser et administrer les paramètres et séquences de numérotation.
 - Ajout du module Rapports pharmacie avec quinze vues décisionnelles, indicateurs issus des tables métier réelles, filtres multi-tenant, vues sauvegardées, snapshots et exports CSV audités.
 - Ajout des modèles `PharmacySavedReportView`, `PharmacyReportExport` et `PharmacyReportSnapshot` avec migration additive.
 - Ajout des routes privées de reporting, sauvegarde de vue, snapshot et export CSV avec protection financière et sensible côté serveur.
@@ -24,6 +27,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les paramètres pharmacie pilotent désormais réellement les ventes, lots, réceptions, caisse, documents, qualité, alertes et exports sensibles côté serveur.
+- Les numéros de ventes, réceptions, sessions caisse, paiements, factures, reçus, remboursements et incidents qualité sont générés par séquences atomiques propres à chaque organisation.
 - Les ventes annulées sont exclues des ventes nettes, les encaissements proviennent des paiements réels et le stock est valorisé depuis les lots sans exposer les montants aux utilisateurs non autorisés.
 - Les documents spécialisés existants sont désormais agrégés dans les métriques du référentiel sans duplication ni suppression.
 - Les expirations, renouvellements et documents obligatoires manquants sont détectés depuis des règles actives et des objets réels, avec alertes dédupliquées.

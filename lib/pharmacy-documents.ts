@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { z } from "zod";
 import type { pharmacyDocumentMetadataSchema } from "@/lib/pharmacy-document-validators";
 import { prisma } from "@/lib/prisma";
+import { getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
 import { uploadPharmacyDocumentToSupabase } from "@/lib/supabase-storage";
 
 type DocumentInput = z.infer<typeof pharmacyDocumentMetadataSchema>;
@@ -64,7 +65,7 @@ export async function createPharmacyDocument(organizationId: string, userId: str
 
 export async function detectPharmacyDocumentCompliance(organizationId: string, userId?: string) {
   await ensurePharmacyDocumentRules(organizationId);
-  const now = new Date(); const soon = new Date(now.getTime() + 30 * 86400000);
+  const documentSettings = (await getEffectivePharmacySettings(organizationId)).sections["documents-compliance"]; const now = new Date(); const soon = new Date(now.getTime() + Number(documentSettings.documentExpiryAlertDays) * 86400000);
   const documents = await prisma.pharmacyDocument.findMany({ where: { organizationId, status: { in: activeDocumentStatuses } }, include: { links: true } });
   for (const document of documents) {
     const complianceStatus = document.expiryDate && document.expiryDate < now ? "EXPIRED" : document.expiryDate && document.expiryDate <= soon ? "TO_RENEW" : document.complianceStatus;
@@ -99,7 +100,7 @@ export async function detectMissingRequiredDocuments(organizationId: string) {
 }
 
 export async function getPharmacyDocumentDataset(organizationId: string, includeAccessLogs: boolean) {
-  await ensurePharmacyDocumentRules(organizationId); const now = new Date(); const month = new Date(now.getFullYear(), now.getMonth(), 1); const soon = new Date(now.getTime() + 30 * 86400000);
+  await ensurePharmacyDocumentRules(organizationId); const documentSettings = (await getEffectivePharmacySettings(organizationId)).sections["documents-compliance"]; const now = new Date(); const month = new Date(now.getFullYear(), now.getMonth(), 1); const soon = new Date(now.getTime() + Number(documentSettings.documentExpiryAlertDays) * 86400000);
   const [documents, rules, missing, accessLogs, products, batches, suppliers, orders, receipts, sales, payments, invoices, prescriptions, inventories, returns, qualityIncidents, alerts, cashSessions, members, legacyCounts] = await Promise.all([
     prisma.pharmacyDocument.findMany({ where: { organizationId, status: { not: "DELETED" } }, orderBy: { updatedAt: "desc" }, include: { links: true, versions: { orderBy: { versionNumber: "desc" } }, accessLogs: { orderBy: { createdAt: "desc" }, take: 20 } } }),
     prisma.pharmacyDocumentComplianceRule.findMany({ where: { organizationId }, orderBy: { label: "asc" } }), prisma.pharmacyMissingDocument.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" } }),

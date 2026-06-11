@@ -2693,6 +2693,99 @@ model PharmacyReportSnapshot {
   @@index([organizationId, generatedById, generatedAt])
 }
 
+model PharmacySetting {
+  id                              String   @id @default(cuid())
+  organizationId                  String   @unique
+  pharmacyName                    String?
+  pharmacyType                    String?
+  currency                        String   @default("USD")
+  timezone                        String   @default("Africa/Kinshasa")
+  language                        String   @default("fr")
+  country                         String?
+  city                            String?
+  address                         String?
+  phone                           String?
+  email                           String?
+  logoUrl                         String?
+  receiptFooterMessage            String?
+  numberingSettingsJson           Json
+  productSettingsJson             Json
+  batchSettingsJson               Json
+  stockSettingsJson               Json
+  expiryFefoSettingsJson          Json
+  salesSettingsJson               Json
+  prescriptionSettingsJson        Json
+  receiptPurchaseSettingsJson     Json
+  cashPaymentSettingsJson         Json
+  returnsLossesSettingsJson       Json
+  alertsNotificationsSettingsJson Json
+  documentsComplianceSettingsJson Json
+  qualitySettingsJson             Json
+  reportsExportsSettingsJson      Json
+  privacySecuritySettingsJson     Json
+  erpIntegrationsSettingsJson     Json
+  settingsVersion                 Int      @default(1)
+  status                          String   @default("ACTIVE")
+  createdById                     String
+  updatedById                     String?
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model PharmacyNumberingSequence {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  entityType          String
+  prefix              String
+  format              String    @default("PREFIX-YYYY-000001")
+  separator           String    @default("-")
+  counterValue        Int       @default(0)
+  counterLength       Int       @default(6)
+  resetFrequency      String    @default("YEARLY")
+  lastResetAt         DateTime?
+  allowManualOverride Boolean   @default(false)
+  active              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([organizationId, entityType])
+  @@index([organizationId, active])
+}
+
+model PharmacySettingsAuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorId        String
+  section        String
+  settingKey     String
+  oldValueJson   Json?
+  newValueJson   Json?
+  changeReason   String?
+  criticality    String   @default("NORMAL")
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, section, settingKey])
+  @@index([organizationId, actorId, createdAt])
+}
+
+model PharmacySettingsProfile {
+  id             String   @id @default(cuid())
+  organizationId String
+  profileName    String
+  description    String?
+  settingsJson   Json
+  isDefault      Boolean  @default(false)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, isDefault])
+}
+
 model OrganizationMember {
   id             String       @id @default(cuid())
   organizationId String
