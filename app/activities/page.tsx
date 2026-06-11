@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { CooBlocker, CooDepartmentRequest, CooMeeting, CooOperation, CooOperationalReport, CooTask } from "@prisma/client";
 import { ActivitiesDashboard } from "@/components/activities/activities-dashboard";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -297,9 +298,9 @@ export default async function ActivitiesPage() {
     }),
   ]);
 
-  const openTasks = tasks.filter((task) => task.status !== "VALIDATED" && task.status !== "CANCELED").length;
-  const blocked = [...tasks.filter((task) => task.status === "BLOCKED"), ...blockers.filter((blocker) => blocker.status !== "RESOLVED")].length;
-  const completed = tasks.filter((task) => task.status === "COMPLETED" || task.status === "VALIDATED").length;
+  const openTasks = tasks.filter((task: CooTask) => task.status !== "VALIDATED" && task.status !== "CANCELED").length;
+  const blocked = [...tasks.filter((task: CooTask) => task.status === "BLOCKED"), ...blockers.filter((blocker: CooBlocker) => blocker.status !== "RESOLVED")].length;
+  const completed = tasks.filter((task: CooTask) => task.status === "COMPLETED" || task.status === "VALIDATED").length;
 
   const sections = [
     {
@@ -314,8 +315,8 @@ export default async function ActivitiesPage() {
       description: "Vue des opérations critiques, blocages majeurs, rapports importants et décisions à suivre.",
       items: [
         ...blockers
-          .filter((blocker) => blocker.severity === "CRITICAL" || blocker.status === "ESCALATED")
-          .map((blocker) => ({
+          .filter((blocker: CooBlocker) => blocker.severity === "CRITICAL" || blocker.status === "ESCALATED")
+          .map((blocker: CooBlocker) => ({
             id: blocker.id,
             entityType: "BLOCKER" as const,
             title: blocker.title,
@@ -384,7 +385,7 @@ export default async function ActivitiesPage() {
       description: supervisesOperations
         ? "Supervisez les tâches opérationnelles, leur avancement, les retards et les points bloqués."
         : "Consultez vos tâches, changez leur statut, ajoutez des commentaires et signalez les blocages.",
-      items: tasks.map((task) => ({
+      items: tasks.map((task: CooTask) => ({
         id: task.id,
         entityType: "TASK" as const,
         title: task.title,
@@ -400,7 +401,7 @@ export default async function ActivitiesPage() {
       id: "operations",
       title: "Opérations internes",
       description: "Suivez les opérations où vous êtes impliqué, leurs objectifs, livrables, priorités et mises à jour COO.",
-      items: operations.map((operation) => ({
+      items: operations.map((operation: CooOperation) => ({
         id: operation.id,
         entityType: "OPERATION" as const,
         title: operation.title,
@@ -416,7 +417,7 @@ export default async function ActivitiesPage() {
       id: "requests",
       title: "Coordination inter-départements",
       description: "Retrouvez les demandes reçues ou envoyées entre départements et échangez avec les responsables concernés.",
-      items: requests.map((request) => ({
+      items: requests.map((request: CooDepartmentRequest) => ({
         id: request.id,
         entityType: "DEPARTMENT_REQUEST" as const,
         title: request.subject,
@@ -432,7 +433,7 @@ export default async function ActivitiesPage() {
       title: "Blocages et réunions",
       description: "Suivez les points bloqués, réunions, décisions, comptes rendus et échanges opérationnels.",
       items: [
-        ...blockers.map((blocker) => ({
+        ...blockers.map((blocker: CooBlocker) => ({
           id: blocker.id,
           entityType: "BLOCKER" as const,
           title: blocker.title,
@@ -442,7 +443,7 @@ export default async function ActivitiesPage() {
           date: toIso(blocker.declaredAt || blocker.updatedAt),
           priority: blocker.severity,
         })),
-        ...meetings.map((meeting) => ({
+        ...meetings.map((meeting: CooMeeting) => ({
           id: meeting.id,
           entityType: "MEETING" as const,
           title: meeting.title,
@@ -457,7 +458,7 @@ export default async function ActivitiesPage() {
       id: "reports",
       title: "Rapports opérationnels",
       description: "Rédigez des rapports, consultez ceux que vous avez reçus et commentez les suivis opérationnels.",
-      items: reports.map((report) => ({
+      items: reports.map((report: CooOperationalReport) => ({
         id: report.id,
         entityType: "REPORT" as const,
         title: report.title,

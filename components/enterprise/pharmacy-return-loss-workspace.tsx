@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
-type Opt = { id: string; name?: string; title?: string; stockUnit?: string; productId?: string; batchNumber?: string; availableQuantity?: string; purchasePrice?: string | null; orderNumber?: string; receiptNumber?: string; supplierId?: string; saleNumber?: string; refundNumber?: string };
+type Opt = { id: string; name?: string; title?: string; stockUnit?: string; productId?: string; batchNumber?: string; availableQuantity?: string; purchasePrice?: string | null; orderNumber?: string; receiptNumber?: string; supplierId?: string; saleId?: string; saleNumber?: string; refundNumber?: string };
 type EventItem = { id: string; eventNumber: string; eventType: string; saleId: string | null; supplierId: string | null; productId: string; batchId: string | null; quantity: string; unit: string; direction: string; itemCondition: string | null; stockDecision: string | null; reason: string; estimatedValue: string | null; criticality: string; refundRequested: boolean; status: string; stockImpactApplied: boolean; createdAt: string };
 type AlertItem = { id: string; alertType: string; criticality: string; status: string; message: string; recommendedAction: string | null };
 type Movement = { id: string; movementType: string; direction: string; quantity: string; reason: string; createdAt: string };

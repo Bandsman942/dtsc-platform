@@ -18,6 +18,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Corrigé
 
 - Correction de l'apostrophe JSX non échappée dans le formulaire Ventes & dispensation qui bloquait ESLint lors du déploiement Vercel.
+- Correction du contrat TypeScript des options de remboursement du module Retours, ajustements & pertes afin de permettre le filtrage par vente pendant le build Vercel.
+- Typage explicite des collections COO de la page Activités afin d'éviter les paramètres de callback implicitement `any` pendant le contrôle TypeScript Vercel.
 
 ## 2026-06-10
 
