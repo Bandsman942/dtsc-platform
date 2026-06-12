@@ -2,6 +2,20 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-12
+
+### Ajouté
+
+- Ajout du module Rendez-vous HEALTH_CARE dédié avec modèles `HealthAppointment` et `HealthAppointmentEvent`, migration additive et reprise non destructive des rendez-vous génériques valides.
+- Ajout des routes privées Rendez-vous pour liste, planning, création, détail, modification et transitions historisées, dont la conversion idempotente en consultation.
+- Ajout d’un workspace Rendez-vous responsive partagé entre Administration et Activités, avec filtres, planning par jour, formulaires guidés, détails et actions métier réelles.
+
+### Amélioré
+
+- Les rendez-vous exigent désormais un patient du même tenant et valident aussi le professionnel et le service côté serveur.
+- Le tableau de bord Santé expose des KPI réels de confirmation, attente, annulation, absence et conversion.
+- Les routes Santé génériques refusent désormais les mutations Rendez-vous afin d’empêcher le contournement des transitions dédiées.
+
 ## 2026-06-11
 
 ### Ajouté

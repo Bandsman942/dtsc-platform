@@ -168,6 +168,11 @@ model User {
   createdHealthPatients                 HealthPatient[]                   @relation("HealthPatientCreatedBy")
   updatedHealthPatients                 HealthPatient[]                   @relation("HealthPatientUpdatedBy")
   healthPatientEvents                   HealthPatientEvent[]              @relation("HealthPatientEventActor")
+  createdHealthAppointments             HealthAppointment[]               @relation("HealthAppointmentCreatedBy")
+  updatedHealthAppointments             HealthAppointment[]               @relation("HealthAppointmentUpdatedBy")
+  assignedHealthAppointments            HealthAppointment[]               @relation("HealthAppointmentProfessional")
+  cancelledHealthAppointments           HealthAppointment[]               @relation("HealthAppointmentCancelledBy")
+  healthAppointmentEvents               HealthAppointmentEvent[]          @relation("HealthAppointmentEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -542,6 +547,8 @@ model Organization {
   enterpriseSectorRecords    EnterpriseSectorRecord[]
   healthPatients             HealthPatient[]
   healthPatientEvents        HealthPatientEvent[]
+  healthAppointments         HealthAppointment[]
+  healthAppointmentEvents    HealthAppointmentEvent[]
   pharmacyProducts           PharmacyProduct[]
   pharmacyBatches            PharmacyBatch[]
   pharmacyStockMovements     PharmacyStockMovement[]
@@ -789,22 +796,23 @@ model EnterprisePosition {
 }
 
 model EnterpriseDepartment {
-  id                String                    @id @default(cuid())
-  organizationId    String
-  departmentCode    String
-  labelFr           String
-  labelEn           String
-  descriptionFr     String?
-  descriptionEn     String?
-  responsibleUserId String?
-  isActive          Boolean                   @default(true)
-  sortOrder         Int                       @default(0)
-  sourceTemplateId  String?
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
-  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sourceTemplate    SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  positions         EnterprisePosition[]
+  id                 String                    @id @default(cuid())
+  organizationId     String
+  departmentCode     String
+  labelFr            String
+  labelEn            String
+  descriptionFr      String?
+  descriptionEn      String?
+  responsibleUserId  String?
+  isActive           Boolean                   @default(true)
+  sortOrder          Int                       @default(0)
+  sourceTemplateId   String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTemplate     SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  positions          EnterprisePosition[]
+  healthAppointments HealthAppointment[]
 
   @@unique([organizationId, departmentCode])
   @@index([organizationId])
@@ -955,9 +963,11 @@ model HealthPatient {
   createdBy                    User                 @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy                    User?                @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events                       HealthPatientEvent[]
+  appointments                 HealthAppointment[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, id])
   @@index([organizationId, fullName])
   @@index([organizationId, phonePrimary])
   @@index([organizationId, status, createdAt])
@@ -980,6 +990,71 @@ model HealthPatientEvent {
   actor          User          @relation("HealthPatientEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, patientId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model HealthAppointment {
+  id                       String                   @id @default(cuid())
+  organizationId           String
+  legacyRecordId           String?
+  patientId                String
+  appointmentNumber        String
+  professionalId           String?
+  departmentId             String?
+  appointmentDate          DateTime
+  endAt                    DateTime?
+  estimatedDurationMinutes Int?
+  reason                   String
+  description              String?
+  appointmentType          String
+  priority                 String                   @default("NORMAL")
+  status                   String                   @default("SCHEDULED")
+  administrativeNotes      String?
+  internalNotes            String?
+  createdById              String
+  updatedById              String?
+  confirmedAt              DateTime?
+  cancelledAt              DateTime?
+  cancelledById            String?
+  cancellationReason       String?
+  markedAbsentAt           DateTime?
+  convertedConsultationId  String?                  @unique
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  organization             Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient                  HealthPatient            @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  professional             User?                    @relation("HealthAppointmentProfessional", fields: [professionalId], references: [id], onDelete: SetNull)
+  department               EnterpriseDepartment?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy                User                     @relation("HealthAppointmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                User?                    @relation("HealthAppointmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  cancelledBy              User?                    @relation("HealthAppointmentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  events                   HealthAppointmentEvent[]
+
+  @@unique([organizationId, appointmentNumber])
+  @@unique([organizationId, legacyRecordId])
+  @@index([organizationId, patientId, appointmentDate])
+  @@index([organizationId, professionalId, appointmentDate])
+  @@index([organizationId, departmentId, appointmentDate])
+  @@index([organizationId, status, priority, appointmentDate])
+  @@index([createdById, createdAt])
+}
+
+model HealthAppointmentEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  appointmentId  String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime          @default(now())
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment    HealthAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  actor          User              @relation("HealthAppointmentEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, appointmentId, createdAt])
   @@index([actorUserId, createdAt])
 }
 

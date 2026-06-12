@@ -19,6 +19,18 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Les actions rendez-vous, consultation, document et dossier médical ouvrent les formulaires existants avec le patient lié.
 - [ ] Le formulaire et le détail Patients restent plein écran et sans débordement sur mobile.
 
+## Santé - Rendez-vous
+
+- [ ] Un rendez-vous référence obligatoirement un patient actif du même `organizationId`.
+- [ ] Un professionnel et un service sélectionnés appartiennent à l’entreprise active.
+- [ ] La liste et le planning filtrent réellement par patient, période, professionnel, statut, priorité et type.
+- [ ] Les transitions interdites sont rejetées côté serveur et les statuts terminaux verrouillent la modification libre.
+- [ ] L’annulation exige un motif et crée un événement ainsi qu’un audit.
+- [ ] La conversion crée une seule consultation liée au patient et au rendez-vous, même en cas de nouvelle tentative.
+- [ ] Les notes internes et données médicales patient ne sont pas exposées sans accès sensible.
+- [ ] Administration et Activités réutilisent le workspace dédié avec actions filtrées selon permissions.
+- [ ] Le formulaire et le détail Rendez-vous restent plein écran et sans débordement sur mobile.
+
 ## Socle commun ERP
 
 - [ ] Une entreprise ne peut lire, créer ou modifier aucun objet commun d’une autre entreprise.

@@ -64,6 +64,12 @@ const healthPatientApi = read("app/api/enterprise/[organizationId]/healthcare/pa
 const healthPatientsWorkspace = read("components/enterprise/health-patients-workspace.tsx");
 const healthPatientsService = read("lib/health-patients.ts");
 const healthPatientAccess = read("lib/health-patient-access.ts");
+const healthAppointmentsApi = read("app/api/enterprise/[organizationId]/healthcare/appointments/route.ts");
+const healthAppointmentApi = read("app/api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/route.ts");
+const healthAppointmentActionsApi = read("app/api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/actions/route.ts");
+const healthAppointmentsWorkspace = read("components/enterprise/health-appointments-workspace.tsx");
+const healthAppointmentsService = read("lib/health-appointments.ts");
+const healthAppointmentAccess = read("lib/health-appointment-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -316,6 +322,30 @@ check(
     && !healthPatientsWorkspace.includes("window.prompt")
     && !healthPatientsWorkspace.includes("window.confirm")
     && !healthPatientsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Rendez-vous: modèles dédiés, patient obligatoire et conversion idempotente",
+  containsAll(prismaSchema, ["model HealthAppointment", "model HealthAppointmentEvent", "@@unique([organizationId, appointmentNumber])", "convertedConsultationId", "@@index([organizationId, patientId, appointmentDate])"])
+    && containsAll(healthAppointmentsService, ["validateHealthAppointmentReferences", "createHealthAppointment", "updateHealthAppointment", "transitionHealthAppointment", "convertedConsultationId", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Rendez-vous: routes privées, références tenant, transitions et audit",
+  containsAll(healthAppointmentsApi, ["getHealthAppointmentAccess", "healthAppointmentCreateSchema.safeParse", "validateHealthAppointmentReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthAppointmentApi, ["getHealthAppointmentAccess", "healthAppointmentUpdateSchema.safeParse", "validateHealthAppointmentReferences", "writeAuditLog", "organizationId"])
+    && containsAll(healthAppointmentActionsApi, ["healthAppointmentActionSchema.safeParse", "transitionHealthAppointment", "writeAuditLog", "ALREADY_CONVERTED"])
+    && containsAll(healthAppointmentAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"APPOINTMENTS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "APPOINTMENTS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "APPOINTMENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Rendez-vous: liste, planning, formulaires, actions, aides et mobile",
+  containsAll(healthAppointmentsWorkspace, ["ListControls", "ActionMenu", "Vue planning", "Aucun rendez-vous enregistré pour cette entreprise.", "Convertir en consultation", "Marquer absent", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !healthAppointmentsWorkspace.includes("window.prompt")
+    && !healthAppointmentsWorkspace.includes("window.confirm")
+    && !healthAppointmentsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

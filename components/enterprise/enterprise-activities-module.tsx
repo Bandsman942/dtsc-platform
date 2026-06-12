@@ -13,6 +13,9 @@ import {
 } from "@/components/enterprise/enterprise-activities-panels";
 import type { EnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-types";
 import { PharmacyActivitiesWorkspace } from "@/components/enterprise/pharmacy-activities-workspace";
+import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
+
+const healthActivityModules = new Set(["CONSULTATIONS"]);
 
 export function EnterpriseActivitiesModule({ organization, blocks, requests, members, sectorRecords, workflows }: EnterpriseActivitiesDataset) {
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
@@ -25,6 +28,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
   return (
     <div className="min-w-0 space-y-5 overflow-x-hidden">
       <EnterpriseActivitiesDashboard organization={organization} />
+      {organization.sectorCode === "HEALTH_CARE" && <HealthAppointmentsWorkspace organizationId={organization.id} activeModuleCodes={healthActivityModules} />}
 
       <Accordion>
         <EnterpriseActivityBlocksPanel

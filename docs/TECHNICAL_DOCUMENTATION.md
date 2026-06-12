@@ -2348,3 +2348,11 @@ Les routes `GET|POST /api/enterprise/[organizationId]/core` et `PATCH /api/enter
 La migration additive `20260612103000_healthcare_patients` ajoute `HealthPatient` et `HealthPatientEvent`, reprend les patients `EnterpriseSectorRecord` existants sans suppression et conserve `legacyRecordId` pour les relations actuelles avec les autres modules Santé. Après copie, elle retire les anciennes clés médicales sensibles du miroir générique pour empêcher leur exposition par les parcours historiques.
 
 Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/patients` et `GET|PATCH /api/enterprise/[organizationId]/healthcare/patients/[patientId]` appliquent session, secteur HEALTH_CARE, membership actif, module Patients activé, origine, rate limit, Zod, isolation `organizationId`, masquage des champs sensibles, audit et historique. Les routes Santé génériques refusent désormais toute mutation Patients.
+
+# Module Rendez-vous HEALTH_CARE
+
+La migration additive `20260612153000_healthcare_appointments` ajoute `HealthAppointment` et `HealthAppointmentEvent`, reprend les rendez-vous génériques reliés à un patient valide et conserve leur miroir `EnterpriseSectorRecord` pour les relations actuelles avec Consultations.
+
+`lib/health-appointments.ts` centralise les références multi-tenant, la création et mise à jour transactionnelles, le verrouillage des statuts terminaux, les transitions autorisées et la conversion idempotente en consultation. Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/appointments`, `GET|PATCH /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]` et `POST /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/actions` appliquent session, module actif, origine, rate limit, Zod, RBAC, tenant, audit et historique.
+
+Le workspace `components/enterprise/health-appointments-workspace.tsx` est partagé entre Administration et Activités Santé. Il fournit liste, planning par jour, filtres, formulaires plein écran, détail, actions persistées et projections patient limitées aux données administratives nécessaires.

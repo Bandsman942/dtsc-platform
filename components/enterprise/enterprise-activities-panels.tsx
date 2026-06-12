@@ -279,6 +279,9 @@ export function EnterpriseHealthcareActivitiesPanel({ sectorRecords }: { sectorR
     () => [
       { label: "Patients", value: sectorRecords.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED").length },
       { label: "Rendez-vous", value: sectorRecords.filter((record) => record.moduleCode === "APPOINTMENTS" && record.status !== "ARCHIVED").length },
+      { label: "Rendez-vous confirmés", value: sectorRecords.filter((record) => record.moduleCode === "APPOINTMENTS" && record.status === "CONFIRMED").length },
+      { label: "Patients absents", value: sectorRecords.filter((record) => record.moduleCode === "APPOINTMENTS" && record.status === "NO_SHOW").length },
+      { label: "Convertis en consultation", value: sectorRecords.filter((record) => record.moduleCode === "APPOINTMENTS" && record.status === "CONVERTED").length },
       { label: "Consultations", value: sectorRecords.filter((record) => record.moduleCode === "CONSULTATIONS" && record.status !== "ARCHIVED").length },
       { label: "Laboratoire", value: sectorRecords.filter((record) => record.moduleCode === "LABORATORY" && record.status !== "ARCHIVED").length },
       { label: "Pharmacie", value: sectorRecords.filter((record) => record.moduleCode === "INTERNAL_PHARMACY" && record.status !== "ARCHIVED").length },

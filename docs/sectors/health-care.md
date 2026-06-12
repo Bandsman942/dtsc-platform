@@ -43,11 +43,37 @@ Les routes vérifient la session, le membership actif, `sectorCode = HEALTH_CARE
 
 La migration `20260612103000_healthcare_patients` reprend les patients génériques existants sans suppression et conserve `legacyRecordId`. Cette référence permet aux rendez-vous, consultations, factures, documents, prises en charge, incidents et dossiers médicaux existants de rester reliés au patient pendant leur migration progressive vers des tables dédiées. Après la reprise, les anciennes clés médicales sensibles sont retirées du miroir générique, qui ne conserve que les données administratives nécessaires à la compatibilité.
 
+## Module Rendez-vous dédié
+
+Le module Rendez-vous utilise `HealthAppointment` et `HealthAppointmentEvent`. Il fournit une liste paginée, une vue planning simple par jour, des filtres par période, professionnel, statut, priorité et type, un formulaire plein écran, un détail complet et des actions de statut persistées. Le même workspace sécurisé est disponible dans Administration et Activités entreprise ; les actions visibles dépendent des permissions retournées par l’API.
+
+Chaque rendez-vous référence obligatoirement un `HealthPatient` actif du même `organizationId`. Le professionnel doit être un membre actif et le service un `EnterpriseDepartment` actif de la même entreprise. Les réponses API n’exposent que les champs administratifs nécessaires du patient et masquent les notes internes sans accès sensible.
+
+Statuts et transitions principales :
+
+- Planifié → Confirmé, Annulé, Absent ou Converti ;
+- Confirmé → En attente, En cours, Annulé, Absent ou Converti ;
+- En attente → En cours, Annulé ou Absent ;
+- En cours → Réalisé, Annulé ou Converti ;
+- Réalisé → Converti si autorisé.
+
+Les rendez-vous réalisés, annulés et convertis sont verrouillés contre modification libre. L’annulation exige un motif. La conversion crée une consultation générique liée au patient et au rendez-vous, puis renseigne `convertedConsultationId`; une transaction et une contrainte unique empêchent les doublons.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/appointments` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/actions`.
+
+La migration `20260612153000_healthcare_appointments` reprend sans suppression les rendez-vous génériques qui référencent un patient valide, conserve `legacyRecordId` pour la compatibilité avec Consultations et fusionne les permissions recommandées dans les postes Santé officiels.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
 - `20260528133000_healthcare_sector_iteration`: enrichit le template `HEALTH_CARE`, les organisations santé existantes et les blocs Activités santé avec documents médicaux, paramètres santé, rapports santé, signalement laboratoire, rupture pharmacie et dépôt de document patient.
 - `20260529113000_enterprise_department_responsible`: ajoute `EnterpriseDepartment.responsibleUserId` pour persister le responsable d'un département entreprise.
+- `20260612103000_healthcare_patients`: ajoute Patients et historique dédiés.
+- `20260612153000_healthcare_appointments`: ajoute Rendez-vous et historique dédiés.
 
 ## Stockage et API
 
@@ -85,7 +111,7 @@ Chaque route vérifie la session, le membership actif, l'organisation cliente ac
 
 Les actions visibles dans les menus `...` sont persistées:
 
-- rendez-vous: confirmer, annuler, marquer absent, convertir en consultation;
+- rendez-vous: confirmer, mettre en attente, démarrer, réaliser, annuler avec motif, marquer absent et convertir en consultation sans doublon;
 - consultation: clôturer, rouvrir;
 - laboratoire: valider un résultat;
 - prise en charge: soumettre, approuver, rejeter;
@@ -148,7 +174,8 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients utilise désormais une table dédiée. Les autres modules Santé utilisent encore `EnterpriseSectorRecord` et leur relation au patient passe temporairement par `HealthPatient.legacyRecordId`.
+- Patients et Rendez-vous utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; Rendez-vous conserve temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Les disponibilités détaillées des professionnels ne sont pas encore reliées automatiquement aux créneaux Rendez-vous ; le planning affiche les créneaux persistés mais ne bloque pas encore les chevauchements.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.
 - Les permissions recommandées par poste santé sont persistées dans `EnterprisePosition.permissionsJson`, mais `OrganizationMember` n’est pas encore relié directement à `EnterprisePosition`. Le backend applique donc actuellement les droits effectifs selon le membership et le rôle entreprise, avec données sensibles réservées aux rôles gestionnaires.
 - L'acceptation/refus d'invitation côté invité utilise le statut `OrganizationMember`; l'interface d'acceptation peut être enrichie dans une prochaine itération si un écran dédié aux invitations est ajouté.
