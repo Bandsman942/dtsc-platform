@@ -190,7 +190,7 @@ export async function transitionHealthAppointment(organizationId: string, appoin
     return { appointment, consultationId: consultation.id };
   }
   return prisma.$transaction(async (tx) => {
-    let consultationId = existing.convertedConsultationId;
+    const consultationId = existing.convertedConsultationId;
     const now = new Date();
     const appointment = await tx.healthAppointment.update({
       where: { id: existing.id },

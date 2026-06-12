@@ -15,6 +15,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Correction du lint Vercel `prefer-const` dans le service Rendez-vous afin de rétablir le déploiement de l’itération Consultations.
 - La conversion Rendez-vous crée désormais une consultation dédiée idempotente et relie automatiquement le patient, le professionnel, le service et les informations utiles.
 - Les consultations clôturées ou annulées sont verrouillées côté serveur et les données cliniques sont masquées sans accès sensible.
 - Les rendez-vous exigent désormais un patient du même tenant et valident aussi le professionnel et le service côté serveur.
