@@ -8,6 +8,17 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Santé - Patients
+
+- [ ] Une organisation HEALTH_CARE crée un patient avec un identifiant généré et ne peut pas utiliser les routes Santé génériques pour contourner le module dédié.
+- [ ] La liste recherche par nom, téléphone ou identifiant et filtre par sexe, statut et période de création.
+- [ ] Le détail affiche les activités liées et un historique minimal sans exposer les données médicales sensibles aux lecteurs non autorisés.
+- [ ] Une autre organisation ne peut ni lire ni modifier le patient.
+- [ ] Les statuts Archivé et Décédé exigent un motif et créent un événement ainsi qu’un audit.
+- [ ] Un patient archivé n’est jamais supprimé brutalement et doit être réactivé avant modification.
+- [ ] Les actions rendez-vous, consultation, document et dossier médical ouvrent les formulaires existants avec le patient lié.
+- [ ] Le formulaire et le détail Patients restent plein écran et sans débordement sur mobile.
+
 ## Socle commun ERP
 
 - [ ] Une entreprise ne peut lire, créer ou modifier aucun objet commun d’une autre entreprise.

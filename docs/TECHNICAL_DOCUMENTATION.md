@@ -2342,3 +2342,9 @@ Les mutations vérifient session, secteur PHARMACY, membership actif, origine, r
 La migration additive `20260611143000_add_enterprise_core_kernel` ajoute `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`. Le service `lib/enterprise/enterprise-core.ts` centralise la création d’objets communs et leurs liens avec les entités sectorielles.
 
 Les routes `GET|POST /api/enterprise/[organizationId]/core` et `PATCH /api/enterprise/[organizationId]/core/[id]` appliquent session, membership actif, module et entitlement, mapping de rôle, visibilité par implication, origine, rate limit, Zod, références du même tenant, `AuditLog` et `ApiLog`. Les activités génériques et PHARMACY créent automatiquement un objet commun lié. Voir `docs/enterprise-core.md`.
+
+# Module Patients HEALTH_CARE
+
+La migration additive `20260612103000_healthcare_patients` ajoute `HealthPatient` et `HealthPatientEvent`, reprend les patients `EnterpriseSectorRecord` existants sans suppression et conserve `legacyRecordId` pour les relations actuelles avec les autres modules Santé. Après copie, elle retire les anciennes clés médicales sensibles du miroir générique pour empêcher leur exposition par les parcours historiques.
+
+Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/patients` et `GET|PATCH /api/enterprise/[organizationId]/healthcare/patients/[patientId]` appliquent session, secteur HEALTH_CARE, membership actif, module Patients activé, origine, rate limit, Zod, isolation `organizationId`, masquage des champs sensibles, audit et historique. Les routes Santé génériques refusent désormais toute mutation Patients.

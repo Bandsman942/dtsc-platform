@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Patients HEALTH_CARE dédié avec modèles `HealthPatient` et `HealthPatientEvent`, migration additive et reprise non destructive des patients génériques existants.
+- Ajout des routes privées Patients pour la liste filtrée, la création, le détail, la modification, l’archivage logique et les changements de statut audités.
+- Ajout d’un workspace Patients premium avec recherche, filtres, pagination, skeleton, formulaire plein écran, détail, historique et liens vers rendez-vous, consultations, documents et dossier médical.
 - Ajout du noyau ERP transversal `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`, avec migration additive, isolation par entreprise, historique et liens sectoriels.
 - Ajout des routes privées et de l’espace frontend commun pour créer, rechercher, commenter et traiter les tâches, réunions, demandes, validations, documents, rapports, budgets, fournisseurs et achats communs.
 - Ajout des modules communs Validations et Notifications métier dans les modèles sectoriels et les organisations clientes existantes.
@@ -34,6 +37,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les données médicales de base des patients sont désormais masquées côté API et interface pour les lecteurs sans accès sensible ; les mutations génériques Santé refusent désormais de contourner le module Patients dédié.
+- Le miroir de compatibilité Patient ne conserve plus les données médicales sensibles ; la migration les reprend dans la table dédiée avant de nettoyer les anciennes clés génériques.
+- Les permissions Patients recommandées sont fusionnées sans perte dans les postes Santé officiels, et les nouveaux patients conservent une référence compatible avec les modules Santé existants.
 - Le tableau de bord Administration entreprise affiche désormais des compteurs réels de tâches ouvertes ou en retard, validations en attente, documents récents, budgets actifs et fournisseurs actifs.
 - Les demandes créées dans Activités entreprise et les activités PHARMACY génèrent désormais un objet commun lié, sans remplacer leur source métier spécialisée.
 - Les membres voient uniquement les objets communs qui les concernent, les responsables disposent d’une vue entreprise, et les invités restent limités à la lecture.

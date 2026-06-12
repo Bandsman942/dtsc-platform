@@ -58,6 +58,12 @@ const enterprisePharmacyLoader = read("lib/enterprise/enterprise-pharmacy-loader
 const enterpriseActivityPharmacyLoader = read("lib/enterprise/enterprise-activity-pharmacy-loader.ts");
 const enterpriseAdminApi = read("app/api/enterprise/[organizationId]/administration/route.ts");
 const enterpriseHealthcareApi = read("app/api/enterprise/[organizationId]/healthcare/route.ts");
+const enterpriseHealthcareRecordApi = read("app/api/enterprise/[organizationId]/healthcare/[recordId]/route.ts");
+const healthPatientsApi = read("app/api/enterprise/[organizationId]/healthcare/patients/route.ts");
+const healthPatientApi = read("app/api/enterprise/[organizationId]/healthcare/patients/[patientId]/route.ts");
+const healthPatientsWorkspace = read("components/enterprise/health-patients-workspace.tsx");
+const healthPatientsService = read("lib/health-patients.ts");
+const healthPatientAccess = read("lib/health-patient-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -286,6 +292,30 @@ check(
   "données Santé non chargées hors HEALTH_CARE",
   containsAll(enterpriseHealthcareLoader, ['sectorCode !== HEALTHCARE_SECTOR_CODE', "return [];"])
     && containsAll(enterpriseActivityHealthcareLoader, ['sectorCode !== HEALTHCARE_SECTOR_CODE', "return [];"])
+);
+
+check(
+  "HEALTH_CARE Patients: modèles dédiés, historique et isolation tenant",
+  containsAll(prismaSchema, ["model HealthPatient", "model HealthPatientEvent", "@@unique([organizationId, patientNumber])", "@@index([organizationId, patientId, createdAt])"])
+    && containsAll(healthPatientsService, ["createHealthPatient", "updateHealthPatient", "maskHealthPatientSensitive", "legacyRecordId", "prisma.$transaction"])
+    && !healthPatientsService.includes("allergies: nil(data.knownAllergies)")
+);
+
+check(
+  "HEALTH_CARE Patients: routes privées, validées, auditées et sans contournement générique",
+  containsAll(healthPatientsApi, ["getHealthPatientAccess", "healthPatientCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthPatientApi, ["getHealthPatientAccess", "healthPatientUpdateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId", "actionReason"])
+    && containsAll(healthPatientAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"PATIENTS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "PATIENTS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "PATIENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Patients: liste, formulaires, détail, aides et mobile",
+  containsAll(healthPatientsWorkspace, ["ListControls", "ActionMenu", "CircleHelp", "Aucun patient enregistré pour cette entreprise.", "Créer un rendez-vous", "Créer une consultation", "Ajouter document", "Voir dossier médical", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+    && !healthPatientsWorkspace.includes("window.prompt")
+    && !healthPatientsWorkspace.includes("window.confirm")
+    && !healthPatientsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

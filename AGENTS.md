@@ -158,6 +158,7 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Tout menu, modale et formulaire ajouté doit rester mobile-first: conteneurs `min-w-0`, hauteur bornée, scroll interne si nécessaire, interactions tactiles et fermeture claire.
 - Masquer un bouton côté interface ne suffit jamais: chaque route sensible doit réappliquer RBAC, propriété ou appartenance côté serveur.
 - Les suivis transversaux des entreprises clientes doivent utiliser `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`, toujours filtrés par `organizationId`. Un module sectoriel conserve sa table métier comme source et crée un lien vers le socle commun sans dupliquer ni modifier directement sa donnée spécialisée.
+- Les patients HEALTH_CARE doivent utiliser `HealthPatient` et `HealthPatientEvent`, rester filtrés par `organizationId` et conserver `legacyRecordId` tant que les rendez-vous, consultations et autres modules Santé utilisent encore `EnterpriseSectorRecord.patientRecordId`. Les routes génériques Santé ne doivent pas créer, modifier ou archiver un patient en contournant les routes dédiées.
 
 ## Conversation, comments and content UX standards
 

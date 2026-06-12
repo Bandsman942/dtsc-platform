@@ -224,6 +224,9 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const data = parsed.data;
+  if (data.moduleCode === "PATIENTS") {
+    return NextResponse.json({ error: "Dedicated module", message: "Utilisez le formulaire Patients dédié pour enregistrer un patient." }, { status: 409 });
+  }
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(data.moduleCode), "write"))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à gérer ce sous-module santé." }, { status: 403 });

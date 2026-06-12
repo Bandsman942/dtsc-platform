@@ -125,6 +125,9 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (existingRecord.moduleCode === "PATIENTS") {
+    return NextResponse.json({ error: "Dedicated module", message: "Utilisez le module Patients dédié pour modifier ce patient." }, { status: 409 });
+  }
 
   const parsed = enterpriseHealthcareRecordUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -325,6 +328,9 @@ export async function DELETE(req: Request, { params }: Params) {
   if (!existingRecord) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (existingRecord.moduleCode === "PATIENTS") {
+    return NextResponse.json({ error: "Dedicated module", message: "Utilisez le module Patients dédié pour archiver ce patient." }, { status: 409 });
   }
 
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(existingRecord.moduleCode), "manage"))) {

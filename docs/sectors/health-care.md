@@ -22,6 +22,27 @@ L'itération `HEALTH_CARE` transforme le modèle sectoriel santé en espace expl
 - Paramètres santé: établissement, préfixes, services, rôles autorisés et verrouillage.
 - Rapports santé: période, service, résumé, difficultés et recommandations.
 
+## Module Patients dédié
+
+Le module Patients utilise désormais `HealthPatient` comme référentiel central et `HealthPatientEvent` pour son historique. Il fournit :
+
+- une liste avec recherche par nom, téléphone ou identifiant, filtres sexe/statut/période, pagination, badges et empty state professionnel ;
+- un formulaire plein écran structuré en identité, coordonnées, contact d’urgence, informations médicales de base et informations administratives ;
+- une vue détail avec résumé administratif, contact d’urgence, informations médicales autorisées, activités liées et historique ;
+- des actions réelles vers les formulaires Rendez-vous, Consultation, Document médical et Dossier médical lorsque ces modules sont actifs ;
+- un archivage logique et des changements de statut audités.
+
+Champs principaux : `patientNumber`, `fullName`, `sex`, `birthDate`, téléphones, email, adresse, contact d’urgence, profession, état civil, groupe sanguin, allergies, antécédents, traitements chroniques, notes médicales et administratives, assurance, source d’enregistrement, statut, créateur, modificateur et dates d’archivage ou décès.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/patients` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/patients/[patientId]`.
+
+Les routes vérifient la session, le membership actif, `sectorCode = HEALTH_CARE`, le module `PATIENTS`, `organizationId`, Zod, l’origine et le rate limit. Les données médicales sensibles sont masquées côté serveur pour les lecteurs non gestionnaires. Les statuts Archivé et Décédé exigent un motif. L’ancien endpoint Santé générique refuse toute mutation Patients.
+
+La migration `20260612103000_healthcare_patients` reprend les patients génériques existants sans suppression et conserve `legacyRecordId`. Cette référence permet aux rendez-vous, consultations, factures, documents, prises en charge, incidents et dossiers médicaux existants de rester reliés au patient pendant leur migration progressive vers des tables dédiées. Après la reprise, les anciennes clés médicales sensibles sont retirées du miroir générique, qui ne conserve que les données administratives nécessaires à la compatibilité.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -127,7 +148,7 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Cette itération utilise `EnterpriseSectorRecord` comme stockage sectoriel générique; des tables dédiées peuvent être ajoutées plus tard pour des besoins médicaux avancés.
+- Patients utilise désormais une table dédiée. Les autres modules Santé utilisent encore `EnterpriseSectorRecord` et leur relation au patient passe temporairement par `HealthPatient.legacyRecordId`.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.
-- Les permissions par poste santé sont persistées dans `EnterprisePosition.permissionsJson`; une matrice d'application plus fine peut encore être ajoutée pour les dossiers médicaux très sensibles.
+- Les permissions recommandées par poste santé sont persistées dans `EnterprisePosition.permissionsJson`, mais `OrganizationMember` n’est pas encore relié directement à `EnterprisePosition`. Le backend applique donc actuellement les droits effectifs selon le membership et le rôle entreprise, avec données sensibles réservées aux rôles gestionnaires.
 - L'acceptation/refus d'invitation côté invité utilise le statut `OrganizationMember`; l'interface d'acceptation peut être enrichie dans une prochaine itération si un écran dédié aux invitations est ajouté.

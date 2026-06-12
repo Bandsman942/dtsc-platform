@@ -50,6 +50,8 @@ const healthcarePermissions = [
   "health.patients.view",
   "health.patients.create",
   "health.patients.update",
+  "health.patients.archive",
+  "health.patients.view_sensitive",
   "health.appointments.view",
   "health.appointments.update",
   "health.consultations.view",
