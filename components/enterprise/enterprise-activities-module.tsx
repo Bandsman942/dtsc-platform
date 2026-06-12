@@ -14,6 +14,7 @@ import {
 import type { EnterpriseActivitiesDataset } from "@/lib/enterprise/enterprise-activities-types";
 import { PharmacyActivitiesWorkspace } from "@/components/enterprise/pharmacy-activities-workspace";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
+import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
 
 const healthActivityModules = new Set(["CONSULTATIONS"]);
 
@@ -29,6 +30,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
     <div className="min-w-0 space-y-5 overflow-x-hidden">
       <EnterpriseActivitiesDashboard organization={organization} />
       {organization.sectorCode === "HEALTH_CARE" && <HealthAppointmentsWorkspace organizationId={organization.id} activeModuleCodes={healthActivityModules} />}
+      {organization.sectorCode === "HEALTH_CARE" && <HealthConsultationsWorkspace organizationId={organization.id} />}
 
       <Accordion>
         <EnterpriseActivityBlocksPanel

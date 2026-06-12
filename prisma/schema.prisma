@@ -173,6 +173,13 @@ model User {
   assignedHealthAppointments            HealthAppointment[]               @relation("HealthAppointmentProfessional")
   cancelledHealthAppointments           HealthAppointment[]               @relation("HealthAppointmentCancelledBy")
   healthAppointmentEvents               HealthAppointmentEvent[]          @relation("HealthAppointmentEventActor")
+  createdHealthConsultations            HealthConsultation[]              @relation("HealthConsultationCreatedBy")
+  updatedHealthConsultations            HealthConsultation[]              @relation("HealthConsultationUpdatedBy")
+  assignedHealthConsultations           HealthConsultation[]              @relation("HealthConsultationProfessional")
+  closedHealthConsultations             HealthConsultation[]              @relation("HealthConsultationClosedBy")
+  reopenedHealthConsultations           HealthConsultation[]              @relation("HealthConsultationReopenedBy")
+  cancelledHealthConsultations          HealthConsultation[]              @relation("HealthConsultationCancelledBy")
+  healthConsultationEvents              HealthConsultationEvent[]         @relation("HealthConsultationEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -549,6 +556,8 @@ model Organization {
   healthPatientEvents        HealthPatientEvent[]
   healthAppointments         HealthAppointment[]
   healthAppointmentEvents    HealthAppointmentEvent[]
+  healthConsultations        HealthConsultation[]
+  healthConsultationEvents   HealthConsultationEvent[]
   pharmacyProducts           PharmacyProduct[]
   pharmacyBatches            PharmacyBatch[]
   pharmacyStockMovements     PharmacyStockMovement[]
@@ -796,23 +805,24 @@ model EnterprisePosition {
 }
 
 model EnterpriseDepartment {
-  id                 String                    @id @default(cuid())
-  organizationId     String
-  departmentCode     String
-  labelFr            String
-  labelEn            String
-  descriptionFr      String?
-  descriptionEn      String?
-  responsibleUserId  String?
-  isActive           Boolean                   @default(true)
-  sortOrder          Int                       @default(0)
-  sourceTemplateId   String?
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
-  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sourceTemplate     SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  positions          EnterprisePosition[]
-  healthAppointments HealthAppointment[]
+  id                  String                    @id @default(cuid())
+  organizationId      String
+  departmentCode      String
+  labelFr             String
+  labelEn             String
+  descriptionFr       String?
+  descriptionEn       String?
+  responsibleUserId   String?
+  isActive            Boolean                   @default(true)
+  sortOrder           Int                       @default(0)
+  sourceTemplateId    String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTemplate      SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  positions           EnterprisePosition[]
+  healthAppointments  HealthAppointment[]
+  healthConsultations HealthConsultation[]
 
   @@unique([organizationId, departmentCode])
   @@index([organizationId])
@@ -964,6 +974,7 @@ model HealthPatient {
   updatedBy                    User?                @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events                       HealthPatientEvent[]
   appointments                 HealthAppointment[]
+  consultations                HealthConsultation[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1029,9 +1040,11 @@ model HealthAppointment {
   updatedBy                User?                    @relation("HealthAppointmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   cancelledBy              User?                    @relation("HealthAppointmentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   events                   HealthAppointmentEvent[]
+  consultation             HealthConsultation?
 
   @@unique([organizationId, appointmentNumber])
   @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, id])
   @@index([organizationId, patientId, appointmentDate])
   @@index([organizationId, professionalId, appointmentDate])
   @@index([organizationId, departmentId, appointmentDate])
@@ -1055,6 +1068,121 @@ model HealthAppointmentEvent {
   actor          User              @relation("HealthAppointmentEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, appointmentId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model HealthConsultation {
+  id                         String                    @id @default(cuid())
+  organizationId             String
+  legacyRecordId             String?
+  consultationNumber         String
+  patientId                  String
+  appointmentId              String?                   @unique
+  professionalId             String
+  departmentId               String?
+  consultationDate           DateTime                  @default(now())
+  consultationType           String
+  priority                   String                    @default("NORMAL")
+  status                     String                    @default("DRAFT")
+  chiefComplaint             String
+  reason                     String
+  historyOfPresentIllness    String?
+  symptoms                   String?
+  symptomDuration            String?
+  aggravatingFactors         String?
+  relievingFactors           String?
+  relevantHistory            String?
+  temperature                Float?
+  systolicBp                 Int?
+  diastolicBp                Int?
+  heartRate                  Int?
+  respiratoryRate            Int?
+  oxygenSaturation           Float?
+  weight                     Float?
+  height                     Float?
+  bmi                        Float?
+  capillaryGlucose           Float?
+  painScore                  Int?
+  vitalsNotes                String?
+  generalCondition           String?
+  cardiovascularExam         String?
+  respiratoryExam            String?
+  abdominalExam              String?
+  neurologicalExam           String?
+  entExam                    String?
+  dermatologicalExam         String?
+  musculoskeletalExam        String?
+  otherExamNotes             String?
+  clinicalConclusion         String?
+  provisionalDiagnosis       String?
+  finalDiagnosis             String?
+  differentialDiagnoses      String?
+  diagnosisCertainty         String?
+  diagnosisCode              String?
+  diagnosisNotes             String?
+  managementPlan             String?
+  treatmentPlan              String?
+  prescriptionText           String?
+  requestedTests             String?
+  referralNotes              String?
+  hospitalizationRecommended Boolean                   @default(false)
+  sickLeaveRecommended       Boolean                   @default(false)
+  followUpRecommended        Boolean                   @default(false)
+  followUpDate               DateTime?
+  patientAdvice              String?
+  warningSigns               String?
+  lifestyleRecommendations   String?
+  returnInstructions         String?
+  createdById                String
+  updatedById                String?
+  closedById                 String?
+  closedAt                   DateTime?
+  reopenedById               String?
+  reopenedAt                 DateTime?
+  reopenReason               String?
+  cancelledById              String?
+  cancelledAt                DateTime?
+  cancellationReason         String?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  organization               Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient                    HealthPatient             @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  appointment                HealthAppointment?        @relation(fields: [organizationId, appointmentId], references: [organizationId, id], onDelete: Restrict)
+  professional               User                      @relation("HealthConsultationProfessional", fields: [professionalId], references: [id], onDelete: Restrict)
+  department                 EnterpriseDepartment?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy                  User                      @relation("HealthConsultationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                  User?                     @relation("HealthConsultationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  closedBy                   User?                     @relation("HealthConsultationClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  reopenedBy                 User?                     @relation("HealthConsultationReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+  cancelledBy                User?                     @relation("HealthConsultationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  events                     HealthConsultationEvent[]
+
+  @@unique([organizationId, consultationNumber])
+  @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, appointmentId])
+  @@index([organizationId, patientId, consultationDate])
+  @@index([organizationId, professionalId, consultationDate])
+  @@index([organizationId, appointmentId])
+  @@index([organizationId, status, priority, consultationDate])
+  @@index([createdById, createdAt])
+}
+
+model HealthConsultationEvent {
+  id             String             @id @default(cuid())
+  organizationId String
+  consultationId String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime           @default(now())
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  consultation   HealthConsultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  actor          User               @relation("HealthConsultationEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, consultationId, createdAt])
   @@index([actorUserId, createdAt])
 }
 

@@ -70,6 +70,12 @@ const healthAppointmentActionsApi = read("app/api/enterprise/[organizationId]/he
 const healthAppointmentsWorkspace = read("components/enterprise/health-appointments-workspace.tsx");
 const healthAppointmentsService = read("lib/health-appointments.ts");
 const healthAppointmentAccess = read("lib/health-appointment-access.ts");
+const healthConsultationsApi = read("app/api/enterprise/[organizationId]/healthcare/consultations/route.ts");
+const healthConsultationApi = read("app/api/enterprise/[organizationId]/healthcare/consultations/[consultationId]/route.ts");
+const healthConsultationActionsApi = read("app/api/enterprise/[organizationId]/healthcare/consultations/[consultationId]/actions/route.ts");
+const healthConsultationsWorkspace = read("components/enterprise/health-consultations-workspace.tsx");
+const healthConsultationsService = read("lib/health-consultations.ts");
+const healthConsultationAccess = read("lib/health-consultation-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -346,6 +352,30 @@ check(
     && !healthAppointmentsWorkspace.includes("window.prompt")
     && !healthAppointmentsWorkspace.includes("window.confirm")
     && !healthAppointmentsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Consultations: modèles dédiés, constantes, historique et isolation tenant",
+  containsAll(prismaSchema, ["model HealthConsultation", "model HealthConsultationEvent", "@@unique([organizationId, consultationNumber])", "@@unique([organizationId, appointmentId])", "@@index([organizationId, patientId, consultationDate])"])
+    && containsAll(healthConsultationsService, ["validateHealthConsultationReferences", "createHealthConsultation", "updateHealthConsultation", "transitionHealthConsultation", "maskHealthConsultationSensitive", "bmi(", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Consultations: routes privées, références tenant, transitions et audit",
+  containsAll(healthConsultationsApi, ["getHealthConsultationAccess", "healthConsultationCreateSchema.safeParse", "validateHealthConsultationReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthConsultationApi, ["getHealthConsultationAccess", "healthConsultationUpdateSchema.safeParse", "maskHealthConsultationSensitive", "writeAuditLog", "organizationId"])
+    && containsAll(healthConsultationActionsApi, ["healthConsultationActionSchema.safeParse", "transitionHealthConsultation", "writeAuditLog", "REASON_REQUIRED"])
+    && containsAll(healthConsultationAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"CONSULTATIONS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "CONSULTATIONS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "CONSULTATIONS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Consultations: liste, formulaire clinique, détail, actions, aides et mobile",
+  containsAll(healthConsultationsWorkspace, ["ListControls", "ActionMenu", "Constantes vitales", "Examen clinique", "Diagnostic", "Conduite à tenir", "Aucune consultation enregistrée.", "Clôturer", "Rouvrir", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !healthConsultationsWorkspace.includes("window.prompt")
+    && !healthConsultationsWorkspace.includes("window.confirm")
+    && !healthConsultationsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

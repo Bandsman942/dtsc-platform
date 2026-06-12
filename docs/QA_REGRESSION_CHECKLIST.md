@@ -31,6 +31,19 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Administration et Activités réutilisent le workspace dédié avec actions filtrées selon permissions.
 - [ ] Le formulaire et le détail Rendez-vous restent plein écran et sans débordement sur mobile.
 
+## Santé - Consultations
+
+- [ ] Une consultation référence obligatoirement un patient et un professionnel actifs du même `organizationId`.
+- [ ] Un rendez-vous lié appartient au même patient, à la même entreprise et ne peut générer qu’une consultation.
+- [ ] Les constantes vitales sont persistées et l’IMC est calculé côté serveur à partir du poids et de la taille.
+- [ ] Les données cliniques sensibles sont masquées côté API pour un lecteur administratif.
+- [ ] La liste filtre réellement par patient, période, professionnel, statut, priorité et type.
+- [ ] Les transitions interdites sont rejetées; clôture, réouverture et annulation sont historisées.
+- [ ] Une réouverture ou annulation exige un motif et une consultation clôturée n’est pas modifiable librement.
+- [ ] Les routes Santé génériques ne peuvent pas contourner le module Consultations dédié.
+- [ ] Administration, Activités et Patients ouvrent le workspace ou le formulaire Consultations dédié.
+- [ ] Le formulaire et le détail Consultations restent plein écran et sans débordement sur mobile.
+
 ## Socle commun ERP
 
 - [ ] Une entreprise ne peut lire, créer ou modifier aucun objet commun d’une autre entreprise.

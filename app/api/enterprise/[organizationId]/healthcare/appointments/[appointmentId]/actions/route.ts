@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const code = error instanceof Error ? error.message : "ACTION_FAILED";
-    const messages: Record<string, string> = { APPOINTMENT_NOT_FOUND: "Rendez-vous introuvable.", INVALID_TRANSITION: "Cette transition de statut n’est pas autorisée.", REASON_REQUIRED: "Un motif d’annulation est obligatoire.", ALREADY_CONVERTED: "Ce rendez-vous a déjà été converti en consultation." };
+    const messages: Record<string, string> = { APPOINTMENT_NOT_FOUND: "Rendez-vous introuvable.", INVALID_TRANSITION: "Cette transition de statut n’est pas autorisée.", REASON_REQUIRED: "Un motif d’annulation est obligatoire.", ALREADY_CONVERTED: "Ce rendez-vous a déjà été converti en consultation.", PROFESSIONAL_REQUIRED: "Assignez un professionnel avant de convertir ce rendez-vous en consultation." };
     return NextResponse.json({ error: code, message: messages[code] || "Action impossible sur ce rendez-vous." }, { status: code === "APPOINTMENT_NOT_FOUND" ? 404 : 409 });
   }
 }

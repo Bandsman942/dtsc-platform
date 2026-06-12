@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import { createHealthConsultation } from "@/lib/health-consultations";
 import { prisma } from "@/lib/prisma";
 
 export type HealthAppointmentInput = {
@@ -171,33 +172,25 @@ export async function transitionHealthAppointment(organizationId: string, appoin
   if (!nextStatus || !transitions[existing.status]?.includes(nextStatus)) throw new Error("INVALID_TRANSITION");
   if (action === "cancel" && !reason?.trim()) throw new Error("REASON_REQUIRED");
   if (action === "convert_consultation" && existing.convertedConsultationId) throw new Error("ALREADY_CONVERTED");
+  if (action === "convert_consultation") {
+    if (!existing.professionalId) throw new Error("PROFESSIONAL_REQUIRED");
+    const consultation = await createHealthConsultation(organizationId, actorUserId, {
+      patientId: existing.patientId,
+      appointmentId: existing.id,
+      professionalId: existing.professionalId,
+      departmentId: existing.departmentId || undefined,
+      consultationDate: new Date(),
+      consultationType: existing.appointmentType === "GENERAL_CONSULTATION" ? "GENERAL" : existing.appointmentType === "SPECIALIST_CONSULTATION" ? "SPECIALIST" : existing.appointmentType === "EMERGENCY" ? "EMERGENCY" : existing.appointmentType === "FOLLOW_UP" ? "FOLLOW_UP" : existing.appointmentType === "CHECKUP" ? "CHECKUP" : existing.appointmentType === "PRENATAL" ? "PRENATAL" : existing.appointmentType === "NURSING_CARE" ? "NURSING_CARE" : "OTHER",
+      priority: existing.priority as "LOW" | "NORMAL" | "HIGH" | "URGENT",
+      chiefComplaint: existing.reason,
+      reason: existing.description || existing.reason,
+      relevantHistory: existing.administrativeNotes || undefined,
+    });
+    const appointment = await prisma.healthAppointment.findUniqueOrThrow({ where: { id: existing.id } });
+    return { appointment, consultationId: consultation.id };
+  }
   return prisma.$transaction(async (tx) => {
     let consultationId = existing.convertedConsultationId;
-    if (action === "convert_consultation") {
-      const consultation = await tx.enterpriseSectorRecord.create({
-        data: {
-          organizationId,
-          sectorCode: "HEALTH_CARE",
-          moduleCode: "CONSULTATIONS",
-          recordType: "CONSULTATION",
-          title: `Consultation · ${existing.patient.fullName}`,
-          summary: existing.reason,
-          status: "IN_PROGRESS",
-          priority: existing.priority,
-          assignedToUserId: existing.professionalId,
-          createdById: actorUserId,
-          payloadJson: {
-            patientRecordId: existing.patient.legacyRecordId,
-            appointmentRecordId: existing.legacyRecordId,
-            appointmentDate: existing.appointmentDate.toISOString(),
-            appointmentType: existing.appointmentType,
-            service: existing.reason,
-            notes: existing.administrativeNotes,
-          },
-        },
-      });
-      consultationId = consultation.id;
-    }
     const now = new Date();
     const appointment = await tx.healthAppointment.update({
       where: { id: existing.id },

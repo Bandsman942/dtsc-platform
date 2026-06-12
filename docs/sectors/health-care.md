@@ -57,7 +57,7 @@ Statuts et transitions principales :
 - En cours → Réalisé, Annulé ou Converti ;
 - Réalisé → Converti si autorisé.
 
-Les rendez-vous réalisés, annulés et convertis sont verrouillés contre modification libre. L’annulation exige un motif. La conversion crée une consultation générique liée au patient et au rendez-vous, puis renseigne `convertedConsultationId`; une transaction et une contrainte unique empêchent les doublons.
+Les rendez-vous réalisés, annulés et convertis sont verrouillés contre modification libre. L’annulation exige un motif. La conversion crée une consultation dédiée liée au patient et au rendez-vous, puis renseigne `convertedConsultationId`; une transaction et une contrainte unique empêchent les doublons.
 
 Routes dédiées :
 
@@ -67,6 +67,32 @@ Routes dédiées :
 
 La migration `20260612153000_healthcare_appointments` reprend sans suppression les rendez-vous génériques qui référencent un patient valide, conserve `legacyRecordId` pour la compatibilité avec Consultations et fusionne les permissions recommandées dans les postes Santé officiels.
 
+## Module Consultations dédié
+
+Le module Consultations utilise `HealthConsultation` et `HealthConsultationEvent`. Il fournit une liste paginée avec recherche et filtres, un formulaire clinique plein écran, une vue détail protégée, un historique et des actions persistées. Le workspace est réutilisé dans Administration et Activités ; Patients peut l’ouvrir avec le patient prérempli.
+
+La consultation exige un `HealthPatient` actif et un professionnel membre actif du même `organizationId`. Un rendez-vous est optionnel, mais doit appartenir au même patient et ne peut produire qu’une seule consultation. La conversion Rendez-vous transfère le patient, le professionnel, le service, le motif, le type et la priorité.
+
+Les sections persistées couvrent le motif et l’histoire clinique, les constantes vitales, l’examen clinique, les diagnostics, la conduite à tenir, la prescription structurée, les examens demandés et les recommandations. L’IMC est calculé côté serveur lorsque poids et taille sont disponibles. Les alertes de plage limitent uniquement les incohérences de saisie et ne remplacent pas le jugement médical.
+
+Statuts et transitions :
+
+- Brouillon → En cours ou Annulée ;
+- En cours → En attente d’examens, Clôturée ou Annulée ;
+- En attente d’examens → En cours, À revoir ou Annulée ;
+- À revoir → En cours, Clôturée ou Annulée ;
+- Clôturée → En cours uniquement via réouverture motivée.
+
+Les consultations clôturées ou annulées sont verrouillées. Réouverture et annulation exigent un motif. Chaque modification et transition crée un événement; les actions sensibles créent aussi un audit. Sans permission sensible, l’API masque constantes, examen, diagnostics, prescriptions et recommandations.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/consultations` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/consultations/[consultationId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/consultations/[consultationId]/actions`.
+
+La consultation conserve un miroir administratif `legacyRecordId` pour préparer les liens avec Dossiers médicaux, Laboratoire, Pharmacie interne, Facturation médicale et Documents médicaux sans créer d’actions décoratives. Ces modules continueront d’utiliser ce lien jusqu’à leur migration dédiée.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -74,6 +100,7 @@ La migration `20260612153000_healthcare_appointments` reprend sans suppression l
 - `20260529113000_enterprise_department_responsible`: ajoute `EnterpriseDepartment.responsibleUserId` pour persister le responsable d'un département entreprise.
 - `20260612103000_healthcare_patients`: ajoute Patients et historique dédiés.
 - `20260612153000_healthcare_appointments`: ajoute Rendez-vous et historique dédiés.
+- `20260612190000_healthcare_consultations`: ajoute Consultations et historique dédiés.
 
 ## Stockage et API
 
@@ -174,7 +201,8 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients et Rendez-vous utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; Rendez-vous conserve temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Patients, Rendez-vous et Consultations utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.
 - Les disponibilités détaillées des professionnels ne sont pas encore reliées automatiquement aux créneaux Rendez-vous ; le planning affiche les créneaux persistés mais ne bloque pas encore les chevauchements.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.
 - Les permissions recommandées par poste santé sont persistées dans `EnterprisePosition.permissionsJson`, mais `OrganizationMember` n’est pas encore relié directement à `EnterprisePosition`. Le backend applique donc actuellement les droits effectifs selon le membership et le rôle entreprise, avec données sensibles réservées aux rôles gestionnaires.

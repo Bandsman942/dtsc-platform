@@ -32,6 +32,7 @@ import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { translate } from "@/lib/i18n";
 import { HealthPatientsWorkspace } from "@/components/enterprise/health-patients-workspace";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
+import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
 
 type HealthcareMember = {
   id: string;
@@ -430,6 +431,7 @@ export function HealthcareAdminWorkspace({
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [appointmentPatientRecordId, setAppointmentPatientRecordId] = useState("");
+  const [consultationPatientRecordId, setConsultationPatientRecordId] = useState("");
 
   const enabledSubmodules = useMemo(
     () => submodules.filter((item) => item.code === "HEALTH_DASHBOARD" || activeModuleCodes.has(item.code)),
@@ -474,6 +476,11 @@ export function HealthcareAdminWorkspace({
     setActiveModuleCode(moduleCode);
     if (moduleCode === "APPOINTMENTS") {
       setAppointmentPatientRecordId(patientRecordId || "");
+      setMessage("");
+      return;
+    }
+    if (moduleCode === "CONSULTATIONS") {
+      setConsultationPatientRecordId(patientRecordId || "");
       setMessage("");
       return;
     }
@@ -547,7 +554,7 @@ export function HealthcareAdminWorkspace({
     router.refresh();
   }
 
-  const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS";
+  const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS";
 
   return (
     <section className="space-y-4 rounded-[1.5rem] border border-cyan-300/25 bg-cyan-400/10 p-3 shadow-[0_20px_70px_rgba(0,23,54,0.16)] backdrop-blur-xl sm:p-5">
@@ -600,6 +607,8 @@ export function HealthcareAdminWorkspace({
         <HealthPatientsWorkspace organizationId={organizationId} activeModuleCodes={activeModuleCodes} onOpenRelated={openRelatedPatientModule} />
       ) : activeModuleCode === "APPOINTMENTS" ? (
         <HealthAppointmentsWorkspace organizationId={organizationId} initialPatientLegacyRecordId={appointmentPatientRecordId} activeModuleCodes={activeModuleCodes} onOpenPatients={() => setActiveModuleCode("PATIENTS")} />
+      ) : activeModuleCode === "CONSULTATIONS" ? (
+        <HealthConsultationsWorkspace organizationId={organizationId} initialPatientLegacyRecordId={consultationPatientRecordId} onOpenPatients={() => setActiveModuleCode("PATIENTS")} />
       ) : (
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -722,7 +731,11 @@ function HealthcareDashboard({ records }: { records: EnterpriseSectorRecordItem[
       { label: "Patients absents", value: appointments.filter((record) => record.status === "NO_SHOW").length, hint: "Absences enregistrées", tone: "red" },
       { label: "Convertis en consultation", value: appointments.filter((record) => record.status === "CONVERTED").length, hint: "Parcours de soin", tone: "violet" },
       { label: "Consultations du jour", value: consultations.filter((record) => isToday(payloadText(record, "appointmentDate")) || isToday(record.createdAt)).length, hint: "Actes médicaux", tone: "violet" },
-      { label: "Consultations à clôturer", value: consultations.filter((record) => !["CLOSED", "CANCELLED"].includes(record.status)).length, hint: "Suivi médical", tone: "amber" },
+      { label: "Consultations en cours", value: consultations.filter((record) => record.status === "IN_PROGRESS").length, hint: "Prises en charge actives", tone: "violet" },
+      { label: "En attente d’examens", value: consultations.filter((record) => record.status === "PENDING_EXAMS").length, hint: "Résultats attendus", tone: "amber" },
+      { label: "Consultations à revoir", value: consultations.filter((record) => record.status === "REVIEW").length, hint: "Suivi clinique", tone: "amber" },
+      { label: "Consultations clôturées", value: consultations.filter((record) => record.status === "CLOSED").length, hint: "Actes finalisés", tone: "emerald" },
+      { label: "Consultations annulées", value: consultations.filter((record) => record.status === "CANCELLED").length, hint: "Annulations historisées", tone: "red" },
       { label: "Dossiers incomplets", value: medicalRecords.filter((record) => !record.summary || !payloadText(record, "medicalHistory")).length, hint: "Complétude dossier", tone: "amber" },
       { label: "Factures en attente", value: invoices.filter((record) => ["DRAFT", "ISSUED", "PARTIAL_PAID"].includes(record.status)).length, hint: "Recouvrement", tone: "blue" },
       { label: "Prises en charge en attente", value: coverages.filter((record) => ["DRAFT", "SUBMITTED", "WAITING"].includes(record.status)).length, hint: "Assurances", tone: "cyan" },

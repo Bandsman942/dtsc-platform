@@ -6,12 +6,17 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Consultations HEALTH_CARE dédié avec modèles `HealthConsultation` et `HealthConsultationEvent`, migration additive et reprise non destructive des consultations génériques valides.
+- Ajout des routes privées Consultations pour liste, création, détail, modification et transitions historisées de démarrage, attente examens, suivi, clôture, réouverture et annulation.
+- Ajout d’un workspace Consultations clinique responsive partagé entre Administration et Activités, avec constantes vitales, IMC, examen, diagnostic, prescription, recommandations et historique.
 - Ajout du module Rendez-vous HEALTH_CARE dédié avec modèles `HealthAppointment` et `HealthAppointmentEvent`, migration additive et reprise non destructive des rendez-vous génériques valides.
 - Ajout des routes privées Rendez-vous pour liste, planning, création, détail, modification et transitions historisées, dont la conversion idempotente en consultation.
 - Ajout d’un workspace Rendez-vous responsive partagé entre Administration et Activités, avec filtres, planning par jour, formulaires guidés, détails et actions métier réelles.
 
 ### Amélioré
 
+- La conversion Rendez-vous crée désormais une consultation dédiée idempotente et relie automatiquement le patient, le professionnel, le service et les informations utiles.
+- Les consultations clôturées ou annulées sont verrouillées côté serveur et les données cliniques sont masquées sans accès sensible.
 - Les rendez-vous exigent désormais un patient du même tenant et valident aussi le professionnel et le service côté serveur.
 - Le tableau de bord Santé expose des KPI réels de confirmation, attente, annulation, absence et conversion.
 - Les routes Santé génériques refusent désormais les mutations Rendez-vous afin d’empêcher le contournement des transitions dédiées.

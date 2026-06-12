@@ -125,8 +125,8 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS") {
-    return NextResponse.json({ error: "Dedicated module", message: `Utilisez le module ${existingRecord.moduleCode === "PATIENTS" ? "Patients" : "Rendez-vous"} dédié.` }, { status: 409 });
+  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS" || existingRecord.moduleCode === "CONSULTATIONS") {
+    return NextResponse.json({ error: "Dedicated module", message: `Utilisez le module ${existingRecord.moduleCode === "PATIENTS" ? "Patients" : existingRecord.moduleCode === "APPOINTMENTS" ? "Rendez-vous" : "Consultations"} dédié.` }, { status: 409 });
   }
 
   const parsed = enterpriseHealthcareRecordUpdateSchema.safeParse(await req.json().catch(() => null));
@@ -329,8 +329,8 @@ export async function DELETE(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS") {
-    return NextResponse.json({ error: "Dedicated module", message: `Utilisez le module ${existingRecord.moduleCode === "PATIENTS" ? "Patients" : "Rendez-vous"} dédié.` }, { status: 409 });
+  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS" || existingRecord.moduleCode === "CONSULTATIONS") {
+    return NextResponse.json({ error: "Dedicated module", message: `Utilisez le module ${existingRecord.moduleCode === "PATIENTS" ? "Patients" : existingRecord.moduleCode === "APPOINTMENTS" ? "Rendez-vous" : "Consultations"} dédié.` }, { status: 409 });
   }
 
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(existingRecord.moduleCode), "manage"))) {

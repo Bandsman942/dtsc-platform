@@ -2353,6 +2353,12 @@ Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/patients` et `G
 
 La migration additive `20260612153000_healthcare_appointments` ajoute `HealthAppointment` et `HealthAppointmentEvent`, reprend les rendez-vous génériques reliés à un patient valide et conserve leur miroir `EnterpriseSectorRecord` pour les relations actuelles avec Consultations.
 
+### Consultations Santé dédiées
+
+La migration additive `20260612190000_healthcare_consultations` ajoute `HealthConsultation` et `HealthConsultationEvent`, reprend les consultations génériques reliées à un patient et un professionnel valides et conserve un miroir `EnterpriseSectorRecord` administratif pour les modules Santé encore génériques.
+
+Les routes `/api/enterprise/[organizationId]/healthcare/consultations`, `/consultations/[consultationId]` et `/consultations/[consultationId]/actions` vérifient session, membership actif, module `CONSULTATIONS`, origine, rate limit, Zod, relations du même tenant et permissions. Les données cliniques sensibles sont masquées côté serveur sans permission. La conversion depuis Rendez-vous crée la consultation dédiée et met à jour `HealthAppointment.convertedConsultationId` dans une transaction idempotente.
+
 `lib/health-appointments.ts` centralise les références multi-tenant, la création et mise à jour transactionnelles, le verrouillage des statuts terminaux, les transitions autorisées et la conversion idempotente en consultation. Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/appointments`, `GET|PATCH /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]` et `POST /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/actions` appliquent session, module actif, origine, rate limit, Zod, RBAC, tenant, audit et historique.
 
 Le workspace `components/enterprise/health-appointments-workspace.tsx` est partagé entre Administration et Activités Santé. Il fournit liste, planning par jour, filtres, formulaires plein écran, détail, actions persistées et projections patient limitées aux données administratives nécessaires.
