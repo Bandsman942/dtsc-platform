@@ -8,6 +8,18 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Santé - Laboratoire
+
+- [ ] Une demande laboratoire exige un patient, un demandeur actif et au moins un examen du catalogue de la même organisation.
+- [ ] Une consultation liée appartient à la même organisation et au même patient.
+- [ ] Prélèvement, saisie, validation, correction, transmission et annulation vérifient leurs permissions côté API.
+- [ ] Un résultat validé ou transmis ne peut pas être modifié librement.
+- [ ] Une correction après validation exige un motif et crée un historique.
+- [ ] Les résultats sensibles sont masqués sans `health.laboratory.view_sensitive`.
+- [ ] Les résultats validés restent visibles depuis Consultation et Dossier médical selon les permissions.
+- [ ] Les demandes apparaissent dans l’activité liée du patient.
+- [ ] Liste, filtres, détail et formulaires Laboratoire restent utilisables sans débordement mobile.
+
 ## Santé - Équipe médicale
 
 - [ ] Seul un membre actif de l’organisation peut recevoir une affectation Santé.

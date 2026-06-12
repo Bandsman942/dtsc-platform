@@ -35,8 +35,11 @@ export async function GET(req: Request, { params }: Params) {
     events: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: { select: { name: true } } } },
   } });
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const consultations = await prisma.healthConsultation.findMany({ where: { organizationId, patientId: record.patientId }, orderBy: { consultationDate: "desc" }, take: 30, select: { id: true, consultationNumber: true, consultationDate: true, consultationType: true, status: true, priority: true, chiefComplaint: true, finalDiagnosis: true, professional: { select: { name: true } } } });
-  return NextResponse.json({ record, consultations, permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canManageStructuredItems: access.canManageStructuredItems, canManageConfidentialNotes: access.canManageConfidentialNotes } });
+  const [consultations,labRequests] = await Promise.all([
+    prisma.healthConsultation.findMany({ where: { organizationId, patientId: record.patientId }, orderBy: { consultationDate: "desc" }, take: 30, select: { id: true, consultationNumber: true, consultationDate: true, consultationType: true, status: true, priority: true, chiefComplaint: true, finalDiagnosis: true, professional: { select: { name: true } } } }),
+    prisma.healthLabRequest.findMany({where:{organizationId,patientId:record.patientId},orderBy:{requestedAt:"desc"},take:30,select:{id:true,labRequestNumber:true,testLabel:true,status:true,priority:true,requestedAt:true,abnormalityLevel:true,resultText:true,validatedAt:true}}),
+  ]);
+  return NextResponse.json({ record, consultations, labRequests, permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canManageStructuredItems: access.canManageStructuredItems, canManageConfidentialNotes: access.canManageConfidentialNotes } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

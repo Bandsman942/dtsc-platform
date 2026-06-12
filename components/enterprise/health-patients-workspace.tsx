@@ -27,7 +27,7 @@ type Form = Record<string, string | boolean>;
 const SEX = { FEMALE: "Féminin", MALE: "Masculin", OTHER: "Autre", NOT_SPECIFIED: "Non renseigné" };
 const STATUS = { ACTIVE: "Actif", INACTIVE: "Inactif", ARCHIVED: "Archivé", DECEASED: "Décédé" };
 const SOURCES = { RECEPTION: "Accueil", CONSULTATION: "Consultation", EMERGENCY: "Urgence", EXTERNAL_REFERRAL: "Référence externe", MEDICAL_CAMPAIGN: "Campagne médicale", OTHER: "Autre" };
-const MODULE_LABELS: Record<string, string> = { APPOINTMENTS: "Rendez-vous", CONSULTATIONS: "Consultations", MEDICAL_BILLING: "Factures", MEDICAL_DOCUMENTS: "Documents médicaux", INSURANCE_COVERAGE: "Prises en charge", QUALITY_INCIDENTS: "Incidents qualité", MEDICAL_RECORDS: "Dossier médical" };
+const MODULE_LABELS: Record<string, string> = { APPOINTMENTS: "Rendez-vous", CONSULTATIONS: "Consultations", LABORATORY: "Laboratoire", MEDICAL_BILLING: "Factures", MEDICAL_DOCUMENTS: "Documents médicaux", INSURANCE_COVERAGE: "Prises en charge", QUALITY_INCIDENTS: "Incidents qualité", MEDICAL_RECORDS: "Dossier médical" };
 const emptyForm = (): Form => ({ fullName: "", sex: "NOT_SPECIFIED", birthDate: "", phonePrimary: "", phoneSecondary: "", email: "", address: "", city: "", country: "RDC", emergencyContactName: "", emergencyContactRelationship: "", emergencyContactPhone: "", emergencyContactAddress: "", profession: "", maritalStatus: "", bloodGroup: "", knownAllergies: "", importantHistory: "", chronicTreatments: "", medicalNotes: "", administrativeNotes: "", insuranceKnown: false, insuranceReference: "", registrationSource: "RECEPTION", status: "ACTIVE", actionReason: "" });
 function formFromPatient(patient: Patient, forcedStatus?: string) {
   const form = emptyForm();

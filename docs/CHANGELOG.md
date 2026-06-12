@@ -6,6 +6,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Laboratoire HEALTH_CARE dédié avec catalogue d’examens, demandes multi-examens, prélèvements, saisie et validation des résultats, transmission au médecin et historique.
+- Ajout des routes privées Laboratoire et des intégrations réelles avec Patients, Consultations, Dossiers médicaux, Équipe médicale, Administration et Activités.
 - Ajout du module Équipe médicale HEALTH_CARE dédié avec affectations liées aux membres actifs, postes, services, spécialités, disponibilités, permissions et historique.
 - Ajout des routes privées Équipe médicale pour liste, tableau de bord, affectation, détail, modification, suspension, réactivation, archivage et création de spécialités.
 - Ajout d’un workspace Équipe médicale responsive partagé entre Administration et Activités.
@@ -21,6 +23,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les résultats laboratoire sensibles sont désormais masqués sans permission dédiée et les résultats validés sont verrouillés contre les modifications libres.
 - Les comboboxes et validations Rendez-vous et Consultations utilisent désormais uniquement les professionnels Santé actifs et disponibles.
 - L’accès aux détails et notes confidentielles des dossiers médicaux dépend désormais des permissions Santé persistées de l’affectation, pas du seul rôle administratif entreprise.
 - Une allergie grave ou potentiellement mortelle crée désormais automatiquement une alerte médicale active dans la même transaction.

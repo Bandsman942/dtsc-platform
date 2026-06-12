@@ -2378,3 +2378,11 @@ La migration additive `20260612233000_healthcare_staff` ajoute `HealthStaffAssig
 Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/staff` et `GET|PATCH /api/enterprise/[organizationId]/healthcare/staff/[staffId]` contrôlent session, secteur, module, membership, origine, rate limit, Zod, références tenantées, permissions et audit. `lib/health-staff.ts` centralise les validations, l’affectation, les transitions sensibles et la liste des professionnels assignables.
 
 Les services Rendez-vous et Consultations rejettent désormais un utilisateur sans affectation Santé active et disponible. L’accès sensible aux dossiers médicaux utilise les permissions de l’affectation active.
+
+### Laboratoire Santé dédié
+
+La migration additive `20260613013000_healthcare_laboratory` ajoute `HealthLabTestCatalog`, `HealthLabRequest`, `HealthLabRequestItem` et `HealthLabEvent`. Les relations composites avec Patient, Consultation, Dossier médical et Catalogue appliquent l’isolation `organizationId`; un catalogue initial limité et extensible est ajouté aux organisations HEALTH_CARE.
+
+Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/laboratory`, `GET|PATCH /laboratory/[requestId]` et `POST /laboratory/[requestId]/actions` appliquent session, module, membership, origine, rate limit, Zod, références tenantées, permissions métier et audit. Les actions de prélèvement, saisie, validation, correction, transmission, rejet et annulation utilisent des transitions contrôlées.
+
+`lib/health-laboratory.ts` centralise la création transactionnelle, les examens multiples, le miroir de compatibilité administratif, les validations multi-tenant et le verrouillage des résultats validés. Le workspace Laboratoire est partagé entre Administration et Activités; Patients, Consultations et Dossiers médicaux lisent les relations réelles sans dupliquer les résultats.

@@ -87,6 +87,12 @@ const healthStaffRecordApi = read("app/api/enterprise/[organizationId]/healthcar
 const healthStaffWorkspace = read("components/enterprise/health-staff-workspace.tsx");
 const healthStaffService = read("lib/health-staff.ts");
 const healthStaffAccess = read("lib/health-staff-access.ts");
+const healthLaboratoryApi = read("app/api/enterprise/[organizationId]/healthcare/laboratory/route.ts");
+const healthLaboratoryRecordApi = read("app/api/enterprise/[organizationId]/healthcare/laboratory/[requestId]/route.ts");
+const healthLaboratoryActionsApi = read("app/api/enterprise/[organizationId]/healthcare/laboratory/[requestId]/actions/route.ts");
+const healthLaboratoryWorkspace = read("components/enterprise/health-laboratory-workspace.tsx");
+const healthLaboratoryService = read("lib/health-laboratory.ts");
+const healthLaboratoryAccess = read("lib/health-laboratory-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -436,6 +442,29 @@ check(
     && !healthStaffWorkspace.includes("window.prompt")
     && !healthStaffWorkspace.includes("window.confirm")
     && !healthStaffWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Laboratoire: modèles dédiés, catalogue, workflow et isolation tenant",
+  containsAll(prismaSchema, ["model HealthLabTestCatalog", "model HealthLabRequest", "model HealthLabRequestItem", "model HealthLabEvent", "@@unique([organizationId, labRequestNumber])", "@@index([organizationId, status, priority, requestedAt])"])
+    && containsAll(healthLaboratoryService, ["validateHealthLabReferences", "createHealthLabRequest", "updateHealthLabRequest", "actionHealthLabRequest", "maskHealthLabSensitive", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Laboratoire: routes privées, permissions, transitions et audit",
+  containsAll(healthLaboratoryApi, ["getHealthLaboratoryAccess", "healthLabRequestCreateSchema.safeParse", "validateHealthLabReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthLaboratoryRecordApi, ["healthLabRequestUpdateSchema.safeParse", "updateHealthLabRequest", "isSameOriginRequest", "organizationId"])
+    && containsAll(healthLaboratoryActionsApi, ["healthLabActionSchema.safeParse", "actionHealthLabRequest", "canValidate", "canCorrect", "writeAuditLog"])
+    && containsAll(healthLaboratoryAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"LABORATORY"', "health.laboratory.view_sensitive"])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "LABORATORY"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Laboratoire: tableau de bord, demandes, prélèvements, résultats et mobile",
+  containsAll(healthLaboratoryWorkspace, ["ListControls", "ActionMenu", "Demandes du jour", "Prélèvements à faire", "Résultats validés", "Résultat critique", "Aucune demande laboratoire enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthLaboratoryWorkspace.includes("window.prompt")
+    && !healthLaboratoryWorkspace.includes("window.confirm")
+    && !healthLaboratoryWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

@@ -196,6 +196,17 @@ model User {
   suspendedHealthStaffAssignments       HealthStaffAssignment[]           @relation("HealthStaffSuspendedBy")
   archivedHealthStaffAssignments        HealthStaffAssignment[]           @relation("HealthStaffArchivedBy")
   healthStaffEvents                     HealthStaffEvent[]                @relation("HealthStaffEventActor")
+  requestedHealthLabRequests            HealthLabRequest[]                @relation("HealthLabRequestedBy")
+  assignedHealthLabRequests             HealthLabRequest[]                @relation("HealthLabAssignedStaff")
+  sampledHealthLabRequests              HealthLabRequest[]                @relation("HealthLabSampledBy")
+  enteredHealthLabResults               HealthLabRequest[]                @relation("HealthLabResultEnteredBy")
+  validatedHealthLabResults             HealthLabRequest[]                @relation("HealthLabValidatedBy")
+  cancelledHealthLabRequests            HealthLabRequest[]                @relation("HealthLabCancelledBy")
+  createdHealthLabRequests              HealthLabRequest[]                @relation("HealthLabCreatedBy")
+  updatedHealthLabRequests              HealthLabRequest[]                @relation("HealthLabUpdatedBy")
+  createdHealthLabTests                 HealthLabTestCatalog[]            @relation("HealthLabTestCreatedBy")
+  updatedHealthLabTests                 HealthLabTestCatalog[]            @relation("HealthLabTestUpdatedBy")
+  healthLabEvents                       HealthLabEvent[]                  @relation("HealthLabEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -584,6 +595,10 @@ model Organization {
   healthSpecialties          HealthSpecialty[]
   healthStaffAssignments     HealthStaffAssignment[]
   healthStaffEvents          HealthStaffEvent[]
+  healthLabTests             HealthLabTestCatalog[]
+  healthLabRequests          HealthLabRequest[]
+  healthLabRequestItems      HealthLabRequestItem[]
+  healthLabEvents            HealthLabEvent[]
   pharmacyProducts           PharmacyProduct[]
   pharmacyBatches            PharmacyBatch[]
   pharmacyStockMovements     PharmacyStockMovement[]
@@ -1011,6 +1026,7 @@ model HealthPatient {
   currentTreatments            HealthCurrentTreatment[]
   medicalAlerts                HealthMedicalAlert[]
   confidentialNotes            HealthConfidentialNote[]
+  labRequests                  HealthLabRequest[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1192,10 +1208,12 @@ model HealthConsultation {
   reopenedBy                 User?                     @relation("HealthConsultationReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
   cancelledBy                User?                     @relation("HealthConsultationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   events                     HealthConsultationEvent[]
+  labRequests                HealthLabRequest[]
 
   @@unique([organizationId, consultationNumber])
   @@unique([organizationId, legacyRecordId])
   @@unique([organizationId, appointmentId])
+  @@unique([organizationId, id])
   @@index([organizationId, patientId, consultationDate])
   @@index([organizationId, professionalId, consultationDate])
   @@index([organizationId, appointmentId])
@@ -1256,6 +1274,7 @@ model HealthMedicalRecord {
   alerts                   HealthMedicalAlert[]
   confidentialNotes        HealthConfidentialNote[]
   events                   HealthMedicalRecordEvent[]
+  labRequests              HealthLabRequest[]
 
   @@unique([organizationId, recordNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1484,6 +1503,150 @@ model HealthStaffEvent {
   actor             User                  @relation("HealthStaffEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, staffAssignmentId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model HealthLabTestCatalog {
+  id             String                 @id @default(cuid())
+  organizationId String
+  code           String
+  labelFr        String
+  labelEn        String?
+  category       String
+  sampleType     String
+  defaultUnit    String?
+  referenceRange String?
+  description    String?
+  isGlobal       Boolean                @default(false)
+  isActive       Boolean                @default(true)
+  sortOrder      Int                    @default(0)
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User?                  @relation("HealthLabTestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy      User?                  @relation("HealthLabTestUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  mainRequests   HealthLabRequest[]
+  requestItems   HealthLabRequestItem[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, isActive, category, sortOrder])
+}
+
+model HealthLabRequest {
+  id                    String                 @id @default(cuid())
+  organizationId        String
+  legacyRecordId        String?
+  labRequestNumber      String
+  patientId             String
+  consultationId        String?
+  medicalRecordId       String?
+  requestedById         String
+  assignedLabStaffId    String?
+  mainTestId            String?
+  testLabel             String
+  clinicalIndication    String?
+  medicalNotes          String?
+  sampleType            String?
+  priority              String                 @default("ROUTINE")
+  status                String                 @default("REQUESTED")
+  confidentialityLevel  String                 @default("MEDICAL_STANDARD")
+  requestedAt           DateTime               @default(now())
+  expectedSampleAt      DateTime?
+  sampledAt             DateTime?
+  sampledById           String?
+  sampleQuality         String?
+  sampleNotes           String?
+  resultText            String?
+  resultValuesJson      Json?
+  resultUnit            String?
+  referenceRange        String?
+  resultInterpretation  String?
+  abnormalityLevel      String?
+  resultFileUrl         String?
+  resultEnteredById     String?
+  resultEnteredAt       DateTime?
+  validatedById         String?
+  validatedAt           DateTime?
+  transmittedToDoctorAt DateTime?
+  cancelledById         String?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+  correctionReason      String?
+  internalNotes         String?
+  laboratoryNotes       String?
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient               HealthPatient          @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  consultation          HealthConsultation?    @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
+  medicalRecord         HealthMedicalRecord?   @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Restrict)
+  requestedBy           User                   @relation("HealthLabRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  assignedLabStaff      User?                  @relation("HealthLabAssignedStaff", fields: [assignedLabStaffId], references: [id], onDelete: SetNull)
+  mainTest              HealthLabTestCatalog?  @relation(fields: [organizationId, mainTestId], references: [organizationId, id], onDelete: Restrict)
+  sampledBy             User?                  @relation("HealthLabSampledBy", fields: [sampledById], references: [id], onDelete: SetNull)
+  resultEnteredBy       User?                  @relation("HealthLabResultEnteredBy", fields: [resultEnteredById], references: [id], onDelete: SetNull)
+  validatedBy           User?                  @relation("HealthLabValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
+  cancelledBy           User?                  @relation("HealthLabCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdBy             User                   @relation("HealthLabCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             User?                  @relation("HealthLabUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  items                 HealthLabRequestItem[]
+  events                HealthLabEvent[]
+
+  @@unique([organizationId, labRequestNumber])
+  @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, id])
+  @@index([organizationId, patientId, requestedAt])
+  @@index([organizationId, consultationId])
+  @@index([organizationId, requestedById, requestedAt])
+  @@index([organizationId, status, priority, requestedAt])
+  @@index([organizationId, validatedAt])
+}
+
+model HealthLabRequestItem {
+  id               String                @id @default(cuid())
+  organizationId   String
+  labRequestId     String
+  testCatalogId    String?
+  testLabel        String
+  sampleType       String?
+  status           String                @default("REQUESTED")
+  resultText       String?
+  resultValuesJson Json?
+  unit             String?
+  referenceRange   String?
+  interpretation   String?
+  abnormalityLevel String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  labRequest       HealthLabRequest      @relation(fields: [organizationId, labRequestId], references: [organizationId, id], onDelete: Cascade)
+  testCatalog      HealthLabTestCatalog? @relation(fields: [organizationId, testCatalogId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, labRequestId, status])
+  @@index([organizationId, testCatalogId])
+}
+
+model HealthLabEvent {
+  id             String           @id @default(cuid())
+  organizationId String
+  labRequestId   String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  labRequest     HealthLabRequest @relation(fields: [organizationId, labRequestId], references: [organizationId, id], onDelete: Cascade)
+  actor          User             @relation("HealthLabEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, labRequestId, createdAt])
   @@index([actorUserId, createdAt])
 }
 

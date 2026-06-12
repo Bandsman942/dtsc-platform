@@ -124,6 +124,24 @@ Routes dédiées :
 
 Rendez-vous et Consultations utilisent désormais les affectations Santé actives et disponibles pour leurs comboboxes et leurs validations serveur. Consultations limite en plus l’assignation aux postes cliniques compatibles. Dossiers médicaux vérifie les permissions `health.medical_records.view_sensitive` et `health.medical_records.confidential_notes` de l’affectation active.
 
+## Module Laboratoire dédié
+
+Le module Laboratoire utilise `HealthLabRequest`, `HealthLabRequestItem`, `HealthLabTestCatalog` et `HealthLabEvent`. Chaque demande appartient à une organisation et à un patient, peut être reliée à une consultation et au dossier médical existant, référence un demandeur médical actif, un examen principal et une liste d’examens du catalogue.
+
+Workflow persistant : `Demandé` → `En attente de prélèvement` → `Prélèvement effectué` → `En analyse` → `En attente de validation` → `Validé` → `Transmis au médecin`. Une demande active peut être annulée; un prélèvement non conforme retourne en attente; un résultat validé nécessite la permission de correction et un motif pour revenir en attente de validation.
+
+Le catalogue initial reste volontairement limité et extensible : NFS, glycémie, créatinine, urée, CRP, goutte épaisse, test rapide paludisme, bandelette urinaire, ECBU, coprologie, test rapide VIH, HBsAg, groupe sanguin et autre examen. Chaque entreprise Santé peut ajouter ses propres examens avec catégorie, prélèvement, unité et valeurs de référence.
+
+Permissions : `health.laboratory.view`, `view_sensitive`, `create_request`, `update_request`, `cancel_request`, `collect_sample`, `enter_result`, `validate_result`, `correct_validated_result`, `transmit_result` et `manage_catalog`. Les résultats et interprétations sont masqués sans permission sensible.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/laboratory` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/laboratory/[requestId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/laboratory/[requestId]/actions`.
+
+Patients affiche l’activité laboratoire liée. Consultations affiche ses demandes et résultats accessibles. Dossiers médicaux lit les demandes du patient directement depuis les tables Laboratoire. Facturation et Documents médicaux restent des liens futurs : aucun bouton décoratif ni fausse facture n’est exposé.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -134,6 +152,7 @@ Rendez-vous et Consultations utilisent désormais les affectations Santé active
 - `20260612190000_healthcare_consultations`: ajoute Consultations et historique dédiés.
 - `20260612223000_healthcare_medical_records`: ajoute Dossiers médicaux, éléments structurés, alertes, notes confidentielles et historique dédiés.
 - `20260612233000_healthcare_staff`: ajoute Équipe médicale, spécialités, affectations, historique, postes et services Santé recommandés.
+- `20260613013000_healthcare_laboratory`: ajoute Laboratoire, catalogue d’examens, demandes multi-examens, résultats et historique dédiés.
 
 ## Stockage et API
 
@@ -236,6 +255,7 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 - Patients, Rendez-vous, Consultations, Dossiers médicaux et Équipe médicale utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
 - Les disponibilités habituelles sont persistées dans l’affectation principale; la gestion détaillée de créneaux exceptionnels par jour reste une évolution future.
+- Le fichier de résultat, la facturation d’examens et l’export PDF ne sont pas exposés tant que leurs routes privées dédiées ne sont pas disponibles.
 - Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.
 - Les disponibilités détaillées des professionnels ne sont pas encore reliées automatiquement aux créneaux Rendez-vous ; le planning affiche les créneaux persistés mais ne bloque pas encore les chevauchements.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.

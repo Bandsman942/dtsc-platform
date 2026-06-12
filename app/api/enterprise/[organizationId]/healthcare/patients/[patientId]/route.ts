@@ -26,7 +26,7 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!patient) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const related = patient.legacyRecordId ? await prisma.enterpriseSectorRecord.findMany({
-    where: { organizationId, sectorCode: "HEALTH_CARE", moduleCode: { in: ["APPOINTMENTS", "CONSULTATIONS", "MEDICAL_BILLING", "MEDICAL_DOCUMENTS", "INSURANCE_COVERAGE", "QUALITY_INCIDENTS", "MEDICAL_RECORDS"] }, deletedAt: null, payloadJson: { path: ["patientRecordId"], equals: patient.legacyRecordId } },
+    where: { organizationId, sectorCode: "HEALTH_CARE", moduleCode: { in: ["APPOINTMENTS", "CONSULTATIONS", "LABORATORY", "MEDICAL_BILLING", "MEDICAL_DOCUMENTS", "INSURANCE_COVERAGE", "QUALITY_INCIDENTS", "MEDICAL_RECORDS"] }, deletedAt: null, payloadJson: { path: ["patientRecordId"], equals: patient.legacyRecordId } },
     orderBy: { updatedAt: "desc" }, take: 60,
     select: { id: true, moduleCode: true, title: true, summary: true, status: true, updatedAt: true },
   }) : [];

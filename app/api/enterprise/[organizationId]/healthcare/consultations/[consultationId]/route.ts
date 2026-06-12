@@ -22,6 +22,7 @@ export async function GET(req: Request, { params }: Params) {
     appointment: { select: { id: true, appointmentNumber: true, appointmentDate: true } }, professional: { select: { id: true, name: true } }, department: { select: { id: true, labelFr: true } },
     createdBy: { select: { name: true } }, updatedBy: { select: { name: true } }, closedBy: { select: { name: true } }, reopenedBy: { select: { name: true } }, cancelledBy: { select: { name: true } },
     events: { orderBy: { createdAt: "desc" }, take: 40, include: { actor: { select: { name: true } } } },
+    labRequests: { orderBy: { requestedAt: "desc" }, select: { id: true, labRequestNumber: true, testLabel: true, status: true, priority: true, requestedAt: true, abnormalityLevel: true, resultText: access.canViewSensitive, validatedAt: true } },
   } });
   if (!consultation) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "CONSULTATIONS" } });
