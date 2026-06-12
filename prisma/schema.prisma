@@ -190,6 +190,12 @@ model User {
   resolvedHealthMedicalAlerts           HealthMedicalAlert[]              @relation("HealthMedicalAlertResolvedBy")
   createdHealthConfidentialNotes        HealthConfidentialNote[]          @relation("HealthConfidentialNoteCreatedBy")
   healthMedicalRecordEvents             HealthMedicalRecordEvent[]        @relation("HealthMedicalRecordEventActor")
+  healthStaffAssignments                HealthStaffAssignment[]           @relation("HealthStaffUser")
+  createdHealthStaffAssignments         HealthStaffAssignment[]           @relation("HealthStaffCreatedBy")
+  updatedHealthStaffAssignments         HealthStaffAssignment[]           @relation("HealthStaffUpdatedBy")
+  suspendedHealthStaffAssignments       HealthStaffAssignment[]           @relation("HealthStaffSuspendedBy")
+  archivedHealthStaffAssignments        HealthStaffAssignment[]           @relation("HealthStaffArchivedBy")
+  healthStaffEvents                     HealthStaffEvent[]                @relation("HealthStaffEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -575,6 +581,9 @@ model Organization {
   healthMedicalAlerts        HealthMedicalAlert[]
   healthConfidentialNotes    HealthConfidentialNote[]
   healthMedicalRecordEvents  HealthMedicalRecordEvent[]
+  healthSpecialties          HealthSpecialty[]
+  healthStaffAssignments     HealthStaffAssignment[]
+  healthStaffEvents          HealthStaffEvent[]
   pharmacyProducts           PharmacyProduct[]
   pharmacyBatches            PharmacyBatch[]
   pharmacyStockMovements     PharmacyStockMovement[]
@@ -793,28 +802,30 @@ model EnterpriseAdminSection {
 }
 
 model EnterprisePosition {
-  id               String                  @id @default(cuid())
-  organizationId   String
-  sectorId         String?
-  positionCode     String
-  labelFr          String
-  labelEn          String
-  departmentId     String?
-  hierarchyLevel   Int                     @default(50)
-  descriptionFr    String?
-  descriptionEn    String?
-  permissionsJson  Json?
-  isActive         Boolean                 @default(true)
-  isKeyPosition    Boolean                 @default(false)
-  sourceTemplateId String?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
-  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sector           BusinessSector?         @relation(fields: [sectorId], references: [id], onDelete: SetNull)
-  department       EnterpriseDepartment?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  sourceTemplate   SectorTemplatePosition? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  sectorId               String?
+  positionCode           String
+  labelFr                String
+  labelEn                String
+  departmentId           String?
+  hierarchyLevel         Int                     @default(50)
+  descriptionFr          String?
+  descriptionEn          String?
+  permissionsJson        Json?
+  isActive               Boolean                 @default(true)
+  isKeyPosition          Boolean                 @default(false)
+  sourceTemplateId       String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sector                 BusinessSector?         @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  department             EnterpriseDepartment?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  sourceTemplate         SectorTemplatePosition? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  healthStaffAssignments HealthStaffAssignment[]
 
   @@unique([organizationId, positionCode])
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([sectorId])
   @@index([positionCode])
@@ -822,26 +833,28 @@ model EnterprisePosition {
 }
 
 model EnterpriseDepartment {
-  id                  String                    @id @default(cuid())
-  organizationId      String
-  departmentCode      String
-  labelFr             String
-  labelEn             String
-  descriptionFr       String?
-  descriptionEn       String?
-  responsibleUserId   String?
-  isActive            Boolean                   @default(true)
-  sortOrder           Int                       @default(0)
-  sourceTemplateId    String?
-  createdAt           DateTime                  @default(now())
-  updatedAt           DateTime                  @updatedAt
-  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sourceTemplate      SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  positions           EnterprisePosition[]
-  healthAppointments  HealthAppointment[]
-  healthConsultations HealthConsultation[]
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  departmentCode         String
+  labelFr                String
+  labelEn                String
+  descriptionFr          String?
+  descriptionEn          String?
+  responsibleUserId      String?
+  isActive               Boolean                   @default(true)
+  sortOrder              Int                       @default(0)
+  sourceTemplateId       String?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTemplate         SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  positions              EnterprisePosition[]
+  healthAppointments     HealthAppointment[]
+  healthConsultations    HealthConsultation[]
+  healthStaffAssignments HealthStaffAssignment[]
 
   @@unique([organizationId, departmentCode])
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([departmentCode])
   @@index([responsibleUserId])
@@ -1380,6 +1393,97 @@ model HealthMedicalRecordEvent {
   actor           User                @relation("HealthMedicalRecordEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, medicalRecordId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model HealthSpecialty {
+  id               String                  @id @default(cuid())
+  organizationId   String
+  code             String
+  labelFr          String
+  labelEn          String?
+  description      String?
+  isGlobal         Boolean                 @default(false)
+  isActive         Boolean                 @default(true)
+  sortOrder        Int                     @default(0)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffAssignments HealthStaffAssignment[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, isActive, sortOrder])
+}
+
+model HealthStaffAssignment {
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  organizationMemberId   String                  @unique
+  userId                 String
+  enterprisePositionId   String
+  enterpriseDepartmentId String
+  healthSpecialtyId      String?
+  supervisorStaffId      String?
+  professionalNumber     String?
+  professionalOrder      String?
+  experienceLevel        String?
+  competenceArea         String?
+  availabilityStatus     String                  @default("AVAILABLE")
+  usualWorkDays          Json?
+  usualStartTime         String?
+  usualEndTime           String?
+  dailyCapacity          Int?
+  status                 String                  @default("ACTIVE")
+  permissionsJson        Json?
+  notes                  String?
+  createdById            String
+  updatedById            String?
+  suspendedById          String?
+  suspendedAt            DateTime?
+  suspensionReason       String?
+  archivedById           String?
+  archivedAt             DateTime?
+  archiveReason          String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationMember     OrganizationMember      @relation(fields: [organizationMemberId], references: [id], onDelete: Restrict)
+  user                   User                    @relation("HealthStaffUser", fields: [userId], references: [id], onDelete: Restrict)
+  enterprisePosition     EnterprisePosition      @relation(fields: [organizationId, enterprisePositionId], references: [organizationId, id], onDelete: Restrict)
+  enterpriseDepartment   EnterpriseDepartment    @relation(fields: [organizationId, enterpriseDepartmentId], references: [organizationId, id], onDelete: Restrict)
+  healthSpecialty        HealthSpecialty?        @relation(fields: [organizationId, healthSpecialtyId], references: [organizationId, id], onDelete: Restrict)
+  supervisorStaff        HealthStaffAssignment?  @relation("HealthStaffSupervisor", fields: [supervisorStaffId], references: [id], onDelete: SetNull)
+  supervisedStaff        HealthStaffAssignment[] @relation("HealthStaffSupervisor")
+  createdBy              User                    @relation("HealthStaffCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy              User?                   @relation("HealthStaffUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  suspendedBy            User?                   @relation("HealthStaffSuspendedBy", fields: [suspendedById], references: [id], onDelete: SetNull)
+  archivedBy             User?                   @relation("HealthStaffArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  events                 HealthStaffEvent[]
+
+  @@unique([organizationId, organizationMemberId])
+  @@unique([organizationId, userId])
+  @@unique([organizationId, id])
+  @@index([organizationId, enterprisePositionId, status])
+  @@index([organizationId, enterpriseDepartmentId, status])
+  @@index([organizationId, healthSpecialtyId, status])
+  @@index([organizationId, availabilityStatus, status])
+}
+
+model HealthStaffEvent {
+  id                String                @id @default(cuid())
+  organizationId    String
+  staffAssignmentId String
+  eventType         String
+  summary           String
+  metadataJson      Json?
+  actorUserId       String
+  createdAt         DateTime              @default(now())
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffAssignment   HealthStaffAssignment @relation(fields: [staffAssignmentId], references: [id], onDelete: Cascade)
+  actor             User                  @relation("HealthStaffEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, staffAssignmentId, createdAt])
   @@index([actorUserId, createdAt])
 }
 
@@ -3467,18 +3571,19 @@ model PharmacyPharmacistAdviceRequest {
 }
 
 model OrganizationMember {
-  id             String       @id @default(cuid())
-  organizationId String
-  userId         String
-  role           String       @default("MEMBER")
-  status         String       @default("INVITED")
-  invitedBy      String?
-  joinedAt       DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  removedAt      DateTime?
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String                 @id @default(cuid())
+  organizationId        String
+  userId                String
+  role                  String                 @default("MEMBER")
+  status                String                 @default("INVITED")
+  invitedBy             String?
+  joinedAt              DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  removedAt             DateTime?
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  healthStaffAssignment HealthStaffAssignment?
 
   @@unique([organizationId, userId])
   @@index([userId, status])

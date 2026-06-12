@@ -125,7 +125,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS" || existingRecord.moduleCode === "CONSULTATIONS" || existingRecord.moduleCode === "MEDICAL_RECORDS") {
+  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS" || existingRecord.moduleCode === "CONSULTATIONS" || existingRecord.moduleCode === "MEDICAL_RECORDS" || existingRecord.moduleCode === "CARE_TEAM") {
     return NextResponse.json({ error: "Dedicated module", message: "Utilisez le module Santé dédié correspondant." }, { status: 409 });
   }
 
@@ -329,7 +329,7 @@ export async function DELETE(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS" || existingRecord.moduleCode === "CONSULTATIONS" || existingRecord.moduleCode === "MEDICAL_RECORDS") {
+  if (existingRecord.moduleCode === "PATIENTS" || existingRecord.moduleCode === "APPOINTMENTS" || existingRecord.moduleCode === "CONSULTATIONS" || existingRecord.moduleCode === "MEDICAL_RECORDS" || existingRecord.moduleCode === "CARE_TEAM") {
     return NextResponse.json({ error: "Dedicated module", message: "Utilisez le module Santé dédié correspondant." }, { status: 409 });
   }
 

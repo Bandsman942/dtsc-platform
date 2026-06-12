@@ -2370,3 +2370,11 @@ La migration additive `20260612223000_healthcare_medical_records` ajoute `Health
 Les routes `/api/enterprise/[organizationId]/healthcare/medical-records`, `/medical-records/[recordId]` et `/medical-records/[recordId]/items` appliquent session, secteur HEALTH_CARE, membership actif, module, origine, rate limit, Zod, tenant, permissions et audit. Le détail sensible est refusé sans permission médicale; les notes confidentielles ne sont chargées qu’avec la permission dédiée.
 
 `lib/health-medical-records.ts` centralise la création transactionnelle du dossier et de son miroir administratif, les transitions d’archivage, les éléments structurés et la création automatique d’une alerte pour une allergie grave. Le workspace responsive est partagé entre Administration et Activités et Patients peut l’ouvrir avec le patient prérempli.
+
+### Équipe médicale Santé dédiée
+
+La migration additive `20260612233000_healthcare_staff` ajoute `HealthStaffAssignment`, `HealthSpecialty` et `HealthStaffEvent`, ainsi que les index et clés étrangères tenantées vers postes et départements. Elle initialise les services, spécialités et postes Santé complémentaires sans supprimer les personnalisations existantes.
+
+Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/staff` et `GET|PATCH /api/enterprise/[organizationId]/healthcare/staff/[staffId]` contrôlent session, secteur, module, membership, origine, rate limit, Zod, références tenantées, permissions et audit. `lib/health-staff.ts` centralise les validations, l’affectation, les transitions sensibles et la liste des professionnels assignables.
+
+Les services Rendez-vous et Consultations rejettent désormais un utilisateur sans affectation Santé active et disponible. L’accès sensible aux dossiers médicaux utilise les permissions de l’affectation active.

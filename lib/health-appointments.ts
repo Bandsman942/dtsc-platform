@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { createHealthConsultation } from "@/lib/health-consultations";
 import { prisma } from "@/lib/prisma";
+import { validateAssignableHealthProfessional } from "@/lib/health-staff";
 
 export type HealthAppointmentInput = {
   patientId: string;
@@ -60,12 +61,12 @@ export async function validateHealthAppointmentReferences(organizationId: string
   const departmentId = data.departmentId;
   const [patient, professional, department] = await Promise.all([
     patientId ? prisma.healthPatient.findFirst({ where: { id: patientId, organizationId, status: { notIn: ["ARCHIVED", "DECEASED"] } }, select: { id: true, legacyRecordId: true, fullName: true } }) : null,
-    professionalId ? prisma.organizationMember.findFirst({ where: { organizationId, userId: professionalId, status: "ACTIVE", removedAt: null }, select: { userId: true } }) : null,
+    professionalId ? validateAssignableHealthProfessional(organizationId, professionalId) : null,
     departmentId ? prisma.enterpriseDepartment.findFirst({ where: { id: departmentId, organizationId, isActive: true }, select: { id: true } }) : null,
   ]);
   if (patientId && !patient) return { error: "Ce patient n’appartient pas à cette entreprise ou n’est plus actif." };
   if (patientId && !patient?.legacyRecordId) return { error: "Ce patient ne peut pas encore être relié aux autres modules Santé." };
-  if (professionalId && !professional) return { error: "Le professionnel sélectionné n’appartient pas à cette entreprise." };
+  if (professionalId && !professional) return { error: "Le professionnel sélectionné ne possède pas d’affectation Santé active ou n’est pas disponible." };
   if (departmentId && !department) return { error: "Le service sélectionné n’appartient pas à cette entreprise." };
   return { patient };
 }

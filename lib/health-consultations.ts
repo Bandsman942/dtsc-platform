@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { validateAssignableHealthProfessional } from "@/lib/health-staff";
 import type { healthConsultationCreateSchema } from "@/lib/health-consultation-validators";
 
 export type HealthConsultationInput = z.infer<typeof healthConsultationCreateSchema>;
@@ -41,7 +42,7 @@ export async function validateHealthConsultationReferences(organizationId: strin
   const [patient, appointment, professional, department] = await Promise.all([
     patientId ? prisma.healthPatient.findFirst({ where: { id: patientId, organizationId, status: { notIn: ["ARCHIVED", "DECEASED"] } }, select: { id: true, legacyRecordId: true, fullName: true } }) : null,
     appointmentId ? prisma.healthAppointment.findFirst({ where: { id: appointmentId, organizationId }, select: { id: true, patientId: true, legacyRecordId: true, convertedConsultationId: true, professionalId: true, departmentId: true, reason: true, appointmentType: true, priority: true, appointmentDate: true, administrativeNotes: true } }) : null,
-    professionalId ? prisma.organizationMember.findFirst({ where: { organizationId, userId: professionalId, status: "ACTIVE", removedAt: null }, select: { userId: true } }) : null,
+    professionalId ? validateAssignableHealthProfessional(organizationId, professionalId, true) : null,
     departmentId ? prisma.enterpriseDepartment.findFirst({ where: { id: departmentId, organizationId, isActive: true }, select: { id: true } }) : null,
   ]);
   if (!patient) return { error: "Patient introuvable ou non actif dans cette entreprise." };
@@ -49,7 +50,7 @@ export async function validateHealthConsultationReferences(organizationId: strin
   if (appointmentId && !appointment) return { error: "Le rendez-vous sélectionné n’appartient pas à cette entreprise." };
   if (appointment && appointment.patientId !== patient.id) return { error: "Le rendez-vous sélectionné ne concerne pas ce patient." };
   if (appointment?.convertedConsultationId) return { error: "Ce rendez-vous a déjà été converti en consultation." };
-  if (professionalId && !professional) return { error: "Le professionnel sélectionné n’appartient pas à cette entreprise." };
+  if (professionalId && !professional) return { error: "Le professionnel sélectionné ne possède pas d’affectation clinique active ou n’est pas disponible." };
   if (departmentId && !department) return { error: "Le service sélectionné n’appartient pas à cette entreprise." };
   return { patient, appointment };
 }

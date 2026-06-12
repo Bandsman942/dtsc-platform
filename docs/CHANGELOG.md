@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Équipe médicale HEALTH_CARE dédié avec affectations liées aux membres actifs, postes, services, spécialités, disponibilités, permissions et historique.
+- Ajout des routes privées Équipe médicale pour liste, tableau de bord, affectation, détail, modification, suspension, réactivation, archivage et création de spécialités.
+- Ajout d’un workspace Équipe médicale responsive partagé entre Administration et Activités.
 - Ajout du module Dossiers médicaux HEALTH_CARE dédié avec dossier principal unique par patient, antécédents, allergies, traitements, alertes, notes confidentielles et historique audité.
 - Ajout des routes privées Dossiers médicaux pour la liste, la création, le détail sensible, la mise à jour, l’archivage et les éléments médicaux structurés.
 - Ajout d’un workspace Dossiers médicaux responsive partagé entre Administration et Activités, relié aux patients et aux consultations dédiées.
@@ -18,6 +21,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les comboboxes et validations Rendez-vous et Consultations utilisent désormais uniquement les professionnels Santé actifs et disponibles.
+- L’accès aux détails et notes confidentielles des dossiers médicaux dépend désormais des permissions Santé persistées de l’affectation, pas du seul rôle administratif entreprise.
 - Une allergie grave ou potentiellement mortelle crée désormais automatiquement une alerte médicale active dans la même transaction.
 - Les notes confidentielles des dossiers médicaux sont exclues des réponses non sensibles et réservées aux utilisateurs autorisés.
 - Correction du lint Vercel `prefer-const` dans le service Rendez-vous afin de rétablir le déploiement de l’itération Consultations.

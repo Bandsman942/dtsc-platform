@@ -8,6 +8,19 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Santé - Équipe médicale
+
+- [ ] Seul un membre actif de l’organisation peut recevoir une affectation Santé.
+- [ ] Le poste, le service, la spécialité et le responsable appartiennent à la même organisation.
+- [ ] Un membre ne peut pas recevoir deux affectations Santé.
+- [ ] Suspension, réactivation, archivage et changements de permissions sont audités.
+- [ ] Les permissions Santé ne sont pas modifiables sans permission dédiée.
+- [ ] Rendez-vous ne propose que les professionnels Santé actifs et disponibles.
+- [ ] Consultations ne propose que les professionnels cliniques actifs et disponibles.
+- [ ] Un professionnel suspendu ou archivé est refusé côté serveur lors d’une nouvelle assignation.
+- [ ] Les notes confidentielles médicales exigent la permission Santé dédiée.
+- [ ] Liste, détail et formulaire Équipe médicale restent utilisables sans débordement mobile.
+
 ## Santé - Dossiers médicaux
 
 - [ ] Un patient ne peut posséder qu’un seul dossier médical principal, même après une nouvelle tentative de création.

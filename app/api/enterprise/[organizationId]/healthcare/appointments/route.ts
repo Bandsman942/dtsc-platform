@@ -7,6 +7,7 @@ import { createHealthAppointment, validateHealthAppointmentReferences } from "@/
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { listAssignableHealthStaff } from "@/lib/health-staff";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -38,11 +39,11 @@ export async function GET(req: Request, { params }: Params) {
       include: { patient: { select: { id: true, legacyRecordId: true, patientNumber: true, fullName: true, phonePrimary: true, sex: true, birthDate: true } }, professional: { select: { id: true, name: true } }, department: { select: { id: true, labelFr: true } }, createdBy: { select: { name: true } }, updatedBy: { select: { name: true } } },
     }),
     prisma.healthPatient.findMany({ where: { organizationId, status: { notIn: ["ARCHIVED", "DECEASED"] } }, orderBy: { fullName: "asc" }, select: { id: true, legacyRecordId: true, patientNumber: true, fullName: true, phonePrimary: true, sex: true, birthDate: true } }),
-    prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, orderBy: { user: { name: "asc" } }, select: { user: { select: { id: true, name: true } }, role: true } }),
+    listAssignableHealthStaff(organizationId, true),
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, orderBy: { labelFr: "asc" }, select: { id: true, labelFr: true } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "APPOINTMENTS" } });
-  return NextResponse.json({ appointments: appointments.map((item) => access.canViewSensitive ? item : { ...item, internalNotes: null }), patients, members: members.map((item) => ({ ...item.user, role: item.role })), departments, permissions: { canCreate: access.canCreate, canUpdate: access.canUpdate, canTransition: access.canTransition, canCancel: access.canCancel, canConvert: access.canConvert, canViewSensitive: access.canViewSensitive } });
+  return NextResponse.json({ appointments: appointments.map((item) => access.canViewSensitive ? item : { ...item, internalNotes: null }), patients, members: members.map((item) => ({ ...item.user, role: item.enterprisePosition.labelFr, availabilityStatus: item.availabilityStatus, department: item.enterpriseDepartment.labelFr, specialty: item.healthSpecialty?.labelFr || null })), departments, permissions: { canCreate: access.canCreate, canUpdate: access.canUpdate, canTransition: access.canTransition, canCancel: access.canCancel, canConvert: access.canConvert, canViewSensitive: access.canViewSensitive } });
 }
 
 export async function POST(req: Request, { params }: Params) {

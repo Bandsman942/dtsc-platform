@@ -109,6 +109,21 @@ Routes dédiées :
 
 Toutes les routes contrôlent session, membership actif, secteur et module, `organizationId`, origine, rate limit, Zod, permissions et audit. Les routes Santé génériques refusent désormais les mutations Dossiers médicaux.
 
+## Module Équipe médicale dédié
+
+Le module Équipe médicale utilise `HealthStaffAssignment`, `HealthSpecialty` et `HealthStaffEvent`. Une affectation relie obligatoirement un membre actif et son utilisateur à un poste Santé, un service de l’entreprise, une disponibilité, des permissions Santé et éventuellement une spécialité et un responsable professionnel. Un même membre ne peut avoir qu’une affectation Santé, qui peut être suspendue, archivée puis réactivée selon autorisation.
+
+Le workspace partagé entre Administration et Activités fournit un tableau de bord réel, recherche, filtres par poste/service/spécialité/statut, pagination, détail, activité liée, permissions lisibles et actions persistées. Les formulaires utilisent uniquement les membres, postes, services, spécialités et responsables du même `organizationId`.
+
+Postes complémentaires ajoutés aux organisations Santé existantes : médecin spécialiste, infirmier chef, responsable laboratoire, assistant pharmacien, archiviste médical, technicien biomédical et autre professionnel Santé. Les services médicaux recommandés et les spécialités initiales sont créés de manière additive.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/staff` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/staff/[staffId]`.
+
+Rendez-vous et Consultations utilisent désormais les affectations Santé actives et disponibles pour leurs comboboxes et leurs validations serveur. Consultations limite en plus l’assignation aux postes cliniques compatibles. Dossiers médicaux vérifie les permissions `health.medical_records.view_sensitive` et `health.medical_records.confidential_notes` de l’affectation active.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -118,6 +133,7 @@ Toutes les routes contrôlent session, membership actif, secteur et module, `org
 - `20260612153000_healthcare_appointments`: ajoute Rendez-vous et historique dédiés.
 - `20260612190000_healthcare_consultations`: ajoute Consultations et historique dédiés.
 - `20260612223000_healthcare_medical_records`: ajoute Dossiers médicaux, éléments structurés, alertes, notes confidentielles et historique dédiés.
+- `20260612233000_healthcare_staff`: ajoute Équipe médicale, spécialités, affectations, historique, postes et services Santé recommandés.
 
 ## Stockage et API
 
@@ -218,7 +234,8 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients, Rendez-vous, Consultations et Dossiers médicaux utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Patients, Rendez-vous, Consultations, Dossiers médicaux et Équipe médicale utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Les disponibilités habituelles sont persistées dans l’affectation principale; la gestion détaillée de créneaux exceptionnels par jour reste une évolution future.
 - Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.
 - Les disponibilités détaillées des professionnels ne sont pas encore reliées automatiquement aux créneaux Rendez-vous ; le planning affiche les créneaux persistés mais ne bloque pas encore les chevauchements.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.

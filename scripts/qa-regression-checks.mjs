@@ -82,6 +82,11 @@ const healthMedicalRecordItemsApi = read("app/api/enterprise/[organizationId]/he
 const healthMedicalRecordsWorkspace = read("components/enterprise/health-medical-records-workspace.tsx");
 const healthMedicalRecordsService = read("lib/health-medical-records.ts");
 const healthMedicalRecordAccess = read("lib/health-medical-record-access.ts");
+const healthStaffApi = read("app/api/enterprise/[organizationId]/healthcare/staff/route.ts");
+const healthStaffRecordApi = read("app/api/enterprise/[organizationId]/healthcare/staff/[staffId]/route.ts");
+const healthStaffWorkspace = read("components/enterprise/health-staff-workspace.tsx");
+const healthStaffService = read("lib/health-staff.ts");
+const healthStaffAccess = read("lib/health-staff-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -406,6 +411,31 @@ check(
     && !healthMedicalRecordsWorkspace.includes("window.prompt")
     && !healthMedicalRecordsWorkspace.includes("window.confirm")
     && !healthMedicalRecordsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Équipe médicale: modèles dédiés, membership, référentiels et isolation tenant",
+  containsAll(prismaSchema, ["model HealthStaffAssignment", "model HealthSpecialty", "model HealthStaffEvent", "@@unique([organizationId, organizationMemberId])", "@@index([organizationId, availabilityStatus, status])"])
+    && containsAll(healthStaffService, ["validateHealthStaffReferences", "createHealthStaffAssignment", "updateHealthStaffAssignment", "transitionHealthStaffAssignment", "validateAssignableHealthProfessional", "organizationMemberId", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Équipe médicale: routes privées, permissions, audit et intégrations assignables",
+  containsAll(healthStaffApi, ["getHealthStaffAccess", "healthStaffCreateSchema.safeParse", "validateHealthStaffReferences", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthStaffRecordApi, ["healthStaffActionSchema.safeParse", "canManagePermissions", "transitionHealthStaffAssignment", "writeAuditLog", "organizationId"])
+    && containsAll(healthStaffAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"CARE_TEAM"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "CARE_TEAM"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "CARE_TEAM"', '"Dedicated module"'])
+    && containsAll(healthAppointmentsService, ["validateAssignableHealthProfessional"])
+    && containsAll(healthConsultationsService, ["validateAssignableHealthProfessional"])
+);
+
+check(
+  "HEALTH_CARE Équipe médicale: tableau de bord, liste, détail, formulaires et mobile",
+  containsAll(healthStaffWorkspace, ["ListControls", "ActionMenu", "Professionnels actifs", "Permissions Santé", "Activité médicale liée", "Aucun professionnel santé enregistré", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthStaffWorkspace.includes("window.prompt")
+    && !healthStaffWorkspace.includes("window.confirm")
+    && !healthStaffWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(
