@@ -33,6 +33,7 @@ import { translate } from "@/lib/i18n";
 import { HealthPatientsWorkspace } from "@/components/enterprise/health-patients-workspace";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
 import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
+import { HealthMedicalRecordsWorkspace } from "@/components/enterprise/health-medical-records-workspace";
 
 type HealthcareMember = {
   id: string;
@@ -432,6 +433,7 @@ export function HealthcareAdminWorkspace({
   const [isSaving, setIsSaving] = useState(false);
   const [appointmentPatientRecordId, setAppointmentPatientRecordId] = useState("");
   const [consultationPatientRecordId, setConsultationPatientRecordId] = useState("");
+  const [medicalRecordPatientRecordId, setMedicalRecordPatientRecordId] = useState("");
 
   const enabledSubmodules = useMemo(
     () => submodules.filter((item) => item.code === "HEALTH_DASHBOARD" || activeModuleCodes.has(item.code)),
@@ -481,6 +483,11 @@ export function HealthcareAdminWorkspace({
     }
     if (moduleCode === "CONSULTATIONS") {
       setConsultationPatientRecordId(patientRecordId || "");
+      setMessage("");
+      return;
+    }
+    if (moduleCode === "MEDICAL_RECORDS") {
+      setMedicalRecordPatientRecordId(patientRecordId || "");
       setMessage("");
       return;
     }
@@ -554,7 +561,7 @@ export function HealthcareAdminWorkspace({
     router.refresh();
   }
 
-  const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS";
+  const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS" && activeModuleCode !== "MEDICAL_RECORDS";
 
   return (
     <section className="space-y-4 rounded-[1.5rem] border border-cyan-300/25 bg-cyan-400/10 p-3 shadow-[0_20px_70px_rgba(0,23,54,0.16)] backdrop-blur-xl sm:p-5">
@@ -609,6 +616,8 @@ export function HealthcareAdminWorkspace({
         <HealthAppointmentsWorkspace organizationId={organizationId} initialPatientLegacyRecordId={appointmentPatientRecordId} activeModuleCodes={activeModuleCodes} onOpenPatients={() => setActiveModuleCode("PATIENTS")} />
       ) : activeModuleCode === "CONSULTATIONS" ? (
         <HealthConsultationsWorkspace organizationId={organizationId} initialPatientLegacyRecordId={consultationPatientRecordId} onOpenPatients={() => setActiveModuleCode("PATIENTS")} />
+      ) : activeModuleCode === "MEDICAL_RECORDS" ? (
+        <HealthMedicalRecordsWorkspace organizationId={organizationId} initialPatientLegacyRecordId={medicalRecordPatientRecordId} />
       ) : (
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

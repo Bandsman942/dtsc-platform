@@ -6,6 +6,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Dossiers médicaux HEALTH_CARE dédié avec dossier principal unique par patient, antécédents, allergies, traitements, alertes, notes confidentielles et historique audité.
+- Ajout des routes privées Dossiers médicaux pour la liste, la création, le détail sensible, la mise à jour, l’archivage et les éléments médicaux structurés.
+- Ajout d’un workspace Dossiers médicaux responsive partagé entre Administration et Activités, relié aux patients et aux consultations dédiées.
 - Ajout du module Consultations HEALTH_CARE dédié avec modèles `HealthConsultation` et `HealthConsultationEvent`, migration additive et reprise non destructive des consultations génériques valides.
 - Ajout des routes privées Consultations pour liste, création, détail, modification et transitions historisées de démarrage, attente examens, suivi, clôture, réouverture et annulation.
 - Ajout d’un workspace Consultations clinique responsive partagé entre Administration et Activités, avec constantes vitales, IMC, examen, diagnostic, prescription, recommandations et historique.
@@ -15,6 +18,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Une allergie grave ou potentiellement mortelle crée désormais automatiquement une alerte médicale active dans la même transaction.
+- Les notes confidentielles des dossiers médicaux sont exclues des réponses non sensibles et réservées aux utilisateurs autorisés.
 - Correction du lint Vercel `prefer-const` dans le service Rendez-vous afin de rétablir le déploiement de l’itération Consultations.
 - La conversion Rendez-vous crée désormais une consultation dédiée idempotente et relie automatiquement le patient, le professionnel, le service et les informations utiles.
 - Les consultations clôturées ou annulées sont verrouillées côté serveur et les données cliniques sont masquées sans accès sensible.

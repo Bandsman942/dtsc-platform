@@ -76,6 +76,12 @@ const healthConsultationActionsApi = read("app/api/enterprise/[organizationId]/h
 const healthConsultationsWorkspace = read("components/enterprise/health-consultations-workspace.tsx");
 const healthConsultationsService = read("lib/health-consultations.ts");
 const healthConsultationAccess = read("lib/health-consultation-access.ts");
+const healthMedicalRecordsApi = read("app/api/enterprise/[organizationId]/healthcare/medical-records/route.ts");
+const healthMedicalRecordApi = read("app/api/enterprise/[organizationId]/healthcare/medical-records/[recordId]/route.ts");
+const healthMedicalRecordItemsApi = read("app/api/enterprise/[organizationId]/healthcare/medical-records/[recordId]/items/route.ts");
+const healthMedicalRecordsWorkspace = read("components/enterprise/health-medical-records-workspace.tsx");
+const healthMedicalRecordsService = read("lib/health-medical-records.ts");
+const healthMedicalRecordAccess = read("lib/health-medical-record-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -376,6 +382,30 @@ check(
     && !healthConsultationsWorkspace.includes("window.prompt")
     && !healthConsultationsWorkspace.includes("window.confirm")
     && !healthConsultationsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Dossiers médicaux: modèles dédiés, dossier unique, alertes et isolation tenant",
+  containsAll(prismaSchema, ["model HealthMedicalRecord", "model HealthMedicalHistoryItem", "model HealthAllergy", "model HealthCurrentTreatment", "model HealthMedicalAlert", "model HealthConfidentialNote", "model HealthMedicalRecordEvent", "@@unique([organizationId, patientId])"])
+    && containsAll(healthMedicalRecordsService, ["validateHealthMedicalRecordPatient", "createHealthMedicalRecord", "createHealthMedicalRecordItem", "transitionHealthMedicalRecord", "LIFE_THREATENING", "healthMedicalAlert.create", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Dossiers médicaux: routes privées, confidentialité, relations tenant et audit",
+  containsAll(healthMedicalRecordsApi, ["getHealthMedicalRecordAccess", "healthMedicalRecordCreateSchema.safeParse", "validateHealthMedicalRecordPatient", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthMedicalRecordApi, ["canViewSensitive", "confidentialNotes", "healthConsultation.findMany", "writeAuditLog", "organizationId"])
+    && containsAll(healthMedicalRecordItemsApi, ["canManageConfidentialNotes", "healthMedicalRecordItemSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog"])
+    && containsAll(healthMedicalRecordAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"HEALTH_CARE"', '"MEDICAL_RECORDS"'])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "MEDICAL_RECORDS"', '"Dedicated module"'])
+    && containsAll(enterpriseHealthcareRecordApi, ['existingRecord.moduleCode === "MEDICAL_RECORDS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Dossiers médicaux: liste, détail, formulaires, aides et mobile",
+  containsAll(healthMedicalRecordsWorkspace, ["ListControls", "ActionMenu", "Alertes médicales actives", "Consultations liées", "Notes confidentielles", "Aucun dossier médical principal", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-x-hidden"])
+    && !healthMedicalRecordsWorkspace.includes("window.prompt")
+    && !healthMedicalRecordsWorkspace.includes("window.confirm")
+    && !healthMedicalRecordsWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

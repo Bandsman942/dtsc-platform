@@ -2362,3 +2362,11 @@ Les routes `/api/enterprise/[organizationId]/healthcare/consultations`, `/consul
 `lib/health-appointments.ts` centralise les références multi-tenant, la création et mise à jour transactionnelles, le verrouillage des statuts terminaux, les transitions autorisées et la conversion idempotente en consultation. Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/appointments`, `GET|PATCH /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]` et `POST /api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/actions` appliquent session, module actif, origine, rate limit, Zod, RBAC, tenant, audit et historique.
 
 Le workspace `components/enterprise/health-appointments-workspace.tsx` est partagé entre Administration et Activités Santé. Il fournit liste, planning par jour, filtres, formulaires plein écran, détail, actions persistées et projections patient limitées aux données administratives nécessaires.
+
+### Dossiers médicaux Santé dédiés
+
+La migration additive `20260612223000_healthcare_medical_records` ajoute `HealthMedicalRecord`, `HealthMedicalHistoryItem`, `HealthAllergy`, `HealthCurrentTreatment`, `HealthMedicalAlert`, `HealthConfidentialNote` et `HealthMedicalRecordEvent`. Une contrainte unique garantit un dossier principal par patient et les clés composites protègent les relations dossier-patient par organisation.
+
+Les routes `/api/enterprise/[organizationId]/healthcare/medical-records`, `/medical-records/[recordId]` et `/medical-records/[recordId]/items` appliquent session, secteur HEALTH_CARE, membership actif, module, origine, rate limit, Zod, tenant, permissions et audit. Le détail sensible est refusé sans permission médicale; les notes confidentielles ne sont chargées qu’avec la permission dédiée.
+
+`lib/health-medical-records.ts` centralise la création transactionnelle du dossier et de son miroir administratif, les transitions d’archivage, les éléments structurés et la création automatique d’une alerte pour une allergie grave. Le workspace responsive est partagé entre Administration et Activités et Patients peut l’ouvrir avec le patient prérempli.

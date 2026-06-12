@@ -355,6 +355,7 @@ Conserver une hiérarchie visible pour:
 - Les paramètres métier PHARMACY doivent utiliser `PharmacySetting`, `PharmacyNumberingSequence`, `PharmacySettingsAuditLog` et `PharmacySettingsProfile`, rester isolés par `organizationId` et être appliqués côté serveur dans les modules concernés; ne jamais livrer un paramètre décoratif uniquement frontend.
 - Toute modification d'un paramètre PHARMACY critique doit exiger un motif, vérifier la permission dédiée et créer une entrée `PharmacySettingsAuditLog`. Les numéros de ventes, réceptions, caisse, paiements, factures, reçus, remboursements et incidents doivent être générés côté serveur par `PharmacyNumberingSequence`.
 - Dans le contexte d'une entreprise cliente, la navigation latérale doit afficher uniquement les modules du socle commun. Les modules sectoriels Santé, Pharmacie ou futurs secteurs restent regroupés dans leurs sous-modules dédiés de `Administration [entreprise]` afin d'éviter toute répétition.
+- Les dossiers médicaux Santé doivent utiliser `HealthMedicalRecord` et ses tables structurées, rester uniques par patient et strictement isolés par `organizationId`. Les notes confidentielles ne doivent jamais être incluses dans une réponse administrative non sensible; une allergie grave ou potentiellement mortelle doit créer une alerte médicale visible et auditée.
 
 ## Règles DTSC — Calendrier interne
 

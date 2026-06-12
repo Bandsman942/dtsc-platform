@@ -180,6 +180,16 @@ model User {
   reopenedHealthConsultations           HealthConsultation[]              @relation("HealthConsultationReopenedBy")
   cancelledHealthConsultations          HealthConsultation[]              @relation("HealthConsultationCancelledBy")
   healthConsultationEvents              HealthConsultationEvent[]         @relation("HealthConsultationEventActor")
+  createdHealthMedicalRecords           HealthMedicalRecord[]             @relation("HealthMedicalRecordCreatedBy")
+  updatedHealthMedicalRecords           HealthMedicalRecord[]             @relation("HealthMedicalRecordUpdatedBy")
+  archivedHealthMedicalRecords          HealthMedicalRecord[]             @relation("HealthMedicalRecordArchivedBy")
+  createdHealthMedicalHistoryItems      HealthMedicalHistoryItem[]        @relation("HealthMedicalHistoryItemCreatedBy")
+  createdHealthAllergies                HealthAllergy[]                   @relation("HealthAllergyCreatedBy")
+  createdHealthCurrentTreatments        HealthCurrentTreatment[]          @relation("HealthCurrentTreatmentCreatedBy")
+  createdHealthMedicalAlerts            HealthMedicalAlert[]              @relation("HealthMedicalAlertCreatedBy")
+  resolvedHealthMedicalAlerts           HealthMedicalAlert[]              @relation("HealthMedicalAlertResolvedBy")
+  createdHealthConfidentialNotes        HealthConfidentialNote[]          @relation("HealthConfidentialNoteCreatedBy")
+  healthMedicalRecordEvents             HealthMedicalRecordEvent[]        @relation("HealthMedicalRecordEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -558,6 +568,13 @@ model Organization {
   healthAppointmentEvents    HealthAppointmentEvent[]
   healthConsultations        HealthConsultation[]
   healthConsultationEvents   HealthConsultationEvent[]
+  healthMedicalRecords       HealthMedicalRecord[]
+  healthMedicalHistoryItems  HealthMedicalHistoryItem[]
+  healthAllergies            HealthAllergy[]
+  healthCurrentTreatments    HealthCurrentTreatment[]
+  healthMedicalAlerts        HealthMedicalAlert[]
+  healthConfidentialNotes    HealthConfidentialNote[]
+  healthMedicalRecordEvents  HealthMedicalRecordEvent[]
   pharmacyProducts           PharmacyProduct[]
   pharmacyBatches            PharmacyBatch[]
   pharmacyStockMovements     PharmacyStockMovement[]
@@ -934,7 +951,7 @@ model EnterpriseSectorRecord {
 }
 
 model HealthPatient {
-  id                           String               @id @default(cuid())
+  id                           String                     @id @default(cuid())
   organizationId               String
   legacyRecordId               String?
   patientNumber                String
@@ -959,22 +976,28 @@ model HealthPatient {
   chronicTreatments            String?
   medicalNotes                 String?
   administrativeNotes          String?
-  insuranceKnown               Boolean              @default(false)
+  insuranceKnown               Boolean                    @default(false)
   insuranceReference           String?
-  registrationSource           String               @default("RECEPTION")
-  status                       String               @default("ACTIVE")
+  registrationSource           String                     @default("RECEPTION")
+  status                       String                     @default("ACTIVE")
   createdById                  String
   updatedById                  String?
   archivedAt                   DateTime?
   deceasedAt                   DateTime?
-  createdAt                    DateTime             @default(now())
-  updatedAt                    DateTime             @updatedAt
-  organization                 Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy                    User                 @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy                    User?                @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
+  organization                 Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy                    User                       @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User?                      @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events                       HealthPatientEvent[]
   appointments                 HealthAppointment[]
   consultations                HealthConsultation[]
+  medicalRecord                HealthMedicalRecord?
+  medicalHistoryItems          HealthMedicalHistoryItem[]
+  allergies                    HealthAllergy[]
+  currentTreatments            HealthCurrentTreatment[]
+  medicalAlerts                HealthMedicalAlert[]
+  confidentialNotes            HealthConfidentialNote[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1183,6 +1206,180 @@ model HealthConsultationEvent {
   actor          User               @relation("HealthConsultationEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, consultationId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model HealthMedicalRecord {
+  id                       String                     @id @default(cuid())
+  organizationId           String
+  legacyRecordId           String?
+  patientId                String                     @unique
+  recordNumber             String
+  summary                  String?
+  activeProblems           String?
+  riskFactors              String?
+  importantHistorySummary  String?
+  mainAllergiesSummary     String?
+  chronicTreatmentsSummary String?
+  generalRecommendations   String?
+  followUpNotes            String?
+  status                   String                     @default("ACTIVE")
+  confidentialityLevel     String                     @default("MEDICAL_STANDARD")
+  createdById              String
+  updatedById              String?
+  archivedById             String?
+  archivedAt               DateTime?
+  archiveReason            String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient                  HealthPatient              @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  createdBy                User                       @relation("HealthMedicalRecordCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                User?                      @relation("HealthMedicalRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  archivedBy               User?                      @relation("HealthMedicalRecordArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  historyItems             HealthMedicalHistoryItem[]
+  allergies                HealthAllergy[]
+  currentTreatments        HealthCurrentTreatment[]
+  alerts                   HealthMedicalAlert[]
+  confidentialNotes        HealthConfidentialNote[]
+  events                   HealthMedicalRecordEvent[]
+
+  @@unique([organizationId, recordNumber])
+  @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, patientId])
+  @@unique([organizationId, id])
+  @@index([organizationId, status, updatedAt])
+}
+
+model HealthMedicalHistoryItem {
+  id              String              @id @default(cuid())
+  organizationId  String
+  medicalRecordId String
+  patientId       String
+  category        String
+  label           String
+  description     String?
+  occurredAt      DateTime?
+  status          String              @default("ACTIVE")
+  createdById     String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  medicalRecord   HealthMedicalRecord @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Cascade)
+  patient         HealthPatient       @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User                @relation("HealthMedicalHistoryItemCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, patientId, createdAt])
+  @@index([organizationId, medicalRecordId, status])
+}
+
+model HealthAllergy {
+  id              String              @id @default(cuid())
+  organizationId  String
+  medicalRecordId String
+  patientId       String
+  allergen        String
+  allergyType     String
+  reaction        String?
+  severity        String              @default("MODERATE")
+  status          String              @default("ACTIVE")
+  createdById     String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  medicalRecord   HealthMedicalRecord @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Cascade)
+  patient         HealthPatient       @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User                @relation("HealthAllergyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, patientId, severity])
+  @@index([organizationId, medicalRecordId, status])
+}
+
+model HealthCurrentTreatment {
+  id              String              @id @default(cuid())
+  organizationId  String
+  medicalRecordId String
+  patientId       String
+  medicationName  String
+  dosage          String?
+  frequency       String?
+  route           String?
+  indication      String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  status          String              @default("ACTIVE")
+  createdById     String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  medicalRecord   HealthMedicalRecord @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Cascade)
+  patient         HealthPatient       @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User                @relation("HealthCurrentTreatmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, patientId, status])
+  @@index([organizationId, medicalRecordId, createdAt])
+}
+
+model HealthMedicalAlert {
+  id              String              @id @default(cuid())
+  organizationId  String
+  medicalRecordId String
+  patientId       String
+  alertType       String
+  title           String
+  description     String?
+  severity        String              @default("HIGH")
+  status          String              @default("ACTIVE")
+  createdById     String
+  resolvedById    String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  medicalRecord   HealthMedicalRecord @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Cascade)
+  patient         HealthPatient       @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User                @relation("HealthMedicalAlertCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy      User?               @relation("HealthMedicalAlertResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, patientId, status, severity])
+  @@index([organizationId, medicalRecordId, createdAt])
+}
+
+model HealthConfidentialNote {
+  id              String              @id @default(cuid())
+  organizationId  String
+  medicalRecordId String
+  patientId       String
+  title           String
+  content         String
+  visibility      String              @default("MEDICAL_TEAM")
+  createdById     String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  medicalRecord   HealthMedicalRecord @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Cascade)
+  patient         HealthPatient       @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User                @relation("HealthConfidentialNoteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, patientId, createdAt])
+  @@index([organizationId, medicalRecordId, visibility])
+}
+
+model HealthMedicalRecordEvent {
+  id              String              @id @default(cuid())
+  organizationId  String
+  medicalRecordId String
+  eventType       String
+  summary         String
+  metadataJson    Json?
+  actorUserId     String
+  createdAt       DateTime            @default(now())
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  medicalRecord   HealthMedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+  actor           User                @relation("HealthMedicalRecordEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, medicalRecordId, createdAt])
   @@index([actorUserId, createdAt])
 }
 

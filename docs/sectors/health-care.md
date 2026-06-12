@@ -93,6 +93,22 @@ Routes dédiées :
 
 La consultation conserve un miroir administratif `legacyRecordId` pour préparer les liens avec Dossiers médicaux, Laboratoire, Pharmacie interne, Facturation médicale et Documents médicaux sans créer d’actions décoratives. Ces modules continueront d’utiliser ce lien jusqu’à leur migration dédiée.
 
+## Module Dossiers médicaux dédié
+
+Le module Dossiers médicaux utilise `HealthMedicalRecord` comme dossier principal unique par patient. Les antécédents, allergies, traitements actuels, alertes, notes confidentielles et événements utilisent des tables dédiées reliées au dossier et à `organizationId`.
+
+La liste fournit recherche, statut, pagination, badges d’alertes et résumé administratif limité. Le détail médical sensible affiche la synthèse, les éléments structurés, les alertes actives en premier, les consultations dédiées du patient et l’historique. Les formulaires et détails sont des dialogues hauts responsive; les actions sont regroupées dans des menus contextuels.
+
+Une allergie `SEVERE` ou `LIFE_THREATENING` crée automatiquement une `HealthMedicalAlert` active dans la même transaction. Les notes `HealthConfidentialNote` ne sont jamais chargées pour un utilisateur sans permission confidentielle. Les consultations liées sont lues depuis `HealthConsultation` et ne sont pas dupliquées.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/medical-records` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/medical-records/[recordId]` ;
+- `POST|PATCH /api/enterprise/[organizationId]/healthcare/medical-records/[recordId]/items`.
+
+Toutes les routes contrôlent session, membership actif, secteur et module, `organizationId`, origine, rate limit, Zod, permissions et audit. Les routes Santé génériques refusent désormais les mutations Dossiers médicaux.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -101,6 +117,7 @@ La consultation conserve un miroir administratif `legacyRecordId` pour préparer
 - `20260612103000_healthcare_patients`: ajoute Patients et historique dédiés.
 - `20260612153000_healthcare_appointments`: ajoute Rendez-vous et historique dédiés.
 - `20260612190000_healthcare_consultations`: ajoute Consultations et historique dédiés.
+- `20260612223000_healthcare_medical_records`: ajoute Dossiers médicaux, éléments structurés, alertes, notes confidentielles et historique dédiés.
 
 ## Stockage et API
 
@@ -201,7 +218,7 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients, Rendez-vous et Consultations utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Patients, Rendez-vous, Consultations et Dossiers médicaux utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
 - Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.
 - Les disponibilités détaillées des professionnels ne sont pas encore reliées automatiquement aux créneaux Rendez-vous ; le planning affiche les créneaux persistés mais ne bloque pas encore les chevauchements.
 - Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.

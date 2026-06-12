@@ -8,6 +8,17 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Santé - Dossiers médicaux
+
+- [ ] Un patient ne peut posséder qu’un seul dossier médical principal, même après une nouvelle tentative de création.
+- [ ] Une autre organisation ne peut ni lire ni modifier le dossier ou ses éléments structurés.
+- [ ] Un lecteur administratif non sensible ne reçoit ni synthèse clinique, ni éléments médicaux, ni notes confidentielles.
+- [ ] Une allergie grave ou potentiellement mortelle crée une alerte active dans la même transaction.
+- [ ] Les consultations liées proviennent de `HealthConsultation` et ne sont pas dupliquées.
+- [ ] Archivage, réactivation et ajouts structurés créent un audit ou un événement.
+- [ ] Administration, Activités et Patients ouvrent le workspace dédié, sans formulaire générique.
+- [ ] Les listes, détails et formulaires restent plein écran et sans débordement sur mobile.
+
 ## Santé - Patients
 
 - [ ] Une organisation HEALTH_CARE crée un patient avec un identifiant généré et ne peut pas utiliser les routes Santé génériques pour contourner le module dédié.
