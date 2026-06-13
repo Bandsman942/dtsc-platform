@@ -2329,6 +2329,112 @@ model HealthQualityIncidentEvent {
   @@index([organizationId, actorUserId, createdAt])
 }
 
+model HealthDocument {
+  id                           String                    @id @default(cuid())
+  organizationId               String
+  documentNumber               String
+  title                        String
+  description                  String?
+  documentType                 String
+  sourceModule                 String
+  confidentialityLevel         String                    @default("MEDICAL_STANDARD")
+  status                       String                    @default("DRAFT")
+  patientId                    String?
+  consultationId               String?
+  medicalRecordId              String?
+  labRequestId                 String?
+  invoiceId                    String?
+  coverageRequestId            String?
+  qualityIncidentId            String?
+  pharmacyDispensationId       String?
+  staffAssignmentId            String?
+  departmentId                 String?
+  documentDate                 DateTime?
+  expiresAt                    DateTime?
+  storageKey                   String?
+  originalFilename             String?
+  mimeType                     String?
+  fileSize                     Int?
+  checksum                     String?
+  currentVersionNumber         Int                       @default(0)
+  validationRequired           Boolean                   @default(false)
+  validatorUserId              String?
+  validatedById                String?
+  validatedAt                  DateTime?
+  validationComment            String?
+  rejectedById                 String?
+  rejectedAt                   DateTime?
+  rejectionReason              String?
+  restrictedAccess             Boolean                   @default(false)
+  restrictedAccessReason       String?
+  containsSensitiveMedicalData Boolean                   @default(false)
+  internalNotes                String?
+  visibleNotes                 String?
+  createdById                  String
+  updatedById                  String?
+  archivedById                 String?
+  archivedAt                   DateTime?
+  archiveReason                String?
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime                  @updatedAt
+  versions                     HealthDocumentVersion[]
+  accessLogs                   HealthDocumentAccessLog[]
+
+  @@unique([organizationId, documentNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, patientId, createdAt])
+  @@index([organizationId, consultationId])
+  @@index([organizationId, medicalRecordId])
+  @@index([organizationId, labRequestId])
+  @@index([organizationId, invoiceId])
+  @@index([organizationId, coverageRequestId])
+  @@index([organizationId, qualityIncidentId])
+  @@index([organizationId, documentType, status])
+  @@index([organizationId, sourceModule, confidentialityLevel])
+  @@index([organizationId, expiresAt])
+  @@index([organizationId, createdById, createdAt])
+}
+
+model HealthDocumentVersion {
+  id               String         @id @default(cuid())
+  organizationId   String
+  documentId       String
+  versionNumber    Int
+  storageKey       String
+  originalFilename String
+  mimeType         String
+  fileSize         Int
+  checksum         String
+  changeReason     String?
+  status           String         @default("ACTIVE")
+  uploadedById     String
+  uploadedAt       DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  document         HealthDocument @relation(fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, documentId, versionNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, documentId, uploadedAt])
+}
+
+model HealthDocumentAccessLog {
+  id             String         @id @default(cuid())
+  organizationId String
+  documentId     String
+  userId         String
+  action         String
+  accessResult   String         @default("ALLOWED")
+  reason         String?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime       @default(now())
+  document       HealthDocument @relation(fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, documentId, createdAt])
+  @@index([organizationId, userId, createdAt])
+}
+
 model EnterpriseCoreRecord {
   id               String                  @id @default(cuid())
   organizationId   String

@@ -116,6 +116,13 @@ const healthQualityActionApi = read("app/api/enterprise/[organizationId]/healthc
 const healthQualityWorkspace = read("components/enterprise/health-quality-workspace.tsx");
 const healthQualityService = read("lib/health-quality.ts");
 const healthQualityAccess = read("lib/health-quality-access.ts");
+const healthDocumentsApi = read("app/api/enterprise/[organizationId]/healthcare/documents/route.ts");
+const healthDocumentApi = read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/route.ts");
+const healthDocumentVersionsApi = read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/versions/route.ts");
+const healthDocumentDownloadApi = read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/download/route.ts");
+const healthDocumentsWorkspace = read("components/enterprise/health-documents-workspace.tsx");
+const healthDocumentsService = read("lib/health-documents.ts");
+const healthDocumentAccess = read("lib/health-document-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -573,6 +580,29 @@ check(
   containsAll(healthQualityWorkspace, ["Incidents qualité", "Incidents ouverts", "Actions en retard", "ListControls", "ActionMenu", "Nouveau signalement qualité", "Actions correctives et préventives", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
     && !healthQualityWorkspace.includes("window.prompt")
     && !healthQualityWorkspace.includes("window.confirm")
+);
+
+check(
+  "HEALTH_CARE Documents médicaux: modèles dédiés, versions, accès et isolation tenant",
+  containsAll(prismaSchema, ["model HealthDocument", "model HealthDocumentVersion", "model HealthDocumentAccessLog", "@@unique([organizationId, documentNumber])", "@@unique([organizationId, documentId, versionNumber])"])
+    && containsAll(healthDocumentsService, ["validateHealthDocumentRefs", "createHealthDocument", "addHealthDocumentVersion", "actionHealthDocument", "logHealthDocumentAccess", "PATIENT_MISMATCH", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Documents médicaux: routes privées, stockage, permissions et audit",
+  containsAll(healthDocumentsApi, ["getHealthDocumentAccess", "healthDocumentSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "isSupabaseStorageConfigured", "organizationId"])
+    && containsAll(healthDocumentApi, ["healthDocumentActionSchema.safeParse", "canReadHealthDocument", "writeAuditLog"])
+    && containsAll(healthDocumentVersionsApi, ["addHealthDocumentVersion", "canManageVersions", "isSupabaseStorageConfigured"])
+    && containsAll(healthDocumentDownloadApi, ["downloadHealthDocumentFromSupabase", "logHealthDocumentAccess", "Cache-Control", "private, no-store"])
+    && containsAll(healthDocumentAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"MEDICAL_DOCUMENTS"', "health.documents.view_restricted"])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "MEDICAL_DOCUMENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Documents médicaux: dashboard, fichiers, versions et mobile",
+  containsAll(healthDocumentsWorkspace, ["Documents médicaux", "Documents actifs", "Aucun fichier joint à ce document.", "ListControls", "ActionMenu", "Nouveau document médical", "Ajouter une nouvelle version", "Journal d’accès", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+    && !healthDocumentsWorkspace.includes("window.prompt")
+    && !healthDocumentsWorkspace.includes("window.confirm")
 );
 
 check(

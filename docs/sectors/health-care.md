@@ -214,6 +214,25 @@ Permissions : `health.quality.view`, `view_sensitive`, `create_incident`, `updat
 
 L’interface Administration fournit KPI réels, recherche, filtres, cartes mobiles, détail, historique et menus d’actions persistées. L’interface Activités réutilise le même workspace avec un périmètre limité à l’utilisateur. Le stockage privé des pièces jointes Santé n’est pas encore raccordé : aucun bouton d’upload fictif n’est affiché.
 
+## Documents médicaux dédiés
+
+Le module Documents médicaux utilise `HealthDocument`, `HealthDocumentVersion` et `HealthDocumentAccessLog`. Il centralise les documents liés aux patients, consultations, dossiers médicaux, demandes laboratoire, factures, prises en charge, incidents qualité, délivrances pharmacie, professionnels et services de la même entreprise.
+
+Les types contrôlés couvrent ordonnances, certificats, rapports, comptes rendus, résultats laboratoire/imagerie, consentements, documents assurance, factures, reçus, pièces patient et documents qualité. Les niveaux de confidentialité sont `INTERNAL_PUBLIC`, `HEALTH_ADMINISTRATIVE`, `MEDICAL_STANDARD`, `MEDICAL_SENSITIVE`, `RESTRICTED` et `HIGHLY_SENSITIVE`. Les niveaux sensibles et restreints exigent des permissions explicites; le rôle de gestion entreprise ne constitue pas un accès automatique aux documents médicaux protégés.
+
+Les fichiers sont optionnels lorsque Supabase Storage n’est pas configuré. Lorsqu’il est disponible, les fichiers PDF, JPG, PNG, DOCX, XLSX et TXT de 10 Mo maximum sont stockés côté serveur dans `health/{organizationId}/{documentId}`. Aucune URL publique n’est persistée. Le remplacement crée une nouvelle `HealthDocumentVersion`, conserve l’ancienne et marque le document validé comme remplacé. Chaque téléchargement autorisé ou refusé crée un `HealthDocumentAccessLog`.
+
+Routes :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/documents` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/documents/[documentId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/documents/[documentId]/versions` ;
+- `GET /api/enterprise/[organizationId]/healthcare/documents/[documentId]/download`.
+
+Permissions : `health.documents.view`, `view_sensitive`, `view_restricted`, `create`, `update_metadata`, `upload_file`, `download`, `validate`, `reject`, `archive`, `restore`, `manage_versions` et `view_access_logs`.
+
+Administration affiche KPI, recherche, filtres, cartes, détail, versions et journal d’accès selon permissions. Activités limite le registre aux documents créés ou à valider par le collaborateur. Les exports groupés, l’impression serveur et les règles automatiques de documents manquants restent hors périmètre.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -229,6 +248,7 @@ L’interface Administration fournit KPI réels, recherche, filtres, cartes mobi
 - `20260613153000_healthcare_medical_billing`: ajoute catalogue, factures, lignes, paiements, historique et permissions de Facturation médicale.
 - `20260613203000_healthcare_insurance_coverage`: ajoute organismes payeurs, couvertures patient, demandes, historique et permissions Assurances.
 - `20260613223000_healthcare_quality_incidents`: ajoute incidents qualité, actions correctives, historique, index et permissions par poste Santé.
+- `20260613233000_healthcare_medical_documents`: ajoute documents médicaux, versions privées, journaux d’accès, index et permissions par poste Santé.
 
 ## Stockage et API
 
@@ -329,13 +349,13 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire, Pharmacie interne, Facturation médicale, Assurances et Incidents qualité utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; certains modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire, Pharmacie interne, Facturation médicale, Assurances, Incidents qualité et Documents médicaux utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; certains modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
 - L’inventaire complet multi-produits, l’annulation par mouvement inverse et le fournisseur structuré restent des évolutions futures. Les ajustements persistants et le statut `TO_BILL` couvrent le périmètre actuel sans bouton fictif.
 - Les remboursements, reçus PDF privés, export de facture, comptes/caisse financiers et prise en charge Assurance structurée restent masqués ou non exposés tant que leurs flux dédiés ne sont pas disponibles.
 - Les disponibilités habituelles sont persistées dans l’affectation principale; la gestion détaillée de créneaux exceptionnels par jour reste une évolution future.
 - Le fichier de résultat, la facturation d’examens et l’export PDF ne sont pas exposés tant que leurs routes privées dédiées ne sont pas disponibles.
 - Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.
 - Les disponibilités détaillées des professionnels ne sont pas encore reliées automatiquement aux créneaux Rendez-vous ; le planning affiche les créneaux persistés mais ne bloque pas encore les chevauchements.
-- Les références de documents médicaux sont persistées, mais l'upload fichier médical complet doit être relié à une route de stockage privée dédiée avant d'autoriser le dépôt direct.
+- Les fichiers médicaux utilisent désormais le stockage privé Supabase et le versioning dédié. Les exports groupés et l’impression serveur restent à implémenter.
 - Les permissions recommandées par poste santé sont persistées dans `EnterprisePosition.permissionsJson`, mais `OrganizationMember` n’est pas encore relié directement à `EnterprisePosition`. Le backend applique donc actuellement les droits effectifs selon le membership et le rôle entreprise, avec données sensibles réservées aux rôles gestionnaires.
 - L'acceptation/refus d'invitation côté invité utilise le statut `OrganizationMember`; l'interface d'acceptation peut être enrichie dans une prochaine itération si un écran dédié aux invitations est ajouté.

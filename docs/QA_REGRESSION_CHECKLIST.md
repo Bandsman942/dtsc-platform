@@ -449,6 +449,18 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier les onze vues, les libellés français, les infos-bulles et l'absence de dépassement horizontal sur mobile.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
 
+# Itération HEALTH_CARE 11 - Documents médicaux
+
+- [ ] Créer un document avec et sans fichier privé, puis vérifier `organizationId`, numéro, métadonnées et version initiale.
+- [ ] Refuser Patient, Consultation, Dossier, Laboratoire, Facture, Assurance, Incident, Délivrance, professionnel ou service d’une autre entreprise.
+- [ ] Refuser les relations métier ne correspondant pas au patient sélectionné.
+- [ ] Vérifier que les documents sensibles et restreints sont invisibles sans permission explicite.
+- [ ] Télécharger un fichier autorisé, refuser un téléchargement non autorisé et vérifier le journal d’accès.
+- [ ] Ajouter une nouvelle version avec raison et vérifier que l’ancienne version reste conservée.
+- [ ] Valider, rejeter, archiver et restaurer selon permissions; verrouiller les métadonnées d’un document validé ou archivé.
+- [ ] Vérifier recherche, filtres, libellés français, infos-bulles, menu `...` et formulaire plein écran mobile.
+- [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build` et les contrôles Git.
+
 # Itération HEALTH_CARE 10 - Incidents qualité
 
 - [ ] Créer un incident et vérifier son numéro, son `organizationId`, son historique et son affichage immédiat.

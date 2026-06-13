@@ -204,6 +204,26 @@ export async function downloadPharmacyDocumentFromSupabase(path: string) {
   return data;
 }
 
+export async function uploadHealthDocumentToSupabase({ organizationId, documentId, file }: { organizationId: string; documentId: string; file: File }) {
+  if (!isSupabaseStorageConfigured()) throw new Error("SUPABASE_STORAGE_NOT_CONFIGURED");
+  const client = createSupabaseStorageClient();
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
+  const storagePath = `health/${organizationId}/${documentId}/${randomUUID()}-${safeFileName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storagePath, buffer, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw new Error(`Supabase Storage health document upload failed: ${error.message}`);
+  return { path: data.path };
+}
+
+export async function downloadHealthDocumentFromSupabase(path: string) {
+  if (!isSupabaseStorageConfigured()) throw new Error("SUPABASE_STORAGE_NOT_CONFIGURED");
+  if (!path.startsWith("health/")) throw new Error("INVALID_HEALTH_DOCUMENT_PATH");
+  const client = createSupabaseStorageClient();
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).download(path);
+  if (error) throw new Error(`Supabase Storage health document download failed: ${error.message}`);
+  return data;
+}
+
 export async function downloadPublicPublicationImageFromSupabase(path: string) {
   if (!isSupabaseStorageConfigured()) {
     throw new Error("Supabase Storage is not configured");

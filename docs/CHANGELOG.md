@@ -10,6 +10,9 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module Documents médicaux HEALTH_CARE dédié avec registre documentaire, liens Santé, fichiers privés, versioning, validation, archivage et journal des téléchargements.
+- Ajout des routes privées Documents médicaux avec validation des références par entreprise, contrôle de confidentialité et stockage Supabase strictement serveur.
+- Ajout d’un workspace responsive partagé entre Administration et Activités avec KPI, filtres, formulaires guidés, versions et téléchargements autorisés.
 - Ajout du module Incidents qualité HEALTH_CARE dédié avec signalements, criticité, confidentialité, investigation, actions correctives, clôture et historique.
 - Ajout des routes privées Incidents qualité avec isolation stricte par entreprise, références Santé validées, permissions explicites pour les incidents confidentiels et verrouillage des incidents clôturés.
 - Ajout d’un workspace responsive partagé entre Administration et Activités, limité aux signalements, assignations et actions du collaborateur dans son espace Activités.
