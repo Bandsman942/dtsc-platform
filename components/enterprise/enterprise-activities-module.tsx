@@ -18,6 +18,7 @@ import { HealthConsultationsWorkspace } from "@/components/enterprise/health-con
 import { HealthMedicalRecordsWorkspace } from "@/components/enterprise/health-medical-records-workspace";
 import { HealthStaffWorkspace } from "@/components/enterprise/health-staff-workspace";
 import { HealthLaboratoryWorkspace } from "@/components/enterprise/health-laboratory-workspace";
+import { HealthPharmacyWorkspace } from "@/components/enterprise/health-pharmacy-workspace";
 
 const healthActivityModules = new Set(["CONSULTATIONS"]);
 
@@ -37,6 +38,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
       {organization.sectorCode === "HEALTH_CARE" && <HealthMedicalRecordsWorkspace organizationId={organization.id} />}
       {organization.sectorCode === "HEALTH_CARE" && <HealthStaffWorkspace organizationId={organization.id} />}
       {organization.sectorCode === "HEALTH_CARE" && <HealthLaboratoryWorkspace organizationId={organization.id} />}
+      {organization.sectorCode === "HEALTH_CARE" && <HealthPharmacyWorkspace organizationId={organization.id} />}
 
       <Accordion>
         <EnterpriseActivityBlocksPanel

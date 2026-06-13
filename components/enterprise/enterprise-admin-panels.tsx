@@ -67,7 +67,7 @@ const healthcarePermissions = [
   "health.consultations.close",
   "health.medical_records.view",
   "health.lab.validate",
-  "health.pharmacy.adjust",
+  "health.pharmacy.view", "health.pharmacy.view_sensitive", "health.pharmacy.create_product", "health.pharmacy.update_product", "health.pharmacy.archive_product", "health.pharmacy.manage_batches", "health.pharmacy.stock_entry", "health.pharmacy.stock_exit", "health.pharmacy.dispense", "health.pharmacy.adjust_stock", "health.pharmacy.manage_inventory", "health.pharmacy.authorize_sensitive_exit", "health.pharmacy.view_movements",
   "health.billing.pay",
   "health.insurance.validate",
   "health.incidents.manage",

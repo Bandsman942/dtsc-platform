@@ -8,6 +8,17 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - La navigation latérale utilise désormais l’icône métier configurée pour chaque module du socle commun et de chaque secteur, avec un repli cohérent par code et catégorie.
 
+### Ajouté
+
+- Ajout du module Pharmacie interne HEALTH_CARE dédié avec produits, lots, mouvements transactionnels, délivrances patient/consultation, logique FEFO, alertes stock/péremption et historique.
+- Ajout des routes privées Pharmacie interne, des permissions métier renforcées et des lectures de délivrances depuis Patients, Consultations et Dossiers médicaux.
+- Ajout d’un workspace Pharmacie interne responsive partagé entre Administration et Activités, avec formulaires guidés, libellés français et infos-bulles.
+
+### Sécurisé
+
+- Les sorties de produits sensibles exigent désormais explicitement `health.pharmacy.authorize_sensitive_exit`; le rôle administrateur entreprise ne constitue pas un passe-droit.
+- Les lots, patients, consultations, services et prescripteurs sont validés côté serveur dans la même organisation, et les produits sensibles sont masqués dans les vues liées sans permission dédiée.
+
 ## 2026-06-12
 
 ### Ajouté

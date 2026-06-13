@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getHealthConsultationAccess } from "@/lib/health-consultation-access";
+import { getHealthPharmacyAccess } from "@/lib/health-pharmacy-access";
 import { healthConsultationUpdateSchema } from "@/lib/health-consultation-validators";
 import { maskHealthConsultationSensitive, updateHealthConsultation, validateHealthConsultationReferences } from "@/lib/health-consultations";
 import { prisma } from "@/lib/prisma";
@@ -25,8 +26,10 @@ export async function GET(req: Request, { params }: Params) {
     labRequests: { orderBy: { requestedAt: "desc" }, select: { id: true, labRequestNumber: true, testLabel: true, status: true, priority: true, requestedAt: true, abnormalityLevel: true, resultText: access.canViewSensitive, validatedAt: true } },
   } });
   if (!consultation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const pharmacyAccess = await getHealthPharmacyAccess({ session, organizationId, action: "read" });
+  const pharmacyDispensations = pharmacyAccess ? await prisma.healthPharmacyDispensation.findMany({ where: { organizationId, consultationId, ...(pharmacyAccess.canViewSensitive ? {} : { product: { isSensitive: false } }) }, orderBy: { dispensedAt: "desc" }, take: 30, select: { id: true, quantity: true, dispensedAt: true, billingStatus: true, product: { select: { name: true, productCode: true, unit: true } }, dispensedBy: { select: { name: true } } } }) : [];
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "CONSULTATIONS" } });
-  return NextResponse.json({ consultation: maskHealthConsultationSensitive(consultation, access.canViewSensitive), permissions: { canUpdate: access.canUpdate, canClose: access.canClose, canReopen: access.canReopen, canCancel: access.canCancel, canViewSensitive: access.canViewSensitive } });
+  return NextResponse.json({ consultation: { ...maskHealthConsultationSensitive(consultation, access.canViewSensitive), pharmacyDispensations: pharmacyDispensations.map((item) => ({ ...item, quantity: Number(item.quantity) })) }, permissions: { canUpdate: access.canUpdate, canClose: access.canClose, canReopen: access.canReopen, canCancel: access.canCancel, canViewSensitive: access.canViewSensitive } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getHealthPatientAccess } from "@/lib/health-patient-access";
+import { getHealthPharmacyAccess } from "@/lib/health-pharmacy-access";
 import { healthPatientUpdateSchema } from "@/lib/health-patient-validators";
 import { maskHealthPatientSensitive, updateHealthPatient } from "@/lib/health-patients";
 import { prisma } from "@/lib/prisma";
@@ -25,13 +26,14 @@ export async function GET(req: Request, { params }: Params) {
     },
   });
   if (!patient) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const related = patient.legacyRecordId ? await prisma.enterpriseSectorRecord.findMany({
+  const pharmacyAccess = await getHealthPharmacyAccess({ session, organizationId, action: "read" });
+  const [related, dispensations] = await Promise.all([patient.legacyRecordId ? prisma.enterpriseSectorRecord.findMany({
     where: { organizationId, sectorCode: "HEALTH_CARE", moduleCode: { in: ["APPOINTMENTS", "CONSULTATIONS", "LABORATORY", "MEDICAL_BILLING", "MEDICAL_DOCUMENTS", "INSURANCE_COVERAGE", "QUALITY_INCIDENTS", "MEDICAL_RECORDS"] }, deletedAt: null, payloadJson: { path: ["patientRecordId"], equals: patient.legacyRecordId } },
     orderBy: { updatedAt: "desc" }, take: 60,
     select: { id: true, moduleCode: true, title: true, summary: true, status: true, updatedAt: true },
-  }) : [];
+  }) : Promise.resolve([]), pharmacyAccess ? prisma.healthPharmacyDispensation.findMany({ where: { organizationId, patientId, ...(pharmacyAccess.canViewSensitive ? {} : { product: { isSensitive: false } }) }, orderBy: { dispensedAt: "desc" }, take: 20, select: { id: true, quantity: true, dispensedAt: true, billingStatus: true, product: { select: { name: true, productCode: true, unit: true } }, consultation: { select: { consultationNumber: true } }, dispensedBy: { select: { name: true } } } }) : Promise.resolve([])]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "PATIENTS" } });
-  return NextResponse.json({ patient: maskHealthPatientSensitive(patient, access.canViewSensitive), related: related.map((item) => access.canViewSensitive ? item : { ...item, summary: null }), permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canViewSensitive: access.canViewSensitive } });
+  return NextResponse.json({ patient: maskHealthPatientSensitive(patient, access.canViewSensitive), related: related.map((item) => access.canViewSensitive ? item : { ...item, summary: null }), dispensations: dispensations.map((item) => ({ ...item, quantity: Number(item.quantity) })), permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canViewSensitive: access.canViewSensitive } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

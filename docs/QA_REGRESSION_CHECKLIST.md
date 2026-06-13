@@ -20,6 +20,16 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Les demandes apparaissent dans l’activité liée du patient.
 - [ ] Liste, filtres, détail et formulaires Laboratoire restent utilisables sans débordement mobile.
 
+## Santé - Pharmacie interne
+
+- [ ] Produit, lot, mouvement et délivrance restent liés au même `organizationId`.
+- [ ] Une sortie supérieure au stock, depuis un lot expiré/bloqué ou depuis un produit bloqué/archivé est refusée.
+- [ ] La sélection automatique de lot suit FEFO parmi les lots réellement délivrables.
+- [ ] Une sortie sensible exige explicitement `health.pharmacy.authorize_sensitive_exit`.
+- [ ] Patient, consultation, service et prescripteur inter-organisation sont refusés côté serveur.
+- [ ] Les délivrances autorisées sont visibles dans Patient, Consultation et Dossier médical sans exposer les produits sensibles.
+- [ ] Liste, filtres, détail, lots, mouvements et formulaires restent utilisables sans débordement mobile.
+
 ## Santé - Équipe médicale
 
 - [ ] Seul un membre actif de l’organisation peut recevoir une affectation Santé.

@@ -142,6 +142,24 @@ Routes dédiées :
 
 Patients affiche l’activité laboratoire liée. Consultations affiche ses demandes et résultats accessibles. Dossiers médicaux lit les demandes du patient directement depuis les tables Laboratoire. Facturation et Documents médicaux restent des liens futurs : aucun bouton décoratif ni fausse facture n’est exposé.
 
+## Pharmacie interne dédiée
+
+Le module `INTERNAL_PHARMACY` utilise désormais `HealthPharmacyProduct`, `HealthPharmacyBatch`, `HealthPharmacyStockMovement` et `HealthPharmacyDispensation`. Le workspace partagé entre Administration et Activités fournit tableau de bord, recherche, filtres, produits, lots, entrées, sorties, délivrances, ajustements, alertes stock/péremption et historique.
+
+Chaque écriture est transactionnelle et isolée par `organizationId`. Les sorties refusent un stock insuffisant, un produit bloqué/archivé et un lot expiré/bloqué. Sans lot choisi, la sortie utilise le premier lot délivrable selon FEFO. Patient, consultation, service et prescripteur sont validés dans la même organisation; une consultation et un patient fournis ensemble doivent correspondre.
+
+Les produits sensibles exigent explicitement `health.pharmacy.authorize_sensitive_exit`; aucun rôle administratif ne reçoit automatiquement ce droit. Sans `health.pharmacy.view_sensitive`, les mouvements sensibles sont exclus, les prix/consignes sensibles sont masqués et les délivrances sensibles ne sont pas affichées dans Patient, Consultation ou Dossier médical.
+
+Permissions : `health.pharmacy.view`, `view_sensitive`, `create_product`, `update_product`, `archive_product`, `manage_batches`, `stock_entry`, `stock_exit`, `dispense`, `adjust_stock`, `manage_inventory`, `authorize_sensitive_exit` et `view_movements`.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/internal-pharmacy` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/internal-pharmacy/[productId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/internal-pharmacy/actions`.
+
+Une délivrance facturable reçoit `billingStatus = TO_BILL`, sans créer de fausse facture. La prescription reste liée à `HealthConsultation.prescriptionText` tant qu’un référentiel de prescriptions structurées n’est pas disponible.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -153,6 +171,7 @@ Patients affiche l’activité laboratoire liée. Consultations affiche ses dema
 - `20260612223000_healthcare_medical_records`: ajoute Dossiers médicaux, éléments structurés, alertes, notes confidentielles et historique dédiés.
 - `20260612233000_healthcare_staff`: ajoute Équipe médicale, spécialités, affectations, historique, postes et services Santé recommandés.
 - `20260613013000_healthcare_laboratory`: ajoute Laboratoire, catalogue d’examens, demandes multi-examens, résultats et historique dédiés.
+- `20260613093000_healthcare_internal_pharmacy`: ajoute produits, lots, mouvements, délivrances et permissions de la Pharmacie interne dédiée.
 
 ## Stockage et API
 
@@ -253,7 +272,8 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients, Rendez-vous, Consultations, Dossiers médicaux et Équipe médicale utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire et Pharmacie interne utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- L’inventaire complet multi-produits, l’annulation par mouvement inverse, le fournisseur structuré et la création de lignes de Facturation médicale restent des évolutions futures. Les ajustements persistants et le statut `TO_BILL` couvrent le périmètre actuel sans bouton fictif.
 - Les disponibilités habituelles sont persistées dans l’affectation principale; la gestion détaillée de créneaux exceptionnels par jour reste une évolution future.
 - Le fichier de résultat, la facturation d’examens et l’export PDF ne sont pas exposés tant que leurs routes privées dédiées ne sont pas disponibles.
 - Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.

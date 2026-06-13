@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getHealthMedicalRecordAccess } from "@/lib/health-medical-record-access";
+import { getHealthPharmacyAccess } from "@/lib/health-pharmacy-access";
 import { healthMedicalRecordActionSchema, healthMedicalRecordUpdateSchema } from "@/lib/health-medical-record-validators";
 import { transitionHealthMedicalRecord, updateHealthMedicalRecord } from "@/lib/health-medical-records";
 import { prisma } from "@/lib/prisma";
@@ -35,11 +36,13 @@ export async function GET(req: Request, { params }: Params) {
     events: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: { select: { name: true } } } },
   } });
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const [consultations,labRequests] = await Promise.all([
+  const pharmacyAccess = await getHealthPharmacyAccess({ session, organizationId, action: "read" });
+  const [consultations,labRequests,pharmacyDispensations] = await Promise.all([
     prisma.healthConsultation.findMany({ where: { organizationId, patientId: record.patientId }, orderBy: { consultationDate: "desc" }, take: 30, select: { id: true, consultationNumber: true, consultationDate: true, consultationType: true, status: true, priority: true, chiefComplaint: true, finalDiagnosis: true, professional: { select: { name: true } } } }),
     prisma.healthLabRequest.findMany({where:{organizationId,patientId:record.patientId},orderBy:{requestedAt:"desc"},take:30,select:{id:true,labRequestNumber:true,testLabel:true,status:true,priority:true,requestedAt:true,abnormalityLevel:true,resultText:true,validatedAt:true}}),
+    pharmacyAccess ? prisma.healthPharmacyDispensation.findMany({ where: { organizationId, patientId: record.patientId, ...(pharmacyAccess.canViewSensitive ? {} : { product: { isSensitive: false } }) }, orderBy: { dispensedAt: "desc" }, take: 30, select: { id: true, quantity: true, dispensedAt: true, billingStatus: true, product: { select: { name: true, productCode: true, unit: true } }, consultation: { select: { consultationNumber: true } }, dispensedBy: { select: { name: true } } } }) : Promise.resolve([]),
   ]);
-  return NextResponse.json({ record, consultations, labRequests, permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canManageStructuredItems: access.canManageStructuredItems, canManageConfidentialNotes: access.canManageConfidentialNotes } });
+  return NextResponse.json({ record, consultations, labRequests, pharmacyDispensations: pharmacyDispensations.map((item) => ({ ...item, quantity: Number(item.quantity) })), permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canManageStructuredItems: access.canManageStructuredItems, canManageConfidentialNotes: access.canManageConfidentialNotes } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

@@ -93,6 +93,12 @@ const healthLaboratoryActionsApi = read("app/api/enterprise/[organizationId]/hea
 const healthLaboratoryWorkspace = read("components/enterprise/health-laboratory-workspace.tsx");
 const healthLaboratoryService = read("lib/health-laboratory.ts");
 const healthLaboratoryAccess = read("lib/health-laboratory-access.ts");
+const healthPharmacyApi = read("app/api/enterprise/[organizationId]/healthcare/internal-pharmacy/route.ts");
+const healthPharmacyRecordApi = read("app/api/enterprise/[organizationId]/healthcare/internal-pharmacy/[productId]/route.ts");
+const healthPharmacyActionsApi = read("app/api/enterprise/[organizationId]/healthcare/internal-pharmacy/actions/route.ts");
+const healthPharmacyWorkspace = read("components/enterprise/health-pharmacy-workspace.tsx");
+const healthPharmacyService = read("lib/health-pharmacy.ts");
+const healthPharmacyAccess = read("lib/health-pharmacy-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -467,6 +473,28 @@ check(
     && !healthLaboratoryWorkspace.includes("window.prompt")
     && !healthLaboratoryWorkspace.includes("window.confirm")
     && !healthLaboratoryWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Pharmacie interne: modèles dédiés, FEFO, délivrances et isolation tenant",
+  containsAll(prismaSchema, ["model HealthPharmacyProduct", "model HealthPharmacyBatch", "model HealthPharmacyStockMovement", "model HealthPharmacyDispensation", "@@unique([organizationId, productCode])"])
+    && containsAll(healthPharmacyService, ["validateHealthPharmacyRelations", "actionHealthPharmacy", "NO_SELLABLE_BATCH", "INSUFFICIENT_STOCK", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Pharmacie interne: routes privées, permissions sensibles et audit",
+  containsAll(healthPharmacyApi, ["getHealthPharmacyAccess", "healthPharmacyProductCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthPharmacyRecordApi, ["healthPharmacyProductUpdateSchema.safeParse", "canViewSensitive", "isSameOriginRequest", "organizationId"])
+    && containsAll(healthPharmacyActionsApi, ["healthPharmacyActionSchema.safeParse", "actionHealthPharmacy", "canAuthorizeSensitive", "writeAuditLog"])
+    && containsAll(healthPharmacyAccess, ['"INTERNAL_PHARMACY"', "health.pharmacy.authorize_sensitive_exit"])
+);
+
+check(
+  "HEALTH_CARE Pharmacie interne: tableau de bord, produits, lots, mouvements et mobile",
+  containsAll(healthPharmacyWorkspace, ["ListControls", "ActionMenu", "Produits actifs", "Lots proches péremption", "Délivrer à un patient", "Aucun produit enregistré", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthPharmacyWorkspace.includes("window.prompt")
+    && !healthPharmacyWorkspace.includes("window.confirm")
+    && !healthPharmacyWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
 check(

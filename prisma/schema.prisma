@@ -207,6 +207,15 @@ model User {
   createdHealthLabTests                 HealthLabTestCatalog[]            @relation("HealthLabTestCreatedBy")
   updatedHealthLabTests                 HealthLabTestCatalog[]            @relation("HealthLabTestUpdatedBy")
   healthLabEvents                       HealthLabEvent[]                  @relation("HealthLabEventActor")
+  createdHealthPharmacyProducts         HealthPharmacyProduct[]           @relation("HealthPharmacyProductCreatedBy")
+  updatedHealthPharmacyProducts         HealthPharmacyProduct[]           @relation("HealthPharmacyProductUpdatedBy")
+  archivedHealthPharmacyProducts        HealthPharmacyProduct[]           @relation("HealthPharmacyProductArchivedBy")
+  createdHealthPharmacyBatches          HealthPharmacyBatch[]             @relation("HealthPharmacyBatchCreatedBy")
+  updatedHealthPharmacyBatches          HealthPharmacyBatch[]             @relation("HealthPharmacyBatchUpdatedBy")
+  createdHealthPharmacyMovements        HealthPharmacyStockMovement[]     @relation("HealthPharmacyMovementCreatedBy")
+  authorizedHealthPharmacyMovements     HealthPharmacyStockMovement[]     @relation("HealthPharmacyMovementAuthorizedBy")
+  dispensedHealthPharmacyItems          HealthPharmacyDispensation[]      @relation("HealthPharmacyDispensedBy")
+  prescribedHealthPharmacyItems         HealthPharmacyDispensation[]      @relation("HealthPharmacyPrescriber")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -528,84 +537,88 @@ model UsageLog {
 }
 
 model Organization {
-  id                         String                      @id @default(cuid())
-  name                       String
-  slug                       String?                     @unique
-  logoUrl                    String?
-  ownerUserId                String?
-  status                     String                      @default("DRAFT")
-  organizationType           String                      @default("CLIENT")
-  sector                     String?
-  sectorId                   String?
-  sectorCode                 String?
-  industry                   String?
-  country                    String?
-  city                       String?
-  timezone                   String                      @default("Africa/Kinshasa")
-  settingsJson               Json?
-  brandingJson               Json?
-  contactPerson              String?
-  email                      String?
-  phone                      String?
-  address                    String?
-  notes                      String?
-  createdByDtscUserId        String?
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  deletedAt                  DateTime?
-  businessSector             BusinessSector?             @relation(fields: [sectorId], references: [id], onDelete: SetNull)
-  createdByDtsc              User?                       @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
-  members                    OrganizationMember[]
-  adminGrants                OrganizationAdminGrant[]
-  subscriptions              OrganizationSubscription[]
-  billingRecords             BillingRecord[]
-  knowledgeDocuments         KnowledgeDocument[]
-  companyProfiles            CompanyProfile[]
-  companyActivities          CompanyActivity[]
-  conversations              Conversation[]
-  conversationProjects       ConversationProject[]
-  notifications              Notification[]
-  supportTickets             SupportTicket[]
-  announcements              Announcement[]              @relation("AnnouncementOrganization")
-  authoredAnnouncements      Announcement[]              @relation("AnnouncementAuthorOrganization")
-  collaborationGroups        CollaborationGroup[]
-  collaboratorAvailabilities CollaboratorAvailability[]
-  internalCalendarEvents     InternalCalendarEvent[]
-  enterpriseModules          EnterpriseModule[]
-  enterpriseAdminSections    EnterpriseAdminSection[]
-  enterprisePositions        EnterprisePosition[]
-  enterpriseDepartments      EnterpriseDepartment[]
-  enterpriseActivityBlocks   EnterpriseActivityBlock[]
-  enterpriseWorkflows        EnterpriseWorkflow[]
-  enterpriseActivityRequests EnterpriseActivityRequest[]
-  enterpriseSectorRecords    EnterpriseSectorRecord[]
-  healthPatients             HealthPatient[]
-  healthPatientEvents        HealthPatientEvent[]
-  healthAppointments         HealthAppointment[]
-  healthAppointmentEvents    HealthAppointmentEvent[]
-  healthConsultations        HealthConsultation[]
-  healthConsultationEvents   HealthConsultationEvent[]
-  healthMedicalRecords       HealthMedicalRecord[]
-  healthMedicalHistoryItems  HealthMedicalHistoryItem[]
-  healthAllergies            HealthAllergy[]
-  healthCurrentTreatments    HealthCurrentTreatment[]
-  healthMedicalAlerts        HealthMedicalAlert[]
-  healthConfidentialNotes    HealthConfidentialNote[]
-  healthMedicalRecordEvents  HealthMedicalRecordEvent[]
-  healthSpecialties          HealthSpecialty[]
-  healthStaffAssignments     HealthStaffAssignment[]
-  healthStaffEvents          HealthStaffEvent[]
-  healthLabTests             HealthLabTestCatalog[]
-  healthLabRequests          HealthLabRequest[]
-  healthLabRequestItems      HealthLabRequestItem[]
-  healthLabEvents            HealthLabEvent[]
-  pharmacyProducts           PharmacyProduct[]
-  pharmacyBatches            PharmacyBatch[]
-  pharmacyStockMovements     PharmacyStockMovement[]
-  pharmacyInventorySessions  PharmacyInventorySession[]
-  pharmacyInventoryLines     PharmacyInventoryLine[]
-  pharmacyStockAdjustments   PharmacyStockAdjustment[]
-  pharmacyStockLocations     PharmacyStockLocation[]
+  id                          String                        @id @default(cuid())
+  name                        String
+  slug                        String?                       @unique
+  logoUrl                     String?
+  ownerUserId                 String?
+  status                      String                        @default("DRAFT")
+  organizationType            String                        @default("CLIENT")
+  sector                      String?
+  sectorId                    String?
+  sectorCode                  String?
+  industry                    String?
+  country                     String?
+  city                        String?
+  timezone                    String                        @default("Africa/Kinshasa")
+  settingsJson                Json?
+  brandingJson                Json?
+  contactPerson               String?
+  email                       String?
+  phone                       String?
+  address                     String?
+  notes                       String?
+  createdByDtscUserId         String?
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime                      @updatedAt
+  deletedAt                   DateTime?
+  businessSector              BusinessSector?               @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  createdByDtsc               User?                         @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
+  members                     OrganizationMember[]
+  adminGrants                 OrganizationAdminGrant[]
+  subscriptions               OrganizationSubscription[]
+  billingRecords              BillingRecord[]
+  knowledgeDocuments          KnowledgeDocument[]
+  companyProfiles             CompanyProfile[]
+  companyActivities           CompanyActivity[]
+  conversations               Conversation[]
+  conversationProjects        ConversationProject[]
+  notifications               Notification[]
+  supportTickets              SupportTicket[]
+  announcements               Announcement[]                @relation("AnnouncementOrganization")
+  authoredAnnouncements       Announcement[]                @relation("AnnouncementAuthorOrganization")
+  collaborationGroups         CollaborationGroup[]
+  collaboratorAvailabilities  CollaboratorAvailability[]
+  internalCalendarEvents      InternalCalendarEvent[]
+  enterpriseModules           EnterpriseModule[]
+  enterpriseAdminSections     EnterpriseAdminSection[]
+  enterprisePositions         EnterprisePosition[]
+  enterpriseDepartments       EnterpriseDepartment[]
+  enterpriseActivityBlocks    EnterpriseActivityBlock[]
+  enterpriseWorkflows         EnterpriseWorkflow[]
+  enterpriseActivityRequests  EnterpriseActivityRequest[]
+  enterpriseSectorRecords     EnterpriseSectorRecord[]
+  healthPatients              HealthPatient[]
+  healthPatientEvents         HealthPatientEvent[]
+  healthAppointments          HealthAppointment[]
+  healthAppointmentEvents     HealthAppointmentEvent[]
+  healthConsultations         HealthConsultation[]
+  healthConsultationEvents    HealthConsultationEvent[]
+  healthMedicalRecords        HealthMedicalRecord[]
+  healthMedicalHistoryItems   HealthMedicalHistoryItem[]
+  healthAllergies             HealthAllergy[]
+  healthCurrentTreatments     HealthCurrentTreatment[]
+  healthMedicalAlerts         HealthMedicalAlert[]
+  healthConfidentialNotes     HealthConfidentialNote[]
+  healthMedicalRecordEvents   HealthMedicalRecordEvent[]
+  healthSpecialties           HealthSpecialty[]
+  healthStaffAssignments      HealthStaffAssignment[]
+  healthStaffEvents           HealthStaffEvent[]
+  healthLabTests              HealthLabTestCatalog[]
+  healthLabRequests           HealthLabRequest[]
+  healthLabRequestItems       HealthLabRequestItem[]
+  healthLabEvents             HealthLabEvent[]
+  healthPharmacyProducts      HealthPharmacyProduct[]
+  healthPharmacyBatches       HealthPharmacyBatch[]
+  healthPharmacyMovements     HealthPharmacyStockMovement[]
+  healthPharmacyDispensations HealthPharmacyDispensation[]
+  pharmacyProducts            PharmacyProduct[]
+  pharmacyBatches             PharmacyBatch[]
+  pharmacyStockMovements      PharmacyStockMovement[]
+  pharmacyInventorySessions   PharmacyInventorySession[]
+  pharmacyInventoryLines      PharmacyInventoryLine[]
+  pharmacyStockAdjustments    PharmacyStockAdjustment[]
+  pharmacyStockLocations      PharmacyStockLocation[]
 
   @@index([status, organizationType])
   @@index([sectorId])
@@ -848,25 +861,26 @@ model EnterprisePosition {
 }
 
 model EnterpriseDepartment {
-  id                     String                    @id @default(cuid())
-  organizationId         String
-  departmentCode         String
-  labelFr                String
-  labelEn                String
-  descriptionFr          String?
-  descriptionEn          String?
-  responsibleUserId      String?
-  isActive               Boolean                   @default(true)
-  sortOrder              Int                       @default(0)
-  sourceTemplateId       String?
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
-  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sourceTemplate         SectorTemplateDepartment? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  positions              EnterprisePosition[]
-  healthAppointments     HealthAppointment[]
-  healthConsultations    HealthConsultation[]
-  healthStaffAssignments HealthStaffAssignment[]
+  id                      String                        @id @default(cuid())
+  organizationId          String
+  departmentCode          String
+  labelFr                 String
+  labelEn                 String
+  descriptionFr           String?
+  descriptionEn           String?
+  responsibleUserId       String?
+  isActive                Boolean                       @default(true)
+  sortOrder               Int                           @default(0)
+  sourceTemplateId        String?
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  organization            Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTemplate          SectorTemplateDepartment?     @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  positions               EnterprisePosition[]
+  healthAppointments      HealthAppointment[]
+  healthConsultations     HealthConsultation[]
+  healthStaffAssignments  HealthStaffAssignment[]
+  healthPharmacyMovements HealthPharmacyStockMovement[]
 
   @@unique([organizationId, departmentCode])
   @@unique([organizationId, id])
@@ -979,7 +993,7 @@ model EnterpriseSectorRecord {
 }
 
 model HealthPatient {
-  id                           String                     @id @default(cuid())
+  id                           String                        @id @default(cuid())
   organizationId               String
   legacyRecordId               String?
   patientNumber                String
@@ -1004,19 +1018,19 @@ model HealthPatient {
   chronicTreatments            String?
   medicalNotes                 String?
   administrativeNotes          String?
-  insuranceKnown               Boolean                    @default(false)
+  insuranceKnown               Boolean                       @default(false)
   insuranceReference           String?
-  registrationSource           String                     @default("RECEPTION")
-  status                       String                     @default("ACTIVE")
+  registrationSource           String                        @default("RECEPTION")
+  status                       String                        @default("ACTIVE")
   createdById                  String
   updatedById                  String?
   archivedAt                   DateTime?
   deceasedAt                   DateTime?
-  createdAt                    DateTime                   @default(now())
-  updatedAt                    DateTime                   @updatedAt
-  organization                 Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy                    User                       @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy                    User?                      @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  organization                 Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy                    User                          @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User?                         @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events                       HealthPatientEvent[]
   appointments                 HealthAppointment[]
   consultations                HealthConsultation[]
@@ -1027,6 +1041,8 @@ model HealthPatient {
   medicalAlerts                HealthMedicalAlert[]
   confidentialNotes            HealthConfidentialNote[]
   labRequests                  HealthLabRequest[]
+  pharmacyMovements            HealthPharmacyStockMovement[]
+  pharmacyDispensations        HealthPharmacyDispensation[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1124,18 +1140,18 @@ model HealthAppointmentEvent {
 }
 
 model HealthConsultation {
-  id                         String                    @id @default(cuid())
+  id                         String                        @id @default(cuid())
   organizationId             String
   legacyRecordId             String?
   consultationNumber         String
   patientId                  String
-  appointmentId              String?                   @unique
+  appointmentId              String?                       @unique
   professionalId             String
   departmentId               String?
-  consultationDate           DateTime                  @default(now())
+  consultationDate           DateTime                      @default(now())
   consultationType           String
-  priority                   String                    @default("NORMAL")
-  status                     String                    @default("DRAFT")
+  priority                   String                        @default("NORMAL")
+  status                     String                        @default("DRAFT")
   chiefComplaint             String
   reason                     String
   historyOfPresentIllness    String?
@@ -1177,9 +1193,9 @@ model HealthConsultation {
   prescriptionText           String?
   requestedTests             String?
   referralNotes              String?
-  hospitalizationRecommended Boolean                   @default(false)
-  sickLeaveRecommended       Boolean                   @default(false)
-  followUpRecommended        Boolean                   @default(false)
+  hospitalizationRecommended Boolean                       @default(false)
+  sickLeaveRecommended       Boolean                       @default(false)
+  followUpRecommended        Boolean                       @default(false)
   followUpDate               DateTime?
   patientAdvice              String?
   warningSigns               String?
@@ -1195,20 +1211,22 @@ model HealthConsultation {
   cancelledById              String?
   cancelledAt                DateTime?
   cancellationReason         String?
-  createdAt                  DateTime                  @default(now())
-  updatedAt                  DateTime                  @updatedAt
-  organization               Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  patient                    HealthPatient             @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
-  appointment                HealthAppointment?        @relation(fields: [organizationId, appointmentId], references: [organizationId, id], onDelete: Restrict)
-  professional               User                      @relation("HealthConsultationProfessional", fields: [professionalId], references: [id], onDelete: Restrict)
-  department                 EnterpriseDepartment?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  createdBy                  User                      @relation("HealthConsultationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy                  User?                     @relation("HealthConsultationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  closedBy                   User?                     @relation("HealthConsultationClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
-  reopenedBy                 User?                     @relation("HealthConsultationReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
-  cancelledBy                User?                     @relation("HealthConsultationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdAt                  DateTime                      @default(now())
+  updatedAt                  DateTime                      @updatedAt
+  organization               Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient                    HealthPatient                 @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  appointment                HealthAppointment?            @relation(fields: [organizationId, appointmentId], references: [organizationId, id], onDelete: Restrict)
+  professional               User                          @relation("HealthConsultationProfessional", fields: [professionalId], references: [id], onDelete: Restrict)
+  department                 EnterpriseDepartment?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy                  User                          @relation("HealthConsultationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                  User?                         @relation("HealthConsultationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  closedBy                   User?                         @relation("HealthConsultationClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  reopenedBy                 User?                         @relation("HealthConsultationReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+  cancelledBy                User?                         @relation("HealthConsultationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   events                     HealthConsultationEvent[]
   labRequests                HealthLabRequest[]
+  pharmacyMovements          HealthPharmacyStockMovement[]
+  pharmacyDispensations      HealthPharmacyDispensation[]
 
   @@unique([organizationId, consultationNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1648,6 +1666,162 @@ model HealthLabEvent {
 
   @@index([organizationId, labRequestId, createdAt])
   @@index([actorUserId, createdAt])
+}
+
+model HealthPharmacyProduct {
+  id                           String                        @id @default(cuid())
+  organizationId               String
+  legacyRecordId               String?
+  productCode                  String
+  name                         String
+  genericName                  String?
+  category                     String
+  pharmaceuticalForm           String?
+  strength                     String?
+  unit                         String
+  description                  String?
+  currentStock                 Decimal                       @default(0) @db.Decimal(14, 3)
+  minimumStock                 Decimal                       @default(0) @db.Decimal(14, 3)
+  criticalStock                Decimal?                      @db.Decimal(14, 3)
+  maximumStock                 Decimal?                      @db.Decimal(14, 3)
+  trackBatches                 Boolean                       @default(true)
+  trackExpiry                  Boolean                       @default(true)
+  storageLocation              String?
+  purchasePrice                Decimal?                      @db.Decimal(14, 2)
+  sellingPrice                 Decimal?                      @db.Decimal(14, 2)
+  billable                     Boolean                       @default(false)
+  billingCode                  String?
+  supplierReference            String?
+  isSensitive                  Boolean                       @default(false)
+  controlLevel                 String                        @default("STANDARD")
+  prescriptionRequired         Boolean                       @default(false)
+  specialAuthorizationRequired Boolean                       @default(false)
+  safetyNotes                  String?
+  status                       String                        @default("ACTIVE")
+  createdById                  String
+  updatedById                  String?
+  archivedById                 String?
+  archivedAt                   DateTime?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  organization                 Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy                    User                          @relation("HealthPharmacyProductCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User?                         @relation("HealthPharmacyProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  archivedBy                   User?                         @relation("HealthPharmacyProductArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  batches                      HealthPharmacyBatch[]
+  movements                    HealthPharmacyStockMovement[]
+  dispensations                HealthPharmacyDispensation[]
+
+  @@unique([organizationId, productCode])
+  @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, id])
+  @@index([organizationId, category, status])
+  @@index([organizationId, isSensitive, status])
+}
+
+model HealthPharmacyBatch {
+  id                String                        @id @default(cuid())
+  organizationId    String
+  productId         String
+  batchNumber       String
+  initialQuantity   Decimal                       @db.Decimal(14, 3)
+  availableQuantity Decimal                       @db.Decimal(14, 3)
+  manufacturingDate DateTime?
+  expiryDate        DateTime?
+  supplierReference String?
+  purchasePrice     Decimal?                      @db.Decimal(14, 2)
+  status            String                        @default("AVAILABLE")
+  notes             String?
+  createdById       String
+  updatedById       String?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  organization      Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product           HealthPharmacyProduct         @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  createdBy         User                          @relation("HealthPharmacyBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy         User?                         @relation("HealthPharmacyBatchUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  movements         HealthPharmacyStockMovement[]
+  dispensations     HealthPharmacyDispensation[]
+
+  @@unique([organizationId, productId, batchNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, productId, status])
+  @@index([organizationId, expiryDate])
+}
+
+model HealthPharmacyStockMovement {
+  id                    String                      @id @default(cuid())
+  organizationId        String
+  productId             String
+  batchId               String?
+  movementType          String
+  quantity              Decimal                     @db.Decimal(14, 3)
+  stockBefore           Decimal                     @db.Decimal(14, 3)
+  stockAfter            Decimal                     @db.Decimal(14, 3)
+  movementDate          DateTime                    @default(now())
+  source                String?
+  destination           String?
+  patientId             String?
+  consultationId        String?
+  departmentId          String?
+  reason                String
+  comment               String?
+  referenceDocument     String?
+  isSensitive           Boolean                     @default(false)
+  requiresAuthorization Boolean                     @default(false)
+  authorizedById        String?
+  authorizedAt          DateTime?
+  createdById           String
+  createdAt             DateTime                    @default(now())
+  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product               HealthPharmacyProduct       @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  batch                 HealthPharmacyBatch?        @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+  patient               HealthPatient?              @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  consultation          HealthConsultation?         @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
+  department            EnterpriseDepartment?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  authorizedBy          User?                       @relation("HealthPharmacyMovementAuthorizedBy", fields: [authorizedById], references: [id], onDelete: SetNull)
+  createdBy             User                        @relation("HealthPharmacyMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  dispensation          HealthPharmacyDispensation?
+
+  @@unique([organizationId, id])
+  @@index([organizationId, productId, movementDate])
+  @@index([organizationId, batchId, movementDate])
+  @@index([organizationId, patientId, movementDate])
+  @@index([organizationId, consultationId, movementDate])
+  @@index([organizationId, movementType, movementDate])
+}
+
+model HealthPharmacyDispensation {
+  id             String                      @id @default(cuid())
+  organizationId String
+  movementId     String                      @unique
+  patientId      String
+  consultationId String?
+  productId      String
+  batchId        String?
+  quantity       Decimal                     @db.Decimal(14, 3)
+  dispensedById  String
+  dispensedAt    DateTime                    @default(now())
+  prescriberId   String?
+  billable       Boolean                     @default(false)
+  billingStatus  String                      @default("NOT_BILLABLE")
+  notes          String?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movement       HealthPharmacyStockMovement @relation(fields: [organizationId, movementId], references: [organizationId, id], onDelete: Restrict)
+  patient        HealthPatient               @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  consultation   HealthConsultation?         @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
+  product        HealthPharmacyProduct       @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  batch          HealthPharmacyBatch?        @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+  dispensedBy    User                        @relation("HealthPharmacyDispensedBy", fields: [dispensedById], references: [id], onDelete: Restrict)
+  prescriber     User?                       @relation("HealthPharmacyPrescriber", fields: [prescriberId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, movementId])
+  @@index([organizationId, patientId, dispensedAt])
+  @@index([organizationId, consultationId, dispensedAt])
+  @@index([organizationId, productId, dispensedAt])
+  @@index([organizationId, billingStatus])
 }
 
 model EnterpriseCoreRecord {
