@@ -109,6 +109,13 @@ const healthInsuranceActionApi = read("app/api/enterprise/[organizationId]/healt
 const healthInsuranceWorkspace = read("components/enterprise/health-insurance-workspace.tsx");
 const healthInsuranceService = read("lib/health-insurance.ts");
 const healthInsuranceAccess = read("lib/health-insurance-access.ts");
+const healthQualityApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/route.ts");
+const healthQualityRecordApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/[incidentId]/route.ts");
+const healthQualityActionsApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/[incidentId]/actions/route.ts");
+const healthQualityActionApi = read("app/api/enterprise/[organizationId]/healthcare/quality-incidents/actions/[actionId]/route.ts");
+const healthQualityWorkspace = read("components/enterprise/health-quality-workspace.tsx");
+const healthQualityService = read("lib/health-quality.ts");
+const healthQualityAccess = read("lib/health-quality-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -543,6 +550,29 @@ check(
 check(
   "HEALTH_CARE Assurances: organismes, couvertures, demandes et mobile",
   containsAll(healthInsuranceWorkspace, ["Assurances & prises en charge", "Organismes", "Couvertures", "Prise en charge", "Appliquer à la facture", "ListControls", "ActionMenu", "CircleHelp", "h-[94dvh]", "min-w-0"])
+);
+
+check(
+  "HEALTH_CARE Incidents qualité: modèles dédiés, actions, historique et isolation tenant",
+  containsAll(prismaSchema, ["model HealthQualityIncident", "model HealthQualityCorrectiveAction", "model HealthQualityIncidentEvent", "@@unique([organizationId, incidentNumber])", "@@index([organizationId, confidentialityIncident, restrictedAccess])"])
+    && containsAll(healthQualityService, ["validateHealthQualityReferences", "createHealthQualityIncident", "healthQualityIncidentAction", "createHealthQualityCorrectiveAction", "healthQualityCorrectiveAction", "PATIENT_MISMATCH", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Incidents qualité: routes privées, confidentialité, permissions et audit",
+  containsAll(healthQualityApi, ["getHealthQualityAccess", "healthQualityIncidentCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthQualityRecordApi, ["healthQualityIncidentActionSchema.safeParse", "healthQualityIncidentUpdateSchema.safeParse", "visible(", "writeAuditLog"])
+    && containsAll(healthQualityActionsApi, ["healthQualityCorrectiveActionCreateSchema.safeParse", "canManageActions", "writeAuditLog"])
+    && containsAll(healthQualityActionApi, ["healthQualityCorrectiveActionUpdateSchema.safeParse", "canValidateActions", "writeAuditLog"])
+    && containsAll(healthQualityAccess, ["requireEnterpriseMembership", "canAccessEnterpriseModule", '"QUALITY_INCIDENTS"', "health.quality.view_confidential_incidents"])
+    && containsAll(enterpriseHealthcareApi, ['data.moduleCode === "QUALITY_INCIDENTS"', '"Dedicated module"'])
+);
+
+check(
+  "HEALTH_CARE Incidents qualité: dashboard, formulaires, actions et mobile",
+  containsAll(healthQualityWorkspace, ["Incidents qualité", "Incidents ouverts", "Actions en retard", "ListControls", "ActionMenu", "Nouveau signalement qualité", "Actions correctives et préventives", "h-[94dvh]", "min-w-0", "overflow-x-hidden"])
+    && !healthQualityWorkspace.includes("window.prompt")
+    && !healthQualityWorkspace.includes("window.confirm")
 );
 
 check(

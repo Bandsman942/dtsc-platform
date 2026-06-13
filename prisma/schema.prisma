@@ -2187,6 +2187,148 @@ model HealthCoverageRequestEvent {
   @@index([actorUserId, createdAt])
 }
 
+model HealthQualityIncident {
+  id                           String                          @id @default(cuid())
+  organizationId               String
+  incidentNumber               String
+  title                        String
+  incidentType                 String
+  description                  String
+  occurredAt                   DateTime?
+  reportedAt                   DateTime                        @default(now())
+  reportedById                 String
+  anonymousReport              Boolean                         @default(false)
+  departmentId                 String?
+  patientId                    String?
+  appointmentId                String?
+  consultationId               String?
+  medicalRecordId              String?
+  labRequestId                 String?
+  pharmacyDispensationId       String?
+  pharmacyStockMovementId      String?
+  invoiceId                    String?
+  coverageRequestId            String?
+  staffAssignmentId            String?
+  initialSeverity              String
+  confirmedSeverity            String?
+  initialCriticality           String
+  confirmedCriticality         String?
+  patientImpact                String?
+  organizationalImpact         String?
+  recurrenceProbability        String?
+  detectability                String?
+  urgency                      String?
+  patientInformed              Boolean                         @default(false)
+  immediateSupervisorInformed  Boolean                         @default(false)
+  observedConsequences         String?
+  immediateActions             String?
+  witnesses                    String?
+  internalNotes                String?
+  confidentialityLevel         String                          @default("QUALITY_STANDARD")
+  containsSensitiveMedicalData Boolean                         @default(false)
+  confidentialityIncident      Boolean                         @default(false)
+  restrictedAccess             Boolean                         @default(false)
+  confidentialityReason        String?
+  status                       String                          @default("REPORTED")
+  assignedToId                 String?
+  dueDate                      DateTime?
+  qualifiedById                String?
+  qualifiedAt                  DateTime?
+  qualificationNotes           String?
+  escalationRequired           Boolean                         @default(false)
+  investigationSummary         String?
+  immediateCause               String?
+  rootCause                    String?
+  contributingFactors          String?
+  investigationConclusion      String?
+  recommendations              String?
+  investigatedById             String?
+  investigatedAt               DateTime?
+  finalConclusion              String?
+  residualRisk                 String?
+  lessonsLearned               String?
+  procedureUpdated             Boolean                         @default(false)
+  closureNotes                 String?
+  closedById                   String?
+  closedAt                     DateTime?
+  reopenedById                 String?
+  reopenedAt                   DateTime?
+  reopenReason                 String?
+  archivedById                 String?
+  archivedAt                   DateTime?
+  archiveReason                String?
+  createdById                  String
+  updatedById                  String?
+  createdAt                    DateTime                        @default(now())
+  updatedAt                    DateTime                        @updatedAt
+  correctiveActions            HealthQualityCorrectiveAction[]
+  events                       HealthQualityIncidentEvent[]
+
+  @@unique([organizationId, incidentNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, incidentType, status])
+  @@index([organizationId, initialCriticality, confirmedCriticality])
+  @@index([organizationId, patientId, reportedAt])
+  @@index([organizationId, consultationId])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, assignedToId, dueDate])
+  @@index([organizationId, confidentialityIncident, restrictedAccess])
+  @@index([organizationId, createdById, createdAt])
+}
+
+model HealthQualityCorrectiveAction {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  incidentId         String
+  title              String
+  description        String
+  actionType         String
+  responsibleUserId  String
+  responsibleStaffId String?
+  dueDate            DateTime
+  priority           String                @default("NORMAL")
+  status             String                @default("TODO")
+  evidenceUrl        String?
+  completionComment  String?
+  validationComment  String?
+  rejectionReason    String?
+  completedById      String?
+  completedAt        DateTime?
+  validatedById      String?
+  validatedAt        DateTime?
+  createdById        String
+  updatedById        String?
+  cancelledById      String?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  incident           HealthQualityIncident @relation(fields: [organizationId, incidentId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, incidentId, status])
+  @@index([organizationId, responsibleUserId, status, dueDate])
+  @@index([organizationId, dueDate, status])
+}
+
+model HealthQualityIncidentEvent {
+  id             String                @id @default(cuid())
+  organizationId String
+  incidentId     String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  reason         String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime              @default(now())
+  incident       HealthQualityIncident @relation(fields: [organizationId, incidentId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, incidentId, createdAt])
+  @@index([organizationId, actorUserId, createdAt])
+}
+
 model EnterpriseCoreRecord {
   id               String                  @id @default(cuid())
   organizationId   String

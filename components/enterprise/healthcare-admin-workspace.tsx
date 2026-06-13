@@ -39,6 +39,7 @@ import { HealthLaboratoryWorkspace } from "@/components/enterprise/health-labora
 import { HealthPharmacyWorkspace } from "@/components/enterprise/health-pharmacy-workspace";
 import { HealthMedicalBillingWorkspace } from "@/components/enterprise/health-medical-billing-workspace";
 import { HealthInsuranceWorkspace } from "@/components/enterprise/health-insurance-workspace";
+import { HealthQualityWorkspace } from "@/components/enterprise/health-quality-workspace";
 
 type HealthcareMember = {
   id: string;
@@ -566,7 +567,7 @@ export function HealthcareAdminWorkspace({
     router.refresh();
   }
 
-  const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS" && activeModuleCode !== "MEDICAL_RECORDS" && activeModuleCode !== "CARE_TEAM" && activeModuleCode !== "LABORATORY" && activeModuleCode !== "INTERNAL_PHARMACY" && activeModuleCode !== "MEDICAL_BILLING" && activeModuleCode !== "INSURANCE_COVERAGE";
+  const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS" && activeModuleCode !== "MEDICAL_RECORDS" && activeModuleCode !== "CARE_TEAM" && activeModuleCode !== "LABORATORY" && activeModuleCode !== "INTERNAL_PHARMACY" && activeModuleCode !== "MEDICAL_BILLING" && activeModuleCode !== "INSURANCE_COVERAGE" && activeModuleCode !== "QUALITY_INCIDENTS";
 
   return (
     <section className="space-y-4 rounded-[1.5rem] border border-cyan-300/25 bg-cyan-400/10 p-3 shadow-[0_20px_70px_rgba(0,23,54,0.16)] backdrop-blur-xl sm:p-5">
@@ -633,6 +634,8 @@ export function HealthcareAdminWorkspace({
         <HealthMedicalBillingWorkspace organizationId={organizationId} />
       ) : activeModuleCode === "INSURANCE_COVERAGE" ? (
         <HealthInsuranceWorkspace organizationId={organizationId} />
+      ) : activeModuleCode === "QUALITY_INCIDENTS" ? (
+        <HealthQualityWorkspace organizationId={organizationId} />
       ) : (
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

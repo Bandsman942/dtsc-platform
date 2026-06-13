@@ -449,6 +449,18 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier les onze vues, les libellés français, les infos-bulles et l'absence de dépassement horizontal sur mobile.
 - [ ] Exécuter `pnpm qa:regression` ou `node scripts/qa-regression-checks.mjs`.
 
+# Itération HEALTH_CARE 10 - Incidents qualité
+
+- [ ] Créer un incident et vérifier son numéro, son `organizationId`, son historique et son affichage immédiat.
+- [ ] Refuser Patient, Consultation, Laboratoire, Pharmacie, Facture, Assurance, professionnel ou service d’une autre entreprise, ainsi que les contextes ne correspondant pas au patient.
+- [ ] Vérifier que le collaborateur voit uniquement ses signalements, incidents assignés et actions correctives dans Activités.
+- [ ] Vérifier qu’un incident confidentiel est refusé sans `health.quality.view_confidential_incidents`.
+- [ ] Qualifier, assigner et investiguer un incident avec les permissions dédiées.
+- [ ] Créer une action corrective avec responsable et échéance, puis la démarrer, soumettre, valider ou rejeter.
+- [ ] Refuser la clôture avec actions ouvertes sans justification, verrouiller l’incident clôturé et exiger une raison de réouverture.
+- [ ] Vérifier recherche, filtres, menus `...`, libellés français, infos-bulles et formulaire plein écran mobile.
+- [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build` et les contrôles Git.
+
 # Itération PHARMACY Ordonnances / prescriptions - 10 juin 2026
 
 - [ ] Créer des ordonnances avec produit référencé et ligne libre, puis vérifier l'isolation par organisation.

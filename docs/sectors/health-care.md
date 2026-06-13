@@ -193,6 +193,27 @@ Les justificatifs sont conservés sous forme de métadonnées contrôlées. Le t
 
 Permissions : `health.billing.view`, `view_sensitive`, `create_invoice`, `update_invoice`, `issue_invoice`, `cancel_invoice`, `record_payment`, `cancel_payment`, `apply_discount`, `apply_large_discount`, `manage_catalog`, `export_invoice` et `view_reports`.
 
+## Incidents qualité dédiés
+
+Le module Incidents qualité utilise `HealthQualityIncident`, `HealthQualityCorrectiveAction` et `HealthQualityIncidentEvent`. Il couvre le signalement, la qualification, l’assignation, l’investigation, les actions correctives/préventives, la clôture, la réouverture et l’archivage. Chaque incident possède un numéro unique dans l’entreprise, une criticité, une gravité, un impact, un statut, un déclarant et un historique.
+
+Les types contrôlés couvrent notamment sécurité patient, identification, rendez-vous, consultation, prescription, pharmacie, laboratoire, facturation, assurance, plainte, confidentialité, document médical, équipement, hygiène et administration. Les relations Patient, Rendez-vous, Consultation, Dossier médical, Laboratoire, Pharmacie interne, Facturation, Assurance, professionnel et service sont toutes validées côté serveur contre le même `organizationId`; une relation liée à un autre patient est refusée.
+
+Les incidents confidentiels ou à accès restreint ne sont lisibles que par les utilisateurs explicitement autorisés ou directement impliqués. Un collaborateur peut signaler depuis `Activités [Entreprise]` puis consulter uniquement ses propres signalements, incidents assignés et actions correctives. Un rôle gestionnaire ne reçoit pas automatiquement la permission `health.quality.view_confidential_incidents`.
+
+Workflow principal : `REPORTED` → `IN_INVESTIGATION` → `CORRECTIVE_ACTION_REQUIRED` / `CORRECTIVE_ACTION_IN_PROGRESS` → `CLOSED` → `ARCHIVED`. Une réouverture exige un motif. Un incident clôturé ou archivé est verrouillé. Une clôture avec actions ouvertes exige une justification, et les actions correctives exigent toujours un responsable et une échéance.
+
+Routes privées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/quality-incidents` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/quality-incidents/[incidentId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/quality-incidents/[incidentId]/actions` ;
+- `PATCH /api/enterprise/[organizationId]/healthcare/quality-incidents/actions/[actionId]`.
+
+Permissions : `health.quality.view`, `view_sensitive`, `create_incident`, `update_incident`, `qualify_incident`, `assign_incident`, `investigate_incident`, `close_incident`, `reopen_incident`, `archive_incident`, `manage_corrective_actions`, `validate_corrective_actions`, `view_confidential_incidents`, `view_reports` et `export`.
+
+L’interface Administration fournit KPI réels, recherche, filtres, cartes mobiles, détail, historique et menus d’actions persistées. L’interface Activités réutilise le même workspace avec un périmètre limité à l’utilisateur. Le stockage privé des pièces jointes Santé n’est pas encore raccordé : aucun bouton d’upload fictif n’est affiché.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -207,6 +228,7 @@ Permissions : `health.billing.view`, `view_sensitive`, `create_invoice`, `update
 - `20260613093000_healthcare_internal_pharmacy`: ajoute produits, lots, mouvements, délivrances et permissions de la Pharmacie interne dédiée.
 - `20260613153000_healthcare_medical_billing`: ajoute catalogue, factures, lignes, paiements, historique et permissions de Facturation médicale.
 - `20260613203000_healthcare_insurance_coverage`: ajoute organismes payeurs, couvertures patient, demandes, historique et permissions Assurances.
+- `20260613223000_healthcare_quality_incidents`: ajoute incidents qualité, actions correctives, historique, index et permissions par poste Santé.
 
 ## Stockage et API
 
@@ -307,7 +329,7 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 
 ## Limites restantes
 
-- Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire et Pharmacie interne utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
+- Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire, Pharmacie interne, Facturation médicale, Assurances et Incidents qualité utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; certains modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
 - L’inventaire complet multi-produits, l’annulation par mouvement inverse et le fournisseur structuré restent des évolutions futures. Les ajustements persistants et le statut `TO_BILL` couvrent le périmètre actuel sans bouton fictif.
 - Les remboursements, reçus PDF privés, export de facture, comptes/caisse financiers et prise en charge Assurance structurée restent masqués ou non exposés tant que leurs flux dédiés ne sont pas disponibles.
 - Les disponibilités habituelles sont persistées dans l’affectation principale; la gestion détaillée de créneaux exceptionnels par jour reste une évolution future.
