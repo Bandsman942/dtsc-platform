@@ -661,6 +661,7 @@
     color: #f8fbff;
     text-shadow: 0 2px 22px rgba(0, 23, 54, 0.42);
     -webkit-text-fill-color: currentColor;
+    color-scheme: only dark;
   }
 
   .dtsc-hero-heading::selection {
@@ -684,6 +685,7 @@
     color: transparent;
     -webkit-text-fill-color: transparent;
     animation: text-shimmer 5.8s ease-in-out infinite;
+    color-scheme: only dark;
   }
 
   .dtsc-ink-shimmer {

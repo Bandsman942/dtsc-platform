@@ -4,6 +4,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-06-13
 
+### Corrigé
+
+- Correction d'un problème d'affichage sur Samsung Internet (et autres navigateurs avec mode sombre forcé) où les titres dégradés avec `background-clip: text` devenaient noirs et illisibles sur fond sombre, via l'ajout de `color-scheme: only dark` sur les classes concernées.
+
 ### Ajouté
 
 - Ajout du module Assurances & prises en charge HEALTH_CARE dédié avec organismes payeurs, couvertures patient, demandes, décisions et historique.
