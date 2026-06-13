@@ -4,6 +4,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-06-13
 
+### Ajouté
+
+- Ajout du module Facturation médicale HEALTH_CARE dédié avec catalogue de prestations, factures patient, lignes persistées, paiements, soldes et historique financier audité.
+- Ajout de routes privées Facturation médicale, de calculs transactionnels côté serveur et de contrôles anti-double facturation pour Consultation, Laboratoire et Pharmacie interne.
+- Ajout d’un workspace Facturation médicale responsive partagé entre Administration et Activités, avec formulaires guidés, libellés français et infos-bulles.
+
 ### Amélioré
 
 - La navigation latérale utilise désormais l’icône métier configurée pour chaque module du socle commun et de chaque secteur, avec un repli cohérent par code et catégorie.

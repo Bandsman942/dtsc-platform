@@ -30,6 +30,16 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Les délivrances autorisées sont visibles dans Patient, Consultation et Dossier médical sans exposer les produits sensibles.
 - [ ] Liste, filtres, détail, lots, mouvements et formulaires restent utilisables sans débordement mobile.
 
+## Santé - Facturation médicale
+
+- [ ] Toute facture et tout paiement restent liés au même `organizationId` que le patient.
+- [ ] Les totaux, remises, part assurance, montant patient, montant payé et solde sont recalculés côté serveur.
+- [ ] Une consultation, demande laboratoire ou délivrance pharmacie d’une autre organisation est refusée.
+- [ ] Un même élément médical lié ne peut pas être facturé deux fois.
+- [ ] Un paiement supérieur au solde, sur facture payée ou annulée, est refusé.
+- [ ] Une facture avec paiement ne peut pas être annulée sans traitement financier contrôlé.
+- [ ] Liste, filtres, détail, lignes et paiement restent utilisables sans débordement mobile.
+
 ## Santé - Équipe médicale
 
 - [ ] Seul un membre actif de l’organisation peut recevoir une affectation Santé.

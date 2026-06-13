@@ -261,6 +261,8 @@ Deuxième itération active: `PHARMACY`.
 - Pharmacie interne dédiée: `HealthPharmacyProduct`, `HealthPharmacyBatch`, `HealthPharmacyStockMovement` et `HealthPharmacyDispensation`, migration `20260613093000_healthcare_internal_pharmacy`, transactions de stock, FEFO, validation tenant et permission explicite pour les sorties sensibles.
 - API Pharmacie interne: `GET|POST /api/enterprise/[organizationId]/healthcare/internal-pharmacy`, `GET|PATCH /api/enterprise/[organizationId]/healthcare/internal-pharmacy/[productId]` et `POST /api/enterprise/[organizationId]/healthcare/internal-pharmacy/actions`. Les routes génériques refusent les mutations `INTERNAL_PHARMACY`.
 - Intégrations Santé: les détails Patient, Consultation et Dossier médical lisent les délivrances depuis `HealthPharmacyDispensation` et masquent les produits sensibles sans permission Pharmacie dédiée.
+- Facturation médicale dédiée: `HealthMedicalInvoice`, `HealthMedicalInvoiceItem`, `HealthMedicalInvoicePayment`, `HealthMedicalInvoiceEvent` et `HealthBillingServiceCatalog`; calculs transactionnels, validation tenant, anti-double facturation et verrouillage des statuts financiers.
+- API Facturation médicale: `GET|POST /api/enterprise/[organizationId]/healthcare/medical-billing`, `GET|PATCH /api/enterprise/[organizationId]/healthcare/medical-billing/[invoiceId]` et `POST /api/enterprise/[organizationId]/healthcare/medical-billing/catalog`.
 - Activités santé: les blocs santé de `Activités [Entreprise]` peuvent collecter des champs métier contextualisés et créent toujours une vraie `EnterpriseActivityRequest` liée à `organizationId`.
 - API:
   - `GET /api/enterprise/[organizationId]/healthcare` pour lister les enregistrements santé autorisés;

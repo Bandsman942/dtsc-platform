@@ -160,6 +160,22 @@ Routes dédiées :
 
 Une délivrance facturable reçoit `billingStatus = TO_BILL`, sans créer de fausse facture. La prescription reste liée à `HealthConsultation.prescriptionText` tant qu’un référentiel de prescriptions structurées n’est pas disponible.
 
+## Facturation médicale dédiée
+
+Le module `MEDICAL_BILLING` utilise `HealthMedicalInvoice`, `HealthMedicalInvoiceItem`, `HealthMedicalInvoicePayment`, `HealthMedicalInvoiceEvent` et `HealthBillingServiceCatalog`. Il fournit tableau de bord, liste filtrée, formulaire plein écran, lignes de facturation, détail, émission, paiement et annulation contrôlée.
+
+Les montants sont recalculés côté serveur : chaque ligne vaut quantité × prix unitaire - remise, puis la facture applique remise globale, taxe et part assurance. Le paiement met à jour `paidAmount`, `balanceAmount` et le statut dans une transaction. Un paiement supérieur au solde, une facture payée/annulée et une annulation avec paiement existant sont refusés.
+
+Patient, consultation, rendez-vous, demande laboratoire, délivrance pharmacie et service sont validés dans la même organisation. Les lignes liées à une consultation, une demande laboratoire ou une délivrance pharmacie utilisent une contrainte d’unicité tenant pour empêcher la double facturation. Une délivrance facturée passe à `BILLED`.
+
+Routes dédiées :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/medical-billing` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/medical-billing/[invoiceId]` ;
+- `POST /api/enterprise/[organizationId]/healthcare/medical-billing/catalog`.
+
+Permissions : `health.billing.view`, `view_sensitive`, `create_invoice`, `update_invoice`, `issue_invoice`, `cancel_invoice`, `record_payment`, `cancel_payment`, `apply_discount`, `apply_large_discount`, `manage_catalog`, `export_invoice` et `view_reports`.
+
 ## Migrations
 
 - `20260528100000_enterprise_sector_records`: ajoute `EnterpriseSectorRecord`.
@@ -172,6 +188,7 @@ Une délivrance facturable reçoit `billingStatus = TO_BILL`, sans créer de fau
 - `20260612233000_healthcare_staff`: ajoute Équipe médicale, spécialités, affectations, historique, postes et services Santé recommandés.
 - `20260613013000_healthcare_laboratory`: ajoute Laboratoire, catalogue d’examens, demandes multi-examens, résultats et historique dédiés.
 - `20260613093000_healthcare_internal_pharmacy`: ajoute produits, lots, mouvements, délivrances et permissions de la Pharmacie interne dédiée.
+- `20260613153000_healthcare_medical_billing`: ajoute catalogue, factures, lignes, paiements, historique et permissions de Facturation médicale.
 
 ## Stockage et API
 
@@ -273,7 +290,8 @@ Le backend applique les contrôles via `canAccessEnterpriseModule()` avec le cod
 ## Limites restantes
 
 - Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire et Pharmacie interne utilisent désormais des tables dédiées. Les autres modules Santé utilisent encore `EnterpriseSectorRecord`; les modules dédiés conservent temporairement un miroir `legacyRecordId` pour leur compatibilité.
-- L’inventaire complet multi-produits, l’annulation par mouvement inverse, le fournisseur structuré et la création de lignes de Facturation médicale restent des évolutions futures. Les ajustements persistants et le statut `TO_BILL` couvrent le périmètre actuel sans bouton fictif.
+- L’inventaire complet multi-produits, l’annulation par mouvement inverse et le fournisseur structuré restent des évolutions futures. Les ajustements persistants et le statut `TO_BILL` couvrent le périmètre actuel sans bouton fictif.
+- Les remboursements, reçus PDF privés, export de facture, comptes/caisse financiers et prise en charge Assurance structurée restent masqués ou non exposés tant que leurs flux dédiés ne sont pas disponibles.
 - Les disponibilités habituelles sont persistées dans l’affectation principale; la gestion détaillée de créneaux exceptionnels par jour reste une évolution future.
 - Le fichier de résultat, la facturation d’examens et l’export PDF ne sont pas exposés tant que leurs routes privées dédiées ne sont pas disponibles.
 - Les demandes laboratoire, factures et documents médicaux liés à une consultation restent génériques; aucun bouton n’est affiché tant que leur workflow dédié n’est pas disponible.

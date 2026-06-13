@@ -216,6 +216,14 @@ model User {
   authorizedHealthPharmacyMovements     HealthPharmacyStockMovement[]     @relation("HealthPharmacyMovementAuthorizedBy")
   dispensedHealthPharmacyItems          HealthPharmacyDispensation[]      @relation("HealthPharmacyDispensedBy")
   prescribedHealthPharmacyItems         HealthPharmacyDispensation[]      @relation("HealthPharmacyPrescriber")
+  createdHealthBillingServices          HealthBillingServiceCatalog[]     @relation("HealthBillingServiceCreatedBy")
+  createdHealthMedicalInvoices          HealthMedicalInvoice[]            @relation("HealthMedicalInvoiceCreatedBy")
+  updatedHealthMedicalInvoices          HealthMedicalInvoice[]            @relation("HealthMedicalInvoiceUpdatedBy")
+  issuedHealthMedicalInvoices           HealthMedicalInvoice[]            @relation("HealthMedicalInvoiceIssuedBy")
+  cancelledHealthMedicalInvoices        HealthMedicalInvoice[]            @relation("HealthMedicalInvoiceCancelledBy")
+  collectedHealthInvoicePayments        HealthMedicalInvoicePayment[]     @relation("HealthInvoicePaymentCollectedBy")
+  cancelledHealthInvoicePayments        HealthMedicalInvoicePayment[]     @relation("HealthInvoicePaymentCancelledBy")
+  healthBillingEvents                   HealthMedicalInvoiceEvent[]       @relation("HealthMedicalInvoiceEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -612,6 +620,11 @@ model Organization {
   healthPharmacyBatches       HealthPharmacyBatch[]
   healthPharmacyMovements     HealthPharmacyStockMovement[]
   healthPharmacyDispensations HealthPharmacyDispensation[]
+  healthBillingServices       HealthBillingServiceCatalog[]
+  healthMedicalInvoices       HealthMedicalInvoice[]
+  healthMedicalInvoiceItems   HealthMedicalInvoiceItem[]
+  healthMedicalPayments       HealthMedicalInvoicePayment[]
+  healthMedicalInvoiceEvents  HealthMedicalInvoiceEvent[]
   pharmacyProducts            PharmacyProduct[]
   pharmacyBatches             PharmacyBatch[]
   pharmacyStockMovements      PharmacyStockMovement[]
@@ -881,6 +894,7 @@ model EnterpriseDepartment {
   healthConsultations     HealthConsultation[]
   healthStaffAssignments  HealthStaffAssignment[]
   healthPharmacyMovements HealthPharmacyStockMovement[]
+  healthMedicalInvoices   HealthMedicalInvoice[]
 
   @@unique([organizationId, departmentCode])
   @@unique([organizationId, id])
@@ -1043,6 +1057,7 @@ model HealthPatient {
   labRequests                  HealthLabRequest[]
   pharmacyMovements            HealthPharmacyStockMovement[]
   pharmacyDispensations        HealthPharmacyDispensation[]
+  medicalInvoices              HealthMedicalInvoice[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1109,6 +1124,7 @@ model HealthAppointment {
   cancelledBy              User?                    @relation("HealthAppointmentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   events                   HealthAppointmentEvent[]
   consultation             HealthConsultation?
+  medicalInvoices          HealthMedicalInvoice[]
 
   @@unique([organizationId, appointmentNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1227,6 +1243,8 @@ model HealthConsultation {
   labRequests                HealthLabRequest[]
   pharmacyMovements          HealthPharmacyStockMovement[]
   pharmacyDispensations      HealthPharmacyDispensation[]
+  medicalInvoices            HealthMedicalInvoice[]
+  medicalInvoiceItems        HealthMedicalInvoiceItem[]
 
   @@unique([organizationId, consultationNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1554,7 +1572,7 @@ model HealthLabTestCatalog {
 }
 
 model HealthLabRequest {
-  id                    String                 @id @default(cuid())
+  id                    String                     @id @default(cuid())
   organizationId        String
   legacyRecordId        String?
   labRequestNumber      String
@@ -1568,10 +1586,10 @@ model HealthLabRequest {
   clinicalIndication    String?
   medicalNotes          String?
   sampleType            String?
-  priority              String                 @default("ROUTINE")
-  status                String                 @default("REQUESTED")
-  confidentialityLevel  String                 @default("MEDICAL_STANDARD")
-  requestedAt           DateTime               @default(now())
+  priority              String                     @default("ROUTINE")
+  status                String                     @default("REQUESTED")
+  confidentialityLevel  String                     @default("MEDICAL_STANDARD")
+  requestedAt           DateTime                   @default(now())
   expectedSampleAt      DateTime?
   sampledAt             DateTime?
   sampledById           String?
@@ -1597,23 +1615,25 @@ model HealthLabRequest {
   laboratoryNotes       String?
   createdById           String
   updatedById           String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  patient               HealthPatient          @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
-  consultation          HealthConsultation?    @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
-  medicalRecord         HealthMedicalRecord?   @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Restrict)
-  requestedBy           User                   @relation("HealthLabRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
-  assignedLabStaff      User?                  @relation("HealthLabAssignedStaff", fields: [assignedLabStaffId], references: [id], onDelete: SetNull)
-  mainTest              HealthLabTestCatalog?  @relation(fields: [organizationId, mainTestId], references: [organizationId, id], onDelete: Restrict)
-  sampledBy             User?                  @relation("HealthLabSampledBy", fields: [sampledById], references: [id], onDelete: SetNull)
-  resultEnteredBy       User?                  @relation("HealthLabResultEnteredBy", fields: [resultEnteredById], references: [id], onDelete: SetNull)
-  validatedBy           User?                  @relation("HealthLabValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
-  cancelledBy           User?                  @relation("HealthLabCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
-  createdBy             User                   @relation("HealthLabCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy             User?                  @relation("HealthLabUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  organization          Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient               HealthPatient              @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  consultation          HealthConsultation?        @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
+  medicalRecord         HealthMedicalRecord?       @relation(fields: [organizationId, medicalRecordId], references: [organizationId, id], onDelete: Restrict)
+  requestedBy           User                       @relation("HealthLabRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  assignedLabStaff      User?                      @relation("HealthLabAssignedStaff", fields: [assignedLabStaffId], references: [id], onDelete: SetNull)
+  mainTest              HealthLabTestCatalog?      @relation(fields: [organizationId, mainTestId], references: [organizationId, id], onDelete: Restrict)
+  sampledBy             User?                      @relation("HealthLabSampledBy", fields: [sampledById], references: [id], onDelete: SetNull)
+  resultEnteredBy       User?                      @relation("HealthLabResultEnteredBy", fields: [resultEnteredById], references: [id], onDelete: SetNull)
+  validatedBy           User?                      @relation("HealthLabValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
+  cancelledBy           User?                      @relation("HealthLabCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdBy             User                       @relation("HealthLabCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             User?                      @relation("HealthLabUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   items                 HealthLabRequestItem[]
   events                HealthLabEvent[]
+  medicalInvoices       HealthMedicalInvoice[]
+  medicalInvoiceItems   HealthMedicalInvoiceItem[]
 
   @@unique([organizationId, labRequestNumber])
   @@unique([organizationId, legacyRecordId])
@@ -1792,36 +1812,202 @@ model HealthPharmacyStockMovement {
 }
 
 model HealthPharmacyDispensation {
-  id             String                      @id @default(cuid())
-  organizationId String
-  movementId     String                      @unique
-  patientId      String
-  consultationId String?
-  productId      String
-  batchId        String?
-  quantity       Decimal                     @db.Decimal(14, 3)
-  dispensedById  String
-  dispensedAt    DateTime                    @default(now())
-  prescriberId   String?
-  billable       Boolean                     @default(false)
-  billingStatus  String                      @default("NOT_BILLABLE")
-  notes          String?
-  createdAt      DateTime                    @default(now())
-  updatedAt      DateTime                    @updatedAt
-  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  movement       HealthPharmacyStockMovement @relation(fields: [organizationId, movementId], references: [organizationId, id], onDelete: Restrict)
-  patient        HealthPatient               @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
-  consultation   HealthConsultation?         @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
-  product        HealthPharmacyProduct       @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
-  batch          HealthPharmacyBatch?        @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
-  dispensedBy    User                        @relation("HealthPharmacyDispensedBy", fields: [dispensedById], references: [id], onDelete: Restrict)
-  prescriber     User?                       @relation("HealthPharmacyPrescriber", fields: [prescriberId], references: [id], onDelete: SetNull)
+  id                  String                      @id @default(cuid())
+  organizationId      String
+  movementId          String                      @unique
+  patientId           String
+  consultationId      String?
+  productId           String
+  batchId             String?
+  quantity            Decimal                     @db.Decimal(14, 3)
+  dispensedById       String
+  dispensedAt         DateTime                    @default(now())
+  prescriberId        String?
+  billable            Boolean                     @default(false)
+  billingStatus       String                      @default("NOT_BILLABLE")
+  notes               String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movement            HealthPharmacyStockMovement @relation(fields: [organizationId, movementId], references: [organizationId, id], onDelete: Restrict)
+  patient             HealthPatient               @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  consultation        HealthConsultation?         @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
+  product             HealthPharmacyProduct       @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  batch               HealthPharmacyBatch?        @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+  dispensedBy         User                        @relation("HealthPharmacyDispensedBy", fields: [dispensedById], references: [id], onDelete: Restrict)
+  prescriber          User?                       @relation("HealthPharmacyPrescriber", fields: [prescriberId], references: [id], onDelete: SetNull)
+  medicalInvoices     HealthMedicalInvoice[]
+  medicalInvoiceItems HealthMedicalInvoiceItem[]
 
   @@unique([organizationId, movementId])
+  @@unique([organizationId, id])
   @@index([organizationId, patientId, dispensedAt])
   @@index([organizationId, consultationId, dispensedAt])
   @@index([organizationId, productId, dispensedAt])
   @@index([organizationId, billingStatus])
+}
+
+model HealthBillingServiceCatalog {
+  id                     String                     @id @default(cuid())
+  organizationId         String
+  code                   String
+  labelFr                String
+  labelEn                String?
+  category               String
+  defaultPrice           Decimal                    @db.Decimal(14, 2)
+  currency               String                     @default("CDF")
+  billable               Boolean                    @default(true)
+  requiresMedicalContext Boolean                    @default(false)
+  isGlobal               Boolean                    @default(false)
+  isActive               Boolean                    @default(true)
+  sortOrder              Int                        @default(0)
+  createdById            String?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+  organization           Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy              User?                      @relation("HealthBillingServiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  invoiceItems           HealthMedicalInvoiceItem[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, isActive, category, sortOrder])
+}
+
+model HealthMedicalInvoice {
+  id                     String                        @id @default(cuid())
+  organizationId         String
+  legacyRecordId         String?
+  invoiceNumber          String
+  patientId              String
+  consultationId         String?
+  appointmentId          String?
+  labRequestId           String?
+  pharmacyDispensationId String?
+  departmentId           String?
+  invoiceType            String
+  invoiceDate            DateTime                      @default(now())
+  dueDate                DateTime?
+  currency               String                        @default("CDF")
+  status                 String                        @default("DRAFT")
+  subtotalAmount         Decimal                       @default(0) @db.Decimal(14, 2)
+  discountAmount         Decimal                       @default(0) @db.Decimal(14, 2)
+  discountReason         String?
+  taxAmount              Decimal                       @default(0) @db.Decimal(14, 2)
+  insuranceAmount        Decimal                       @default(0) @db.Decimal(14, 2)
+  patientAmount          Decimal                       @default(0) @db.Decimal(14, 2)
+  totalAmount            Decimal                       @default(0) @db.Decimal(14, 2)
+  paidAmount             Decimal                       @default(0) @db.Decimal(14, 2)
+  balanceAmount          Decimal                       @default(0) @db.Decimal(14, 2)
+  notesInternal          String?
+  notesVisible           String?
+  createdById            String
+  updatedById            String?
+  issuedById             String?
+  issuedAt               DateTime?
+  cancelledById          String?
+  cancelledAt            DateTime?
+  cancellationReason     String?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  organization           Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient                HealthPatient                 @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  consultation           HealthConsultation?           @relation(fields: [organizationId, consultationId], references: [organizationId, id], onDelete: Restrict)
+  appointment            HealthAppointment?            @relation(fields: [organizationId, appointmentId], references: [organizationId, id], onDelete: Restrict)
+  labRequest             HealthLabRequest?             @relation(fields: [organizationId, labRequestId], references: [organizationId, id], onDelete: Restrict)
+  pharmacyDispensation   HealthPharmacyDispensation?   @relation(fields: [organizationId, pharmacyDispensationId], references: [organizationId, id], onDelete: Restrict)
+  department             EnterpriseDepartment?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy              User                          @relation("HealthMedicalInvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy              User?                         @relation("HealthMedicalInvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  issuedBy               User?                         @relation("HealthMedicalInvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  cancelledBy            User?                         @relation("HealthMedicalInvoiceCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  items                  HealthMedicalInvoiceItem[]
+  payments               HealthMedicalInvoicePayment[]
+  events                 HealthMedicalInvoiceEvent[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@unique([organizationId, legacyRecordId])
+  @@unique([organizationId, id])
+  @@unique([organizationId, consultationId])
+  @@unique([organizationId, labRequestId])
+  @@unique([organizationId, pharmacyDispensationId])
+  @@index([organizationId, patientId, invoiceDate])
+  @@index([organizationId, consultationId])
+  @@index([organizationId, status, invoiceDate])
+  @@index([organizationId, dueDate])
+}
+
+model HealthMedicalInvoiceItem {
+  id                           String                       @id @default(cuid())
+  organizationId               String
+  invoiceId                    String
+  itemType                     String
+  serviceCatalogId             String?
+  description                  String
+  quantity                     Decimal                      @db.Decimal(14, 3)
+  unitPrice                    Decimal                      @db.Decimal(14, 2)
+  discountAmount               Decimal                      @default(0) @db.Decimal(14, 2)
+  totalAmount                  Decimal                      @db.Decimal(14, 2)
+  linkedConsultationId         String?
+  linkedLabRequestId           String?
+  linkedPharmacyDispensationId String?
+  createdAt                    DateTime                     @default(now())
+  updatedAt                    DateTime                     @updatedAt
+  organization                 Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice                      HealthMedicalInvoice         @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Cascade)
+  serviceCatalog               HealthBillingServiceCatalog? @relation(fields: [organizationId, serviceCatalogId], references: [organizationId, id], onDelete: Restrict)
+  linkedConsultation           HealthConsultation?          @relation(fields: [organizationId, linkedConsultationId], references: [organizationId, id], onDelete: Restrict)
+  linkedLabRequest             HealthLabRequest?            @relation(fields: [organizationId, linkedLabRequestId], references: [organizationId, id], onDelete: Restrict)
+  linkedPharmacyDispensation   HealthPharmacyDispensation?  @relation(fields: [organizationId, linkedPharmacyDispensationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, linkedConsultationId])
+  @@unique([organizationId, linkedLabRequestId])
+  @@unique([organizationId, linkedPharmacyDispensationId])
+  @@index([organizationId, invoiceId])
+}
+
+model HealthMedicalInvoicePayment {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  invoiceId          String
+  amount             Decimal              @db.Decimal(14, 2)
+  paymentDate        DateTime             @default(now())
+  paymentMethod      String
+  paymentReference   String?
+  receiptNumber      String
+  status             String               @default("CONFIRMED")
+  comment            String?
+  collectedById      String
+  cancelledById      String?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice            HealthMedicalInvoice @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  collectedBy        User                 @relation("HealthInvoicePaymentCollectedBy", fields: [collectedById], references: [id], onDelete: Restrict)
+  cancelledBy        User?                @relation("HealthInvoicePaymentCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId, invoiceId, paymentDate])
+  @@index([organizationId, paymentDate, status])
+}
+
+model HealthMedicalInvoiceEvent {
+  id             String               @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime             @default(now())
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice        HealthMedicalInvoice @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Cascade)
+  actor          User                 @relation("HealthMedicalInvoiceEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, invoiceId, createdAt])
 }
 
 model EnterpriseCoreRecord {

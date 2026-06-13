@@ -99,6 +99,11 @@ const healthPharmacyActionsApi = read("app/api/enterprise/[organizationId]/healt
 const healthPharmacyWorkspace = read("components/enterprise/health-pharmacy-workspace.tsx");
 const healthPharmacyService = read("lib/health-pharmacy.ts");
 const healthPharmacyAccess = read("lib/health-pharmacy-access.ts");
+const healthBillingApi = read("app/api/enterprise/[organizationId]/healthcare/medical-billing/route.ts");
+const healthBillingRecordApi = read("app/api/enterprise/[organizationId]/healthcare/medical-billing/[invoiceId]/route.ts");
+const healthBillingWorkspace = read("components/enterprise/health-medical-billing-workspace.tsx");
+const healthBillingService = read("lib/health-billing.ts");
+const healthBillingAccess = read("lib/health-billing-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -495,6 +500,26 @@ check(
     && !healthPharmacyWorkspace.includes("window.prompt")
     && !healthPharmacyWorkspace.includes("window.confirm")
     && !healthPharmacyWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
+);
+
+check(
+  "HEALTH_CARE Facturation médicale: modèles dédiés, calculs et isolation tenant",
+  containsAll(prismaSchema, ["model HealthMedicalInvoice", "model HealthMedicalInvoiceItem", "model HealthMedicalInvoicePayment", "model HealthMedicalInvoiceEvent", "model HealthBillingServiceCatalog", "@@unique([organizationId, invoiceNumber])"])
+    && containsAll(healthBillingService, ["calculateInvoice", "validateBillingRefs", "createMedicalInvoice", "billingAction", "PAYMENT_EXCEEDS_BALANCE", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Facturation médicale: routes privées, permissions et audit",
+  containsAll(healthBillingApi, ["getHealthBillingAccess", "invoiceCreateSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthBillingRecordApi, ["billingActionSchema.safeParse", "billingAction", "canRecordPayment", "writeAuditLog"])
+    && containsAll(healthBillingAccess, ['"MEDICAL_BILLING"', "health.billing.record_payment"])
+);
+
+check(
+  "HEALTH_CARE Facturation médicale: tableau de bord, lignes, paiements et mobile",
+  containsAll(healthBillingWorkspace, ["ListControls", "ActionMenu", "Factures du jour", "Solde restant", "Enregistrer un paiement", "Aucune facture médicale enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+    && !healthBillingWorkspace.includes("window.prompt")
+    && !healthBillingWorkspace.includes("window.confirm")
 );
 
 check(

@@ -68,7 +68,7 @@ const healthcarePermissions = [
   "health.medical_records.view",
   "health.lab.validate",
   "health.pharmacy.view", "health.pharmacy.view_sensitive", "health.pharmacy.create_product", "health.pharmacy.update_product", "health.pharmacy.archive_product", "health.pharmacy.manage_batches", "health.pharmacy.stock_entry", "health.pharmacy.stock_exit", "health.pharmacy.dispense", "health.pharmacy.adjust_stock", "health.pharmacy.manage_inventory", "health.pharmacy.authorize_sensitive_exit", "health.pharmacy.view_movements",
-  "health.billing.pay",
+  "health.billing.view", "health.billing.view_sensitive", "health.billing.create_invoice", "health.billing.update_invoice", "health.billing.issue_invoice", "health.billing.cancel_invoice", "health.billing.record_payment", "health.billing.cancel_payment", "health.billing.apply_discount", "health.billing.apply_large_discount", "health.billing.manage_catalog", "health.billing.export_invoice", "health.billing.view_reports",
   "health.insurance.validate",
   "health.incidents.manage",
   "health.documents.download",
