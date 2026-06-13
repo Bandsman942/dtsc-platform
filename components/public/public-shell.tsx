@@ -35,7 +35,7 @@ const companyLinks = [
 
 export function PublicHeader() {
   return (
-    <header className="sticky top-0 z-[90] overflow-visible border-b border-dtsc-border bg-dtsc-surface/95 shadow-[0_18px_55px_rgba(0,23,54,0.12)] backdrop-blur-xl">
+    <header className="sticky top-0 z-[90] overflow-visible border-b border-dtsc-border bg-dtsc-surface/85 shadow-[0_1px_0_rgba(0,23,54,0.04)] backdrop-blur-xl supports-[backdrop-filter]:bg-dtsc-surface/75">
       <VisitTracker />
       <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:flex lg:justify-between">
@@ -44,7 +44,7 @@ export function PublicHeader() {
           </div>
           <PublicNav />
         </div>
-        <div className="rounded-[1.35rem] border border-dtsc-border bg-[linear-gradient(120deg,var(--dtsc-page),var(--dtsc-surface),var(--dtsc-soft))] p-2 shadow-[0_16px_42px_rgba(0,43,91,0.08)]">
+        <div className="rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-2">
           <PublicSiteSearch />
         </div>
       </div>
@@ -57,43 +57,43 @@ export function PublicFooter() {
 
   return (
     <footer className="border-t border-dtsc-border bg-dtsc-surface">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-2 lg:px-8 xl:grid-cols-[1.25fr_0.85fr_0.95fr_1fr_1.1fr]">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 text-sm sm:px-6 md:grid-cols-2 lg:px-8 xl:grid-cols-[1.25fr_0.85fr_0.95fr_1fr_1.1fr]">
         <div>
           <DtscLogo />
-          <p className="mt-4 max-w-md leading-6 text-dtsc-muted">{dtsc.summary}</p>
+          <p className="mt-4 max-w-md leading-relaxed text-dtsc-muted">{dtsc.summary}</p>
         </div>
         <div>
-          <p className="font-black text-dtsc-ink">Entreprise</p>
-          <div className="mt-3 grid gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Entreprise</p>
+          <div className="mt-4 grid gap-2.5">
             {companyLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{link.label}</Link>
+              <Link key={link.href} href={link.href} className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">{link.label}</Link>
             ))}
           </div>
         </div>
         <div>
-          <p className="font-black text-dtsc-ink">Ressources</p>
-          <div className="mt-3 grid gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Ressources</p>
+          <div className="mt-4 grid gap-2.5">
             {resourceLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{link.label}</Link>
+              <Link key={link.href} href={link.href} className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">{link.label}</Link>
             ))}
           </div>
         </div>
         <div>
-          <p className="font-black text-dtsc-ink">Conditions et politiques</p>
-          <div className="mt-3 grid gap-2">
-            <Link href="/conditions-utilisation" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Conditions d&apos;utilisation</Link>
-            <Link href="/politique-confidentialite" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Politique de confidentialité</Link>
-            <Link href="/politique-cookies" className="font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">Politique des cookies</Link>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Conditions et politiques</p>
+          <div className="mt-4 grid gap-2.5">
+            <Link href="/conditions-utilisation" className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">Conditions d&apos;utilisation</Link>
+            <Link href="/politique-confidentialite" className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">Politique de confidentialité</Link>
+            <Link href="/politique-cookies" className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">Politique des cookies</Link>
           </div>
         </div>
         <div>
-          <p className="font-black text-dtsc-ink">Contact</p>
-          <p className="mt-3 text-dtsc-muted">WhatsApp: {dtsc.whatsapp}</p>
-          <a href={`mailto:${dtsc.email}`} className="mt-2 inline-flex font-bold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Contact</p>
+          <p className="mt-4 text-dtsc-muted">WhatsApp: {dtsc.whatsapp}</p>
+          <a href={`mailto:${dtsc.email}`} className="mt-2 inline-flex font-medium text-dtsc-blue transition-colors hover:text-dtsc-cyan">
             {dtsc.email}
           </a>
-          <div className="mt-4">
-            <p className="font-black text-dtsc-ink">Réseaux sociaux</p>
+          <div className="mt-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Réseaux sociaux</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {socialNetworks.map((item) =>
                 item.href ? (
@@ -102,7 +102,7 @@ export function PublicFooter() {
                     href={item.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-blue shadow-[0_10px_24px_rgba(0,43,91,0.08)] transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-blue transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft"
                     aria-label={item.label}
                   >
                     <SocialIcon network={item.network} />
@@ -110,7 +110,7 @@ export function PublicFooter() {
                 ) : (
                   <span
                     key={item.network}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-muted shadow-[0_10px_24px_rgba(0,43,91,0.08)]"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-page text-dtsc-muted"
                     aria-label={item.label}
                     title="Compte à venir"
                   >
@@ -118,7 +118,7 @@ export function PublicFooter() {
                   </span>
                 )
               )}
-              <span className="ml-1 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-black text-dtsc-blue">
+              <span className="ml-1 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-semibold text-dtsc-blue">
                 {socialHandle}
               </span>
             </div>

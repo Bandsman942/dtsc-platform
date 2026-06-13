@@ -462,48 +462,122 @@
     max-width: 100%;
     overflow-wrap: anywhere;
     border: 1px solid var(--dtsc-border);
-    border-radius: 1rem;
-    background:
-      linear-gradient(145deg, color-mix(in srgb, var(--dtsc-surface) 92%, var(--dtsc-cyan) 8%), color-mix(in srgb, var(--dtsc-page) 90%, var(--dtsc-blue) 10%));
-    box-shadow: 0 12px 34px rgba(0, 43, 91, 0.08);
+    border-radius: var(--radius-lg, 1rem);
+    background: var(--dtsc-surface);
+    box-shadow: 0 1px 2px rgba(7, 20, 39, 0.04), 0 6px 16px rgba(0, 43, 91, 0.05);
   }
 
   .dtsc-card-alt {
     min-width: 0;
     max-width: 100%;
     overflow-wrap: anywhere;
-    border: 1px solid color-mix(in srgb, var(--dtsc-border) 78%, var(--dtsc-cyan) 22%);
-    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--dtsc-border) 82%, var(--dtsc-cyan) 18%);
+    border-radius: var(--radius-lg, 1rem);
     background:
-      linear-gradient(145deg, color-mix(in srgb, var(--dtsc-soft) 74%, var(--dtsc-surface) 26%), color-mix(in srgb, var(--dtsc-surface) 88%, var(--dtsc-cyan) 12%));
-    box-shadow: 0 14px 38px rgba(0, 43, 91, 0.09);
+      linear-gradient(160deg, color-mix(in srgb, var(--dtsc-soft) 50%, var(--dtsc-surface) 50%), var(--dtsc-surface));
+    box-shadow: 0 1px 2px rgba(7, 20, 39, 0.04), 0 6px 16px rgba(0, 43, 91, 0.05);
   }
 
   .dtsc-public-band-light {
-    background:
-      radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--dtsc-cyan) 13%, transparent) 0, transparent 30%),
-      linear-gradient(180deg, color-mix(in srgb, var(--dtsc-surface) 88%, var(--dtsc-cyan) 12%), color-mix(in srgb, var(--dtsc-page) 92%, var(--dtsc-blue) 8%));
+    background: var(--dtsc-surface);
   }
 
   .dtsc-public-band-soft {
     background:
-      radial-gradient(circle at 84% 14%, color-mix(in srgb, var(--dtsc-blue) 13%, transparent) 0, transparent 32%),
-      linear-gradient(135deg, color-mix(in srgb, var(--dtsc-soft) 82%, var(--dtsc-surface) 18%), color-mix(in srgb, var(--dtsc-page) 84%, var(--dtsc-cyan) 16%));
+      linear-gradient(180deg, var(--dtsc-page), color-mix(in srgb, var(--dtsc-soft) 45%, var(--dtsc-page) 55%));
   }
 
   .dtsc-public-band-cyan {
     background:
-      radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--dtsc-cyan) 18%, transparent) 0, transparent 30%),
-      linear-gradient(145deg, color-mix(in srgb, var(--dtsc-surface) 82%, var(--dtsc-cyan) 18%), color-mix(in srgb, var(--dtsc-soft) 78%, var(--dtsc-blue) 22%));
+      linear-gradient(180deg, color-mix(in srgb, var(--dtsc-soft) 60%, var(--dtsc-surface) 40%), var(--dtsc-page));
   }
 
   .dtsc-card-hover {
-    transition: transform 200ms ease, box-shadow 200ms ease;
+    transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease, border-color 220ms ease;
   }
 
   .dtsc-card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 32px rgba(0, 43, 91, 0.1);
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--dtsc-cyan) 50%, var(--dtsc-border));
+    box-shadow: 0 2px 4px rgba(7, 20, 39, 0.04), 0 16px 36px rgba(0, 43, 91, 0.1);
+  }
+
+  /* Reusable public design helpers */
+  .dtsc-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dtsc-blue);
+  }
+
+  .dtsc-eyebrow::before {
+    content: "";
+    width: 1.5rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--dtsc-blue), var(--dtsc-cyan));
+  }
+
+  .dtsc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--dtsc-border) 70%, var(--dtsc-cyan) 30%);
+    background: color-mix(in srgb, var(--dtsc-soft) 60%, var(--dtsc-surface) 40%);
+    padding: 0.4rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--dtsc-blue);
+  }
+
+  .dtsc-link-arrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    color: var(--dtsc-blue);
+    transition: gap 200ms ease, color 200ms ease;
+  }
+
+  .dtsc-link-arrow:hover {
+    gap: 0.65rem;
+    color: var(--dtsc-cyan);
+  }
+
+  .dtsc-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 3rem;
+    width: 3rem;
+    border-radius: 0.85rem;
+    background: linear-gradient(150deg, color-mix(in srgb, var(--dtsc-blue) 14%, var(--dtsc-surface)), var(--dtsc-soft));
+    color: var(--dtsc-blue);
+    border: 1px solid color-mix(in srgb, var(--dtsc-border) 60%, var(--dtsc-cyan) 40%);
+  }
+
+  .dtsc-hairline {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, var(--dtsc-border), transparent);
+  }
+
+  /* Scroll reveal (used by the Reveal component) */
+  .dtsc-reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 640ms cubic-bezier(0.16, 1, 0.3, 1), transform 640ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+  }
+
+  .dtsc-reveal[data-visible="true"] {
+    opacity: 1;
+    transform: none;
   }
 
   .dtsc-glass-card {
@@ -1005,6 +1079,12 @@
     .dtsc-ink-shimmer,
     .dtsc-line-reveal::after {
       animation: none;
+    }
+
+    .dtsc-reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
     }
   }
 
