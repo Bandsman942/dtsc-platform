@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ElementType } from "react";
-import { Bell, Blocks, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
+import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { getConsoleUrl, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
+import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
 
 type NavItem = {
   href: string;
@@ -48,7 +49,7 @@ export function NavLinks({
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
-  enterpriseContext?: { organizationName: string; showAdmin: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean }> } | null;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean; icon: string | null }> } | null;
   locale?: string | null;
 }) {
   const pathname = usePathname();
@@ -73,7 +74,7 @@ export function NavLinks({
         ...enterpriseContext.modules.map((enterpriseModule) => ({
           href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`,
           label: enterpriseModule.label,
-          icon: Blocks,
+          icon: resolveEnterpriseModuleIcon(enterpriseModule),
           help: enterpriseModule.description,
         })),
         ...(enterpriseContext.showAdmin

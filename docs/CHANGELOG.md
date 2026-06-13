@@ -2,6 +2,12 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-13
+
+### Amélioré
+
+- La navigation latérale utilise désormais l’icône métier configurée pour chaque module du socle commun et de chaque secteur, avec un repli cohérent par code et catégorie.
+
 ## 2026-06-12
 
 ### Ajouté

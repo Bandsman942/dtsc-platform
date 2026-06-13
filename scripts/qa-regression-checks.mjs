@@ -301,6 +301,8 @@ check(
 check(
   "navigation Enterprise expose uniquement les modules actifs et autorisés",
   containsAll(enterpriseNavigation, ["enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed", "getOrganizationEntitlements", "getEnterpriseModulesDataset"])
+    && containsAll(read("components/layout/nav-links.tsx"), ["resolveEnterpriseModuleIcon(enterpriseModule)", "enterpriseModule.description"])
+    && containsAll(read("lib/enterprise/enterprise-module-icons.ts"), ["enterpriseModuleIcons", "iconByModuleCode", "ADMIN_DASHBOARD", "LABORATORY", "PHARMACY"])
     && containsAll(enterpriseModulePage, ["canAccessEnterpriseModule", "requireEnterpriseMembership", "organizationId_moduleCode", "!enterpriseModule.isCore", "internalCalendarEvent", "auditLog.findMany"])
     && middleware.includes('"/enterprise-modules"')
 );

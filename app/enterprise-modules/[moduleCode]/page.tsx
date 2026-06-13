@@ -52,7 +52,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
       <EnterpriseModuleWorkspace
         organizationId={organizationId}
         organizationName={organization.name}
-        enterpriseModule={{ code: enterpriseModule.moduleCode, label: user.locale === "en" ? enterpriseModule.labelEn : enterpriseModule.labelFr, description: user.locale === "en" ? enterpriseModule.descriptionEn || enterpriseModule.moduleCode : enterpriseModule.descriptionFr || enterpriseModule.moduleCode, category: enterpriseModule.moduleCategory, isCore: enterpriseModule.isCore }}
+        enterpriseModule={{ code: enterpriseModule.moduleCode, label: user.locale === "en" ? enterpriseModule.labelEn : enterpriseModule.labelFr, description: user.locale === "en" ? enterpriseModule.descriptionEn || enterpriseModule.moduleCode : enterpriseModule.descriptionFr || enterpriseModule.moduleCode, category: enterpriseModule.moduleCategory, isCore: enterpriseModule.isCore, icon: enterpriseModule.icon }}
         activityBlocks={activityBlocks}
         records={records}
         coreData={{ members, departments, positions, workflows, requests, calendarEvents, audits }}

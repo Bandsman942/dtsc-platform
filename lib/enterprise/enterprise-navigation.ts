@@ -7,6 +7,7 @@ export type EnterpriseNavigationModule = {
   description: string;
   category: string;
   isCore: boolean;
+  icon: string | null;
 };
 
 export async function getEnterpriseNavigationModules(organizationId: string, locale?: string | null): Promise<EnterpriseNavigationModule[]> {
@@ -23,5 +24,6 @@ export async function getEnterpriseNavigationModules(organizationId: string, loc
       description: locale === "en" ? enterpriseModule.descriptionEn || enterpriseModule.moduleCode : enterpriseModule.descriptionFr || enterpriseModule.moduleCode,
       category: enterpriseModule.moduleCategory,
       isCore: enterpriseModule.isCore,
+      icon: enterpriseModule.icon,
     }));
 }

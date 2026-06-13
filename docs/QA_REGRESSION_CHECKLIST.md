@@ -162,6 +162,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 ## Navigation et socle commun Enterprise
 
 - Vérifier que la sidebar d'une entreprise cliente affiche uniquement les modules du socle commun actifs et autorisés.
+- Vérifier que chaque module de la sidebar affiche une icône adaptée à son contenu et non l’icône générique des blocs.
 - Vérifier que les modules sectoriels Santé et Pharmacie restent accessibles dans `Administration [entreprise]` sans carte ou lien latéral répété.
 - Ouvrir plusieurs pages `/enterprise-modules/[moduleCode]` du socle commun et vérifier les KPI/listes issus de l'organisation active.
 - Vérifier qu'une page générique refuse un module sectoriel même avec une URL saisie manuellement.
