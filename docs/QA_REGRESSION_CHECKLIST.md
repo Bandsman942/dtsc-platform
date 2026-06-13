@@ -40,6 +40,16 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Une facture avec paiement ne peut pas être annulée sans traitement financier contrôlé.
 - [ ] Liste, filtres, détail, lignes et paiement restent utilisables sans débordement mobile.
 
+## Santé - Assurances & prises en charge
+
+- [ ] Organismes, couvertures patient et demandes restent strictement liés à `organizationId`.
+- [ ] Patient, organisme, couverture, consultation, laboratoire, pharmacie et facture inter-organisation sont refusés.
+- [ ] Le montant approuvé ne dépasse jamais le montant demandé ni la facture liée.
+- [ ] Approbation, rejet, annulation et application facture vérifient les permissions et créent un historique.
+- [ ] Une prise en charge ne peut pas être appliquée deux fois à une facture.
+- [ ] L’application recalcule côté serveur part assurance, part patient, solde et statut facture.
+- [ ] Les données sensibles sont masquées sans permission et les formulaires restent utilisables sur mobile.
+
 ## Santé - Équipe médicale
 
 - [ ] Seul un membre actif de l’organisation peut recevoir une affectation Santé.

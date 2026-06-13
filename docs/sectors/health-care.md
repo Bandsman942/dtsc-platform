@@ -174,6 +174,23 @@ Routes dédiées :
 - `GET|PATCH /api/enterprise/[organizationId]/healthcare/medical-billing/[invoiceId]` ;
 - `POST /api/enterprise/[organizationId]/healthcare/medical-billing/catalog`.
 
+## Assurances & prises en charge dédiées
+
+Le module `INSURANCE_COVERAGE` utilise `HealthInsuranceProvider`, `HealthPatientInsuranceCoverage`, `HealthCoverageRequest` et `HealthCoverageRequestEvent`. Il gère les organismes payeurs, les couvertures patient, les demandes liées au contexte médical, les montants demandés/approuvés/refusés, le reste patient et l’historique des décisions.
+
+Les références Patient, organisme, couverture, Consultation, Rendez-vous, Laboratoire, Pharmacie interne, Facturation médicale et service sont validées côté serveur dans la même organisation. Une approbation ne peut dépasser le montant demandé. L’application à une facture est transactionnelle, recalcule la part assurance, la part patient, le solde et le statut, puis marque la demande utilisée afin d’empêcher une double application.
+
+Routes :
+
+- `GET|POST /api/enterprise/[organizationId]/healthcare/insurance` ;
+- `POST /api/enterprise/[organizationId]/healthcare/insurance/providers` ;
+- `POST /api/enterprise/[organizationId]/healthcare/insurance/coverages` ;
+- `GET|PATCH /api/enterprise/[organizationId]/healthcare/insurance/[requestId]`.
+
+Permissions : `health.insurance.view`, `view_sensitive`, `manage_providers`, `manage_patient_coverages`, `create_coverage_request`, `update_coverage_request`, `submit_coverage_request`, `approve_coverage_request`, `reject_coverage_request`, `cancel_coverage_request`, `apply_to_invoice`, `manage_documents` et `view_reports`.
+
+Les justificatifs sont conservés sous forme de métadonnées contrôlées. Le téléversement privé Santé, la modification avancée des brouillons et l’export assurance restent des limites documentées, sans bouton fictif.
+
 Permissions : `health.billing.view`, `view_sensitive`, `create_invoice`, `update_invoice`, `issue_invoice`, `cancel_invoice`, `record_payment`, `cancel_payment`, `apply_discount`, `apply_large_discount`, `manage_catalog`, `export_invoice` et `view_reports`.
 
 ## Migrations
@@ -189,6 +206,7 @@ Permissions : `health.billing.view`, `view_sensitive`, `create_invoice`, `update
 - `20260613013000_healthcare_laboratory`: ajoute Laboratoire, catalogue d’examens, demandes multi-examens, résultats et historique dédiés.
 - `20260613093000_healthcare_internal_pharmacy`: ajoute produits, lots, mouvements, délivrances et permissions de la Pharmacie interne dédiée.
 - `20260613153000_healthcare_medical_billing`: ajoute catalogue, factures, lignes, paiements, historique et permissions de Facturation médicale.
+- `20260613203000_healthcare_insurance_coverage`: ajoute organismes payeurs, couvertures patient, demandes, historique et permissions Assurances.
 
 ## Stockage et API
 

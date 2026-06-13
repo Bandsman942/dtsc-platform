@@ -104,6 +104,11 @@ const healthBillingRecordApi = read("app/api/enterprise/[organizationId]/healthc
 const healthBillingWorkspace = read("components/enterprise/health-medical-billing-workspace.tsx");
 const healthBillingService = read("lib/health-billing.ts");
 const healthBillingAccess = read("lib/health-billing-access.ts");
+const healthInsuranceApi = read("app/api/enterprise/[organizationId]/healthcare/insurance/route.ts");
+const healthInsuranceActionApi = read("app/api/enterprise/[organizationId]/healthcare/insurance/[requestId]/route.ts");
+const healthInsuranceWorkspace = read("components/enterprise/health-insurance-workspace.tsx");
+const healthInsuranceService = read("lib/health-insurance.ts");
+const healthInsuranceAccess = read("lib/health-insurance-access.ts");
 const enterprisePharmacyApi = read("app/api/enterprise/[organizationId]/pharmacy/route.ts");
 const enterprisePharmacyRecordApi = read("app/api/enterprise/[organizationId]/pharmacy/[recordId]/route.ts");
 const pharmacyProductsApi = read("app/api/enterprise/[organizationId]/pharmacy/products/route.ts");
@@ -520,6 +525,24 @@ check(
   containsAll(healthBillingWorkspace, ["ListControls", "ActionMenu", "Factures du jour", "Solde restant", "Enregistrer un paiement", "Aucune facture médicale enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
     && !healthBillingWorkspace.includes("window.prompt")
     && !healthBillingWorkspace.includes("window.confirm")
+);
+
+check(
+  "HEALTH_CARE Assurances: modèles dédiés, montants et isolation tenant",
+  containsAll(prismaSchema, ["model HealthInsuranceProvider", "model HealthPatientInsuranceCoverage", "model HealthCoverageRequest", "model HealthCoverageRequestEvent", "@@unique([organizationId, coverageRequestNumber])"])
+    && containsAll(healthInsuranceService, ["validateInsuranceRefs", "createCoverageRequest", "coverageAction", "appliedToInvoice", "APPROVED_EXCEEDS_REQUESTED", "prisma.$transaction"])
+);
+
+check(
+  "HEALTH_CARE Assurances: routes privées, permissions et audit",
+  containsAll(healthInsuranceApi, ["getHealthInsuranceAccess", "requestSchema.safeParse", "isSameOriginRequest", "await rateLimit", "writeAuditLog", "organizationId"])
+    && containsAll(healthInsuranceActionApi, ["insuranceActionSchema.safeParse", "coverageAction", "writeAuditLog", "canApply"])
+    && containsAll(healthInsuranceAccess, ["INSURANCE_COVERAGE", "health.insurance.apply_to_invoice"])
+);
+
+check(
+  "HEALTH_CARE Assurances: organismes, couvertures, demandes et mobile",
+  containsAll(healthInsuranceWorkspace, ["Assurances & prises en charge", "Organismes", "Couvertures", "Prise en charge", "Appliquer à la facture", "ListControls", "ActionMenu", "CircleHelp", "h-[94dvh]", "min-w-0"])
 );
 
 check(

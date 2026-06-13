@@ -224,7 +224,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const data = parsed.data;
-  if (data.moduleCode === "PATIENTS" || data.moduleCode === "APPOINTMENTS" || data.moduleCode === "CONSULTATIONS" || data.moduleCode === "MEDICAL_RECORDS" || data.moduleCode === "CARE_TEAM" || data.moduleCode === "LABORATORY" || data.moduleCode === "INTERNAL_PHARMACY" || data.moduleCode === "MEDICAL_BILLING") {
+  if (data.moduleCode === "PATIENTS" || data.moduleCode === "APPOINTMENTS" || data.moduleCode === "CONSULTATIONS" || data.moduleCode === "MEDICAL_RECORDS" || data.moduleCode === "CARE_TEAM" || data.moduleCode === "LABORATORY" || data.moduleCode === "INTERNAL_PHARMACY" || data.moduleCode === "MEDICAL_BILLING" || data.moduleCode === "INSURANCE_COVERAGE") {
     return NextResponse.json({ error: "Dedicated module", message: "Utilisez le formulaire dédié de ce sous-module Santé." }, { status: 409 });
   }
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(data.moduleCode), "write"))) {

@@ -2393,3 +2393,9 @@ La migration additive `20260613013000_healthcare_laboratory` ajoute `HealthLabTe
 Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/laboratory`, `GET|PATCH /laboratory/[requestId]` et `POST /laboratory/[requestId]/actions` appliquent session, module, membership, origine, rate limit, Zod, références tenantées, permissions métier et audit. Les actions de prélèvement, saisie, validation, correction, transmission, rejet et annulation utilisent des transitions contrôlées.
 
 `lib/health-laboratory.ts` centralise la création transactionnelle, les examens multiples, le miroir de compatibilité administratif, les validations multi-tenant et le verrouillage des résultats validés. Le workspace Laboratoire est partagé entre Administration et Activités; Patients, Consultations et Dossiers médicaux lisent les relations réelles sans dupliquer les résultats.
+
+### Assurances & prises en charge Santé dédiées
+
+La migration additive `20260613203000_healthcare_insurance_coverage` ajoute `HealthInsuranceProvider`, `HealthPatientInsuranceCoverage`, `HealthCoverageRequest` et `HealthCoverageRequestEvent`. Les routes `/api/enterprise/[organizationId]/healthcare/insurance`, `/insurance/providers`, `/insurance/coverages` et `/insurance/[requestId]` appliquent session, module actif, origine, rate limit, Zod, permissions, validation multi-tenant et audit.
+
+`lib/health-insurance.ts` centralise les références, montants, transitions et l’application idempotente à `HealthMedicalInvoice`. Le workspace responsive est partagé entre Administration et Activités; les justificatifs restent représentés par métadonnées tant qu’un stockage privé Santé dédié n’est pas livré.

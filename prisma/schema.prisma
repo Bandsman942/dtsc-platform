@@ -224,6 +224,7 @@ model User {
   collectedHealthInvoicePayments        HealthMedicalInvoicePayment[]     @relation("HealthInvoicePaymentCollectedBy")
   cancelledHealthInvoicePayments        HealthMedicalInvoicePayment[]     @relation("HealthInvoicePaymentCancelledBy")
   healthBillingEvents                   HealthMedicalInvoiceEvent[]       @relation("HealthMedicalInvoiceEventActor")
+  healthCoverageRequestEvents           HealthCoverageRequestEvent[]      @relation("HealthCoverageRequestEventActor")
   createdPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductCreatedBy")
   updatedPharmacyProducts               PharmacyProduct[]                 @relation("PharmacyProductUpdatedBy")
   createdPharmacyBatches                PharmacyBatch[]                   @relation("PharmacyBatchCreatedBy")
@@ -545,20 +546,20 @@ model UsageLog {
 }
 
 model Organization {
-  id                          String                        @id @default(cuid())
+  id                          String                           @id @default(cuid())
   name                        String
-  slug                        String?                       @unique
+  slug                        String?                          @unique
   logoUrl                     String?
   ownerUserId                 String?
-  status                      String                        @default("DRAFT")
-  organizationType            String                        @default("CLIENT")
+  status                      String                           @default("DRAFT")
+  organizationType            String                           @default("CLIENT")
   sector                      String?
   sectorId                    String?
   sectorCode                  String?
   industry                    String?
   country                     String?
   city                        String?
-  timezone                    String                        @default("Africa/Kinshasa")
+  timezone                    String                           @default("Africa/Kinshasa")
   settingsJson                Json?
   brandingJson                Json?
   contactPerson               String?
@@ -567,11 +568,11 @@ model Organization {
   address                     String?
   notes                       String?
   createdByDtscUserId         String?
-  createdAt                   DateTime                      @default(now())
-  updatedAt                   DateTime                      @updatedAt
+  createdAt                   DateTime                         @default(now())
+  updatedAt                   DateTime                         @updatedAt
   deletedAt                   DateTime?
-  businessSector              BusinessSector?               @relation(fields: [sectorId], references: [id], onDelete: SetNull)
-  createdByDtsc               User?                         @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
+  businessSector              BusinessSector?                  @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  createdByDtsc               User?                            @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
   members                     OrganizationMember[]
   adminGrants                 OrganizationAdminGrant[]
   subscriptions               OrganizationSubscription[]
@@ -583,8 +584,8 @@ model Organization {
   conversationProjects        ConversationProject[]
   notifications               Notification[]
   supportTickets              SupportTicket[]
-  announcements               Announcement[]                @relation("AnnouncementOrganization")
-  authoredAnnouncements       Announcement[]                @relation("AnnouncementAuthorOrganization")
+  announcements               Announcement[]                   @relation("AnnouncementOrganization")
+  authoredAnnouncements       Announcement[]                   @relation("AnnouncementAuthorOrganization")
   collaborationGroups         CollaborationGroup[]
   collaboratorAvailabilities  CollaboratorAvailability[]
   internalCalendarEvents      InternalCalendarEvent[]
@@ -625,6 +626,10 @@ model Organization {
   healthMedicalInvoiceItems   HealthMedicalInvoiceItem[]
   healthMedicalPayments       HealthMedicalInvoicePayment[]
   healthMedicalInvoiceEvents  HealthMedicalInvoiceEvent[]
+  healthInsuranceProviders    HealthInsuranceProvider[]
+  healthPatientCoverages      HealthPatientInsuranceCoverage[]
+  healthCoverageRequests      HealthCoverageRequest[]
+  healthCoverageRequestEvents HealthCoverageRequestEvent[]
   pharmacyProducts            PharmacyProduct[]
   pharmacyBatches             PharmacyBatch[]
   pharmacyStockMovements      PharmacyStockMovement[]
@@ -1007,7 +1012,7 @@ model EnterpriseSectorRecord {
 }
 
 model HealthPatient {
-  id                           String                        @id @default(cuid())
+  id                           String                           @id @default(cuid())
   organizationId               String
   legacyRecordId               String?
   patientNumber                String
@@ -1032,19 +1037,19 @@ model HealthPatient {
   chronicTreatments            String?
   medicalNotes                 String?
   administrativeNotes          String?
-  insuranceKnown               Boolean                       @default(false)
+  insuranceKnown               Boolean                          @default(false)
   insuranceReference           String?
-  registrationSource           String                        @default("RECEPTION")
-  status                       String                        @default("ACTIVE")
+  registrationSource           String                           @default("RECEPTION")
+  status                       String                           @default("ACTIVE")
   createdById                  String
   updatedById                  String?
   archivedAt                   DateTime?
   deceasedAt                   DateTime?
-  createdAt                    DateTime                      @default(now())
-  updatedAt                    DateTime                      @updatedAt
-  organization                 Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy                    User                          @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy                    User?                         @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt                    DateTime                         @default(now())
+  updatedAt                    DateTime                         @updatedAt
+  organization                 Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy                    User                             @relation("HealthPatientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy                    User?                            @relation("HealthPatientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events                       HealthPatientEvent[]
   appointments                 HealthAppointment[]
   consultations                HealthConsultation[]
@@ -1058,6 +1063,8 @@ model HealthPatient {
   pharmacyMovements            HealthPharmacyStockMovement[]
   pharmacyDispensations        HealthPharmacyDispensation[]
   medicalInvoices              HealthMedicalInvoice[]
+  insuranceCoverages           HealthPatientInsuranceCoverage[]
+  coverageRequests             HealthCoverageRequest[]
 
   @@unique([organizationId, patientNumber])
   @@unique([organizationId, legacyRecordId])
@@ -2008,6 +2015,176 @@ model HealthMedicalInvoiceEvent {
   actor          User                 @relation("HealthMedicalInvoiceEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, invoiceId, createdAt])
+}
+
+model HealthInsuranceProvider {
+  id                       String                           @id @default(cuid())
+  organizationId           String
+  providerCode             String?
+  name                     String
+  providerType             String
+  description              String?
+  phone                    String?
+  email                    String?
+  address                  String?
+  contactName              String?
+  contactRole              String?
+  contactPhone             String?
+  contactEmail             String?
+  defaultCoverageRate      Decimal?                         @db.Decimal(5, 2)
+  defaultCeilingAmount     Decimal?                         @db.Decimal(14, 2)
+  monthlyCeilingAmount     Decimal?                         @db.Decimal(14, 2)
+  annualCeilingAmount      Decimal?                         @db.Decimal(14, 2)
+  directBilling            Boolean                          @default(false)
+  preauthorizationRequired Boolean                          @default(false)
+  requiredDocumentsJson    Json?
+  averageResponseDays      Int?
+  billingMode              String?
+  paymentDelayDays         Int?
+  contractReference        String?
+  financialNotes           String?
+  status                   String                           @default("ACTIVE")
+  createdById              String
+  updatedById              String?
+  archivedById             String?
+  archivedAt               DateTime?
+  createdAt                DateTime                         @default(now())
+  updatedAt                DateTime                         @updatedAt
+  organization             Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patientCoverages         HealthPatientInsuranceCoverage[]
+  coverageRequests         HealthCoverageRequest[]
+
+  @@unique([organizationId, providerCode])
+  @@unique([organizationId, id])
+  @@index([organizationId, name, status])
+  @@index([organizationId, providerType, status])
+}
+
+model HealthPatientInsuranceCoverage {
+  id                   String                  @id @default(cuid())
+  organizationId       String
+  patientId            String
+  insuranceProviderId  String
+  coverageNumber       String?
+  cardNumber           String?
+  mainPolicyHolder     String?
+  relationshipToHolder String?
+  employerName         String?
+  coverageCategory     String?
+  coverageRate         Decimal?                @db.Decimal(5, 2)
+  ceilingAmount        Decimal?                @db.Decimal(14, 2)
+  startDate            DateTime?
+  endDate              DateTime?
+  status               String                  @default("ACTIVE")
+  documentsJson        Json?
+  administrativeNotes  String?
+  internalNotes        String?
+  isPrimary            Boolean                 @default(false)
+  createdById          String
+  updatedById          String?
+  archivedById         String?
+  archivedAt           DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient              HealthPatient           @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  insuranceProvider    HealthInsuranceProvider @relation(fields: [organizationId, insuranceProviderId], references: [organizationId, id], onDelete: Restrict)
+  coverageRequests     HealthCoverageRequest[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, patientId, status])
+  @@index([organizationId, insuranceProviderId, status])
+  @@index([organizationId, endDate])
+}
+
+model HealthCoverageRequest {
+  id                          String                          @id @default(cuid())
+  organizationId              String
+  coverageRequestNumber       String
+  patientId                   String
+  patientCoverageId           String?
+  insuranceProviderId         String
+  consultationId              String?
+  appointmentId               String?
+  labRequestId                String?
+  pharmacyDispensationId      String?
+  invoiceId                   String?
+  departmentId                String?
+  requestType                 String
+  description                 String?
+  administrativeReason        String?
+  priority                    String                          @default("NORMAL")
+  requestDate                 DateTime                        @default(now())
+  desiredResponseDate         DateTime?
+  preauthorization            Boolean                         @default(false)
+  requestedAmount             Decimal                         @db.Decimal(14, 2)
+  requestedPercentage         Decimal?                        @db.Decimal(5, 2)
+  approvedAmount              Decimal                         @default(0) @db.Decimal(14, 2)
+  rejectedAmount              Decimal                         @default(0) @db.Decimal(14, 2)
+  patientResponsibilityAmount Decimal                         @default(0) @db.Decimal(14, 2)
+  currency                    String                          @default("CDF")
+  financialComment            String?
+  status                      String                          @default("DRAFT")
+  confidentialityLevel        String                          @default("ADMINISTRATIVE")
+  documentsJson               Json?
+  missingDocumentsJson        Json?
+  insurerDecision             String?
+  insurerReference            String?
+  insurerResponseDate         DateTime?
+  insurerContactName          String?
+  insurerComment              String?
+  insurerResponseDocumentUrl  String?
+  appliedToInvoice            Boolean                         @default(false)
+  appliedToInvoiceAt          DateTime?
+  createdById                 String
+  updatedById                 String?
+  submittedById               String?
+  submittedAt                 DateTime?
+  approvedById                String?
+  approvedAt                  DateTime?
+  rejectedById                String?
+  rejectedAt                  DateTime?
+  rejectionReason             String?
+  cancelledById               String?
+  cancelledAt                 DateTime?
+  cancellationReason          String?
+  closedById                  String?
+  closedAt                    DateTime?
+  createdAt                   DateTime                        @default(now())
+  updatedAt                   DateTime                        @updatedAt
+  organization                Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient                     HealthPatient                   @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  patientCoverage             HealthPatientInsuranceCoverage? @relation(fields: [organizationId, patientCoverageId], references: [organizationId, id], onDelete: Restrict)
+  insuranceProvider           HealthInsuranceProvider         @relation(fields: [organizationId, insuranceProviderId], references: [organizationId, id], onDelete: Restrict)
+  events                      HealthCoverageRequestEvent[]
+
+  @@unique([organizationId, coverageRequestNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, patientId, requestDate])
+  @@index([organizationId, insuranceProviderId, status])
+  @@index([organizationId, patientCoverageId])
+  @@index([organizationId, invoiceId])
+  @@index([organizationId, consultationId])
+  @@index([organizationId, status, priority, requestDate])
+}
+
+model HealthCoverageRequestEvent {
+  id                String                @id @default(cuid())
+  organizationId    String
+  coverageRequestId String
+  eventType         String
+  summary           String
+  fromStatus        String?
+  toStatus          String?
+  metadataJson      Json?
+  actorUserId       String
+  createdAt         DateTime              @default(now())
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  coverageRequest   HealthCoverageRequest @relation(fields: [organizationId, coverageRequestId], references: [organizationId, id], onDelete: Cascade)
+  actor             User                  @relation("HealthCoverageRequestEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, coverageRequestId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model EnterpriseCoreRecord {
