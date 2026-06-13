@@ -52,6 +52,32 @@ export function PublicHeader() {
   );
 }
 
+function FooterLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="
+        relative inline-flex w-fit rounded-md px-1 py-0.5
+        text-dtsc-muted transition-all duration-200 ease-out
+        after:absolute after:left-1 after:right-1 after:-bottom-0.5
+        after:h-px after:origin-left after:scale-x-0
+        after:bg-dtsc-blue after:transition-transform after:duration-200
+        hover:bg-dtsc-blue/10 hover:text-dtsc-blue hover:shadow-[0_0_18px_rgba(59,130,246,0.18)]
+        hover:after:scale-x-100
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue/50
+      "
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function PublicFooter() {
   const socialHandle = dtsc.socialHandle.replace(/^@/, "");
 
@@ -66,7 +92,9 @@ export function PublicFooter() {
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Entreprise</p>
           <div className="mt-4 grid gap-2.5">
             {companyLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">{link.label}</Link>
+              <FooterLink key={link.href} href={link.href}>
+                {link.label}
+              </FooterLink>
             ))}
           </div>
         </div>
@@ -74,16 +102,18 @@ export function PublicFooter() {
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Ressources</p>
           <div className="mt-4 grid gap-2.5">
             {resourceLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">{link.label}</Link>
+              <FooterLink key={link.href} href={link.href}>
+                {link.label}
+              </FooterLink>
             ))}
           </div>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Conditions et politiques</p>
           <div className="mt-4 grid gap-2.5">
-            <Link href="/conditions-utilisation" className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">Conditions d&apos;utilisation</Link>
-            <Link href="/politique-confidentialite" className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">Politique de confidentialité</Link>
-            <Link href="/politique-cookies" className="w-fit text-dtsc-muted transition-colors hover:text-dtsc-blue">Politique des cookies</Link>
+            <FooterLink href="/conditions-utilisation">Conditions d&apos;utilisation</FooterLink>
+            <FooterLink href="/politique-confidentialite">Politique de confidentialité</FooterLink>
+            <FooterLink href="/politique-cookies">Politique des cookies</FooterLink>
           </div>
         </div>
         <div>
