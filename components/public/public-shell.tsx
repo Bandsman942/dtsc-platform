@@ -123,7 +123,7 @@ export function PublicFooter() {
               </span>
             </div>
             <p className="mt-3 text-xs leading-5 text-dtsc-muted">
-              Tapez ce nom sur Facebook, Instagram, X, YouTube, LinkedIn et TikTok pour retrouver DTSC.
+              Rejoignez-nous sur Facebook, Instagram et X.
             </p>
           </div>
         </div>
