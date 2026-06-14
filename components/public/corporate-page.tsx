@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import type { PublicLongPage } from "@/lib/public-site";
 import { cn } from "@/lib/utils";
+import { PublicSectionWatermark } from "@/components/public/public-section-watermark";
 
 const toneClasses = {
   blue: "from-[#001736] via-[#002b5b] to-[#0057b8]",
@@ -63,7 +64,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       </section>
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <PublicSectionWatermark position="right" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8 max-w-3xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Vue d&apos;ensemble</p>
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Les points clés à explorer avant de passer à l&apos;action.</h2>

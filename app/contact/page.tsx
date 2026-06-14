@@ -6,6 +6,7 @@ import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
+import { PublicSectionWatermark } from "@/components/public/public-section-watermark";
 
 export const metadata: Metadata = {
   title: "Contact DTSC — cadrer votre besoin et choisir le bon levier",
@@ -92,8 +93,13 @@ export default function ContactPage() {
         </div>
       </section>
 
-      <section className="border-b border-dtsc-border dtsc-public-band-light">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden border-b border-dtsc-border dtsc-public-band-light">
+        <PublicSectionWatermark
+          position="right"
+          image="/watermarks/dtsc-7-leviers-watermark.jpg"
+          className="opacity-[0.04]"
+        />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
             <div>
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Avant de nous écrire</p>
