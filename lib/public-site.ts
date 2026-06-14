@@ -760,7 +760,7 @@ export const publicLongPages: Record<string, PublicLongPage> = {
       "Data and Tech Solutions Consulting aide les organisations à booster leur performance à travers 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
     tone: "slate",
     heroLabel: "Kinshasa · 2026",
-    heroImage: "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
+    heroImage: "/hero-images/dtscplatform1.jpg",
     heroImages: [
       "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
       "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1400",
