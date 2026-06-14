@@ -762,10 +762,10 @@ export const publicLongPages: Record<string, PublicLongPage> = {
     heroLabel: "Kinshasa · 2026",
     heroImage: "/hero-images/dtscplatform1.jpg",
     heroImages: [
-      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1400",
-      "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1400",
-      "https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg?auto=compress&cs=tinysrgb&w=1400",
-      "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=80",
+      "/hero-images/dtscplatform1.jpg",
+      "/hero-images/dtscplatform2.jpg",
+      "/hero-images/dtscplatform3.jpg",
+      "/hero-images/dtscplatform4.jpg",
     ],
     cards: [
       { title: "Vision", text: "Devenir un leader africain de la performance mesurable par les 7 leviers numériques DTSC.", icon: Lightbulb },
