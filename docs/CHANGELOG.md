@@ -12,6 +12,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout des affectations de postes sur `OrganizationMember` pour les entreprises clientes, avec migration additive non destructive et stockage du poste assigné au collaborateur.
+- Ajout d'une route sécurisée `PATCH/DELETE /api/enterprise/[organizationId]/members/[memberId]` pour modifier rôle, statut, poste, suspension, réactivation et retrait logique d'un collaborateur d'entreprise.
 - Ajout du module IA Assistant Entreprise pour organisations clientes: modèles Prisma dédiés, migration additive pgvector, conversations, messages, sources RAG, chunks, appels d'outils, usage mensuel et paramètres.
 - Ajout des routes privées `/api/enterprise/ai/chat`, `/api/enterprise/ai/conversations`, `/api/enterprise/ai/knowledge-sources`, `/api/enterprise/ai/usage` et `/api/enterprise/ai/settings` avec session, origine, Zod, rate limit, quotas et audit.
 - Ajout du CRUD sécurisé des conversations et messages IA Entreprise: renommage, classement par projet, suppression logique, édition de messages utilisateur et partage volontaire vers les groupes Mes collaborateurs par snapshot.
@@ -24,6 +26,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Sécurisé
 
+- Les modules, blocs d'activités et liens de navigation entreprise tiennent désormais compte des permissions du poste actif du collaborateur en plus du plan SaaS, du module activé et du membership actif.
 - Isolation du RAG entreprise dans des tables dédiées filtrées par `organizationId`, statut, archivage et confidentialité afin d'éviter tout mélange avec les documents personnels du chatbot.
 - Ajout de limites IA organisationnelles par plan SaaS: messages mensuels, sources, stockage, outils lecture et brouillons d'action.
 - Les partages IA Entreprise vers Mes collaborateurs créent une copie persistante limitée au groupe autorisé de la même organisation et ne donnent pas accès à la conversation privée originale.
@@ -32,6 +35,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Le bloc `Collaborateurs, postes et permissions` de `Administration [Entreprise]` propose maintenant des formulaires plein écran, des comboboxes pour rôles/statuts/postes, des libellés lisibles sans underscores et des menus `...` pour gérer les collaborateurs et postes.
+- Le chatbot général est désormais guidé pour produire des réponses Markdown enrichies, avec titres, numérotation, puces, gras, italique et tableaux lorsque cela clarifie la réponse.
 - L'onglet Chat du module IA Assistant Entreprise reprend l'ergonomie du Chatbot: panneau conversations/projets, menu `...`, composer fixe, rendu Markdown streaming et contrastes explicites compatibles thème clair/sombre.
 - Les réponses IA Entreprise sont désormais guidées vers une structure Markdown riche: titres, numérotation, puces, gras, italique, tableaux et sections de synthèse pour réduire l'ambiguïté.
 - `POST /api/enterprise/ai/chat` renvoie désormais un flux texte progressif et persiste la réponse assistant, les citations, les outils et l'usage en fin de génération.

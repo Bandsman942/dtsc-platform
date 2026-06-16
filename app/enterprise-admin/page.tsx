@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getEnterpriseAdministrationDataset } from "@/lib/enterprise/enterprise-admin-loader";
-import { ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { canManageEnterpriseAdministration, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
 export default async function EnterpriseAdminPage() {
   const user = await requireUser();
@@ -15,7 +15,7 @@ export default async function EnterpriseAdminPage() {
     redirect("/dashboard");
   }
   const membership = await requireEnterpriseMembership(session, organizationId);
-  if (!membership || !ENTERPRISE_MANAGER_ROLES.has(membership.role)) {
+  if (!membership || !(await canManageEnterpriseAdministration(session.userId, organizationId))) {
     redirect("/dashboard");
   }
   const featureAccess = await canUseFeature(organizationId, "enterprise-admin");

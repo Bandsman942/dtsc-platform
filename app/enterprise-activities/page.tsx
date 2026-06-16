@@ -34,7 +34,7 @@ export default async function EnterpriseActivitiesPage() {
   }
 
   const dataset = await getEnterpriseActivitiesDataset({ organizationId, userId: user.id, membershipRole: membership.role });
-  if (!dataset) {
+  if (!dataset || dataset.blocks.length === 0) {
     redirect("/dashboard");
   }
 

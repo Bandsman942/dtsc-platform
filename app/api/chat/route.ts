@@ -57,7 +57,12 @@ function buildChatPreferenceContext(style?: string | null, length?: string | nul
     DETAILED: "Développe les points importants avec titres, listes et exemples utiles.",
   }[length || "BALANCED"] || "Privilégie une réponse équilibrée avec assez de contexte pour agir.";
 
-  return [styleInstruction, lengthInstruction].join("\n");
+  return [
+    styleInstruction,
+    lengthInstruction,
+    "Formate les réponses en Markdown lisible: titres si utile, listes numérotées pour les étapes, puces pour les points secondaires, **gras** pour les décisions ou éléments critiques, *italique* pour les nuances, tableaux Markdown pour comparer plusieurs options ou critères.",
+    "N'utilise pas un tableau s'il rend la réponse moins claire; privilégie alors une structure en sections courtes.",
+  ].join("\n");
 }
 
 export async function POST(req: Request) {

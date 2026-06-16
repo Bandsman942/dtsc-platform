@@ -268,7 +268,15 @@ export const enterpriseAdministrationMutationSchema = z.discriminatedUnion("enti
 export const enterpriseMemberInviteSchema = z.object({
   email: z.string().email().max(180).transform((email) => email.toLowerCase()),
   role: z.enum(["MANAGER", "MEMBER", "GUEST"]).default("MEMBER"),
+  positionId: z.string().max(160).optional().or(z.literal("")),
   message: z.string().max(800).optional().or(z.literal("")),
+});
+
+export const enterpriseMemberUpdateSchema = z.object({
+  role: z.enum(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER", "MEMBER", "GUEST"]).optional(),
+  status: z.enum(["ACTIVE", "INVITED", "SUSPENDED", "REMOVED"]).optional(),
+  positionId: z.string().max(160).optional().or(z.literal("")),
+  action: z.enum(["update", "suspend", "restore", "remove"]).default("update"),
 });
 
 export const enterpriseInvitationResponseSchema = z.object({

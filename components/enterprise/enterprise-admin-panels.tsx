@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Building2, CalendarDays, ExternalLink, MailPlus, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, UsersRound } from "lucide-react";
+import { Ban, Building2, CalendarDays, Edit3, ExternalLink, MailPlus, Plus, RotateCcw, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, Trash2, UserCog } from "lucide-react";
 import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
 import { PharmacyAdminWorkspace } from "@/components/enterprise/pharmacy-admin-workspace";
 import { AccordionItem } from "@/components/ui/accordion";
@@ -91,6 +91,66 @@ const pharmacyPermissions = [
   "enterprise.ai.chat", "enterprise.ai.sources.view", "enterprise.ai.sources.manage", "enterprise.ai.tools.read", "enterprise.ai.usage.view", "enterprise.ai.settings.manage",
   "pharmacy.ai.stock.read", "pharmacy.ai.sales.read", "pharmacy.ai.cash.read", "pharmacy.ai.quality.read", "pharmacy.ai.documents.read",
 ];
+
+const roleLabels: Record<string, string> = {
+  OWNER: "Propriétaire",
+  ADMIN_ENTREPRISE: "Administrateur entreprise",
+  ADMIN_ENTERPRISE: "Administrateur entreprise",
+  MANAGER: "Responsable",
+  MEMBER: "Collaborateur",
+  GUEST: "Invité",
+};
+
+const statusLabels: Record<string, string> = {
+  ACTIVE: "Actif",
+  INVITED: "Invitation en attente",
+  SUSPENDED: "Suspendu",
+  REMOVED: "Retiré",
+};
+
+const permissionLabels: Record<string, string> = {
+  "enterprise.admin.manage": "Gérer l'administration entreprise",
+  "enterprise.admin.members.manage": "Gérer les collaborateurs et postes",
+  "enterprise.activities.manage": "Superviser les activités entreprise",
+  "enterprise.activities.submit": "Soumettre des activités entreprise",
+  "enterprise.ai.chat": "Utiliser l'assistant IA entreprise",
+  "enterprise.ai.sources.view": "Consulter les sources IA",
+  "enterprise.ai.sources.manage": "Gérer les sources IA",
+  "enterprise.ai.tools.read": "Utiliser les outils IA en lecture",
+  "enterprise.ai.usage.view": "Voir l'usage IA",
+  "enterprise.ai.settings.manage": "Gérer les paramètres IA",
+};
+
+function humanizeCode(value: string | null | undefined) {
+  if (!value) return "Non renseigné";
+  return value
+    .replaceAll("_", " ")
+    .replaceAll(".", " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+function permissionLabel(permission: string) {
+  return permissionLabels[permission] || humanizeCode(permission);
+}
+
+function positionPermissions(position: EnterprisePositionItem | null | undefined) {
+  return Array.isArray(position?.permissionsJson)
+    ? position.permissionsJson.filter((permission): permission is string => typeof permission === "string")
+    : [];
+}
+
+function permissionsForSector(sectorCode?: string | null) {
+  const base = [
+    "enterprise.admin.manage",
+    "enterprise.admin.members.manage",
+    "enterprise.activities.manage",
+    "enterprise.activities.submit",
+  ];
+  return [...base, ...(sectorCode === "PHARMACY" ? pharmacyPermissions : healthcarePermissions)];
+}
 
 const workflowCategories = [
   "Accueil patient",
@@ -337,41 +397,125 @@ export function EnterpriseMembersPanel({
   members,
   pendingMembers,
   activeMembers,
+  positions,
   inviteMember,
+  updateMember,
+  removeMember,
 }: {
   members: EnterpriseMemberItem[];
   pendingMembers: EnterpriseMemberItem[];
   activeMembers: EnterpriseMemberItem[];
+  positions: EnterprisePositionItem[];
   inviteMember: InviteMemberHandler;
+  updateMember: (memberId: string, payload: Record<string, unknown>, successMessage: string) => void | Promise<void>;
+  removeMember: (memberId: string) => void | Promise<void>;
 }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<EnterpriseMemberItem | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<EnterpriseMemberItem | null>(null);
+
+  async function submitInvite(event: FormEvent<HTMLFormElement>) {
+    await inviteMember(event);
+    setInviteOpen(false);
+  }
+
+  async function submitMemberUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingMember) return;
+    const form = new FormData(event.currentTarget);
+    await updateMember(
+      editingMember.id,
+      {
+        action: "update",
+        role: String(form.get("role") || editingMember.role),
+        status: String(form.get("status") || editingMember.status),
+        positionId: String(form.get("positionId") || ""),
+      },
+      "Collaborateur mis à jour."
+    );
+    setEditingMember(null);
+  }
+
   return (
     <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-      <div className="flex items-center gap-2">
-        <UsersRound className="h-5 w-5 text-cyan-600" />
-        <h2 className="text-lg font-black text-dtsc-ink">Collaborateurs</h2>
-      </div>
-      <form onSubmit={(event) => void inviteMember(event)} className="mt-4 grid gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 md:grid-cols-[1fr_12rem]">
-        <Input name="email" type="email" placeholder="Email d'un utilisateur existant" required />
-        <select name="role" defaultValue="MEMBER" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-          <option value="MEMBER">Collaborateur</option>
-          <option value="MANAGER">Manager</option>
-          <option value="GUEST">Invité</option>
-        </select>
-        <textarea name="message" placeholder="Message d'invitation optionnel" className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink md:col-span-2" />
-        <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Collaborateurs et affectations</p>
+          <h2 className="mt-1 text-lg font-black text-dtsc-ink">Accès, rôles et postes</h2>
+          <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-dtsc-muted">
+            Invitez les membres, affectez un poste et gardez les permissions lisibles depuis un centre de contrôle unique.
+          </p>
+        </div>
+        <Button type="button" onClick={() => setInviteOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <MailPlus className="h-4 w-4" />
-          Inviter un collaborateur existant
+          Inviter / affecter
         </Button>
-      </form>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {pendingMembers.map((member) => (
-          <MemberCard key={member.id} member={member} statusLabel="Invitation en attente" />
-        ))}
-        {activeMembers.map((member) => (
-          <MemberCard key={member.id} member={member} statusLabel="Actif" />
-        ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {[...pendingMembers, ...activeMembers].map((member) => {
+          const assignedPosition = positions.find((position) => position.id === member.positionId) || null;
+          return (
+            <MemberCard
+              key={member.id}
+              member={member}
+              position={assignedPosition}
+              onEdit={() => setEditingMember(member)}
+              onSuspend={() => void updateMember(member.id, { action: "suspend" }, "Collaborateur suspendu.")}
+              onRestore={() => void updateMember(member.id, { action: "restore" }, "Collaborateur réactivé.")}
+              onRemove={() => setMemberToRemove(member)}
+            />
+          );
+        })}
         {!members.length && <EmptyState text="Aucun collaborateur ou invitation pour cette entreprise." />}
       </div>
+
+      <Dialog open={inviteOpen} title="Inviter un collaborateur" description="Le collaborateur devra accepter l'invitation avant d'accéder à l'entreprise." onClose={() => setInviteOpen(false)} className="h-[92dvh] max-w-4xl">
+        <form onSubmit={(event) => void submitInvite(event)} className="grid gap-4 md:grid-cols-2">
+          <FormField label="Email du compte DTSC" hint="L'utilisateur doit déjà avoir un compte actif.">
+            <Input name="email" type="email" placeholder="nom@entreprise.com" required />
+          </FormField>
+          <RoleSelect defaultValue="MEMBER" />
+          <PositionSelect positions={positions} />
+          <FormField label="Message d'invitation" hint="Message visible dans l'invitation interne et l'email si disponible." className="md:col-span-2">
+            <textarea name="message" className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
+          <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <MailPlus className="h-4 w-4" />
+            Envoyer l&apos;invitation
+          </Button>
+        </form>
+      </Dialog>
+
+      <Dialog open={Boolean(editingMember)} title="Modifier le collaborateur" description="Mettez à jour son rôle global, son statut et son poste métier." onClose={() => setEditingMember(null)} className="h-[92dvh] max-w-4xl">
+        {editingMember && (
+          <form onSubmit={(event) => void submitMemberUpdate(event)} className="grid gap-4 md:grid-cols-2">
+            <InfoCard label="Collaborateur" value={`${editingMember.user.name} · ${editingMember.user.email}`} />
+            <RoleSelect defaultValue={editingMember.role} />
+            <StatusSelect defaultValue={editingMember.status} />
+            <PositionSelect positions={positions} defaultValue={editingMember.positionId || ""} />
+            <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <UserCog className="h-4 w-4" />
+              Enregistrer
+            </Button>
+          </form>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(memberToRemove)}
+        title="Retirer le collaborateur"
+        description="Cette action retire l'accès à l'entreprise sans supprimer le compte utilisateur DTSC."
+        onClose={() => setMemberToRemove(null)}
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setMemberToRemove(null)}>Annuler</Button>
+            <Button type="button" variant="destructive" onClick={() => { if (memberToRemove) void removeMember(memberToRemove.id); setMemberToRemove(null); }}>Retirer</Button>
+          </>
+        )}
+      >
+        <p className="text-sm font-semibold leading-6 text-dtsc-muted">{memberToRemove?.user.name} ne verra plus les modules de cette entreprise après retrait.</p>
+      </Dialog>
     </section>
   );
 }
@@ -387,56 +531,130 @@ export function EnterprisePositionsPanel({
   positions: EnterprisePositionItem[];
   submitAdminMutation: AdminMutationHandler;
 }) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<EnterprisePositionItem | null>(null);
+  const permissionOptions = permissionsForSector(sectorCode);
+
+  function openCreateForm() {
+    setEditingPosition(null);
+    setFormOpen(true);
+  }
+
+  function openEditForm(position: EnterprisePositionItem) {
+    setEditingPosition(position);
+    setFormOpen(true);
+  }
+
+  async function submitPosition(event: FormEvent<HTMLFormElement>) {
+    await submitAdminMutation(event, editingPosition ? "Poste mis à jour." : "Poste enregistré.");
+    setFormOpen(false);
+    setEditingPosition(null);
+  }
+
   return (
     <>
       <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-cyan-600" />
-          <h2 className="text-lg font-black text-dtsc-ink">Postes & permissions</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-cyan-600" />
+              <h2 className="text-lg font-black text-dtsc-ink">Postes et permissions</h2>
+            </div>
+            <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-dtsc-muted">
+              Chaque poste porte ses permissions métier. Les collaborateurs affectés héritent de ces accès dans l&apos;administration et les activités entreprise.
+            </p>
+          </div>
+          <Button type="button" onClick={openCreateForm} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+            <Plus className="h-4 w-4" />
+            Nouveau poste
+          </Button>
         </div>
-        <form onSubmit={(event) => void submitAdminMutation(event, "Poste enregistré.")} className="mt-4 grid gap-3">
+      </section>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {positions.map((position) => (
+          <article key={position.id} className="relative rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 pr-16">
+            <div className="absolute right-3 top-3">
+              <ActionMenu
+                label="Actions poste"
+                items={[
+                  { key: "edit", label: "Modifier", icon: Edit3, onSelect: () => openEditForm(position) },
+                  { key: "toggle", label: position.isActive ? "Désactiver" : "Réactiver", icon: position.isActive ? ToggleLeft : ToggleRight, onSelect: () => openEditForm({ ...position, isActive: !position.isActive }) },
+                ]}
+              />
+            </div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{humanizeCode(position.positionCode)}</p>
+            <h3 className="mt-1 font-black text-dtsc-ink">{position.labelFr}</h3>
+            <p className="text-xs font-bold text-dtsc-muted">{position.department?.labelFr || "Département à assigner"} · niveau {position.hierarchyLevel}</p>
+            {position.descriptionFr && <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-dtsc-muted">{position.descriptionFr}</p>}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className={`rounded-full px-2 py-1 text-[0.68rem] font-black ${position.isActive ? "bg-emerald-400/14 text-emerald-600" : "bg-slate-500/14 text-dtsc-muted"}`}>{position.isActive ? "Actif" : "Inactif"}</span>
+              {position.isKeyPosition && <span className="rounded-full bg-cyan-400/14 px-2 py-1 text-[0.68rem] font-black text-cyan-600">Poste clé</span>}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {positionPermissions(position).slice(0, 4).map((permission) => (
+                <span key={permission} className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">{permissionLabel(permission)}</span>
+              ))}
+              {positionPermissions(position).length > 4 && <span className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">+{positionPermissions(position).length - 4}</span>}
+            </div>
+          </article>
+        ))}
+        {!positions.length && <EmptyState text="Aucun poste configuré pour cette entreprise." />}
+      </div>
+
+      <Dialog
+        open={formOpen}
+        title={editingPosition ? "Modifier le poste" : "Créer un poste"}
+        description="Configurez le libellé, le département et les permissions disponibles pour les collaborateurs affectés."
+        onClose={() => { setFormOpen(false); setEditingPosition(null); }}
+        className="h-[92dvh] max-w-6xl"
+      >
+        <form onSubmit={(event) => void submitPosition(event)} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="entityType" value="position" />
-          <Input name="positionCode" placeholder="CODE_POSTE" required pattern="[A-Z0-9_]+" />
-          <Input name="labelFr" placeholder="Nom du poste" required />
-          <Input name="labelEn" placeholder="Position name" required />
-          <select name="departmentId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            <option value="">Département par défaut</option>
-            {departments.map((department) => <option key={department.id} value={department.id}>{department.labelFr}</option>)}
-          </select>
-          <Input name="hierarchyLevel" type="number" placeholder="Niveau hiérarchique" defaultValue="50" />
-          <textarea name="descriptionFr" placeholder="Description du poste" className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
-          <input type="hidden" name="isActive" value="off" />
-          <input type="hidden" name="isKeyPosition" value="off" />
-          <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isKeyPosition" type="checkbox" /> Poste clé</label>
-          <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isActive" type="checkbox" defaultChecked /> Poste actif</label>
-          <div className="max-h-44 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-surface p-3">
-            {(sectorCode === "PHARMACY" ? pharmacyPermissions : healthcarePermissions).map((permission) => (
-              <label key={permission} className="mb-2 flex items-center gap-2 text-xs font-bold text-dtsc-ink">
-                <input name="permissions" value={permission} type="checkbox" />
-                {permission}
-              </label>
-            ))}
+          <FormField label="Code interne" hint="Utilisé comme identifiant stable. Il est affiché sous forme lisible dans l'interface.">
+            <Input name="positionCode" defaultValue={editingPosition?.positionCode || ""} placeholder="RESPONSABLE_OPERATIONS" required pattern="[A-Z0-9_]+" />
+          </FormField>
+          <FormField label="Nom du poste">
+            <Input name="labelFr" defaultValue={editingPosition?.labelFr || ""} placeholder="Responsable des opérations" required />
+          </FormField>
+          <FormField label="Nom anglais">
+            <Input name="labelEn" defaultValue={editingPosition?.labelEn || editingPosition?.labelFr || ""} placeholder="Operations manager" required />
+          </FormField>
+          <FormField label="Département">
+            <select name="departmentId" defaultValue={editingPosition?.departmentId || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <option value="">Département par défaut</option>
+              {departments.map((department) => <option key={department.id} value={department.id}>{department.labelFr}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Niveau hiérarchique" hint="Plus le nombre est faible, plus le poste est prioritaire dans les listes.">
+            <Input name="hierarchyLevel" type="number" defaultValue={String(editingPosition?.hierarchyLevel || 50)} placeholder="50" />
+          </FormField>
+          <FormField label="Description" className="md:col-span-2">
+            <textarea name="descriptionFr" defaultValue={editingPosition?.descriptionFr || ""} placeholder="Responsabilités principales du poste" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+          </FormField>
+          <div className="flex flex-wrap gap-4 md:col-span-2">
+            <input type="hidden" name="isActive" value="off" />
+            <input type="hidden" name="isKeyPosition" value="off" />
+            <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isKeyPosition" type="checkbox" defaultChecked={editingPosition?.isKeyPosition || false} /> Poste clé</label>
+            <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isActive" type="checkbox" defaultChecked={editingPosition?.isActive !== false} /> Poste actif</label>
+          </div>
+          <div className="md:col-span-2">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">Permissions du poste</p>
+            <div className="mt-2 grid max-h-[42dvh] gap-2 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 md:grid-cols-2">
+              {permissionOptions.map((permission) => (
+                <label key={permission} className="flex items-start gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-xs font-bold leading-5 text-dtsc-ink">
+                  <input name="permissions" value={permission} type="checkbox" defaultChecked={positionPermissions(editingPosition).includes(permission)} className="mt-0.5" />
+                  <span>{permissionLabel(permission)}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <Save className="h-4 w-4" />
             Enregistrer le poste
           </Button>
         </form>
-      </section>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {positions.map((position) => (
-          <article key={position.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{position.positionCode}</p>
-            <h3 className="mt-1 font-black text-dtsc-ink">{position.labelFr}</h3>
-            <p className="text-xs font-bold text-dtsc-muted">{position.department?.labelFr || "Département à assigner"} · niveau {position.hierarchyLevel}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className={`rounded-full px-2 py-1 text-[0.68rem] font-black ${position.isActive ? "bg-emerald-400/14 text-emerald-600" : "bg-slate-500/14 text-dtsc-muted"}`}>{position.isActive ? "Actif" : "Inactif"}</span>
-              {position.isKeyPosition && <span className="rounded-full bg-cyan-400/14 px-2 py-1 text-[0.68rem] font-black text-cyan-600">Poste clé</span>}
-            </div>
-          </article>
-        ))}
-      </div>
+      </Dialog>
     </>
   );
 }
@@ -660,13 +878,117 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function MemberCard({ member, statusLabel }: { member: EnterpriseMemberItem; statusLabel: string }) {
+function MemberCard({
+  member,
+  position,
+  onEdit,
+  onSuspend,
+  onRestore,
+  onRemove,
+}: {
+  member: EnterpriseMemberItem;
+  position: EnterprisePositionItem | null;
+  onEdit: () => void;
+  onSuspend: () => void;
+  onRestore: () => void;
+  onRemove: () => void;
+}) {
   return (
-    <article className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-      <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{member.role} · {statusLabel}</p>
+    <article className="relative rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 pr-16">
+      <div className="absolute right-3 top-3">
+        <ActionMenu
+          label="Actions collaborateur"
+          items={[
+            { key: "edit", label: "Modifier l'affectation", icon: UserCog, onSelect: onEdit },
+            member.status === "SUSPENDED"
+              ? { key: "restore", label: "Réactiver", icon: RotateCcw, onSelect: onRestore }
+              : { key: "suspend", label: "Suspendre", icon: Ban, onSelect: onSuspend, disabled: member.status !== "ACTIVE" },
+            { key: "remove", label: "Retirer", icon: Trash2, destructive: true, onSelect: onRemove },
+          ]}
+        />
+      </div>
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{roleLabels[member.role] || humanizeCode(member.role)}</p>
       <h3 className="mt-1 font-black text-dtsc-ink">{member.user.name}</h3>
       <p className="text-xs font-semibold text-dtsc-muted">{member.user.email}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className={`rounded-full px-2 py-1 text-[0.68rem] font-black ${member.status === "ACTIVE" ? "bg-emerald-400/14 text-emerald-600" : member.status === "SUSPENDED" ? "bg-amber-400/18 text-amber-700" : "bg-dtsc-page text-dtsc-muted"}`}>
+          {statusLabels[member.status] || humanizeCode(member.status)}
+        </span>
+        <span className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">
+          {position?.labelFr || member.positionTitle || "Poste à assigner"}
+        </span>
+      </div>
+      {position && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {positionPermissions(position).slice(0, 3).map((permission) => (
+            <span key={permission} className="rounded-full bg-cyan-400/10 px-2 py-1 text-[0.68rem] font-black text-cyan-700">{permissionLabel(permission)}</span>
+          ))}
+          {positionPermissions(position).length > 3 && <span className="rounded-full bg-cyan-400/10 px-2 py-1 text-[0.68rem] font-black text-cyan-700">+{positionPermissions(position).length - 3}</span>}
+        </div>
+      )}
     </article>
+  );
+}
+
+function FormField({
+  label,
+  hint,
+  className,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`grid gap-1 text-sm font-black text-dtsc-ink ${className || ""}`}>
+      <span className="text-xs uppercase tracking-[0.14em] text-dtsc-muted">{label}</span>
+      {children}
+      {hint && <span className="text-xs font-semibold leading-5 text-dtsc-muted">{hint}</span>}
+    </label>
+  );
+}
+
+function RoleSelect({ defaultValue }: { defaultValue: string }) {
+  return (
+    <FormField label="Rôle global">
+      <select name="role" defaultValue={defaultValue} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select>
+    </FormField>
+  );
+}
+
+function StatusSelect({ defaultValue }: { defaultValue: string }) {
+  return (
+    <FormField label="Statut">
+      <select name="status" defaultValue={defaultValue} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select>
+    </FormField>
+  );
+}
+
+function PositionSelect({ positions, defaultValue = "" }: { positions: EnterprisePositionItem[]; defaultValue?: string }) {
+  return (
+    <FormField label="Poste métier" hint="Le poste pilote les permissions visibles dans les modules entreprise.">
+      <select name="positionId" defaultValue={defaultValue} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+        <option value="">Aucun poste assigné</option>
+        {positions.filter((position) => position.isActive).map((position) => (
+          <option key={position.id} value={position.id}>{position.labelFr}</option>
+        ))}
+      </select>
+    </FormField>
+  );
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{value}</p>
+    </div>
   );
 }
 

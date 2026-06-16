@@ -84,6 +84,7 @@ export type EnterprisePositionItem = {
   isActive: boolean;
   isKeyPosition: boolean;
   permissionsJson?: unknown;
+  departmentId?: string | null;
   department: { labelFr: string; labelEn: string } | null;
 };
 
@@ -131,6 +132,11 @@ export type EnterpriseMemberItem = {
   id: string;
   role: string;
   status: string;
+  positionId?: string | null;
+  positionCode?: string | null;
+  positionTitle?: string | null;
+  joinedAt?: string | null;
+  createdAt?: string;
   user: { id: string; name: string; email: string };
 };
 

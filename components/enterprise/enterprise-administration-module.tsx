@@ -109,6 +109,24 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
     }
   }
 
+  async function updateMember(memberId: string, payload: Record<string, unknown>, successMessage: string) {
+    setMessage("");
+    const response = await fetch(`/api/enterprise/${organization.id}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    setMessage(response.ok ? successMessage : body?.message || "Mise à jour du collaborateur impossible.");
+    if (response.ok) {
+      router.refresh();
+    }
+  }
+
+  async function removeMember(memberId: string) {
+    await updateMember(memberId, { action: "remove" }, "Collaborateur retiré de l'entreprise.");
+  }
+
   return (
     <div className="space-y-5">
       <EnterpriseDashboardSummary
@@ -138,9 +156,22 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
         <EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} />
 
         <AccordionItem title="Collaborateurs, postes et permissions" defaultOpen>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.75fr)]">
-            <EnterpriseMembersPanel members={members} pendingMembers={pendingMembers} activeMembers={activeMembers} inviteMember={inviteMember} />
-            <EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} />
+          <div className="grid gap-4">
+            <EnterpriseMembersPanel
+              members={members}
+              pendingMembers={pendingMembers}
+              activeMembers={activeMembers}
+              positions={positions}
+              inviteMember={inviteMember}
+              updateMember={updateMember}
+              removeMember={removeMember}
+            />
+            <EnterprisePositionsPanel
+              sectorCode={organization.sectorCode}
+              departments={departments}
+              positions={positions}
+              submitAdminMutation={submitAdminMutation}
+            />
           </div>
         </AccordionItem>
 

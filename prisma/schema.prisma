@@ -4729,6 +4729,9 @@ model OrganizationMember {
   role                  String                 @default("MEMBER")
   status                String                 @default("INVITED")
   invitedBy             String?
+  positionId            String?
+  positionCode          String?
+  positionTitle         String?
   joinedAt              DateTime?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
@@ -4740,6 +4743,8 @@ model OrganizationMember {
   @@unique([organizationId, userId])
   @@index([userId, status])
   @@index([organizationId, role, status])
+  @@index([organizationId, positionId, status])
+  @@index([organizationId, positionCode, status])
 }
 
 model OrganizationAdminGrant {

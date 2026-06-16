@@ -173,7 +173,7 @@ export function MobileBottomNavigation({
   showEmployeeActivities: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
-  enterpriseContext?: { organizationName: string; showAdmin: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean; icon: string | null }> } | null;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean; showActivities: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean; icon: string | null }> } | null;
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
@@ -186,7 +186,7 @@ export function MobileBottomNavigation({
     }
     return true;
   });
-  const enterprisePrimaryItems = enterpriseContext
+  const enterprisePrimaryItems = enterpriseContext?.showActivities
     ? [
         { href: "/enterprise-activities", labelKey: "navigation.enterpriseActivities", fallback: "Activités", icon: CalendarCheck },
       ]

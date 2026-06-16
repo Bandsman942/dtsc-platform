@@ -339,7 +339,7 @@ check(
 
 check(
   "Enterprise Admin exige contexte ORGANIZATION et permission d'administration",
-  containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "ENTERPRISE_MANAGER_ROLES", 'canUseFeature(organizationId, "enterprise-admin")', "getEnterpriseAdministrationDataset(organizationId)"])
+  containsAll(enterpriseAdminPage, ['activeContext === "ORGANIZATION"', "canManageEnterpriseAdministration(session.userId, organizationId)", 'canUseFeature(organizationId, "enterprise-admin")', "getEnterpriseAdministrationDataset(organizationId)"])
 );
 
 check(

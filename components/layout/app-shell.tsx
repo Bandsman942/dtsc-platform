@@ -20,9 +20,11 @@ import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/d
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
-import { canAccessOrganizationAdministration, isDtscInternalSession } from "@/lib/organizations";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
+import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
+import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { prisma } from "@/lib/prisma";
 
@@ -52,7 +54,7 @@ export async function AppShell({
   const notificationWhere = session
     ? await getVisibleNotificationWhereForSession(session)
     : { userId: user.id, organizationId: null };
-  const [unreadNotifications, latestUnreadNotifications, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules] = await Promise.all([
+  const [unreadNotifications, latestUnreadNotifications, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules, enterpriseActivityBlocks, canManageEnterpriseAdmin] = await Promise.all([
     prisma.notification.count({
       where: {
         ...notificationWhere,
@@ -87,14 +89,21 @@ export async function AppShell({
       take: 12,
     }),
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
-      ? getEnterpriseNavigationModules(activeOrganizationId, user.locale)
+      ? getEnterpriseNavigationModules(activeOrganizationId, user.id, user.locale)
       : Promise.resolve([]),
+    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      ? getEnterpriseActivityBlocks(activeOrganizationId, user.id)
+      : Promise.resolve([]),
+    session?.activeContext === "ORGANIZATION" && activeOrganizationId
+      ? canManageEnterpriseAdministration(user.id, activeOrganizationId)
+      : Promise.resolve(false),
   ]);
   const enterpriseContext =
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
       ? {
           organizationName: session.activeOrganizationName || "Entreprise",
-          showAdmin: canAccessOrganizationAdministration(session.activeOrganizationRole),
+          showAdmin: canManageEnterpriseAdmin,
+          showActivities: enterpriseActivityBlocks.length > 0,
           modules: enterpriseModules,
         }
       : null;

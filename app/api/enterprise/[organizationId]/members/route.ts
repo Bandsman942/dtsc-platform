@@ -43,7 +43,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid payload", message: "L'email ou le rôle est invalide." }, { status: 400 });
   }
 
-  const [organization, targetUser, inviter] = await Promise.all([
+  const [organization, targetUser, inviter, position] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
       select: { id: true, name: true },
@@ -56,6 +56,12 @@ export async function POST(req: Request, { params }: Params) {
       where: { id: session.userId },
       select: { id: true, name: true },
     }),
+    parsed.data.positionId
+      ? prisma.enterprisePosition.findFirst({
+          where: { id: parsed.data.positionId, organizationId, isActive: true },
+          select: { id: true, positionCode: true, labelFr: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   if (!organization) {
@@ -65,6 +71,10 @@ export async function POST(req: Request, { params }: Params) {
   if (!targetUser) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "User not found", message: "Ce collaborateur doit d'abord disposer d'un compte actif DTSC Platform." }, { status: 404 });
+  }
+  if (parsed.data.positionId && !position) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid position", message: "Le poste sélectionné n'appartient pas à cette entreprise." }, { status: 400 });
   }
 
   const existingMembership = await prisma.organizationMember.findUnique({
@@ -84,6 +94,9 @@ export async function POST(req: Request, { params }: Params) {
     where: { organizationId_userId: { organizationId, userId: targetUser.id } },
     update: {
       role: parsed.data.role,
+      positionId: position?.id || null,
+      positionCode: position?.positionCode || null,
+      positionTitle: position?.labelFr || null,
       status: "INVITED",
       removedAt: null,
       joinedAt: null,
@@ -93,6 +106,9 @@ export async function POST(req: Request, { params }: Params) {
       organizationId,
       userId: targetUser.id,
       role: parsed.data.role,
+      positionId: position?.id || null,
+      positionCode: position?.positionCode || null,
+      positionTitle: position?.labelFr || null,
       status: "INVITED",
       invitedBy: session.userId,
       joinedAt: null,

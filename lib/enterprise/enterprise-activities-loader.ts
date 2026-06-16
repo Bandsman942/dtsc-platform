@@ -42,7 +42,7 @@ export async function getEnterpriseActivitiesDataset({
   }
 
   const [blocks, requests, members, sectorRecords, workflows] = await Promise.all([
-    getEnterpriseActivityBlocks(organizationId),
+    getEnterpriseActivityBlocks(organizationId, userId),
     getEnterpriseActivityRequests({ organizationId, userId, membershipRole }),
     getEnterpriseActivityMembers(organizationId),
     organization.sectorCode === "PHARMACY"

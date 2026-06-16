@@ -35,6 +35,98 @@ function isEnterpriseManagerRole(role: string | null | undefined) {
   return role ? ENTERPRISE_MANAGER_ROLES.has(role) : false;
 }
 
+function permissionList(value: Prisma.JsonValue | null | undefined) {
+  return Array.isArray(value) ? value.filter((permission): permission is string => typeof permission === "string") : [];
+}
+
+async function getEnterpriseAccessContext(userId: string, organizationId: string) {
+  const membership = await prisma.organizationMember.findFirst({
+    where: {
+      userId,
+      organizationId,
+      status: "ACTIVE",
+      removedAt: null,
+      organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
+    },
+    select: { role: true, positionId: true, positionCode: true },
+  });
+  if (!membership) {
+    return null;
+  }
+  const position = membership.positionId || membership.positionCode
+    ? await prisma.enterprisePosition.findFirst({
+        where: {
+          organizationId,
+          isActive: true,
+          OR: [
+            ...(membership.positionId ? [{ id: membership.positionId }] : []),
+            ...(membership.positionCode ? [{ positionCode: membership.positionCode }] : []),
+          ],
+        },
+        select: { permissionsJson: true },
+      })
+    : null;
+  return { role: membership.role, permissions: permissionList(position?.permissionsJson) };
+}
+
+export function hasEnterprisePermission(permissions: string[], permission: string) {
+  return permissions.some((candidate) => candidate === permission);
+}
+
+const enterpriseModulePermissionPrefixes: Record<string, string[]> = {
+  AI_ASSISTANT: ["enterprise.ai."],
+  PATIENTS: ["health.patients."],
+  APPOINTMENTS: ["health.appointments."],
+  CONSULTATIONS: ["health.consultations."],
+  MEDICAL_RECORDS: ["health.medical_records."],
+  LABORATORY: ["health.lab."],
+  INTERNAL_PHARMACY: ["health.pharmacy."],
+  MEDICAL_BILLING: ["health.billing."],
+  INSURANCE_COVERAGE: ["health.insurance."],
+  QUALITY_INCIDENTS: ["health.incidents."],
+  MEDICAL_DOCUMENTS: ["health.documents."],
+  HEALTH_SETTINGS: ["health.settings."],
+  HEALTH_REPORTS: ["health.billing.", "health.incidents.", "health.patients."],
+  MEDICINES_PRODUCTS: ["pharmacy.products."],
+  BATCH_EXPIRY: ["pharmacy.batches."],
+  STOCK_INVENTORY: ["pharmacy.stock."],
+  STOCK_RECEIPTS: ["pharmacy.receipts."],
+  SALES_DISPENSATION: ["pharmacy.sales."],
+  PRESCRIPTIONS: ["pharmacy.prescriptions."],
+  SUPPLIERS_ORDERS: ["pharmacy.suppliers.", "pharmacy.purchase_orders."],
+  CASH_INVOICES_PAYMENTS: ["pharmacy.cash."],
+  RETURNS_ADJUSTMENTS_LOSSES: ["pharmacy.adjustments."],
+  ALERTS_EXPIRY_LOW_STOCK: ["pharmacy.alerts."],
+  QUALITY_PHARMACOVIGILANCE: ["pharmacy.quality."],
+  PHARMACY_DOCUMENTS: ["pharmacy.documents."],
+  PHARMACY_REPORTS: ["pharmacy.reports."],
+  PHARMACY_SETTINGS: ["pharmacy.settings."],
+};
+
+function canUseModuleWithPositionPermissions(permissions: string[], moduleCode: string, action: "read" | "submit" | "write" | "manage") {
+  if (hasEnterprisePermission(permissions, "enterprise.admin.manage")) {
+    return true;
+  }
+  const prefixes = enterpriseModulePermissionPrefixes[moduleCode] || [];
+  if (!prefixes.length) {
+    return action === "read" || action === "submit";
+  }
+  const modulePermissions = permissions.filter((permission) => prefixes.some((prefix) => permission.startsWith(prefix)));
+  if (!modulePermissions.length) {
+    return false;
+  }
+  if (action === "read") {
+    return modulePermissions.some((permission) => permission.endsWith(".view") || permission.endsWith(".read") || permission.endsWith(".chat") || permission.includes(".view_"));
+  }
+  if (action === "submit") {
+    return modulePermissions.some((permission) => permission.endsWith(".create") || permission.endsWith(".submit") || permission.endsWith(".chat") || permission.endsWith(".dispense"));
+  }
+  if (action === "write") {
+    return modulePermissions.some((permission) => permission.endsWith(".create") || permission.endsWith(".update") || permission.endsWith(".validate") || permission.endsWith(".manage") || permission.endsWith(".dispense"));
+  }
+  return modulePermissions.some((permission) => permission.endsWith(".manage") || permission.endsWith(".update") || permission.endsWith(".validate"));
+}
+
 export async function listBusinessSectors() {
   return prisma.businessSector.findMany({
     where: { isActive: true },
@@ -128,36 +220,23 @@ export async function getSectorTemplatePreview(sectorIdOrCode: string): Promise<
 }
 
 export async function canManageEnterpriseAdministration(userId: string, organizationId: string) {
-  const membership = await prisma.organizationMember.findFirst({
-    where: {
-      userId,
-      organizationId,
-      status: "ACTIVE",
-      removedAt: null,
-      organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
-    },
-    select: { role: true },
-  });
-
-  if (!isEnterpriseManagerRole(membership?.role)) {
+  const access = await getEnterpriseAccessContext(userId, organizationId);
+  if (!access) {
     return false;
   }
   const featureAccess = await canUseFeature(organizationId, "enterprise-admin");
-  return featureAccess.allowed;
+  if (!featureAccess.allowed) {
+    return false;
+  }
+  if (isEnterpriseManagerRole(access.role)) {
+    return true;
+  }
+  return hasEnterprisePermission(access.permissions, "enterprise.admin.manage") || hasEnterprisePermission(access.permissions, "enterprise.admin.members.manage");
 }
 
 export async function canAccessEnterpriseModule(userId: string, organizationId: string, moduleCode: string, action: "read" | "submit" | "write" | "manage" = "read") {
-  const membership = await prisma.organizationMember.findFirst({
-    where: {
-      userId,
-      organizationId,
-      status: "ACTIVE",
-      removedAt: null,
-      organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
-    },
-    select: { role: true },
-  });
-  if (!membership) {
+  const access = await getEnterpriseAccessContext(userId, organizationId);
+  if (!access) {
     return false;
   }
 
@@ -174,27 +253,21 @@ export async function canAccessEnterpriseModule(userId: string, organizationId: 
     return false;
   }
 
-  if (isEnterpriseAdminRole(membership.role)) {
+  if (isEnterpriseAdminRole(access.role)) {
     return true;
   }
-  if (membership.role === "MANAGER") {
+  if (access.permissions.length > 0) {
+    return canUseModuleWithPositionPermissions(access.permissions, moduleCode, action);
+  }
+  if (access.role === "MANAGER") {
     return action !== "manage";
   }
   return action === "read" || action === "submit";
 }
 
 export async function canAccessEnterpriseActivity(userId: string, organizationId: string, blockCode: string, action: "read" | "submit" | "manage" = "read") {
-  const membership = await prisma.organizationMember.findFirst({
-    where: {
-      userId,
-      organizationId,
-      status: "ACTIVE",
-      removedAt: null,
-      organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
-    },
-    select: { role: true },
-  });
-  if (!membership) {
+  const access = await getEnterpriseAccessContext(userId, organizationId);
+  if (!access) {
     return false;
   }
 
@@ -210,8 +283,20 @@ export async function canAccessEnterpriseActivity(userId: string, organizationId
   if (!block?.isEnabled) {
     return false;
   }
+  if (isEnterpriseAdminRole(access.role)) {
+    return true;
+  }
+  if (access.permissions.length > 0) {
+    if (action === "manage") {
+      return hasEnterprisePermission(access.permissions, "enterprise.activities.manage");
+    }
+    if (block.targetModuleCode) {
+      return canUseModuleWithPositionPermissions(access.permissions, block.targetModuleCode, action === "submit" ? "submit" : "read");
+    }
+    return hasEnterprisePermission(access.permissions, "enterprise.activities.manage") || hasEnterprisePermission(access.permissions, "enterprise.activities.submit");
+  }
   if (action === "manage") {
-    return isEnterpriseManagerRole(membership.role);
+    return isEnterpriseManagerRole(access.role);
   }
   if (block.targetModuleCode) {
     return canAccessEnterpriseModule(userId, organizationId, block.targetModuleCode, action === "submit" ? "submit" : "read");

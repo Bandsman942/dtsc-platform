@@ -8,6 +8,21 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, invitations entreprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Administration entreprise - collaborateurs, postes et permissions
+
+- [ ] Un admin entreprise peut inviter un utilisateur actif en choisissant rôle et poste; le membre reste `INVITED` jusqu'à acceptation.
+- [ ] Le menu `...` d'un collaborateur permet modifier l'affectation, suspendre, réactiver et retirer sans suppression physique du compte.
+- [ ] Un poste peut être créé ou modifié depuis un dialogue plein écran avec département, statut, poste clé et permissions lisibles sans underscores.
+- [ ] Un collaborateur avec poste sans permission `enterprise.admin.*` ne voit pas `Administration [Entreprise]` et ne peut pas l'ouvrir par URL directe.
+- [ ] Un collaborateur avec permissions de poste sectorielles ne voit dans la navigation que les modules entreprise activés, inclus dans le plan et autorisés par son poste.
+- [ ] Les blocs `Activités [Entreprise]` sont filtrés par poste; un utilisateur sans bloc autorisé ne voit pas le lien et est redirigé hors de `/enterprise-activities`.
+- [ ] Les routes membres `PATCH/DELETE /api/enterprise/[organizationId]/members/[memberId]` refusent origine invalide, session absente, organisation différente, membre retiré et tentative de retrait de soi-même.
+
+## Chatbot général
+
+- [ ] Les réponses de l'assistant général s'affichent en Markdown enrichi: titres, listes, gras, italique, tableaux si pertinent et code borné dans la bulle assistant.
+- [ ] Le streaming du chatbot conserve l'historique, les quotas et la persistance des messages sans casser les actions de copie, feedback et partage vers Mes collaborateurs.
+
 ## IA Assistant Entreprise
 
 - [ ] `/enterprise-modules/AI_ASSISTANT` n'est visible et ouvrable que si le module est activé, inclus dans le plan et accessible au membre actif de l'organisation.

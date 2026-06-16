@@ -51,7 +51,7 @@ export function NavLinks({
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
-  enterpriseContext?: { organizationName: string; showAdmin: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean; icon: string | null }> } | null;
+  enterpriseContext?: { organizationName: string; showAdmin: boolean; showActivities: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean; icon: string | null }> } | null;
   locale?: string | null;
 }) {
   const pathname = usePathname();
@@ -75,7 +75,9 @@ export function NavLinks({
     : [...visibleBaseItems, ...invitationItems, ...employeeItems];
   const enterpriseItems: NavItem[] = enterpriseContext
       ? [
-        { href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
+        ...(enterpriseContext.showActivities
+          ? [{ href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." }]
+          : []),
         ...enterpriseContext.modules.map((enterpriseModule) => ({
           href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`,
           label: enterpriseModule.label,
