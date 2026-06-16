@@ -158,6 +158,13 @@ model User {
   organizationAdminGrants               OrganizationAdminGrant[]          @relation("OrganizationAdminGrantUser")
   grantedOrganizationAdmins             OrganizationAdminGrant[]          @relation("OrganizationAdminGrantDtscUser")
   createdOrganizations                  Organization[]                    @relation("OrganizationCreatedByDtsc")
+  enterpriseAiAssistantsCreated         EnterpriseAiAssistant[]           @relation("EnterpriseAiAssistantCreatedBy")
+  enterpriseAiConversations             EnterpriseAiConversation[]        @relation("EnterpriseAiConversationUser")
+  enterpriseAiMessages                  EnterpriseAiMessage[]             @relation("EnterpriseAiMessageUser")
+  enterpriseAiKnowledgeSourcesCreated   EnterpriseAiKnowledgeSource[]     @relation("EnterpriseAiKnowledgeSourceCreatedBy")
+  enterpriseAiToolCalls                 EnterpriseAiToolCall[]            @relation("EnterpriseAiToolCallUser")
+  enterpriseAiUsageLogs                 EnterpriseAiUsage[]               @relation("EnterpriseAiUsageUser")
+  enterpriseAiSettingsUpdated           EnterpriseAiSetting[]             @relation("EnterpriseAiSettingUpdatedBy")
   updatedOrganizationSubscriptions      OrganizationSubscription[]        @relation("OrganizationSubscriptionUpdatedBy")
   createdOrganizationSubscriptions      OrganizationSubscription[]        @relation("OrganizationSubscriptionCreatedBy")
   organizationBillingRecords            BillingRecord[]
@@ -545,98 +552,286 @@ model UsageLog {
   @@index([conversationId])
 }
 
+model EnterpriseAiAssistant {
+  id               String                        @id @default(cuid())
+  organizationId   String
+  sectorCode       String?
+  moduleCode       String                        @default("AI_ASSISTANT")
+  name             String                        @default("IA Assistant Entreprise")
+  status           String                        @default("ACTIVE")
+  systemProfile    String                        @default("SECTOR_AWARE")
+  settingsJson     Json?
+  createdById      String?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  organization     Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy        User?                         @relation("EnterpriseAiAssistantCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  conversations    EnterpriseAiConversation[]
+  knowledgeSources EnterpriseAiKnowledgeSource[]
+  toolCalls        EnterpriseAiToolCall[]
+  usageLogs        EnterpriseAiUsage[]
+
+  @@unique([organizationId, moduleCode])
+  @@index([organizationId, status])
+  @@index([sectorCode, status])
+}
+
+model EnterpriseAiConversation {
+  id             String                 @id @default(cuid())
+  organizationId String
+  assistantId    String
+  userId         String
+  title          String                 @default("Nouvelle conversation")
+  status         String                 @default("ACTIVE")
+  lastMessageAt  DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assistant      EnterpriseAiAssistant  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user           User                   @relation("EnterpriseAiConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  messages       EnterpriseAiMessage[]
+  toolCalls      EnterpriseAiToolCall[]
+  usageLogs      EnterpriseAiUsage[]
+
+  @@index([organizationId, userId, updatedAt])
+  @@index([organizationId, assistantId, status, updatedAt])
+}
+
+model EnterpriseAiMessage {
+  id              String                   @id @default(cuid())
+  organizationId  String
+  conversationId  String
+  userId          String?
+  role            String
+  content         String
+  model           String?
+  citationsJson   Json?
+  toolResultsJson Json?
+  tokenHint       Int                      @default(0)
+  createdAt       DateTime                 @default(now())
+  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation    EnterpriseAiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User?                    @relation("EnterpriseAiMessageUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, conversationId, createdAt])
+  @@index([organizationId, userId, createdAt])
+}
+
+model EnterpriseAiKnowledgeSource {
+  id              String                       @id @default(cuid())
+  organizationId  String
+  assistantId     String?
+  sectorCode      String?
+  moduleCode      String?
+  title           String
+  sourceType      String                       @default("DOCUMENT")
+  status          String                       @default("PROCESSING")
+  confidentiality String                       @default("INTERNAL")
+  fileName        String?
+  mimeType        String?
+  sizeBytes       Int?
+  storageBucket   String?
+  storagePath     String?
+  extractedText   String?
+  errorMessage    String?
+  archivedAt      DateTime?
+  createdById     String
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  organization    Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assistant       EnterpriseAiAssistant?       @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  createdBy       User                         @relation("EnterpriseAiKnowledgeSourceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  chunks          EnterpriseAiKnowledgeChunk[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, sectorCode, moduleCode])
+  @@index([organizationId, confidentiality, status])
+  @@index([storageBucket, storagePath])
+}
+
+model EnterpriseAiKnowledgeChunk {
+  id             String                       @id @default(cuid())
+  organizationId String
+  sourceId       String
+  sectorCode     String?
+  moduleCode     String?
+  content        String
+  tokenHint      Int                          @default(0)
+  embedding      Unsupported("vector(1536)")?
+  createdAt      DateTime                     @default(now())
+  organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source         EnterpriseAiKnowledgeSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, sourceId])
+  @@index([organizationId, sectorCode, moduleCode, createdAt])
+}
+
+model EnterpriseAiToolCall {
+  id             String                    @id @default(cuid())
+  organizationId String
+  assistantId    String?
+  conversationId String?
+  userId         String
+  toolName       String
+  toolType       String                    @default("READ")
+  status         String                    @default("SUCCESS")
+  inputJson      Json?
+  outputJson     Json?
+  errorMessage   String?
+  createdAt      DateTime                  @default(now())
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assistant      EnterpriseAiAssistant?    @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  conversation   EnterpriseAiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  user           User                      @relation("EnterpriseAiToolCallUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, createdAt])
+  @@index([organizationId, toolName, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model EnterpriseAiUsage {
+  id             String                    @id @default(cuid())
+  organizationId String
+  assistantId    String?
+  conversationId String?
+  userId         String
+  periodStart    DateTime
+  messageCount   Int                       @default(0)
+  inputTokens    Int                       @default(0)
+  outputTokens   Int                       @default(0)
+  totalTokens    Int                       @default(0)
+  estimatedCost  Decimal                   @default(0) @db.Decimal(10, 6)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assistant      EnterpriseAiAssistant?    @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  conversation   EnterpriseAiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  user           User                      @relation("EnterpriseAiUsageUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, periodStart])
+  @@index([organizationId, periodStart])
+  @@index([conversationId])
+}
+
+model EnterpriseAiSetting {
+  id                   String       @id @default(cuid())
+  organizationId       String       @unique
+  enabled              Boolean      @default(true)
+  defaultLanguage      String       @default("fr")
+  allowKnowledgeUpload Boolean      @default(true)
+  allowReadTools       Boolean      @default(true)
+  allowActionDrafts    Boolean      @default(true)
+  retentionDays        Int          @default(365)
+  settingsJson         Json?
+  updatedById          String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy            User?        @relation("EnterpriseAiSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([enabled, updatedAt])
+}
+
 model Organization {
-  id                          String                           @id @default(cuid())
-  name                        String
-  slug                        String?                          @unique
-  logoUrl                     String?
-  ownerUserId                 String?
-  status                      String                           @default("DRAFT")
-  organizationType            String                           @default("CLIENT")
-  sector                      String?
-  sectorId                    String?
-  sectorCode                  String?
-  industry                    String?
-  country                     String?
-  city                        String?
-  timezone                    String                           @default("Africa/Kinshasa")
-  settingsJson                Json?
-  brandingJson                Json?
-  contactPerson               String?
-  email                       String?
-  phone                       String?
-  address                     String?
-  notes                       String?
-  createdByDtscUserId         String?
-  createdAt                   DateTime                         @default(now())
-  updatedAt                   DateTime                         @updatedAt
-  deletedAt                   DateTime?
-  businessSector              BusinessSector?                  @relation(fields: [sectorId], references: [id], onDelete: SetNull)
-  createdByDtsc               User?                            @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
-  members                     OrganizationMember[]
-  adminGrants                 OrganizationAdminGrant[]
-  subscriptions               OrganizationSubscription[]
-  billingRecords              BillingRecord[]
-  knowledgeDocuments          KnowledgeDocument[]
-  companyProfiles             CompanyProfile[]
-  companyActivities           CompanyActivity[]
-  conversations               Conversation[]
-  conversationProjects        ConversationProject[]
-  notifications               Notification[]
-  supportTickets              SupportTicket[]
-  announcements               Announcement[]                   @relation("AnnouncementOrganization")
-  authoredAnnouncements       Announcement[]                   @relation("AnnouncementAuthorOrganization")
-  collaborationGroups         CollaborationGroup[]
-  collaboratorAvailabilities  CollaboratorAvailability[]
-  internalCalendarEvents      InternalCalendarEvent[]
-  enterpriseModules           EnterpriseModule[]
-  enterpriseAdminSections     EnterpriseAdminSection[]
-  enterprisePositions         EnterprisePosition[]
-  enterpriseDepartments       EnterpriseDepartment[]
-  enterpriseActivityBlocks    EnterpriseActivityBlock[]
-  enterpriseWorkflows         EnterpriseWorkflow[]
-  enterpriseActivityRequests  EnterpriseActivityRequest[]
-  enterpriseSectorRecords     EnterpriseSectorRecord[]
-  healthPatients              HealthPatient[]
-  healthPatientEvents         HealthPatientEvent[]
-  healthAppointments          HealthAppointment[]
-  healthAppointmentEvents     HealthAppointmentEvent[]
-  healthConsultations         HealthConsultation[]
-  healthConsultationEvents    HealthConsultationEvent[]
-  healthMedicalRecords        HealthMedicalRecord[]
-  healthMedicalHistoryItems   HealthMedicalHistoryItem[]
-  healthAllergies             HealthAllergy[]
-  healthCurrentTreatments     HealthCurrentTreatment[]
-  healthMedicalAlerts         HealthMedicalAlert[]
-  healthConfidentialNotes     HealthConfidentialNote[]
-  healthMedicalRecordEvents   HealthMedicalRecordEvent[]
-  healthSpecialties           HealthSpecialty[]
-  healthStaffAssignments      HealthStaffAssignment[]
-  healthStaffEvents           HealthStaffEvent[]
-  healthLabTests              HealthLabTestCatalog[]
-  healthLabRequests           HealthLabRequest[]
-  healthLabRequestItems       HealthLabRequestItem[]
-  healthLabEvents             HealthLabEvent[]
-  healthPharmacyProducts      HealthPharmacyProduct[]
-  healthPharmacyBatches       HealthPharmacyBatch[]
-  healthPharmacyMovements     HealthPharmacyStockMovement[]
-  healthPharmacyDispensations HealthPharmacyDispensation[]
-  healthBillingServices       HealthBillingServiceCatalog[]
-  healthMedicalInvoices       HealthMedicalInvoice[]
-  healthMedicalInvoiceItems   HealthMedicalInvoiceItem[]
-  healthMedicalPayments       HealthMedicalInvoicePayment[]
-  healthMedicalInvoiceEvents  HealthMedicalInvoiceEvent[]
-  healthInsuranceProviders    HealthInsuranceProvider[]
-  healthPatientCoverages      HealthPatientInsuranceCoverage[]
-  healthCoverageRequests      HealthCoverageRequest[]
-  healthCoverageRequestEvents HealthCoverageRequestEvent[]
-  pharmacyProducts            PharmacyProduct[]
-  pharmacyBatches             PharmacyBatch[]
-  pharmacyStockMovements      PharmacyStockMovement[]
-  pharmacyInventorySessions   PharmacyInventorySession[]
-  pharmacyInventoryLines      PharmacyInventoryLine[]
-  pharmacyStockAdjustments    PharmacyStockAdjustment[]
-  pharmacyStockLocations      PharmacyStockLocation[]
+  id                           String                           @id @default(cuid())
+  name                         String
+  slug                         String?                          @unique
+  logoUrl                      String?
+  ownerUserId                  String?
+  status                       String                           @default("DRAFT")
+  organizationType             String                           @default("CLIENT")
+  sector                       String?
+  sectorId                     String?
+  sectorCode                   String?
+  industry                     String?
+  country                      String?
+  city                         String?
+  timezone                     String                           @default("Africa/Kinshasa")
+  settingsJson                 Json?
+  brandingJson                 Json?
+  contactPerson                String?
+  email                        String?
+  phone                        String?
+  address                      String?
+  notes                        String?
+  createdByDtscUserId          String?
+  createdAt                    DateTime                         @default(now())
+  updatedAt                    DateTime                         @updatedAt
+  deletedAt                    DateTime?
+  businessSector               BusinessSector?                  @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  createdByDtsc                User?                            @relation("OrganizationCreatedByDtsc", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
+  members                      OrganizationMember[]
+  adminGrants                  OrganizationAdminGrant[]
+  subscriptions                OrganizationSubscription[]
+  billingRecords               BillingRecord[]
+  knowledgeDocuments           KnowledgeDocument[]
+  companyProfiles              CompanyProfile[]
+  companyActivities            CompanyActivity[]
+  conversations                Conversation[]
+  conversationProjects         ConversationProject[]
+  enterpriseAiAssistants       EnterpriseAiAssistant[]
+  enterpriseAiConversations    EnterpriseAiConversation[]
+  enterpriseAiMessages         EnterpriseAiMessage[]
+  enterpriseAiKnowledgeSources EnterpriseAiKnowledgeSource[]
+  enterpriseAiKnowledgeChunks  EnterpriseAiKnowledgeChunk[]
+  enterpriseAiToolCalls        EnterpriseAiToolCall[]
+  enterpriseAiUsageLogs        EnterpriseAiUsage[]
+  enterpriseAiSettings         EnterpriseAiSetting[]
+  notifications                Notification[]
+  supportTickets               SupportTicket[]
+  announcements                Announcement[]                   @relation("AnnouncementOrganization")
+  authoredAnnouncements        Announcement[]                   @relation("AnnouncementAuthorOrganization")
+  collaborationGroups          CollaborationGroup[]
+  collaboratorAvailabilities   CollaboratorAvailability[]
+  internalCalendarEvents       InternalCalendarEvent[]
+  enterpriseModules            EnterpriseModule[]
+  enterpriseAdminSections      EnterpriseAdminSection[]
+  enterprisePositions          EnterprisePosition[]
+  enterpriseDepartments        EnterpriseDepartment[]
+  enterpriseActivityBlocks     EnterpriseActivityBlock[]
+  enterpriseWorkflows          EnterpriseWorkflow[]
+  enterpriseActivityRequests   EnterpriseActivityRequest[]
+  enterpriseSectorRecords      EnterpriseSectorRecord[]
+  healthPatients               HealthPatient[]
+  healthPatientEvents          HealthPatientEvent[]
+  healthAppointments           HealthAppointment[]
+  healthAppointmentEvents      HealthAppointmentEvent[]
+  healthConsultations          HealthConsultation[]
+  healthConsultationEvents     HealthConsultationEvent[]
+  healthMedicalRecords         HealthMedicalRecord[]
+  healthMedicalHistoryItems    HealthMedicalHistoryItem[]
+  healthAllergies              HealthAllergy[]
+  healthCurrentTreatments      HealthCurrentTreatment[]
+  healthMedicalAlerts          HealthMedicalAlert[]
+  healthConfidentialNotes      HealthConfidentialNote[]
+  healthMedicalRecordEvents    HealthMedicalRecordEvent[]
+  healthSpecialties            HealthSpecialty[]
+  healthStaffAssignments       HealthStaffAssignment[]
+  healthStaffEvents            HealthStaffEvent[]
+  healthLabTests               HealthLabTestCatalog[]
+  healthLabRequests            HealthLabRequest[]
+  healthLabRequestItems        HealthLabRequestItem[]
+  healthLabEvents              HealthLabEvent[]
+  healthPharmacyProducts       HealthPharmacyProduct[]
+  healthPharmacyBatches        HealthPharmacyBatch[]
+  healthPharmacyMovements      HealthPharmacyStockMovement[]
+  healthPharmacyDispensations  HealthPharmacyDispensation[]
+  healthBillingServices        HealthBillingServiceCatalog[]
+  healthMedicalInvoices        HealthMedicalInvoice[]
+  healthMedicalInvoiceItems    HealthMedicalInvoiceItem[]
+  healthMedicalPayments        HealthMedicalInvoicePayment[]
+  healthMedicalInvoiceEvents   HealthMedicalInvoiceEvent[]
+  healthInsuranceProviders     HealthInsuranceProvider[]
+  healthPatientCoverages       HealthPatientInsuranceCoverage[]
+  healthCoverageRequests       HealthCoverageRequest[]
+  healthCoverageRequestEvents  HealthCoverageRequestEvent[]
+  pharmacyProducts             PharmacyProduct[]
+  pharmacyBatches              PharmacyBatch[]
+  pharmacyStockMovements       PharmacyStockMovement[]
+  pharmacyInventorySessions    PharmacyInventorySession[]
+  pharmacyInventoryLines       PharmacyInventoryLine[]
+  pharmacyStockAdjustments     PharmacyStockAdjustment[]
+  pharmacyStockLocations       PharmacyStockLocation[]
 
   @@index([status, organizationType])
   @@index([sectorId])

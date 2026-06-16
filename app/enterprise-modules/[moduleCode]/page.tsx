@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { EnterpriseAiWorkspace } from "@/components/enterprise/enterprise-ai-workspace";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -17,7 +18,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
   if (!membership || !(await canAccessEnterpriseModule(user.id, organizationId, moduleCode, "read"))) notFound();
 
   const [organization, enterpriseModule, activityBlocks, records, members, departments, positions, workflows, requests, calendarEvents, audits, coreRecords] = await Promise.all([
-    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, sectorCode: true } }),
     prisma.enterpriseModule.findUnique({ where: { organizationId_moduleCode: { organizationId, moduleCode } } }),
     prisma.enterpriseActivityBlock.findMany({ where: { organizationId, isEnabled: true, targetModuleCode: moduleCode }, orderBy: { sortOrder: "asc" }, select: { id: true, labelFr: true, labelEn: true, blockCode: true } }),
     prisma.enterpriseSectorRecord.findMany({ where: { organizationId, moduleCode, deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 20, select: { id: true, title: true, summary: true, status: true, updatedAt: true } }),
@@ -46,6 +47,19 @@ export default async function EnterpriseModulePage({ params }: Params) {
     }),
   ]);
   if (!organization || !enterpriseModule || !enterpriseModule.isCore) notFound();
+
+  if (enterpriseModule.moduleCode === "AI_ASSISTANT") {
+    return (
+      <AppShell user={user}>
+        <EnterpriseAiWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          sectorCode={organization.sectorCode}
+          canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)}
+        />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell user={user}>

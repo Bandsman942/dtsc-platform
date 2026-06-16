@@ -73,6 +73,12 @@ const healthcarePermissions = [
   "health.incidents.manage",
   "health.documents.download",
   "health.settings.manage",
+  "enterprise.ai.chat",
+  "enterprise.ai.sources.view",
+  "enterprise.ai.sources.manage",
+  "enterprise.ai.tools.read",
+  "enterprise.ai.usage.view",
+  "enterprise.ai.settings.manage",
 ];
 const pharmacyPermissions = [
   "pharmacy.products.view", "pharmacy.products.create", "pharmacy.products.update", "pharmacy.products.archive",
@@ -82,6 +88,8 @@ const pharmacyPermissions = [
   "pharmacy.prescriptions.view", "pharmacy.prescriptions.validate", "pharmacy.suppliers.view", "pharmacy.purchase_orders.validate",
   "pharmacy.cash.view", "pharmacy.cash.close", "pharmacy.adjustments.validate", "pharmacy.alerts.manage", "pharmacy.quality.manage",
   "pharmacy.documents.view", "pharmacy.reports.view", "pharmacy.settings.update",
+  "enterprise.ai.chat", "enterprise.ai.sources.view", "enterprise.ai.sources.manage", "enterprise.ai.tools.read", "enterprise.ai.usage.view", "enterprise.ai.settings.manage",
+  "pharmacy.ai.stock.read", "pharmacy.ai.sales.read", "pharmacy.ai.cash.read", "pharmacy.ai.quality.read", "pharmacy.ai.documents.read",
 ];
 
 const workflowCategories = [

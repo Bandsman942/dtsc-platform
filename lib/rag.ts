@@ -105,7 +105,7 @@ export async function createEmbedding(input: string) {
   return values;
 }
 
-function toVectorLiteral(embedding: number[]) {
+export function toVectorLiteral(embedding: number[]) {
   return `[${embedding.map((value) => Number(value).toFixed(8)).join(",")}]`;
 }
 

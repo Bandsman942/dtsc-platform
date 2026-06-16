@@ -200,6 +200,16 @@ const pharmacyActivityActionApi = read("app/api/enterprise/[organizationId]/phar
 const pharmacyActivitiesWorkspace = read("components/enterprise/pharmacy-activities-workspace.tsx");
 const pharmacyActivitiesService = read("lib/pharmacy-activities.ts");
 const pharmacyActivityAccess = read("lib/pharmacy-activity-access.ts");
+const enterpriseAiAccess = read("lib/enterprise-ai/access.ts");
+const enterpriseAiKnowledge = read("lib/enterprise-ai/knowledge.ts");
+const enterpriseAiContext = read("lib/enterprise-ai/context.ts");
+const enterpriseAiPharmacyTools = read("lib/enterprise-ai/pharmacy-tools.ts");
+const enterpriseAiUsage = read("lib/enterprise-ai/usage.ts");
+const enterpriseAiChatRoute = read("app/api/enterprise/ai/chat/route.ts");
+const enterpriseAiKnowledgeRoute = read("app/api/enterprise/ai/knowledge-sources/route.ts");
+const enterpriseAiKnowledgeActionRoute = read("app/api/enterprise/ai/knowledge-sources/[id]/route.ts");
+const enterpriseAiSettingsRoute = read("app/api/enterprise/ai/settings/route.ts");
+const enterpriseAiWorkspace = read("components/enterprise/enterprise-ai-workspace.tsx");
 const prismaSchema = read("prisma/schema.prisma");
 const collaboratorsPage = read("app/collaborators/page.tsx");
 const collaboratorsGroupsRoute = read("app/api/collaborators/groups/route.ts");
@@ -1118,6 +1128,90 @@ check(
   containsAll(enterpriseCoreWorkspace, ["Créer un élément", "ListControls", "ActionMenu", "CircleHelp", "Demander une validation", "min-w-0", "overflow-x-hidden"])
     && !enterpriseCoreWorkspace.includes("window.prompt")
     && !enterpriseCoreWorkspace.includes("window.confirm")
+);
+
+check(
+  "Enterprise AI: modèles Prisma et limites SaaS dédiés",
+  containsAll(prismaSchema, [
+    "model EnterpriseAiAssistant",
+    "model EnterpriseAiConversation",
+    "model EnterpriseAiMessage",
+    "model EnterpriseAiKnowledgeSource",
+    "model EnterpriseAiKnowledgeChunk",
+    "model EnterpriseAiToolCall",
+    "model EnterpriseAiUsage",
+    "model EnterpriseAiSetting",
+    "Unsupported(\"vector(1536)\")",
+  ])
+    && containsAll(read("lib/billing/plan-limits.ts"), [
+      "maxEnterpriseAiMonthlyMessages",
+      "maxEnterpriseAiKnowledgeSources",
+      "maxEnterpriseAiStorageMb",
+      "enterpriseAiReadToolsEnabled",
+      "enterpriseAiActionDraftsEnabled",
+    ])
+);
+
+check(
+  "Enterprise AI: accès strictement lié au contexte organisation actif",
+  containsAll(enterpriseAiAccess, [
+    "session.activeContext !== \"ORGANIZATION\"",
+    "session.activeOrganizationId !== organizationId",
+    "canAccessEnterpriseModule(session.userId, organizationId, ENTERPRISE_AI_MODULE_CODE",
+    "status: \"ACTIVE\"",
+    "removedAt: null",
+    "organization: { status: \"ACTIVE\", deletedAt: null, organizationType: \"CLIENT\" }",
+  ])
+);
+
+check(
+  "Enterprise AI: RAG séparé des documents personnels et filtré par organisation",
+  containsAll(enterpriseAiKnowledge, [
+    "enterpriseAiKnowledgeSource.create",
+    "EnterpriseAiKnowledgeChunk",
+    "kc.\"organizationId\" = $2",
+    "ks.\"organizationId\" = $2",
+    "ks.\"status\" = 'READY'",
+    "ks.\"archivedAt\" IS NULL",
+    "ks.\"confidentiality\" = ANY($3::text[])",
+    "uploadEnterpriseAiKnowledgeFileToSupabase",
+  ])
+);
+
+check(
+  "Enterprise AI: routes mutantes protégées par origine, Zod, rate limit et audit",
+  containsAll(enterpriseAiChatRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiChatSchema.safeParse", "getEnterpriseAiAccess", "recordEnterpriseAiUsage", "writeAuditLog"])
+    && containsAll(enterpriseAiKnowledgeRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiKnowledgeUploadSchema.safeParse", "assertEnterpriseAiKnowledgeQuota", "writeAuditLog"])
+    && containsAll(enterpriseAiKnowledgeActionRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiKnowledgeActionSchema.safeParse", "ENTERPRISE_AI_SOURCE_ARCHIVED"])
+    && containsAll(enterpriseAiSettingsRoute, ["isSameOriginRequest", "await rateLimit", "enterpriseAiSettingsUpdateSchema.safeParse", "ENTERPRISE_AI_SETTINGS_UPDATED"])
+);
+
+check(
+  "Enterprise AI PHARMACY: CAG, outils lecture et absence de mutation métier directe",
+  containsAll(enterpriseAiContext, ["Contexte secteur PHARMACY", "Respecter FEFO", "ne prétends jamais avoir exécuté une action métier"])
+    && containsAll(enterpriseAiPharmacyTools, [
+      "pharmacy.dashboard.summary",
+      "pharmacy.stock.low",
+      "pharmacy.batches.expiring",
+      "pharmacy.alerts.open",
+      "pharmacy.sales.today",
+      "pharmacy.cash.sessions",
+      "pharmacy.purchases.open",
+      "pharmacy.quality.open",
+      "pharmacy.documents.summary",
+    ])
+    && !enterpriseAiPharmacyTools.includes(".create({")
+    && !enterpriseAiPharmacyTools.includes(".update({")
+    && !enterpriseAiPharmacyTools.includes(".delete({")
+);
+
+check(
+  "Enterprise AI: workspace complet sans alert/confirm/prompt",
+  containsAll(enterpriseModulePage, ["EnterpriseAiWorkspace", "enterpriseModule.moduleCode === \"AI_ASSISTANT\""])
+    && containsAll(enterpriseAiWorkspace, ["Chat", "Sources", "Historique", "Usage", "Paramètres", "ActionMenu", "Dialog", "/api/enterprise/ai/chat", "/api/enterprise/ai/knowledge-sources", "/api/enterprise/ai/settings"])
+    && !enterpriseAiWorkspace.includes("window.alert")
+    && !enterpriseAiWorkspace.includes("window.confirm")
+    && !enterpriseAiWorkspace.includes("window.prompt")
 );
 
 check(

@@ -23,6 +23,7 @@ Objectifs couverts par le code actuel:
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
+- IA Assistant Entreprise pour organisations clientes avec CAG sectoriel, RAG entreprise isole par `organizationId`, conversations dediees, sources privees, citations, quotas de plan, outils backend en lecture et premiere couverture sectorielle PHARMACY;
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
@@ -114,6 +115,25 @@ Les controles sont appliques cote serveur sur:
 La Console DTSC `Abonnements & facturation` utilise `lib/console/console-billing.ts` pour afficher les abonnements organisations, plans resolus, statuts, dates, limites, modules, utilisateurs actifs et derniers paiements. Le gestionnaire `components/admin/billing-plan-manager.tsx` permet uniquement au role `ADMIN` de modifier les tarifs, descriptions, quotas, ordre et activation via `PATCH /api/admin/billing-plans/[id]`. La route exige contexte `DTSC_INTERNAL`, origine valide, Zod, rate limit et journalise les valeurs avant/apres. `ensureBillingPlans()` utilise une creation avec `skipDuplicates` et ne modifie jamais un plan existant. La page client `/billing` expose en lecture seule le plan organisationnel actif, ses limites, modules et enregistrements de facturation. Le flux MaishaPay existant reste celui des abonnements utilisateur chatbot; aucun flux organisationnel parallele n'a ete ajoute.
 
 La reference complete est dans `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`.
+
+### IA Assistant Entreprise
+
+Le module `AI_ASSISTANT` dispose maintenant d'un backend propre, distinct du chatbot personnel et de `KnowledgeDocument`. La migration additive `20260616183000_enterprise_ai_assistant` cree les tables `EnterpriseAiAssistant`, `EnterpriseAiConversation`, `EnterpriseAiMessage`, `EnterpriseAiKnowledgeSource`, `EnterpriseAiKnowledgeChunk`, `EnterpriseAiToolCall`, `EnterpriseAiUsage` et `EnterpriseAiSetting`. Les chunks utilisent pgvector `vector(1536)`.
+
+Routes privees ajoutees:
+
+- `POST /api/enterprise/ai/chat`: chat sectoriel avec contexte CAG, RAG, outils lecture, quotas mensuels, audit et journal API;
+- `GET /api/enterprise/ai/conversations`: historique IA de l'utilisateur dans l'organisation active;
+- `GET|POST /api/enterprise/ai/knowledge-sources`: liste et indexation de sources IA entreprise;
+- `PATCH /api/enterprise/ai/knowledge-sources/[id]`: archivage ou restauration non destructive d'une source;
+- `GET /api/enterprise/ai/usage`: usage mensuel et limites de plan;
+- `GET|PATCH /api/enterprise/ai/settings`: paramètres IA entreprise.
+
+Les mutations verifient origine, session, membership `ACTIVE`, contexte organisation actif, module `AI_ASSISTANT`, validation Zod, rate limit et quotas. Les sources RAG sont filtrees par `organizationId`, statut, archivage, secteur/module et confidentialite. Les documents RAG sont traites comme contenu non fiable afin de limiter le prompt injection.
+
+Les limites IA organisationnelles sont ajoutees a `lib/billing/plan-limits.ts`: messages mensuels, sources, stockage, outils lecture et brouillons d'action. Le workspace client est expose sur `/enterprise-modules/AI_ASSISTANT` avec Chat, Sources, Historique, Usage et Parametres.
+
+La documentation detaillee est dans `docs/enterprise-ai-assistant.md`; la couverture PHARMACY est dans `docs/sectors/pharmacy-ai-assistant.md`.
 
 ### Invitations entreprise
 

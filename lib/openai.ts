@@ -46,6 +46,7 @@ export const DTSC_SYSTEM_PROMPT = [
   "- Secteur sante, module Equipe medicale actif: les professionnels sont des membres reels de l'entreprise affectes a un poste, un service, une specialite, une disponibilite et des permissions Sante. Les rendez-vous et consultations utilisent uniquement les professionnels actifs et disponibles.",
   "- Secteur sante, module Consultations actif: les professionnels autorises peuvent ouvrir une consultation pour un patient, la relier a un rendez-vous, saisir constantes, examen, diagnostic, conduite, prescription et suivi, puis gerer son statut, sa cloture et sa reouverture avec historique. Les details cliniques restent masques sans permission sensible.",
   "- Navigation entreprise active: seuls les modules actives, inclus dans l'abonnement et issus du socle commun ou du secteur propre a l'entreprise apparaissent aux collaborateurs autorises; chaque module possede une page dediee et disparait de la navigation lorsqu'il est desactive.",
+  "- IA Assistant Entreprise actif: les organisations disposant du module peuvent utiliser un assistant sectoriel limite a leur espace actif, avec contexte entreprise, sources documentaires privees, citations, historique, quotas de plan, outils backend en lecture et brouillons d'action soumis a confirmation humaine; le secteur pharmacie dispose de syntheses sur stocks, lots, alertes, ventes, caisse, achats, qualite et documents sans execution directe des workflows sensibles.",
   "- Parametres utilisateur: choix du modele IA disponible, preferences de notifications et alertes navigateur/PWA pendant une session connectee.",
   "- Administration interne pour roles autorises: vue generale, RBAC, utilisateurs, inscrits newsletter, publications, visites, activite, audits, HR & CFO, SCO, COO, CEO, MPO, CTO et LA. Les sections metier sensibles sont visibles selon le poste officiel RH correspondant, sauf ADMIN.",
   "- HR & CFO: suivi des departements, postes officiels DTSC, comptes financiers, collaborateurs internes, budgets, transactions, factures automatiques, paie, bulletins de paie, controles internes, alertes et audits pour stabiliser la gestion humaine et financiere de DTSC.",
@@ -99,9 +100,11 @@ export function getOpenAIModel(model?: string) {
 export async function createOpenAIResponseStream({
   model,
   messages,
+  instructions = DTSC_SYSTEM_PROMPT,
 }: {
   model?: string;
   messages: OpenAIInputMessage[];
+  instructions?: string;
 }) {
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -111,7 +114,7 @@ export async function createOpenAIResponseStream({
     },
     body: JSON.stringify({
       model: getOpenAIModel(model),
-      instructions: DTSC_SYSTEM_PROMPT,
+      instructions,
       input: messages
         .filter((message) => message.role !== "system")
         .map((message) => ({
@@ -133,6 +136,66 @@ export async function createOpenAIResponseStream({
   }
 
   return response.body;
+}
+
+function extractResponseText(payload: unknown) {
+  if (payload && typeof payload === "object" && "output_text" in payload && typeof payload.output_text === "string") {
+    return payload.output_text;
+  }
+  const record = payload as { output?: Array<{ content?: Array<{ text?: string; type?: string }> }> } | null;
+  const chunks = record?.output
+    ?.flatMap((item) => item.content || [])
+    .map((item) => item.text)
+    .filter((text): text is string => Boolean(text));
+  return chunks?.join("\n").trim() || "";
+}
+
+export async function createOpenAITextResponse({
+  model,
+  messages,
+  instructions = DTSC_SYSTEM_PROMPT,
+}: {
+  model?: string;
+  messages: OpenAIInputMessage[];
+  instructions?: string;
+}) {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${requireEnv("OPENAI_API_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: getOpenAIModel(model),
+      instructions,
+      input: messages
+        .filter((message) => message.role !== "system")
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+      store: false,
+    }),
+  });
+
+  const payload = await response.json().catch(async () => ({ raw: await response.text().catch(() => "") }));
+  if (!response.ok) {
+    throw new Error(`OpenAI request failed with status ${response.status}`);
+  }
+
+  const content = extractResponseText(payload);
+  if (!content) {
+    throw new Error("OpenAI response did not include text content");
+  }
+
+  return {
+    content,
+    model: getOpenAIModel(model),
+    usage: {
+      inputTokens: Number((payload as { usage?: { input_tokens?: number } }).usage?.input_tokens || 0),
+      outputTokens: Number((payload as { usage?: { output_tokens?: number } }).usage?.output_tokens || 0),
+    },
+  };
 }
 
 export function estimateCost() {

@@ -195,6 +195,30 @@ export async function uploadPharmacyDocumentToSupabase({
   return { path: data.path };
 }
 
+export async function uploadEnterpriseAiKnowledgeFileToSupabase({
+  organizationId,
+  sourceId,
+  file,
+}: {
+  organizationId: string;
+  sourceId: string;
+  file: File;
+}) {
+  if (!isSupabaseStorageConfigured()) {
+    return null;
+  }
+  const client = createSupabaseStorageClient();
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
+  const storagePath = `enterprise-ai/${organizationId}/${sourceId}/${randomUUID()}-${safeFileName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storagePath, buffer, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (error) throw new Error(`Supabase Storage enterprise AI upload failed: ${error.message}`);
+  return { bucket: env.SUPABASE_STORAGE_BUCKET, path: data.path };
+}
+
 export async function downloadPharmacyDocumentFromSupabase(path: string) {
   if (!isSupabaseStorageConfigured()) throw new Error("SUPABASE_STORAGE_NOT_CONFIGURED");
   if (!path.startsWith("pharmacy/")) throw new Error("INVALID_PHARMACY_DOCUMENT_PATH");

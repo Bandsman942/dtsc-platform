@@ -12,12 +12,18 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du module IA Assistant Entreprise pour organisations clientes: modèles Prisma dédiés, migration additive pgvector, conversations, messages, sources RAG, chunks, appels d'outils, usage mensuel et paramètres.
+- Ajout des routes privées `/api/enterprise/ai/chat`, `/api/enterprise/ai/conversations`, `/api/enterprise/ai/knowledge-sources`, `/api/enterprise/ai/usage` et `/api/enterprise/ai/settings` avec session, origine, Zod, rate limit, quotas et audit.
+- Ajout du workspace `/enterprise-modules/AI_ASSISTANT` avec chat sectoriel, sources, historique, usage et paramètres.
+- Ajout de la première couverture PHARMACY avec contexte CAG, règles FEFO, synthèses en lecture sur stocks, lots, alertes, ventes, caisse, achats, qualité et documents.
 - Ajout de la page privée `/enterprise-invitations` avec acceptation, refus, bascule de contexte après acceptation et état vide.
 - Ajout de la route `PATCH /api/enterprise/invitations/[id]` sécurisée par session, origine, rate limit, validation Zod, appartenance utilisateur, statut d'invitation et audit.
 - Ajout d'un helper email Zoho pour les invitations entreprise, non bloquant si la configuration email est indisponible ou si l'envoi échoue.
 
 ### Sécurisé
 
+- Isolation du RAG entreprise dans des tables dédiées filtrées par `organizationId`, statut, archivage et confidentialité afin d'éviter tout mélange avec les documents personnels du chatbot.
+- Ajout de limites IA organisationnelles par plan SaaS: messages mensuels, sources, stockage, outils lecture et brouillons d'action.
 - Centralisation du filtrage des notifications visibles pour inclure les invitations d'entreprise en attente sans exposer les notifications d'une organisation où l'utilisateur n'est ni `ACTIVE`, ni `INVITED`.
 - Maintien de la séparation entre invitations d'entreprise (`OrganizationMember`) et invitations des groupes collaborateurs (`CollaborationGroupInvitation`).
 

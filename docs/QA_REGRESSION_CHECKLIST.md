@@ -8,6 +8,19 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, invitations entreprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## IA Assistant Entreprise
+
+- [ ] `/enterprise-modules/AI_ASSISTANT` n'est visible et ouvrable que si le module est activé, inclus dans le plan et accessible au membre actif de l'organisation.
+- [ ] `POST /api/enterprise/ai/chat` refuse une requête cross-origin, une session absente, un contexte non `ORGANIZATION`, un `organizationId` différent du contexte actif ou un module désactivé.
+- [ ] Un utilisateur de l'entreprise A ne peut lire aucune conversation, source, usage, paramètre ou résultat d'outil de l'entreprise B.
+- [ ] Une source IA uploadée est enregistrée dans `EnterpriseAiKnowledgeSource`, indexée en chunks `EnterpriseAiKnowledgeChunk` et filtrée par `organizationId`.
+- [ ] Une source archivée ne revient plus dans le RAG actif et peut être restaurée sans suppression destructive.
+- [ ] Les quotas Starter, Business et Enterprise limitent messages mensuels, sources, stockage, outils lecture et brouillons d'action.
+- [ ] Pour PHARMACY, les outils de lecture synthétisent stocks, lots, alertes, ventes, caisse, achats, qualité et documents sans modifier les tables métier.
+- [ ] Les recommandations sur lots respectent FEFO et excluent les lots expirés, rappelés, bloqués ou en quarantaine.
+- [ ] Les paramètres IA peuvent désactiver chat, upload, outils lecture ou brouillons d'action sans empêcher un administrateur de les réactiver.
+- [ ] Le workspace mobile reste utilisable: onglets scrollables, fil de chat borné, sources en cartes, dialogues et menus `...` au premier plan.
+
 ## Santé - Laboratoire
 
 - [ ] Une demande laboratoire exige un patient, un demandeur actif et au moins un examen du catalogue de la même organisation.
