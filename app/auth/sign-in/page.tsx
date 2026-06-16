@@ -14,7 +14,7 @@ export default async function SignInPage() {
   const currentHostType = getCurrentHostType(requestHeaders.get("host"));
 
   return (
-    <main className="grid min-h-screen bg-dtsc-page text-dtsc-ink lg:grid-cols-[0.95fr_1.05fr]">
+    <main className="grid min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <section className="relative hidden overflow-hidden border-r border-dtsc-border bg-[#001736] p-10 text-white lg:flex lg:flex-col lg:justify-between">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-50"
@@ -38,13 +38,13 @@ export default async function SignInPage() {
           <DtscFooter compact />
         </div>
       </section>
-      <section className="relative flex flex-col items-center justify-center gap-6 overflow-hidden px-4 py-10">
+      <section className="relative flex min-w-0 flex-col items-center justify-center gap-6 overflow-hidden px-4 py-10">
         <div
           className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.07]"
           style={{ backgroundImage: "url('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1400&q=80')" }}
         />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(0,194,255,0.16),transparent_34%),linear-gradient(180deg,transparent,rgba(232,243,255,0.55))]" />
-        <div className="relative w-full max-w-md rounded-2xl border border-dtsc-border bg-dtsc-surface/94 p-8 shadow-[0_24px_80px_rgba(0,43,91,0.16)] backdrop-blur-xl">
+        <div className="relative w-full max-w-md min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface/94 p-8 shadow-[0_24px_80px_rgba(0,43,91,0.16)] backdrop-blur-xl">
           <h1 className="text-2xl font-black text-dtsc-ink">Connexion</h1>
           <p className="mt-2 text-sm text-dtsc-muted">Connectez-vous à votre espace {dtsc.name}.</p>
           <div className="mt-6">

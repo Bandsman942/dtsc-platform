@@ -57,11 +57,11 @@ const contactFaqs = [
 
 export default function ContactPage() {
   return (
-    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
       <section className="relative overflow-hidden border-b border-dtsc-border bg-gradient-to-br from-[#001736] via-[#002b5b] to-[#00a7c7] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.18),transparent_30%)]" />
-        <div className="dtsc-premium-reveal relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <div className="dtsc-premium-reveal relative mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Contact professionnel</p>
           <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Parlez-nous de votre besoin autour des 7 leviers DTSC.</h1>
           <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
@@ -78,15 +78,15 @@ export default function ContactPage() {
               <Link href="/services">Comparer les 7 leviers</Link>
             </Button>
           </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <div className="mt-8 grid min-w-0 gap-4 sm:grid-cols-3">
             {[
               ["Email", dtsc.email],
               ["WhatsApp", dtsc.whatsapp],
               ["Réseaux", dtsc.socialHandle],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl border border-white/15 bg-white/10 p-4">
+              <div key={label} className="min-w-0 rounded-2xl border border-white/15 bg-white/10 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">{label}</p>
-                <p className="mt-2 font-black text-white">{value}</p>
+                <p className="mt-2 break-words font-black text-white">{value}</p>
               </div>
             ))}
           </div>
@@ -99,9 +99,9 @@ export default function ContactPage() {
           image="/watermarks/dtsc-7-leviers-watermark.jpg"
           className="opacity-[0.04]"
         />
-        <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-            <div>
+        <div className="relative z-10 mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Avant de nous écrire</p>
               <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Choisissez le besoin qui ressemble le plus à votre situation.</h2>
             </div>
@@ -131,17 +131,17 @@ export default function ContactPage() {
       </section>
 
       <section className="border-b border-dtsc-border dtsc-public-band-cyan">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
-          <div>
+        <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
+          <div className="min-w-0">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Mini-parcours</p>
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">De votre message à une action prioritaire.</h2>
             <p className="mt-4 leading-7 text-dtsc-muted">
               DTSC transforme une demande générale en cadrage exploitable: problème, levier, livrable, résultat à mesurer et prochaine étape.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             {contactSteps.map((step, index) => (
-              <div key={step} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
+              <div key={step} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Étape {String(index + 1).padStart(2, "0")}</p>
                 <p className="mt-2 font-black text-dtsc-ink">{step}</p>
               </div>
@@ -155,8 +155,8 @@ export default function ContactPage() {
       </section>
 
       <section className="border-t border-dtsc-border dtsc-public-band-soft">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
-          <div>
+        <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
+          <div className="min-w-0">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions contact</p>
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Clarifier votre demande avant l&apos;envoi.</h2>
           </div>

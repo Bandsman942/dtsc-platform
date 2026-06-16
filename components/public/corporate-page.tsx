@@ -18,13 +18,13 @@ const toneClasses = {
 
 export function CorporatePage({ page }: { page: PublicLongPage }) {
   return (
-    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
 
       <section className={cn("relative overflow-hidden bg-gradient-to-br text-white", toneClasses[page.tone])}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,194,255,0.24),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.16),transparent_28%)]" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:px-8 lg:py-24">
-          <div className="dtsc-premium-reveal">
+        <div className="relative mx-auto grid w-full max-w-7xl min-w-0 items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:px-8 lg:py-24">
+          <div className="dtsc-premium-reveal min-w-0">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-black text-cyan-200 shadow-[0_12px_30px_rgba(0,194,255,0.12)]">
               <Sparkles className="h-4 w-4" />
               {page.eyebrow}
@@ -46,13 +46,13 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
             </div>
           </div>
 
-          <div className="group relative">
+          <div className="group relative min-w-0 max-w-full overflow-hidden rounded-[2rem]">
             <div className="absolute -inset-4 rounded-[2rem] bg-cyan-300/20 blur-2xl transition duration-500 group-hover:scale-105" />
             <div className="relative overflow-hidden rounded-[1.5rem] border border-white/15 bg-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
               <HeroImageCarousel images={page.heroImages || [page.heroImage]} label={page.heroLabel} eyebrow="DTSC Platform" priority />
-              <div className="grid gap-3 p-5 sm:grid-cols-3">
+              <div className="grid min-w-0 gap-3 p-5 sm:grid-cols-3">
                 {["Comprendre", "Construire", "Mesurer"].map((step) => (
-                  <div key={step} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white/15">
+                  <div key={step} className="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white/15">
                     <CheckCircle2 className="mb-3 h-5 w-5 text-cyan-300" />
                     {step}
                   </div>
@@ -63,7 +63,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
         </div>
       </section>
 
-      <section className="dtsc-public-band-light border-b border-dtsc-border">
+      <section className="relative overflow-hidden dtsc-public-band-light border-b border-dtsc-border">
         <PublicSectionWatermark position="right" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8 max-w-3xl">
@@ -96,8 +96,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       {page.deepDives && (
         <section className="border-b border-dtsc-border dtsc-public-band-light">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-            <div className="mb-9 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-              <div>
+            <div className="mb-9 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+              <div className="min-w-0">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Approfondir</p>
                 <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Problème client, réponse DTSC et résultat mesurable.</h2>
               </div>
@@ -106,7 +106,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
               </p>
             </div>
 
-            <div className="grid gap-5">
+            <div className="grid min-w-0 gap-5">
               {page.deepDives.map((item, index) => (
                 <article
                   key={item.title}
@@ -123,7 +123,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
                       <p className="mt-5 text-sm font-black uppercase tracking-[0.16em] text-cyan-200">Problème</p>
                       <p className="mt-2 text-sm leading-6 text-blue-50">{item.problem}</p>
                     </div>
-                    <div className="grid gap-5 p-6 sm:p-7">
+                    <div className="grid min-w-0 gap-5 p-6 sm:p-7">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Ce que DTSC fait</p>
                         <p className="mt-2 text-base leading-8 text-dtsc-muted">{item.dtscAction}</p>
@@ -164,8 +164,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       {page.journey && (
         <section className="border-b border-dtsc-border dtsc-public-band-cyan">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-            <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
-              <div>
+            <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
+              <div className="min-w-0">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Méthode DTSC</p>
                 <h2 className="mt-2 text-3xl font-black text-dtsc-ink">{page.journey.heading}</h2>
                 <p className="mt-4 leading-7 text-dtsc-muted">{page.journey.text}</p>
@@ -188,14 +188,14 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
           {page.sections.map((section, index) => (
             <article
               key={section.heading}
-              className={cn("dtsc-premium-reveal grid overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] lg:grid-cols-[320px_1fr]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")}
+                className={cn("dtsc-premium-reveal grid min-w-0 overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")}
               style={{ animationDelay: `${index * 90}ms` }}
             >
               <div className={cn("bg-gradient-to-br p-6 text-white", toneClasses[page.tone])}>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Partie {String(index + 1).padStart(2, "0")}</p>
                 <h3 className="mt-4 text-2xl font-black"><span className="dtsc-line-reveal">{section.heading}</span></h3>
               </div>
-              <div className="p-6">
+              <div className="min-w-0 p-6">
                 <p className="text-base leading-8 text-dtsc-muted">{section.text}</p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {section.bullets.map((bullet) => (
@@ -213,8 +213,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
 
       {page.faqs && (
         <section className="border-b border-dtsc-border dtsc-public-band-light">
-          <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
-            <div>
+          <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
+            <div className="min-w-0">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions utiles</p>
               <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Clarifier avant de démarrer.</h2>
               <p className="mt-4 leading-7 text-dtsc-muted">
@@ -236,8 +236,8 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
         <section className="border-b border-dtsc-border dtsc-public-band-soft">
           <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
             <div className="rounded-[1.5rem] bg-[#002b5b] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] sm:p-8">
-              <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div>
+              <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <div className="min-w-0">
                   <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">Prochaine étape</p>
                   <h2 className="mt-2 text-3xl font-black">Choisissez une page utile ou demandez un cadrage.</h2>
                   <p className="mt-3 max-w-3xl leading-7 text-blue-100">
@@ -287,7 +287,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
 
 function DetailList({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+    <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
       <p className="text-xs font-black uppercase tracking-[0.16em] text-dtsc-blue">{title}</p>
       <ul className="mt-3 grid gap-2">
         {items.map((item) => (

@@ -31,8 +31,8 @@ const offlineFaq = [
 
 export default function OfflinePage() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-dtsc-page px-4 py-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] text-dtsc-ink">
-      <section className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col gap-5">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page px-4 py-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] text-dtsc-ink">
+      <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl min-w-0 flex-col gap-5">
         <header className="dtsc-glass-card flex items-center justify-between gap-3 rounded-[1.75rem] p-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="relative flex h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">

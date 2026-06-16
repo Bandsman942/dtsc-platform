@@ -16,6 +16,7 @@ Objectifs couverts par le code actuel:
 - FAQ premium sur la page d'accueil publique, organisee par categories et exposee en donnees structurees `FAQPage` pour le SEO;
 - pages publiques avec hero visuel en carrousel automatique, images thematiques multiples par page, indicateurs manuels et animations legeres;
 - bandes visuelles publiques alternees (`dtsc-public-band-light`, `dtsc-public-band-soft`, `dtsc-public-band-cyan`) et cartes contrastees pour eviter que les blocs aient la meme couleur que l'arriere-plan;
+- protection responsive des pages publiques contre le scroll horizontal mobile: `html/body` bornes en largeur, `main` publics limites a `100vw`, watermark decoratif clippe, header/menu/recherche contenus et verification mobile sur 360, 375, 390 et 414 px;
 - publications publiques administrables depuis l'administration pour alimenter regulierement la page Ressources, avec recherche instantanee, pagination, images optimisees, partage, reactions, commentaires et reponses aux commentaires;
 - recherche intelligente publique via le header pour orienter les visiteurs vers les pages, services, solutions et publications utiles;
 - page Ressources organisee comme vitrine media avec categories editoriales, lecture par objectif, ressources pedagogiques statiques, accordions par categorie et seulement les trois dernieres publications mises en avant sous forme de cartes;

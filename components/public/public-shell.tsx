@@ -35,16 +35,16 @@ const companyLinks = [
 
 export function PublicHeader() {
   return (
-    <header className="sticky top-0 z-[90] overflow-visible border-b border-dtsc-border bg-dtsc-surface/85 shadow-[0_1px_0_rgba(0,23,54,0.04)] backdrop-blur-xl supports-[backdrop-filter]:bg-dtsc-surface/75">
+    <header className="sticky top-0 z-[90] w-full max-w-[100vw] overflow-x-clip overflow-y-visible border-b border-dtsc-border bg-dtsc-surface/85 shadow-[0_1px_0_rgba(0,23,54,0.04)] backdrop-blur-xl supports-[backdrop-filter]:bg-dtsc-surface/75">
       <VisitTracker />
-      <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[min(80rem,100vw)] min-w-0 flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:flex lg:justify-between">
           <div className="min-w-0 max-w-[calc(100vw-8.5rem)] overflow-hidden lg:max-w-none">
             <DtscLogo />
           </div>
           <PublicNav />
         </div>
-        <div className="rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-2">
+        <div className="w-full min-w-0 max-w-full rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-2">
           <PublicSiteSearch />
         </div>
       </div>
@@ -82,13 +82,13 @@ export function PublicFooter() {
   const socialHandle = dtsc.socialHandle.replace(/^@/, "");
 
   return (
-    <footer className="border-t border-dtsc-border bg-dtsc-surface">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 text-sm sm:px-6 md:grid-cols-2 lg:px-8 xl:grid-cols-[1.25fr_0.85fr_0.95fr_1fr_1.1fr]">
-        <div>
+    <footer className="w-full max-w-[100vw] overflow-x-clip border-t border-dtsc-border bg-dtsc-surface">
+      <div className="mx-auto grid w-full max-w-[min(80rem,100vw)] min-w-0 gap-8 px-4 py-12 text-sm sm:px-6 md:grid-cols-2 lg:px-8 xl:grid-cols-[1.25fr_0.85fr_0.95fr_1fr_1.1fr]">
+        <div className="min-w-0">
           <DtscLogo />
           <p className="mt-4 max-w-md leading-relaxed text-dtsc-muted">{dtsc.summary}</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Entreprise</p>
           <div className="mt-4 grid gap-2.5">
             {companyLinks.map((link) => (
@@ -98,7 +98,7 @@ export function PublicFooter() {
             ))}
           </div>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Ressources</p>
           <div className="mt-4 grid gap-2.5">
             {resourceLinks.map((link) => (
@@ -108,7 +108,7 @@ export function PublicFooter() {
             ))}
           </div>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Conditions et politiques</p>
           <div className="mt-4 grid gap-2.5">
             <FooterLink href="/conditions-utilisation">Conditions d&apos;utilisation</FooterLink>
@@ -116,7 +116,7 @@ export function PublicFooter() {
             <FooterLink href="/politique-cookies">Politique des cookies</FooterLink>
           </div>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-ink">Contact</p>
           <p className="mt-4 text-dtsc-muted">WhatsApp: {dtsc.whatsapp}</p>
           <a href={`mailto:${dtsc.email}`} className="mt-2 inline-flex font-medium text-dtsc-blue transition-colors hover:text-dtsc-cyan">

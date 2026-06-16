@@ -51,9 +51,9 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
   }
 
   return (
-    <section id="contact" className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-        <div className="rounded-[1.5rem] border border-dtsc-border bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.2)] sm:p-8">
+    <section id="contact" className="mx-auto w-full max-w-7xl min-w-0 px-4 pb-16 sm:px-6 lg:px-8">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+        <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-dtsc-border bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.2)] sm:p-8">
           <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-black text-cyan-200">
             <Mail className="h-4 w-4" />
             Contact professionnel DTSC
@@ -62,19 +62,19 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
           <p className="mt-4 max-w-2xl leading-7 text-slate-300">
             Les demandes issues du site sont transmises à l&apos;équipe DTSC pour qualification. L&apos;assistant IA peut aussi vous aider à rattacher votre besoin au bon levier avant envoi.
           </p>
-          <a href={`mailto:${contactEmail}`} className="mt-5 inline-flex font-black text-cyan-200 underline underline-offset-4 hover:text-white">
+          <a href={`mailto:${contactEmail}`} className="mt-5 inline-flex max-w-full break-words font-black text-cyan-200 underline underline-offset-4 hover:text-white">
             {contactEmail}
           </a>
-          <form onSubmit={submitContact} className="mt-8 grid gap-3 md:grid-cols-2">
-            <Input name="name" placeholder="Nom complet" required className="bg-white/10 text-white placeholder:text-slate-300" />
-            <Input name="email" type="email" placeholder="Email professionnel" required className="bg-white/10 text-white placeholder:text-slate-300" />
-            <Input name="phone" placeholder="Téléphone" className="bg-white/10 text-white placeholder:text-slate-300" />
-            <Input name="companyName" placeholder="Entreprise" className="bg-white/10 text-white placeholder:text-slate-300" />
-            <Input name="subject" placeholder="Objet de la demande" required className="bg-white/10 text-white placeholder:text-slate-300 md:col-span-2" />
+          <form onSubmit={submitContact} className="mt-8 grid min-w-0 gap-3 md:grid-cols-2">
+            <Input name="name" placeholder="Nom complet" required className="min-w-0 bg-white/10 text-white placeholder:text-slate-300" />
+            <Input name="email" type="email" placeholder="Email professionnel" required className="min-w-0 bg-white/10 text-white placeholder:text-slate-300" />
+            <Input name="phone" placeholder="Téléphone" className="min-w-0 bg-white/10 text-white placeholder:text-slate-300" />
+            <Input name="companyName" placeholder="Entreprise" className="min-w-0 bg-white/10 text-white placeholder:text-slate-300" />
+            <Input name="subject" placeholder="Objet de la demande" required className="min-w-0 bg-white/10 text-white placeholder:text-slate-300 md:col-span-2" />
             <textarea
               name="message"
               placeholder="Décrivez votre contexte, vos objectifs et les contraintes connues."
-              className="min-h-36 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-300 focus-visible:ring-2 focus-visible:ring-cyan-300 md:col-span-2"
+              className="min-h-36 w-full min-w-0 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-300 focus-visible:ring-2 focus-visible:ring-cyan-300 md:col-span-2"
               required
             />
             <Button disabled={isContactPending} className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300 md:col-span-2">
@@ -84,7 +84,7 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
           </form>
         </div>
 
-        <div className="dtsc-card-alt p-6 sm:p-8">
+        <div className="dtsc-card-alt min-w-0 p-6 sm:p-8">
           <p className="inline-flex items-center gap-2 rounded-full bg-dtsc-soft px-3 py-1.5 text-sm font-black text-dtsc-blue">
             <Sparkles className="h-4 w-4 text-cyan-500" />
             Newsletter DTSC
@@ -93,11 +93,11 @@ export function ContactNewsletterSection({ contactEmail }: { contactEmail: strin
           <p className="mt-3 leading-7 text-dtsc-muted">
             Inscrivez-vous pour recevoir des contenus utiles sur Data & BI, l&apos;IA en entreprise, les Solutions digitales, l&apos;Audit & optimisation, les Formations, le Marketing digital et l&apos;Imprimerie numérique.
           </p>
-          <form onSubmit={submitNewsletter} className="mt-6 space-y-3">
-            <Input name="name" placeholder="Nom complet" required />
-            <Input name="email" type="email" placeholder="Email professionnel" required />
-            <Input name="companyName" placeholder="Entreprise" />
-            <Input name="interest" placeholder="Sujet d'intérêt: Data & BI, IA, marketing..." />
+          <form onSubmit={submitNewsletter} className="mt-6 min-w-0 space-y-3">
+            <Input name="name" placeholder="Nom complet" required className="min-w-0" />
+            <Input name="email" type="email" placeholder="Email professionnel" required className="min-w-0" />
+            <Input name="companyName" placeholder="Entreprise" className="min-w-0" />
+            <Input name="interest" placeholder="Sujet d'intérêt: Data & BI, IA, marketing..." className="min-w-0" />
             <label className="flex items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm leading-6 text-dtsc-muted">
               <input name="consent" type="checkbox" required className="mt-1 h-4 w-4 accent-cyan-500" />
               <span>J&apos;accepte de recevoir les communications professionnelles DTSC et je peux demander mon retrait à tout moment.</span>

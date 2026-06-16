@@ -51,11 +51,11 @@ export default async function RessourcesPage() {
   const publicationGroups = Object.entries(groupedPublications);
 
   return (
-    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
       <section className="relative overflow-hidden border-b border-dtsc-border bg-gradient-to-br from-[#0f172a] via-[#002b5b] to-[#0057b8] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(0,194,255,0.22),transparent_32%)]" />
-        <div className="dtsc-premium-reveal relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <div className="dtsc-premium-reveal relative mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Ressources & annonces</p>
           <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Comprendre les 7 leviers numériques DTSC avant de lancer un projet.</h1>
           <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
@@ -65,13 +65,13 @@ export default async function RessourcesPage() {
       </section>
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-            <div>
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Catégories éditoriales</p>
               <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Lire selon le format qui vous aide le plus.</h2>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               {editorialCategories.map((category) => (
                 <span key={category} className="rounded-full border border-dtsc-border bg-dtsc-soft px-3 py-1.5 text-sm font-black text-dtsc-blue">
                   {category}
@@ -79,7 +79,7 @@ export default async function RessourcesPage() {
               ))}
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid min-w-0 gap-4 md:grid-cols-3">
             {staticResources.map((resource, index) => (
               <Link
                 key={resource.href}
@@ -101,12 +101,12 @@ export default async function RessourcesPage() {
       </section>
 
       <section className="border-b border-dtsc-border dtsc-public-band-cyan">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8 max-w-3xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Lire selon votre objectif</p>
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Choisissez un objectif, retrouvez le levier DTSC associé.</h2>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
             {objectiveResources.map((item, index) => (
               <Link
                 key={item.title}
@@ -128,12 +128,12 @@ export default async function RessourcesPage() {
       </section>
 
       <section className="border-y border-dtsc-border dtsc-public-band-soft">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8">
           <div className="mb-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications DTSC</p>
             <h2 className="dtsc-ink-shimmer mt-2 text-3xl font-black text-dtsc-ink">Contenus publiés depuis l&apos;administration</h2>
           </div>
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="dtsc-card overflow-hidden">
               <div className="border-b border-dtsc-border p-6">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Explorer par catégorie</p>
@@ -149,22 +149,22 @@ export default async function RessourcesPage() {
                       key={category}
                       defaultOpen={index === 0}
                       title={
-                        <span className="flex w-full items-center justify-between gap-3">
-                          <span>{category}</span>
+                        <span className="flex w-full min-w-0 items-center justify-between gap-3">
+                          <span className="min-w-0 break-words">{category}</span>
                           <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">
                             {items.length}
                           </span>
                         </span>
                       }
                     >
-                      <div className="grid gap-3">
+                      <div className="grid min-w-0 gap-3">
                         {items.map((publication) => (
                           <Link
                             key={publication.id}
                             href={`/ressources/${publication.slug}`}
-                            className="group rounded-xl border border-dtsc-border bg-dtsc-page p-4 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft"
+                            className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-4 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-dtsc-soft"
                           >
-                            <p className="text-sm font-black text-dtsc-ink">{publication.title}</p>
+                            <p className="break-words text-sm font-black text-dtsc-ink">{publication.title}</p>
                             <p className="mt-1 line-clamp-2 text-xs leading-5 text-dtsc-muted">{publication.excerpt}</p>
                             <span className="mt-3 inline-flex items-center gap-2 text-xs font-black text-dtsc-blue underline underline-offset-4">
                               Lire l&apos;article
@@ -195,7 +195,7 @@ export default async function RessourcesPage() {
               )}
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="mb-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">À la une</p>
                 <h3 className="mt-2 text-2xl font-black text-dtsc-ink">Les 3 dernières publications</h3>
@@ -203,11 +203,11 @@ export default async function RessourcesPage() {
                   Les cartes mettent en avant les nouveautés récentes. La liste complète reste accessible par catégorie.
                 </p>
               </div>
-              <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <div className="grid min-w-0 gap-4 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                 {latestPublications.map((publication) => (
                   <Link key={publication.id} href={`/ressources/${publication.slug}`} className="dtsc-card dtsc-card-hover dtsc-premium-reveal p-6">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{formatEnumLabel(publication.category)}</p>
-                    <h3 className="mt-3 text-xl font-black text-dtsc-ink">{publication.title}</h3>
+                    <h3 className="mt-3 break-words text-xl font-black text-dtsc-ink">{publication.title}</h3>
                     <p className="mt-3 line-clamp-3 text-sm leading-6 text-dtsc-muted">{publication.excerpt}</p>
                     {publication.author?.publicProfileConsent && (
                       <span className="mt-5 flex items-center gap-3 text-xs font-bold text-dtsc-muted">
@@ -230,10 +230,10 @@ export default async function RessourcesPage() {
       </section>
 
       <section className="dtsc-public-band-cyan">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-12 sm:px-6 lg:px-8">
+        <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
           <h2 className="font-black text-dtsc-ink">Sources de veille utilisées</h2>
-          <div className="mt-4 grid gap-2 md:grid-cols-2">
+          <div className="mt-4 grid min-w-0 gap-2 md:grid-cols-2">
             {trustedSources.map((source) => (
               <Link key={source.href} href={source.href} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">
                 {source.label}

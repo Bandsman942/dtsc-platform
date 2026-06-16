@@ -56,26 +56,26 @@ export default async function PublicationPage({ params }: Params) {
   }
 
   return (
-    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
       <article>
         <section className="border-b border-dtsc-border bg-gradient-to-br from-[#001736] via-[#002b5b] to-[#0057b8] text-white">
-          <div className="dtsc-premium-reveal mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <div className="dtsc-premium-reveal mx-auto w-full max-w-5xl min-w-0 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
             <Link href="/ressources" className="inline-flex items-center gap-2 text-sm font-black text-cyan-200 underline underline-offset-4">
               <ArrowLeft className="h-4 w-4" />
               Retour aux ressources
             </Link>
             <p className="mt-8 text-sm font-black uppercase tracking-[0.18em] text-cyan-200">{formatEnumLabel(publication.category)}</p>
-            <h1 className="dtsc-text-shimmer mt-4 text-4xl font-black leading-tight sm:text-6xl">{publication.title}</h1>
+            <h1 className="dtsc-text-shimmer mt-4 break-words text-4xl font-black leading-tight sm:text-6xl">{publication.title}</h1>
             <p className="dtsc-premium-reveal-delay mt-5 text-lg leading-8 text-blue-50">{publication.excerpt}</p>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-sm text-blue-100">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="mt-6 flex min-w-0 flex-wrap items-center justify-between gap-4 text-sm text-blue-100">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 {publication.author?.publicProfileConsent && (
                   <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/15 text-sm font-black text-white">
                     {publication.author.avatarUrl ? <img src={publication.author.avatarUrl} alt="" className="h-full w-full object-cover" /> : publication.author.name.slice(0, 2).toUpperCase()}
                   </span>
                 )}
-                <span>
+                <span className="min-w-0 break-words">
                   Publié le {publication.createdAt.toLocaleDateString("fr-FR")}{" "}
                   {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}
                   {publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
@@ -92,7 +92,7 @@ export default async function PublicationPage({ params }: Params) {
         </section>
 
         <section className="dtsc-public-band-light">
-          <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-4xl min-w-0 px-4 py-14 sm:px-6 lg:px-8">
             <div className="dtsc-card dtsc-premium-reveal p-6 sm:p-8">
               {hasHtmlMarkup(publication.content) ? (
                 <div

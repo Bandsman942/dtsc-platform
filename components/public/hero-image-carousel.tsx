@@ -42,7 +42,7 @@ export function HeroImageCarousel({
   const activeImage = slides[activeIndex] || images[0];
 
   return (
-    <div className={cn("relative h-72 overflow-hidden", className)}>
+    <div className={cn("relative h-72 w-full min-w-0 max-w-full overflow-hidden", className)}>
       {activeImage && (
         <Image
           key={activeImage}
@@ -63,9 +63,9 @@ export function HeroImageCarousel({
           aria-label="Afficher l'image suivante"
         />
       )}
-      <div className="absolute bottom-5 left-5 right-5 z-20">
+      <div className="absolute bottom-5 left-5 right-5 z-20 min-w-0">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">{eyebrow}</p>
-        <h2 className="mt-2 text-2xl font-black">{label}</h2>
+        <h2 className="mt-2 break-words text-2xl font-black">{label}</h2>
       </div>
       {slides.length > 1 && (
         <>

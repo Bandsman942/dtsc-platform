@@ -368,13 +368,31 @@
   }
   html,
   body {
+    width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
+    overscroll-behavior-x: none;
   }
+
   body {
+    min-width: 0;
     @apply bg-background text-foreground;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+  }
+
+  img,
+  video,
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  @supports not (overflow: clip) {
+    html,
+    body {
+      overflow-x: hidden;
+    }
   }
 
   ::selection {
@@ -479,15 +497,21 @@
   }
 
   .dtsc-public-band-light {
+    max-width: 100%;
+    overflow-wrap: anywhere;
     background: var(--dtsc-surface);
   }
 
   .dtsc-public-band-soft {
+    max-width: 100%;
+    overflow-wrap: anywhere;
     background:
       linear-gradient(180deg, var(--dtsc-page), color-mix(in srgb, var(--dtsc-soft) 45%, var(--dtsc-page) 55%));
   }
 
   .dtsc-public-band-cyan {
+    max-width: 100%;
+    overflow-wrap: anywhere;
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--dtsc-soft) 60%, var(--dtsc-surface) 40%), var(--dtsc-page));
   }

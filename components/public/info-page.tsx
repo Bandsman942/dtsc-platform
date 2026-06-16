@@ -22,12 +22,12 @@ export function InfoPage({
   sourceList?: Array<{ label: string; href: string }>;
 }) {
   return (
-    <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
       <section className="relative overflow-hidden border-b border-dtsc-border dtsc-public-band-light">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(0,194,255,0.16),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(0,87,184,0.12),transparent_28%)]" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:py-20">
-          <div className="dtsc-premium-reveal">
+        <div className="relative mx-auto grid w-full max-w-7xl min-w-0 items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:px-8 lg:py-20">
+          <div className="dtsc-premium-reveal min-w-0">
             <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-600">{eyebrow}</p>
             <h1 className="dtsc-ink-shimmer mt-3 text-4xl font-black tracking-tight text-dtsc-ink sm:text-6xl">{title}</h1>
             <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-dtsc-muted">{intro}</p>
@@ -51,8 +51,8 @@ export function InfoPage({
       </section>
 
       <section className="dtsc-public-band-soft border-y border-dtsc-border">
-        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mb-8 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Analyse DTSC</p>
             <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Ce que vous devez retenir</h2>
@@ -62,11 +62,11 @@ export function InfoPage({
           </p>
         </div>
 
-        <div className="grid gap-5">
+        <div className="grid min-w-0 gap-5">
           {sections.map((section, index) => (
             <article
               key={section.heading}
-              className={`group dtsc-premium-reveal grid overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,43,91,0.12)] lg:grid-cols-[320px_1fr] ${index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft"}`}
+              className={`group dtsc-premium-reveal grid min-w-0 overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,0.08)] transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,43,91,0.12)] lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] ${index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft"}`}
               style={{ animationDelay: `${index * 90}ms` }}
             >
               <div className="relative min-h-56 overflow-hidden bg-[#001736] p-6 text-white">
@@ -81,7 +81,7 @@ export function InfoPage({
                   </div>
                 </div>
               </div>
-              <div className="p-6">
+              <div className="min-w-0 p-6">
                 <p className="text-base leading-8 text-dtsc-muted">{section.text}</p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {section.bullets.map((bullet) => (
@@ -97,8 +97,8 @@ export function InfoPage({
         </div>
 
         <div className="mt-10 rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,0.08)]">
-          <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-            <div>
+          <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions pratiques</p>
               <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Passer de la compréhension à l&apos;action.</h2>
               <p className="mt-4 leading-7 text-dtsc-muted">
@@ -161,13 +161,13 @@ function InteractiveVisual({
   heroImages?: string[];
 }) {
   return (
-    <div className="group relative">
+    <div className="group relative min-w-0 max-w-full overflow-hidden rounded-[2rem]">
       <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-cyan-300/30 via-blue-500/10 to-emerald-300/20 blur-2xl transition duration-500 group-hover:scale-105" />
       <div className="relative overflow-hidden rounded-[1.5rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.16)]">
         <HeroImageCarousel images={heroImages || [heroImage || "/dtsc-logo.png"]} label={imageAlt || title} eyebrow="DTSC Insight" priority className="h-72" />
-        <div className="grid gap-3 p-5 sm:grid-cols-3">
+        <div className="grid min-w-0 gap-3 p-5 sm:grid-cols-3">
           {["Diagnostic", "Architecture", "Exécution"].map((step) => (
-            <div key={step} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 transition hover:border-cyan-300 hover:bg-dtsc-soft">
+            <div key={step} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 transition hover:border-cyan-300 hover:bg-dtsc-soft">
               <Layers3 className="h-5 w-5 text-cyan-500" />
               <p className="mt-3 text-sm font-black text-dtsc-ink">{step}</p>
               <p className="mt-1 text-xs leading-5 text-dtsc-muted">Approche progressive, mesurable et orientée performance.</p>

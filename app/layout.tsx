@@ -116,9 +116,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
-      <body
-        className="overflow-x-hidden antialiased"
-      >
+      <body className="min-w-0 antialiased">
         <script
           type="application/ld+json"
           suppressHydrationWarning

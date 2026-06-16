@@ -247,14 +247,14 @@ const faqJsonLd = {
 
 export default function Page() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-dtsc-page text-dtsc-ink">
+    <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <PublicHeader />
 
       <section className="relative overflow-hidden bg-gradient-to-br from-[#001736] via-[#002b5b] to-[#0057b8] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(0,194,255,0.24),transparent_32%),radial-gradient(circle_at_82%_6%,rgba(255,255,255,0.16),transparent_30%)]" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
-          <div className="dtsc-premium-reveal">
+        <div className="relative mx-auto grid w-full max-w-7xl min-w-0 items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
+          <div className="dtsc-premium-reveal min-w-0">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-black text-cyan-200">
               <Sparkles className="h-4 w-4" />
               {dtsc.slogan}
@@ -286,13 +286,13 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="group relative">
+          <div className="group relative min-w-0 max-w-full overflow-hidden rounded-[2rem]">
             <div className="absolute -inset-5 rounded-[2rem] bg-cyan-300/20 blur-2xl transition duration-500 group-hover:scale-105" />
             <div className="relative overflow-hidden rounded-[1.5rem] border border-white/15 bg-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
               <HeroImageCarousel images={homeHeroImages} label="Data and Tech Solutions Consulting" eyebrow="Kinshasa · Afrique" className="h-80" priority />
-              <div className="grid gap-3 p-5 sm:grid-cols-3">
+              <div className="grid min-w-0 gap-3 p-5 sm:grid-cols-3">
                 {["Data & BI", "IA", "Solutions"].map((item) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-black text-white">
+                  <div key={item} className="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-black text-white">
                     <BrainCircuit className="mb-3 h-5 w-5 text-cyan-300" />
                     {item}
                   </div>
@@ -307,13 +307,13 @@ export default function Page() {
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <Link
             href="/ressources"
-            className="group grid gap-4 overflow-hidden rounded-3xl border border-dtsc-border bg-[linear-gradient(120deg,var(--dtsc-soft),var(--dtsc-surface),var(--dtsc-page))] p-5 shadow-[0_18px_55px_rgba(0,43,91,0.08)] transition hover:-translate-y-0.5 hover:border-cyan-400 md:grid-cols-[1fr_auto]"
+            className="group grid min-w-0 gap-4 overflow-hidden rounded-3xl border border-dtsc-border bg-[linear-gradient(120deg,var(--dtsc-soft),var(--dtsc-surface),var(--dtsc-page))] p-5 shadow-[0_18px_55px_rgba(0,43,91,0.08)] transition hover:-translate-y-0.5 hover:border-cyan-400 md:grid-cols-[minmax(0,1fr)_auto]"
           >
-            <div className="flex items-start gap-4">
+            <div className="flex min-w-0 items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-400 text-[#001736] shadow-[0_14px_34px_rgba(0,194,255,0.22)]">
                 <HelpCircle className="h-6 w-6" />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Ressources DTSC</p>
                 <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Lisez nos guides, annonces, cas pratiques et articles pour mieux préparer vos projets.</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
@@ -333,8 +333,8 @@ export default function Page() {
 
       <section className="dtsc-public-band-light border-b border-dtsc-border">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-            <div>
+          <div className="mb-8 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Les 7 leviers numériques DTSC</p>
               <h2 className="dtsc-ink-shimmer mt-2 text-3xl font-black text-dtsc-ink">
                 Une grille simple pour transformer un besoin en résultat mesurable.
@@ -398,8 +398,8 @@ export default function Page() {
 
       <section className="border-b border-dtsc-border dtsc-public-band-cyan">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mb-8 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-            <div>
+          <div className="mb-8 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Cas d&apos;usage rapides</p>
               <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Des projets concrets pour lancer une première action.</h2>
             </div>
@@ -463,8 +463,8 @@ export default function Page() {
       </section>
 
       <section className="border-y border-dtsc-border dtsc-public-band-cyan">
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_1fr] lg:px-8">
-          <div className="rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
+        <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-6 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:px-8">
+          <div className="min-w-0 rounded-[1.5rem] bg-[#001736] p-6 text-white shadow-[0_24px_80px_rgba(0,23,54,0.18)] sm:p-8">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-300">Pourquoi DTSC ?</p>
             <h2 className="mt-3 text-3xl font-black">
               Une approche claire autour de <span className="text-cyan-300">7 leviers</span> numériques.
@@ -473,7 +473,7 @@ export default function Page() {
               DTSC relie chaque besoin à un levier officiel pour éviter la dispersion: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
             </p>
           </div>
-          <div className="grid gap-3">
+          <div className="grid min-w-0 gap-3">
             {dtsc.advantages.map((advantage) => (
               <div key={advantage} className="dtsc-card-alt flex items-center gap-3 p-4 text-sm font-bold text-dtsc-ink">
                 <CheckCircle2 className="h-5 w-5 text-cyan-500" />
@@ -487,8 +487,8 @@ export default function Page() {
       <section className="relative overflow-hidden border-b border-dtsc-border dtsc-public-band-soft">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_8%,rgba(0,194,255,0.14),transparent_28%),radial-gradient(circle_at_88%_18%,rgba(0,87,184,0.12),transparent_30%)]" />
         <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-            <div className="lg:sticky lg:top-24">
+          <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
+            <div className="min-w-0 lg:sticky lg:top-24">
               <p className="inline-flex items-center gap-2 rounded-full bg-dtsc-soft px-3 py-1.5 text-sm font-black text-dtsc-blue">
                 <HelpCircle className="h-4 w-4" />
                 Questions fréquentes
@@ -518,7 +518,7 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid min-w-0 gap-4">
               {faqCategories.map((category) => (
                 <article
                   key={category.title}
@@ -546,8 +546,8 @@ export default function Page() {
       <section className="dtsc-public-band-light">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="rounded-[1.5rem] bg-[#002b5b] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] sm:p-8 lg:p-10">
-          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div>
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="min-w-0">
               <h2 className="text-3xl font-black">Passez à une nouvelle étape de performance numérique.</h2>
               <p className="mt-3 max-w-3xl leading-7 text-blue-100">
                 Échangeons sur vos besoins et construisons ensemble une solution adaptée à vos objectifs, à vos équipes et à votre réalité opérationnelle.

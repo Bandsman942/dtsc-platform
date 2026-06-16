@@ -62,7 +62,7 @@ export function PublicSiteSearch() {
   }, []);
 
   return (
-    <div ref={containerRef} className="relative z-[110] w-full">
+    <div ref={containerRef} className="relative z-[110] w-full min-w-0 max-w-full">
       {open && query.trim().length >= 2 && (
         <button
           type="button"
@@ -71,7 +71,7 @@ export function PublicSiteSearch() {
           aria-label="Fermer les résultats de recherche"
         />
       )}
-      <div className="relative z-[135]">
+      <div className="relative z-[135] w-full min-w-0 max-w-full">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-dtsc-blue" />
         <Input
           value={query}
@@ -79,7 +79,7 @@ export function PublicSiteSearch() {
           onFocus={() => query.trim().length >= 2 && setOpen(true)}
           placeholder="Rechercher un service, une solution, un secteur, un article..."
           autoComplete="off"
-          className="h-12 rounded-[1rem] border-dtsc-border bg-dtsc-surface pl-12 pr-11 text-sm font-semibold text-dtsc-ink shadow-sm outline-none transition placeholder:text-dtsc-muted focus:border-cyan-400 focus:ring-4 focus:ring-cyan-300/20"
+          className="h-12 w-full min-w-0 max-w-full rounded-[1rem] border-dtsc-border bg-dtsc-surface pl-12 pr-11 text-sm font-semibold text-dtsc-ink shadow-sm outline-none transition placeholder:text-dtsc-muted focus:border-cyan-400 focus:ring-4 focus:ring-cyan-300/20"
           aria-label="Rechercher sur les pages publiques DTSC"
         />
         {query && (
@@ -98,23 +98,23 @@ export function PublicSiteSearch() {
         )}
       </div>
       {open && query.trim().length >= 2 && (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-[135] overflow-hidden rounded-[1.25rem] border border-cyan-300/35 bg-[#071427] text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] ring-1 ring-white/10">
-          <div className="max-h-[min(70dvh,25rem)] overflow-y-auto p-2 sm:p-3">
+        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-[135] max-w-full overflow-hidden rounded-[1.25rem] border border-cyan-300/35 bg-[#071427] text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] ring-1 ring-white/10">
+          <div className="max-h-[min(70dvh,25rem)] min-w-0 overflow-y-auto p-2 sm:p-3">
             {results.length > 0 ? (
               results.map((result) => (
                 <Link
                   key={`${result.href}-${result.title}`}
                   href={result.href}
                   onClick={() => setOpen(false)}
-                  className="group block rounded-xl px-3 py-3 transition hover:bg-white/10"
+                  className="group block min-w-0 rounded-xl px-3 py-3 transition hover:bg-white/10"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-300">
                         {result.category}
                       </p>
-                      <p className="mt-1 text-sm font-black text-white">{result.title}</p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-300">{result.description}</p>
+                      <p className="mt-1 break-words text-sm font-black text-white">{result.title}</p>
+                      <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-slate-300">{result.description}</p>
                     </div>
                     <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-cyan-300 transition group-hover:translate-x-0.5" />
                   </div>
