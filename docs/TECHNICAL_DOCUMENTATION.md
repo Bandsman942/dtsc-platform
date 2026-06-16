@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 7 juin 2026
+Derniere mise a jour: 16 juin 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -82,6 +82,7 @@ La suite `pnpm qa:regression` execute `scripts/qa-regression-checks.mjs`, un con
 - redirections post-login: refus des domaines externes et defaults Console/SaaS;
 - Support: historique base sur `SupportTicket.userId`, gestion Support DTSC via contexte interne, origine/rate limit/Zod sur les routes mutantes;
 - Enterprise Admin et Enterprise Activities: contexte `ORGANIZATION`, membership actif, permissions, filtres `organizationId`;
+- Invitations entreprise: creation `INVITED`, notification visible hors contexte, email Zoho non bloquant, acceptation/refus volontaire et absence de fuite multi-tenant;
 - Sante: loaders `HEALTH_CARE` conditionnels pour eviter des chargements inutiles hors secteur;
 - Mes collaborateurs: scope de session, membership groupe, messages, snapshots et appels proteges;
 - appels audio/video: origine, rate limit, membership, bouton Terminer reserve au lanceur/gestionnaire, duree persistante et absence de details techniques dans les donnees UI;
@@ -112,6 +113,22 @@ Les controles sont appliques cote serveur sur:
 La Console DTSC `Abonnements & facturation` utilise `lib/console/console-billing.ts` pour afficher les abonnements organisations, plans resolus, statuts, dates, limites, modules, utilisateurs actifs et derniers paiements. Le gestionnaire `components/admin/billing-plan-manager.tsx` permet uniquement au role `ADMIN` de modifier les tarifs, descriptions, quotas, ordre et activation via `PATCH /api/admin/billing-plans/[id]`. La route exige contexte `DTSC_INTERNAL`, origine valide, Zod, rate limit et journalise les valeurs avant/apres. `ensureBillingPlans()` utilise une creation avec `skipDuplicates` et ne modifie jamais un plan existant. La page client `/billing` expose en lecture seule le plan organisationnel actif, ses limites, modules et enregistrements de facturation. Le flux MaishaPay existant reste celui des abonnements utilisateur chatbot; aucun flux organisationnel parallele n'a ete ajoute.
 
 La reference complete est dans `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`.
+
+### Invitations entreprise
+
+Le workflow d'invitation des collaborateurs d'une entreprise cliente repose sur `OrganizationMember` afin d'eviter une migration inutile. Une invitation creee depuis `POST /api/enterprise/[organizationId]/members` reste toujours `status = "INVITED"`, avec `joinedAt = null`, `removedAt = null` et `invitedBy = session.userId`. Aucun collaborateur n'est ajoute comme `ACTIVE` sans action volontaire du compte invite.
+
+La route de creation conserve les controles existants: session, origine, rate limit, utilisateur cible actif, organisation cliente active et `canManageEnterpriseAdministration`. Elle cree une notification `ENTERPRISE_INVITATION` vers `/enterprise-invitations?organizationId=...` et tente un email via `lib/enterprise-invitations-mail.ts`, qui reutilise `sendZohoOutboundMail` et `getSignInUrl("/enterprise-invitations")`. Un echec email est journalise dans `ApiLog` et renvoye comme avertissement, mais ne supprime pas l'invitation interne.
+
+La page privee `/enterprise-invitations` liste uniquement les memberships du compte connecte avec `status = "INVITED"`, `removedAt = null`, organisation `ACTIVE`, `deletedAt = null` et `organizationType = "CLIENT"`. Le composant client appelle `PATCH /api/enterprise/invitations/[id]` avec `{ "action": "ACCEPT" }` ou `{ "action": "DECLINE" }`. L'acceptation passe le membership a `ACTIVE`, renseigne `joinedAt`, notifie l'invitant et permet ensuite a `/api/account/context` de basculer vers l'organisation. Le refus utilise `status = "REMOVED"` et `removedAt = now()` car le schema actuel ne contient pas de statut `DECLINED`; ce choix conserve l'historique sans nouvelle table ni migration destructive.
+
+La route `PATCH /api/enterprise/invitations/[id]` verifie l'origine, la session, l'utilisateur actif, le rate limit, le schema Zod `enterpriseInvitationResponseSchema`, l'appartenance `invitation.userId === session.userId`, `status === "INVITED"`, `removedAt = null` et l'organisation active non supprimee. Les actions produisent `ENTERPRISE_INVITATION_ACCEPTED` ou `ENTERPRISE_INVITATION_DECLINED` dans `AuditLog`. Une tentative d'accepter l'invitation d'un autre utilisateur est refusee et auditee avec `ENTERPRISE_INVITATION_ACCESS_DENIED`.
+
+`lib/notification-access.ts` centralise le filtrage des notifications visibles. Il inclut les notifications globales, celles du contexte actif, et les notifications `ENTERPRISE_INVITATION`/`ORGANIZATION_INVITATION` uniquement pour les organisations ou l'utilisateur possede un membership `ACTIVE` ou `INVITED`. Cette regle corrige la cause racine: une notification d'invitation portait un `organizationId` que l'utilisateur ne pouvait pas encore selectionner, donc la page Notifications et le compteur la masquaient en contexte standard. Le helper est utilise par `/notifications`, `AppShell` et la suppression des notifications visibles.
+
+`POST /api/auth/organizations` renvoie desormais deux listes separees: `organizations` pour les memberships `ACTIVE` selectionnables au login, et `pendingInvitations` pour les memberships `INVITED` affiches comme information. Le formulaire de connexion indique que l'utilisateur doit entrer dans l'espace standard pour accepter l'invitation; il ne permet jamais de selectionner directement une organisation ou le membership est encore `INVITED`.
+
+Le workflow groupe reste separe: `app/api/collaborators/invitations/[id]/route.ts` continue d'utiliser `CollaborationGroupInvitation`, `collaborationInvitationResponseSchema` et les controles de membership groupe. Les invitations entreprise utilisent `OrganizationMember`, `/enterprise-invitations` et `PATCH /api/enterprise/invitations/[id]`.
 
 ### Design mobile/PWA premium
 

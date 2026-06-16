@@ -64,6 +64,28 @@ export async function getAccessibleOrganizationsForEmail(email: string) {
   });
 }
 
+export async function getPendingOrganizationInvitationsForEmail(email: string) {
+  return prisma.organizationMember.findMany({
+    where: {
+      status: "INVITED",
+      removedAt: null,
+      user: { email: email.toLowerCase(), status: "ACTIVE" },
+      organization: { status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      role: true,
+      status: true,
+      organization: {
+        select: { id: true, name: true, slug: true, logoUrl: true, status: true, organizationType: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+}
+
 export async function resolveOrganizationLoginContext(user: Pick<User, "id" | "role">, organizationId?: string | null): Promise<OrganizationContext> {
   if (!organizationId) {
     return resolveDefaultOrganizationContext(user);

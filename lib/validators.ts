@@ -271,6 +271,10 @@ export const enterpriseMemberInviteSchema = z.object({
   message: z.string().max(800).optional().or(z.literal("")),
 });
 
+export const enterpriseInvitationResponseSchema = z.object({
+  action: z.enum(["ACCEPT", "DECLINE"]),
+});
+
 export const enterpriseActivityRequestSchema = z.object({
   blockCode: z.string().trim().min(2).max(120),
   title: z.string().trim().min(3).max(180),

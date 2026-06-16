@@ -235,6 +235,15 @@ const enterpriseCoreApi = read("app/api/enterprise/[organizationId]/core/route.t
 const enterpriseCoreActionApi = read("app/api/enterprise/[organizationId]/core/[id]/route.ts");
 const enterpriseCoreWorkspace = read("components/enterprise/enterprise-core-workspace.tsx");
 const enterpriseCoreService = read("lib/enterprise/enterprise-core.ts");
+const enterpriseMembersRoute = read("app/api/enterprise/[organizationId]/members/route.ts");
+const enterpriseInvitationRoute = read("app/api/enterprise/invitations/[id]/route.ts");
+const enterpriseInvitationsPage = read("app/enterprise-invitations/page.tsx");
+const enterpriseInvitationsClient = read("components/enterprise/enterprise-invitations-client.tsx");
+const enterpriseInvitationsMail = read("lib/enterprise-invitations-mail.ts");
+const notificationAccess = read("lib/notification-access.ts");
+const notificationPage = read("app/notifications/page.tsx");
+const authOrganizationsRoute = read("app/api/auth/organizations/route.ts");
+const authForm = read("components/auth/auth-form.tsx");
 
 check(
   "script qa:regression déclaré",
@@ -1109,6 +1118,65 @@ check(
   containsAll(enterpriseCoreWorkspace, ["Créer un élément", "ListControls", "ActionMenu", "CircleHelp", "Demander une validation", "min-w-0", "overflow-x-hidden"])
     && !enterpriseCoreWorkspace.includes("window.prompt")
     && !enterpriseCoreWorkspace.includes("window.confirm")
+);
+
+check(
+  "Enterprise invitations: creation conserve INVITED, notification cible la page dediee et email Zoho non bloquant",
+  containsAll(enterpriseMembersRoute, [
+    "canManageEnterpriseAdministration",
+    "status: \"INVITED\"",
+    "joinedAt: null",
+    "removedAt: null",
+    "invitedBy: session.userId",
+    "type: \"ENTERPRISE_INVITATION\"",
+    "/enterprise-invitations?organizationId=",
+    "sendEnterpriseInvitationEmail",
+    "emailSent",
+  ])
+);
+
+check(
+  "Enterprise invitations: route PATCH securisee accepte ou refuse uniquement ses propres invitations",
+  containsAll(enterpriseInvitationRoute, [
+    "isSameOriginRequest",
+    "await rateLimit",
+    "enterpriseInvitationResponseSchema.safeParse",
+    "invitation.userId !== session.userId",
+    "invitation.status !== \"INVITED\"",
+    "invitation.removedAt",
+    "status: \"ACTIVE\"",
+    "joinedAt: now",
+    "status: \"REMOVED\"",
+    "removedAt: now",
+    "ENTERPRISE_INVITATION_ACCEPTED",
+    "ENTERPRISE_INVITATION_DECLINED",
+  ])
+);
+
+check(
+  "Enterprise invitations: page privee, actions client et bascule de contexte apres acceptation",
+  containsAll(enterpriseInvitationsPage, ["getPendingEnterpriseInvitationsForUser", "EnterpriseInvitationsClient", "Invitations reçues"])
+    && containsAll(enterpriseInvitationsClient, ["/api/enterprise/invitations/", "\"ACCEPT\" | \"DECLINE\"", "/api/account/context", "Accéder à l&apos;entreprise", "Invitation refusée"])
+);
+
+check(
+  "Enterprise invitations: notifications visibles hors contexte sans fuite multi-tenant",
+  containsAll(notificationAccess, ["ENTERPRISE_INVITATION_NOTIFICATION_TYPES", "status: { in: [\"ACTIVE\", \"INVITED\"] }", "removedAt: null", "organization: { status: \"ACTIVE\", deletedAt: null }", "userId: session.userId"])
+    && notificationPage.includes("getVisibleNotificationWhereForSession")
+    && appShell.includes("getVisibleNotificationWhereForSession")
+);
+
+check(
+  "Enterprise invitations: login separe organisations actives et invitations en attente",
+  containsAll(authOrganizationsRoute, ["getAccessibleOrganizationsForEmail", "getPendingOrganizationInvitationsForEmail", "pendingInvitations", "status: \"ACTIVE\""])
+    && containsAll(authForm, ["pendingInvitations", "Connectez-vous à votre espace standard pour l&apos;accepter"])
+    && !authForm.includes("option key={invitation.id}")
+);
+
+check(
+  "Enterprise invitations: route privee protegee et workflow groupes collaborateurs separe",
+  containsAll(middleware, ['"/enterprise-invitations"', '"/enterprise-invitations/:path*"'])
+    && containsAll(read("app/api/collaborators/invitations/[id]/route.ts"), ["collaborationInvitationResponseSchema", "collaborationGroupInvitation", "COLLABORATION"])
 );
 
 if (failures.length) {

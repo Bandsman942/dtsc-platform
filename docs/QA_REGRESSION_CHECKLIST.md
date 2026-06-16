@@ -6,7 +6,7 @@ Cette checklist couvre les parcours critiques apres les refactors Console DTSC, 
 pnpm qa:regression
 ```
 
-La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
+La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, invitations entreprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
 ## Santé - Laboratoire
 
@@ -331,6 +331,13 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Les routes mutantes refusent une origine externe.
 - Les routes mutantes appliquent rate limiting et validation Zod.
 - Le secteur Sante charge patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialite et rapports uniquement pour `HEALTH_CARE`.
+- Inviter un collaborateur actif cree `OrganizationMember.status = INVITED`, `joinedAt = null`, `removedAt = null`, une notification `ENTERPRISE_INVITATION` vers `/enterprise-invitations` et tente un email Zoho sans annuler l'invitation si l'email echoue.
+- L'utilisateur invite connecte en espace standard voit le badge, la notification et la page `/enterprise-invitations`.
+- Accepter une invitation passe le membership a `ACTIVE`, renseigne `joinedAt`, permet `/api/account/context` et rend l'entreprise disponible dans le selecteur.
+- Refuser une invitation passe le membership a `REMOVED`, renseigne `removedAt` et ne donne aucun acces entreprise.
+- Un utilisateur A ne peut pas accepter l'invitation de B; la route retourne 403 ou 404 et journalise la tentative si l'invitation existe.
+- Une invitation dans l'entreprise A ne doit jamais exposer notifications, invitations ou donnees privees de l'entreprise B.
+- Les invitations de groupes collaborateurs restent gerees par `CollaborationGroupInvitation` et ne sont pas melangees avec les invitations entreprise.
 
 ## 7. Activites [Entreprise]
 
@@ -395,6 +402,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Les notifications PWA utilisent service worker quand disponible et ne cassent pas le rendu.
 - Les filtres de notifications utilisent `type`, `targetUrl` ou une regle ciblee.
 - Les notifications ne melangent pas les contextes organisationnels.
+- Les notifications `ENTERPRISE_INVITATION` restent visibles hors contexte entreprise si le destinataire possede un membership `INVITED` dans l'organisation cible.
 
 ## 12. Calendrier interne
 

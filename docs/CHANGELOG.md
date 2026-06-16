@@ -2,6 +2,24 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-16
+
+### Corrigé
+
+- Correction du workflow d'invitation des collaborateurs dans les entreprises clientes: les invitations restent `INVITED` jusqu'à acceptation explicite, disposent d'une page privée de réponse et ne sont plus masquées par le contexte actif des notifications.
+- Correction du login entreprise afin de distinguer les memberships `ACTIVE` sélectionnables des invitations `INVITED` seulement informatives.
+
+### Ajouté
+
+- Ajout de la page privée `/enterprise-invitations` avec acceptation, refus, bascule de contexte après acceptation et état vide.
+- Ajout de la route `PATCH /api/enterprise/invitations/[id]` sécurisée par session, origine, rate limit, validation Zod, appartenance utilisateur, statut d'invitation et audit.
+- Ajout d'un helper email Zoho pour les invitations entreprise, non bloquant si la configuration email est indisponible ou si l'envoi échoue.
+
+### Sécurisé
+
+- Centralisation du filtrage des notifications visibles pour inclure les invitations d'entreprise en attente sans exposer les notifications d'une organisation où l'utilisateur n'est ni `ACTIVE`, ni `INVITED`.
+- Maintien de la séparation entre invitations d'entreprise (`OrganizationMember`) et invitations des groupes collaborateurs (`CollaborationGroupInvitation`).
+
 ## 2026-06-13
 
 ### Corrigé

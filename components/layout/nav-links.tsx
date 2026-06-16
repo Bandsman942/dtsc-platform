@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ElementType } from "react";
-import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UsersRound } from "lucide-react";
+import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
@@ -37,6 +37,7 @@ export function NavLinks({
   role,
   mobile = false,
   unreadNotifications = 0,
+  pendingEnterpriseInvitations = 0,
   showEmployeeActivities = false,
   showInternalModules = false,
   showCollaborationModule = true,
@@ -46,6 +47,7 @@ export function NavLinks({
   role: UserRole;
   mobile?: boolean;
   unreadNotifications?: number;
+  pendingEnterpriseInvitations?: number;
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
@@ -65,9 +67,12 @@ export function NavLinks({
     }
     return true;
   });
+  const invitationItems: NavItem[] = pendingEnterpriseInvitations > 0
+    ? [{ href: "/enterprise-invitations", label: "Invitations", icon: UserPlus, help: "Accepter ou refuser vos invitations vers les espaces entreprises." }]
+    : [];
   const navItems: NavItem[] = showInternalModules && canAccessAdministration(role)
-    ? [...visibleBaseItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
-    : [...visibleBaseItems, ...employeeItems];
+    ? [...visibleBaseItems, ...invitationItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
+    : [...visibleBaseItems, ...invitationItems, ...employeeItems];
   const enterpriseItems: NavItem[] = enterpriseContext
       ? [
         { href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
@@ -91,6 +96,7 @@ export function NavLinks({
     "/calendar": "navigation.calendar",
     "/collaborators": "navigation.collaborators",
     "/notifications": "navigation.notifications",
+    "/enterprise-invitations": "navigation.invitations",
     "/announcements": "navigation.announcements",
     "/support": "navigation.support",
     "/profile": "navigation.profile",
@@ -107,6 +113,7 @@ export function NavLinks({
         const itemPath = item.path || item.href;
         const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
         const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
+        const showInvitationSignal = itemPath === "/enterprise-invitations" && pendingEnterpriseInvitations > 0;
         return (
           <Link
             key={itemPath}
@@ -123,7 +130,7 @@ export function NavLinks({
           >
             <span className="relative inline-flex">
               <item.icon className={mobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
-              {showNotificationSignal && (
+              {(showNotificationSignal || showInvitationSignal) && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-2.5 w-2.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300 opacity-70" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-dtsc-surface bg-cyan-400" />
@@ -139,9 +146,9 @@ export function NavLinks({
                   : itemPath.startsWith("/enterprise-modules/")
                     ? item.label
                     : translate(locale, translationByHref[itemPath] || item.label)}
-            {showNotificationSignal && (
+            {(showNotificationSignal || showInvitationSignal) && (
               <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
-                {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                {(showInvitationSignal ? pendingEnterpriseInvitations : unreadNotifications) > 99 ? "99+" : showInvitationSignal ? pendingEnterpriseInvitations : unreadNotifications}
               </span>
             )}
           </Link>

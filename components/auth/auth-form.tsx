@@ -27,6 +27,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
   const [emailValue, setEmailValue] = useState("");
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<Array<{ id: string; organizationId: string; name: string; role: string }>>([]);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [organizationLoading, setOrganizationLoading] = useState(false);
   const isSignUp = mode === "sign-up";
@@ -35,6 +36,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   async function loadOrganizations(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
     setOrganizations([]);
+    setPendingInvitations([]);
     setSelectedOrganizationId("");
     if (isSignUp || !normalizedEmail.includes("@")) {
       return;
@@ -47,10 +49,15 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      const body = (await response.json().catch(() => null)) as { organizations?: Array<{ id: string; name: string; role: string }> } | null;
+      const body = (await response.json().catch(() => null)) as {
+        organizations?: Array<{ id: string; name: string; role: string }>;
+        pendingInvitations?: Array<{ id: string; organizationId: string; name: string; role: string }>;
+      } | null;
       setOrganizations(body?.organizations || []);
+      setPendingInvitations(body?.pendingInvitations || []);
     } catch {
       setOrganizations([]);
+      setPendingInvitations([]);
     } finally {
       setOrganizationLoading(false);
     }
@@ -194,6 +201,11 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
                   ? `Vous vous connecterez à l'espace privé de ${organizations.find((item) => item.id === selectedOrganizationId)?.name || "cette entreprise"}.`
                   : "Laissez vide pour accéder à votre espace client standard."}
               </span>
+              {pendingInvitations.length > 0 && (
+                <span className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-3 py-2 text-xs font-bold leading-5 text-dtsc-blue">
+                  Vous avez une invitation en attente pour {pendingInvitations.map((invitation) => invitation.name).join(", ")}. Connectez-vous à votre espace standard pour l&apos;accepter.
+                </span>
+              )}
             </label>
           )}
           <PasswordInput

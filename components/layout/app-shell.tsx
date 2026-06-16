@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Sparkles } from "lucide-react";
-import type { Prisma, UserRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SessionTimeoutGuard } from "@/components/auth/session-timeout-guard";
@@ -20,7 +20,9 @@ import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
 import { canAccessOrganizationAdministration, isDtscInternalSession } from "@/lib/organizations";
+import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
+import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { prisma } from "@/lib/prisma";
 
 export async function AppShell({
@@ -46,27 +48,25 @@ export async function AppShell({
   const dtscInternalContext = isDtscInternalSession(session);
   const activeOrganizationId = session?.activeOrganizationId || null;
   const showCollaborationModule = Boolean(session);
-  const notificationContextWhere: Prisma.NotificationWhereInput = activeOrganizationId
-    ? dtscInternalContext
-      ? { OR: [{ organizationId: activeOrganizationId }, { organizationId: null }] }
-      : { organizationId: activeOrganizationId }
-    : { organizationId: null };
-  const [unreadNotifications, latestUnreadNotifications, employeeRecord, organizationMemberships, enterpriseModules] = await Promise.all([
+  const notificationWhere = session
+    ? await getVisibleNotificationWhereForSession(session)
+    : { userId: user.id, organizationId: null };
+  const [unreadNotifications, latestUnreadNotifications, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules] = await Promise.all([
     prisma.notification.count({
       where: {
-        userId: user.id,
+        ...notificationWhere,
         readAt: null,
-        ...notificationContextWhere,
       },
     }),
     user.pushNotificationsEnabled
       ? prisma.notification.findMany({
-          where: { userId: user.id, readAt: null, ...notificationContextWhere },
+          where: { ...notificationWhere, readAt: null },
           orderBy: { createdAt: "desc" },
           take: 5,
           select: { id: true, title: true, body: true, targetUrl: true },
         })
       : Promise.resolve([]),
+    getPendingEnterpriseInvitationCount(user.id),
     prisma.hrcfoEmployee.findFirst({
       where: { userId: user.id, status: { not: "EXITED" } },
       select: { id: true },
@@ -109,6 +109,7 @@ export async function AppShell({
       <MobilePwaHeader
         user={user}
         unreadNotifications={unreadNotifications}
+        pendingEnterpriseInvitations={pendingEnterpriseInvitations}
         currentOrganizationId={activeOrganizationId}
         organizationOptions={organizationOptions}
         showInternalModules={dtscInternalContext}
@@ -134,6 +135,7 @@ export async function AppShell({
           <NavLinks
             role={user.role}
             unreadNotifications={unreadNotifications}
+            pendingEnterpriseInvitations={pendingEnterpriseInvitations}
             showEmployeeActivities={showEmployeeActivities}
             showInternalModules={dtscInternalContext}
             showCollaborationModule={showCollaborationModule}
@@ -176,6 +178,7 @@ export async function AppShell({
         <MobileBottomNavigation
           user={user}
           unreadNotifications={unreadNotifications}
+          pendingEnterpriseInvitations={pendingEnterpriseInvitations}
           showEmployeeActivities={showEmployeeActivities}
           showInternalModules={dtscInternalContext}
           showCollaborationModule={showCollaborationModule}

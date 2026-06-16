@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useEffect, type ElementType } from "react";
-import { Bell, Bot, CalendarCheck, ChevronRight, Home, LogOut, Settings, Shield, User, UsersRound } from "lucide-react";
+import { Bell, Bot, CalendarCheck, ChevronRight, Home, LogOut, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
@@ -35,6 +35,7 @@ const primaryItems = [
 export function MobilePwaHeader({
   user,
   unreadNotifications,
+  pendingEnterpriseInvitations = 0,
   currentOrganizationId,
   organizationOptions = [],
   showInternalModules = false,
@@ -42,6 +43,7 @@ export function MobilePwaHeader({
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
+  pendingEnterpriseInvitations?: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
   showInternalModules?: boolean;
@@ -139,6 +141,7 @@ export function MobilePwaHeader({
         {organizationOptions.length > 0 && (
           <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />
         )}
+        {pendingEnterpriseInvitations > 0 && <QuickChip href="/enterprise-invitations" active={pathname?.startsWith("/enterprise-invitations")} icon={UserPlus} label={`${translate(locale, "navigation.invitations")} (${pendingEnterpriseInvitations})`} />}
         {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={pathname?.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
         <QuickChip href="/settings" active={pathname?.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
         <QuickChip href="/profile" active={pathname?.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />
@@ -158,6 +161,7 @@ export function MobilePwaHeader({
 export function MobileBottomNavigation({
   user,
   unreadNotifications,
+  pendingEnterpriseInvitations = 0,
   showEmployeeActivities,
   showInternalModules = false,
   showCollaborationModule = true,
@@ -165,6 +169,7 @@ export function MobileBottomNavigation({
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
+  pendingEnterpriseInvitations?: number;
   showEmployeeActivities: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
@@ -186,12 +191,16 @@ export function MobileBottomNavigation({
         { href: "/enterprise-activities", labelKey: "navigation.enterpriseActivities", fallback: "Activités", icon: CalendarCheck },
       ]
     : [];
+  const pendingInvitationItems = pendingEnterpriseInvitations > 0
+    ? [{ href: "/enterprise-invitations", labelKey: "navigation.invitations", fallback: "Invitations", icon: UserPlus }]
+    : [];
   const primaryNavigationItems = enterpriseContext
     ? [
         ...visibleItems.filter((item) => item.href !== "/activities"),
+        ...pendingInvitationItems,
         ...enterprisePrimaryItems,
       ].slice(0, 5)
-    : visibleItems;
+    : [...visibleItems, ...pendingInvitationItems].slice(0, 5);
   const overflowItems = enterpriseContext
     ? [
         { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" },
@@ -224,6 +233,7 @@ export function MobileBottomNavigation({
           const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
           const Icon = item.icon;
           const isNotifications = item.href === "/notifications";
+          const isInvitation = item.href === "/enterprise-invitations";
           return (
             <Link
               key={item.href}
@@ -237,9 +247,9 @@ export function MobileBottomNavigation({
               {active && <motion.span layoutId="mobile-nav-active" className="absolute inset-0 rounded-2xl border border-cyan-300/40" transition={{ type: "spring", stiffness: 460, damping: 34 }} />}
               <span className="relative">
                 <Icon className="h-5 w-5" />
-                {isNotifications && unreadNotifications > 0 && (
+                {((isNotifications && unreadNotifications > 0) || (isInvitation && pendingEnterpriseInvitations > 0)) && (
                   <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-cyan-400 px-1 text-[0.56rem] font-black text-[#001736]">
-                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                    {(isInvitation ? pendingEnterpriseInvitations : unreadNotifications) > 99 ? "99+" : isInvitation ? pendingEnterpriseInvitations : unreadNotifications}
                   </span>
                 )}
               </span>

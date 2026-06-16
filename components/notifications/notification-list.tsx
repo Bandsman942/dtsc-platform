@@ -27,6 +27,9 @@ function fallbackTarget(type: string) {
   if (type === "ANNOUNCEMENT") {
     return "/announcements";
   }
+  if (type === "ENTERPRISE_INVITATION" || type === "ORGANIZATION_INVITATION") {
+    return "/enterprise-invitations";
+  }
   if (type === "CALENDAR" || type.startsWith("CALENDAR_")) {
     return "/calendar";
   }
@@ -55,6 +58,7 @@ const notificationFilters = [
   { id: "mentions", label: "Mentions" },
   { id: "calls", label: "Appels" },
   { id: "groups", label: "Groupes" },
+  { id: "invitations", label: "Invitations" },
   { id: "announcements", label: "Annonces" },
   { id: "publications", label: "Publications" },
   { id: "support", label: "Support" },
@@ -96,6 +100,9 @@ function filterNotification(notification: NotificationItem, filterId: string): b
   }
   if (filterId === "groups") {
     return type === "COLLABORATION" && targetUrl.startsWith("/collaborators") && !isCallNotification(type, searchable);
+  }
+  if (filterId === "invitations") {
+    return type === "ENTERPRISE_INVITATION" || type === "ORGANIZATION_INVITATION" || targetUrl.startsWith("/enterprise-invitations");
   }
   if (filterId === "announcements") {
     return type === "ANNOUNCEMENT" || targetUrl.startsWith("/announcements");

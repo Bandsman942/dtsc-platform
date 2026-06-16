@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { sendEnterpriseInvitationEmail } from "@/lib/enterprise-invitations-mail";
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +43,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid payload", message: "L'email ou le rôle est invalide." }, { status: 400 });
   }
 
-  const [organization, targetUser] = await Promise.all([
+  const [organization, targetUser, inviter] = await Promise.all([
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
       select: { id: true, name: true },
@@ -50,6 +51,10 @@ export async function POST(req: Request, { params }: Params) {
     prisma.user.findFirst({
       where: { email: parsed.data.email, status: UserStatus.ACTIVE },
       select: { id: true, email: true, name: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -93,23 +98,60 @@ export async function POST(req: Request, { params }: Params) {
       joinedAt: null,
     },
   });
+  const invitationTargetUrl = `/enterprise-invitations?organizationId=${encodeURIComponent(organizationId)}`;
+  const invitationMessage = parsed.data.message?.trim() || `Vous êtes invité à rejoindre l'espace privé de ${organization.name}.`;
 
   await notifyUser({
     userId: targetUser.id,
     title: `Invitation ${organization.name}`,
-    body: parsed.data.message || `Vous êtes invité à rejoindre l'espace privé de ${organization.name}.`,
-    type: "ORGANIZATION",
-    targetUrl: "/notifications",
+    body: invitationMessage,
+    type: "ENTERPRISE_INVITATION",
+    targetUrl: invitationTargetUrl,
     organizationId,
   });
+
+  const emailResult = await sendEnterpriseInvitationEmail({
+    email: targetUser.email,
+    name: targetUser.name,
+    organizationName: organization.name,
+    invitedByName: inviter?.name || session.name,
+    role: parsed.data.role,
+    message: parsed.data.message,
+  }).catch((error) => ({
+    sent: false,
+    reason: error instanceof Error ? error.message : "Enterprise invitation email failed",
+  }));
+
   await writeAuditLog({
     userId: session.userId,
     action: "ENTERPRISE_MEMBER_INVITED",
     entity: "OrganizationMember",
     entityId: membership.id,
     request: req,
-    metadata: { organizationId, invitedUserId: targetUser.id, role: parsed.data.role },
+    metadata: { organizationId, invitedUserId: targetUser.id, role: parsed.data.role, emailSent: emailResult.sent },
   });
-  await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, membership }, { status: 201 });
+  await writeApiLog({
+    request: req,
+    statusCode: 201,
+    userId: session.userId,
+    startedAt,
+    metadata: {
+      action: "enterprise_member_invited",
+      organizationId,
+      invitedUserId: targetUser.id,
+      emailSent: emailResult.sent,
+      emailReason: "reason" in emailResult ? emailResult.reason : undefined,
+    },
+  });
+  return NextResponse.json(
+    {
+      ok: true,
+      membership,
+      emailSent: emailResult.sent,
+      message: emailResult.sent
+        ? "Invitation créée et email envoyé."
+        : "Invitation interne créée. L'email d'invitation n'a pas pu être envoyé.",
+    },
+    { status: 201 }
+  );
 }

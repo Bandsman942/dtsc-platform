@@ -4,7 +4,7 @@ import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-activities", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
+const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 const dtscInternalRoutes = ["/admin", "/activities"];
 const dtscInternalApiRoutes = ["/api/admin", "/api/activities"];
@@ -12,7 +12,7 @@ const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
 const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";
 const authRoutes = ["/auth/sign-in", "/auth/sign-up"];
-const appOnlyRedirectRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/enterprise-admin", "/enterprise-activities", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/notifications", "/announcements"];
+const appOnlyRedirectRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/enterprise-admin", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/notifications", "/announcements"];
 const staticAssetPrefixes = ["/_next/", "/icons/"];
 const staticAssetPaths = ["/favicon.ico", "/manifest.webmanifest", "/offline", "/offline.html", "/sw.js", "/robots.txt", "/sitemap.xml"];
 
@@ -259,6 +259,7 @@ export const config = {
     "/activities/:path*",
     "/enterprise-admin/:path*",
     "/enterprise-activities/:path*",
+    "/enterprise-invitations/:path*",
     "/enterprise-modules/:path*",
     "/collaborators/:path*",
     "/profile/:path*",
