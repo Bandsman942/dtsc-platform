@@ -11,6 +11,8 @@ La commande effectue des controles source-level sans dependance externe: middlew
 ## Administration entreprise - collaborateurs, postes et permissions
 
 - [ ] Un admin entreprise peut inviter un utilisateur actif en choisissant rôle et poste; le membre reste `INVITED` jusqu'à acceptation.
+- [ ] Le formulaire de modification d'un collaborateur invité masque le champ statut et permet seulement d'ajuster rôle/poste ou de retirer l'invitation.
+- [ ] Une requête directe ne peut pas changer `INVITED` vers `ACTIVE`/`SUSPENDED`, ni remettre un membre actif/suspendu en `INVITED`.
 - [ ] Le menu `...` d'un collaborateur permet modifier l'affectation, suspendre, réactiver et retirer sans suppression physique du compte.
 - [ ] Un poste peut être créé ou modifié depuis un dialogue plein écran avec département, statut, poste clé et permissions lisibles sans underscores.
 - [ ] Un collaborateur avec poste sans permission `enterprise.admin.*` ne voit pas `Administration [Entreprise]` et ne peut pas l'ouvrir par URL directe.

@@ -6,6 +6,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du formulaire d'affectation des collaborateurs entreprise: le statut `Invitation en attente` n'est plus sélectionnable et une invitation ne peut plus être forcée vers `ACTIVE` ou `SUSPENDED` hors acceptation volontaire.
+- Correction de l'animation mobile de masquage du premier bloc privé: disparition progressive avec opacité, flou et glissement vertical, sans limite fixe qui coupait les dashboards longs.
 - Correction du débordement horizontal mobile sur les pages publiques DTSC: garde-fous globaux `overflow-x`, watermark décoratif encapsulé, header/menu/recherche publics bornés et wrappers principaux limités à la largeur du viewport.
 - Correction du workflow d'invitation des collaborateurs dans les entreprises clientes: les invitations restent `INVITED` jusqu'à acceptation explicite, disposent d'une page privée de réponse et ne sont plus masquées par le contexte actif des notifications.
 - Correction du login entreprise afin de distinguer les memberships `ACTIVE` sélectionnables des invitations `INVITED` seulement informatives.

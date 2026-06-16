@@ -64,6 +64,16 @@ export async function PATCH(req: Request, { params }: Params) {
       data.action === "restore" ? "ACTIVE" :
         data.action === "remove" ? "REMOVED" :
           data.status;
+  if (member.status === "INVITED" && nextStatus && nextStatus !== "REMOVED") {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
+    return NextResponse.json(
+      {
+        error: "Invitation status locked",
+        message: "Une invitation en attente ne peut pas être transformée en adhésion active. Le collaborateur doit l'accepter lui-même.",
+      },
+      { status: 409 }
+    );
+  }
   const updated = await prisma.organizationMember.update({
     where: { id: memberId },
     data: {

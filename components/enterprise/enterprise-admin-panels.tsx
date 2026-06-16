@@ -423,12 +423,13 @@ export function EnterpriseMembersPanel({
     event.preventDefault();
     if (!editingMember) return;
     const form = new FormData(event.currentTarget);
+    const nextStatus = form.get("status");
     await updateMember(
       editingMember.id,
       {
         action: "update",
         role: String(form.get("role") || editingMember.role),
-        status: String(form.get("status") || editingMember.status),
+        ...(typeof nextStatus === "string" && nextStatus ? { status: nextStatus } : {}),
         positionId: String(form.get("positionId") || ""),
       },
       "Collaborateur mis à jour."
@@ -492,7 +493,11 @@ export function EnterpriseMembersPanel({
           <form onSubmit={(event) => void submitMemberUpdate(event)} className="grid gap-4 md:grid-cols-2">
             <InfoCard label="Collaborateur" value={`${editingMember.user.name} · ${editingMember.user.email}`} />
             <RoleSelect defaultValue={editingMember.role} />
-            <StatusSelect defaultValue={editingMember.status} />
+            {editingMember.status === "INVITED" ? (
+              <InfoCard label="Statut" value="Invitation en attente - seul le collaborateur invité peut accepter ou refuser." />
+            ) : (
+              <StatusSelect defaultValue={editingMember.status} />
+            )}
             <PositionSelect positions={positions} defaultValue={editingMember.positionId || ""} />
             <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <UserCog className="h-4 w-4" />
@@ -961,10 +966,11 @@ function RoleSelect({ defaultValue }: { defaultValue: string }) {
 }
 
 function StatusSelect({ defaultValue }: { defaultValue: string }) {
+  const assignableStatusLabels = Object.entries(statusLabels).filter(([value]) => value !== "INVITED");
   return (
     <FormField label="Statut">
       <select name="status" defaultValue={defaultValue} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-        {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        {assignableStatusLabels.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select>
     </FormField>
   );

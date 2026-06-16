@@ -1192,29 +1192,23 @@
     .dtsc-private-main > .dtsc-panel:first-child,
     .dtsc-private-main > div > .dtsc-panel:first-child,
     .dtsc-private-main > div > section.dtsc-panel:first-child {
-      max-height: 24rem;
-      opacity: 1;
-      overflow: hidden;
-      transform: translateY(0);
+      max-height: var(--dtsc-private-first-block-max-height, 999rem);
+      opacity: var(--dtsc-private-first-block-opacity, 1);
+      overflow: clip;
+      transform: translateY(var(--dtsc-private-first-block-translate, 0));
+      filter: blur(var(--dtsc-private-first-block-blur, 0));
       transition:
-        max-height 260ms ease,
-        margin 260ms ease,
-        opacity 220ms ease,
-        padding 260ms ease,
-        transform 260ms ease;
-      will-change: max-height, opacity, transform;
+        max-height 180ms linear,
+        opacity 180ms linear,
+        filter 180ms linear,
+        transform 180ms linear;
+      will-change: max-height, opacity, filter, transform;
     }
 
-    html[data-private-scroll="down"] .dtsc-private-main > .dtsc-panel:first-child,
-    html[data-private-scroll="down"] .dtsc-private-main > div > .dtsc-panel:first-child,
-    html[data-private-scroll="down"] .dtsc-private-main > div > section.dtsc-panel:first-child {
-      max-height: 0;
-      margin-bottom: 0;
-      opacity: 0;
-      padding-bottom: 0;
-      padding-top: 0;
+    html[data-private-scroll="collapsing"] .dtsc-private-main > .dtsc-panel:first-child,
+    html[data-private-scroll="collapsing"] .dtsc-private-main > div > .dtsc-panel:first-child,
+    html[data-private-scroll="collapsing"] .dtsc-private-main > div > section.dtsc-panel:first-child {
       pointer-events: none;
-      transform: translateY(-18px);
     }
 
     [data-mobile-bottom-nav] {

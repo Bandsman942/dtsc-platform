@@ -274,7 +274,7 @@ export const enterpriseMemberInviteSchema = z.object({
 
 export const enterpriseMemberUpdateSchema = z.object({
   role: z.enum(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER", "MEMBER", "GUEST"]).optional(),
-  status: z.enum(["ACTIVE", "INVITED", "SUSPENDED", "REMOVED"]).optional(),
+  status: z.enum(["ACTIVE", "SUSPENDED", "REMOVED"]).optional(),
   positionId: z.string().max(160).optional().or(z.literal("")),
   action: z.enum(["update", "suspend", "restore", "remove"]).default("update"),
 });
