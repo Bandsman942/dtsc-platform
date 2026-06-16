@@ -1194,15 +1194,17 @@
     .dtsc-private-main > div > section.dtsc-panel:first-child {
       max-height: var(--dtsc-private-first-block-max-height, 999rem);
       opacity: var(--dtsc-private-first-block-opacity, 1);
+      overflow: hidden;
       overflow: clip;
-      transform: translateY(var(--dtsc-private-first-block-translate, 0));
-      filter: blur(var(--dtsc-private-first-block-blur, 0));
+      transform: translate3d(0, var(--dtsc-private-first-block-translate, 0px), 0);
+      filter: blur(clamp(0px, var(--dtsc-private-first-block-blur, 0px), 4px));
+
       transition:
-        max-height 180ms linear,
-        opacity 180ms linear,
-        filter 180ms linear,
-        transform 180ms linear;
-      will-change: max-height, opacity, filter, transform;
+        opacity 150ms cubic-bezier(0.22, 1, 0.36, 1),
+        filter 150ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+
+      will-change: opacity, transform;
     }
 
     html[data-private-scroll="collapsing"] .dtsc-private-main > .dtsc-panel:first-child,
@@ -1213,8 +1215,8 @@
 
     [data-mobile-bottom-nav] {
       transition:
-        opacity 220ms ease,
-        transform 240ms ease;
+        opacity 150ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
       will-change: opacity, transform;
     }
 
@@ -1222,6 +1224,21 @@
       opacity: 0;
       pointer-events: none;
       transform: translateY(calc(100% + 1.25rem)) !important;
+    }
+  }
+
+  @media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
+    .dtsc-private-main > .dtsc-panel:first-child,
+    .dtsc-private-main > div > .dtsc-panel:first-child,
+    .dtsc-private-main > div > section.dtsc-panel:first-child,
+    [data-mobile-bottom-nav] {
+      transition: none;
+    }
+
+    .dtsc-private-main > .dtsc-panel:first-child,
+    .dtsc-private-main > div > .dtsc-panel:first-child,
+    .dtsc-private-main > div > section.dtsc-panel:first-child {
+      filter: none;
     }
   }
 }
