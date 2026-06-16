@@ -16,6 +16,8 @@ export function PrivateMobileChromeController() {
     const root = document.documentElement;
     const media = window.matchMedia("(max-width: 1023px)");
     let navHidden = false;
+    let ticking = false;
+    let scrollEndTimer: number | undefined;
 
     function applyNavState() {
       root.dataset.privateMobileNav = navHidden ? "hidden" : "visible";
@@ -31,6 +33,7 @@ export function PrivateMobileChromeController() {
       if (!media.matches) {
         root.dataset.privateScroll = "desktop";
         root.dataset.privateMobileNav = "visible";
+        delete root.dataset.privateScrollActive;
         root.style.removeProperty("--dtsc-private-first-block-height");
         root.style.removeProperty("--dtsc-private-first-block-progress");
         root.style.removeProperty("--dtsc-private-first-block-max-height");
@@ -49,8 +52,28 @@ export function PrivateMobileChromeController() {
       root.style.setProperty("--dtsc-private-first-block-progress", progress.toFixed(3));
       root.style.setProperty("--dtsc-private-first-block-max-height", `${maxHeight}px`);
       root.style.setProperty("--dtsc-private-first-block-opacity", String(Math.max(0, 1 - progress * 0.82)));
-      root.style.setProperty("--dtsc-private-first-block-blur", `${progress * 10}px`);
+      root.style.setProperty("--dtsc-private-first-block-blur", `${progress * 4}px`);
       root.style.setProperty("--dtsc-private-first-block-translate", `${progress * -18}px`);
+    }
+
+    function markScrollActive() {
+      root.dataset.privateScrollActive = "true";
+      window.clearTimeout(scrollEndTimer);
+      scrollEndTimer = window.setTimeout(() => {
+        delete root.dataset.privateScrollActive;
+      }, 120);
+    }
+
+    function onScroll() {
+      markScrollActive();
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        updateScrollState();
+        ticking = false;
+      });
     }
 
     function toggleMobileNavigation(event: PointerEvent) {
@@ -63,17 +86,19 @@ export function PrivateMobileChromeController() {
 
     applyNavState();
     updateScrollState();
-    window.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", updateScrollState);
     document.addEventListener("pointerdown", toggleMobileNavigation, { passive: true });
     media.addEventListener("change", updateScrollState);
     return () => {
-      window.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", updateScrollState);
       document.removeEventListener("pointerdown", toggleMobileNavigation);
       media.removeEventListener("change", updateScrollState);
+      window.clearTimeout(scrollEndTimer);
       delete root.dataset.privateScroll;
       delete root.dataset.privateMobileNav;
+      delete root.dataset.privateScrollActive;
       root.style.removeProperty("--dtsc-private-first-block-height");
       root.style.removeProperty("--dtsc-private-first-block-progress");
       root.style.removeProperty("--dtsc-private-first-block-max-height");

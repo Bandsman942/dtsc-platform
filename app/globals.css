@@ -1207,6 +1207,12 @@
       will-change: opacity, transform;
     }
 
+    html[data-private-scroll-active="true"] .dtsc-private-main > .dtsc-panel:first-child,
+    html[data-private-scroll-active="true"] .dtsc-private-main > div > .dtsc-panel:first-child,
+    html[data-private-scroll-active="true"] .dtsc-private-main > div > section.dtsc-panel:first-child {
+      transition: none;
+    }
+
     html[data-private-scroll="collapsing"] .dtsc-private-main > .dtsc-panel:first-child,
     html[data-private-scroll="collapsing"] .dtsc-private-main > div > .dtsc-panel:first-child,
     html[data-private-scroll="collapsing"] .dtsc-private-main > div > section.dtsc-panel:first-child {

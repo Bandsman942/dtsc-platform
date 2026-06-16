@@ -6,7 +6,7 @@ export const dtsc = {
   website: "dtsc-platform.com",
   email: process.env.DTSC_CONTACT_EMAIL || "contact@dtsc-platform.com",
   whatsapp: "+243971935917",
-  socialHandle: "Facebook : dtsc-platform | Instagram : dtsc.platform | X : @dtscplatform",
+  socialHandle: "Facebook (dtsc-platform) | Instagram (dtsc.platform) | X (dtscplatform)",
   copyright: "© 2026 DTSC — Data and Tech Solutions Consulting. Tous droits réservés.",
   summary:
     "DTSC est un cabinet basé à Kinshasa qui aide les organisations à booster leur performance avec 7 leviers numériques: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
