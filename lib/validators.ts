@@ -911,7 +911,7 @@ export const collaborationInvitationResponseSchema = z.object({
 
 export const collaborationMessageSchema = z.object({
   content: z.string().min(1).max(4000),
-  messageType: z.enum(["TEXT", "CHATBOT_SHARE", "SYSTEM", "FILE", "LINK"]).default("TEXT"),
+  messageType: z.enum(["TEXT", "CHATBOT_SHARE", "ENTERPRISE_AI_SHARE", "SYSTEM", "FILE", "LINK"]).default("TEXT"),
   replyToId: z.string().max(120).optional().or(z.literal("")),
   sharedChatbotConversationId: z.string().max(120).optional().or(z.literal("")),
   mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),

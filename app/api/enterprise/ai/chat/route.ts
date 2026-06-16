@@ -8,12 +8,37 @@ import { retrieveEnterpriseAiKnowledge } from "@/lib/enterprise-ai/knowledge";
 import { runPharmacyReadTools } from "@/lib/enterprise-ai/pharmacy-tools";
 import { assertEnterpriseAiMessageQuota, getEnterpriseAiUsageSnapshot, recordEnterpriseAiUsage } from "@/lib/enterprise-ai/usage";
 import { enterpriseAiChatSchema } from "@/lib/enterprise-ai/validators";
-import { createOpenAITextResponse } from "@/lib/openai";
+import { createOpenAIResponseStream } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const jsonValue = (value: unknown) => value as Prisma.InputJsonValue;
+export const maxDuration = 60;
+
+function parseOpenAIEvent(block: string) {
+  const data = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.replace(/^data:\s*/, ""))
+    .join("");
+
+  if (!data || data === "[DONE]") {
+    return null;
+  }
+
+  return JSON.parse(data) as {
+    type?: string;
+    delta?: string;
+    response?: {
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        total_tokens?: number;
+      };
+    };
+  };
+}
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -57,7 +82,7 @@ export async function POST(req: Request) {
     const existingConversationId = data.conversationId || null;
     const conversation = existingConversationId
       ? await prisma.enterpriseAiConversation.findFirst({
-          where: { id: existingConversationId, organizationId: data.organizationId, userId: session.userId, status: "ACTIVE" },
+          where: { id: existingConversationId, organizationId: data.organizationId, userId: session.userId, status: "ACTIVE", deletedAt: null },
           select: { id: true, title: true },
         })
       : await prisma.enterpriseAiConversation.create({
@@ -117,7 +142,7 @@ export async function POST(req: Request) {
     }
 
     const previousMessages = await prisma.enterpriseAiMessage.findMany({
-      where: { organizationId: data.organizationId, conversationId: conversation.id },
+      where: { organizationId: data.organizationId, conversationId: conversation.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 8,
       select: { role: true, content: true },
@@ -129,73 +154,116 @@ export async function POST(req: Request) {
       citations: knowledge.citations,
       toolResults,
     });
-    const response = await createOpenAITextResponse({
+    const openAIStream = await createOpenAIResponseStream({
       model: data.model || undefined,
       instructions,
       messages: [
-        ...previousMessages.reverse().map((message) => ({
-          role: message.role === "assistant" ? "assistant" as const : "user" as const,
-          content: message.content,
+        ...previousMessages.reverse().map((historyMessage) => ({
+          role: historyMessage.role === "assistant" ? "assistant" as const : "user" as const,
+          content: historyMessage.content,
         })),
         { role: "user", content: prompt },
       ],
     });
 
-    const assistantMessage = await prisma.enterpriseAiMessage.create({
-      data: {
-        organizationId: data.organizationId,
-        conversationId: conversation.id,
-        role: "assistant",
-        content: response.content,
-        model: response.model,
-        citationsJson: jsonValue(knowledge.citations.map((citation) => ({
-          sourceId: citation.sourceId,
-          title: citation.title,
-          confidentiality: citation.confidentiality,
-          distance: citation.distance,
-        }))),
-        toolResultsJson: jsonValue(toolResults),
-        tokenHint: Math.ceil(response.content.length / 4),
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const reader = openAIStream.getReader();
+        let buffer = "";
+        let assistantContent = "";
+        let usage = {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+        };
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split("\n\n");
+            buffer = blocks.pop() ?? "";
+
+            for (const block of blocks) {
+              const event = parseOpenAIEvent(block);
+              if (!event) continue;
+              if (event.type === "response.output_text.delta" && event.delta) {
+                assistantContent += event.delta;
+                controller.enqueue(encoder.encode(event.delta));
+              }
+              if (event.type === "response.completed" && event.response?.usage) {
+                usage = {
+                  inputTokens: event.response.usage.input_tokens ?? 0,
+                  outputTokens: event.response.usage.output_tokens ?? 0,
+                  totalTokens: event.response.usage.total_tokens ?? 0,
+                };
+              }
+            }
+          }
+
+          if (assistantContent.trim()) {
+            await prisma.enterpriseAiMessage.create({
+              data: {
+                organizationId: data.organizationId,
+                conversationId: conversation.id,
+                role: "assistant",
+                content: assistantContent,
+                model: data.model || null,
+                citationsJson: jsonValue(knowledge.citations.map((citation) => ({
+                  sourceId: citation.sourceId,
+                  title: citation.title,
+                  confidentiality: citation.confidentiality,
+                  distance: citation.distance,
+                }))),
+                toolResultsJson: jsonValue(toolResults),
+                tokenHint: Math.ceil(assistantContent.length / 4),
+              },
+            });
+
+            await Promise.all([
+              prisma.enterpriseAiConversation.update({
+                where: { id: conversation.id },
+                data: { lastMessageAt: new Date(), title: conversation.title === "Nouvelle conversation" ? data.content.slice(0, 90) : undefined },
+              }),
+              recordEnterpriseAiUsage({
+                organizationId: data.organizationId,
+                assistantId: access.assistantId,
+                conversationId: conversation.id,
+                userId: session.userId,
+                inputTokens: usage.inputTokens || Math.ceil(prompt.length / 4),
+                outputTokens: usage.outputTokens || Math.ceil(assistantContent.length / 4),
+              }),
+              writeAuditLog({
+                userId: session.userId,
+                action: "ENTERPRISE_AI_CHAT_COMPLETED",
+                entity: "EnterpriseAiConversation",
+                entityId: conversation.id,
+                request: req,
+                metadata: { organizationId: data.organizationId, toolCount: toolResults.length, citationCount: knowledge.citations.length },
+              }),
+            ]);
+            await getEnterpriseAiUsageSnapshot(data.organizationId, session.userId, access);
+            await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, conversationId: conversation.id, totalTokens: usage.totalTokens } });
+          }
+        } catch (streamError) {
+          console.error("Enterprise AI streaming failed", streamError);
+          controller.enqueue(encoder.encode("\n\nUne erreur est survenue pendant la génération. Veuillez réessayer."));
+        } finally {
+          controller.close();
+        }
       },
     });
 
-    await Promise.all([
-      prisma.enterpriseAiConversation.update({
-        where: { id: conversation.id },
-        data: { lastMessageAt: new Date(), title: conversation.title === "Nouvelle conversation" ? data.content.slice(0, 90) : undefined },
-      }),
-      recordEnterpriseAiUsage({
-        organizationId: data.organizationId,
-        assistantId: access.assistantId,
-        conversationId: conversation.id,
-        userId: session.userId,
-        inputTokens: response.usage.inputTokens || Math.ceil(prompt.length / 4),
-        outputTokens: response.usage.outputTokens || Math.ceil(response.content.length / 4),
-      }),
-      writeAuditLog({
-        userId: session.userId,
-        action: "ENTERPRISE_AI_CHAT_COMPLETED",
-        entity: "EnterpriseAiConversation",
-        entityId: conversation.id,
-        request: req,
-        metadata: { organizationId: data.organizationId, toolCount: toolResults.length, citationCount: knowledge.citations.length },
-      }),
-    ]);
-
-    const usage = await getEnterpriseAiUsageSnapshot(data.organizationId, session.userId, access);
-    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, conversationId: conversation.id } });
-    return NextResponse.json({
-      ok: true,
-      conversationId: conversation.id,
-      message: {
-        id: assistantMessage.id,
-        role: assistantMessage.role,
-        content: assistantMessage.content,
-        createdAt: assistantMessage.createdAt.toISOString(),
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Conversation-Id": conversation.id,
       },
-      citations: knowledge.citations.map((citation) => ({ sourceId: citation.sourceId, title: citation.title, confidentiality: citation.confidentiality, distance: citation.distance })),
-      toolResults,
-      usage,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Enterprise AI chat failed";

@@ -14,8 +14,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - Ajout du module IA Assistant Entreprise pour organisations clientes: modèles Prisma dédiés, migration additive pgvector, conversations, messages, sources RAG, chunks, appels d'outils, usage mensuel et paramètres.
 - Ajout des routes privées `/api/enterprise/ai/chat`, `/api/enterprise/ai/conversations`, `/api/enterprise/ai/knowledge-sources`, `/api/enterprise/ai/usage` et `/api/enterprise/ai/settings` avec session, origine, Zod, rate limit, quotas et audit.
+- Ajout du CRUD sécurisé des conversations et messages IA Entreprise: renommage, classement par projet, suppression logique, édition de messages utilisateur et partage volontaire vers les groupes Mes collaborateurs par snapshot.
 - Ajout du workspace `/enterprise-modules/AI_ASSISTANT` avec chat sectoriel, sources, historique, usage et paramètres.
 - Ajout de la première couverture PHARMACY avec contexte CAG, règles FEFO, synthèses en lecture sur stocks, lots, alertes, ventes, caisse, achats, qualité et documents.
+- Ajout d'un contrôleur mobile privé pour masquer le premier panneau de présentation au scroll et alterner l'affichage de la navigation basse par tap hors contrôles.
 - Ajout de la page privée `/enterprise-invitations` avec acceptation, refus, bascule de contexte après acceptation et état vide.
 - Ajout de la route `PATCH /api/enterprise/invitations/[id]` sécurisée par session, origine, rate limit, validation Zod, appartenance utilisateur, statut d'invitation et audit.
 - Ajout d'un helper email Zoho pour les invitations entreprise, non bloquant si la configuration email est indisponible ou si l'envoi échoue.
@@ -24,8 +26,15 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 - Isolation du RAG entreprise dans des tables dédiées filtrées par `organizationId`, statut, archivage et confidentialité afin d'éviter tout mélange avec les documents personnels du chatbot.
 - Ajout de limites IA organisationnelles par plan SaaS: messages mensuels, sources, stockage, outils lecture et brouillons d'action.
+- Les partages IA Entreprise vers Mes collaborateurs créent une copie persistante limitée au groupe autorisé de la même organisation et ne donnent pas accès à la conversation privée originale.
 - Centralisation du filtrage des notifications visibles pour inclure les invitations d'entreprise en attente sans exposer les notifications d'une organisation où l'utilisateur n'est ni `ACTIVE`, ni `INVITED`.
 - Maintien de la séparation entre invitations d'entreprise (`OrganizationMember`) et invitations des groupes collaborateurs (`CollaborationGroupInvitation`).
+
+### Amélioré
+
+- L'onglet Chat du module IA Assistant Entreprise reprend l'ergonomie du Chatbot: panneau conversations/projets, menu `...`, composer fixe, rendu Markdown streaming et contrastes explicites compatibles thème clair/sombre.
+- Les réponses IA Entreprise sont désormais guidées vers une structure Markdown riche: titres, numérotation, puces, gras, italique, tableaux et sections de synthèse pour réduire l'ambiguïté.
+- `POST /api/enterprise/ai/chat` renvoie désormais un flux texte progressif et persiste la réponse assistant, les citations, les outils et l'usage en fin de génération.
 
 ## 2026-06-13
 

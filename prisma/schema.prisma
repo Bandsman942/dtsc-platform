@@ -582,8 +582,11 @@ model EnterpriseAiConversation {
   assistantId    String
   userId         String
   title          String                 @default("Nouvelle conversation")
+  projectName    String?
   status         String                 @default("ACTIVE")
   lastMessageAt  DateTime?
+  archivedAt     DateTime?
+  deletedAt      DateTime?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -594,6 +597,8 @@ model EnterpriseAiConversation {
   usageLogs      EnterpriseAiUsage[]
 
   @@index([organizationId, userId, updatedAt])
+  @@index([organizationId, userId, projectName, updatedAt])
+  @@index([organizationId, userId, status, updatedAt])
   @@index([organizationId, assistantId, status, updatedAt])
 }
 
@@ -609,12 +614,16 @@ model EnterpriseAiMessage {
   toolResultsJson Json?
   tokenHint       Int                      @default(0)
   createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  editedAt        DateTime?
+  deletedAt       DateTime?
   organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversation    EnterpriseAiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user            User?                    @relation("EnterpriseAiMessageUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, conversationId, createdAt])
   @@index([organizationId, userId, createdAt])
+  @@index([organizationId, conversationId, deletedAt])
 }
 
 model EnterpriseAiKnowledgeSource {

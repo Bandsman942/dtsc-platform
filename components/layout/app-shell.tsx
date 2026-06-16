@@ -13,6 +13,7 @@ import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge"
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
+import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
 import { ProductNavigation } from "@/components/layout/product-navigation";
 import { getSession } from "@/lib/auth";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
@@ -105,6 +106,7 @@ export async function AppShell({
   return (
     <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
       <SessionTimeoutGuard />
+      <PrivateMobileChromeController />
       <GlobalCallToast />
       <MobilePwaHeader
         user={user}
@@ -174,7 +176,7 @@ export async function AppShell({
             </div>
           </div>
         </header>
-        <main className="min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
+        <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{children}</main>
         <MobileBottomNavigation
           user={user}
           unreadNotifications={unreadNotifications}

@@ -19,6 +19,10 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Pour PHARMACY, les outils de lecture synthétisent stocks, lots, alertes, ventes, caisse, achats, qualité et documents sans modifier les tables métier.
 - [ ] Les recommandations sur lots respectent FEFO et excluent les lots expirés, rappelés, bloqués ou en quarantaine.
 - [ ] Les paramètres IA peuvent désactiver chat, upload, outils lecture ou brouillons d'action sans empêcher un administrateur de les réactiver.
+- [ ] L'onglet Chat streame la réponse assistant sans attendre la fin complète, puis recharge la conversation persistée avec messages et usage à jour.
+- [ ] Le menu `...` d'une conversation permet infos, renommage/classement par projet, partage groupe et suppression logique sans exposer une conversation d'une autre organisation.
+- [ ] Le menu `...` d'un message permet copier, modifier uniquement un message utilisateur du propriétaire, et supprimer logiquement un message visible.
+- [ ] Le partage vers Mes collaborateurs crée un snapshot lisible par les membres du groupe autorisé de la même organisation, sans accès direct à la conversation Enterprise AI privée.
 - [ ] Le workspace mobile reste utilisable: onglets scrollables, fil de chat borné, sources en cartes, dialogues et menus `...` au premier plan.
 
 ## Santé - Laboratoire
@@ -435,6 +439,8 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - Collaborateurs: liste de groupes accessible, conversation plein ecran, composer visible.
 - Appels: controles tactiles, plein ecran portrait/paysage, chat d'appel borne.
 - Calendrier: listes et formulaires sans debordement.
+- Modules privés: le premier panneau de présentation se contracte au scroll descendant et réapparaît au scroll montant sans masquer les formulaires ou menus.
+- Navigation basse: tap hors contrôles masque/réaffiche la barre, sans se déclencher sur liens, boutons, champs, menus ou modales.
 
 ## 14. Sortie de validation
 

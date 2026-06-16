@@ -32,6 +32,25 @@ export const enterpriseAiConversationListSchema = z.object({
   organizationId: z.string().min(1).max(160),
 });
 
+export const enterpriseAiConversationUpdateSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  title: z.string().trim().min(1).max(160).optional(),
+  projectName: z.string().trim().max(120).optional().or(z.literal("")),
+  action: z.enum(["update", "archive", "restore", "delete"]).default("update"),
+});
+
+export const enterpriseAiMessageUpdateSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  content: z.string().trim().min(1).max(8_000).optional(),
+  action: z.enum(["edit", "delete"]).default("edit"),
+});
+
+export const enterpriseAiConversationShareSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  groupId: z.string().min(1).max(160),
+  content: z.string().trim().min(1).max(2_000).optional(),
+});
+
 export const enterpriseAiUsageQuerySchema = z.object({
   organizationId: z.string().min(1).max(160),
 });

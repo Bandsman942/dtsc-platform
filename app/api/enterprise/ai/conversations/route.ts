@@ -24,11 +24,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const conversations = await prisma.enterpriseAiConversation.findMany({
-    where: { organizationId: parsed.data.organizationId, userId: session.userId, status: "ACTIVE" },
+    where: { organizationId: parsed.data.organizationId, userId: session.userId, status: "ACTIVE", deletedAt: null },
     orderBy: { updatedAt: "desc" },
     take: 25,
     include: {
-      messages: { orderBy: { createdAt: "asc" }, take: 40, select: { id: true, role: true, content: true, createdAt: true, citationsJson: true, toolResultsJson: true } },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        take: 80,
+        select: { id: true, role: true, content: true, createdAt: true, updatedAt: true, editedAt: true, citationsJson: true, toolResultsJson: true },
+      },
+      _count: { select: { messages: { where: { deletedAt: null } } } },
     },
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId: parsed.data.organizationId } });
@@ -36,13 +42,17 @@ export async function GET(req: Request) {
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.title,
+      projectName: conversation.projectName,
       updatedAt: conversation.updatedAt.toISOString(),
       lastMessageAt: conversation.lastMessageAt?.toISOString() || null,
+      _count: conversation._count,
       messages: conversation.messages.map((message) => ({
         id: message.id,
         role: message.role,
         content: message.content,
         createdAt: message.createdAt.toISOString(),
+        updatedAt: message.updatedAt.toISOString(),
+        editedAt: message.editedAt?.toISOString() || null,
         citations: message.citationsJson,
         toolResults: message.toolResultsJson,
       })),

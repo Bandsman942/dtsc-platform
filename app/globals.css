@@ -782,6 +782,16 @@
     line-height: 1.75;
   }
 
+  .dtsc-assistant-markdown strong {
+    color: var(--dtsc-ink);
+    font-weight: 900;
+  }
+
+  .dtsc-assistant-markdown em {
+    color: color-mix(in oklch, var(--dtsc-muted) 82%, var(--dtsc-blue));
+    font-style: italic;
+  }
+
   .dtsc-assistant-markdown ul,
   .dtsc-assistant-markdown ol {
     margin-left: 1.15rem;
@@ -1177,6 +1187,47 @@
     textarea,
     button {
       font-size: 16px;
+    }
+
+    .dtsc-private-main > .dtsc-panel:first-child,
+    .dtsc-private-main > div > .dtsc-panel:first-child,
+    .dtsc-private-main > div > section.dtsc-panel:first-child {
+      max-height: 24rem;
+      opacity: 1;
+      overflow: hidden;
+      transform: translateY(0);
+      transition:
+        max-height 260ms ease,
+        margin 260ms ease,
+        opacity 220ms ease,
+        padding 260ms ease,
+        transform 260ms ease;
+      will-change: max-height, opacity, transform;
+    }
+
+    html[data-private-scroll="down"] .dtsc-private-main > .dtsc-panel:first-child,
+    html[data-private-scroll="down"] .dtsc-private-main > div > .dtsc-panel:first-child,
+    html[data-private-scroll="down"] .dtsc-private-main > div > section.dtsc-panel:first-child {
+      max-height: 0;
+      margin-bottom: 0;
+      opacity: 0;
+      padding-bottom: 0;
+      padding-top: 0;
+      pointer-events: none;
+      transform: translateY(-18px);
+    }
+
+    [data-mobile-bottom-nav] {
+      transition:
+        opacity 220ms ease,
+        transform 240ms ease;
+      will-change: opacity, transform;
+    }
+
+    html[data-private-mobile-nav="hidden"] [data-mobile-bottom-nav] {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(calc(100% + 1.25rem)) !important;
     }
   }
 }

@@ -122,16 +122,19 @@ Le module `AI_ASSISTANT` dispose maintenant d'un backend propre, distinct du cha
 
 Routes privees ajoutees:
 
-- `POST /api/enterprise/ai/chat`: chat sectoriel avec contexte CAG, RAG, outils lecture, quotas mensuels, audit et journal API;
-- `GET /api/enterprise/ai/conversations`: historique IA de l'utilisateur dans l'organisation active;
+- `POST /api/enterprise/ai/chat`: chat sectoriel en streaming texte avec contexte CAG, RAG, outils lecture, quotas mensuels, audit et journal API;
+- `GET /api/enterprise/ai/conversations`: historique IA de l'utilisateur dans l'organisation active, projets `projectName`, messages non supprimes et compteurs;
+- `PATCH|DELETE /api/enterprise/ai/conversations/[id]`: renommage, classement par projet, archivage/restauration logique et suppression logique d'une conversation appartenant au membre courant;
+- `POST /api/enterprise/ai/conversations/[id]/share`: creation d'un snapshot partage dans un groupe Mes collaborateurs de la meme organisation, sans donner acces a la conversation privee originale;
+- `PATCH|DELETE /api/enterprise/ai/messages/[id]`: edition des messages utilisateur du proprietaire de conversation et suppression logique des messages visibles;
 - `GET|POST /api/enterprise/ai/knowledge-sources`: liste et indexation de sources IA entreprise;
 - `PATCH /api/enterprise/ai/knowledge-sources/[id]`: archivage ou restauration non destructive d'une source;
 - `GET /api/enterprise/ai/usage`: usage mensuel et limites de plan;
 - `GET|PATCH /api/enterprise/ai/settings`: paramètres IA entreprise.
 
-Les mutations verifient origine, session, membership `ACTIVE`, contexte organisation actif, module `AI_ASSISTANT`, validation Zod, rate limit et quotas. Les sources RAG sont filtrees par `organizationId`, statut, archivage, secteur/module et confidentialite. Les documents RAG sont traites comme contenu non fiable afin de limiter le prompt injection.
+Les mutations verifient origine, session, membership `ACTIVE`, contexte organisation actif, module `AI_ASSISTANT`, validation Zod, rate limit, propriete de la conversation/message, `organizationId` et quotas. Les sources RAG sont filtrees par `organizationId`, statut, archivage, secteur/module et confidentialite. Les documents RAG sont traites comme contenu non fiable afin de limiter le prompt injection. Les suppressions de conversations et messages sont logiques (`deletedAt`) afin de conserver l'audit et d'eviter toute migration destructive.
 
-Les limites IA organisationnelles sont ajoutees a `lib/billing/plan-limits.ts`: messages mensuels, sources, stockage, outils lecture et brouillons d'action. Le workspace client est expose sur `/enterprise-modules/AI_ASSISTANT` avec Chat, Sources, Historique, Usage et Parametres.
+Les limites IA organisationnelles sont ajoutees a `lib/billing/plan-limits.ts`: messages mensuels, sources, stockage, outils lecture et brouillons d'action. Le workspace client est expose sur `/enterprise-modules/AI_ASSISTANT` avec Chat, Sources, Historique, Usage et Parametres. L'onglet Chat reprend les principes UX du chatbot standard: panneau conversations/projets, menu `...`, partage volontaire vers groupes, rendu `Streamdown`, composer fixe, et contrastes explicites compatibles clair/sombre.
 
 La documentation detaillee est dans `docs/enterprise-ai-assistant.md`; la couverture PHARMACY est dans `docs/sectors/pharmacy-ai-assistant.md`.
 
@@ -156,10 +159,13 @@ Le workflow groupe reste separe: `app/api/collaborators/invitations/[id]/route.t
 La couche mobile authentifiée reprend les principes du redesign fourni dans `dtsc-platform-redesign.zip` sans importer les écrans mockés comme source de données. Le shell privé conserve `AppShell`, l'authentification, RBAC, notifications, routes API et modules existants, puis ajoute:
 
 - `components/dtsc/mobile-shell.tsx`: header mobile compact, quick chips et bottom navigation PWA;
+- `components/layout/private-mobile-chrome-controller.tsx`: controleur client mobile qui observe le scroll et les taps hors controles pour masquer/reafficher le premier panneau de module et la navigation basse;
 - `components/dtsc/ui-components.tsx`: primitives visuelles premium réutilisables (`PremiumCard`, `GlassCard`, `MobileStatCard`, `MobileBadge`, `MobileAvatar`);
 - styles mobiles dans `app/globals.css`: fond mesh, cartes glass pour `dtsc-card`/`dtsc-panel`, safe-area et scrollbar masquée.
 
 La navigation mobile principale expose Accueil, IA, Activités DTSC quand disponible, Collaborateurs et Notifications. Les autres modules restent accessibles par les actions rapides et liens secondaires, avec Administration visible uniquement selon les droits existants. Les modules continuent d'utiliser leurs données réelles: aucune donnée mockée du prototype ne doit être introduite dans les écrans connectés.
+
+Sur mobile, le premier panneau `dtsc-panel` d'un module prive peut se contracter au scroll descendant et revenir au scroll montant afin de liberer l'espace de lecture. La bottom navigation mobile est balisee `data-mobile-bottom-nav` et peut etre masquee/reaffichee par tap hors champs, boutons, menus et modales. Ce comportement reste purement UI: les routes, RBAC et donnees serveur ne changent pas.
 
 Les dialogs partagés via `components/ui/dialog.tsx` sont optimisés mobile/PWA avec une hauteur visible jusqu'à `95dvh`, un contenu interne scrollable et des header/footer non noyés dans le scroll. Les zones conversationnelles privées privilégient le contenu utile:
 

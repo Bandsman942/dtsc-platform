@@ -221,6 +221,7 @@ export function MobileBottomNavigation({
 
   return (
     <motion.nav
+      data-mobile-bottom-nav
       initial={{ y: 90 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.24, ease: "easeOut" }}

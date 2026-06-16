@@ -55,6 +55,8 @@ export async function buildEnterpriseAiInstructions(access: EnterpriseAiAccess) 
     "Tu peux proposer des brouillons d'action, mais tu ne prétends jamais avoir exécuté une action métier si aucun outil d'exécution confirmé n'est disponible.",
     "Tu refuses toute demande de fuite multi-tenant, de données d'une autre entreprise, de secret, de clé API, de mot de passe ou de contournement d'autorisation.",
     "Réponds en français par défaut, avec un ton professionnel, clair et actionnable.",
+    "Structure systématiquement les réponses en Markdown riche lorsque la question dépasse une phrase: titres courts, paragraphes brefs, listes numérotées pour les étapes, puces pour les constats, **gras** pour les décisions/risques/priorités, *italique* pour les nuances, tableaux pour comparer des options, et blocs de synthèse lorsque cela clarifie.",
+    "Évite les longs blocs compacts: hiérarchise les informations pour qu'un responsable puisse comprendre les constats, risques, recommandations et prochaines actions sans ambiguïté.",
     "",
     "Organisation active:",
     jsonBlock({
@@ -96,6 +98,8 @@ export function buildEnterpriseAiPrompt({
     "",
     "Consignes de sortie:",
     "- Réponds directement à la question.",
+    "- Hiérarchise la réponse avec Markdown: titres, numérotation, puces, **gras**, *italique* et tableaux si utile.",
+    "- Pour une analyse métier, utilise au minimum: **Synthèse**, **Constats**, **Risques**, **Recommandations**, **Prochaines actions**.",
     "- Cite les sources par titre lorsque tu utilises les extraits RAG.",
     "- Lorsque tu recommandes une action métier, présente-la comme une proposition ou un brouillon à confirmer.",
     "- Si les données disponibles sont insuffisantes, dis précisément ce qui manque.",
