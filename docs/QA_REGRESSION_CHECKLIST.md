@@ -14,6 +14,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Les KPI, filtres, badges d'état et actions rapides apparaissent dans un deuxième bloc immédiatement accessible sous la présentation.
 - [ ] Le premier bloc disparaît sans saccade pendant le scroll: opacité, flou et translation restent fluides, sans saut de hauteur pendant le geste tactile.
 - [ ] Une fois le premier bloc replié, le second bloc remonte sans laisser d'espace vide et le premier bloc réapparaît proprement au retour proche du haut.
+- [ ] Le header mobile haut et la navigation basse se masquent ensemble quand l'espace de lecture est nécessaire, puis réapparaissent par tap hors contrôles.
 - [ ] Le comportement reste correct sur Dashboard, Activités DTSC, Entreprise, Abonnements, Notifications, Administration entreprise, Activités entreprise et IA Assistant Entreprise.
 
 ## Administration entreprise - collaborateurs, postes et permissions

@@ -1200,12 +1200,12 @@
       filter: blur(clamp(0px, var(--dtsc-private-first-block-blur, 0px), 3px));
 
       transition:
-        max-height 190ms cubic-bezier(0.22, 1, 0.36, 1),
-        margin 190ms cubic-bezier(0.22, 1, 0.36, 1),
-        padding 190ms cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 120ms linear,
-        filter 120ms linear,
-        transform 120ms linear;
+        max-height 420ms cubic-bezier(0.22, 1, 0.36, 1),
+        margin 420ms cubic-bezier(0.22, 1, 0.36, 1),
+        padding 420ms cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+        filter 360ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
 
       will-change: opacity, transform;
     }
@@ -1231,6 +1231,7 @@
       padding-bottom: 0;
       padding-top: 0;
       pointer-events: none;
+      transform: translate3d(0, -16px, 0);
     }
 
     html[data-private-scroll="collapsed"] .dtsc-private-main > .dtsc-panel:first-child + *,
@@ -1239,17 +1240,27 @@
       margin-top: 0 !important;
     }
 
+    [data-mobile-top-nav],
     [data-mobile-bottom-nav] {
       transition:
-        opacity 150ms cubic-bezier(0.22, 1, 0.36, 1),
-        transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+        opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+        filter 260ms cubic-bezier(0.22, 1, 0.36, 1);
       will-change: opacity, transform;
+    }
+
+    html[data-private-mobile-nav="hidden"] [data-mobile-top-nav] {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(calc(-100% - 0.75rem)) !important;
+      filter: blur(3px);
     }
 
     html[data-private-mobile-nav="hidden"] [data-mobile-bottom-nav] {
       opacity: 0;
       pointer-events: none;
       transform: translateY(calc(100% + 1.25rem)) !important;
+      filter: blur(3px);
     }
   }
 
@@ -1257,6 +1268,7 @@
     .dtsc-private-main > .dtsc-panel:first-child,
     .dtsc-private-main > div > .dtsc-panel:first-child,
     .dtsc-private-main > div > section.dtsc-panel:first-child,
+    [data-mobile-top-nav],
     [data-mobile-bottom-nav] {
       transition: none;
     }

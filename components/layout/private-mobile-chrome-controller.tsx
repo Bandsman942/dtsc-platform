@@ -6,7 +6,7 @@ function isInteractiveTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
   return Boolean(
     target.closest(
-      "a,button,input,textarea,select,label,[role='button'],[role='menu'],[role='dialog'],[data-mobile-bottom-nav]"
+      "a,button,input,textarea,select,label,[role='button'],[role='menu'],[role='dialog'],[data-mobile-top-nav],[data-mobile-bottom-nav]"
     )
   );
 }
@@ -52,18 +52,28 @@ export function PrivateMobileChromeController() {
       const firstPanel = getFirstPrivatePanel();
       const fullHeight = firstPanel?.scrollHeight || 0;
       const keepCollapsed = root.dataset.privateScroll === "collapsed" && progress > 0.16;
+      let nextScrollState: "top" | "collapsing" | "collapsed";
       if (progress <= 0.04) {
-        root.dataset.privateScroll = "top";
+        nextScrollState = "top";
       } else if (keepCollapsed || (settled && progress > 0.72)) {
-        root.dataset.privateScroll = "collapsed";
+        nextScrollState = "collapsed";
       } else {
-        root.dataset.privateScroll = "collapsing";
+        nextScrollState = "collapsing";
+      }
+      root.dataset.privateScroll = nextScrollState;
+      if (nextScrollState === "top" && navHidden) {
+        navHidden = false;
+        applyNavState();
+      }
+      if (nextScrollState === "collapsed" && !navHidden) {
+        navHidden = true;
+        applyNavState();
       }
       root.style.setProperty("--dtsc-private-first-block-height", `${fullHeight}px`);
       root.style.setProperty("--dtsc-private-first-block-progress", progress.toFixed(3));
-      root.style.setProperty("--dtsc-private-first-block-opacity", String(Math.max(0.08, 1 - progress * 0.9)));
-      root.style.setProperty("--dtsc-private-first-block-blur", `${progress * 3}px`);
-      root.style.setProperty("--dtsc-private-first-block-translate", `${progress * -14}px`);
+      root.style.setProperty("--dtsc-private-first-block-opacity", String(Math.max(0.16, 1 - progress * 0.72)));
+      root.style.setProperty("--dtsc-private-first-block-blur", `${progress * 2.4}px`);
+      root.style.setProperty("--dtsc-private-first-block-translate", `${progress * -10}px`);
     }
 
     function markScrollActive() {
@@ -72,7 +82,7 @@ export function PrivateMobileChromeController() {
       scrollEndTimer = window.setTimeout(() => {
         delete root.dataset.privateScrollActive;
         updateScrollState({ settled: latestProgress > 0.04 });
-      }, 140);
+      }, 220);
     }
 
     function onScroll() {
