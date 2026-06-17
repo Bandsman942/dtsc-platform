@@ -46,13 +46,17 @@ export default async function BillingPage() {
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
             Choisissez un niveau d&apos;accès selon votre volume de conversations, vos besoins documentaires et votre usage professionnel.
           </p>
-          {activeSubscription && (
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-300">
+        </section>
+
+        {activeSubscription && (
+          <section className="dtsc-panel p-4 sm:p-5">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Abonnement courant</p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-600">
               <CreditCard className="h-4 w-4" />
               Plan actif: {activeSubscription.plan.name}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         <BillingPlans
           activePlanId={activeSubscription?.planId}

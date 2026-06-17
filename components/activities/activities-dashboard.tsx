@@ -93,6 +93,14 @@ export function ActivitiesDashboard({
         <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
           Retrouvez les tâches, opérations internes, demandes inter-départements, réunions, rapports et workflows qui vous sont partagés par l&apos;équipe COO.
         </p>
+      </section>
+
+      <section className="dtsc-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Tableau de bord</p>
+            <h2 className="mt-1 text-xl font-black text-dtsc-ink">Suivi opérationnel</h2>
+          </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <Metric label="Tâches ouvertes" value={metrics.openTasks} />
           <Metric label="Terminées / validées" value={metrics.completed} />
@@ -119,6 +127,7 @@ export function ActivitiesDashboard({
               </Button>
             </div>
           </div>
+        </div>
         </div>
       </section>
 

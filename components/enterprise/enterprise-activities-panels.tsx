@@ -147,16 +147,21 @@ function activityFields(blockCode: string) {
 
 export function EnterpriseActivitiesDashboard({ organization }: { organization: EnterpriseActivitiesOrganization }) {
   return (
-    <section className="dtsc-panel min-w-0 p-5 sm:p-6">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Activités entreprise</p>
-      <h1 className="mt-2 break-words text-3xl font-black tracking-tight text-dtsc-ink sm:text-4xl">Activités {organization.name}</h1>
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-dtsc-muted">
-        Soumettez des demandes, rapports ou signalements liés à votre entreprise sans accéder aux sections sensibles d&apos;administration.
-      </p>
-      <span className="mt-4 inline-flex max-w-full rounded-full bg-cyan-400/14 px-3 py-1 text-xs font-black text-cyan-600">
-        <span className="truncate">{organization.businessSector?.labelFr || organization.sector || "Socle commun"}</span>
-      </span>
-    </section>
+    <>
+      <section className="dtsc-panel min-w-0 p-5 sm:p-6">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Activités entreprise</p>
+        <h1 className="mt-2 break-words text-3xl font-black tracking-tight text-dtsc-ink sm:text-4xl">Activités {organization.name}</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-dtsc-muted">
+          Soumettez des demandes, rapports ou signalements liés à votre entreprise sans accéder aux sections sensibles d&apos;administration.
+        </p>
+      </section>
+      <section className="dtsc-panel min-w-0 p-4 sm:p-5">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Périmètre actif</p>
+        <span className="mt-3 inline-flex max-w-full rounded-full bg-cyan-400/14 px-3 py-1 text-xs font-black text-cyan-600">
+          <span className="truncate">{organization.businessSector?.labelFr || organization.sector || "Socle commun"}</span>
+        </span>
+      </section>
+    </>
   );
 }
 

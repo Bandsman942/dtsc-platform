@@ -31,7 +31,10 @@ export default async function NotificationsPage() {
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
             Retrouvez les tickets, annonces, réponses support, alertes de limites, messages administratifs et événements importants de la plateforme.
           </p>
-          <div className="mt-5 rounded-2xl bg-dtsc-soft p-4 text-sm font-bold text-dtsc-blue">
+        </section>
+        <section className="dtsc-panel p-4 sm:p-5">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Synthèse</p>
+          <div className="mt-3 rounded-2xl bg-dtsc-soft p-4 text-sm font-bold text-dtsc-blue">
             {unreadCount} notification(s) non lue(s)
           </div>
         </section>

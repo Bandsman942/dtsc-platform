@@ -41,12 +41,16 @@ export default async function CompanyPage() {
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
             Renseignez votre organisation, votre poste, vos activités clés et vos documents pour aider le chatbot DTSC à produire des réponses plus adaptées à votre réalité professionnelle.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <span title="Ces informations sont disponibles dans tous les plans et enrichissent le contexte privé du chatbot." className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-300">
+        </section>
+
+        <section className="dtsc-panel p-4 sm:p-5">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Capacités disponibles</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <span title="Ces informations sont disponibles dans tous les plans et enrichissent le contexte privé du chatbot." className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-600">
               <BriefcaseBusiness className="h-4 w-4" />
               Contexte entreprise inclus dans tous les plans
             </span>
-            <span title="La limite documentaire dépend toujours de votre abonnement actif." className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-300">
+            <span title="La limite documentaire dépend toujours de votre abonnement actif." className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-600">
               <FileText className="h-4 w-4" />
               Capacité documentaire: {activeSubscription?.plan.maxDocuments ?? 0} document(s)
             </span>

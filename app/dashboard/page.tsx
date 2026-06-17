@@ -49,7 +49,15 @@ export default async function DashboardPage() {
           <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
             Pilotez vos échanges IA, structurez vos besoins en data, BI, IA, marketing digital ou solutions numériques, puis créez un ticket lorsqu&apos;un cadrage humain est nécessaire.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+        </section>
+
+        <section className="dtsc-panel p-4 sm:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Actions rapides</p>
+              <h2 className="mt-1 text-xl font-black text-dtsc-ink">Démarrer ou compléter votre espace</h2>
+            </div>
+            <div className="flex flex-wrap gap-3">
             <Button asChild title="Démarrer un échange avec le chatbot DTSC." className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <Link href="/chat">
                 <Plus className="h-4 w-4" />
@@ -62,6 +70,7 @@ export default async function DashboardPage() {
             <Button asChild variant="outline" title="Renseigner votre entreprise pour personnaliser le chatbot." className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
               <Link href="/company">Compléter mon entreprise</Link>
             </Button>
+            </div>
           </div>
         </section>
 

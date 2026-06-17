@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Stabilisation du masquage mobile du premier bloc des modules privés: la hauteur n'est plus recalculée pendant le geste de scroll, le repli se fait après stabilisation et les panneaux restent homogènes en séparant présentation, indicateurs et actions.
 - Correction des micro-saccades de transition mobile du premier bloc privé: les variables de scroll sont appliquées par `requestAnimationFrame`, les transitions CSS sont désactivées pendant le scroll actif et le flou est réduit pour limiter le coût graphique.
 - Correction du formulaire d'affectation des collaborateurs entreprise: le statut `Invitation en attente` n'est plus sélectionnable et une invitation ne peut plus être forcée vers `ACTIVE` ou `SUSPENDED` hors acceptation volontaire.
 - Correction de l'animation mobile de masquage du premier bloc privé: disparition progressive avec opacité, flou et glissement vertical, sans limite fixe qui coupait les dashboards longs.

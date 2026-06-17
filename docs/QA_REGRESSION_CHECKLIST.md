@@ -8,6 +8,14 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, invitations entreprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Mobile privé - panneaux de présentation
+
+- [ ] Sur mobile, le premier bloc des modules privés affiche uniquement la présentation du module et ne contient pas de KPI, filtre ou action principale.
+- [ ] Les KPI, filtres, badges d'état et actions rapides apparaissent dans un deuxième bloc immédiatement accessible sous la présentation.
+- [ ] Le premier bloc disparaît sans saccade pendant le scroll: opacité, flou et translation restent fluides, sans saut de hauteur pendant le geste tactile.
+- [ ] Une fois le premier bloc replié, le second bloc remonte sans laisser d'espace vide et le premier bloc réapparaît proprement au retour proche du haut.
+- [ ] Le comportement reste correct sur Dashboard, Activités DTSC, Entreprise, Abonnements, Notifications, Administration entreprise, Activités entreprise et IA Assistant Entreprise.
+
 ## Administration entreprise - collaborateurs, postes et permissions
 
 - [ ] Un admin entreprise peut inviter un utilisateur actif en choisissant rôle et poste; le membre reste `INVITED` jusqu'à acceptation.

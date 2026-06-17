@@ -437,13 +437,18 @@ export function EnterpriseAiWorkspace({
   return (
     <div className="min-w-0 space-y-5">
       <section className="dtsc-panel p-5 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">IA Assistant Entreprise</p>
-            <h1 className="mt-2 text-3xl font-black text-dtsc-ink sm:text-4xl">{organizationName}</h1>
-            <p className="mt-3 max-w-4xl text-sm leading-7 text-dtsc-muted">
-              Assistant sectoriel avec contexte entreprise, sources RAG privées, outils backend en lecture et brouillons d&apos;action contrôlés.
-            </p>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">IA Assistant Entreprise</p>
+        <h1 className="mt-2 text-3xl font-black text-dtsc-ink sm:text-4xl">{organizationName}</h1>
+        <p className="mt-3 max-w-4xl text-sm leading-7 text-dtsc-muted">
+          Assistant sectoriel avec contexte entreprise, sources RAG privées, outils backend en lecture et brouillons d&apos;action contrôlés.
+        </p>
+      </section>
+
+      <section className="dtsc-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Outils assistant</p>
+            <h2 className="mt-1 text-xl font-black text-dtsc-ink">Synchronisation des données IA</h2>
           </div>
           <Button type="button" variant="secondary" onClick={refreshAll} disabled={loadingData}>
             <RefreshCw className="h-4 w-4" /> Actualiser

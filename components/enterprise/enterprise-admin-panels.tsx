@@ -202,6 +202,10 @@ export function EnterpriseDashboardSummary({
         <p className="mt-3 max-w-3xl text-sm leading-6 text-dtsc-muted">
           Modules, postes, permissions, procédures et paramètres isolés pour {organization.name}. Les actions restent limitées à cette organisation.
         </p>
+      </section>
+
+      <section className="dtsc-panel p-4 sm:p-5">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Contexte entreprise</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="rounded-full bg-cyan-400/14 px-3 py-1 text-xs font-black text-cyan-600">{organization.businessSector?.labelFr || organization.sector || "Secteur à préciser"}</span>
           <span className="rounded-full bg-dtsc-page px-3 py-1 text-xs font-black text-dtsc-muted">{organization.sectorCode || "NO_SECTOR"}</span>
