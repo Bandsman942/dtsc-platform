@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction de l'affichage des bannières promotionnelles: une nouvelle bannière est désormais active par défaut afin d'apparaître immédiatement sur les surfaces ciblées, sauf statut explicitement changé.
 - Correction du build Vercel des bannières promotionnelles en rétablissant l'import Prisma requis par la page Administration.
 - Correction du build Vercel du refactor toast: les workspaces Santé et Pharmacie consommant un état `message` utilisent désormais `useToastMessage(message)` afin d'éviter les erreurs ESLint `no-unused-vars`.
 - Correction de l'import manquant de `useToastMessage` dans le workspace Documents médicaux afin de rétablir le build TypeScript Vercel après le refactor toast.
@@ -23,6 +24,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Modifié
 
+- Le module Profil sépare désormais son bloc de présentation mobile des accordéons de contenu afin que seuls les éléments d'introduction disparaissent au scroll vertical.
 - Sur mobile, Chatbot, IA Assistant Entreprise et Mes collaborateurs ouvrent d'abord la liste des conversations ou groupes, sauf lien profond explicite, et le module Mes collaborateurs affiche désormais un compteur global de messages non lus comme Notifications.
 
 ## 2026-06-16

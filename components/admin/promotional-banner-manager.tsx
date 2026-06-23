@@ -46,7 +46,7 @@ export function PromotionalBannerManager({ banners, canManage }: { banners: Bann
     const payload = {
       title: String(form.get("title") || "").trim(),
       description: String(form.get("description") || "").trim(),
-      status: String(form.get("status") || "DRAFT"),
+      status: String(form.get("status") || "ACTIVE"),
       surfaces: form.getAll("surfaces").map(String),
       includeRoles: form.getAll("includeRoles").map(String),
       excludeRoles: form.getAll("excludeRoles").map(String),
@@ -189,7 +189,7 @@ function BannerForm({ banner, canManage, onSubmit }: { banner: BannerItem | null
         <Input name="title" defaultValue={banner?.title || ""} required maxLength={90} disabled={!canManage} placeholder="Add your birthday!" />
       </Field>
       <Field label="Statut">
-        <select name="status" defaultValue={banner?.status || "DRAFT"} disabled={!canManage} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
+        <select name="status" defaultValue={banner?.status || "ACTIVE"} disabled={!canManage} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
           {statusOptions.map((status) => <option key={status} value={status}>{formatEnumLabel(status)}</option>)}
         </select>
       </Field>

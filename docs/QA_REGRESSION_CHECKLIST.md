@@ -22,7 +22,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Le premier bloc disparaît sans saccade pendant le scroll: opacité, flou et translation restent fluides, sans saut de hauteur pendant le geste tactile.
 - [ ] Une fois le premier bloc replié, le second bloc remonte sans laisser d'espace vide et le premier bloc réapparaît proprement au retour proche du haut.
 - [ ] Le header mobile haut et la navigation basse se masquent ensemble quand l'espace de lecture est nécessaire, puis réapparaissent par tap hors contrôles.
-- [ ] Le comportement reste correct sur Dashboard, Activités DTSC, Entreprise, Abonnements, Notifications, Administration entreprise, Activités entreprise et IA Assistant Entreprise.
+- [ ] Le comportement reste correct sur Dashboard, Activités DTSC, Entreprise, Abonnements, Notifications, Profil, Administration entreprise, Activités entreprise et IA Assistant Entreprise.
 
 ## Administration entreprise - collaborateurs, postes et permissions
 
@@ -75,6 +75,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 ## Bannières promotionnelles
 
 - [ ] Dans Administration > Bannières promo, un `ADMIN` peut créer, modifier, activer, mettre en pause et archiver une bannière avec surfaces, rôles inclus/exclus, priorité, dates et CTA.
+- [ ] Une nouvelle bannière est active par défaut et apparaît immédiatement sur une surface ciblée si les rôles, dates et fermetures utilisateur le permettent.
 - [ ] Le formulaire de création/modification des bannières promotionnelles s'ouvre en plein écran utile, avec scroll interne et champs exploitables sur mobile comme sur desktop.
 - [ ] Les routes `POST/PATCH/DELETE /api/admin/promotional-banners` refusent origine invalide, session absente, rôle non-`ADMIN` et payload invalide.
 - [ ] Une bannière active ciblée s'affiche dans Chatbot, IA Assistant Entreprise, Mes collaborateurs ou Annonces selon les surfaces choisies, sans apparaître sur les autres pages.
@@ -306,6 +307,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 ### Utilisateur DTSC interne
 
 - Se connecter avec contexte `DTSC_INTERNAL`.
+- Ouvrir `/profile` sur mobile: le bloc de présentation peut disparaître au scroll, tandis que les accordéons restent dans un second bloc lisible et indépendant.
 - Ouvrir `console.dtsc-platform.com/admin`: acces autorise.
 - Ouvrir `app.dtsc-platform.com/dashboard`: acces SaaS autorise.
 - Ouvrir `support.dtsc-platform.com/support`: tickets Support visibles selon role.

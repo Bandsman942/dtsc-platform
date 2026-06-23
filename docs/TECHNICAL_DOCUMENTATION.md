@@ -29,7 +29,7 @@ Objectifs couverts par le code actuel:
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
 - chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, snapshots consultables pour les groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, rendu Markdown enrichi (titres, gras, italique, listes, numerotation et tableaux quand utile), choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - architecture conversationnelle mobile-first avec primitives `components/chat/*` (`ConversationListItem`, `ConversationAvatar`, `SearchBar`, `FloatingActionButton`, `MessageBubble`, `ConversationHeader`, `ConversationComposer`, `ConversationLayout`) pour densifier les listes, supprimer les doubles conteneurs et garder les fils de messages en plein espace utile;
-- bannières promotionnelles administrables depuis la Console DTSC, ciblees par role et surface, affichables dans Chatbot, IA Assistant Entreprise, Mes collaborateurs et Annonces, avec fermeture persistante par utilisateur;
+- bannières promotionnelles administrables depuis la Console DTSC, ciblees par role et surface, actives par defaut a la creation, affichables dans Chatbot, IA Assistant Entreprise, Mes collaborateurs et Annonces, avec fermeture persistante par utilisateur;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - notifications applicatives client via `ToastProvider`, evenement `dtsc:toast`, helpers `toastSuccess`/`toastError`/`toastInfo` et hook `useToastMessage` pour remplacer les confirmations et erreurs inline par des toasts accessibles;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
@@ -1104,7 +1104,7 @@ Les annonces acceptent `contentHtml` en plus de `content`. Le HTML riche est net
 | `PATCH` | `/api/admin/access` | `ADMIN` | Mise a jour des blocs Administration visibles par role non-client |
 | `POST` | `/api/admin/broadcast` | `ADMIN` | Notification interne + email utilisateurs, avec logs API et cause d'erreur explicite |
 | `POST` | `/api/admin/newsletter-broadcast` | `ADMIN` | Email abonnes newsletter, avec logs API et cause d'erreur explicite |
-| `POST` | `/api/admin/promotional-banners` | `ADMIN` | Creation d'une banniere promotionnelle avec surfaces, roles inclus/exclus, CTA, priorite et dates optionnelles |
+| `POST` | `/api/admin/promotional-banners` | `ADMIN` | Creation d'une banniere promotionnelle active par defaut avec surfaces, roles inclus/exclus, CTA, priorite et dates optionnelles |
 | `PATCH` | `/api/admin/promotional-banners/[id]` | `ADMIN` | Modification complete d'une banniere promotionnelle avec validation Zod, origine, rate limit et audit |
 | `DELETE` | `/api/admin/promotional-banners/[id]` | `ADMIN` | Archivage logique d'une banniere promotionnelle |
 | `POST` | `/api/promotional-banners/[id]/dismiss` | session | Fermeture persistante d'une banniere pour l'utilisateur courant |

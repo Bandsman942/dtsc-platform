@@ -967,7 +967,7 @@ export const promotionalBannerStatusSchema = z.enum(["DRAFT", "ACTIVE", "PAUSED"
 export const promotionalBannerWriteSchema = z.object({
   title: z.string().trim().min(2).max(90),
   description: z.string().trim().min(2).max(180),
-  status: promotionalBannerStatusSchema.default("DRAFT"),
+  status: promotionalBannerStatusSchema.default("ACTIVE"),
   surfaces: z.array(promotionalBannerSurfaceSchema).min(1).max(4),
   includeRoles: z.array(z.enum(["ADMIN", "MANAGER", "CLIENT", "SUPPORT"])).max(4).default([]),
   excludeRoles: z.array(z.enum(["ADMIN", "MANAGER", "CLIENT", "SUPPORT"])).max(4).default([]),

@@ -79,6 +79,9 @@ export default async function ProfilePage() {
           <h1 className="mt-2 text-3xl font-black">Profil utilisateur</h1>
           <p className="mt-2 text-sm text-slate-300">Informations de contact, identité professionnelle et visibilité publique maîtrisée.</p>
         </div>
+      </section>
+
+      <section className="dtsc-panel max-w-6xl overflow-hidden p-0">
         <div className="p-4 sm:p-6">
           <Accordion>
             <AccordionItem title="Informations du compte" defaultOpen>
