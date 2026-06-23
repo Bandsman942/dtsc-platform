@@ -11,7 +11,7 @@ import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 import { useToastMessage } from "@/components/ui/use-toast-message";
 type PurchaseOrderLineOption = { id: string; productId: string; orderedQuantity: string; receivedQuantity: string; remainingQuantity: string; unit: string; estimatedUnitPrice: string | null; discountRate: string | null };
-type Option = { id: string; name?: string; title?: string; labelFr?: string; code?: string; stockUnit?: string; referencePurchasePrice?: string | null; productId?: string; supplierId?: string; departmentId?: string | null; currency?: string; lines?: PurchaseOrderLineOption[]; batchNumber?: string; expiryDate?: string };
+type Option = { id: string; name?: string; title?: string; labelFr?: string; code?: string; stockUnit?: string; referencePurchasePrice?: string | null; productId?: string; supplierId?: string; departmentId?: string | null; currency?: string; status?: string; lines?: PurchaseOrderLineOption[]; batchNumber?: string; expiryDate?: string };
 type ReceiptBatch = { id: string; receiptLineId: string; batchId: string | null; batchNumber: string; expiryDate: string; receivedQuantity: string; createNewBatch: boolean; locationId: string | null };
 type ReceiptLine = { id: string; productId: string; purchaseOrderLineId: string | null; orderedQuantity: string | null; previouslyReceivedQuantity: string | null; receivedQuantity: string; unit: string; purchasePrice: string | null; totalLine: string | null };
 type Discrepancy = { id: string; discrepancyType: string; description: string; criticality: string; status: string };

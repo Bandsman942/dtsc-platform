@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du build Vercel PHARMACY après l'ajout des devises: le type partagé des options de réception expose désormais le statut des commandes fournisseur préremplies.
 - Correction des workflows PHARMACY Fournisseurs, commandes, réceptions, ventes, caisse et lots: commandes brouillon modifiables uniquement avant validation, réception brouillon réutilisée au lieu d'être dupliquée, quantités d'achat entières, montants limités à deux décimales, statut de commande synchronisé après réception et quantité disponible des lots recalculée côté serveur.
 - Correction de l'affichage des bannières promotionnelles: une nouvelle bannière est désormais active par défaut afin d'apparaître immédiatement sur les surfaces ciblées, sauf statut explicitement changé.
 - Correction du build Vercel des bannières promotionnelles en rétablissant l'import Prisma requis par la page Administration.
