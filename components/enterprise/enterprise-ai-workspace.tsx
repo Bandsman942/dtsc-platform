@@ -1,17 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, BarChart3, Bot, Copy, Database, Edit3, FileText, FolderKanban, FolderPlus, History, Info, Loader2, Menu, Pencil, RefreshCw, Send, Settings, Share2, Trash2, Upload, X } from "lucide-react";
+import { Archive, BarChart3, Bot, Copy, Database, Edit3, FileText, FolderKanban, History, Info, Loader2, Pencil, RefreshCw, Settings, Share2, Trash2, Upload, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
+import { ConversationComposer } from "@/components/chat/ConversationComposer";
+import { ConversationEmptyState } from "@/components/chat/ConversationEmptyState";
+import { ConversationHeader } from "@/components/chat/ConversationHeader";
+import { ConversationListItem } from "@/components/chat/ConversationListItem";
+import { FloatingActionButton } from "@/components/chat/FloatingActionButton";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { SearchBar } from "@/components/chat/SearchBar";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ListControls } from "@/components/ui/list-controls";
 import { toastError, toastInfo, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatRelativeUserDateTime, formatUserDateTime } from "@/lib/user-format";
-import { cn } from "@/lib/utils";
 
 type SourceItem = {
   id: string;
@@ -429,28 +434,18 @@ export function EnterpriseAiWorkspace({
   }
 
   return (
-    <div className="min-w-0 space-y-5">
-      <section className="dtsc-panel p-5 sm:p-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">IA Assistant Entreprise</p>
-        <h1 className="mt-2 text-3xl font-black text-dtsc-ink sm:text-4xl">{organizationName}</h1>
-        <p className="mt-3 max-w-4xl text-sm leading-7 text-dtsc-muted">
-          Assistant sectoriel avec contexte entreprise, sources RAG privées, outils backend en lecture et brouillons d&apos;action contrôlés.
-        </p>
-      </section>
-
-      <section className="dtsc-panel p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Outils assistant</p>
-            <h2 className="mt-1 text-xl font-black text-dtsc-ink">Synchronisation des données IA</h2>
-          </div>
-          <Button type="button" variant="secondary" onClick={refreshAll} disabled={loadingData}>
-            <RefreshCw className="h-4 w-4" /> Actualiser
-          </Button>
+    <div className="min-w-0 space-y-3 overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">IA Assistant Entreprise</p>
+          <h1 className="mt-1 truncate text-2xl font-black text-dtsc-ink sm:text-3xl">{organizationName}</h1>
         </div>
-      </section>
+        <Button type="button" variant="secondary" onClick={refreshAll} disabled={loadingData} className="shrink-0 rounded-full">
+          <RefreshCw className="h-4 w-4" /> Actualiser
+        </Button>
+      </div>
 
-      <nav className="flex min-w-0 gap-2 overflow-x-auto rounded-2xl border border-dtsc-border bg-dtsc-surface p-2">
+      <nav className="flex min-w-0 gap-2 overflow-x-auto border-b border-dtsc-border pb-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.key;
@@ -468,8 +463,8 @@ export function EnterpriseAiWorkspace({
       </nav>
 
       {activeTab === "chat" && (
-        <section className="relative grid h-[calc(100dvh-18rem)] min-h-[36rem] gap-3 lg:h-[calc(100vh-20rem)] lg:grid-cols-[320px_1fr]">
-          <div className="hidden min-h-0 lg:block">
+        <section className="relative grid h-[calc(100dvh-11.5rem)] min-h-0 overflow-hidden bg-dtsc-surface lg:h-[calc(100vh-12rem)] lg:grid-cols-[320px_1fr]">
+          <div className="hidden min-h-0 border-r border-dtsc-border lg:block">
             <EnterpriseAiHistoryPanel
               conversations={conversations}
               groupedConversations={groupedConversations}
@@ -501,89 +496,58 @@ export function EnterpriseAiWorkspace({
             </div>
           )}
 
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.65rem] border border-dtsc-border bg-dtsc-surface shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-dtsc-border px-3 py-3 sm:px-5">
-              <Button type="button" variant="outline" size="icon" onClick={() => setHistoryOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden" aria-label="Ouvrir les conversations IA">
-                <Menu className="h-4 w-4" />
-              </Button>
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-lg font-black text-dtsc-ink sm:text-xl">{activeConversation?.title || "Nouvelle conversation"}</h2>
-                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs font-black text-dtsc-muted">
-                  <span className="inline-flex items-center rounded-full bg-cyan-400/14 px-2.5 py-1 text-cyan-600">Assistant IA Entreprise</span>
-                  <span>{sectorCode || "GENERAL"}</span>
-                  <span>Sources {sources.filter((source) => source.status === "READY").length}</span>
-                  <span>Outils {permissions.canUseReadTools ? "actifs" : "désactivés"}</span>
-                </div>
-              </div>
-              <ActionMenu
-                label="Actions de la conversation IA"
-                items={[
-                  { key: "info", label: "Infos", icon: Info, onSelect: () => setInfoOpen(true), disabled: !activeConversation },
-                  { key: "share", label: "Partager au groupe", icon: Share2, onSelect: () => setShareToGroupOpen(true), disabled: !activeConversation },
-                  { key: "rename", label: "Renommer / classer", icon: Pencil, onSelect: () => setConversationDialog("rename"), disabled: !activeConversation },
-                  { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setConversationDialog("delete"), disabled: !activeConversation },
-                ]}
-              />
-            </div>
-            <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-dtsc-page px-2.5 py-3 sm:px-4 lg:px-7">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-dtsc-surface">
+            <ConversationHeader
+              title={activeConversation?.title || "Nouvelle conversation"}
+              subtitle={`Assistant IA Entreprise · ${sectorCode || "GENERAL"} · ${sources.filter((source) => source.status === "READY").length} sources · outils ${permissions.canUseReadTools ? "actifs" : "désactivés"}`}
+              type="assistant"
+              onBack={() => setHistoryOpen(true)}
+              actions={(
+                <ActionMenu
+                  label="Actions de la conversation IA"
+                  items={[
+                    { key: "info", label: "Infos", icon: Info, onSelect: () => setInfoOpen(true), disabled: !activeConversation },
+                    { key: "share", label: "Partager au groupe", icon: Share2, onSelect: () => setShareToGroupOpen(true), disabled: !activeConversation },
+                    { key: "rename", label: "Renommer / classer", icon: Pencil, onSelect: () => setConversationDialog("rename"), disabled: !activeConversation },
+                    { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setConversationDialog("delete"), disabled: !activeConversation },
+                  ]}
+                />
+              )}
+            />
+            <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-dtsc-page px-2.5 py-3 sm:px-4 lg:px-7">
               {!messages.length && (
-                <div className="mx-auto flex h-full max-w-2xl flex-col justify-center text-center">
-                  <p className="text-2xl font-black text-dtsc-ink sm:text-3xl">Analysez votre entreprise avec son contexte réel</p>
-                  <p className="mt-3 leading-7 text-dtsc-muted">
-                    Posez une question sur les sources indexées, les indicateurs métier ou les modules sectoriels activés.
-                  </p>
-                </div>
+                <ConversationEmptyState title="Aucune conversation IA." description="Demarrez une discussion avec l'assistant sectoriel de cette entreprise pour analyser les sources et modules autorises." />
               )}
               <div className="space-y-4">
                 {messages.map((chatMessage) => {
                   const isUser = chatMessage.role === "user";
                   return (
-                    <div key={chatMessage.id} className={cn("flex min-w-0 gap-3", isUser && "justify-end")}>
-                      {!isUser && (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-black text-rose-700 dark:bg-rose-300/20 dark:text-rose-100">
-                          AI
+                    <MessageBubble
+                      key={chatMessage.id}
+                      role={isUser ? "user" : "assistant"}
+                      author={isUser ? "Vous" : "Assistant entreprise"}
+                      initials={isUser ? "VO" : "AI"}
+                      meta={`${formatRelativeUserDateTime(chatMessage.createdAt)}${chatMessage.editedAt ? " · modifié" : ""}`}
+                      actions={(
+                        <ActionMenu
+                          label="Actions du message IA"
+                          className="opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100"
+                          items={[
+                            { key: "copy", label: copiedMessageId === chatMessage.id ? "Copié" : "Copier", icon: Copy, onSelect: () => void copyMessageContent(chatMessage) },
+                            { key: "edit", label: "Modifier", icon: Edit3, onSelect: () => { setSelectedMessage(chatMessage); setMessageDialog("edit"); }, disabled: !isUser || chatMessage.id.startsWith("draft-") },
+                            { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => { setSelectedMessage(chatMessage); setMessageDialog("delete"); }, disabled: chatMessage.id.startsWith("draft-") || chatMessage.id.startsWith("assistant-") },
+                          ]}
+                        />
+                      )}
+                    >
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap break-words">{chatMessage.content}</p>
+                      ) : (
+                        <div className="dtsc-assistant-markdown">
+                          <Streamdown>{chatMessage.content || "..."}</Streamdown>
                         </div>
                       )}
-                      <article
-                        className={cn(
-                          "group relative max-w-[92%] rounded-2xl px-3 py-2.5 text-sm leading-6 shadow-[0_4px_20px_rgba(0,43,91,0.05)] sm:max-w-[88%] sm:px-4 sm:py-3",
-                          isUser
-                            ? "rounded-tr-sm bg-[#002b5b] text-white"
-                            : "rounded-tl-sm border border-dtsc-border bg-dtsc-surface text-dtsc-ink"
-                        )}
-                      >
-                        <div className="mb-1 flex items-start justify-between gap-2">
-                          <p className={cn("text-xs font-black", isUser ? "text-cyan-100" : "text-cyan-600")}>
-                            {isUser ? "Vous" : "Assistant entreprise"}
-                          </p>
-                          <ActionMenu
-                            label="Actions du message IA"
-                            className="opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100"
-                            items={[
-                              { key: "copy", label: copiedMessageId === chatMessage.id ? "Copié" : "Copier", icon: Copy, onSelect: () => void copyMessageContent(chatMessage) },
-                              { key: "edit", label: "Modifier", icon: Edit3, onSelect: () => { setSelectedMessage(chatMessage); setMessageDialog("edit"); }, disabled: !isUser || chatMessage.id.startsWith("draft-") },
-                              { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => { setSelectedMessage(chatMessage); setMessageDialog("delete"); }, disabled: chatMessage.id.startsWith("draft-") || chatMessage.id.startsWith("assistant-") },
-                            ]}
-                          />
-                        </div>
-                        {isUser ? (
-                          <p className="whitespace-pre-wrap break-words">{chatMessage.content}</p>
-                        ) : (
-                          <div className="dtsc-assistant-markdown">
-                            <Streamdown>{chatMessage.content || "..."}</Streamdown>
-                          </div>
-                        )}
-                        <p className={cn("mt-2 text-[0.68rem] font-semibold", isUser ? "text-white/70" : "text-dtsc-muted")}>
-                          {formatRelativeUserDateTime(chatMessage.createdAt)}
-                          {chatMessage.editedAt ? " · modifié" : ""}
-                        </p>
-                      </article>
-                      {isUser && (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-xs font-black text-[#002b5b] dark:bg-cyan-300/20 dark:text-cyan-100">
-                          VO
-                        </div>
-                      )}
-                    </div>
+                    </MessageBubble>
                   );
                 })}
                 {loadingChat && (
@@ -594,22 +558,14 @@ export function EnterpriseAiWorkspace({
                 )}
               </div>
             </div>
-            <form onSubmit={sendMessage} className="shrink-0 border-t border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
-              <p className="mb-2 hidden text-center text-[0.72rem] font-bold text-dtsc-muted sm:block">
-                Vérifiez les informations critiques avant toute décision métier.
-              </p>
-              <div className="flex items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
-                <Input
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  placeholder="Écrivez votre demande..."
-                  className="h-11 border-0 bg-transparent text-dtsc-ink focus-visible:ring-0"
-                />
-                <Button type="submit" size="icon" className="h-11 w-11 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={loadingChat || !message.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </form>
+            <ConversationComposer
+              value={message}
+              onChange={setMessage}
+              onSubmit={sendMessage}
+              placeholder="Écrivez votre demande..."
+              sending={loadingChat}
+              helper="Vérifiez les informations critiques avant toute décision métier."
+            />
           </div>
         </section>
       )}
@@ -833,29 +789,24 @@ function EnterpriseAiHistoryPanel({
   const sourcePercent = sourceLimit ? Math.min(100, Math.round((sourceValue / Math.max(sourceLimit, 1)) * 100)) : 0;
 
   return (
-    <aside className="dtsc-card flex h-full min-h-0 flex-col overflow-hidden p-3 sm:p-4">
+    <aside className="relative flex h-full min-h-0 flex-col overflow-hidden px-3 py-3 sm:px-4">
       <div className="flex items-center justify-between gap-2">
-        <Button onClick={onCreate} className="h-11 flex-1 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-          <Bot className="h-4 w-4" />
-          Nouvelle conversation
-        </Button>
-        <Button type="button" variant="outline" size="icon" className="h-11 w-11 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue" aria-label="Classer les conversations">
-          <FolderPlus className="h-4 w-4" />
-        </Button>
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-600">Entreprise</p>
+          <h2 className="truncate text-lg font-black text-dtsc-ink">Conversations IA</h2>
+        </div>
       </div>
-      <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div className="mt-3">
         {conversations.length > 0 && (
-          <ListControls
-            query={conversationList.query}
-            onQueryChange={conversationList.setQuery}
-            page={conversationList.page}
-            pageCount={conversationList.pageCount}
-            totalCount={conversationList.totalCount}
-            filteredCount={conversationList.filteredCount}
+          <SearchBar
+            value={conversationList.query}
+            onChange={conversationList.setQuery}
             placeholder="Rechercher..."
-            onPageChange={conversationList.setPage}
+            ariaLabel="Rechercher une conversation IA Entreprise"
           />
         )}
+      </div>
+      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {Object.entries(groupedConversations).map(([projectName, items]) => (
           <div key={projectName} className="space-y-2">
             <div className="flex items-center gap-2 px-2 pt-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-dtsc-muted">
@@ -863,22 +814,16 @@ function EnterpriseAiHistoryPanel({
               <span className="truncate">{projectName}</span>
             </div>
             {items.map((conversation) => (
-              <button
+              <ConversationListItem
                 key={conversation.id}
-                type="button"
+                id={conversation.id}
+                type="assistant"
+                title={conversation.title}
+                preview={`${conversation._count?.messages ?? conversation.messages.length} messages`}
+                timestamp={formatRelativeUserDateTime(conversation.updatedAt)}
+                isActive={activeConversationId === conversation.id}
                 onClick={() => onSelect(conversation.id)}
-                className={cn(
-                  "w-full min-w-0 rounded-xl px-3 py-3 text-left text-sm transition",
-                  activeConversationId === conversation.id
-                    ? "border-l-4 border-cyan-400 bg-dtsc-soft text-dtsc-ink"
-                    : "text-dtsc-muted hover:bg-dtsc-page hover:text-dtsc-ink"
-                )}
-              >
-                <span className="block truncate font-black">{conversation.title}</span>
-                <span className="mt-1 block truncate text-xs">
-                  {conversation._count?.messages ?? conversation.messages.length} messages · {formatRelativeUserDateTime(conversation.updatedAt)}
-                </span>
-              </button>
+              />
             ))}
           </div>
         ))}
@@ -889,6 +834,13 @@ function EnterpriseAiHistoryPanel({
           <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucune conversation IA pour le moment.</p>
         )}
       </div>
+      {conversationList.pageCount > 1 && (
+        <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs font-bold text-dtsc-muted">
+          <Button type="button" size="sm" variant="outline" onClick={() => conversationList.setPage(Math.max(1, conversationList.page - 1))} disabled={conversationList.page <= 1} className="h-8 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue">Préc.</Button>
+          <span>{conversationList.page}/{conversationList.pageCount}</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => conversationList.setPage(Math.min(conversationList.pageCount, conversationList.page + 1))} disabled={conversationList.page >= conversationList.pageCount} className="h-8 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue">Suiv.</Button>
+        </div>
+      )}
       <div className="mt-4 shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
         <p className="font-black text-dtsc-ink">Usage mensuel entreprise</p>
         <div className="mt-3 space-y-3">
@@ -896,6 +848,7 @@ function EnterpriseAiHistoryPanel({
           <UsageBar label="Sources" value={sourceValue} limit={sourceLimit} percent={sourcePercent} />
         </div>
       </div>
+      <FloatingActionButton label="Nouvelle conversation IA Entreprise" onClick={onCreate} icon={<Bot className="h-5 w-5" />} />
     </aside>
   );
 }

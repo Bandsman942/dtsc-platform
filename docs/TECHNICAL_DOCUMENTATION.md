@@ -28,6 +28,7 @@ Objectifs couverts par le code actuel:
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
 - chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, snapshots consultables pour les groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, rendu Markdown enrichi (titres, gras, italique, listes, numerotation et tableaux quand utile), choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
+- architecture conversationnelle mobile-first avec primitives `components/chat/*` (`ConversationListItem`, `ConversationAvatar`, `SearchBar`, `FloatingActionButton`, `MessageBubble`, `ConversationHeader`, `ConversationComposer`, `ConversationLayout`) pour densifier les listes, supprimer les doubles conteneurs et garder les fils de messages en plein espace utile;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
 - notifications applicatives client via `ToastProvider`, evenement `dtsc:toast`, helpers `toastSuccess`/`toastError`/`toastInfo` et hook `useToastMessage` pour remplacer les confirmations et erreurs inline par des toasts accessibles;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;

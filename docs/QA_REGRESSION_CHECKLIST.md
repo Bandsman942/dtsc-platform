@@ -38,12 +38,24 @@ La commande effectue des controles source-level sans dependance externe: middlew
 
 ## Chatbot général
 
+- [ ] `/chat` occupe l'espace privé disponible sans carte globale visible; sur mobile, le fil est plein écran avec header compact, historique via panneau et input fixe accessible.
+- [ ] La liste historique affiche des items compacts avec avatar assistant, titre tronqué, date relative, recherche unifiée et FAB fonctionnel de nouvelle conversation.
 - [ ] Les réponses de l'assistant général s'affichent en Markdown enrichi: titres, listes, gras, italique, tableaux si pertinent et code borné dans la bulle assistant.
 - [ ] Le streaming du chatbot conserve l'historique, les quotas et la persistance des messages sans casser les actions de copie, feedback et partage vers Mes collaborateurs.
+
+## Mes collaborateurs
+
+- [ ] `/collaborators` ouvre directement l'espace conversationnel sans grand panneau introductif ni double conteneur.
+- [ ] La liste des groupes affiche des items compacts avec avatar, dernier message ou appel en cours, date relative, badge non lu et badge mention `@`.
+- [ ] La recherche de groupes reste accent-insensible via `useSmartList`, les pages restent navigables et le FAB `Créer un groupe` ouvre le vrai dialogue de création.
+- [ ] Sur mobile, la liste et la conversation ne sont pas côte à côte: sélection d'un groupe, retour à la liste, fil scrollable et composer fixe restent accessibles sans débordement horizontal.
+- [ ] Les actions existantes restent fonctionnelles: invitation, appels audio/vidéo, détails du groupe, partage chatbot, support DTSC, édition, suppression ou sortie selon permissions.
 
 ## IA Assistant Entreprise
 
 - [ ] `/enterprise-modules/AI_ASSISTANT` n'est visible et ouvrable que si le module est activé, inclus dans le plan et accessible au membre actif de l'organisation.
+- [ ] L'onglet Chat occupe l'espace disponible sans carte globale visible; desktop affiche historique dense + conversation active, mobile affiche historique via panneau et fil plein écran.
+- [ ] La liste des conversations IA utilise des items compacts, recherche unifiée, avatar assistant, date relative et FAB fonctionnel de nouvelle conversation.
 - [ ] `POST /api/enterprise/ai/chat` refuse une requête cross-origin, une session absente, un contexte non `ORGANIZATION`, un `organizationId` différent du contexte actif ou un module désactivé.
 - [ ] Un utilisateur de l'entreprise A ne peut lire aucune conversation, source, usage, paramètre ou résultat d'outil de l'entreprise B.
 - [ ] Une source IA uploadée est enregistrée dans `EnterpriseAiKnowledgeSource`, indexée en chunks `EnterpriseAiKnowledgeChunk` et filtrée par `organizationId`.

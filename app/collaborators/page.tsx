@@ -144,14 +144,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
 
   return (
     <AppShell user={user}>
-      <div className="space-y-6">
-        <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">Collaboration privée</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Mes collaborateurs</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            Créez des groupes, invitez des membres, échangez en messagerie privée et partagez des conversations chatbot avec les personnes autorisées.
-          </p>
-        </section>
+      <div className="min-w-0 overflow-x-hidden">
         <CollaboratorsWorkspace
           currentUserId={user.id}
           initialActiveGroupId={params?.groupId || null}

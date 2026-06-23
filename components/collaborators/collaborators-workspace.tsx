@@ -1,14 +1,18 @@
 "use client";
 
-import { Archive, ArrowLeft, Check, CheckCheck, Copy, Eye, Maximize2, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
+import { Archive, Check, CheckCheck, Copy, Eye, Maximize2, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, MessageSquare, Phone, PhoneCall, PhoneOff, Pencil, Plus, Reply, Send, Shield, ShieldOff, Trash2, UserMinus, UserPlus, UserRound, Video, VideoOff, X } from "lucide-react";
 import { LiveKitRoom, RoomAudioRenderer, VideoConference } from "@livekit/components-react";
 import { ConnectionState, Room } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
+import { ConversationComposer } from "@/components/chat/ConversationComposer";
+import { ConversationHeader } from "@/components/chat/ConversationHeader";
+import { ConversationListItem } from "@/components/chat/ConversationListItem";
+import { FloatingActionButton } from "@/components/chat/FloatingActionButton";
+import { SearchBar } from "@/components/chat/SearchBar";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { playCallSound } from "@/components/calls/call-sounds";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
@@ -515,14 +519,14 @@ export function CollaboratorsWorkspace({
   }
 
   return (
-    <div className="grid h-[calc(100dvh-7.25rem)] min-w-0 gap-3 overflow-hidden sm:h-[calc(100dvh-8rem)] xl:grid-cols-[360px_minmax(0,1fr)]">
-      <aside className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden p-3 sm:p-4", activeGroup && !mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
+    <div className="relative grid h-[calc(100dvh-7.25rem)] min-w-0 overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] xl:grid-cols-[340px_minmax(0,1fr)]">
+      <aside className={cn("h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-3 py-3 sm:px-4", activeGroup && !mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-black text-dtsc-ink">Groupes</h2>
-            <p className="text-sm text-dtsc-muted">Espaces dont vous êtes membre.</p>
+          <div className="min-w-0">
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-600">Mes collaborateurs</p>
+            <h2 className="truncate text-lg font-black text-dtsc-ink">Groupes</h2>
           </div>
-          <Button type="button" size="icon" onClick={() => setGroupDialog("create")} className="rounded-xl bg-[#002b5b] text-white">
+          <Button type="button" size="icon" onClick={() => setGroupDialog("create")} className="h-10 w-10 rounded-full bg-[#002b5b] text-white" aria-label="Créer un groupe">
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -543,101 +547,84 @@ export function CollaboratorsWorkspace({
           </div>
         )}
         <div className="mt-3 sm:mt-4">
-          <ListControls
-            query={groupList.query}
-            onQueryChange={groupList.setQuery}
-            page={groupList.page}
-            pageCount={groupList.pageCount}
-            totalCount={groupList.totalCount}
-            filteredCount={groupList.filteredCount}
+          <SearchBar
+            value={groupList.query}
+            onChange={groupList.setQuery}
             placeholder="Rechercher un groupe..."
-            onPageChange={groupList.setPage}
+            ariaLabel="Rechercher un groupe collaboratif"
           />
         </div>
-        <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5 sm:mt-4 sm:pr-1">
+        <div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-0.5 sm:pr-1">
           {groupList.paginatedItems.map((group) => {
             const groupActiveCall = group.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE");
             const activeParticipantCount = groupActiveCall?.participants?.filter((participant) => participant.status === "JOINED").length || 0;
             const unreadMessageCount = group.unreadMessageCount || 0;
             const unreadMentionCount = group.unreadMentionCount || 0;
+            const latestMessage = group.messages[0];
+            const preview = groupActiveCall
+              ? `Appel ${groupActiveCall.callType === "VIDEO" ? "video" : "audio"} · ${activeParticipantCount} en ligne`
+              : group.unreadMentionPreview || (latestMessage ? `${latestMessage.author.name}: ${latestMessage.content}` : "Aucun message recent.");
             return (
-            <button
-              key={group.id}
-              type="button"
-              onClick={() => {
-                setActiveGroupId(group.id);
-                setMobileGroupListOpen(false);
-              }}
-              className={cn(
-                "w-full rounded-[1.35rem] border p-3 text-left transition sm:p-4",
-                unreadMessageCount || unreadMentionCount ? "border-cyan-300 bg-cyan-400/10 shadow-[0_14px_40px_rgba(0,186,217,0.12)]" : activeGroupId === group.id ? "border-cyan-300 bg-cyan-400/10" : "border-dtsc-border bg-dtsc-page hover:border-cyan-300"
-              )}
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate font-black text-dtsc-ink">{group.name}</span>
-                <span className="flex shrink-0 items-center gap-1">
-                  {groupActiveCall && <span className="rounded-full bg-emerald-400/18 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-emerald-600">Live</span>}
-                  {Boolean(unreadMentionCount) && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[0.68rem] font-black text-[#001736]">@ {unreadMentionCount}</span>}
-                  {Boolean(unreadMessageCount) && <span className="flex min-w-5 items-center justify-center rounded-full bg-cyan-300 px-1.5 py-0.5 text-[0.68rem] font-black text-[#001736]">{unreadMessageCount > 99 ? "99+" : unreadMessageCount}</span>}
-                </span>
-              </span>
-              <span className="mt-1 block text-xs text-dtsc-muted">{formatEnumLabel(group.groupType)} · {group._count?.members ?? group.members.length} membres · {group._count?.messages ?? 0} messages</span>
-              {groupActiveCall && (
-                <span className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-400/10 px-2.5 py-1.5 text-[0.68rem] font-black text-emerald-700 dark:text-emerald-200">
-                  {groupActiveCall.callType === "VIDEO" ? <Video className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
-                  Appel {groupActiveCall.callType === "VIDEO" ? "vidéo" : "audio"} · {activeParticipantCount} en ligne
-                </span>
-              )}
-              <span className={cn("mt-2 block truncate text-xs", unreadMessageCount || unreadMentionCount ? "font-bold text-cyan-600" : "text-dtsc-muted")}>{group.unreadMentionPreview || group.messages[0]?.content || group.description || "Aucun message récent."}</span>
-            </button>
+              <ConversationListItem
+                key={group.id}
+                id={group.id}
+                type="group"
+                title={group.name}
+                preview={preview}
+                timestamp={groupActiveCall ? "Live" : latestMessage ? formatRelativeUserDateTime(latestMessage.createdAt, userPreferences) : undefined}
+                unreadCount={unreadMessageCount}
+                mentionCount={unreadMentionCount}
+                isActive={activeGroupId === group.id}
+                statusLabel={groupActiveCall ? "Appel en cours" : undefined}
+                onClick={() => {
+                  setActiveGroupId(group.id);
+                  setMobileGroupListOpen(false);
+                }}
+              />
             );
           })}
+          {!groupList.filteredCount && (
+            <p className="rounded-xl bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">Aucun groupe ne correspond à votre recherche.</p>
+          )}
         </div>
+        {groupList.pageCount > 1 && (
+          <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs font-bold text-dtsc-muted">
+            <Button type="button" size="sm" variant="outline" onClick={() => groupList.setPage(Math.max(1, groupList.page - 1))} disabled={groupList.page <= 1} className="h-8 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue">Préc.</Button>
+            <span>{groupList.page}/{groupList.pageCount}</span>
+            <Button type="button" size="sm" variant="outline" onClick={() => groupList.setPage(Math.min(groupList.pageCount, groupList.page + 1))} disabled={groupList.page >= groupList.pageCount} className="h-8 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue">Suiv.</Button>
+          </div>
+        )}
+        <FloatingActionButton label="Créer un groupe" onClick={() => setGroupDialog("create")} />
       </aside>
 
-      <section className={cn("dtsc-card h-full min-h-0 min-w-0 flex-col overflow-hidden", activeGroup && mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
+      <section className={cn("h-full min-h-0 min-w-0 flex-col overflow-hidden bg-dtsc-surface", activeGroup && mobileGroupListOpen ? "hidden xl:flex" : "flex")}>
         {activeGroup ? (
           <>
-            <div className="shrink-0 border-b border-dtsc-border p-2.5 sm:p-4">
-              <div className="flex items-center justify-between gap-3">
-                <Button type="button" variant="outline" size="icon" onClick={() => setMobileGroupListOpen(true)} className="shrink-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue xl:hidden">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setGroupDetailsOpen(true)}
-                  className="min-w-0 flex-1 rounded-2xl p-1.5 text-left transition hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300 sm:p-2"
-                  aria-label={`Voir les détails du groupe ${activeGroup.name}`}
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/15 text-sm font-black text-cyan-500 sm:h-11 sm:w-11">
-                      {activeGroup.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-lg font-black text-dtsc-ink sm:text-2xl">{activeGroup.name}</h2>
-                      <p className="truncate text-xs font-bold text-dtsc-muted">{activeGroup.members.length} membre(s) · {formatEnumLabel(activeGroup.status)} · Détails au clic</p>
-                    </div>
-                  </div>
-                </button>
-                <div className="flex gap-2">
+            <ConversationHeader
+              title={activeGroup.name}
+              subtitle={`${activeGroup.members.length} membre(s) · ${formatEnumLabel(activeGroup.status)}`}
+              type="group"
+              onBack={() => setMobileGroupListOpen(true)}
+              onTitleClick={() => setGroupDetailsOpen(true)}
+              backButtonClassName="xl:hidden"
+              actions={(
+                <>
                   {activeCall ? (
-                    <Button type="button" onClick={() => joinGroupCall(activeCall)} disabled={callJoining} className="rounded-xl bg-cyan-500 text-[#001736] hover:bg-cyan-300">
+                    <Button type="button" onClick={() => joinGroupCall(activeCall)} disabled={callJoining} className="hidden rounded-full bg-cyan-500 text-[#001736] hover:bg-cyan-300 sm:inline-flex">
                       <PhoneCall className="h-4 w-4" />
-                      Rejoindre l&apos;appel
+                      Rejoindre
                     </Button>
                   ) : (
                     <>
-                      <Button type="button" variant="outline" onClick={() => startGroupCall("AUDIO")} className="hidden rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex">
+                      <Button type="button" variant="outline" onClick={() => startGroupCall("AUDIO")} className="hidden rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex" aria-label="Démarrer un appel audio">
                         <Phone className="h-4 w-4" />
-                        Audio
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => startGroupCall("VIDEO")} className="hidden rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex">
+                      <Button type="button" variant="outline" onClick={() => startGroupCall("VIDEO")} className="hidden rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex" aria-label="Démarrer un appel vidéo">
                         <Video className="h-4 w-4" />
-                        Vidéo
                       </Button>
                     </>
                   )}
-                  {canManage && <Button type="button" variant="outline" onClick={() => setInviteDialog(true)} className="rounded-xl"><UserPlus className="h-4 w-4" /> Inviter</Button>}
+                  {canManage && <Button type="button" variant="outline" onClick={() => setInviteDialog(true)} className="hidden rounded-full sm:inline-flex"><UserPlus className="h-4 w-4" /> Inviter</Button>}
                   <ActionMenu
                     items={[
                       ...(activeCall
@@ -649,7 +636,11 @@ export function CollaboratorsWorkspace({
                             { key: "start-audio", label: "Démarrer un appel audio", icon: Phone, onSelect: () => startGroupCall("AUDIO") },
                             { key: "start-video", label: "Démarrer un appel vidéo", icon: Video, onSelect: () => startGroupCall("VIDEO") },
                           ]),
-                      ...(canManage ? [{ key: "edit", label: "Modifier le groupe", icon: Pencil, onSelect: () => setGroupDialog("edit") }] : []),
+                      ...(canManage ? [
+                        { key: "invite", label: "Inviter des membres", icon: UserPlus, onSelect: () => setInviteDialog(true) },
+                        { key: "edit", label: "Modifier le groupe", icon: Pencil, onSelect: () => setGroupDialog("edit") },
+                      ] : []),
+                      { key: "details", label: "Infos du groupe", icon: Eye, onSelect: () => setGroupDetailsOpen(true) },
                       { key: "share", label: "Partager une conversation", icon: MessageSquare, onSelect: () => setShareDialog(true) },
                       { key: "support", label: "Contacter l'équipe DTSC", icon: Send, onSelect: async () => {
                         const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/contact-support`, { method: "POST" });
@@ -661,9 +652,9 @@ export function CollaboratorsWorkspace({
                         : [{ key: "leave-group", label: "Quitter le groupe", icon: Archive, onSelect: archiveOrLeaveGroup }]),
                     ]}
                   />
-                </div>
-              </div>
-            </div>
+                </>
+              )}
+            />
             {activeCall && (
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-black text-cyan-700 dark:text-cyan-200 sm:px-4">
                 <span className="min-w-0 truncate">Appel {activeCall.callType === "VIDEO" ? "vidéo" : "audio"} · {formatCallDurationFromStart(activeCall.startedAt)} · {activeCall.participants?.filter((participant) => participant.status === "JOINED").length || 0} connecté(s)</span>
@@ -1090,36 +1081,41 @@ function MessageThread({
         ))}
         {!messages.length && <p className="rounded-xl bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun message dans ce groupe.</p>}
       </div>
-      <form onSubmit={sendMessage} className="relative shrink-0 border-t border-dtsc-border p-3 sm:p-4">
-        {replyTo && (
-          <div className="mb-3 flex items-start justify-between gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
-            <div className="min-w-0">
-              <p className="font-black">Réponse à {replyTo.author.name}</p>
-              <p className="mt-1 line-clamp-2 text-xs opacity-80">{replyTo.deletedAt ? "Message supprimé." : replyTo.content}</p>
-            </div>
-            <button type="button" onClick={() => setReplyTo(null)} className="rounded-lg p-1 text-dtsc-blue hover:bg-white/40" aria-label="Annuler la réponse">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-        {mentionSuggestions.length > 0 && (
-          <div className="absolute bottom-20 left-4 z-20 w-[min(28rem,calc(100%-2rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_18px_60px_rgba(0,23,54,0.18)]">
-            {mentionSuggestions.map((member) => {
-              const color = getParticipantColor(member.userId);
-              return (
-                <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-dtsc-soft">
-                  <span className={cn("flex h-8 w-8 items-center justify-center rounded-full font-black", color.bgClassName, color.textClassName)}>{member.user.name.slice(0, 2).toUpperCase()}</span>
-                  <span><span className="block font-bold text-dtsc-ink">{member.user.name}</span><span className="text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span>
+      <ConversationComposer
+        value={content}
+        onChange={setContent}
+        onSubmit={sendMessage}
+        placeholder="Écrire un message ou mentionner @collaborateur..."
+        className="relative"
+        before={(
+          <>
+            {replyTo && (
+              <div className="mb-3 flex items-start justify-between gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-[#001736] dark:border-cyan-400/40 dark:bg-[#08223a] dark:text-cyan-50">
+                <div className="min-w-0">
+                  <p className="font-black">Réponse à {replyTo.author.name}</p>
+                  <p className="mt-1 line-clamp-2 text-xs opacity-80">{replyTo.deletedAt ? "Message supprimé." : replyTo.content}</p>
+                </div>
+                <button type="button" onClick={() => setReplyTo(null)} className="rounded-lg p-1 text-dtsc-blue hover:bg-white/40" aria-label="Annuler la réponse">
+                  <X className="h-4 w-4" />
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            )}
+            {mentionSuggestions.length > 0 && (
+              <div className="absolute bottom-20 left-4 z-20 w-[min(28rem,calc(100%-2rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[0_18px_60px_rgba(0,23,54,0.18)]">
+                {mentionSuggestions.map((member) => {
+                  const color = getParticipantColor(member.userId);
+                  return (
+                    <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-dtsc-soft">
+                      <span className={cn("flex h-8 w-8 items-center justify-center rounded-full font-black", color.bgClassName, color.textClassName)}>{member.user.name.slice(0, 2).toUpperCase()}</span>
+                      <span><span className="block font-bold text-dtsc-ink">{member.user.name}</span><span className="text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
-        <div className="flex gap-2 sm:gap-3">
-          <Input value={content} onChange={(event) => setContent(event.target.value)} placeholder="Écrire un message ou mentionner @collaborateur..." className="rounded-xl bg-dtsc-page" required />
-          <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /></Button>
-        </div>
-      </form>
+      />
     </div>
   );
 }

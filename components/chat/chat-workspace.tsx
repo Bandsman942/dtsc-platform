@@ -1,16 +1,22 @@
 "use client";
 
-import { Copy, FolderKanban, FolderPlus, Info, Loader2, Menu, Pencil, Plus, Send, Share2, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
+import { Copy, FolderKanban, FolderPlus, Info, Loader2, Pencil, Plus, Share2, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
+import { ConversationComposer } from "@/components/chat/ConversationComposer";
+import { ConversationEmptyState } from "@/components/chat/ConversationEmptyState";
+import { ConversationHeader } from "@/components/chat/ConversationHeader";
+import { ConversationListItem } from "@/components/chat/ConversationListItem";
+import { ConversationLayout } from "@/components/chat/ConversationLayout";
+import { FloatingActionButton } from "@/components/chat/FloatingActionButton";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { SearchBar } from "@/components/chat/SearchBar";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ListControls } from "@/components/ui/list-controls";
 import { toastError, toastInfo, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
-import { getParticipantColor } from "@/lib/participant-colors";
 import { formatRelativeUserDateTime, formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
@@ -375,12 +381,12 @@ export function ChatWorkspace({
   }
 
   const historyPanel = (
-    <aside className="dtsc-card flex h-full min-h-0 flex-col overflow-hidden p-3 sm:p-4">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden px-3 py-3 sm:px-4">
       <div className="flex items-center justify-between gap-2">
-        <Button onClick={createConversation} className="h-11 flex-1 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-          <Plus className="h-4 w-4" />
-          Nouvelle conversation
-        </Button>
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-600">Assistant DTSC</p>
+          <h2 className="truncate text-lg font-black text-dtsc-ink">Conversations</h2>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -392,21 +398,17 @@ export function ChatWorkspace({
           <FolderPlus className="h-4 w-4" />
         </Button>
       </div>
-      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 sm:mt-4 sm:space-y-3">
+      <div className="mt-3">
         {conversations.length > 0 && (
-          <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
-            <ListControls
-              query={conversationList.query}
-              onQueryChange={conversationList.setQuery}
-              page={conversationList.page}
-              pageCount={conversationList.pageCount}
-              totalCount={conversationList.totalCount}
-              filteredCount={conversationList.filteredCount}
-              placeholder="Rechercher une conversation..."
-              onPageChange={conversationList.setPage}
-            />
-          </div>
+          <SearchBar
+            value={conversationList.query}
+            onChange={conversationList.setQuery}
+            placeholder="Rechercher une conversation..."
+            ariaLabel="Rechercher une conversation DTSC"
+          />
         )}
+      </div>
+      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {Object.entries(groupedConversations).map(([projectName, items]) => {
           const project = projects.find((item) => item.name === projectName);
           return (
@@ -444,24 +446,19 @@ export function ChatWorkspace({
                 )}
               </div>
               {items.map((conversation) => (
-                <button
+                <ConversationListItem
                   key={conversation.id}
+                  id={conversation.id}
+                  type="assistant"
+                  title={conversation.title}
+                  preview={`${conversation._count?.messages ?? 0} messages`}
+                  timestamp={formatRelativeUserDateTime(conversation.updatedAt, userPreferences)}
+                  isActive={activeConversationId === conversation.id}
                   onClick={() => {
                     setActiveConversationId(conversation.id);
                     setHistoryOpen(false);
                   }}
-                  className={cn(
-                    "w-full rounded-xl px-3 py-3 text-left text-sm transition",
-                    activeConversationId === conversation.id
-                      ? "border-l-4 border-cyan-400 bg-slate-100 text-[#001736]"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-[#001736]"
-                  )}
-                >
-                  <span className="block truncate font-medium">{conversation.title}</span>
-                  <span className="text-xs text-slate-500">
-                    {conversation._count?.messages ?? 0} messages · {formatRelativeUserDateTime(conversation.updatedAt, userPreferences)}
-                  </span>
-                </button>
+                />
               ))}
               {!items.length && (
                 <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
@@ -477,6 +474,13 @@ export function ChatWorkspace({
           </p>
         )}
       </div>
+      {conversationList.pageCount > 1 && (
+        <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs font-bold text-dtsc-muted">
+          <Button type="button" size="sm" variant="outline" onClick={() => conversationList.setPage(Math.max(1, conversationList.page - 1))} disabled={conversationList.page <= 1} className="h-8 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue">Préc.</Button>
+          <span>{conversationList.page}/{conversationList.pageCount}</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => conversationList.setPage(Math.min(conversationList.pageCount, conversationList.page + 1))} disabled={conversationList.page >= conversationList.pageCount} className="h-8 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue">Suiv.</Button>
+        </div>
+      )}
       <div className="mt-4 shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-xs text-dtsc-muted">
         <p className="font-black text-dtsc-ink">Usage journalier</p>
         <div className="mt-3 space-y-3">
@@ -489,12 +493,12 @@ export function ChatWorkspace({
           </div>
         )}
       </div>
-    </aside>
+      <FloatingActionButton label="Nouvelle conversation DTSC" onClick={createConversation} icon={<Plus className="h-5 w-5" />} />
+    </div>
   );
 
   return (
-    <div className="relative grid h-[calc(100dvh-7.25rem)] min-h-0 gap-3 sm:h-[calc(100dvh-8rem)] lg:h-[calc(100vh-7rem)] lg:grid-cols-[320px_1fr]">
-      <div className="hidden min-h-0 lg:block">{historyPanel}</div>
+    <ConversationLayout sidebar={historyPanel} sidebarOpen={false}>
       {historyOpen && (
         <div className="fixed inset-0 z-40 bg-[#001736]/55 backdrop-blur-sm lg:hidden" onClick={() => setHistoryOpen(false)}>
           <div className="h-full w-[min(92vw,24rem)] p-3" onClick={(event) => event.stopPropagation()}>
@@ -508,21 +512,13 @@ export function ChatWorkspace({
         </div>
       )}
 
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-[1.65rem] border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-4">
-          <Button type="button" variant="outline" size="icon" onClick={() => setHistoryOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue lg:hidden" aria-label="Ouvrir les conversations">
-            <Menu className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold text-[#001736] sm:text-xl">
-              {activeConversation?.title || "Assistant DTSC"}
-            </h1>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-[#d5e3fd] px-2.5 py-1 text-xs font-bold text-[#002b5b]">Assistant IA DTSC</span>
-              <span className="text-xs font-medium text-slate-500">En ligne</span>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
+      <section className="flex h-full min-h-0 flex-col overflow-hidden bg-dtsc-surface">
+        <ConversationHeader
+          title={activeConversation?.title || "Assistant DTSC"}
+          subtitle="Assistant IA DTSC · En ligne"
+          type="assistant"
+          onBack={() => setHistoryOpen(true)}
+          actions={(
             <ActionMenu
               label="Actions de la conversation"
               items={[
@@ -534,61 +530,29 @@ export function ChatWorkspace({
                 { key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => setDeleteOpen(true), disabled: !activeConversation },
               ]}
             />
-          </div>
-        </div>
-
-        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#faf9fe] px-2.5 py-2.5 sm:px-4 sm:py-4 lg:px-7">
+          )}
+        />
+        <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-dtsc-page px-2.5 py-3 sm:px-4 sm:py-4 lg:px-7">
           {!messages.length && (
-            <div className="mx-auto flex h-full max-w-2xl flex-col justify-center text-center">
-              <p className="text-3xl font-bold text-[#001736]">Comment DTSC peut vous aider ?</p>
-              <p className="mt-3 leading-7 text-slate-600">
-                Décrivez votre besoin en transformation numérique, automatisation, data, application métier ou IA.
-              </p>
-            </div>
+            <ConversationEmptyState title="Aucune conversation IA active." description="Demarrez une discussion avec l'assistant DTSC pour cadrer un besoin numerique, data ou automatisation." />
           )}
           <div className="space-y-3 sm:space-y-5">
             {messages.map((message) => {
-              const participantColor = getParticipantColor(message.role === "assistant" ? "dtsc-assistant" : "current-user");
               return (
-              <div key={message.id} className={cn("flex gap-3", message.role === "user" && "justify-end")}>
-                {message.role === "assistant" && (
-                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", participantColor.bgClassName, participantColor.textClassName)}>
-                    <BotIcon />
-                  </div>
-                )}
-                <div
-                  className={cn(
-                    "group max-w-[92%] rounded-2xl px-3 py-2.5 text-sm leading-6 shadow-[0_4px_20px_rgba(0,43,91,0.05)] sm:max-w-[88%] sm:px-4 sm:py-3",
-                    message.role === "user"
-                      ? "rounded-tr-sm bg-[#002b5b] text-white"
-                      : "rounded-tl-sm bg-white text-slate-800"
-                  )}
-                >
-                  <p className="mb-1 text-xs font-black" style={{ color: message.role === "user" ? "#a5f3fc" : participantColor.hex }}>
-                    {message.role === "assistant" ? "Assistant DTSC" : "Vous"}
-                  </p>
-                  {message.role === "assistant" ? (
-                    <div className="relative">
-                      <div className="dtsc-assistant-markdown">
-                        <Streamdown>{message.content || "..."}</Streamdown>
-                      </div>
-                    </div>
-                  ) : (
-                    message.content
-                  )}
-                  {message.createdAt && (
-                    <p className={cn("mt-2 text-[0.68rem] font-semibold", message.role === "user" ? "text-white/70" : "text-slate-500")}>
-                      {formatRelativeUserDateTime(message.createdAt, userPreferences)}
-                    </p>
-                  )}
-                  {message.role === "assistant" && message.content && !isStreaming && (
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
+                <MessageBubble
+                  key={message.id}
+                  role={message.role === "assistant" ? "assistant" : message.role === "system" ? "system" : "user"}
+                  author={message.role === "assistant" ? "Assistant DTSC" : "Vous"}
+                  initials={message.role === "assistant" ? "AI" : "VO"}
+                  meta={message.createdAt ? formatRelativeUserDateTime(message.createdAt, userPreferences) : undefined}
+                  actions={message.role === "assistant" && message.content && !isStreaming ? (
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => reactToAssistantMessage(message, 1)}
                         className={cn(
                           "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-black transition",
-                          message.feedbackValue === 1 ? "bg-cyan-100 text-[#002b5b]" : "bg-slate-50 text-slate-500 hover:bg-cyan-50 hover:text-[#002b5b]"
+                          message.feedbackValue === 1 ? "bg-cyan-100 text-[#002b5b]" : "bg-dtsc-page text-dtsc-muted hover:bg-cyan-50 hover:text-[#002b5b]"
                         )}
                         aria-label="Aimer la réponse"
                       >
@@ -600,7 +564,7 @@ export function ChatWorkspace({
                         onClick={() => reactToAssistantMessage(message, -1)}
                         className={cn(
                           "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-black transition",
-                          message.feedbackValue === -1 ? "bg-rose-100 text-rose-700" : "bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-700"
+                          message.feedbackValue === -1 ? "bg-rose-100 text-rose-700" : "bg-dtsc-page text-dtsc-muted hover:bg-rose-50 hover:text-rose-700"
                         )}
                         aria-label="Ne pas aimer la réponse"
                       >
@@ -610,21 +574,23 @@ export function ChatWorkspace({
                       <button
                         type="button"
                         onClick={() => copyAssistantResponse(message)}
-                        className="inline-flex h-8 items-center gap-1 rounded-full bg-slate-50 px-2.5 text-xs font-black text-slate-500 transition hover:bg-cyan-50 hover:text-[#002b5b]"
+                        className="inline-flex h-8 items-center gap-1 rounded-full bg-dtsc-page px-2.5 text-xs font-black text-dtsc-muted transition hover:bg-cyan-50 hover:text-[#002b5b]"
                         aria-label="Copier la réponse"
                       >
                         <Copy className="h-3.5 w-3.5" />
                         {copiedMessageId === message.id ? "Copié" : "Copier"}
                       </button>
                     </div>
+                  ) : null}
+                >
+                  {message.role === "assistant" ? (
+                    <div className="dtsc-assistant-markdown">
+                      <Streamdown>{message.content || "..."}</Streamdown>
+                    </div>
+                  ) : (
+                    message.content
                   )}
-                </div>
-                {message.role === "user" && (
-                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold", participantColor.bgClassName, participantColor.textClassName)}>
-                    VO
-                  </div>
-                )}
-              </div>
+                </MessageBubble>
               );
             })}
             {isStreaming && (
@@ -636,23 +602,15 @@ export function ChatWorkspace({
           </div>
         </div>
 
-        <form onSubmit={sendMessage} className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
-          <p className="mb-2 hidden text-center text-[0.72rem] font-medium text-slate-500 sm:block">
-            Le chatbot DTSC peut se tromper. Vérifiez les informations importantes avant toute décision.
-          </p>
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)] sm:gap-3 sm:p-2">
-            <Input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Écrivez votre demande..."
-              className="h-11 border-0 bg-transparent text-slate-900 focus-visible:ring-0"
-              disabled={limitReached}
-            />
-            <Button type="submit" size="icon" className="h-11 w-11 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]" disabled={!input.trim() || isStreaming || limitReached}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </form>
+        <ConversationComposer
+          value={input}
+          onChange={setInput}
+          onSubmit={sendMessage}
+          placeholder="Écrivez votre demande..."
+          disabled={limitReached}
+          sending={isStreaming}
+          helper="Le chatbot DTSC peut se tromper. Vérifiez les informations importantes avant toute décision."
+        />
       </section>
       <Dialog open={infoOpen} title="Infos sur la conversation" onClose={() => setInfoOpen(false)}>
         {activeConversation && (
@@ -747,7 +705,7 @@ export function ChatWorkspace({
       >
         <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression de cette conversation.</p>
       </Dialog>
-    </div>
+    </ConversationLayout>
   );
 }
 
@@ -764,10 +722,6 @@ function formatResetAt(resetAt?: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function BotIcon() {
-  return <span className="text-sm font-black">AI</span>;
 }
 
 function InfoCard({ label, value }: { label: string; value: string }) {
