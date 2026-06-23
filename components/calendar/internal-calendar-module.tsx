@@ -9,6 +9,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { translate } from "@/lib/i18n";
 import type { UserDatePreferences } from "@/lib/user-format";
@@ -111,6 +112,7 @@ export function InternalCalendarModule({
   const [eventTemplate, setEventTemplate] = useState<CalendarEventTemplate | null>(null);
   const [eventToCancel, setEventToCancel] = useState<CalendarEventItem | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  useToastMessage(statusMessage);
   const locale = userPreferences.locale || "fr";
   const visibleEvents = useMemo(() => filterEventsByView(events, activeView), [activeView, events]);
   const eventList = useSmartList({
@@ -212,7 +214,6 @@ export function InternalCalendarModule({
             </Button>
           </div>
         </div>
-        {statusMessage && <p className="mt-4 break-words rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-700 dark:text-cyan-100">{statusMessage}</p>}
       </section>
 
       <Accordion>
@@ -486,6 +487,7 @@ function EventFormDialog({
   const [message, setMessage] = useState("");
   const [conflicts, setConflicts] = useState<Array<{ message: string; severity: string }>>([]);
   const [allowConflicts, setAllowConflicts] = useState(false);
+  useToastMessage(conflicts.length === 0 ? message : "");
   const defaultOwner = event?.ownerCollaboratorId || template?.ownerCollaboratorId || context.employeeId || collaborators[0]?.id || "";
   const defaultEventType = event?.eventType || template?.eventType || "Tâche";
   const templateParticipants = template?.participantIds?.length ? template.participantIds : [defaultOwner];
@@ -599,7 +601,6 @@ function EventFormDialog({
             )}
           </div>
         )}
-        {message && conflicts.length === 0 && <p className="rounded-2xl bg-cyan-400/10 p-3 text-sm font-bold text-cyan-700 dark:text-cyan-100">{message}</p>}
         <div className="flex flex-col justify-end gap-2 sm:flex-row">
           <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">{translate(locale, "common.cancel")}</Button>
           <Button type="submit" className="rounded-xl bg-dtsc-navy text-white">{translate(locale, "common.save")}</Button>
@@ -702,6 +703,7 @@ function AvailabilityFormDialog({
 }) {
   const [message, setMessage] = useState("");
   const [recurrenceType, setRecurrenceType] = useState(availability?.recurrenceType || "Aucune");
+  useToastMessage(message);
   const defaultOwner = availability?.collaboratorId || context.employeeId || collaborators[0]?.id || "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -801,7 +803,6 @@ function AvailabilityFormDialog({
         <FormField label="Notes" hint="Ajoutez une précision utile pour comprendre cette disponibilité.">
           <textarea name="notes" defaultValue={availability?.notes || ""} placeholder={translate(locale, "calendar.fields.notes")} className="min-h-24 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink outline-none focus:ring-2 focus:ring-cyan-300" />
         </FormField>
-        {message && <p className="break-words rounded-2xl bg-red-500/10 p-3 text-sm font-bold text-red-600">{message}</p>}
         <div className="flex flex-col justify-end gap-2 sm:flex-row">
           <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">{translate(locale, "common.cancel")}</Button>
           <Button type="submit" className="rounded-xl bg-dtsc-navy text-white">{translate(locale, "common.save")}</Button>

@@ -2,6 +2,12 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-06-23
+
+### Amélioré
+
+- Centralisation des confirmations et erreurs client dans un `ToastProvider` global avec notifications applicatives accessibles, tonalités explicites, expiration automatique et remplacement des anciens messages inline sur les principaux parcours privés, admin, chatbot, abonnements, notifications, support, Entreprise, Santé et Pharmacie.
+
 ## 2026-06-16
 
 ### Corrigé

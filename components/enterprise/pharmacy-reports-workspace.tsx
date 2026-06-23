@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Row = Record<string, string | number | boolean | null>;
 type Section = { title: string; description: string; metrics: Array<{ label: string; value: string | number; sensitive?: boolean }>; rows: Row[] };
 type Option = { id: string; label: string };
@@ -21,7 +22,8 @@ const help: Record<string, string> = { start: "Début de la période analysée."
 const date = (value: string) => value ? new Date(value).toLocaleDateString("fr-FR") : "";
 
 export function PharmacyReportsWorkspace({ organizationId }: { organizationId: string }) {
-  const [active, setActive] = useState("overview"); const [filters, setFilters] = useState<Filters>(emptyFilters); const [data, setData] = useState<Data | null>(null); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [saveOpen, setSaveOpen] = useState(false); const [viewName, setViewName] = useState(""); const [snapshotName, setSnapshotName] = useState("");
+  const [active, setActive] = useState("overview"); const [filters, setFilters] = useState<Filters>(emptyFilters); const [data, setData] = useState<Data | null>(null); const [message, setMessage] = useState("");
+  useToastMessage(message); const [busy, setBusy] = useState(false); const [saveOpen, setSaveOpen] = useState(false); const [viewName, setViewName] = useState(""); const [snapshotName, setSnapshotName] = useState("");
   const load = useCallback(async (nextFilters: Filters = filters) => { setBusy(true); const query = new URLSearchParams(Object.entries(nextFilters).filter((entry): entry is [string, string] => Boolean(entry[1]))); const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/reports?${query}`, { cache: "no-store" }); const body = await response.json().catch(() => null) as Data | { message?: string } | null; if (response.ok && body && "sections" in body) setData(body); else setMessage(body && "message" in body ? body.message || "Chargement impossible." : "Chargement impossible."); setBusy(false); }, [filters, organizationId]);
   useEffect(() => { void load(); }, [load]);
   const current = data?.sections[active]; const reportType = tabs.find((item) => item[0] === active)?.[2] || "PHARMACY_OVERVIEW";
@@ -38,7 +40,7 @@ export function PharmacyReportsWorkspace({ organizationId }: { organizationId: s
     {busy ? <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm font-bold text-dtsc-muted">Calcul des indicateurs réels en cours...</p> : current && <ReportSection section={current} />}
     {active === "custom" && <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h4 className="font-black text-dtsc-ink">Vues sauvegardées</h4><div className="mt-3 grid gap-2 md:grid-cols-2">{data?.savedViews.map((view) => <button key={view.id} type="button" onClick={() => applyView(view)} className="rounded-xl border border-dtsc-border p-3 text-left"><b>{view.name}</b><span className="block text-xs text-dtsc-muted">{view.reportType} · {view.visibility}</span></button>)}{!data?.savedViews.length && <Empty />}</div></section>}
     {active === "exports" && <section className="grid gap-4 lg:grid-cols-2"><History title="Historique des exports" rows={(data?.exports || []).map((item) => [item.reportName, `${item.format} · ${item.status} · ${date(item.exportedAt)}`])} /><History title="Snapshots décisionnels" rows={(data?.snapshots || []).map((item) => [item.snapshotName, `${item.reportType} · ${date(item.generatedAt)}`])} /><div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h4 className="font-black">Créer un snapshot du rapport actif</h4><Input className="mt-3" value={snapshotName} onChange={(event) => setSnapshotName(event.target.value)} placeholder="Nom du snapshot" /><Button className="mt-3" onClick={() => void snapshot()}>Créer le snapshot</Button></div></section>}
-    {message && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <Dialog open={saveOpen} title="Sauvegarder cette vue" description="La vue conserve le domaine et les filtres dans l'organisation active." onClose={() => setSaveOpen(false)}><Filter title="Nom facilement identifiable" help="Exemple : ventes mensuelles par produit."><Input value={viewName} onChange={(event) => setViewName(event.target.value)} /></Filter><Button className="mt-4" disabled={viewName.trim().length < 2} onClick={() => void saveView()}>Enregistrer la vue</Button></Dialog>
   </div>;
 }

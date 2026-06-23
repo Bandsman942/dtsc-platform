@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Opt = { id: string; name?: string; labelFr?: string; code?: string; stockUnit?: string; productId?: string; batchNumber?: string; status?: string; saleNumber?: string; customerName?: string | null; prescriptionId?: string | null; prescriptionNumber?: string; patientName?: string; receiptNumber?: string; eventNumber?: string; alertNumber?: string; title?: string };
 type Investigation = { id: string; incidentId: string; title: string; status: string; leadUserId: string | null; rootCause: string | null; conclusion: string | null; dueAt: string | null };
 type Capa = { id: string; incidentId: string; actionType: string; title: string; description: string; status: string; required: boolean; responsibleId: string | null; dueAt: string | null };
@@ -42,7 +43,7 @@ export function PharmacyQualityWorkspace({ organizationId }: { organizationId: s
       <Grid>{shown.map((item) => <IncidentCard key={item.id} item={item} product={item.productId ? productMap.get(item.productId) : undefined} batch={item.batchId ? batchMap.get(item.batchId) : undefined} actions={incidentActions(item, setDetail, action)} />)}</Grid>
       {!shown.length && <Empty />}
     </>}
-    {message && <p className="mt-3 rounded-xl border p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <IncidentForm open={formOpen} close={() => setFormOpen(false)} form={form} setForm={setForm} data={data} save={save} />
     <Dialog open={Boolean(detail)} title={detail ? `${detail.incidentNumber} · ${detail.title}` : "Détail incident"} description="Traitement qualité persistant et auditable." onClose={() => setDetail(null)} className="h-[96dvh] max-w-6xl">{detail && <IncidentDetail item={detail} data={data} comment={comment} setComment={setComment} assignee={assignee} setAssignee={setAssignee} action={action} reload={load} organizationId={organizationId} />}</Dialog>
   </section>;

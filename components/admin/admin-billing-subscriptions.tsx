@@ -23,6 +23,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -141,6 +142,7 @@ export function AdminBillingSubscriptions({
   const [historyTarget, setHistoryTarget] = useState<OrganizationBillingItem | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  useToastMessage(message);
   const summaryCards = [
     { label: "Entreprises", value: summary.organizations, icon: CreditCard },
     { label: "Actifs", value: summary.active, icon: CheckCircle2 },
@@ -254,8 +256,6 @@ export function AdminBillingSubscriptions({
             onPageChange={subscriptionList.setPage}
           />
         </div>
-
-        {message && <p className="mt-4 rounded-lg border border-cyan-300/40 bg-cyan-400/10 p-3 text-sm font-bold text-dtsc-ink">{message}</p>}
 
         <div className="mt-4 grid gap-3">
           {subscriptionList.paginatedItems.map((organization) => {

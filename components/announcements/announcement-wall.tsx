@@ -10,6 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { translate } from "@/lib/i18n";
 import { formatEnumLabel } from "@/lib/labels";
@@ -88,6 +89,7 @@ export function AnnouncementWall({
   const [selectedTransferRecipientIds, setSelectedTransferRecipientIds] = useState<string[]>([]);
   const [reportAnnouncement, setReportAnnouncement] = useState<Announcement | null>(null);
   const [openCommentIds, setOpenCommentIds] = useState<string[]>([]);
+  useToastMessage(feedback);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
   const filteredTransferRecipients = useMemo(() => {
@@ -625,9 +627,6 @@ export function AnnouncementWall({
             <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer le signalement</Button>
           </form>
         )}
-      </Dialog>
-      <Dialog open={Boolean(feedback)} title="Message DTSC" onClose={() => setFeedback("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
       </Dialog>
       <Dialog
         open={Boolean(deletingAnnouncement)}

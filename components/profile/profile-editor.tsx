@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 
 type ProfileData = {
   id: string;
@@ -96,6 +97,7 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  useToastMessage(message);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -287,13 +289,6 @@ export function ProfileEditor({ user }: { user: ProfileData }) {
           </section>
         </div>
       </form>
-      </Dialog>
-
-      <Dialog open={Boolean(message)} title="Profil utilisateur" onClose={() => setMessage("")}>
-        <div className="flex items-start gap-3">
-          <Camera className="mt-1 h-5 w-5 text-cyan-500" />
-          <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
-        </div>
       </Dialog>
     </>
   );

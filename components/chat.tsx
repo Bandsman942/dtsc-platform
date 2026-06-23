@@ -9,10 +9,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SendIcon, PlusIcon } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_MODEL } from "@/lib/constants";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
+
+import { useToastMessage } from "@/components/ui/use-toast-message";
 
 function ModelSelectorHandler({
   modelId,
@@ -43,6 +43,12 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId?: string }) {
   };
 
   const { messages, error, sendMessage, regenerate, setMessages, stop, status } = useChat();
+  const errorMessage = error
+    ? error.message.includes("OPENAI_API_KEY")
+      ? "Clé OpenAI absente. Ajoutez OPENAI_API_KEY dans .env.local puis redémarrez le serveur."
+      : "Une erreur est survenue pendant la génération de la réponse."
+    : "";
+  useToastMessage(errorMessage, "error");
 
   const hasMessages = messages.length > 0;
 
@@ -165,29 +171,14 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId?: string }) {
 
       {error && (
         <div className="max-w-4xl mx-auto w-full px-4 md:px-8 pb-4 animate-slide-down">
-          <Alert variant="destructive" className="flex flex-col items-end">
-            <div className="flex flex-row gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <AlertDescription className="dark:text-red-400 text-red-600">
-                {error.message.includes("OPENAI_API_KEY") ? (
-                  <div>
-                    Missing OpenAI API key. Add OPENAI_API_KEY to .env.local and
-                    restart the dev server.
-                  </div>
-                ) : (
-                  "An error occurred while generating the response."
-                )}
-              </AlertDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto transition-all duration-150 ease-out hover:scale-105"
-              onClick={() => regenerate()}
-            >
-              Retry
-            </Button>
-          </Alert>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto transition-all duration-150 ease-out hover:scale-105"
+            onClick={() => regenerate()}
+          >
+            Réessayer
+          </Button>
         </div>
       )}
 

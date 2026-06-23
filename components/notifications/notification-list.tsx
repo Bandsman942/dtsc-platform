@@ -7,6 +7,7 @@ import { Bell, CheckCircle2, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ListControls } from "@/components/ui/list-controls";
+import { toastError, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -143,7 +144,6 @@ function filterNotification(notification: NotificationItem, filterId: string): b
 export function NotificationList({ notifications }: { notifications: NotificationItem[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<NotificationItem | null>(null);
-  const [feedback, setFeedback] = useState("");
   const [clearOpen, setClearOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<(typeof notificationFilters)[number]["id"]>("all");
   const filteredNotifications = useMemo(
@@ -165,7 +165,6 @@ export function NotificationList({ notifications }: { notifications: Notificatio
 
   async function openNotification(notification: NotificationItem) {
     setSelected(notification);
-    setFeedback("");
     if (!notification.readAt) {
       await fetch(`/api/notifications/${notification.id}/read`, { method: "PATCH" });
       setSelected({ ...notification, readAt: new Date().toISOString() });
@@ -180,9 +179,10 @@ export function NotificationList({ notifications }: { notifications: Notificatio
     const response = await fetch(`/api/notifications/${selected.id}`, { method: "DELETE" });
     if (response.ok) {
       setSelected(null);
+      toastSuccess("Notification supprimée.");
       router.refresh();
     } else {
-      setFeedback("Impossible de supprimer cette notification.");
+      toastError("Impossible de supprimer cette notification.");
     }
   }
 
@@ -191,9 +191,10 @@ export function NotificationList({ notifications }: { notifications: Notificatio
     if (response.ok) {
       setClearOpen(false);
       setSelected(null);
+      toastSuccess("Notifications vidées.");
       router.refresh();
     } else {
-      setFeedback("Impossible de vider les notifications.");
+      toastError("Impossible de vider les notifications.");
     }
   }
 
@@ -303,7 +304,6 @@ export function NotificationList({ notifications }: { notifications: Notificatio
         {selected && (
           <div className="space-y-4">
             <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{formatNotificationText(selected.body)}</p>
-            {feedback && <div className="rounded-xl bg-dtsc-soft p-3 text-sm font-bold text-dtsc-blue">{feedback}</div>}
           </div>
         )}
       </Dialog>
@@ -324,9 +324,6 @@ export function NotificationList({ notifications }: { notifications: Notificatio
         }
       >
         <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression de toutes vos notifications. Les annonces, tickets et messages liés ne seront pas supprimés.</p>
-      </Dialog>
-      <Dialog open={Boolean(feedback) && !selected} title="Notifications DTSC" onClose={() => setFeedback("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
       </Dialog>
     </div>
   );

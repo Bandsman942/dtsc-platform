@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Product = {
   id: string;
   name: string;
@@ -238,6 +239,7 @@ export function PharmacyPrescriptionsWorkspace({ organizationId }: { organizatio
   const [detail, setDetail] = useState<Prescription | null>(null);
   const [form, setForm] = useState<FormState>(() => emptyForm(null));
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [saving, setSaving] = useState(false);
   const load = useCallback(async () => {
     const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/prescriptions`, { cache: "no-store" });
@@ -309,7 +311,7 @@ export function PharmacyPrescriptionsWorkspace({ organizationId }: { organizatio
           {!list.filteredCount && tab === "received" && <Empty />}
         </>
       )}
-      {message && <p className="mt-3 rounded-xl border border-dtsc-border p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
       <PrescriptionForm open={formOpen} close={() => setFormOpen(false)} form={form} setForm={setForm} dataset={dataset} save={save} saving={saving} />
       <Dialog open={Boolean(detail)} title={detail?.prescriptionNumber || "Détail ordonnance"} description="Contrôle pharmaceutique, rapprochement, dispensation et traçabilité." onClose={() => setDetail(null)} className="h-[96dvh] max-w-6xl">
         {detail && <PrescriptionDetail item={detail} products={dataset?.products || []} productMap={productMap} memberMap={memberMap} saleMap={saleMap} action={action} />}

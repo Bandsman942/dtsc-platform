@@ -121,6 +121,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
 - Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
+- Notifications applicatives globales pour confirmations, erreurs et informations client, avec toasts accessibles, fermeture manuelle et expiration automatique
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires scrollables, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert intelligent multi-destinataires, indicateurs, signalement, archivage et épinglage
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
 - Support conversationnel paginé avec réponses ciblées et CRUD non destructif des messages depuis les menus `...`.

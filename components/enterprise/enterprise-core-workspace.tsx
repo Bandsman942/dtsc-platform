@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type CoreRecord = {
   id: string;
   moduleCode: string;
@@ -87,6 +88,7 @@ export function EnterpriseCoreWorkspace({
   const [pendingAction, setPendingAction] = useState<{ record: CoreRecord; action: string } | null>(null);
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const list = useSmartList({
     items: records,
     pageSize: 12,
@@ -165,7 +167,7 @@ export function EnterpriseCoreWorkspace({
         ))}
       </div>
       {!list.filteredCount && <p className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-5 text-sm leading-6 text-dtsc-muted">Aucun élément n’est encore enregistré dans ce module. Créez le premier élément pour lancer un suivi assignable, commenté et auditable.</p>}
-      {message && <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
 
       <CoreCreateDialog open={formOpen} close={() => setFormOpen(false)} submit={createRecord} recordTypes={recordTypes} members={members} departments={departments} />
       <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || "Détail"} description="Historique récent et informations de suivi de cet élément." className="h-[92dvh] max-w-4xl">

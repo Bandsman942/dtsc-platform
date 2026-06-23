@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Option = { id: string; name?: string; title?: string; labelFr?: string; code?: string; stockUnit?: string; referencePurchasePrice?: string | null; productId?: string; supplierId?: string; batchNumber?: string; expiryDate?: string };
 type ReceiptBatch = { id: string; receiptLineId: string; batchId: string | null; batchNumber: string; expiryDate: string; receivedQuantity: string; createNewBatch: boolean; locationId: string | null };
 type ReceiptLine = { id: string; productId: string; orderedQuantity: string | null; previouslyReceivedQuantity: string | null; receivedQuantity: string; unit: string; purchasePrice: string | null; totalLine: string | null };
@@ -47,6 +48,7 @@ export function PharmacyReceiptsWorkspace({ organizationId }: { organizationId: 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [tab, setTab] = useState<Tab>("dashboard");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export function PharmacyReceiptsWorkspace({ organizationId }: { organizationId: 
     {tab === "discrepancies" && <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">{receipts.flatMap((receipt) => receipt.discrepancies.map((item) => <article key={item.id} className="dtsc-glass-list-item min-w-0 rounded-2xl p-4"><Badge value={item.criticality} /><h4 className="mt-2 break-words font-black text-dtsc-ink">{label(item.discrepancyType)}</h4><p className="text-xs text-dtsc-muted">{receipt.receiptNumber} · {label(item.status)}</p><p className="mt-2 text-sm text-dtsc-muted">{item.description}</p></article>))}</div>}
     {tab === "documents" && <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">{receipts.flatMap((receipt) => receipt.documents.map((document) => <article key={document.id} className="dtsc-glass-list-item rounded-2xl p-4"><FileText className="h-5 w-5 text-emerald-600" /><h4 className="mt-2 font-black text-dtsc-ink">{document.title}</h4><p className="text-xs text-dtsc-muted">{receipt.receiptNumber} · {document.documentType}</p></article>))}{!receipts.some((receipt) => receipt.documents.length) && <Empty text="Les documents de réception seront affichés ici après leur téléversement sécurisé depuis le module Documents." />}</div>}
     {tab === "history" && <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">{(dataset?.movements || []).map((movement) => <article key={movement.id} className="dtsc-glass-list-item rounded-2xl p-4"><Badge value={movement.movementType} /><p className="mt-2 font-black text-dtsc-ink">{label(movement.direction)} · {movement.quantity}</p><p className="text-xs text-dtsc-muted">{formatDate(movement.createdAt)}</p></article>)}</div>}
-    {message && <p className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <ReceiptFormDialog open={formOpen} form={form} setForm={setForm} dataset={dataset} editing={Boolean(editingId)} onClose={() => setFormOpen(false)} onSave={save} updateLine={updateLine} updateBatch={updateBatch} />
     <Dialog open={Boolean(detail)} title={detail?.receiptNumber || "Détail réception"} description="Détail, lots, écarts, documents et actions contrôlées." onClose={() => setDetail(null)} className="h-[94dvh] max-w-5xl">{detail && <ReceiptDetail receipt={detail} productName={productName} reason={actionReason} setReason={setActionReason} action={action} />}</Dialog>
   </section>;

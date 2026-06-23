@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, CreditCard, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toastError, toastInfo, toastSuccess } from "@/lib/client-toast";
 
 type Plan = {
   id: string;
@@ -26,18 +27,16 @@ export function BillingPlans({
 }) {
   const [walletId, setWalletId] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
-  const [message, setMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
 
   async function checkout(planId: string, priceUsd: number) {
     setSelectedPlan(planId);
-    setMessage("");
     if (priceUsd > 0 && !paymentAvailable) {
-      setMessage("Les abonnements payants sont momentanément en préparation. Le plan gratuit Découverte reste opérationnel.");
+      toastInfo("Les abonnements payants sont momentanément en préparation. Le plan gratuit Découverte reste opérationnel.", "Abonnements en préparation");
       return;
     }
     if (priceUsd > 0 && !walletId.trim()) {
-      setMessage("Saisissez votre numéro M-Pesa avant de continuer.");
+      toastError("Saisissez votre numéro M-Pesa avant de continuer.");
       return;
     }
 
@@ -51,15 +50,15 @@ export function BillingPlans({
     setIsPending(false);
 
     if (!response.ok) {
-      setMessage(body?.error || "Impossible de lancer le paiement.");
+      toastError(body?.error || "Impossible de lancer le paiement.");
       return;
     }
 
-    setMessage(
-      body.free
-        ? "Plan gratuit activé."
-        : `Paiement initié. Référence: ${body.paymentReference}. Confirmez la demande sur votre téléphone.`
-    );
+    if (body.free) {
+      toastSuccess("Plan gratuit activé.");
+    } else {
+      toastInfo(`Paiement initié. Référence: ${body.paymentReference}. Confirmez la demande sur votre téléphone.`, "Paiement initié");
+    }
   }
 
   return (
@@ -84,8 +83,6 @@ export function BillingPlans({
           Le plan gratuit ne demande pas de paiement. Pour les plans payants, la validation se fera sur le numéro mobile money renseigné.
         </p>
       </div>
-
-      {message && <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-dtsc-ink">{message}</p>}
 
       <div className="grid gap-4 lg:grid-cols-4">
         {plans.map((plan) => {

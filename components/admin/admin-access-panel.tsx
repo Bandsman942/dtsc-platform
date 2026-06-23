@@ -3,13 +3,14 @@
 import { useState, type FormEvent } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { adminBlocks, type AdminRoleAccess } from "@/lib/admin-access";
 
 const configurableRoles = ["MANAGER", "SUPPORT"] as const;
 
 export function AdminAccessPanel({ access }: { access: AdminRoleAccess }) {
   const [message, setMessage] = useState("");
+  useToastMessage(message);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,10 +72,6 @@ export function AdminAccessPanel({ access }: { access: AdminRoleAccess }) {
           </Button>
         </div>
       </form>
-
-      <Dialog open={Boolean(message)} title="Droits Administration" onClose={() => setMessage("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
-      </Dialog>
     </section>
   );
 }

@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { toastError, toastSuccess } from "@/lib/client-toast";
 
 export function SupportForm() {
   const router = useRouter();
-  const [message, setMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -17,7 +17,6 @@ export function SupportForm() {
     event.preventDefault();
     const form = event.currentTarget;
     setIsPending(true);
-    setMessage("");
 
     const payload = Object.fromEntries(new FormData(form).entries());
     try {
@@ -27,14 +26,18 @@ export function SupportForm() {
         body: JSON.stringify(payload),
       });
 
-      setMessage(response.ok ? "Demande transmise à l'équipe DTSC." : "Impossible d'envoyer la demande.");
+      if (response.ok) {
+        toastSuccess("Demande transmise à l'équipe DTSC.");
+      } else {
+        toastError("Impossible d'envoyer la demande.");
+      }
       if (response.ok) {
         form.reset();
         setOpen(false);
         router.refresh();
       }
     } catch {
-      setMessage("Impossible d'envoyer la demande.");
+      toastError("Impossible d'envoyer la demande.");
     } finally {
       setIsPending(false);
     }
@@ -51,7 +54,6 @@ export function SupportForm() {
           Créer un ticket
         </Button>
       </div>
-      {message && <p className="mt-3 break-words text-sm font-bold text-dtsc-blue">{message}</p>}
       <Dialog open={open} title="Créer un ticket support" description="Décrivez votre besoin avec assez de contexte pour permettre une réponse DTSC rapide et utile." onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
         <form onSubmit={submit} className="grid min-w-0 gap-4">
           <FormField label="Objet de la demande" hint="Résumez le sujet en une phrase claire.">

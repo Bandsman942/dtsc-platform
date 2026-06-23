@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Patient = {
   id: string; legacyRecordId: string | null; patientNumber: string; fullName: string; sex: string; birthDate: string | null;
   phonePrimary: string; phoneSecondary: string | null; email: string | null; address: string; city: string | null; country: string | null;
@@ -49,6 +50,7 @@ export function HealthPatientsWorkspace({ organizationId, activeModuleCodes, onO
   const [patients, setPatients] = useState<Patient[]>([]);
   const [permissions, setPermissions] = useState<Permissions>({ canCreate: false, canUpdate: false, canArchive: false, canViewSensitive: false });
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
@@ -107,7 +109,7 @@ export function HealthPatientsWorkspace({ organizationId, activeModuleCodes, onO
     <ListControls query={query} onQueryChange={setQuery} page={list.page} pageCount={list.pageCount} totalCount={patients.length} filteredCount={filtered.length} onPageChange={list.setPage} placeholder="Nom, téléphone ou identifiant patient..." />
     {loading ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{[1,2,3].map((id) => <div key={id} className="h-40 animate-pulse rounded-2xl bg-dtsc-page" />)}</div> : <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">{list.paginatedItems.map((patient) => <PatientCard key={patient.id} patient={patient} permissions={permissions} openDetail={openDetail} openEdit={openEdit} activeModuleCodes={activeModuleCodes} onOpenRelated={openRelated} />)}</div>}
     {!loading && !filtered.length && <div className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page p-6 text-center"><p className="font-black text-dtsc-ink">Aucun patient enregistré pour cette entreprise.</p><p className="mt-1 text-sm text-dtsc-muted">Enregistrez le premier patient pour relier ensuite ses rendez-vous, consultations et documents médicaux.</p></div>}
-    {message && <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <PatientForm open={formOpen} close={() => setFormOpen(false)} save={save} form={form} change={change} editing={editing} canViewSensitive={permissions.canViewSensitive} />
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? `${detail.patientNumber} · ${detail.fullName}` : "Détail patient"} description="Résumé administratif, informations médicales autorisées, activité liée et historique." className="h-[94dvh] max-w-6xl">{detail && <PatientDetail patient={detail} related={related} dispensations={dispensations} permissions={permissions} openEdit={openEdit} activeModuleCodes={activeModuleCodes} onOpenRelated={openRelated} />}</Dialog>
   </section>;

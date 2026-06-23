@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Building2, CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 export type EnterpriseInvitationItem = {
   id: string;
   organizationId: string;
@@ -32,6 +33,7 @@ export function EnterpriseInvitationsClient({ invitations }: { invitations: Ente
   const [items, setItems] = useState(invitations);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
+  useToastMessage(feedback);
   const [acceptedOrganizationId, setAcceptedOrganizationId] = useState<string | null>(null);
 
   async function switchToOrganization(organizationId: string) {
@@ -81,16 +83,11 @@ export function EnterpriseInvitationsClient({ invitations }: { invitations: Ente
 
   return (
     <div className="space-y-5">
-      {feedback && (
-        <div className="rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-4 text-sm font-bold text-dtsc-blue">
-          {feedback}
-          {acceptedOrganizationId && (
-            <Button type="button" onClick={() => void switchToOrganization(acceptedOrganizationId)} className="mt-3 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-              <ExternalLink className="h-4 w-4" />
-              Accéder à l&apos;entreprise
-            </Button>
-          )}
-        </div>
+      {acceptedOrganizationId && (
+        <Button type="button" onClick={() => void switchToOrganization(acceptedOrganizationId)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+          <ExternalLink className="h-4 w-4" />
+          Accéder à l&apos;entreprise
+        </Button>
       )}
       {items.map((invitation) => {
         const pending = pendingId === invitation.id;

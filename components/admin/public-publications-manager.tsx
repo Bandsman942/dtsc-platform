@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 import { sanitizeRichHtml } from "@/lib/rich-content";
@@ -60,6 +61,7 @@ export function PublicPublicationsManager({
   const [pendingDelete, setPendingDelete] = useState<Publication | null>(null);
   const [createPreviewHtml, setCreatePreviewHtml] = useState("");
   const [editingPreviewHtml, setEditingPreviewHtml] = useState("");
+  useToastMessage(message);
   const getPublicationSearchText = useCallback((publication: Publication) => {
     return [
       publication.title,
@@ -233,10 +235,6 @@ export function PublicPublicationsManager({
           {!items.length && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-5 text-sm text-dtsc-muted">Aucune publication publique enregistrée.</p>}
         </div>
       </div>
-
-      <Dialog open={Boolean(message)} title="Publication publique" onClose={() => setMessage("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
-      </Dialog>
 
       <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => {
         setEditing(null);

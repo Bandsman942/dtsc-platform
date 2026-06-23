@@ -24,11 +24,13 @@ import { HealthInsuranceWorkspace } from "@/components/enterprise/health-insuran
 import { HealthQualityWorkspace } from "@/components/enterprise/health-quality-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 const healthActivityModules = new Set(["CONSULTATIONS"]);
 
 export function EnterpriseActivitiesModule({ organization, blocks, requests, members, sectorRecords, workflows }: EnterpriseActivitiesDataset) {
   const [selectedBlockCode, setSelectedBlockCode] = useState(blocks[0]?.blockCode || "");
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [formOpen, setFormOpen] = useState(false);
   const selectedBlock = useMemo(() => blocks.find((block) => block.blockCode === selectedBlockCode) || null, [blocks, selectedBlockCode]);
 
@@ -74,7 +76,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         onMessage={setMessage}
       />
 
-      {message && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     </div>
   );
 }

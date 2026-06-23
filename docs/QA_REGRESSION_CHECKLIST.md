@@ -8,6 +8,13 @@ pnpm qa:regression
 
 La commande effectue des controles source-level sans dependance externe: middleware, redirects, routes Support, routes Enterprise, invitations entreprise, groupes, appels, notifications, calendrier et loaders. Elle ne remplace pas les tests manuels avec comptes reels de staging.
 
+## Notifications applicatives
+
+- [ ] Les succès, erreurs et informations des formulaires privés apparaissent dans un toast global en haut de l'écran, sans `alert`, `confirm` ou message inline résiduel.
+- [ ] Un toast peut être fermé manuellement, disparaît automatiquement et n'empêche pas l'utilisation des dialogues, menus `...`, formulaires ou fils de discussion.
+- [ ] Le même message peut réapparaître après une nouvelle tentative ou un reset de formulaire.
+- [ ] Les parcours Chatbot, Auth, Abonnements, Notifications, Support, Administration, Entreprise, Santé et Pharmacie affichent les erreurs serveur exploitables sans casser l'état courant.
+
 ## Mobile privé - panneaux de présentation
 
 - [ ] Sur mobile, le premier bloc des modules privés affiche uniquement la présentation du module et ne contient pas de KPI, filtre ou action principale.

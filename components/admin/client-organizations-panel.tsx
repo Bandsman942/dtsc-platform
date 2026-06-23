@@ -9,6 +9,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 type ClientOrganization = {
@@ -78,6 +79,7 @@ export function ClientOrganizationsPanel({
   const [editingOrganization, setEditingOrganization] = useState<ClientOrganization | null>(null);
   const [subscriptionOrganization, setSubscriptionOrganization] = useState<ClientOrganization | null>(null);
   const [organizationToDelete, setOrganizationToDelete] = useState<ClientOrganization | null>(null);
+  useToastMessage(message);
   const list = useSmartList({
     items: organizations,
     pageSize: 8,
@@ -376,8 +378,6 @@ export function ClientOrganizationsPanel({
         })}
         {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucune entreprise cliente trouvée.</p>}
       </div>
-      {message && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
-
       <OrganizationEditDialog
         organization={editingOrganization}
         users={activeUsers}

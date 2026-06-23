@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { playCallSound } from "@/components/calls/call-sounds";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { translate } from "@/lib/i18n";
@@ -159,6 +160,7 @@ export function CollaboratorsWorkspace({
   const [readInfo, setReadInfo] = useState<MessageReadInfo | null>(null);
   const [joinedCall, setJoinedCall] = useState<JoinedCall | null>(null);
   const [callJoining, setCallJoining] = useState(false);
+  useToastMessage(feedback);
   const trackedActiveCallIds = useRef<Set<string>>(new Set());
   const hasTrackedInitialCalls = useRef(false);
   const autoJoinCallIdRef = useRef(initialJoinCallId || "");
@@ -949,9 +951,6 @@ export function CollaboratorsWorkspace({
             </div>
           </div>
         )}
-      </Dialog>
-      <Dialog open={Boolean(feedback)} title="Message DTSC" onClose={() => setFeedback("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
       </Dialog>
     </div>
   );

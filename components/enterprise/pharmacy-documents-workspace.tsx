@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Opt = { id: string; name?: string; title?: string; productId?: string; batchNumber?: string; orderNumber?: string; receiptNumber?: string; saleNumber?: string; paymentNumber?: string; invoiceNumber?: string; prescriptionNumber?: string; eventNumber?: string; incidentNumber?: string; alertNumber?: string; cashSessionNumber?: string };
 type Link = { id: string; entityType: string; entityId: string; linkRole: string };
 type Version = { id: string; versionNumber: number; filename: string | null; mimeType: string | null; fileSize: number | null; uploadedAt: string; changeReason: string | null; isCurrent: boolean };
@@ -43,7 +44,7 @@ export function PharmacyDocumentsWorkspace({ organizationId }: { organizationId:
       {tab === "library" && <ListControls query={list.query} onQueryChange={list.setQuery} page={list.page} pageCount={list.pageCount} totalCount={list.totalCount} filteredCount={list.filteredCount} onPageChange={list.setPage} placeholder="Titre, numéro, type, catégorie, module, confidentialité..." />}
       <Grid>{(tab === "library" ? list.paginatedItems : shown).map((item) => <DocumentCard key={item.id} item={item} actions={documentActions(item, setDetail, action)} />)}</Grid>{!(tab === "library" ? list.paginatedItems : shown).length && <Empty />}
     </>}
-    {message && <p className="mt-3 rounded-xl border p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <DocumentForm open={formOpen} close={() => setFormOpen(false)} form={form} setForm={setForm} file={file} setFile={setFile} data={data} save={save} />
     <Dialog open={Boolean(detail)} title={detail?.title || "Détail document"} description="Fichier privé, liens métier, conformité, versions et audit." onClose={() => setDetail(null)} className="h-[96dvh] max-w-6xl">{detail && <DocumentDetail item={detail} organizationId={organizationId} action={action} />}</Dialog>
   </section>;

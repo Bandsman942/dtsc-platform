@@ -8,12 +8,14 @@ import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { formatEnumLabel } from "@/lib/labels";
 
 export function CreateUserForm() {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState(false);
+  useToastMessage(message);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,7 +43,6 @@ export function CreateUserForm() {
           Créer le compte
         </Button>
       </div>
-      {message && <p className="mt-3 text-sm font-bold text-dtsc-blue">{message}</p>}
       <Dialog open={open} title="Créer un compte utilisateur" description="Renseignez les informations nécessaires au compte. Les limites d'usage sont appliquées côté serveur." onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
           <FormField label="Nom complet" hint="Nom affiché dans l'application et les notifications.">

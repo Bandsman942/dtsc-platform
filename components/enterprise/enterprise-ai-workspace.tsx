@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { toastError, toastInfo, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatRelativeUserDateTime, formatUserDateTime } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
@@ -104,8 +105,6 @@ export function EnterpriseAiWorkspace({
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
   const [permissions, setPermissions] = useState({ canUploadSources: false, canManageSources: false, canManageSettings: false, canUseReadTools: false, canUseActionDrafts: false });
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loadingChat, setLoadingChat] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [sourceToArchive, setSourceToArchive] = useState<SourceItem | null>(null);
@@ -182,11 +181,10 @@ export function EnterpriseAiWorkspace({
 
   const refreshAll = useCallback(async () => {
     setLoadingData(true);
-    setError(null);
     try {
       await Promise.all([loadSources(), loadConversations(), loadUsage(), loadSettings()]);
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Chargement impossible.");
+      toastError(refreshError instanceof Error ? refreshError.message : "Chargement impossible.");
     } finally {
       setLoadingData(false);
     }
@@ -217,8 +215,6 @@ export function EnterpriseAiWorkspace({
     const trimmed = message.trim();
     if (!trimmed || loadingChat) return;
     setLoadingChat(true);
-    setError(null);
-    setStatus(null);
     const optimisticMessage: ChatMessage = { id: `draft-${Date.now()}`, role: "user", content: trimmed, createdAt: new Date().toISOString() };
     setMessages((current) => [...current, optimisticMessage]);
     setMessage("");
@@ -250,7 +246,7 @@ export function EnterpriseAiWorkspace({
       }
       await Promise.all([loadConversations(), loadUsage()]);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Message non envoyé.");
+      toastError(sendError instanceof Error ? sendError.message : "Message non envoyé.");
       setMessages((current) => current.filter((item) => item.id !== optimisticMessage.id && !item.id.startsWith("assistant-")));
     } finally {
       setLoadingChat(false);
@@ -271,11 +267,11 @@ export function EnterpriseAiWorkspace({
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(body?.message || "Conversation non enregistrée.");
+      toastError(body?.message || "Conversation non enregistrée.");
       return;
     }
     setConversationDialog(null);
-    setStatus("Conversation mise à jour.");
+    toastSuccess("Conversation mise à jour.");
     await loadConversations();
   }
 
@@ -286,13 +282,13 @@ export function EnterpriseAiWorkspace({
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(body?.message || "Conversation non supprimée.");
+      toastError(body?.message || "Conversation non supprimée.");
       return;
     }
     setConversationDialog(null);
     setActiveConversationId(null);
     setMessages([]);
-    setStatus("Conversation supprimée.");
+    toastSuccess("Conversation supprimée.");
     await loadConversations();
   }
 
@@ -309,11 +305,12 @@ export function EnterpriseAiWorkspace({
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(body?.message || "Message non modifié.");
+      toastError(body?.message || "Message non modifié.");
       return;
     }
     setMessageDialog(null);
     setSelectedMessage(null);
+    toastSuccess("Message modifié.");
     await loadConversations();
   }
 
@@ -324,22 +321,24 @@ export function EnterpriseAiWorkspace({
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(body?.message || "Message non supprimé.");
+      toastError(body?.message || "Message non supprimé.");
       return;
     }
     setMessageDialog(null);
     setSelectedMessage(null);
     setMessages((current) => current.filter((item) => item.id !== selectedMessage.id));
+    toastSuccess("Message supprimé.");
     await loadConversations();
   }
 
   async function copyMessageContent(targetMessage: ChatMessage) {
     const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
     if (!browserNavigator?.clipboard) {
-      setError("Copie indisponible dans ce navigateur.");
+      toastError("Copie indisponible dans ce navigateur.");
       return;
     }
     await browserNavigator.clipboard.writeText(targetMessage.content);
+    toastInfo("Contenu copié.");
     setCopiedMessageId(targetMessage.id);
     window.setTimeout(() => setCopiedMessageId((current) => (current === targetMessage.id ? "" : current)), 1600);
   }
@@ -351,7 +350,7 @@ export function EnterpriseAiWorkspace({
     const groupId = String(form.get("groupId") || "").trim();
     const content = String(form.get("content") || "").trim();
     if (!groupId) {
-      setError("Sélectionnez un groupe de destination.");
+      toastError("Sélectionnez un groupe de destination.");
       return;
     }
     const response = await fetch(`/api/enterprise/ai/conversations/${encodeURIComponent(activeConversation.id)}/share`, {
@@ -361,22 +360,21 @@ export function EnterpriseAiWorkspace({
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(body?.message || "Partage impossible.");
+      toastError(body?.message || "Partage impossible.");
       return;
     }
     setShareToGroupOpen(false);
-    setStatus("Conversation partagée dans Mes collaborateurs.");
+    toastSuccess("Conversation partagée dans Mes collaborateurs.");
   }
 
   async function uploadSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
-      setError("Sélectionnez un fichier à indexer.");
+      toastError("Sélectionnez un fichier à indexer.");
       return;
     }
-    setStatus("Indexation de la source en cours...");
-    setError(null);
+    toastInfo("Indexation de la source en cours...");
     const form = new FormData(event.currentTarget);
     form.set("organizationId", organizationId);
     form.set("file", file);
@@ -385,11 +383,10 @@ export function EnterpriseAiWorkspace({
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || "Indexation impossible.");
       event.currentTarget.reset();
-      setStatus("Source indexée et disponible pour le RAG.");
+      toastSuccess("Source indexée et disponible pour le RAG.");
       await Promise.all([loadSources(), loadUsage()]);
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Indexation impossible.");
-      setStatus(null);
+      toastError(uploadError instanceof Error ? uploadError.message : "Indexation impossible.");
     }
   }
 
@@ -397,7 +394,7 @@ export function EnterpriseAiWorkspace({
     if (!sourceToArchive) return;
     const targetSource = sourceToArchive;
     setSourceToArchive(null);
-    setStatus("Archivage de la source...");
+    toastInfo("Archivage de la source...");
     try {
       const response = await fetch(`/api/enterprise/ai/knowledge-sources/${encodeURIComponent(targetSource.id)}`, {
         method: "PATCH",
@@ -406,18 +403,16 @@ export function EnterpriseAiWorkspace({
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || "Archivage impossible.");
-      setStatus("Source archivée.");
+      toastSuccess("Source archivée.");
       await Promise.all([loadSources(), loadUsage()]);
     } catch (archiveError) {
-      setError(archiveError instanceof Error ? archiveError.message : "Archivage impossible.");
-      setStatus(null);
+      toastError(archiveError instanceof Error ? archiveError.message : "Archivage impossible.");
     }
   }
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Enregistrement des paramètres...");
-    setError(null);
+    toastInfo("Enregistrement des paramètres...");
     try {
       const response = await fetch("/api/enterprise/ai/settings", {
         method: "PATCH",
@@ -426,11 +421,10 @@ export function EnterpriseAiWorkspace({
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || "Paramètres non enregistrés.");
-      setStatus("Paramètres IA enregistrés.");
+      toastSuccess("Paramètres IA enregistrés.");
       await loadSettings();
     } catch (settingsError) {
-      setError(settingsError instanceof Error ? settingsError.message : "Paramètres non enregistrés.");
-      setStatus(null);
+      toastError(settingsError instanceof Error ? settingsError.message : "Paramètres non enregistrés.");
     }
   }
 
@@ -472,9 +466,6 @@ export function EnterpriseAiWorkspace({
           );
         })}
       </nav>
-
-      {status && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{status}</p>}
-      {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
 
       {activeTab === "chat" && (
         <section className="relative grid h-[calc(100dvh-18rem)] min-h-[36rem] gap-3 lg:h-[calc(100vh-20rem)] lg:grid-cols-[320px_1fr]">

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { toastError, toastInfo, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { getParticipantColor } from "@/lib/participant-colors";
 import { formatRelativeUserDateTime, formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
@@ -66,7 +67,6 @@ export function ChatWorkspace({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState("");
   const [dailyUsage, setDailyUsage] = useState(usage);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -109,7 +109,7 @@ export function ChatWorkspace({
     fetch(`/api/conversations/${activeConversationId}`)
       .then((response) => response.json())
       .then((data) => setMessages(data.conversation?.messages ?? []))
-      .catch(() => setError("Impossible de charger la conversation."));
+      .catch(() => toastError("Impossible de charger la conversation."));
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -213,7 +213,7 @@ export function ChatWorkspace({
     const formData = new FormData(event.currentTarget);
     const groupId = String(formData.get("groupId") || "");
     if (!groupId) {
-      setError("Sélectionnez un groupe de destination.");
+      toastError("Sélectionnez un groupe de destination.");
       return;
     }
     const response = await fetch(`/api/collaborators/groups/${groupId}/messages`, {
@@ -228,9 +228,9 @@ export function ChatWorkspace({
     });
     if (response.ok) {
       setShareToGroupOpen(false);
-      setError("Conversation partagée dans le groupe.");
+      toastSuccess("Conversation partagée dans le groupe.");
     } else {
-      setError("Impossible de partager cette conversation dans le groupe.");
+      toastError("Impossible de partager cette conversation dans le groupe.");
     }
   }
 
@@ -240,7 +240,6 @@ export function ChatWorkspace({
       return;
     }
 
-    setError("");
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -270,7 +269,7 @@ export function ChatWorkspace({
       if (body?.usage) {
         setDailyUsage(body.usage);
       }
-      setError(body?.code === "DAILY_LIMIT_REACHED" ? `Limite journalière atteinte. Vos messages seront réinitialisés le ${formatResetAt(body.usage?.resetAt)}.` : "Le chatbot DTSC est momentanément indisponible.");
+      toastError(body?.code === "DAILY_LIMIT_REACHED" ? `Limite journalière atteinte. Vos messages seront réinitialisés le ${formatResetAt(body.usage?.resetAt)}.` : "Le chatbot DTSC est momentanément indisponible.");
       setIsStreaming(false);
       return;
     }
@@ -322,17 +321,17 @@ export function ChatWorkspace({
   async function copyTextToClipboard(value: string) {
     const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
     if (!browserNavigator?.clipboard) {
-      setError("Copie indisponible dans ce navigateur.");
+      toastError("Copie indisponible dans ce navigateur.");
       return;
     }
     await browserNavigator.clipboard.writeText(value);
-    setError("Contenu copié.");
+    toastInfo("Contenu copié.");
   }
 
   async function copyAssistantResponse(message: ChatMessage) {
     const browserNavigator = typeof window === "undefined" ? undefined : window.navigator;
     if (!browserNavigator?.clipboard) {
-      setError("Copie indisponible dans ce navigateur.");
+      toastError("Copie indisponible dans ce navigateur.");
       return;
     }
     await browserNavigator.clipboard.writeText(message.content);
@@ -358,7 +357,7 @@ export function ChatWorkspace({
           item.id === message.id ? { ...item, feedbackValue: message.feedbackValue ?? null } : item
         )
       );
-      setError("Impossible d'enregistrer cette réaction.");
+      toastError("Impossible d'enregistrer cette réaction.");
     }
   }
 
@@ -655,9 +654,6 @@ export function ChatWorkspace({
           </div>
         </form>
       </section>
-      <Dialog open={Boolean(error)} title="Message DTSC" onClose={() => setError("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{error}</p>
-      </Dialog>
       <Dialog open={infoOpen} title="Infos sur la conversation" onClose={() => setInfoOpen(false)}>
         {activeConversation && (
           <div className="grid gap-3 text-sm text-dtsc-muted sm:grid-cols-2">

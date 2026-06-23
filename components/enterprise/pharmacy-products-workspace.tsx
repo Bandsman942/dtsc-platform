@@ -13,6 +13,7 @@ import {
 } from "@/lib/pharmacy-products";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Product = Record<string, unknown> & { id: string; name: string; internalCode: string; category: string; pharmaceuticalForm: string; status: string; createdAt: string };
 type ProductForm = Record<string, string | boolean>;
 
@@ -98,6 +99,7 @@ export function PharmacyProductsWorkspace({ organizationId }: { organizationId: 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [detail, setDetail] = useState<Product | null>(null);
@@ -159,7 +161,7 @@ export function PharmacyProductsWorkspace({ organizationId }: { organizationId: 
       {!loading && !list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun produit ne correspond aux critères. Créez le premier produit ou ajustez les filtres.</p>}
       {loading && <p className="text-sm font-bold text-dtsc-muted">Chargement du catalogue...</p>}
     </div>
-    {message && <p className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <Dialog open={formOpen} title={editing ? `Modifier ${editing.name}` : "Nouveau produit"} description="Les informations sont isolées dans la pharmacie active." onClose={() => setFormOpen(false)} className="h-[94dvh] max-w-6xl"><form onSubmit={save} className="grid min-w-0 gap-4 overflow-x-hidden">
       <Section title="Identification"><Grid><Text form={form} field="name" labelText="Nom commercial" change={change} required /><Text form={form} field="genericName" labelText="DCI / nom générique" change={change} /><Text form={form} field="internalCode" labelText="Code interne unique" change={change} required /><Text form={form} field="barcode" labelText="Code-barres / GTIN" change={change} /><Text form={form} field="manufacturer" labelText="Fabricant" change={change} /><Text form={form} field="brand" labelText="Marque" change={change} /></Grid></Section>
       <Section title="Classification et présentation"><Grid><Choice field="category" labelText="Catégorie" form={form} options={PHARMACY_PRODUCT_CATEGORIES} change={change} /><Text form={form} field="subcategory" labelText="Sous-catégorie" change={change} /><Choice field="pharmaceuticalForm" labelText="Forme pharmaceutique" form={form} options={PHARMACY_PRODUCT_FORMS} change={change} /><Text form={form} field="dosage" labelText="Dosage" change={change} /><Choice field="saleUnit" labelText="Unité de vente" form={form} options={PHARMACY_PRODUCT_UNITS} change={change} /><Choice field="stockUnit" labelText="Unité de stock" form={form} options={PHARMACY_PRODUCT_UNITS} change={change} /><Text form={form} field="packaging" labelText="Conditionnement" change={change} /><Choice field="administrationRoute" labelText="Voie d'administration" form={form} options={PHARMACY_ADMINISTRATION_ROUTES} change={change} /></Grid></Section>

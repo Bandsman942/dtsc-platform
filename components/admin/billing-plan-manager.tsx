@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { translate } from "@/lib/i18n";
 
 export type ManagedBillingPlan = {
@@ -42,6 +43,7 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
   const [busy, setBusy] = useState(false);
   const t = (key: string) => translate(locale, `adminBillingControl.${key}`);
   const dateLocale = locale === "en" ? "en-US" : "fr-FR";
+  useToastMessage(message);
 
   async function updatePlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -99,8 +101,6 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
           {t("pricingAdminOnly")}
         </p>
       )}
-      {message && <p className="mt-4 rounded-lg border border-cyan-300/40 bg-cyan-400/10 p-3 text-sm font-bold text-dtsc-ink">{message}</p>}
-
       <div className="mt-5 grid gap-3 lg:grid-cols-2">
         {plans.map((plan) => (
           <article key={plan.id} className="min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page p-4">

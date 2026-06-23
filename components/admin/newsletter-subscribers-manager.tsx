@@ -5,6 +5,7 @@ import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -45,6 +46,7 @@ export function NewsletterSubscribersManager({ canManage }: { canManage: boolean
   const [message, setMessage] = useState("");
   const [confirmSave, setConfirmSave] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
+  useToastMessage(message);
   const list = useSmartList({
     items: subscribers,
     pageSize: 8,
@@ -149,8 +151,6 @@ export function NewsletterSubscribersManager({ canManage }: { canManage: boolean
         </table>
         {!list.filteredCount && <p className="py-6 text-sm text-dtsc-muted">Aucun inscrit newsletter.</p>}
       </div>
-
-      {message && <p className="mt-3 text-sm font-bold text-cyan-600">{message}</p>}
 
       {selected && (
         <Dialog open={true} title="Détail inscrit newsletter" onClose={() => {

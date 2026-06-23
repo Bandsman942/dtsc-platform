@@ -1,6 +1,6 @@
 # Documentation technique DTSC Platform
 
-Derniere mise a jour: 16 juin 2026
+Derniere mise a jour: 23 juin 2026
 
 Cette documentation decrit ce qui est deja code dans l'application DTSC Platform: architecture, base de donnees, authentification, modules fonctionnels, API internes, API externes connectees et methode recommandee pour connecter l'application a d'autres systemes.
 
@@ -29,6 +29,7 @@ Objectifs couverts par le code actuel:
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
 - chatbot OpenAI avec historique des conversations, classement par dossier/projet avec CRUD de dossiers, partage de conversation, snapshots consultables pour les groupes collaboratifs, dates/heures selon preferences utilisateur, streaming, rendu Markdown enrichi (titres, gras, italique, listes, numerotation et tableaux quand utile), choix de modele LLM prefere par utilisateur, style/longueur de reponse persistants et limites d'usage;
 - notifications internes avec preferences utilisateur, extrait en liste, lecture automatique a l'ouverture et alertes navigateur/PWA pendant une session connectee;
+- notifications applicatives client via `ToastProvider`, evenement `dtsc:toast`, helpers `toastSuccess`/`toastError`/`toastInfo` et hook `useToastMessage` pour remplacer les confirmations et erreurs inline par des toasts accessibles;
 - annonces internes avec commentaires, reactions, menu d'actions `...`, copie, transfert, signalement, archivage, epinglage et indicateurs persistants;
 - module prive Mes collaborateurs avec groupes internes d'organisation ou groupes transversaux, recherche d'utilisateurs actifs de toute l'application pour invitations, acceptation obligatoire, membres, messagerie paginee, mentions, couleurs stables par intervenant, snapshots de conversations chatbot, appels audio/vidéo LiveKit sécurisés par groupe, notifications et journal d'audit par groupe;
 - calendrier interne prive contextualise par organisation pour suivre disponibilites, evenements, participants, missions, absences, reunions, conflits de planning et synchronisations métier sans API calendrier externe;

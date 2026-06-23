@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -55,6 +56,7 @@ export function PublicationEngagement({
   const [deletingComment, setDeletingComment] = useState<PublicationComment | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  useToastMessage(feedback);
   const isAdmin = currentUser?.role === "ADMIN";
   const likes = reactions.filter((reaction) => reaction.value === 1).length;
   const dislikes = reactions.filter((reaction) => reaction.value === -1).length;
@@ -302,9 +304,6 @@ export function PublicationEngagement({
         <p className="text-sm leading-7 text-dtsc-muted">Cette action est réservée à l&apos;administrateur et supprimera aussi les réponses associées.</p>
       </Dialog>
 
-      <Dialog open={Boolean(feedback)} title="Publication DTSC" onClose={() => setFeedback("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{feedback}</p>
-      </Dialog>
     </section>
   );
 }

@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type ProductStock = { id: string; name: string; genericName: string | null; category: string; stockUnit: string; available: number; reserved: number; damaged: number; value: number; minStock: number; maxStock: number | null; status: string; location: string | null; nearestExpiry: string | null; activeLots: number };
 type BatchStock = { id: string; productId: string; batchNumber: string; effectiveStatus: string; availableQuantity: string; reservedQuantity: string; damagedQuantity: string; expiryDate: string; location: string | null; product: { name: string; internalCode: string }; stockMovements: Array<{ createdAt: string }> };
 type Movement = { id: string; movementType: string; direction: string; quantity: string; quantityBefore: string | null; quantityAfter: string | null; reason: string; createdAt: string; product: { name: string }; batch: { batchNumber: string } | null; createdBy: { name: string } };
@@ -67,6 +68,7 @@ export function PharmacyStockWorkspace({ organizationId }: { organizationId: str
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [formKind, setFormKind] = useState<FormKind | null>(null);
   const [detail, setDetail] = useState<Session | ProductStock | BatchStock | null>(null);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
@@ -117,7 +119,7 @@ export function PharmacyStockWorkspace({ organizationId }: { organizationId: str
     {tab === "adjustments" && <><Toolbar action={() => openForm("adjustment")} labelText="Nouvel ajustement" /><CardGrid>{(dataset?.adjustments || []).map((item) => <StockCard key={item.id} title={`${item.product.name} · ${item.batch?.batchNumber || "sans lot"}`} status={item.status} details={[`${label(item.direction)} ${item.quantity}`, label(item.adjustmentType), item.reason, `Demandé par ${item.requestedBy.name}`]} actions={adjustmentActions(item, action)} />)}</CardGrid></>}
     {tab === "locations" && <><Toolbar action={() => openForm("location")} labelText="Nouvel emplacement" /><CardGrid>{(dataset?.locations || []).map((item) => <StockCard key={item.id} title={`${item.name} · ${item.code}`} status={item.status} details={[label(item.locationType), item.refrigerated ? "Réfrigéré" : "Non réfrigéré", item.temperatureControlled ? "Température contrôlée" : "Température non contrôlée"]} actions={[{ key: "archive", label: "Archiver", icon: Archive, destructive: true, onSelect: () => void action("location", "archive", item.id) }]} />)}</CardGrid></>}
     {tab === "alerts" && <CardGrid>{alerts.map((item) => <StockCard key={item.id} title={item.title} status={item.type} details={[item.detail, "Alerte calculée depuis les données réelles du stock."]} />)}</CardGrid>}
-    {message && <p className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <StockFormDialog kind={formKind} form={form} setForm={setForm} dataset={dataset} onClose={() => setFormKind(null)} onSave={save} />
     <Dialog open={Boolean(detail)} title="Détail stock" description="Informations réelles issues du stock de l'organisation." onClose={() => setDetail(null)} className="h-[94dvh] max-w-5xl">{detail && <StockDetail detail={detail} action={action} />}</Dialog>
   </section>;

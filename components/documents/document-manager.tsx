@@ -5,6 +5,7 @@ import { FileText, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { toastError, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -34,7 +35,6 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
   const [documents, setDocuments] = useState(initialDocuments);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
 
   const getSearchText = useCallback((item: DocumentItem) => `${item.title} ${item.fileName} ${item.status}`, []);
@@ -43,9 +43,8 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
     if (!file) {
-      setMessage("Sélectionnez un fichier avant de lancer l'indexation.");
+      toastError("Sélectionnez un fichier avant de lancer l'indexation.");
       return;
     }
 
@@ -58,24 +57,24 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
     setIsPending(false);
 
     if (!response.ok) {
-      setMessage(body?.error || "Impossible d'indexer ce document.");
+      toastError(body?.error || "Impossible d'indexer ce document.");
       return;
     }
 
     setDocuments((current) => [body.document, ...current]);
     setTitle("");
     setFile(null);
-    setMessage("Document indexé. Le chatbot peut maintenant s'appuyer sur ce contenu.");
+    toastSuccess("Document indexé. Le chatbot peut maintenant s'appuyer sur ce contenu.");
   }
 
   async function deleteDocument(id: string) {
-    setMessage("");
     const response = await fetch(`/api/documents/${id}`, { method: "DELETE" });
     if (!response.ok) {
-      setMessage("Impossible de supprimer ce document.");
+      toastError("Impossible de supprimer ce document.");
       return;
     }
     setDocuments((current) => current.filter((item) => item.id !== id));
+    toastSuccess("Document supprimé.");
   }
 
   return (
@@ -102,8 +101,6 @@ export function DocumentManager({ initialDocuments, maxDocuments }: { initialDoc
           Fichiers pris en charge: TXT, Markdown, CSV, JSON et PDF jusqu&apos;à 2 Mo. Capacité du plan: {usedSlots}/{maxDocuments} document(s).
         </p>
       </form>
-
-      {message && <p className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-dtsc-ink">{message}</p>}
 
       <section className="dtsc-card p-5">
         <ListControls

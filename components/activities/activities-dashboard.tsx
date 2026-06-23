@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -232,6 +233,7 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
   const [statusMessage, setStatusMessage] = useState("");
   const [workflowType, setWorkflowType] = useState("COO_MEETING");
   const [formVersion, setFormVersion] = useState(0);
+  useToastMessage(statusMessage);
 
   async function submitWorkflow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -329,7 +331,6 @@ function CollaboratorWorkflowComposer({ collaborators, operations }: { collabora
       )}
 
       <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Transmettre</Button>
-      {statusMessage && <p className="text-sm font-bold text-cyan-600">{statusMessage}</p>}
     </form>
   );
 }
@@ -599,6 +600,7 @@ function ActivityDetail({ item, collaborators, currentUserId, currentUserRole }:
   const [deletingComment, setDeletingComment] = useState<CommentItem | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const commentsThreadRef = useRef<HTMLDivElement>(null);
+  useToastMessage(statusMessage);
 
   useEffect(() => {
     setRequestResponse("");
@@ -819,7 +821,6 @@ function ActivityDetail({ item, collaborators, currentUserId, currentUserRole }:
           <Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ajouter un commentaire..." className="rounded-xl bg-dtsc-page" />
           <Button className="rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer</Button>
         </form>
-        {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
       </div>
       <Dialog open={Boolean(editingComment)} title="Modifier le commentaire" onClose={() => setEditingComment(null)} className="max-w-xl">
         <form onSubmit={(event) => { event.preventDefault(); const value = String(new FormData(event.currentTarget).get("content") || ""); if (editingComment) void mutateComment("PATCH", editingComment, value); }} className="space-y-4">
@@ -991,6 +992,7 @@ function RequestComposer({ collaborators, selected, compact = false }: { collabo
   const [statusMessage, setStatusMessage] = useState("");
   const [open, setOpen] = useState(!compact);
   const [formVersion, setFormVersion] = useState(0);
+  useToastMessage(statusMessage);
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1058,7 +1060,6 @@ function RequestComposer({ collaborators, selected, compact = false }: { collabo
       </FormField>
       <RequestAttachmentField key={formVersion} />
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer la demande</Button>
-      {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
   );
   if (!compact) {
@@ -1154,6 +1155,7 @@ function escapeRegExp(value: string) {
 function BlockerComposer({ operations, compact = false }: { operations: CollaboratorOption[]; compact?: boolean }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [open, setOpen] = useState(!compact);
+  useToastMessage(statusMessage);
 
   async function createBlocker(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1206,7 +1208,6 @@ function BlockerComposer({ operations, compact = false }: { operations: Collabor
         <textarea name="correctiveAction" placeholder="Action attendue ou solution proposée..." className="min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
       </FormField>
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><CircleAlert className="h-4 w-4" /> Déclarer</Button>
-      {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
   );
   if (!compact) {
@@ -1228,6 +1229,7 @@ function BlockerComposer({ operations, compact = false }: { operations: Collabor
 function ReportComposer({ collaborators, operations, compact = false }: { collaborators: CollaboratorOption[]; operations: CollaboratorOption[]; compact?: boolean }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [open, setOpen] = useState(!compact);
+  useToastMessage(statusMessage);
 
   async function createReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1273,7 +1275,6 @@ function ReportComposer({ collaborators, operations, compact = false }: { collab
         <textarea name="content" required placeholder="Contenu du rapport..." className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
       </FormField>
       <Button className="mt-3 rounded-xl bg-[#002b5b] text-white"><Send className="h-4 w-4" /> Envoyer</Button>
-      {statusMessage && <p className="mt-2 text-xs font-bold text-cyan-600">{statusMessage}</p>}
     </form>
   );
   if (!compact) {

@@ -42,6 +42,7 @@ import { HealthInsuranceWorkspace } from "@/components/enterprise/health-insuran
 import { HealthQualityWorkspace } from "@/components/enterprise/health-quality-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type HealthcareMember = {
   id: string;
   role: string;
@@ -437,6 +438,7 @@ export function HealthcareAdminWorkspace({
   const [editingRecord, setEditingRecord] = useState<EnterpriseSectorRecordItem | null>(null);
   const [formState, setFormState] = useState<HealthcareFormState>(() => defaultForm("PATIENTS"));
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [isSaving, setIsSaving] = useState(false);
   const [appointmentPatientRecordId, setAppointmentPatientRecordId] = useState("");
   const [consultationPatientRecordId, setConsultationPatientRecordId] = useState("");
@@ -690,7 +692,7 @@ export function HealthcareAdminWorkspace({
         </div>
       )}
 
-      {message && <p className="rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-3 text-sm font-bold text-cyan-700 dark:text-cyan-200">{message}</p>}
+
 
       <Dialog
         open={formOpen}

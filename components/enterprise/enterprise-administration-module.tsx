@@ -18,6 +18,7 @@ import {
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & { locale?: string | null }) {
   const {
     organization,
@@ -35,6 +36,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
   } = props;
   const router = useRouter();
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const activeMembers = useMemo(() => members.filter((member) => member.status === "ACTIVE"), [members]);
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "INVITED"), [members]);
   const memberNameById = useMemo(() => new Map(activeMembers.map((member) => [member.user.id, member.user.name])), [activeMembers]);
@@ -195,7 +197,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
 
       <EnterpriseRecentRequestsPanel recentRequests={recentRequests} />
 
-      {message && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     </div>
   );
 }

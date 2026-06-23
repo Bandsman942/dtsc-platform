@@ -25,6 +25,7 @@ import { PharmacyDocumentsWorkspace } from "@/components/enterprise/pharmacy-doc
 import { PharmacyReportsWorkspace } from "@/components/enterprise/pharmacy-reports-workspace";
 import { PharmacySettingsWorkspace } from "@/components/enterprise/pharmacy-settings-workspace";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type ModuleCode =
   | "PHARMACY_DASHBOARD"
   | "MEDICINES_PRODUCTS"
@@ -117,6 +118,7 @@ export function PharmacyAdminWorkspace({ organizationId, records, members, depar
   const [editing, setEditing] = useState<EnterpriseSectorRecordItem | null>(null);
   const [form, setForm] = useState<FormState>(() => defaultForm("MEDICINES_PRODUCTS"));
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const enabled = useMemo(() => submodules.filter((item) => item.code === "PHARMACY_DASHBOARD" || activeModuleCodes.has(item.code)), [activeModuleCodes]);
   const active = enabled.find((item) => item.code === activeCode) || enabled[0];
   const visible = useMemo(() => records.filter((record) => record.moduleCode === activeCode), [activeCode, records]);
@@ -164,7 +166,7 @@ export function PharmacyAdminWorkspace({ organizationId, records, members, depar
           </div>
         </section>
       )}
-      {message && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
       <Dialog open={formOpen} title={editing ? "Modifier l'élément pharmacie" : active?.createLabel || "Nouvel élément"} description="Formulaire métier persistant, isolé dans la pharmacie active." onClose={() => setFormOpen(false)} className="h-[94dvh] max-w-6xl"><form onSubmit={save} className="grid gap-4"><FormSection title="Identification"><div className="grid gap-3 md:grid-cols-2"><Field label="Titre"><Input value={form.title} onChange={(event) => change("title", event.target.value)} required /></Field><Field label="Statut"><Input value={form.status} onChange={(event) => change("status", event.target.value)} required /></Field><Field label="Résumé"><Input value={form.summary} onChange={(event) => change("summary", event.target.value)} /></Field><Select label="Responsable" value={form.assignedToUserId} onChange={(value) => change("assignedToUserId", value)} options={members.map((member) => [member.user.id, member.user.name])} /></div></FormSection><SpecificFields form={form} change={change} products={products} batches={batches} suppliers={suppliers} orders={orders} prescriptions={prescriptions} departments={departments} members={members} /><FormSection title="Notes et suivi"><div className="grid gap-3 md:grid-cols-2"><Field label="Motif / justification"><textarea value={form.reason} onChange={(event) => change("reason", event.target.value)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field><Field label="Notes internes"><textarea value={form.notes} onChange={(event) => change("notes", event.target.value)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field></div></FormSection><Button className="w-fit rounded-xl bg-[#002b5b] text-white">Enregistrer</Button></form></Dialog>
       <Dialog open={Boolean(details)} title={details?.title || "Détail"} description="Données pharmacie confinées à l'entreprise active." onClose={() => setDetails(null)} className="max-w-4xl">{details && <Details record={details} />}</Dialog>
     </div>

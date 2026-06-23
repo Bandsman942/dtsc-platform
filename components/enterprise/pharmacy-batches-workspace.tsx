@@ -11,6 +11,7 @@ import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { PHARMACY_BATCH_LABELS, PHARMACY_BATCH_MANUAL_STATUSES, PHARMACY_BATCH_STATUSES, PHARMACY_BATCH_STORAGE_CONDITIONS } from "@/lib/pharmacy-batch-options";
 import { PHARMACY_CURRENCIES, PHARMACY_PRODUCT_LABELS, PHARMACY_PRODUCT_UNITS } from "@/lib/pharmacy-products";
 
+import { useToastMessage } from "@/components/ui/use-toast-message";
 type Product = { id: string; name: string; genericName: string | null; internalCode: string; category: string; pharmaceuticalForm: string; dosage: string | null; stockUnit: string; defaultLocation: string | null; shelf: string | null; storageType: string | null; tempMin: string | null; tempMax: string | null; refrigerated: boolean; currency: string };
 type Member = { id: string; name: string; email: string };
 type Supplier = { id: string; title: string };
@@ -50,6 +51,7 @@ export function PharmacyBatchesWorkspace({ organizationId }: { organizationId: s
   const [receipts, setReceipts] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  useToastMessage(message);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Batch | null>(null);
   const [detail, setDetail] = useState<Batch | null>(null);
@@ -119,7 +121,7 @@ export function PharmacyBatchesWorkspace({ organizationId }: { organizationId: s
       {!loading && !list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun lot n&apos;est encore enregistré. Les lots seront utilisés pour suivre les quantités, les péremptions et la traçabilité des produits.</p>}
       {loading && <p className="text-sm font-bold text-dtsc-muted">Chargement des lots...</p>}
     </div>
-    {message && <p className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm font-bold text-dtsc-blue">{message}</p>}
+
     <Dialog open={formOpen} title={editing ? "Modifier lot" : "Nouveau lot"} description="Formulaire plein écran, isolé dans la pharmacie active." onClose={() => setFormOpen(false)} className="h-[94dvh] max-w-6xl"><form onSubmit={save} className="grid gap-4">
       <Section title="Produit concerné"><Grid><Choice field="productId" form={form} labelText="Produit" options={products.map((product) => [product.id, `${product.name} · ${product.internalCode}`])} change={(_, value) => selectProduct(String(value))} required />{form.productId && <ReadOnlyProduct product={products.find((product) => product.id === form.productId)} />}</Grid></Section>
       <Section title="Identification du lot"><Grid>{textFields.slice(0, 5).map((field) => <TextField key={field} field={field} form={form} change={change} required={field === "batchNumber"} />)}</Grid></Section>

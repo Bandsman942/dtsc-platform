@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { toastError, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 
@@ -82,7 +83,6 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
   const [editingActivity, setEditingActivity] = useState<CompanyActivity | null>(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
-  const [message, setMessage] = useState("");
   const smartList = useSmartList({
     items: activities,
     pageSize: 5,
@@ -98,19 +98,23 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
       body: JSON.stringify(payload),
     });
     const body = await response.json().catch(() => null);
-    setMessage(response.ok ? "Profil entreprise enregistré. Le chatbot utilisera ce contexte dans votre espace privé." : body?.error || "Impossible d'enregistrer le profil entreprise.");
     if (response.ok) {
       setProfile(body.profile);
       setProfileDialogOpen(false);
+      toastSuccess("Profil entreprise enregistré. Le chatbot utilisera ce contexte dans votre espace privé.");
+    } else {
+      toastError(body?.error || "Impossible d'enregistrer le profil entreprise.");
     }
   }
 
   async function deleteProfile() {
     const response = await fetch("/api/company/profile", { method: "DELETE" });
-    setMessage(response.ok ? "Profil entreprise supprimé." : "Impossible de supprimer le profil entreprise.");
     if (response.ok) {
       setProfile(null);
       setProfileDialogOpen(false);
+      toastSuccess("Profil entreprise supprimé.");
+    } else {
+      toastError("Impossible de supprimer le profil entreprise.");
     }
   }
 
@@ -125,21 +129,23 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      setMessage(body?.error || "Impossible d'enregistrer l'activité.");
+      toastError(body?.error || "Impossible d'enregistrer l'activité.");
       return;
     }
     setActivities((current) => activityId ? current.map((item) => (item.id === activityId ? body.activity : item)) : [body.activity, ...current]);
     form.reset();
     setActivityDialogOpen(false);
     setEditingActivity(null);
-    setMessage("Activité métier enregistrée.");
+    toastSuccess("Activité métier enregistrée.");
   }
 
   async function deleteActivity(id: string) {
     const response = await fetch(`/api/company/activities/${id}`, { method: "DELETE" });
-    setMessage(response.ok ? "Activité supprimée." : "Impossible de supprimer l'activité.");
     if (response.ok) {
       setActivities((current) => current.filter((item) => item.id !== id));
+      toastSuccess("Activité supprimée.");
+    } else {
+      toastError("Impossible de supprimer l'activité.");
     }
   }
 
@@ -219,10 +225,6 @@ export function CompanyManager({ initialProfile, initialActivities }: { initialP
           </div>
         </div>
       </section>
-
-      <Dialog open={Boolean(message)} title="Entreprise" onClose={() => setMessage("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
-      </Dialog>
 
       <Dialog open={profileDialogOpen} title="Profil et activités entreprise" description="Renseignez le contexte professionnel utilisé par DTSC Platform et le chatbot dans votre espace privé." onClose={() => setProfileDialogOpen(false)} className="h-[92dvh] max-w-6xl">
         <CompanyProfileForm profile={profile} onSubmit={saveProfile} onDelete={deleteProfile} />

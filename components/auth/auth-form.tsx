@@ -7,6 +7,7 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { toastError, toastInfo } from "@/lib/client-toast";
 import { buildUrlForHostType, getDashboardUrl } from "@/lib/domains";
 import { resolveTrustedInternalRedirect } from "@/lib/post-login-redirect";
 
@@ -20,8 +21,6 @@ function normalizeRedirectTarget(target: unknown) {
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<Record<string, FormDataEntryValue> | null>(null);
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
@@ -76,8 +75,6 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
-    setSuccess("");
     setIsPending(true);
 
     const formData = new FormData(event.currentTarget);
@@ -91,14 +88,14 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     setIsPending(false);
 
     if (!response.ok) {
-      setError(body?.error || "Impossible de traiter la demande.");
+      toastError(body?.error || "Impossible de traiter la demande.");
       return;
     }
 
     if (isSignUp && body?.otpRequired) {
       setPendingRegistration(payload);
       setOtpExpiresAt(body.expiresAt || "");
-      setSuccess("Un code OTP vient d'être envoyé à votre adresse email. Saisissez-le pour activer votre compte.");
+      toastInfo("Un code OTP vient d'être envoyé à votre adresse email. Saisissez-le pour activer votre compte.", "Vérification email");
       return;
     }
 
@@ -116,19 +113,17 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    setError("");
-    setSuccess("");
     setIsPending(true);
     const { response, body } = await submitPayload(pendingRegistration);
     setIsPending(false);
 
     if (!response.ok || !body?.otpRequired) {
-      setError(body?.error || "Impossible de renvoyer le code OTP.");
+      toastError(body?.error || "Impossible de renvoyer le code OTP.");
       return;
     }
 
     setOtpExpiresAt(body.expiresAt || "");
-    setSuccess("Un nouveau code OTP vient d'être envoyé.");
+    toastInfo("Un nouveau code OTP vient d'être envoyé.", "Code OTP envoyé");
   }
 
   return (
@@ -216,8 +211,6 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           />
         </>
       )}
-      {success && <p className="rounded-xl bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-800">{success}</p>}
-      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       <Button type="submit" className="h-11 w-full rounded-xl bg-[#002b5b] text-white shadow-[0_12px_32px_rgba(0,43,91,0.12)] hover:bg-[#001736]" disabled={isPending}>
         {isPending ? "Traitement..." : pendingRegistration ? "Vérifier et créer le compte" : isSignUp ? "Créer mon compte" : "Se connecter"}
         <ArrowRight className="h-4 w-4" />

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import type { OperationDataset, OperationField, OperationRecord } from "@/lib/admin-operations-types";
 import { formatEnumLabel } from "@/lib/labels";
@@ -44,6 +45,7 @@ export function OperationsAdminPanel({
   const [message, setMessage] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
+  useToastMessage(message);
 
   const visibleItemsByDataset = useMemo(() => {
     return Object.fromEntries(
@@ -261,10 +263,6 @@ export function OperationsAdminPanel({
           </AccordionItem>
         ))}
       </Accordion>
-
-      <Dialog open={Boolean(message)} title={title} onClose={() => setMessage("")}>
-        <p className="text-sm leading-7 text-dtsc-muted">{message}</p>
-      </Dialog>
     </section>
   );
 }
