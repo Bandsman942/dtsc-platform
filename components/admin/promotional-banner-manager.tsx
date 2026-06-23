@@ -152,7 +152,7 @@ export function PromotionalBannerManager({ banners, canManage }: { banners: Bann
         title={dialog === "edit" ? "Modifier la bannière" : "Créer une bannière"}
         description="Le message est court, dismissible et ciblé par rôle utilisateur."
         onClose={() => { setDialog(null); setSelectedBanner(null); }}
-        className="max-w-4xl"
+        className="h-[92dvh] max-w-6xl"
       >
         <BannerForm banner={selectedBanner} canManage={canManage} onSubmit={saveBanner} />
       </Dialog>
@@ -184,7 +184,7 @@ function BannerForm({ banner, canManage, onSubmit }: { banner: BannerItem | null
   const includeRoles = normalizeBannerRoles(banner?.includeRoles);
   const excludeRoles = normalizeBannerRoles(banner?.excludeRoles);
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 lg:grid-cols-2">
+    <form onSubmit={onSubmit} className="grid min-w-0 gap-4 overflow-x-hidden lg:grid-cols-2 xl:grid-cols-3">
       <Field label="Titre principal">
         <Input name="title" defaultValue={banner?.title || ""} required maxLength={90} disabled={!canManage} placeholder="Add your birthday!" />
       </Field>
@@ -193,11 +193,11 @@ function BannerForm({ banner, canManage, onSubmit }: { banner: BannerItem | null
           {statusOptions.map((status) => <option key={status} value={status}>{formatEnumLabel(status)}</option>)}
         </select>
       </Field>
-      <Field label="Sous-texte" className="lg:col-span-2">
+      <Field label="Sous-texte" className="lg:col-span-2 xl:col-span-3">
         <textarea name="description" defaultValue={banner?.description || ""} required maxLength={180} disabled={!canManage} placeholder="Let your contacts know..." className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm text-dtsc-ink" />
       </Field>
-      <Field label="Surfaces d'affichage" className="lg:col-span-2">
-        <div className="grid gap-2 sm:grid-cols-2">
+      <Field label="Surfaces d'affichage" className="lg:col-span-2 xl:col-span-3">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {promotionalBannerSurfaces.map((surface) => (
             <CheckOption key={surface.id} name="surfaces" value={surface.id} label={surface.label} defaultChecked={surfaces.includes(surface.id)} disabled={!canManage} />
           ))}
@@ -232,7 +232,7 @@ function BannerForm({ banner, canManage, onSubmit }: { banner: BannerItem | null
         <Shield className="h-4 w-4 shrink-0" />
         Les rôles exclus priment toujours sur les rôles inclus.
       </div>
-      <div className="lg:col-span-2">
+      <div className="lg:col-span-2 xl:col-span-3">
         <Button disabled={!canManage} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
       </div>
     </form>

@@ -16,7 +16,12 @@ type DialogProps = {
 };
 
 export function Dialog({ open, title, description, children, footer, onClose, className }: DialogProps) {
-  const isTallDialog = typeof className === "string" && (className.includes("h-[92dvh]") || className.includes("h-[94dvh]"));
+  const isTallDialog =
+    typeof className === "string" &&
+    (className.includes("h-[90dvh]") ||
+      className.includes("h-[92dvh]") ||
+      className.includes("h-[94dvh]") ||
+      className.includes("h-[96dvh]"));
 
   useEffect(() => {
     if (!open) {
@@ -55,7 +60,8 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         className={cn(
           "flex max-h-[96dvh] min-h-[66dvh] w-full min-w-0 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.65rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.35)] sm:max-h-[calc(100dvh-2rem)] sm:min-h-[min(34rem,calc(100dvh-2rem))] sm:max-w-2xl sm:rounded-2xl",
           className,
-          isTallDialog && "h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-3rem)]",
+          isTallDialog &&
+            "h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] sm:h-[calc(100dvh-3rem)] sm:max-h-[calc(100dvh-3rem)] sm:max-w-[calc(100vw-3rem)]",
         )}
         onMouseDown={(event) => event.stopPropagation()}
       >

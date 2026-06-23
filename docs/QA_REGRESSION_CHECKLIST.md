@@ -75,6 +75,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 ## Bannières promotionnelles
 
 - [ ] Dans Administration > Bannières promo, un `ADMIN` peut créer, modifier, activer, mettre en pause et archiver une bannière avec surfaces, rôles inclus/exclus, priorité, dates et CTA.
+- [ ] Le formulaire de création/modification des bannières promotionnelles s'ouvre en plein écran utile, avec scroll interne et champs exploitables sur mobile comme sur desktop.
 - [ ] Les routes `POST/PATCH/DELETE /api/admin/promotional-banners` refusent origine invalide, session absente, rôle non-`ADMIN` et payload invalide.
 - [ ] Une bannière active ciblée s'affiche dans Chatbot, IA Assistant Entreprise, Mes collaborateurs ou Annonces selon les surfaces choisies, sans apparaître sur les autres pages.
 - [ ] Un rôle exclu ne voit jamais la bannière, même s'il est aussi présent dans les rôles inclus.
@@ -403,7 +404,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 
 - Page visible uniquement en contexte `ORGANIZATION` et avec permission d'administration.
 - Les membres actifs, modules, departements, postes, workflows, calendrier et parametres sont filtres par `organizationId`.
-- Les formulaires longs restent en modale/panneau responsive.
+- Les formulaires longs s'ouvrent en panneau plein écran utile, avec scroll interne et sans largeur réduite sur desktop.
 - Les routes mutantes refusent une origine externe.
 - Les routes mutantes appliquent rate limiting et validation Zod.
 - Le secteur Sante charge patients, rendez-vous, consultations, laboratoire, pharmacie, facturation, assurance, confidentialite et rapports uniquement pour `HEALTH_CARE`.

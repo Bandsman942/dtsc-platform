@@ -12,6 +12,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Amélioré
 
+- Les dialogues de formulaire hauts (`h-[90/92/94/96dvh]`) s'affichent désormais en plein écran utile sur desktop et mobile, et le formulaire des bannières promotionnelles adopte ce comportement.
 - Centralisation des confirmations et erreurs client dans un `ToastProvider` global avec notifications applicatives accessibles, tonalités explicites, expiration automatique et remplacement des anciens messages inline sur les principaux parcours privés, admin, chatbot, abonnements, notifications, support, Entreprise, Santé et Pharmacie.
 - Refonte UX/UI premium des espaces conversationnels: composants `components/chat/*` réutilisables, listes denses type conversation, recherche unifiée, FAB d'action principale, headers compacts, fils plein écran et composers fixes pour Mes collaborateurs, Chatbot général et IA Assistant Entreprise.
 
