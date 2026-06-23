@@ -59,6 +59,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Stockage optionnel des fichiers originaux dans Supabase Storage, tout en gardant Neon PostgreSQL comme base principale
 - Module Entreprise: profil organisationnel, poste utilisateur, responsabilités, activités métier, processus, données, objectifs et KPI injectés dans le contexte privé du chatbot
 - Espaces conversationnels premium mobile-first: listes denses, avatars, badges non lus, recherche unifiée, FAB d'action principale, headers compacts, fils plein écran et saisie fixe pour Mes collaborateurs, Chatbot général et IA Assistant Entreprise
+- IA Assistant Entreprise avec projets persistants pour classer les conversations, créer une nouvelle conversation vide, renommer/fusionner ou supprimer un projet sans perdre les échanges
 - Ancienne page `/documents` redirigée vers `/company`; les documents restent gérés dans le module Entreprise selon les limites d'abonnement
 - Sessions sécurisées par cookie signé
 - Préparation multi-sous-domaines dans une seule app Vercel: site public, espace SaaS, console DTSC, compte/authentification et support peuvent être routés par host sans extraction monorepo.

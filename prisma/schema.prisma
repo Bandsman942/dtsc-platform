@@ -160,6 +160,7 @@ model User {
   createdOrganizations                  Organization[]                    @relation("OrganizationCreatedByDtsc")
   enterpriseAiAssistantsCreated         EnterpriseAiAssistant[]           @relation("EnterpriseAiAssistantCreatedBy")
   enterpriseAiConversations             EnterpriseAiConversation[]        @relation("EnterpriseAiConversationUser")
+  enterpriseAiConversationProjects       EnterpriseAiConversationProject[] @relation("EnterpriseAiConversationProjectUser")
   enterpriseAiMessages                  EnterpriseAiMessage[]             @relation("EnterpriseAiMessageUser")
   enterpriseAiKnowledgeSourcesCreated   EnterpriseAiKnowledgeSource[]     @relation("EnterpriseAiKnowledgeSourceCreatedBy")
   enterpriseAiToolCalls                 EnterpriseAiToolCall[]            @relation("EnterpriseAiToolCallUser")
@@ -583,6 +584,7 @@ model EnterpriseAiConversation {
   userId         String
   title          String                 @default("Nouvelle conversation")
   projectName    String?
+  projectId      String?
   status         String                 @default("ACTIVE")
   lastMessageAt  DateTime?
   archivedAt     DateTime?
@@ -592,14 +594,31 @@ model EnterpriseAiConversation {
   organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assistant      EnterpriseAiAssistant  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
   user           User                   @relation("EnterpriseAiConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  project        EnterpriseAiConversationProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   messages       EnterpriseAiMessage[]
   toolCalls      EnterpriseAiToolCall[]
   usageLogs      EnterpriseAiUsage[]
 
   @@index([organizationId, userId, updatedAt])
   @@index([organizationId, userId, projectName, updatedAt])
+  @@index([organizationId, userId, projectId, updatedAt])
   @@index([organizationId, userId, status, updatedAt])
   @@index([organizationId, assistantId, status, updatedAt])
+}
+
+model EnterpriseAiConversationProject {
+  id             String                     @id @default(cuid())
+  organizationId String
+  userId         String
+  name           String
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                       @relation("EnterpriseAiConversationProjectUser", fields: [userId], references: [id], onDelete: Cascade)
+  conversations  EnterpriseAiConversation[]
+
+  @@unique([organizationId, userId, name])
+  @@index([organizationId, userId, updatedAt])
 }
 
 model EnterpriseAiMessage {
@@ -780,6 +799,7 @@ model Organization {
   conversationProjects         ConversationProject[]
   enterpriseAiAssistants       EnterpriseAiAssistant[]
   enterpriseAiConversations    EnterpriseAiConversation[]
+  enterpriseAiConversationProjects EnterpriseAiConversationProject[]
   enterpriseAiMessages         EnterpriseAiMessage[]
   enterpriseAiKnowledgeSources EnterpriseAiKnowledgeSource[]
   enterpriseAiKnowledgeChunks  EnterpriseAiKnowledgeChunk[]

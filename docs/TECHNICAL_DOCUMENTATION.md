@@ -23,7 +23,7 @@ Objectifs couverts par le code actuel:
 - authentification maison avec sessions securisees par cookie HTTP-only, comparaison de signature en temps constant et OTP email optionnel a l'inscription;
 - plans d'abonnement chatbot avec MaishaPay, callback, factures et activation automatique;
 - base documentaire privee avec upload texte, extraction, embeddings OpenAI et recherche pgvector pour le RAG chatbot;
-- IA Assistant Entreprise pour organisations clientes avec CAG sectoriel, RAG entreprise isole par `organizationId`, conversations dediees, sources privees, citations, quotas de plan, outils backend en lecture et premiere couverture sectorielle PHARMACY;
+- IA Assistant Entreprise pour organisations clientes avec CAG sectoriel, RAG entreprise isole par `organizationId`, conversations dediees, projets persistants `EnterpriseAiConversationProject`, sources privees, citations, quotas de plan, outils backend en lecture et premiere couverture sectorielle PHARMACY;
 - module Entreprise permettant a chaque utilisateur de renseigner son organisation, son poste, ses activites, ses processus, ses donnees, ses objectifs et ses KPI pour enrichir le contexte prive du chatbot;
 - roles `ADMIN`, `MANAGER`, `SUPPORT`, `CLIENT`;
 - tableau de bord client enrichi avec KPI d'entreprise, activites, documents et usage IA;
@@ -730,6 +730,7 @@ Champs conversation ajoutes:
 
 - `projectName`: dossier ou projet libre permettant de classer l'historique des conversations par sujet.
 - `projectId`: lien vers `ConversationProject` pour les dossiers geres par CRUD.
+- `EnterpriseAiConversation.projectId`: lien vers `EnterpriseAiConversationProject` pour classer les conversations IA Entreprise par projet persistant propre a l'utilisateur et a l'organisation.
 
 Enums:
 

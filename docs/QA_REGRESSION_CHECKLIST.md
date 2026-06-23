@@ -56,6 +56,9 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] `/enterprise-modules/AI_ASSISTANT` n'est visible et ouvrable que si le module est activé, inclus dans le plan et accessible au membre actif de l'organisation.
 - [ ] L'onglet Chat occupe l'espace disponible sans carte globale visible; desktop affiche historique dense + conversation active, mobile affiche historique via panneau et fil plein écran.
 - [ ] La liste des conversations IA utilise des items compacts, recherche unifiée, avatar assistant, date relative et FAB fonctionnel de nouvelle conversation.
+- [ ] Le bouton `Nouvelle conversation IA` crée une conversation vide persistée, sélectionnée immédiatement, puis le premier message conserve l'historique et met à jour le titre.
+- [ ] Un utilisateur peut créer un projet IA, créer une conversation dans ce projet, reclasser une conversation existante, renommer le projet et supprimer le projet sans supprimer ses conversations.
+- [ ] Les routes `POST /api/enterprise/ai/conversations`, `PATCH/DELETE /api/enterprise/ai/conversations/[id]` et `POST/PATCH/DELETE /api/enterprise/ai/projects` refusent origine invalide, session absente, contexte non autorisé, projet d'une autre organisation ou d'un autre utilisateur.
 - [ ] `POST /api/enterprise/ai/chat` refuse une requête cross-origin, une session absente, un contexte non `ORGANIZATION`, un `organizationId` différent du contexte actif ou un module désactivé.
 - [ ] Un utilisateur de l'entreprise A ne peut lire aucune conversation, source, usage, paramètre ou résultat d'outil de l'entreprise B.
 - [ ] Une source IA uploadée est enregistrée dans `EnterpriseAiKnowledgeSource`, indexée en chunks `EnterpriseAiKnowledgeChunk` et filtrée par `organizationId`.

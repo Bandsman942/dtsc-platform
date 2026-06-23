@@ -14,6 +14,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Centralisation des confirmations et erreurs client dans un `ToastProvider` global avec notifications applicatives accessibles, tonalités explicites, expiration automatique et remplacement des anciens messages inline sur les principaux parcours privés, admin, chatbot, abonnements, notifications, support, Entreprise, Santé et Pharmacie.
 - Refonte UX/UI premium des espaces conversationnels: composants `components/chat/*` réutilisables, listes denses type conversation, recherche unifiée, FAB d'action principale, headers compacts, fils plein écran et composers fixes pour Mes collaborateurs, Chatbot général et IA Assistant Entreprise.
 
+### Ajouté
+
+- Ajout de projets persistants pour l'IA Assistant Entreprise, avec création de conversations vides, classement par projet, renommage/fusion, suppression de projet sans supprimer les conversations et routes API sécurisées par session, origine, Zod, rate limit et audit.
+
 ## 2026-06-16
 
 ### Corrigé

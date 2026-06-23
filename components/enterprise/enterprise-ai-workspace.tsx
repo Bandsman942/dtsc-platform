@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, BarChart3, Bot, Copy, Database, Edit3, FileText, FolderKanban, History, Info, Loader2, Pencil, RefreshCw, Settings, Share2, Trash2, Upload, X } from "lucide-react";
+import { Archive, BarChart3, Bot, Copy, Database, Edit3, FileText, FolderKanban, FolderPlus, History, Info, Loader2, Pencil, Plus, RefreshCw, Settings, Share2, Trash2, Upload, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -48,11 +48,19 @@ type ChatMessage = {
 type ConversationItem = {
   id: string;
   title: string;
+  projectId: string | null;
   projectName: string | null;
   updatedAt: string;
   lastMessageAt: string | null;
   messages: ChatMessage[];
   _count?: { messages: number };
+};
+
+type ProjectItem = {
+  id: string;
+  name: string;
+  updatedAt: string;
+  _count?: { conversations: number };
 };
 
 type UsageSnapshot = {
@@ -104,6 +112,7 @@ export function EnterpriseAiWorkspace({
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>("chat");
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [usage, setUsage] = useState<UsageSnapshot | null>(null);
@@ -116,6 +125,8 @@ export function EnterpriseAiWorkspace({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [conversationDialog, setConversationDialog] = useState<"rename" | "delete" | null>(null);
+  const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);
+  const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null);
   const [messageDialog, setMessageDialog] = useState<"edit" | "delete" | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
   const [shareToGroupOpen, setShareToGroupOpen] = useState(false);
@@ -134,12 +145,19 @@ export function EnterpriseAiWorkspace({
     getSearchText: (item) => `${item.title} ${item.projectName || ""} ${item.updatedAt} ${item._count?.messages ?? item.messages.length}`,
   });
   const groupedConversations = useMemo(() => {
+    const projectQuery = conversationList.query.trim().toLocaleLowerCase("fr");
+    const initialGroups = projects.reduce<Record<string, ConversationItem[]>>((groups, project) => {
+      if (!projectQuery || project.name.toLocaleLowerCase("fr").includes(projectQuery)) {
+        groups[project.name] = [];
+      }
+      return groups;
+    }, {});
     return conversationList.paginatedItems.reduce<Record<string, ConversationItem[]>>((groups, conversation) => {
       const key = conversation.projectName?.trim() || "Sans projet";
       groups[key] = [...(groups[key] || []), conversation];
       return groups;
-    }, {});
-  }, [conversationList.paginatedItems]);
+    }, initialGroups);
+  }, [conversationList.paginatedItems, conversationList.query, projects]);
 
   const loadSources = useCallback(async () => {
     const response = await fetch(`/api/enterprise/ai/knowledge-sources?organizationId=${encodeURIComponent(organizationId)}`);
@@ -155,6 +173,7 @@ export function EnterpriseAiWorkspace({
     if (!response.ok) throw new Error(body.message || "Chargement de l'historique impossible.");
     const loaded = body.conversations || [];
     setConversations(loaded);
+    setProjects(body.projects || []);
     setPermissions((current) => ({ ...current, ...(body.permissions || {}) }));
     if (!activeConversationId && loaded[0]) {
       setActiveConversationId(loaded[0].id);
@@ -258,17 +277,76 @@ export function EnterpriseAiWorkspace({
     }
   }
 
+  async function createConversation(projectId?: string) {
+    const response = await fetch("/api/enterprise/ai/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId, projectId: projectId || "" }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.conversation?.id) {
+      toastError(body?.message || "Conversation IA non créée.");
+      return;
+    }
+    setActiveConversationId(body.conversation.id);
+    setMessages([]);
+    setHistoryOpen(false);
+    toastSuccess("Nouvelle conversation IA créée.");
+    await loadConversations();
+  }
+
+  async function saveProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") || "").trim();
+    if (!name) return;
+    const endpoint = "/api/enterprise/ai/projects";
+    const method = projectDialog === "rename" && selectedProject ? "PATCH" : "POST";
+    const response = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId, projectId: selectedProject?.id || "", name }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      toastError(body?.message || "Projet IA non enregistré.");
+      return;
+    }
+    setProjectDialog(null);
+    setSelectedProject(null);
+    toastSuccess(projectDialog === "rename" ? "Projet IA renommé." : "Projet IA créé.");
+    await loadConversations();
+  }
+
+  async function deleteProject() {
+    if (!selectedProject) return;
+    const response = await fetch("/api/enterprise/ai/projects", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId, projectId: selectedProject.id }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      toastError(body?.message || "Projet IA non supprimé.");
+      return;
+    }
+    setProjectDialog(null);
+    setSelectedProject(null);
+    toastSuccess("Projet IA supprimé. Ses conversations restent disponibles sans projet.");
+    await loadConversations();
+  }
+
   async function saveConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeConversation) return;
     const form = new FormData(event.currentTarget);
     const title = String(form.get("title") || "").trim();
-    const projectName = String(form.get("projectName") || "").trim();
+    const projectId = String(form.get("projectId") || "").trim();
     if (!title) return;
     const response = await fetch(`/api/enterprise/ai/conversations/${encodeURIComponent(activeConversation.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ organizationId, title, projectName, action: "update" }),
+      body: JSON.stringify({ organizationId, title, projectId, action: "update" }),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
@@ -471,7 +549,12 @@ export function EnterpriseAiWorkspace({
               activeConversationId={activeConversationId}
               conversationList={conversationList}
               usage={usage}
-              onCreate={() => { setActiveConversationId(null); setMessages([]); setHistoryOpen(false); }}
+              projects={projects}
+              onCreate={() => { void createConversation(); }}
+              onCreateProject={() => { setSelectedProject(null); setHistoryOpen(false); setProjectDialog("create"); }}
+              onRenameProject={(project) => { setSelectedProject(project); setHistoryOpen(false); setProjectDialog("rename"); }}
+              onDeleteProject={(project) => { setSelectedProject(project); setHistoryOpen(false); setProjectDialog("delete"); }}
+              onCreateInProject={(projectId) => { void createConversation(projectId); }}
               onSelect={(id) => { setActiveConversationId(id); setHistoryOpen(false); }}
             />
           </div>
@@ -489,7 +572,12 @@ export function EnterpriseAiWorkspace({
                   activeConversationId={activeConversationId}
                   conversationList={conversationList}
                   usage={usage}
-                  onCreate={() => { setActiveConversationId(null); setMessages([]); setHistoryOpen(false); }}
+                  projects={projects}
+                  onCreate={() => { void createConversation(); }}
+                  onCreateProject={() => { setSelectedProject(null); setHistoryOpen(false); setProjectDialog("create"); }}
+                  onRenameProject={(project) => { setSelectedProject(project); setHistoryOpen(false); setProjectDialog("rename"); }}
+                  onDeleteProject={(project) => { setSelectedProject(project); setHistoryOpen(false); setProjectDialog("delete"); }}
+                  onCreateInProject={(projectId) => { void createConversation(projectId); }}
                   onSelect={(id) => { setActiveConversationId(id); setHistoryOpen(false); }}
                 />
               </div>
@@ -671,7 +759,16 @@ export function EnterpriseAiWorkspace({
       <Dialog open={conversationDialog === "rename"} title="Renommer et classer" onClose={() => setConversationDialog(null)}>
         <form onSubmit={saveConversation} className="space-y-3">
           <Input name="title" defaultValue={activeConversation?.title || ""} required placeholder="Titre de la conversation" />
-          <Input name="projectName" defaultValue={activeConversation?.projectName || ""} placeholder="Projet ou dossier" />
+          <select
+            name="projectId"
+            defaultValue={activeConversation?.projectId || ""}
+            className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold text-dtsc-ink"
+          >
+            <option value="">Sans projet</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>{project.name}</option>
+            ))}
+          </select>
           <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
         </form>
       </Dialog>
@@ -689,6 +786,39 @@ export function EnterpriseAiWorkspace({
         )}
       >
         <p className="text-sm leading-7 text-dtsc-muted">Les traces sont conservées côté serveur pour audit et la conversation est masquée de votre historique actif.</p>
+      </Dialog>
+
+      <Dialog
+        open={projectDialog === "create" || projectDialog === "rename"}
+        title={projectDialog === "rename" ? "Renommer le projet IA" : "Créer un projet IA"}
+        description="Les projets permettent de classer les conversations de l'assistant IA de cette entreprise."
+        onClose={() => {
+          setProjectDialog(null);
+          setSelectedProject(null);
+        }}
+      >
+        <form onSubmit={saveProject} className="space-y-3">
+          <Input name="name" defaultValue={selectedProject?.name || ""} required placeholder="Nom du projet" />
+          <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Enregistrer</Button>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={projectDialog === "delete"}
+        title="Supprimer le projet IA"
+        description="Les conversations du projet seront conservées et replacées dans Sans projet."
+        onClose={() => {
+          setProjectDialog(null);
+          setSelectedProject(null);
+        }}
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => { setProjectDialog(null); setSelectedProject(null); }}>Annuler</Button>
+            <Button type="button" variant="destructive" onClick={deleteProject}>Supprimer</Button>
+          </>
+        )}
+      >
+        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression du projet {selectedProject?.name}.</p>
       </Dialog>
 
       <Dialog open={messageDialog === "edit"} title="Modifier le message" onClose={() => { setMessageDialog(null); setSelectedMessage(null); }}>
@@ -758,14 +888,20 @@ export function EnterpriseAiWorkspace({
 
 function EnterpriseAiHistoryPanel({
   conversations,
+  projects,
   groupedConversations,
   activeConversationId,
   conversationList,
   usage,
   onCreate,
+  onCreateProject,
+  onRenameProject,
+  onDeleteProject,
+  onCreateInProject,
   onSelect,
 }: {
   conversations: ConversationItem[];
+  projects: ProjectItem[];
   groupedConversations: Record<string, ConversationItem[]>;
   activeConversationId: string | null;
   conversationList: {
@@ -779,6 +915,10 @@ function EnterpriseAiHistoryPanel({
   };
   usage: UsageSnapshot | null;
   onCreate: () => void;
+  onCreateProject: () => void;
+  onRenameProject: (project: ProjectItem) => void;
+  onDeleteProject: (project: ProjectItem) => void;
+  onCreateInProject: (projectId: string) => void;
   onSelect: (id: string) => void;
 }) {
   const messageLimit = usage?.limits.monthlyMessages || 0;
@@ -787,6 +927,7 @@ function EnterpriseAiHistoryPanel({
   const sourceLimit = usage?.limits.knowledgeSources || 0;
   const sourceValue = usage?.organization.knowledgeSources || 0;
   const sourcePercent = sourceLimit ? Math.min(100, Math.round((sourceValue / Math.max(sourceLimit, 1)) * 100)) : 0;
+  const groupedEntries = Object.entries(groupedConversations);
 
   return (
     <aside className="relative flex h-full min-h-0 flex-col overflow-hidden px-3 py-3 sm:px-4">
@@ -795,9 +936,17 @@ function EnterpriseAiHistoryPanel({
           <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-600">Entreprise</p>
           <h2 className="truncate text-lg font-black text-dtsc-ink">Conversations IA</h2>
         </div>
+        <div className="flex shrink-0 gap-1">
+          <Button type="button" size="icon" onClick={onCreate} className="h-10 w-10 rounded-full bg-[#002b5b] text-white" aria-label="Nouvelle conversation IA">
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button type="button" size="icon" variant="outline" onClick={onCreateProject} className="h-10 w-10 rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue" aria-label="Créer un projet IA">
+            <FolderPlus className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <div className="mt-3">
-        {conversations.length > 0 && (
+        {(conversations.length > 0 || projects.length > 0) && (
           <SearchBar
             value={conversationList.query}
             onChange={conversationList.setQuery}
@@ -807,11 +956,28 @@ function EnterpriseAiHistoryPanel({
         )}
       </div>
       <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-        {Object.entries(groupedConversations).map(([projectName, items]) => (
+        {groupedEntries.map(([projectName, items]) => {
+          const project = projects.find((item) => item.name === projectName) || null;
+          return (
           <div key={projectName} className="space-y-2">
-            <div className="flex items-center gap-2 px-2 pt-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-dtsc-muted">
-              <FolderKanban className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
-              <span className="truncate">{projectName}</span>
+            <div className="flex items-center justify-between gap-2 px-2 pt-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-dtsc-muted">
+              <span className="flex min-w-0 items-center gap-2">
+                <FolderKanban className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
+                <span className="truncate">{projectName}</span>
+              </span>
+              {project ? (
+                <span className="flex shrink-0 items-center gap-1">
+                  <button type="button" onClick={() => onCreateInProject(project.id)} className="rounded-lg p-1 text-dtsc-blue hover:bg-dtsc-soft" aria-label={`Nouvelle conversation dans ${project.name}`}>
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => onRenameProject(project)} className="rounded-lg p-1 text-dtsc-blue hover:bg-dtsc-soft" aria-label={`Renommer ${project.name}`}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => onDeleteProject(project)} className="rounded-lg p-1 text-red-600 hover:bg-red-50" aria-label={`Supprimer ${project.name}`}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ) : null}
             </div>
             {items.map((conversation) => (
               <ConversationListItem
@@ -825,12 +991,18 @@ function EnterpriseAiHistoryPanel({
                 onClick={() => onSelect(conversation.id)}
               />
             ))}
+            {project && !items.length ? (
+              <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">
+                Projet vide. Lancez une conversation dans ce projet.
+              </p>
+            ) : null}
           </div>
-        ))}
-        {!conversationList.filteredCount && conversations.length > 0 && (
+        );
+        })}
+        {!groupedEntries.length && (conversations.length > 0 || projects.length > 0) && (
           <p className="rounded-xl bg-dtsc-page p-3 text-xs font-bold text-dtsc-muted">Aucune conversation ne correspond à votre recherche.</p>
         )}
-        {!conversations.length && (
+        {!conversations.length && !projects.length && (
           <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">Aucune conversation IA pour le moment.</p>
         )}
       </div>

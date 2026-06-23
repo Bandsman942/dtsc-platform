@@ -32,11 +32,35 @@ export const enterpriseAiConversationListSchema = z.object({
   organizationId: z.string().min(1).max(160),
 });
 
+export const enterpriseAiConversationCreateSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  title: z.string().trim().min(1).max(160).optional(),
+  projectId: z.string().trim().max(160).optional().or(z.literal("")),
+  projectName: z.string().trim().max(120).optional().or(z.literal("")),
+});
+
 export const enterpriseAiConversationUpdateSchema = z.object({
   organizationId: z.string().min(1).max(160),
   title: z.string().trim().min(1).max(160).optional(),
+  projectId: z.string().trim().max(160).optional().or(z.literal("")),
   projectName: z.string().trim().max(120).optional().or(z.literal("")),
   action: z.enum(["update", "archive", "restore", "delete"]).default("update"),
+});
+
+export const enterpriseAiProjectCreateSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  name: z.string().trim().min(1).max(120),
+});
+
+export const enterpriseAiProjectUpdateSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  projectId: z.string().min(1).max(160),
+  name: z.string().trim().min(1).max(120),
+});
+
+export const enterpriseAiProjectDeleteSchema = z.object({
+  organizationId: z.string().min(1).max(160),
+  projectId: z.string().min(1).max(160),
 });
 
 export const enterpriseAiMessageUpdateSchema = z.object({

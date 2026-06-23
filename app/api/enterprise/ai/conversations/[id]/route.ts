@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
-import { enterpriseAiConversationUpdateSchema } from "@/lib/enterprise-ai/validators";
+import { enterpriseAiConversationListSchema, enterpriseAiConversationUpdateSchema } from "@/lib/enterprise-ai/validators";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -47,7 +47,33 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const now = new Date();
-  const projectName = typeof data.projectName === "string" ? data.projectName.trim() || null : undefined;
+  const projectName = typeof data.projectName === "string" ? data.projectName.trim() : undefined;
+  const projectId = typeof data.projectId === "string" ? data.projectId.trim() : undefined;
+  let project: { id: string; name: string } | null | undefined;
+  if (data.action === "update" && typeof projectId !== "undefined") {
+    if (projectId) {
+      project = await prisma.enterpriseAiConversationProject.findFirst({
+        where: { id: projectId, organizationId: data.organizationId, userId: session.userId },
+        select: { id: true, name: true },
+      });
+      if (!project) {
+        await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId } });
+        return NextResponse.json({ error: "Not found", message: "Projet IA introuvable." }, { status: 404 });
+      }
+    } else {
+      project = null;
+    }
+  } else if (data.action === "update" && typeof projectName !== "undefined") {
+    project = projectName
+      ? await prisma.enterpriseAiConversationProject.findFirst({
+          where: { organizationId: data.organizationId, userId: session.userId, name: projectName },
+          select: { id: true, name: true },
+        }) || await prisma.enterpriseAiConversationProject.create({
+          data: { organizationId: data.organizationId, userId: session.userId, name: projectName },
+          select: { id: true, name: true },
+        })
+      : null;
+  }
   const updated = await prisma.enterpriseAiConversation.update({
     where: { id },
     data: {
@@ -55,7 +81,7 @@ export async function PATCH(req: Request, { params }: Params) {
       ...(data.action === "restore" ? { status: "ACTIVE", archivedAt: null } : {}),
       ...(data.action === "delete" ? { status: "DELETED", deletedAt: now } : {}),
       ...(data.action === "update" && data.title ? { title: data.title } : {}),
-      ...(data.action === "update" && typeof projectName !== "undefined" ? { projectName } : {}),
+      ...(data.action === "update" && typeof project !== "undefined" ? { projectId: project?.id || null, projectName: project?.name || null } : {}),
     },
     select: { id: true, title: true, projectName: true, status: true, updatedAt: true },
   });
@@ -83,8 +109,18 @@ export async function DELETE(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `enterprise-ai-conversation:${session.userId}`), 90, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", message: "Trop d'actions sur les conversations IA." }, { status: 429 });
+  }
   const url = new URL(req.url);
-  const organizationId = url.searchParams.get("organizationId") || "";
+  const parsed = enterpriseAiConversationListSchema.safeParse({ organizationId: url.searchParams.get("organizationId") || "" });
+  if (!parsed.success) {
+    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid query", message: "Organisation invalide." }, { status: 400 });
+  }
+  const organizationId = parsed.data.organizationId;
   const access = organizationId ? await getEnterpriseAiAccess(session, organizationId, "chat") : null;
   if (!access) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { organizationId } });
