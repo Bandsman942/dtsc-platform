@@ -6,15 +6,17 @@ import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/li
 type CashInput = z.infer<typeof cashCreateSchema>;
 const nil = <T>(value: T | "" | undefined) => value === "" || value === undefined ? null : value;
 const activePaymentStatuses = ["PAID", "VALIDATED"];
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 export async function recalculateSalePaymentStatus(organizationId: string, saleId: string) {
-  const sale = await prisma.pharmacySale.findFirst({ where: { id: saleId, organizationId }, select: { id: true, totalAmount: true, invoiceId: true } });
+  const sale = await prisma.pharmacySale.findFirst({ where: { id: saleId, organizationId }, select: { id: true, totalAmount: true, exchangeRateToBase: true, invoiceId: true } });
   if (!sale) throw new Error("SALE_NOT_FOUND");
   const aggregate = await prisma.pharmacyPayment.aggregate({ where: { organizationId, saleId, status: { in: activePaymentStatuses } }, _sum: { amount: true } });
   const paid = Number(aggregate._sum.amount || 0);
   const remaining = Math.max(0, Number(sale.totalAmount) - paid);
   const paymentStatus = remaining === 0 ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "UNPAID";
-  await prisma.pharmacySale.update({ where: { id: sale.id }, data: { paidAmount: paid, remainingAmount: remaining, paymentStatus, status: paymentStatus === "PAID" ? "PAID" : undefined } });
+  const exchangeRate = Number(sale.exchangeRateToBase || 1);
+  await prisma.pharmacySale.update({ where: { id: sale.id }, data: { paidAmount: paid, remainingAmount: remaining, paidAmountBase: roundMoney(paid * exchangeRate), remainingAmountBase: roundMoney(remaining * exchangeRate), paymentStatus, status: paymentStatus === "PAID" ? "PAID" : undefined } });
   if (sale.invoiceId) await prisma.pharmacyInvoice.updateMany({ where: { id: sale.invoiceId, organizationId }, data: { paidAmount: paid, remainingAmount: remaining, status: remaining === 0 ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED" } });
 }
 
@@ -61,6 +63,7 @@ export async function createPayment(organizationId: string, userId: string, data
   if (saleId && !sale) throw new Error("SALE_NOT_FOUND");
   if (invoiceId && !invoice) throw new Error("INVOICE_NOT_FOUND");
   if (saleId && invoice?.saleId && invoice.saleId !== saleId) throw new Error("SALE_INVOICE_MISMATCH");
+  if (sale && data.currency !== sale.currency) throw new Error("PAYMENT_CURRENCY_MISMATCH");
   if (!cashier) throw new Error("CASHIER_NOT_FOUND");
   if (data.paymentMethod !== "CREDIT" && !cashSessionId && cashSettings.requireCashSessionForSales && !cashSettings.allowPaymentWithoutCashSession) throw new Error("SESSION_REQUIRED");
   if (cashSessionId && !session) throw new Error("SESSION_NOT_OPEN");
@@ -83,7 +86,7 @@ export async function generateInvoiceFromSale(organizationId: string, saleId: st
   const paid = sale.payments.reduce((sum, item) => sum + Number(item.amount), 0);
   const invoiceNumber = await generatePharmacyEntityNumber(organizationId, "INVOICE");
   return prisma.$transaction(async (transaction) => {
-    const invoice = await transaction.pharmacyInvoice.create({ data: { organizationId, invoiceNumber, saleId: sale.id, customerName: sale.customerName, invoiceDate: new Date(), subtotal: sale.subtotal, discount: sale.globalDiscount, taxAmount: sale.taxAmount, totalAmount: sale.totalAmount, paidAmount: paid, remainingAmount: Math.max(0, Number(sale.totalAmount) - paid), currency: "USD", status: paid >= Number(sale.totalAmount) ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED", createdById: userId, updatedById: userId } });
+    const invoice = await transaction.pharmacyInvoice.create({ data: { organizationId, invoiceNumber, saleId: sale.id, customerName: sale.customerName, invoiceDate: new Date(), subtotal: sale.subtotal, discount: sale.globalDiscount, taxAmount: sale.taxAmount, totalAmount: sale.totalAmount, paidAmount: paid, remainingAmount: Math.max(0, Number(sale.totalAmount) - paid), currency: sale.currency, status: paid >= Number(sale.totalAmount) ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED", createdById: userId, updatedById: userId } });
     await transaction.pharmacySale.update({ where: { id: sale.id }, data: { invoiceId: invoice.id, updatedById: userId } });
     return invoice;
   });
@@ -163,7 +166,7 @@ export async function getCashDataset(organizationId: string) {
     prisma.pharmacyCashReceipt.findMany({ where: { organizationId }, orderBy: { generatedAt: "desc" } }),
     prisma.pharmacyRefund.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" } }),
     prisma.pharmacyCashDiscrepancy.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" } }),
-    prisma.pharmacySale.findMany({ where: { organizationId, status: { notIn: ["CANCELLED", "REJECTED"] } }, orderBy: { saleDate: "desc" }, select: { id: true, saleNumber: true, customerName: true, totalAmount: true, paidAmount: true, remainingAmount: true, paymentStatus: true, cashierId: true, cashSessionId: true, saleDate: true } }),
+    prisma.pharmacySale.findMany({ where: { organizationId, status: { notIn: ["CANCELLED", "REJECTED"] } }, orderBy: { saleDate: "desc" }, select: { id: true, saleNumber: true, customerName: true, totalAmount: true, paidAmount: true, remainingAmount: true, currency: true, paymentStatus: true, cashierId: true, cashSessionId: true, saleDate: true } }),
     prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, select: { user: { select: { id: true, name: true } } } }),
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, select: { id: true, labelFr: true } }),
   ]);

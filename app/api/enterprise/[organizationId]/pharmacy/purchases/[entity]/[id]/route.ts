@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { convertPharmacyMoneyToBase } from "@/lib/pharmacy-currencies";
 import { canAccessPharmacyPurchases, type PharmacyPurchaseAction } from "@/lib/pharmacy-purchase-access";
-import { purchaseActionSchema } from "@/lib/pharmacy-purchase-validators";
-import { createReceiptFromPurchaseOrder } from "@/lib/pharmacy-purchases";
+import { purchaseActionSchema, purchaseOrderInputSchema } from "@/lib/pharmacy-purchase-validators";
+import { createReceiptFromPurchaseOrder, updatePurchaseOrderDraft, validatePurchaseReferences } from "@/lib/pharmacy-purchases";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -27,7 +28,27 @@ export async function PATCH(request: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(request, `pharmacy-purchases:${session.userId}`), 120, 3600000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests", message: "Trop d'actions achats." }, { status: 429 });
   const { organizationId, entity, id } = await params;
-  const parsed = purchaseActionSchema.safeParse(await request.json().catch(() => null));
+  const body = await request.json().catch(() => null);
+  const actionName = body && typeof body === "object" && "action" in body ? String(body.action) : "";
+  if (!actionName) {
+    if (entity !== "order") return NextResponse.json({ error: "Invalid entity", message: "Seules les commandes peuvent être modifiées par ce formulaire." }, { status: 400 });
+    if (!(await canAccessPharmacyPurchases(session.userId, organizationId, "update"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const parsedOrder = purchaseOrderInputSchema.safeParse(body);
+    if (!parsedOrder.success) return NextResponse.json({ error: "Invalid payload", message: parsedOrder.error.issues[0]?.message || "Commande fournisseur invalide." }, { status: 400 });
+    const referenceError = await validatePurchaseReferences(organizationId, parsedOrder.data);
+    if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
+    try {
+      const order = await updatePurchaseOrderDraft(organizationId, id, session.userId, parsedOrder.data);
+      await writeAuditLog({ userId: session.userId, action: "PHARMACY_PURCHASE_ORDER_UPDATED", entity: "order", entityId: id, request, metadata: { organizationId } });
+      await writeApiLog({ request, statusCode: 200, userId: session.userId, startedAt });
+      return NextResponse.json({ ok: true, record: order });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "UNKNOWN";
+      const messages: Record<string, string> = { ORDER_NOT_FOUND: "Commande introuvable.", ORDER_LOCKED: "Une commande validée, commandée ou déjà réceptionnée ne peut plus être modifiée." };
+      return NextResponse.json({ error: code, message: messages[code] || "Modification de commande impossible." }, { status: code === "ORDER_NOT_FOUND" ? 404 : 409 });
+    }
+  }
+  const parsed = purchaseActionSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid action", message: "Action achats invalide." }, { status: 400 });
   const data = parsed.data;
   if (!(await canAccessPharmacyPurchases(session.userId, organizationId, permission(data.action)))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -47,9 +68,11 @@ export async function PATCH(request: Request, { params }: Params) {
         const suggestedSupplierId = item.suggestedSupplierId;
         if (item.status !== "VALIDATED" || !suggestedSupplierId) throw new Error("REQUEST_NOT_CONVERTIBLE");
         const count = await prisma.pharmacyPurchaseOrder.count({ where: { organizationId } });
+        const estimatedTotal = Number(item.estimatedPrice || 0) * Number(item.requestedQuantity);
+        const conversion = await convertPharmacyMoneyToBase(organizationId, estimatedTotal, "USD");
         await prisma.$transaction(async (transaction) => {
-          const order = await transaction.pharmacyPurchaseOrder.create({ data: { organizationId, orderNumber: `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, supplierId: suggestedSupplierId, requestId: item.id, requestedById: item.requestedById, departmentId: item.departmentId, priority: item.priority, orderDate: new Date(), estimatedTotal: Number(item.estimatedPrice || 0) * Number(item.requestedQuantity), currency: "USD", createdById: session.userId, updatedById: session.userId } });
-          await transaction.pharmacyPurchaseOrderLine.create({ data: { organizationId, purchaseOrderId: order.id, productId: item.productId, orderedQuantity: item.requestedQuantity, remainingQuantity: item.requestedQuantity, unit: item.unit, estimatedUnitPrice: item.estimatedPrice, totalLine: Number(item.estimatedPrice || 0) * Number(item.requestedQuantity) } });
+          const order = await transaction.pharmacyPurchaseOrder.create({ data: { organizationId, orderNumber: `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`, supplierId: suggestedSupplierId, requestId: item.id, requestedById: item.requestedById, departmentId: item.departmentId, priority: item.priority, orderDate: new Date(), estimatedTotal, currency: conversion.currency, baseCurrency: conversion.baseCurrency, exchangeRateToBase: conversion.exchangeRateToBase, estimatedTotalBase: conversion.baseAmount, createdById: session.userId, updatedById: session.userId } });
+          await transaction.pharmacyPurchaseOrderLine.create({ data: { organizationId, purchaseOrderId: order.id, productId: item.productId, orderedQuantity: item.requestedQuantity, remainingQuantity: item.requestedQuantity, unit: item.unit, estimatedUnitPrice: item.estimatedPrice, totalLine: estimatedTotal } });
           await transaction.pharmacyReplenishmentRequest.update({ where: { id }, data: { status: "CONVERTED_TO_ORDER", purchaseOrderId: order.id } });
         });
       } else {

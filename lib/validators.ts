@@ -598,7 +598,7 @@ const pharmacyBatchBaseSchema = z.object({
   stockEntryDate: optionalBatchDate,
   receivedById: z.string().max(120).optional().or(z.literal("")),
   receivedQuantity: z.coerce.number().gt(0).max(1_000_000_000),
-  availableQuantity: z.coerce.number().min(0).max(1_000_000_000),
+  availableQuantity: z.coerce.number().min(0).max(1_000_000_000).default(0),
   reservedQuantity: z.coerce.number().min(0).max(1_000_000_000).default(0),
   damagedQuantity: z.coerce.number().min(0).max(1_000_000_000).default(0),
   unit: z.string().trim().min(1).max(80),

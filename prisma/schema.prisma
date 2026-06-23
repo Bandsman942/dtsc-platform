@@ -3171,6 +3171,9 @@ model PharmacyPurchaseOrder {
   budgetId                    String?
   estimatedTotal              Decimal                     @default(0) @db.Decimal(14, 2)
   currency                    String                      @default("USD")
+  baseCurrency                String                      @default("USD")
+  exchangeRateToBase          Decimal                     @default(1) @db.Decimal(18, 6)
+  estimatedTotalBase          Decimal                     @default(0) @db.Decimal(14, 2)
   financialValidationRequired Boolean                     @default(false)
   status                      String                      @default("DRAFT")
   submittedById               String?
@@ -3283,6 +3286,10 @@ model PharmacyReceipt {
   invoiceDate              DateTime?
   deliveryNoteDate         DateTime?
   totalAmount              Decimal?                     @db.Decimal(14, 2)
+  currency                 String                       @default("USD")
+  baseCurrency             String                       @default("USD")
+  exchangeRateToBase       Decimal                      @default(1) @db.Decimal(18, 6)
+  totalAmountBase          Decimal?                     @db.Decimal(14, 2)
   totalItems               Decimal?                     @db.Decimal(14, 3)
   status                   String                       @default("DRAFT")
   submittedById            String?
@@ -3565,11 +3572,18 @@ model PharmacySale {
   departmentId                String?
   saleDate                    DateTime
   subtotal                    Decimal               @db.Decimal(14, 2)
+  currency                    String                @default("USD")
+  baseCurrency                String                @default("USD")
+  exchangeRateToBase          Decimal               @default(1) @db.Decimal(18, 6)
+  subtotalBase                Decimal               @default(0) @db.Decimal(14, 2)
   globalDiscount              Decimal?              @db.Decimal(8, 2)
   taxAmount                   Decimal?              @db.Decimal(14, 2)
   totalAmount                 Decimal               @db.Decimal(14, 2)
+  totalAmountBase             Decimal               @default(0) @db.Decimal(14, 2)
   paidAmount                  Decimal               @default(0) @db.Decimal(14, 2)
+  paidAmountBase              Decimal               @default(0) @db.Decimal(14, 2)
   remainingAmount             Decimal               @db.Decimal(14, 2)
+  remainingAmountBase         Decimal               @default(0) @db.Decimal(14, 2)
   changeAmount                Decimal?              @db.Decimal(14, 2)
   paymentMethod               String?
   paymentReference            String?
@@ -4581,6 +4595,25 @@ model PharmacySetting {
   updatedAt                       DateTime @updatedAt
 
   @@index([organizationId, status])
+}
+
+model PharmacyCurrencyRate {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String
+  label          String
+  symbol         String?
+  isBase         Boolean  @default(false)
+  rateToBase     Decimal  @default(1) @db.Decimal(18, 6)
+  roundingScale  Int      @default(2)
+  active         Boolean  @default(true)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId, active])
+  @@index([organizationId, isBase])
 }
 
 model PharmacyNumberingSequence {

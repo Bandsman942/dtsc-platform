@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const optionalText = z.string().trim().max(1200).optional().or(z.literal(""));
 const optionalId = z.string().max(160).optional().or(z.literal(""));
-const optionalNumber = z.union([z.coerce.number().min(0).max(1_000_000_000), z.literal("")]).optional();
+const hasTwoDecimals = (value: number) => Number.isInteger(Math.round(value * 100));
+const optionalMoney = z.union([z.coerce.number().min(0).max(1_000_000_000).refine(hasTwoDecimals, "Le montant doit avoir au maximum deux décimales."), z.literal("")]).optional();
+const optionalIntegerQuantity = z.union([z.coerce.number().int("La quantité doit être un nombre entier.").min(0).max(1_000_000_000), z.literal("")]).optional();
+const positiveIntegerQuantity = z.coerce.number().int("La quantité doit être un nombre entier.").gt(0).max(1_000_000_000);
 const optionalDate = z.union([z.coerce.date(), z.literal("")]).optional();
 
 export const receiptBatchInputSchema = z.object({
@@ -12,7 +15,7 @@ export const receiptBatchInputSchema = z.object({
   manufacturingDate: optionalDate,
   expiryDate: z.coerce.date(),
   barcode: z.string().trim().max(180).optional().or(z.literal("")),
-  receivedQuantity: z.coerce.number().gt(0).max(1_000_000_000),
+  receivedQuantity: positiveIntegerQuantity,
   locationId: optionalId,
   initialStatus: z.enum(["ACTIVE", "QUARANTINED"]).default("ACTIVE"),
   notes: optionalText,
@@ -21,11 +24,11 @@ export const receiptBatchInputSchema = z.object({
 export const receiptLineInputSchema = z.object({
   productId: z.string().min(1).max(160),
   purchaseOrderLineId: optionalId,
-  orderedQuantity: optionalNumber,
-  previouslyReceivedQuantity: optionalNumber,
-  receivedQuantity: z.coerce.number().gt(0).max(1_000_000_000),
+  orderedQuantity: optionalIntegerQuantity,
+  previouslyReceivedQuantity: optionalIntegerQuantity,
+  receivedQuantity: positiveIntegerQuantity,
   unit: z.string().trim().min(1).max(80),
-  purchasePrice: optionalNumber,
+  purchasePrice: optionalMoney,
   supplierDiscount: z.union([z.coerce.number().min(0).max(100), z.literal("")]).optional(),
   notes: optionalText,
   batches: z.array(receiptBatchInputSchema).min(1).max(50),

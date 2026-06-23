@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { convertPharmacyMoneyToBase } from "@/lib/pharmacy-currencies";
 import { prisma } from "@/lib/prisma";
 import type { pharmacyReceiptSchema } from "@/lib/pharmacy-receipt-validators";
 import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
@@ -9,6 +10,7 @@ export type PharmacyReceiptInput = z.infer<typeof pharmacyReceiptSchema>;
 function nullable<T>(value: T | "" | undefined) {
   return value === "" || value === undefined ? null : value;
 }
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 export async function validateReceiptReferences(organizationId: string, data: PharmacyReceiptInput) {
   const settings = (await getEffectivePharmacySettings(organizationId)).sections; const receiptSettings = settings["receipts-purchases"]; const expirySettings = settings["expiry-fefo"];
@@ -51,9 +53,11 @@ export async function validateReceiptReferences(organizationId: string, data: Ph
 export async function createPharmacyReceipt(organizationId: string, userId: string, data: PharmacyReceiptInput) {
   const receiptNumber = data.receiptNumber || await generatePharmacyEntityNumber(organizationId, "RECEIPT");
   const totalItems = data.lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
-  const totalAmount = data.lines.reduce((sum, line) => sum + line.receivedQuantity * Number(line.purchasePrice || 0) * (1 - Number(line.supplierDiscount || 0) / 100), 0);
+  const totalAmount = roundMoney(data.lines.reduce((sum, line) => sum + line.receivedQuantity * Number(line.purchasePrice || 0) * (1 - Number(line.supplierDiscount || 0) / 100), 0));
+  const linkedOrder = data.purchaseOrderId ? await prisma.pharmacyPurchaseOrder.findFirst({ where: { id: data.purchaseOrderId, organizationId }, select: { currency: true } }) : null;
+  const conversion = await convertPharmacyMoneyToBase(organizationId, totalAmount, linkedOrder?.currency);
   return prisma.$transaction(async (tx) => {
-    const receipt = await tx.pharmacyReceipt.create({ data: { organizationId, receiptNumber, receiptType: data.receiptType, supplierId: data.supplierId, purchaseOrderId: nullable(data.purchaseOrderId), departmentId: nullable(data.departmentId), mainLocationId: nullable(data.mainLocationId), receivedById: data.receivedById, receivedAt: data.receivedAt, supplierInvoiceReference: nullable(data.supplierInvoiceReference), deliveryNoteReference: nullable(data.deliveryNoteReference), invoiceDate: nullable(data.invoiceDate), deliveryNoteDate: nullable(data.deliveryNoteDate), totalItems, totalAmount, notes: nullable(data.notes), createdById: userId, updatedById: userId } });
+    const receipt = await tx.pharmacyReceipt.create({ data: { organizationId, receiptNumber, receiptType: data.receiptType, supplierId: data.supplierId, purchaseOrderId: nullable(data.purchaseOrderId), departmentId: nullable(data.departmentId), mainLocationId: nullable(data.mainLocationId), receivedById: data.receivedById, receivedAt: data.receivedAt, supplierInvoiceReference: nullable(data.supplierInvoiceReference), deliveryNoteReference: nullable(data.deliveryNoteReference), invoiceDate: nullable(data.invoiceDate), deliveryNoteDate: nullable(data.deliveryNoteDate), totalItems, totalAmount, currency: conversion.currency, baseCurrency: conversion.baseCurrency, exchangeRateToBase: conversion.exchangeRateToBase, totalAmountBase: conversion.baseAmount, notes: nullable(data.notes), createdById: userId, updatedById: userId } });
     for (const lineInput of data.lines) {
       const totalLine = lineInput.receivedQuantity * Number(lineInput.purchasePrice || 0) * (1 - Number(lineInput.supplierDiscount || 0) / 100);
       const line = await tx.pharmacyReceiptLine.create({ data: { organizationId, receiptId: receipt.id, productId: lineInput.productId, purchaseOrderLineId: nullable(lineInput.purchaseOrderLineId), orderedQuantity: nullable(lineInput.orderedQuantity), previouslyReceivedQuantity: nullable(lineInput.previouslyReceivedQuantity), receivedQuantity: lineInput.receivedQuantity, unit: lineInput.unit, purchasePrice: nullable(lineInput.purchasePrice), supplierDiscount: nullable(lineInput.supplierDiscount), totalLine, notes: nullable(lineInput.notes) } });
@@ -71,11 +75,13 @@ export async function updatePharmacyReceipt(organizationId: string, receiptId: s
   if (!existing) throw new Error("RECEIPT_NOT_FOUND");
   if (existing.status !== "DRAFT" || existing.stockImpactApplied) throw new Error("RECEIPT_LOCKED");
   const totalItems = data.lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
-  const totalAmount = data.lines.reduce((sum, line) => sum + line.receivedQuantity * Number(line.purchasePrice || 0) * (1 - Number(line.supplierDiscount || 0) / 100), 0);
+  const totalAmount = roundMoney(data.lines.reduce((sum, line) => sum + line.receivedQuantity * Number(line.purchasePrice || 0) * (1 - Number(line.supplierDiscount || 0) / 100), 0));
+  const linkedOrder = data.purchaseOrderId ? await prisma.pharmacyPurchaseOrder.findFirst({ where: { id: data.purchaseOrderId, organizationId }, select: { currency: true } }) : null;
+  const conversion = await convertPharmacyMoneyToBase(organizationId, totalAmount, linkedOrder?.currency);
   return prisma.$transaction(async (tx) => {
     await tx.pharmacyReceiptLine.deleteMany({ where: { receiptId, organizationId } });
     await tx.pharmacyReceiptDiscrepancy.deleteMany({ where: { receiptId, organizationId } });
-    const receipt = await tx.pharmacyReceipt.update({ where: { id: receiptId }, data: { receiptNumber: data.receiptNumber || undefined, receiptType: data.receiptType, supplierId: data.supplierId, purchaseOrderId: nullable(data.purchaseOrderId), departmentId: nullable(data.departmentId), mainLocationId: nullable(data.mainLocationId), receivedById: data.receivedById, receivedAt: data.receivedAt, supplierInvoiceReference: nullable(data.supplierInvoiceReference), deliveryNoteReference: nullable(data.deliveryNoteReference), invoiceDate: nullable(data.invoiceDate), deliveryNoteDate: nullable(data.deliveryNoteDate), totalItems, totalAmount, notes: nullable(data.notes), updatedById: userId } });
+    const receipt = await tx.pharmacyReceipt.update({ where: { id: receiptId }, data: { receiptNumber: data.receiptNumber || undefined, receiptType: data.receiptType, supplierId: data.supplierId, purchaseOrderId: nullable(data.purchaseOrderId), departmentId: nullable(data.departmentId), mainLocationId: nullable(data.mainLocationId), receivedById: data.receivedById, receivedAt: data.receivedAt, supplierInvoiceReference: nullable(data.supplierInvoiceReference), deliveryNoteReference: nullable(data.deliveryNoteReference), invoiceDate: nullable(data.invoiceDate), deliveryNoteDate: nullable(data.deliveryNoteDate), totalItems, totalAmount, currency: conversion.currency, baseCurrency: conversion.baseCurrency, exchangeRateToBase: conversion.exchangeRateToBase, totalAmountBase: conversion.baseAmount, notes: nullable(data.notes), updatedById: userId } });
     for (const lineInput of data.lines) {
       const totalLine = lineInput.receivedQuantity * Number(lineInput.purchasePrice || 0) * (1 - Number(lineInput.supplierDiscount || 0) / 100);
       const line = await tx.pharmacyReceiptLine.create({ data: { organizationId, receiptId, productId: lineInput.productId, purchaseOrderLineId: nullable(lineInput.purchaseOrderLineId), orderedQuantity: nullable(lineInput.orderedQuantity), previouslyReceivedQuantity: nullable(lineInput.previouslyReceivedQuantity), receivedQuantity: lineInput.receivedQuantity, unit: lineInput.unit, purchasePrice: nullable(lineInput.purchasePrice), supplierDiscount: nullable(lineInput.supplierDiscount), totalLine, notes: nullable(lineInput.notes) } });
@@ -86,6 +92,8 @@ export async function updatePharmacyReceipt(organizationId: string, receiptId: s
 }
 
 export async function getPharmacyReceiptsDataset(organizationId: string) {
+  const settings = await getEffectivePharmacySettings(organizationId);
+  const currency = String(settings.sections.general.currency || "USD");
   const [receipts, products, batches, members, departments, locations, suppliers, purchaseOrders, movements] = await Promise.all([
     prisma.pharmacyReceipt.findMany({ where: { organizationId }, orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }], include: { lines: true, receiptBatches: true, discrepancies: true, documents: true } }),
     prisma.pharmacyProduct.findMany({ where: { organizationId, status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true, stockUnit: true, referencePurchasePrice: true } }),
@@ -94,14 +102,14 @@ export async function getPharmacyReceiptsDataset(organizationId: string) {
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, orderBy: { labelFr: "asc" }, select: { id: true, labelFr: true } }),
     prisma.pharmacyStockLocation.findMany({ where: { organizationId, status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),
     prisma.pharmacySupplier.findMany({ where: { organizationId, status: { notIn: ["ARCHIVED", "INACTIVE"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.pharmacyPurchaseOrder.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "CANCELLED", "ARCHIVED"] } }, orderBy: { orderDate: "desc" }, select: { id: true, orderNumber: true, status: true, supplierId: true } }),
+    prisma.pharmacyPurchaseOrder.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "CANCELLED", "ARCHIVED", "RECEIVED"] } }, orderBy: { orderDate: "desc" }, select: { id: true, orderNumber: true, status: true, supplierId: true, departmentId: true, currency: true, lines: { select: { id: true, productId: true, orderedQuantity: true, receivedQuantity: true, remainingQuantity: true, unit: true, estimatedUnitPrice: true, discountRate: true } } } }),
     prisma.pharmacyStockMovement.findMany({ where: { organizationId, relatedEntityType: "PharmacyReceipt" }, orderBy: { createdAt: "desc" }, take: 300, select: { id: true, relatedEntityId: true, movementType: true, direction: true, quantity: true, createdAt: true } }),
   ]);
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const today = now.toISOString().slice(0, 10);
   const metrics = { today: receipts.filter((receipt) => receipt.receivedAt.toISOString().slice(0, 10) === today).length, month: receipts.filter((receipt) => receipt.receivedAt >= monthStart).length, drafts: receipts.filter((receipt) => receipt.status === "DRAFT").length, submitted: receipts.filter((receipt) => receipt.status === "SUBMITTED").length, validated: receipts.filter((receipt) => ["VALIDATED", "PARTIALLY_VALIDATED"].includes(receipt.status)).length, cancelled: receipts.filter((receipt) => receipt.status === "CANCELLED").length, partial: receipts.filter((receipt) => receipt.status === "PARTIALLY_VALIDATED" || receipt.receiptType === "PARTIAL").length, pendingOrders: purchaseOrders.filter((order) => !["RECEIVED", "CANCELLED", "ARCHIVED"].includes(order.status)).length, productsThisMonth: receipts.filter((receipt) => receipt.receivedAt >= monthStart && receipt.stockImpactApplied).reduce((sum, receipt) => sum + Number(receipt.totalItems || 0), 0), valueThisMonth: receipts.filter((receipt) => receipt.receivedAt >= monthStart && receipt.stockImpactApplied).reduce((sum, receipt) => sum + Number(receipt.totalAmount || 0), 0), openDiscrepancies: receipts.flatMap((receipt) => receipt.discrepancies).filter((item) => !["RESOLVED", "REJECTED", "CANCELLED"].includes(item.status)).length, createdBatches: receipts.flatMap((receipt) => receipt.receiptBatches).filter((item) => item.createNewBatch && item.batchId).length, missingDocuments: receipts.filter((receipt) => !receipt.documents.length).length };
-  return { metrics, receipts, products, batches, members: members.map((member) => member.user), departments, locations, suppliers: suppliers.map((supplier) => ({ id: supplier.id, title: supplier.name })), purchaseOrders: purchaseOrders.map((order) => ({ id: order.id, title: order.orderNumber, status: order.status, supplierId: order.supplierId })), movements };
+  return { metrics, currency, receipts, products, batches, members: members.map((member) => member.user), departments, locations, suppliers: suppliers.map((supplier) => ({ id: supplier.id, title: supplier.name })), purchaseOrders: purchaseOrders.map((order) => ({ id: order.id, title: order.orderNumber, status: order.status, supplierId: order.supplierId, departmentId: order.departmentId, currency: order.currency, lines: order.lines })), movements };
 }
 
 export async function applyReceiptStockImpact(organizationId: string, receiptId: string, userId: string) {

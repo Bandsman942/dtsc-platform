@@ -51,6 +51,14 @@ export async function PATCH(req: Request, { params }: Params) {
   if (merged.data.receiptId && !receipt) return NextResponse.json({ error: "Invalid receipt", message: "La réception sélectionnée n'appartient pas à cette pharmacie." }, { status: 400 });
   const data: Record<string, unknown> = { ...parsed.data, updatedById: session.userId };
   for (const [key, value] of Object.entries(data)) if (nullableKeys.has(key) && value === "") data[key] = null;
+  if (parsed.data.receivedQuantity !== undefined || parsed.data.reservedQuantity !== undefined || parsed.data.damagedQuantity !== undefined) {
+    const [outgoing, incomingReturns] = await Promise.all([
+      prisma.pharmacyStockMovement.aggregate({ where: { organizationId, batchId, direction: "OUT", status: "APPLIED" }, _sum: { quantity: true } }),
+      prisma.pharmacyStockMovement.aggregate({ where: { organizationId, batchId, direction: "IN", status: "APPLIED", movementType: { in: ["SALE_CANCELLATION", "RETURN", "CUSTOMER_RETURN"] } }, _sum: { quantity: true } }),
+    ]);
+    const netExitedQuantity = Math.max(0, Number(outgoing._sum.quantity || 0) - Number(incomingReturns._sum.quantity || 0));
+    data.availableQuantity = Math.max(0, Number(merged.data.receivedQuantity) - Number(merged.data.reservedQuantity || 0) - Number(merged.data.damagedQuantity || 0) - netExitedQuantity);
+  }
   if (parsed.data.purchasePrice !== undefined || parsed.data.receivedQuantity !== undefined) data.totalCost = merged.data.purchasePrice === "" || merged.data.purchasePrice === null || merged.data.purchasePrice === undefined ? null : Number(merged.data.receivedQuantity) * Number(merged.data.purchasePrice);
   try {
     const batch = await prisma.pharmacyBatch.update({ where: { id: batchId }, data: data as Prisma.PharmacyBatchUncheckedUpdateInput, include: { product: true } });

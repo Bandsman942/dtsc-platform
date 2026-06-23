@@ -295,6 +295,8 @@ pnpm prisma studio
 
 Le sous-module `PHARMACY_SETTINGS` fournit un centre de configuration métier isolé par organisation. Les valeurs sont appliquées côté serveur aux ventes, réceptions, lots, caisse, alertes, documents, qualité et rapports. Les changements critiques sont motivés et audités; les numéros métier sont générés avec des séquences transactionnelles.
 
+Les devises PHARMACY sont administrées dans `Devises & conversions`: `USD`, `CDF` et `EUR` disposent de taux auditables, les achats/réceptions/ventes gardent leur devise métier et stockent un miroir converti vers la devise principale.
+
 ## OpenAI
 
 Le chatbot utilise l'endpoint OpenAI **Responses API** côté serveur dans `app/api/chat/route.ts`.

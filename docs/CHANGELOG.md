@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction des workflows PHARMACY Fournisseurs, commandes, réceptions, ventes, caisse et lots: commandes brouillon modifiables uniquement avant validation, réception brouillon réutilisée au lieu d'être dupliquée, quantités d'achat entières, montants limités à deux décimales, statut de commande synchronisé après réception et quantité disponible des lots recalculée côté serveur.
 - Correction de l'affichage des bannières promotionnelles: une nouvelle bannière est désormais active par défaut afin d'apparaître immédiatement sur les surfaces ciblées, sauf statut explicitement changé.
 - Correction du build Vercel des bannières promotionnelles en rétablissant l'import Prisma requis par la page Administration.
 - Correction du build Vercel du refactor toast: les workspaces Santé et Pharmacie consommant un état `message` utilisent désormais `useToastMessage(message)` afin d'éviter les erreurs ESLint `no-unused-vars`.
@@ -19,11 +20,13 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout d'un socle de devises PHARMACY avec modèle `PharmacyCurrencyRate`, migration additive, onglet Paramètres `Devises & conversions`, conversion des commandes, réceptions et ventes vers la devise principale et garde-fou de devise sur les encaissements.
 - Ajout du sous-module Administration `Bannières promo` pour créer, modifier, activer, cibler par rôle et archiver des messages promotionnels affichables dans Chatbot, IA Assistant Entreprise, Mes collaborateurs et Annonces, avec dismissals par utilisateur, API sécurisées et audit.
 - Ajout de projets persistants pour l'IA Assistant Entreprise, avec création de conversations vides, classement par projet, renommage/fusion, suppression de projet sans supprimer les conversations et routes API sécurisées par session, origine, Zod, rate limit et audit.
 
 ### Modifié
 
+- Les formulaires PHARMACY achats, réceptions, lots, ventes et caisse affichent les devises réelles des objets, préremplissent les lignes depuis les commandes, filtrent les caissiers par poste et utilisent des cartes compactes avec menus `...`.
 - Le module Profil sépare désormais son bloc de présentation mobile des accordéons de contenu afin que seuls les éléments d'introduction disparaissent au scroll vertical.
 - Sur mobile, Chatbot, IA Assistant Entreprise et Mes collaborateurs ouvrent d'abord la liste des conversations ou groupes, sauf lien profond explicite, et le module Mes collaborateurs affiche désormais un compteur global de messages non lus comme Notifications.
 

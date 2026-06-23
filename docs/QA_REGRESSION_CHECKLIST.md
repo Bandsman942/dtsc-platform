@@ -211,6 +211,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Une organisation PHARMACY crée et modifie un lot lié à un produit actif de la même organisation.
 - [ ] Les doublons produit + numéro de lot et les codes-barres de lot dupliqués sont refusés.
 - [ ] Les quantités négatives, incohérentes ou supérieures à la quantité reçue sont refusées.
+- [ ] Le formulaire ne permet pas de saisir librement la quantité disponible; l'API la recalcule depuis reçu, réservé, endommagé et mouvements sortants/retours.
 - [ ] Les lots expirés, rappelés, bloqués et en quarantaine sont exclus de l'endpoint FEFO.
 - [ ] Les lots vendables sont triés par date de péremption croissante.
 - [ ] Les actions quarantaine, levée, rappel, blocage et annulation exigent un motif et créent une trace.
@@ -233,6 +234,8 @@ La commande effectue des controles source-level sans dependance externe: middlew
 ## Pharmacie - Entrées stock / réceptions
 
 - [ ] Une organisation PHARMACY peut créer et modifier une réception en brouillon liée uniquement à ses fournisseurs, commandes, produits, collaborateurs, départements et emplacements.
+- [ ] Sélectionner une commande existante préremplit les lignes restantes, l'unité en combobox et la devise de la commande.
+- [ ] Créer une réception depuis une commande qui possède déjà un brouillon réouvre ce brouillon au lieu d'en créer un second.
 - [ ] La soumission n'impacte pas le stock; la validation augmente les lots et crée un mouvement `RECEIPT` par lot reçu.
 - [ ] Valider deux fois la même réception ne double jamais le stock.
 - [ ] L'annulation après validation crée les mouvements inverses et refuse une quantité disponible négative.
@@ -530,6 +533,8 @@ Documenter dans le ticket ou la PR:
 
 - [ ] Vérifier que les ventes listées appartiennent uniquement à l'organisation PHARMACY active.
 - [ ] Créer une vente multi-produit et vérifier que seuls les lots vendables sont proposés selon FEFO.
+- [ ] Vérifier que la liste des caissiers ne propose que les collaborateurs ayant un poste de caisse.
+- [ ] Vérifier que la devise de la vente est persistée, affichée dans les cartes et convertie vers la devise principale.
 - [ ] Confirmer une vente simple et vérifier les mouvements `SALE` ainsi que la diminution du stock.
 - [ ] Vérifier qu'une vente réglementée n'impacte pas le stock avant validation pharmacien.
 - [ ] Annuler une vente et vérifier la restauration idempotente du stock avec `SALE_CANCELLATION`.
@@ -578,7 +583,8 @@ Documenter dans le ticket ou la PR:
 - [ ] Créer un fournisseur et vérifier l'unicité du code ainsi que l'isolation par organisation.
 - [ ] Associer plusieurs produits à un fournisseur et refuser produit ou fournisseur d'un autre tenant.
 - [ ] Créer, soumettre et valider une demande de réapprovisionnement, puis la convertir en commande.
-- [ ] Créer une commande multi-lignes, vérifier les totaux serveur, puis soumettre, valider et marquer commandée.
+- [ ] Créer une commande multi-lignes avec quantités entières et prix à deux décimales, vérifier les totaux serveur et la conversion en devise principale, puis soumettre, valider et marquer commandée.
+- [ ] Modifier une commande brouillon, vérifier la recréation cohérente des lignes, puis vérifier qu'une commande validée, commandée ou reçue refuse la modification.
 - [ ] Créer une réception brouillon depuis une commande et vérifier qu'aucun impact stock n'est appliqué.
 - [ ] Valider une réception partielle puis complète et vérifier les quantités reçues/restantes et statuts de commande.
 - [ ] Annuler une réception validée et vérifier la contre-passation du stock et des quantités de commande.
@@ -589,6 +595,7 @@ Documenter dans le ticket ou la PR:
 - [x] Les sessions, paiements, factures, reçus, remboursements et écarts utilisent des modèles dédiés isolés par `organizationId`.
 - [x] Un caissier ne peut pas ouvrir deux sessions simultanées et un paiement comptoir exige une session ouverte.
 - [x] Un paiement validé recalcule le payé, le reste et le statut de la vente.
+- [ ] Un paiement lié à une vente reprend la devise de la vente et refuse une devise différente.
 - [x] La clôture recalcule les montants réels, crée l'écart et exige une justification significative.
 - [x] Le caissier ne peut pas valider sa propre clôture.
 - [x] Le remboursement ne dépasse pas le montant payé.
@@ -624,6 +631,8 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier que les dix-sept sections chargent et enregistrent uniquement les paramètres de l'organisation active.
 - [ ] Modifier un paramètre normal puis un paramètre critique; vérifier que le second exige un motif et crée un historique audité.
 - [ ] Prévisualiser puis modifier une séquence; vérifier que les numéros générés restent uniques et progressifs dans l'organisation.
+- [ ] Gérer les devises `USD`, `CDF` et `EUR` dans `Devises & conversions`, activer/désactiver un taux et définir la devise principale avec motif obligatoire.
+- [ ] Vérifier qu'un changement de devise principale met à jour `PharmacySetting.currency`, journalise l'historique et laisse les anciens montants non destructifs.
 - [ ] Vérifier que ventes, réceptions, lots, caisse, documents, qualité, alertes et exports appliquent leurs paramètres côté serveur.
 - [ ] Réinitialiser une section avec motif et vérifier que les valeurs par défaut sont restaurées sans supprimer l'historique.
 - [ ] Vérifier les libellés métier français, infos-bulles, combobox référentielles et l'absence de dépassement horizontal mobile.

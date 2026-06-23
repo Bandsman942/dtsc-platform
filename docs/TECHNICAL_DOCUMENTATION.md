@@ -2320,6 +2320,18 @@ Le module `PRESCRIPTIONS` persiste les ordonnances, lignes prescrites, documents
 
 Le module `SUPPLIERS_ORDERS` persiste le référentiel achats dans les modèles `PharmacySupplier*`, `PharmacyReplenishmentRequest`, `PharmacyPurchaseOrder*` et `PharmacyPurchaseAlert`. `validatePurchaseReferences()` refuse toute référence externe au tenant. `createReceiptFromPurchaseOrder()` prépare une réception brouillon à partir des quantités restantes; `applyReceiptStockImpact()` et `reverseReceiptStockImpact()` synchronisent ensuite les quantités reçues/restantes sans déplacer la logique stock hors du module Réceptions.
 
+### PHARMACY achats, réceptions, lots et devises - 23 juin 2026
+
+La migration additive `20260623170000_pharmacy_currency_rates` ajoute `PharmacyCurrencyRate` et les champs de conversion sur `PharmacyPurchaseOrder`, `PharmacyReceipt` et `PharmacySale`. Les montants restent saisis dans la devise métier de l'objet, puis `lib/pharmacy-currencies.ts` calcule un miroir en devise principale avec `baseCurrency`, `exchangeRateToBase` et les montants `*Base` après le calcul final et l'arrondi à deux décimales.
+
+`PHARMACY_SETTINGS` expose désormais l'onglet `Devises & conversions`. L'action `POST /api/enterprise/[organizationId]/pharmacy/settings/actions` accepte `update-currency` avec `currencyCode`, `rateToBase`, `active`, `isBase` et `reason` lorsque la devise devient principale. La route conserve session, origine, rate limit, Zod, permission `update` ou `update_critical`, audit applicatif et historique `PharmacySettingsAuditLog`.
+
+Les commandes fournisseur brouillon peuvent être modifiées par `PATCH /api/enterprise/[organizationId]/pharmacy/purchases/order/[id]` tant que leur statut reste `DRAFT`. Les quantités de commande et de réapprovisionnement sont validées comme entiers, les montants fournisseur et commande ont au maximum deux décimales, et les lignes recalculent `totalLine`, `estimatedTotal` et `estimatedTotalBase` côté serveur. Une commande validée, commandée ou déjà reçue est verrouillée.
+
+La création d'une réception depuis commande réutilise un brouillon existant pour éviter les duplications. Le formulaire de réception préremplit les lignes à partir des quantités restantes de commande, conserve `purchaseOrderLineId`, propose l'unité en combobox et stocke la devise héritée de la commande. La validation d'une réception met à jour les lignes de commande et passe la commande à `PARTIALLY_RECEIVED` ou `RECEIVED`.
+
+La quantité disponible d'un lot n'est plus saisie librement dans l'UI ni acceptée comme source de vérité à la création: elle est recalculée côté API à partir de `receivedQuantity - reservedQuantity - damagedQuantity` et, lors des mises à jour, des mouvements de sortie ou de retour déjà enregistrés. Les ventes utilisent uniquement les collaborateurs dont le poste correspond à Caissier; le prix unitaire reste prérempli par le produit mais la devise de vente est persistée et les paiements caisse doivent utiliser la même devise que la vente.
+
 Routes:
 
 | Methode | Route | Acces | Usage |

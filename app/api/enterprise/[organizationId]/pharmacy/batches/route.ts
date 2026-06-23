@@ -16,7 +16,8 @@ const nullableNumberKeys = ["minQuantityAlert", "expiryAlertDays", "tempMin", "t
 const nullableDateKeys = ["manufacturingDate", "receivedAt", "stockEntryDate", "recallDate"] as const;
 
 function batchData(data: BatchInput, userId: string): Omit<Prisma.PharmacyBatchUncheckedCreateInput, "organizationId"> {
-  const normalized: Record<string, unknown> = { ...data, createdById: userId, updatedById: userId, totalCost: data.purchasePrice === "" || data.purchasePrice === null || data.purchasePrice === undefined ? null : Number(data.receivedQuantity) * Number(data.purchasePrice) };
+  const availableQuantity = Math.max(0, Number(data.receivedQuantity) - Number(data.reservedQuantity || 0) - Number(data.damagedQuantity || 0));
+  const normalized: Record<string, unknown> = { ...data, availableQuantity, createdById: userId, updatedById: userId, totalCost: data.purchasePrice === "" || data.purchasePrice === null || data.purchasePrice === undefined ? null : Number(data.receivedQuantity) * Number(data.purchasePrice) };
   for (const key of nullableTextKeys) normalized[key] = data[key] || null;
   for (const key of nullableNumberKeys) normalized[key] = data[key] === "" || data[key] === undefined ? null : data[key];
   for (const key of nullableDateKeys) normalized[key] = data[key] || null;
