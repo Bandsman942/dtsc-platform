@@ -38,6 +38,7 @@ La commande effectue des controles source-level sans dependance externe: middlew
 
 ## Chatbot général
 
+- [ ] Sur mobile, l'ouverture de `/chat` sans `conversationId` affiche d'abord la liste des conversations; la sélection d'une conversation ouvre ensuite le fil.
 - [ ] `/chat` occupe l'espace privé disponible sans carte globale visible; sur mobile, le fil est plein écran avec header compact, historique via panneau et input fixe accessible.
 - [ ] La liste historique affiche des items compacts avec avatar assistant, titre tronqué, date relative, recherche unifiée et FAB fonctionnel de nouvelle conversation.
 - [ ] Les réponses de l'assistant général s'affichent en Markdown enrichi: titres, listes, gras, italique, tableaux si pertinent et code borné dans la bulle assistant.
@@ -45,15 +46,17 @@ La commande effectue des controles source-level sans dependance externe: middlew
 
 ## Mes collaborateurs
 
+- [ ] Le compteur global de messages non lus Mes collaborateurs apparaît dans les navigations desktop/mobile comme le compteur Notifications, puis disparaît après lecture des messages concernés.
 - [ ] `/collaborators` ouvre directement l'espace conversationnel sans grand panneau introductif ni double conteneur.
 - [ ] La liste des groupes affiche des items compacts avec avatar, dernier message ou appel en cours, date relative, badge non lu et badge mention `@`.
 - [ ] La recherche de groupes reste accent-insensible via `useSmartList`, les pages restent navigables et le FAB `Créer un groupe` ouvre le vrai dialogue de création.
-- [ ] Sur mobile, la liste et la conversation ne sont pas côte à côte: sélection d'un groupe, retour à la liste, fil scrollable et composer fixe restent accessibles sans débordement horizontal.
+- [ ] Sur mobile, `/collaborators` sans `groupId` ni `joinCall` affiche d'abord la liste des groupes; les liens profonds continuent d'ouvrir directement le groupe ou l'appel ciblé.
 - [ ] Les actions existantes restent fonctionnelles: invitation, appels audio/vidéo, détails du groupe, partage chatbot, support DTSC, édition, suppression ou sortie selon permissions.
 
 ## IA Assistant Entreprise
 
 - [ ] `/enterprise-modules/AI_ASSISTANT` n'est visible et ouvrable que si le module est activé, inclus dans le plan et accessible au membre actif de l'organisation.
+- [ ] Sur mobile, l'onglet Chat de l'IA Assistant Entreprise affiche d'abord la liste des conversations/projets avant l'ouverture d'un fil.
 - [ ] L'onglet Chat occupe l'espace disponible sans carte globale visible; desktop affiche historique dense + conversation active, mobile affiche historique via panneau et fil plein écran.
 - [ ] La liste des conversations IA utilise des items compacts, recherche unifiée, avatar assistant, date relative et FAB fonctionnel de nouvelle conversation.
 - [ ] Le bouton `Nouvelle conversation IA` crée une conversation vide persistée, sélectionnée immédiatement, puis le premier message conserve l'historique et met à jour le titre.
@@ -68,6 +71,14 @@ La commande effectue des controles source-level sans dependance externe: middlew
 - [ ] Les recommandations sur lots respectent FEFO et excluent les lots expirés, rappelés, bloqués ou en quarantaine.
 - [ ] Les paramètres IA peuvent désactiver chat, upload, outils lecture ou brouillons d'action sans empêcher un administrateur de les réactiver.
 - [ ] L'onglet Chat streame la réponse assistant sans attendre la fin complète, puis recharge la conversation persistée avec messages et usage à jour.
+
+## Bannières promotionnelles
+
+- [ ] Dans Administration > Bannières promo, un `ADMIN` peut créer, modifier, activer, mettre en pause et archiver une bannière avec surfaces, rôles inclus/exclus, priorité, dates et CTA.
+- [ ] Les routes `POST/PATCH/DELETE /api/admin/promotional-banners` refusent origine invalide, session absente, rôle non-`ADMIN` et payload invalide.
+- [ ] Une bannière active ciblée s'affiche dans Chatbot, IA Assistant Entreprise, Mes collaborateurs ou Annonces selon les surfaces choisies, sans apparaître sur les autres pages.
+- [ ] Un rôle exclu ne voit jamais la bannière, même s'il est aussi présent dans les rôles inclus.
+- [ ] La fermeture d'une bannière appelle `POST /api/promotional-banners/[id]/dismiss` et la bannière ne réapparaît plus pour le même utilisateur.
 - [ ] Le menu `...` d'une conversation permet infos, renommage/classement par projet, partage groupe et suppression logique sans exposer une conversation d'une autre organisation.
 - [ ] Le menu `...` d'un message permet copier, modifier uniquement un message utilisateur du propriétaire, et supprimer logiquement un message visible.
 - [ ] Le partage vers Mes collaborateurs crée un snapshot lisible par les membres du groupe autorisé de la même organisation, sans accès direct à la conversation Enterprise AI privée.

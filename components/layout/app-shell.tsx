@@ -15,7 +15,9 @@ import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobil
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
 import { ProductNavigation } from "@/components/layout/product-navigation";
+import { PromotionalBannerHost } from "@/components/promotions/promotional-banner-host";
 import { getSession } from "@/lib/auth";
+import { getUnreadCollaborationMessageCount } from "@/lib/collaboration";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
 import { initials } from "@/lib/format";
@@ -27,6 +29,7 @@ import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navi
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { prisma } from "@/lib/prisma";
+import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
 
 export async function AppShell({
   children,
@@ -54,7 +57,7 @@ export async function AppShell({
   const notificationWhere = session
     ? await getVisibleNotificationWhereForSession(session)
     : { userId: user.id, organizationId: null };
-  const [unreadNotifications, latestUnreadNotifications, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules, enterpriseActivityBlocks, canManageEnterpriseAdmin] = await Promise.all([
+  const [unreadNotifications, latestUnreadNotifications, unreadCollaboratorMessages, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules, enterpriseActivityBlocks, canManageEnterpriseAdmin, promotionalBanners] = await Promise.all([
     prisma.notification.count({
       where: {
         ...notificationWhere,
@@ -69,6 +72,7 @@ export async function AppShell({
           select: { id: true, title: true, body: true, targetUrl: true },
         })
       : Promise.resolve([]),
+    getUnreadCollaborationMessageCount(session),
     getPendingEnterpriseInvitationCount(user.id),
     prisma.hrcfoEmployee.findFirst({
       where: { userId: user.id, status: { not: "EXITED" } },
@@ -97,6 +101,7 @@ export async function AppShell({
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
       ? canManageEnterpriseAdministration(user.id, activeOrganizationId)
       : Promise.resolve(false),
+    getVisiblePromotionalBannersForUser(user.id, user.role),
   ]);
   const enterpriseContext =
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
@@ -117,9 +122,11 @@ export async function AppShell({
       <SessionTimeoutGuard />
       <PrivateMobileChromeController />
       <GlobalCallToast />
+      <PromotionalBannerHost banners={promotionalBanners} />
       <MobilePwaHeader
         user={user}
         unreadNotifications={unreadNotifications}
+        unreadCollaboratorMessages={unreadCollaboratorMessages}
         pendingEnterpriseInvitations={pendingEnterpriseInvitations}
         currentOrganizationId={activeOrganizationId}
         organizationOptions={organizationOptions}
@@ -146,6 +153,7 @@ export async function AppShell({
           <NavLinks
             role={user.role}
             unreadNotifications={unreadNotifications}
+            unreadCollaboratorMessages={unreadCollaboratorMessages}
             pendingEnterpriseInvitations={pendingEnterpriseInvitations}
             showEmployeeActivities={showEmployeeActivities}
             showInternalModules={dtscInternalContext}
@@ -189,6 +197,7 @@ export async function AppShell({
         <MobileBottomNavigation
           user={user}
           unreadNotifications={unreadNotifications}
+          unreadCollaboratorMessages={unreadCollaboratorMessages}
           pendingEnterpriseInvitations={pendingEnterpriseInvitations}
           showEmployeeActivities={showEmployeeActivities}
           showInternalModules={dtscInternalContext}

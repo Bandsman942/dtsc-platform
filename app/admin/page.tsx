@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, Building2, Code2, CreditCard, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
+import { BadgePercent, BarChart3, BriefcaseBusiness, Building2, Code2, CreditCard, Crown, FileText, FolderKanban, Megaphone, MessageSquare, PackageCheck, Scale, Settings, ShieldCheck, Users } from "lucide-react";
 import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
@@ -17,6 +17,7 @@ import { CreateUserForm } from "@/components/admin/create-user-form";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
+import { PromotionalBannerManager } from "@/components/admin/promotional-banner-manager";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart } from "@/components/admin/site-visits-chart";
 import { AppShell } from "@/components/layout/app-shell";
@@ -44,6 +45,7 @@ const adminSections: Array<{ id: AdminSectionId; label: string; description: str
   { id: "overview", label: "Vue générale", description: "KPIs et synthèse plateforme", icon: BarChart3 },
   { id: "access", label: "Accès RBAC", description: "Droits des rôles non-client", icon: ShieldCheck },
   { id: "settings", label: "Paramètres plateforme", description: "Limites, OTP, diffusions", icon: Settings },
+  { id: "promotions", label: "Bannières promo", description: "Messages ciblés", icon: BadgePercent },
   { id: "publications", label: "Publications & contenus", description: "Articles et ressources publiques", icon: FileText },
   { id: "users", label: "Utilisateurs & accès", description: "Comptes, rôles et limites", icon: Users },
   { id: "clientOrganizations", label: "Entreprises clientes", description: "Espaces client et admins", icon: Building2 },
@@ -131,6 +133,7 @@ export default async function AdminPage({
   const loadBillingDetails = activeSection === "billing" || activeSection === "audits";
   const loadAuditDetails = activeSection === "audits";
   const loadPublicationDetails = activeSection === "publications";
+  const loadPromotionalBanners = activeSection === "promotions";
   const loadInternalOperations =
     activeSection === "hrCfo" ||
     activeSection === "sco" ||
@@ -150,6 +153,7 @@ export default async function AdminPage({
     auditDataset,
     publicationsDataset,
     internalModulesDataset,
+    promotionalBanners,
   ] = await Promise.all([
     getConsoleOverviewMetrics({
       activeUserCount: usersDataset.activeUserCount,
@@ -168,6 +172,13 @@ export default async function AdminPage({
     getConsoleAuditDataset({ loadAuditDetails }),
     getConsolePublicationsDataset({ loadPublicationDetails }),
     getConsoleInternalModulesDataset({ ceoEndDate, ceoStartDate, loadInternalOperations, selectedCeoEnd, selectedCeoStart }),
+    loadPromotionalBanners
+      ? prisma.promotionalBanner.findMany({
+          orderBy: [{ archivedAt: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
+          include: { _count: { select: { dismissals: true } } },
+          take: 100,
+        })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -271,6 +282,14 @@ export default async function AdminPage({
                   signUpOtpExpirationMinutes: settings.signUpOtpExpirationMinutes,
                 }}
               />
+            </AccordionItem>
+          </Accordion>
+        )}
+
+        {activeSection === "promotions" && canView("promotions") && (
+          <Accordion>
+            <AccordionItem title="Bannières promotionnelles" defaultOpen>
+              <PromotionalBannerManager banners={toJsonSafe(promotionalBanners)} canManage={user.role === UserRole.ADMIN} />
             </AccordionItem>
           </Accordion>
         )}

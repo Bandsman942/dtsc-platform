@@ -144,7 +144,7 @@ export function CollaboratorsWorkspace({
   const [groups, setGroups] = useState(initialGroups);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [activeGroupId, setActiveGroupId] = useState(
-    initialActiveGroupId && initialGroups.some((group) => group.id === initialActiveGroupId) ? initialActiveGroupId : initialGroups[0]?.id || ""
+    initialActiveGroupId && initialGroups.some((group) => group.id === initialActiveGroupId) ? initialActiveGroupId : ""
   );
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [messagesCursor, setMessagesCursor] = useState<string | null>(null);
@@ -155,7 +155,7 @@ export function CollaboratorsWorkspace({
   const [inviteDialog, setInviteDialog] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
   const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
-  const [mobileGroupListOpen, setMobileGroupListOpen] = useState(!initialGroups[0]?.id);
+  const [mobileGroupListOpen, setMobileGroupListOpen] = useState(!(initialActiveGroupId || initialJoinCallId));
   const [mentionedProfile, setMentionedProfile] = useState<MentionedUser | null>(null);
   const [editingMessage, setEditingMessage] = useState<GroupMessage | null>(null);
   const [inviteSearch, setInviteSearch] = useState("");
@@ -446,10 +446,15 @@ export function CollaboratorsWorkspace({
     if (!targetCallId || joinedCall || callJoining) {
       return;
     }
-    const targetCall = groups.flatMap((group) => group.calls || []).find((call) => call.id === targetCallId && (call.status === "RINGING" || call.status === "ACTIVE"));
-    if (!targetCall) {
+    const targetGroup = groups.find((group) =>
+      (group.calls || []).some((call) => call.id === targetCallId && (call.status === "RINGING" || call.status === "ACTIVE"))
+    );
+    const targetCall = targetGroup?.calls?.find((call) => call.id === targetCallId && (call.status === "RINGING" || call.status === "ACTIVE"));
+    if (!targetGroup || !targetCall) {
       return;
     }
+    setActiveGroupId(targetGroup.id);
+    setMobileGroupListOpen(false);
     autoJoinCallIdRef.current = "";
     void joinGroupCall(targetCall);
   }, [callJoining, groups, joinedCall, joinGroupCall]);

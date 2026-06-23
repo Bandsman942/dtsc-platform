@@ -35,6 +35,7 @@ const primaryItems = [
 export function MobilePwaHeader({
   user,
   unreadNotifications,
+  unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
   currentOrganizationId,
   organizationOptions = [],
@@ -43,6 +44,7 @@ export function MobilePwaHeader({
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
+  unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
@@ -134,6 +136,14 @@ export function MobilePwaHeader({
               </span>
             )}
           </Link>
+          {unreadCollaboratorMessages > 0 && (
+            <Link href="/collaborators" className="relative flex h-9 w-9 items-center justify-center rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted shadow-[0_10px_32px_rgba(0,23,54,0.08)]" aria-label="Messages collaborateurs non lus">
+              <UsersRound className="h-4 w-4" />
+              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-cyan-400 px-1 text-[0.62rem] font-black text-[#001736]">
+                {unreadCollaboratorMessages > 99 ? "99+" : unreadCollaboratorMessages}
+              </span>
+            </Link>
+          )}
           <MobileAvatar src={user.avatarUrl} name={user.name} online />
         </div>
       </div>
@@ -162,6 +172,7 @@ export function MobilePwaHeader({
 export function MobileBottomNavigation({
   user,
   unreadNotifications,
+  unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
   showEmployeeActivities,
   showInternalModules = false,
@@ -170,6 +181,7 @@ export function MobileBottomNavigation({
 }: {
   user: MobileShellUser;
   unreadNotifications: number;
+  unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
   showEmployeeActivities: boolean;
   showInternalModules?: boolean;
@@ -235,7 +247,9 @@ export function MobileBottomNavigation({
           const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
           const Icon = item.icon;
           const isNotifications = item.href === "/notifications";
+          const isCollaborators = item.href === "/collaborators";
           const isInvitation = item.href === "/enterprise-invitations";
+          const badgeCount = isInvitation ? pendingEnterpriseInvitations : isNotifications ? unreadNotifications : isCollaborators ? unreadCollaboratorMessages : 0;
           return (
             <Link
               key={item.href}
@@ -249,9 +263,9 @@ export function MobileBottomNavigation({
               {active && <motion.span layoutId="mobile-nav-active" className="absolute inset-0 rounded-2xl border border-cyan-300/40" transition={{ type: "spring", stiffness: 460, damping: 34 }} />}
               <span className="relative">
                 <Icon className="h-5 w-5" />
-                {((isNotifications && unreadNotifications > 0) || (isInvitation && pendingEnterpriseInvitations > 0)) && (
+                {badgeCount > 0 && (
                   <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-cyan-400 px-1 text-[0.56rem] font-black text-[#001736]">
-                    {(isInvitation ? pendingEnterpriseInvitations : unreadNotifications) > 99 ? "99+" : isInvitation ? pendingEnterpriseInvitations : unreadNotifications}
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 )}
               </span>

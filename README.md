@@ -79,6 +79,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
 - Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.
 - Conversations mobiles optimisées: dialogs hauts, fils de groupe/chatbot plus immersifs, cartes de groupes plus lisibles, chat texte disponible pendant les appels de groupe, partage d'écran, portrait/paysage PWA et contrôles d'appel DTSC premium.
+- Accès mobile aux modules conversationnels par liste d'abord: Chatbot, IA Assistant Entreprise et Mes collaborateurs laissent l'utilisateur choisir la conversation ou le groupe à ouvrir, sauf lien profond explicite.
 - UI mobile/PWA compacte: accordéons premium pour Dashboard, Entreprise, Abonnement et Profil, navigation flottante Administration, formulaires support/annonces repliables, commentaires repliés par défaut et filtres avancés des notifications.
 - Calendrier interne privé sans API externe: CRUD des disponibilités collaborateurs sur date précise ou fréquence claire, événements, participants, conflits de planning, vues mobiles premium, isolation par `organizationId` en contexte entreprise et visibilité des disponibilités DTSC pour le rôle `SUPPORT`.
 - Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
@@ -111,6 +112,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Analytics simples des visites publiques avec filtre par période dans `/admin`, agrégation journalière et total calculé en temps réel
 - Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
 - Paramètres globaux admin: limites par défaut, activation chatbot, assistant public, contribution brouillon publications, maintenance, règles annonces et support
+- Bannières promotionnelles administrables: CRUD, ciblage par rôle, surfaces Chatbot / IA Assistant Entreprise / Mes collaborateurs / Annonces, priorités, dates et fermeture persistante par utilisateur
 - Paramètres OTP: activation et durée d'expiration des codes d'inscription
 - Diffusion globale: notifications internes + email groupé protégé avec destinataires en CCI
 - Adresse professionnelle DTSC: `contact@dtsc-platform.com`
@@ -122,7 +124,7 @@ La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CH
 - Logs API, audit des paiements et exports CSV/HTML imprimable PDF
 - Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
 - SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
-- Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA
+- Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA; le module Mes collaborateurs affiche aussi son compteur global de messages non lus dans la navigation
 - Notifications applicatives globales pour confirmations, erreurs et informations client, avec toasts accessibles, fermeture manuelle et expiration automatique
 - Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires scrollables, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert intelligent multi-destinataires, indicateurs, signalement, archivage et épinglage
 - Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture

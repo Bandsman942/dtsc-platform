@@ -78,7 +78,7 @@ export function ChatWorkspace({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [shareToGroupOpen, setShareToGroupOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(!initialConversationId);
   const [copiedMessageId, setCopiedMessageId] = useState("");
   const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);
   const [selectedProject, setSelectedProject] = useState<ConversationProject | null>(null);

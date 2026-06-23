@@ -123,6 +123,8 @@ model User {
   supportTickets                        SupportTicket[]
   ticketMessages                        TicketMessage[]
   notifications                         Notification[]
+  createdPromotionalBanners             PromotionalBanner[]               @relation("PromotionalBannerCreatedBy")
+  promotionalBannerDismissals           PromotionalBannerDismissal[]
   announcements                         Announcement[]
   announcementComments                  AnnouncementComment[]
   announcementReactions                 AnnouncementReaction[]
@@ -4997,6 +4999,42 @@ model Notification {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([userId, organizationId, readAt, createdAt])
+}
+
+model PromotionalBanner {
+  id           String                         @id @default(cuid())
+  title        String
+  description  String
+  status       String                         @default("DRAFT")
+  surfacesJson Json                           @default("[]")
+  includeRoles Json                           @default("[]")
+  excludeRoles Json                           @default("[]")
+  ctaLabel     String?
+  ctaUrl       String?
+  priority     Int                            @default(0)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  archivedAt   DateTime?
+  createdById  String
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+  createdBy    User                           @relation("PromotionalBannerCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  dismissals   PromotionalBannerDismissal[]
+
+  @@index([status, archivedAt, startsAt, endsAt, priority])
+  @@index([createdById, createdAt])
+}
+
+model PromotionalBannerDismissal {
+  id        String            @id @default(cuid())
+  bannerId  String
+  userId    String
+  createdAt DateTime          @default(now())
+  banner    PromotionalBanner @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bannerId, userId])
+  @@index([userId, createdAt])
 }
 
 model Announcement {

@@ -3,6 +3,7 @@ import type { UserRole } from "@prisma/client";
 export const adminBlocks = [
   { id: "overview", label: "Vue d'ensemble", description: "Statistiques générales et synthèse d'activité." },
   { id: "settings", label: "Paramètres globaux", description: "Limites, OTP, maintenance, diffusions et réglages applicatifs." },
+  { id: "promotions", label: "Bannières promotionnelles", description: "Messages ciblés affichés dans les espaces conversationnels et les annonces." },
   { id: "publications", label: "Publications publiques", description: "Contenus visibles sur la page Ressources." },
   { id: "users", label: "Utilisateurs", description: "Création, rôles, statuts et limites des comptes." },
   { id: "clientOrganizations", label: "Entreprises clientes", description: "Création, activation, abonnements et admins entreprise sans accès aux données privées." },

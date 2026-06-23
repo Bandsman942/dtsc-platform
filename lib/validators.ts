@@ -961,13 +961,30 @@ export const broadcastSchema = z.object({
   type: z.string().min(2).max(40).default("BROADCAST"),
 });
 
+export const promotionalBannerSurfaceSchema = z.enum(["CHATBOT", "ENTERPRISE_AI", "COLLABORATORS", "ANNOUNCEMENTS"]);
+export const promotionalBannerStatusSchema = z.enum(["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"]);
+
+export const promotionalBannerWriteSchema = z.object({
+  title: z.string().trim().min(2).max(90),
+  description: z.string().trim().min(2).max(180),
+  status: promotionalBannerStatusSchema.default("DRAFT"),
+  surfaces: z.array(promotionalBannerSurfaceSchema).min(1).max(4),
+  includeRoles: z.array(z.enum(["ADMIN", "MANAGER", "CLIENT", "SUPPORT"])).max(4).default([]),
+  excludeRoles: z.array(z.enum(["ADMIN", "MANAGER", "CLIENT", "SUPPORT"])).max(4).default([]),
+  ctaLabel: z.string().trim().max(48).optional().or(z.literal("")),
+  ctaUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  priority: z.coerce.number().int().min(0).max(100).default(0),
+  startsAt: z.string().optional().or(z.literal("")),
+  endsAt: z.string().optional().or(z.literal("")),
+});
+
 export const massMailSchema = z.object({
   subject: z.string().min(3).max(160),
   content: z.string().min(10).max(6_000),
   contentHtml: z.string().max(60_000).optional().or(z.literal("")),
 });
 
-const adminBlockSchema = z.enum(["overview", "settings", "publications", "users", "hrCfo", "sco", "coo", "ceo", "mpo", "cto", "la", "visits", "activity", "audits"]);
+const adminBlockSchema = z.enum(["overview", "settings", "promotions", "publications", "users", "hrCfo", "sco", "coo", "ceo", "mpo", "cto", "la", "visits", "activity", "audits"]);
 
 export const adminAccessSchema = z.object({
   MANAGER: z.array(adminBlockSchema).default([]),

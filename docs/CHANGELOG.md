@@ -16,7 +16,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Ajouté
 
+- Ajout du sous-module Administration `Bannières promo` pour créer, modifier, activer, cibler par rôle et archiver des messages promotionnels affichables dans Chatbot, IA Assistant Entreprise, Mes collaborateurs et Annonces, avec dismissals par utilisateur, API sécurisées et audit.
 - Ajout de projets persistants pour l'IA Assistant Entreprise, avec création de conversations vides, classement par projet, renommage/fusion, suppression de projet sans supprimer les conversations et routes API sécurisées par session, origine, Zod, rate limit et audit.
+
+### Modifié
+
+- Sur mobile, Chatbot, IA Assistant Entreprise et Mes collaborateurs ouvrent d'abord la liste des conversations ou groupes, sauf lien profond explicite, et le module Mes collaborateurs affiche désormais un compteur global de messages non lus comme Notifications.
 
 ## 2026-06-16
 

@@ -122,7 +122,7 @@ export function EnterpriseAiWorkspace({
   const [loadingChat, setLoadingChat] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [sourceToArchive, setSourceToArchive] = useState<SourceItem | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const [infoOpen, setInfoOpen] = useState(false);
   const [conversationDialog, setConversationDialog] = useState<"rename" | "delete" | null>(null);
   const [projectDialog, setProjectDialog] = useState<"create" | "rename" | "delete" | null>(null);

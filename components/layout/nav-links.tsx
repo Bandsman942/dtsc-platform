@@ -37,6 +37,7 @@ export function NavLinks({
   role,
   mobile = false,
   unreadNotifications = 0,
+  unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
   showEmployeeActivities = false,
   showInternalModules = false,
@@ -47,6 +48,7 @@ export function NavLinks({
   role: UserRole;
   mobile?: boolean;
   unreadNotifications?: number;
+  unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
@@ -115,7 +117,9 @@ export function NavLinks({
         const itemPath = item.path || item.href;
         const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
         const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
+        const showCollaborationSignal = itemPath === "/collaborators" && unreadCollaboratorMessages > 0;
         const showInvitationSignal = itemPath === "/enterprise-invitations" && pendingEnterpriseInvitations > 0;
+        const signalCount = showInvitationSignal ? pendingEnterpriseInvitations : showNotificationSignal ? unreadNotifications : showCollaborationSignal ? unreadCollaboratorMessages : 0;
         return (
           <Link
             key={itemPath}
@@ -132,7 +136,7 @@ export function NavLinks({
           >
             <span className="relative inline-flex">
               <item.icon className={mobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
-              {(showNotificationSignal || showInvitationSignal) && (
+              {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-2.5 w-2.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300 opacity-70" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-dtsc-surface bg-cyan-400" />
@@ -148,9 +152,9 @@ export function NavLinks({
                   : itemPath.startsWith("/enterprise-modules/")
                     ? item.label
                     : translate(locale, translationByHref[itemPath] || item.label)}
-            {(showNotificationSignal || showInvitationSignal) && (
+            {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
               <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
-                {(showInvitationSignal ? pendingEnterpriseInvitations : unreadNotifications) > 99 ? "99+" : showInvitationSignal ? pendingEnterpriseInvitations : unreadNotifications}
+                {signalCount > 99 ? "99+" : signalCount}
               </span>
             )}
           </Link>
