@@ -4,6 +4,10 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ## 2026-06-23
 
+### Corrigé
+
+- Correction du build Vercel du refactor toast: les workspaces Santé et Pharmacie consommant un état `message` utilisent désormais `useToastMessage(message)` afin d'éviter les erreurs ESLint `no-unused-vars`.
+
 ### Amélioré
 
 - Centralisation des confirmations et erreurs client dans un `ToastProvider` global avec notifications applicatives accessibles, tonalités explicites, expiration automatique et remplacement des anciens messages inline sur les principaux parcours privés, admin, chatbot, abonnements, notifications, support, Entreprise, Santé et Pharmacie.

@@ -35,6 +35,7 @@ function initialForm(kind: FormKind, data: Dataset | null): CashForm {
 
 export function PharmacyCashWorkspace({ organizationId }: { organizationId: string }) {
   const [data, setData] = useState<Dataset | null>(null), [tab, setTab] = useState<Tab>("dashboard"), [formOpen, setFormOpen] = useState(false), [kind, setKind] = useState<FormKind>("session"), [form, setForm] = useState<CashForm>(() => initialForm("session", null)), [detail, setDetail] = useState<CashSession | Payment | null>(null), [counted, setCounted] = useState("0"), [reason, setReason] = useState(""), [message, setMessage] = useState("");
+  useToastMessage(message);
   const load = useCallback(async () => { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/cash`, { cache: "no-store" }); const body = await response.json().catch(() => null) as Dataset | null; if (response.ok && body) setData(body); else setMessage("Chargement de la caisse impossible."); }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
   const memberMap = useMemo(() => new Map((data?.members || []).map((item) => [item.id, item.name || "Collaborateur"])), [data]);

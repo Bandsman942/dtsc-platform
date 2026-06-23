@@ -32,6 +32,7 @@ function initial(): FormState { return { documentNumber: "", title: "", descript
 
 export function PharmacyDocumentsWorkspace({ organizationId }: { organizationId: string }) {
   const [data, setData] = useState<Data | null>(null), [tab, setTab] = useState<Tab>("dashboard"), [detail, setDetail] = useState<DocumentItem | null>(null), [formOpen, setFormOpen] = useState(false), [form, setForm] = useState<FormState>(initial), [file, setFile] = useState<File | null>(null), [message, setMessage] = useState("");
+  useToastMessage(message);
   const load = useCallback(async () => { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/documents`, { cache: "no-store" }); const body = await response.json().catch(() => null) as Data | null; if (response.ok && body) setData(body); else setMessage("Chargement du référentiel documentaire impossible."); }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
   const documents = data?.documents || []; const list = useSmartList({ items: documents, pageSize: 12, getSearchText: useCallback((item: DocumentItem) => `${item.documentNumber} ${item.title} ${item.description || ""} ${item.documentType} ${item.category} ${item.moduleSource || ""} ${item.confidentialityLevel} ${item.status}`, []) });

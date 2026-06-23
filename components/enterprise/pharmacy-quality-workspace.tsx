@@ -27,6 +27,7 @@ function initial(data: Data | null): FormState { return { incidentNumber: "", ti
 
 export function PharmacyQualityWorkspace({ organizationId }: { organizationId: string }) {
   const [data, setData] = useState<Data | null>(null), [tab, setTab] = useState<Tab>("dashboard"), [formOpen, setFormOpen] = useState(false), [form, setForm] = useState<FormState>(() => initial(null)), [detail, setDetail] = useState<Incident | null>(null), [comment, setComment] = useState(""), [assignee, setAssignee] = useState(""), [message, setMessage] = useState("");
+  useToastMessage(message);
   const load = useCallback(async () => { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/quality`, { cache: "no-store" }); const body = await response.json().catch(() => null) as Data | null; if (response.ok && body) setData(body); else setMessage("Chargement du registre qualité impossible."); }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
   const incidents = data?.incidents || []; const productMap = useMemo(() => new Map((data?.products || []).map((item) => [item.id, item.name || "Produit"])), [data]); const batchMap = useMemo(() => new Map((data?.batches || []).map((item) => [item.id, item.batchNumber || "Lot"])), [data]);

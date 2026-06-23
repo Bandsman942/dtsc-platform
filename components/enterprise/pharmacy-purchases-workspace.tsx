@@ -52,6 +52,7 @@ function initialForm(kind: FormKind, data: Dataset | null): FormState {
 
 export function PharmacyPurchasesWorkspace({ organizationId }: { organizationId: string }) {
   const [data, setData] = useState<Dataset | null>(null), [tab, setTab] = useState<Tab>("dashboard"), [formOpen, setFormOpen] = useState(false), [kind, setKind] = useState<FormKind>("supplier"), [form, setForm] = useState<FormState>(() => initialForm("supplier", null)), [detail, setDetail] = useState<Supplier | Order | Request | null>(null), [reason, setReason] = useState(""), [message, setMessage] = useState("");
+  useToastMessage(message);
   const load = useCallback(async () => { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/purchases`, { cache: "no-store" }); const body = await response.json().catch(() => null) as Dataset | null; if (response.ok && body) setData(body); else setMessage("Chargement des achats impossible."); }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
   const supplierMap = useMemo(() => new Map((data?.suppliers || []).map((item) => [item.id, item.name])), [data]);

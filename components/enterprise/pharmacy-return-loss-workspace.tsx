@@ -27,6 +27,7 @@ function initial(data: Data | null): FormState { return { eventNumber: "", event
 
 export function PharmacyReturnLossWorkspace({ organizationId }: { organizationId: string }) {
   const [data, setData] = useState<Data | null>(null), [tab, setTab] = useState<Tab>("dashboard"), [formOpen, setFormOpen] = useState(false), [form, setForm] = useState<FormState>(() => initial(null)), [detail, setDetail] = useState<EventItem | null>(null), [reason, setReason] = useState(""), [message, setMessage] = useState("");
+  useToastMessage(message);
   const load = useCallback(async () => { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/returns-losses`, { cache: "no-store" }); const body = await response.json().catch(() => null) as Data | null; if (response.ok && body) setData(body); else setMessage("Chargement des retours et pertes impossible."); }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
   const productMap = useMemo(() => new Map((data?.products || []).map((item) => [item.id, item.name || "Produit"])), [data]);
