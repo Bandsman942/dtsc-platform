@@ -6,6 +6,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 
 ### Corrigé
 
+- Correction du build Vercel des bannières promotionnelles en rétablissant l'import Prisma requis par la page Administration.
 - Correction du build Vercel du refactor toast: les workspaces Santé et Pharmacie consommant un état `message` utilisent désormais `useToastMessage(message)` afin d'éviter les erreurs ESLint `no-unused-vars`.
 - Correction de l'import manquant de `useToastMessage` dans le workspace Documents médicaux afin de rétablir le build TypeScript Vercel après le refactor toast.
 

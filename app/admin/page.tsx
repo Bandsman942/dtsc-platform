@@ -37,6 +37,7 @@ import { getConsoleUsersDataset } from "@/lib/console/console-users";
 import { getDashboardUrl } from "@/lib/domains";
 import { reconcileFinancialState, syncPaidSubscriptionIncomeTransactions } from "@/lib/hr-cfo-finance";
 import { isDtscInternalSession } from "@/lib/organizations";
+import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
 type AdminSectionId = AdminBlockId | "access";
