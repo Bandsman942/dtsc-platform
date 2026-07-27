@@ -80,6 +80,11 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         height: `${visualViewportBounds.height}px`,
       }
     : undefined;
+  const panelStyle: CSSProperties | undefined = visualViewportBounds
+    ? {
+        maxHeight: `calc(${visualViewportBounds.height}px - 1rem)`,
+      }
+    : undefined;
 
   return createPortal(
     <div
@@ -104,6 +109,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
           isTallDialog &&
             "h-full max-h-full max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-3rem)]",
         )}
+        style={panelStyle}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b border-dtsc-border bg-dtsc-page px-4 py-3 sm:px-5 sm:py-4">
