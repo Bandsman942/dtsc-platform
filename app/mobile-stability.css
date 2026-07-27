@@ -1,0 +1,52 @@
+/*
+ * DTSC mobile/iOS stability layer.
+ * Keep these rules narrowly focused on browser interaction quirks rather than
+ * hiding layout bugs globally. Components still own their responsive sizing.
+ */
+
+.dtsc-mobile-mesh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+[data-mobile-top-nav] {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    /* Safari iOS zooms form controls whose computed font-size is below 16px. */
+    font-size: 16px !important;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="combobox"],
+  [role="menuitem"] {
+    touch-action: manipulation;
+  }
+}
+
+[data-dtsc-dialog-scroll] {
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-dtsc-dialog-scroll] :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select,
+    [contenteditable="true"],
+    [role="combobox"]
+  ) {
+  /* Give Safari room to reveal the focused field above the virtual keyboard. */
+  scroll-margin-top: 18dvh;
+  scroll-margin-bottom: 28dvh;
+}

@@ -55,15 +55,20 @@ export function ActionMenu({
       }
       setOpen(false);
     }
+    const visualViewport = window.visualViewport;
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", closeOnViewportChange);
     window.addEventListener("scroll", closeOnViewportChange, true);
+    visualViewport?.addEventListener("resize", closeOnViewportChange);
+    visualViewport?.addEventListener("scroll", closeOnViewportChange);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", closeOnViewportChange);
       window.removeEventListener("scroll", closeOnViewportChange, true);
+      visualViewport?.removeEventListener("resize", closeOnViewportChange);
+      visualViewport?.removeEventListener("scroll", closeOnViewportChange);
     };
   }, [open]);
 
@@ -77,16 +82,23 @@ export function ActionMenu({
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    const menuWidth = 224;
-    const menuHeight = Math.min(visibleItems.length * 44 + 8, 384);
+    const visualViewport = window.visualViewport;
+    const viewportLeft = visualViewport?.offsetLeft ?? 0;
+    const viewportTop = visualViewport?.offsetTop ?? 0;
+    const viewportWidth = visualViewport?.width ?? window.innerWidth;
+    const viewportHeight = visualViewport?.height ?? window.innerHeight;
+    const viewportRight = viewportLeft + viewportWidth;
+    const viewportBottom = viewportTop + viewportHeight;
+    const menuWidth = Math.min(224, Math.max(160, viewportWidth - 24));
+    const menuHeight = Math.min(visibleItems.length * 44 + 8, Math.max(120, viewportHeight - 24));
     const viewportMargin = 12;
     const left = align === "right"
-      ? Math.max(viewportMargin, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - viewportMargin))
-      : Math.max(viewportMargin, Math.min(rect.left, window.innerWidth - menuWidth - viewportMargin));
-    const preferredTop = rect.bottom + 8 + menuHeight <= window.innerHeight - viewportMargin
+      ? Math.max(viewportLeft + viewportMargin, Math.min(rect.right - menuWidth, viewportRight - menuWidth - viewportMargin))
+      : Math.max(viewportLeft + viewportMargin, Math.min(rect.left, viewportRight - menuWidth - viewportMargin));
+    const preferredTop = rect.bottom + 8 + menuHeight <= viewportBottom - viewportMargin
       ? rect.bottom + 8
       : rect.top - menuHeight - 8;
-    setMenuPosition({ left, top: Math.max(viewportMargin, preferredTop) });
+    setMenuPosition({ left, top: Math.max(viewportTop + viewportMargin, preferredTop) });
     setOpen(true);
   }
 
@@ -100,7 +112,7 @@ export function ActionMenu({
         ref={triggerRef}
         type="button"
         onClick={toggleMenu}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface text-dtsc-blue shadow-[0_4px_20px_rgba(0,43,91,0.05)] transition hover:border-cyan-300 hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300"
+        className="inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface text-dtsc-blue shadow-[0_4px_20px_rgba(0,43,91,0.05)] transition hover:border-cyan-300 hover:bg-dtsc-soft focus:outline-none focus:ring-2 focus:ring-cyan-300 sm:h-10 sm:w-10"
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -111,8 +123,8 @@ export function ActionMenu({
         <div
           ref={menuRef}
           role="menu"
-          style={{ left: menuPosition.left, top: menuPosition.top }}
-          className="fixed z-[1000] max-h-[min(24rem,calc(100dvh-2rem))] min-w-56 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-1 shadow-[0_18px_60px_rgba(0,23,54,0.28)] backdrop-blur-xl"
+          style={{ left: menuPosition.left, top: menuPosition.top, zIndex: 1200 }}
+          className="fixed z-[1000] max-h-[min(24rem,calc(100dvh-1.5rem))] max-w-[calc(100vw-1.5rem)] min-w-40 touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-1 shadow-[0_18px_60px_rgba(0,23,54,0.28)] backdrop-blur-xl [-webkit-overflow-scrolling:touch] sm:min-w-56"
         >
           {visibleItems.map((item) => {
             const Icon = item.icon;
@@ -126,7 +138,7 @@ export function ActionMenu({
                   item.onSelect();
                 }}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition",
+                  "flex min-h-11 w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left text-base font-bold transition sm:text-sm",
                   item.destructive
                     ? "text-red-600 hover:bg-red-50"
                     : "text-dtsc-ink hover:bg-dtsc-soft"
