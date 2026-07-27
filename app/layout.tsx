@@ -5,6 +5,7 @@ import { PWARegister } from "@/components/pwa/pwa-register";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { dtsc } from "@/lib/dtsc";
 import "./globals.css";
+import "./mobile-stability.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -107,6 +108,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#0B1220",
 };
 
