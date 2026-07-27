@@ -103,7 +103,12 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cachedResponse);
+        .catch((error) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          throw error;
+        });
 
       // Keep startup fast while ensuring stable asset URLs are refreshed in the background.
       return cachedResponse || networkResponse;
