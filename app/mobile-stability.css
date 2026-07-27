@@ -4,6 +4,15 @@
  * hiding layout bugs globally. Components still own their responsive sizing.
  */
 
+.dtsc-mobile-mesh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+[data-mobile-top-nav] {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
 @media (max-width: 767px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
   textarea,
