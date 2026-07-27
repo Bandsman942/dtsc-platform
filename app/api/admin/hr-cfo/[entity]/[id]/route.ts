@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
+import { syncDtscInternalMembershipForEmployee } from "@/lib/dtsc-internal-membership";
 import { deleteHrcfoTransaction, updateHrcfoTransaction, updatePayroll } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
@@ -179,7 +180,11 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
       complianceStatus: data.complianceStatus ? String(data.complianceStatus) : undefined,
       notes: data.notes ? String(data.notes) : null,
     };
-    return prisma.hrcfoEmployee.update({ where: { id }, data: updateData });
+    const employee = await prisma.hrcfoEmployee.update({ where: { id }, data: updateData });
+    if (employee.userId) {
+      await syncDtscInternalMembershipForEmployee(employee.userId, employee.status);
+    }
+    return employee;
   }
   if (entity === "budgets") {
     const departmentId = data.departmentId ? String(data.departmentId) : undefined;
@@ -225,7 +230,12 @@ async function deleteRecord(entity: HrcfoEntity, id: string) {
     return prisma.dtscPosition.delete({ where: { id } });
   }
   if (entity === "employees") {
-    return prisma.hrcfoEmployee.delete({ where: { id } });
+    const employee = await prisma.hrcfoEmployee.findUnique({ where: { id }, select: { userId: true } });
+    const deleted = await prisma.hrcfoEmployee.delete({ where: { id } });
+    if (employee?.userId) {
+      await syncDtscInternalMembershipForEmployee(employee.userId, "EXITED");
+    }
+    return deleted;
   }
   if (entity === "budgets") {
     const linked = await prisma.hrcfoBudget.findUnique({ where: { id }, include: { _count: { select: { transactions: true, payrolls: true } } } });

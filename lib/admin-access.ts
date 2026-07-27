@@ -25,7 +25,7 @@ export type AdminRoleAccess = Record<Exclude<UserRole, "CLIENT">, AdminBlockId[]
 
 const defaultAccess: AdminRoleAccess = {
   ADMIN: adminBlocks.map((block) => block.id),
-  MANAGER: ["overview", "publications", "clientOrganizations", "billing", "hrCfo", "sco", "coo", "mpo", "cto", "visits", "activity"],
+  MANAGER: ["overview", "publications", "clientOrganizations", "billing", "hrCfo", "sco", "coo", "mpo", "cto", "la", "visits", "activity"],
   SUPPORT: ["overview", "activity", "audits"],
 };
 
