@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
+import { syncDtscInternalMembershipForEmployee } from "@/lib/dtsc-internal-membership";
 import { createHrcfoBudget, createPayroll, createValidatedTransaction } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
@@ -126,7 +127,7 @@ async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, 
       throw new Error("Le responsable doit être un collaborateur DTSC déjà enregistré et actif.");
     }
 
-    return prisma.hrcfoEmployee.create({
+    const employee = await prisma.hrcfoEmployee.create({
       data: {
         userId,
         fullName: user.name,
@@ -150,6 +151,8 @@ async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, 
         createdById,
       },
     });
+    await syncDtscInternalMembershipForEmployee(userId, employee.status);
+    return employee;
   }
   if (entity === "budgets") {
     return createHrcfoBudget({ ...(data as Parameters<typeof createHrcfoBudget>[0]), createdById });
