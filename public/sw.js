@@ -95,23 +95,20 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      const networkResponse = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
-          }
-          return response;
-        })
-        .catch((error) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          throw error;
-        });
+      const networkResponse = fetch(request).then((response) => {
+        if (response.ok) {
+          const responseClone = response.clone();
+          caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
+        }
+        return response;
+      });
 
-      // Keep startup fast while ensuring stable asset URLs are refreshed in the background.
-      return cachedResponse || networkResponse;
+      if (cachedResponse) {
+        event.waitUntil(networkResponse.then(() => undefined).catch(() => undefined));
+        return cachedResponse;
+      }
+
+      return networkResponse;
     })
   );
 });
