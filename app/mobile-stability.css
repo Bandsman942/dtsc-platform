@@ -18,7 +18,7 @@
   textarea,
   select {
     /* Safari iOS zooms form controls whose computed font-size is below 16px. */
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 
