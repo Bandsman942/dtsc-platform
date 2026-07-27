@@ -123,7 +123,7 @@ export function ActionMenu({
         <div
           ref={menuRef}
           role="menu"
-          style={{ left: menuPosition.left, top: menuPosition.top }}
+          style={{ left: menuPosition.left, top: menuPosition.top, zIndex: 1200 }}
           className="fixed z-[1000] max-h-[min(24rem,calc(100dvh-1.5rem))] max-w-[calc(100vw-1.5rem)] min-w-40 touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-1 shadow-[0_18px_60px_rgba(0,23,54,0.28)] backdrop-blur-xl [-webkit-overflow-scrolling:touch] sm:min-w-56"
         >
           {visibleItems.map((item) => {
