@@ -47,7 +47,7 @@ check(
 
 check(
   "dialog partagé est porté au body et borné par VisualViewport",
-  containsAll(dialog, ["createPortal", "window.visualViewport", "data-dtsc-dialog-scroll", 'z-[1000]', "onPointerDown"])
+  containsAll(dialog, ["createPortal", "window.visualViewport", "data-dtsc-dialog-scroll", 'z-[1000]', "onPointerDown", "panelStyle"])
 );
 
 check(
@@ -62,7 +62,7 @@ check(
 
 check(
   "menus d'action suivent le viewport mobile sans casser la convention z-index existante",
-  containsAll(actionMenu, ["window.visualViewport", 'className="fixed z-[1000]', "touch-pan-y", "max-w-[calc(100vw-1.5rem)]"])
+  containsAll(actionMenu, ["window.visualViewport", 'className="fixed z-[1000]', "zIndex: 1200", "touch-pan-y", "max-w-[calc(100vw-1.5rem)]"])
 );
 
 check(
