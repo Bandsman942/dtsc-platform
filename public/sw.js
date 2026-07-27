@@ -1,4 +1,4 @@
-const STATIC_CACHE = "dtsc-static-v6-20260602";
+const STATIC_CACHE = "dtsc-static-v7-20260728";
 const OFFLINE_URL = "/offline.html";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];
@@ -58,7 +58,7 @@ function isStaticAsset(pathname) {
 function offlineFallback() {
   return caches.match(OFFLINE_URL).then((cachedResponse) => {
     return cachedResponse || new Response(
-      "<!doctype html><html lang=\"fr\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Hors ligne</title><body style=\"margin:0;display:grid;min-height:100vh;place-items:center;background:#071427;color:white;font-family:system-ui,sans-serif;padding:24px;text-align:center\"><main><h1>Vous êtes hors ligne.</h1><p>DTSC Platform nécessite une connexion pour charger cette page.</p></main></body></html>",
+      "<!doctype html><html lang=\"fr\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>Hors ligne</title><body style=\"margin:0;display:grid;min-height:100vh;min-height:100dvh;place-items:center;background:#071427;color:white;font-family:system-ui,sans-serif;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));text-align:center\"><main><h1>Vous êtes hors ligne.</h1><p>DTSC Platform nécessite une connexion pour charger cette page.</p></main></body></html>",
       { headers: { "Content-Type": "text/html; charset=utf-8" } }
     );
   });
@@ -95,17 +95,18 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+      const networkResponse = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
+          }
+          return response;
+        })
+        .catch(() => cachedResponse);
 
-      return fetch(request).then((networkResponse) => {
-        if (networkResponse.ok) {
-          const responseClone = networkResponse.clone();
-          caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
-        }
-        return networkResponse;
-      });
+      // Keep startup fast while ensuring stable asset URLs are refreshed in the background.
+      return cachedResponse || networkResponse;
     })
   );
 });
