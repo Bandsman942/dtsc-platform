@@ -30,6 +30,7 @@ const layout = read("app/layout.tsx");
 const mobileCss = read("app/mobile-stability.css");
 const dialog = read("components/ui/dialog.tsx");
 const select = read("components/ui/select.tsx");
+const actionMenu = read("components/ui/action-menu.tsx");
 const serviceWorker = read("public/sw.js");
 const pwaRegister = read("components/pwa/pwa-register.tsx");
 const manifest = read("app/manifest.ts");
@@ -60,13 +61,18 @@ check(
 );
 
 check(
+  "menus d'action suivent le viewport mobile sans casser la convention z-index existante",
+  containsAll(actionMenu, ["window.visualViewport", 'className="fixed z-[1000]', "touch-pan-y", "max-w-[calc(100vw-1.5rem)]"])
+);
+
+check(
   "service worker n'intercepte pas les API ni les pages privées",
   containsAll(serviceWorker, ['"/api/"', '"/auth/"', '"/admin"', '"/support"', 'url.pathname.startsWith("/api/")'])
 );
 
 check(
   "service worker rafraîchit les assets stables en arrière-plan",
-  containsAll(serviceWorker, ["cachedResponse || networkResponse", "cache.put(request, responseClone)", "dtsc-static-v7-20260728"])
+  containsAll(serviceWorker, ["event.waitUntil(networkResponse", "cache.put(request, responseClone)", "return cachedResponse", "dtsc-static-v7-20260728"])
 );
 
 check(
