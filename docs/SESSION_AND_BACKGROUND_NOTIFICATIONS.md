@@ -48,10 +48,12 @@ Les anciens tokens ne possédant que `exp` restent vérifiables jusqu'à leur ex
 
 La migration `20260728113000_session_idle_timeout_policy` crée :
 
-- clé primaire `userId` ;
-- FK vers `User(id)` avec suppression cascade ;
-- timeout par défaut 30 ;
-- contrainte SQL de valeurs autorisées.
+- une clé primaire `userId`, toujours résolue depuis l'utilisateur authentifié côté serveur ;
+- le timeout par défaut 30 minutes ;
+- une contrainte SQL de valeurs autorisées ;
+- un index sur `updatedAt`.
+
+Le modèle est volontairement autonome afin d'éviter de modifier le grand modèle `User` historique durant ce sprint. L'API n'accepte jamais un `userId` client pour écrire cette préférence : l'ownership est dérivé exclusivement de la session authentifiée.
 
 `package.json` pointe Prisma vers le dossier `./prisma`, support multi-fichiers disponible dans Prisma 6.16.
 
@@ -141,6 +143,7 @@ Les endpoints `POST/GET/DELETE /api/push/subscriptions` :
 - valident le payload ;
 - appliquent same-origin sur les mutations ;
 - appliquent rate limiting ;
+- refusent la réattribution silencieuse d'un endpoint détenu par un autre compte ;
 - ne renvoient jamais les clés privées ou les endpoints enregistrés.
 
 Un endpoint retournant 404/410 au dispatcher est supprimé.
@@ -213,7 +216,7 @@ Les messages collaborateurs, appels de groupe, support, invitations et autres mo
 - retour online ;
 - message du Service Worker après push.
 
-Il vérifie la session, réconcilie l'abonnement courant, récupère le compteur non lu, actualise le badge si l'API existe et fait un refresh RSC ciblé.
+Le `SessionTimeoutGuard` reste responsable de la revalidation de session au retour. `AppResumeSync` réconcilie l'abonnement courant, récupère le compteur non lu via une route authentifiée, traite un `401` comme une expiration, actualise le badge si l'API existe et fait un refresh RSC ciblé.
 
 ## LiveKit / appels
 
