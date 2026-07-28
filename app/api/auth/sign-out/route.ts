@@ -21,10 +21,16 @@ export async function POST(req: Request) {
   const pushEndpoint = parsed.success ? parsed.data.pushEndpoint : "";
 
   if (reason === "manual" && session && pushEndpoint) {
-    await prisma.pushSubscription.updateMany({
-      where: { userId: session.userId, endpoint: pushEndpoint, revokedAt: null },
-      data: { revokedAt: new Date() },
+    await prisma.pushSubscription.deleteMany({
+      where: { userId: session.userId, endpoint: pushEndpoint },
     });
+    const remaining = await prisma.pushSubscription.count({ where: { userId: session.userId } });
+    if (remaining === 0) {
+      await prisma.user.update({
+        where: { id: session.userId },
+        data: { pushNotificationsEnabled: false },
+      }).catch(() => undefined);
+    }
   }
 
   await clearSessionCookie();
