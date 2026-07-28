@@ -3,12 +3,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
+import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
+import { PharmacyAdminWorkspace } from "@/components/enterprise/pharmacy-admin-workspace";
 import {
   EnterpriseBrandingSettingsPanel,
   EnterpriseCalendarPanel,
   EnterpriseDepartmentsPanel,
-  EnterpriseHealthcareSection,
-  EnterprisePharmacySection,
   EnterpriseMembersPanel,
   EnterpriseModulesPanel,
   EnterprisePositionsPanel,
@@ -18,6 +18,7 @@ import {
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleContent, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { SectorWorkspaceFrame } from "@/components/workspace/sector-workspace-frame";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
 
 export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & { locale?: string | null }) {
@@ -135,30 +136,37 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
       />
 
       <ModuleContent>
+        {organization.sectorCode === "HEALTH_CARE" ? (
+          <ModuleSection title="Santé — sous-modules métier" description="Le shell Santé adopte le workspace DTSC sans modifier les workflows cliniques ni leurs permissions.">
+            <SectorWorkspaceFrame variant="health">
+              <HealthcareAdminWorkspace
+                organizationId={organization.id}
+                records={sectorRecords}
+                members={activeMembers}
+                departments={departments}
+                positions={positions}
+                activeModuleCodes={activeHealthcareModuleCodes}
+                locale={locale}
+              />
+            </SectorWorkspaceFrame>
+          </ModuleSection>
+        ) : null}
+
+        {organization.sectorCode === "PHARMACY" ? (
+          <PharmacyAdminWorkspace
+            organizationId={organization.id}
+            records={sectorRecords}
+            members={activeMembers}
+            departments={departments}
+            activeModuleCodes={activePharmacyModuleCodes}
+          />
+        ) : null}
+
         <ModuleSection
           title="Configuration et gouvernance"
           description="Les accordéons sont conservés ici comme regroupements sémantiques de formulaires administratifs volumineux, et non comme cartes décoratives imbriquées."
         >
           <Accordion>
-            <EnterpriseHealthcareSection
-              organizationId={organization.id}
-              sectorCode={organization.sectorCode}
-              sectorRecords={sectorRecords}
-              activeMembers={activeMembers}
-              departments={departments}
-              positions={positions}
-              activeHealthcareModuleCodes={activeHealthcareModuleCodes}
-              locale={locale}
-            />
-            <EnterprisePharmacySection
-              organizationId={organization.id}
-              sectorCode={organization.sectorCode}
-              sectorRecords={sectorRecords}
-              activeMembers={activeMembers}
-              departments={departments}
-              activePharmacyModuleCodes={activePharmacyModuleCodes}
-            />
-
             <EnterpriseModulesPanel organization={organization} visibleModules={visibleModules} toggleModule={toggleModule} />
             <EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} />
 
