@@ -74,6 +74,11 @@ check(
 );
 
 check(
+  "navigation basse reste opaque lorsque le backdrop iOS est désactivé",
+  containsAll(mobileCss, ["background: var(--dtsc-surface) !important", "background-color: var(--dtsc-surface) !important", "isolation: isolate"])
+);
+
+check(
   "select partagé reste au-dessus des overlays et scrollable au toucher",
   containsAll(select, ["z-[1100]", "70dvh", "touch-pan-y", "overscroll-contain", "-webkit-overflow-scrolling:touch", "min-h-11"])
 );
