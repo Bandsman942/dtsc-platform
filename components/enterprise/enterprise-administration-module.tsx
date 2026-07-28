@@ -2,10 +2,10 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
 import {
   EnterpriseBrandingSettingsPanel,
   EnterpriseCalendarPanel,
-  EnterpriseDashboardSummary,
   EnterpriseDepartmentsPanel,
   EnterpriseHealthcareSection,
   EnterprisePharmacySection,
@@ -16,9 +16,10 @@ import {
   EnterpriseWorkflowsPanel,
 } from "@/components/enterprise/enterprise-admin-panels";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
+import { useToastMessage } from "@/components/ui/use-toast-message";
+import { ModuleContent, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
 
-import { useToastMessage } from "@/components/ui/use-toast-message";
 export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & { locale?: string | null }) {
   const {
     organization,
@@ -40,10 +41,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
   const activeMembers = useMemo(() => members.filter((member) => member.status === "ACTIVE"), [members]);
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "INVITED"), [members]);
   const memberNameById = useMemo(() => new Map(activeMembers.map((member) => [member.user.id, member.user.name])), [activeMembers]);
-  const visibleModules = useMemo(
-    () => modules.filter((enterpriseModule) => enterpriseModule.isCore),
-    [modules],
-  );
+  const visibleModules = useMemo(() => modules.filter((enterpriseModule) => enterpriseModule.isCore), [modules]);
   const activeHealthcareModuleCodes = useMemo(() => new Set(modules.filter((enterpriseModule) => enterpriseModule.isEnabled).map((enterpriseModule) => enterpriseModule.moduleCode)), [modules]);
   const activePharmacyModuleCodes = activeHealthcareModuleCodes;
 
@@ -88,9 +86,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     setMessage(response.ok ? "Module mis à jour." : body?.message || "Mise à jour impossible.");
-    if (response.ok) {
-      router.refresh();
-    }
+    if (response.ok) router.refresh();
   }
 
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
@@ -120,9 +116,7 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
     });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     setMessage(response.ok ? successMessage : body?.message || "Mise à jour du collaborateur impossible.");
-    if (response.ok) {
-      router.refresh();
-    }
+    if (response.ok) router.refresh();
   }
 
   async function removeMember(memberId: string) {
@@ -130,8 +124,8 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
   }
 
   return (
-    <div className="space-y-5">
-      <EnterpriseDashboardSummary
+    <ModuleWorkspace>
+      <EnterpriseAdministrationSummary
         organization={organization}
         dashboard={dashboard}
         entitlements={entitlements}
@@ -140,64 +134,64 @@ export function EnterpriseAdministrationModule(props: EnterpriseAdminDataset & {
         visibleModules={visibleModules}
       />
 
-      <Accordion>
-        <EnterpriseHealthcareSection
-          organizationId={organization.id}
-          sectorCode={organization.sectorCode}
-          sectorRecords={sectorRecords}
-          activeMembers={activeMembers}
-          departments={departments}
-          positions={positions}
-          activeHealthcareModuleCodes={activeHealthcareModuleCodes}
-          locale={locale}
-        />
-        <EnterprisePharmacySection organizationId={organization.id} sectorCode={organization.sectorCode} sectorRecords={sectorRecords} activeMembers={activeMembers} departments={departments} activePharmacyModuleCodes={activePharmacyModuleCodes} />
-
-        <EnterpriseModulesPanel organization={organization} visibleModules={visibleModules} toggleModule={toggleModule} />
-
-        <EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} />
-
-        <AccordionItem title="Collaborateurs, postes et permissions" defaultOpen>
-          <div className="grid gap-4">
-            <EnterpriseMembersPanel
-              members={members}
-              pendingMembers={pendingMembers}
-              activeMembers={activeMembers}
-              positions={positions}
-              inviteMember={inviteMember}
-              updateMember={updateMember}
-              removeMember={removeMember}
-            />
-            <EnterprisePositionsPanel
+      <ModuleContent>
+        <ModuleSection
+          title="Configuration et gouvernance"
+          description="Les accordéons sont conservés ici comme regroupements sémantiques de formulaires administratifs volumineux, et non comme cartes décoratives imbriquées."
+        >
+          <Accordion>
+            <EnterpriseHealthcareSection
+              organizationId={organization.id}
               sectorCode={organization.sectorCode}
+              sectorRecords={sectorRecords}
+              activeMembers={activeMembers}
               departments={departments}
               positions={positions}
-              submitAdminMutation={submitAdminMutation}
+              activeHealthcareModuleCodes={activeHealthcareModuleCodes}
+              locale={locale}
             />
-          </div>
-        </AccordionItem>
+            <EnterprisePharmacySection
+              organizationId={organization.id}
+              sectorCode={organization.sectorCode}
+              sectorRecords={sectorRecords}
+              activeMembers={activeMembers}
+              departments={departments}
+              activePharmacyModuleCodes={activePharmacyModuleCodes}
+            />
 
-        <EnterpriseDepartmentsPanel
-          departments={departments}
-          activeMembers={activeMembers}
-          memberNameById={memberNameById}
-          submitAdminMutation={submitAdminMutation}
-        />
+            <EnterpriseModulesPanel organization={organization} visibleModules={visibleModules} toggleModule={toggleModule} />
+            <EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} />
 
-        <EnterpriseWorkflowsPanel
-          sectorCode={organization.sectorCode}
-          workflows={workflows}
-          departments={departments}
-          activeMembers={activeMembers}
-          submitAdminMutation={submitAdminMutation}
-        />
+            <AccordionItem title="Collaborateurs, postes et permissions" defaultOpen>
+              <div className="grid gap-4">
+                <EnterpriseMembersPanel
+                  members={members}
+                  pendingMembers={pendingMembers}
+                  activeMembers={activeMembers}
+                  positions={positions}
+                  inviteMember={inviteMember}
+                  updateMember={updateMember}
+                  removeMember={removeMember}
+                />
+                <EnterprisePositionsPanel
+                  sectorCode={organization.sectorCode}
+                  departments={departments}
+                  positions={positions}
+                  submitAdminMutation={submitAdminMutation}
+                />
+              </div>
+            </AccordionItem>
 
-        <EnterpriseBrandingSettingsPanel sectorCode={organization.sectorCode} organization={organization} submitAdminMutation={submitAdminMutation} />
-      </Accordion>
+            <EnterpriseDepartmentsPanel departments={departments} activeMembers={activeMembers} memberNameById={memberNameById} submitAdminMutation={submitAdminMutation} />
+            <EnterpriseWorkflowsPanel sectorCode={organization.sectorCode} workflows={workflows} departments={departments} activeMembers={activeMembers} submitAdminMutation={submitAdminMutation} />
+            <EnterpriseBrandingSettingsPanel sectorCode={organization.sectorCode} organization={organization} submitAdminMutation={submitAdminMutation} />
+          </Accordion>
+        </ModuleSection>
 
-      <EnterpriseRecentRequestsPanel recentRequests={recentRequests} />
-
-
-    </div>
+        <ModuleSection title="Demandes récentes" description="Suivi des demandes administratives visibles dans l’organisation active.">
+          <EnterpriseRecentRequestsPanel recentRequests={recentRequests} />
+        </ModuleSection>
+      </ModuleContent>
+    </ModuleWorkspace>
   );
 }
