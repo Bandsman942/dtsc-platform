@@ -25,7 +25,7 @@ const EDITABLE_DIALOG_CONTROL_SELECTOR = [
   "[role='combobox']",
 ].join(",");
 
-function isEditableDialogControl(target: EventTarget | Element | null): target is HTMLElement {
+function isEditableDialogControl(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && target.matches(EDITABLE_DIALOG_CONTROL_SELECTOR);
 }
 
@@ -95,7 +95,8 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
     }
 
     function handleFocusIn(event: FocusEvent) {
-      if (!isEditableDialogControl(event.target) || !scrollRef.current?.contains(event.target)) {
+      const target = event.target;
+      if (!isEditableDialogControl(target) || !scrollRef.current?.contains(target)) {
         return;
       }
       window.clearTimeout(focusTimer);
