@@ -32,6 +32,7 @@ const dialog = read("components/ui/dialog.tsx");
 const select = read("components/ui/select.tsx");
 const actionMenu = read("components/ui/action-menu.tsx");
 const mobileChrome = read("components/layout/private-mobile-chrome-controller.tsx");
+const mobileShell = read("components/dtsc/mobile-shell.tsx");
 const serviceWorker = read("public/sw.js");
 const pwaRegister = read("components/pwa/pwa-register.tsx");
 const manifest = read("app/manifest.ts");
@@ -76,6 +77,9 @@ check(
 check(
   "navigation basse reste opaque lorsque le backdrop iOS est désactivé",
   containsAll(mobileCss, ["background: var(--dtsc-surface) !important", "background-color: var(--dtsc-surface) !important", "isolation: isolate"])
+    && containsAll(mobileShell, ["<nav", "data-mobile-bottom-nav", "bg-dtsc-surface", "border-dtsc-border"])
+    && !mobileShell.includes("bg-dtsc-surface/86")
+    && !mobileShell.includes("<motion.nav")
 );
 
 check(
