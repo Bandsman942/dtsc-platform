@@ -4,13 +4,18 @@ export type PushCapabilityState =
   | "permission-denied"
   | "permission-granted"
   | "subscribed"
-  | "configuration-missing";
+  | "configuration-missing"
+  | "configuration-invalid";
 
 function urlBase64ToUint8Array(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from(rawData, (character) => character.charCodeAt(0));
+}
+
+function pushConfigurationState(issue?: string | null): PushCapabilityState {
+  return issue?.startsWith("invalid-") ? "configuration-invalid" : "configuration-missing";
 }
 
 export function supportsWebPush() {
@@ -47,6 +52,15 @@ export async function getPushCapabilityState(): Promise<PushCapabilityState> {
   if (Notification.permission === "denied") return "permission-denied";
   if (Notification.permission === "default") return "permission-default";
 
+  const configurationResponse = await fetch("/api/push/subscriptions", { cache: "no-store" }).catch(() => null);
+  if (configurationResponse?.ok) {
+    const configuration = await configurationResponse.json() as {
+      configured?: boolean;
+      configurationIssue?: string | null;
+    };
+    if (!configuration.configured) return pushConfigurationState(configuration.configurationIssue);
+  }
+
   const subscription = await getCurrentPushSubscription();
   if (!subscription) return "permission-granted";
 
@@ -58,8 +72,13 @@ export async function getPushCapabilityState(): Promise<PushCapabilityState> {
   }).catch(() => null);
   if (!serverResponse?.ok) return "permission-granted";
 
-  const server = await serverResponse.json() as { configured?: boolean; enabled?: boolean; registered?: boolean };
-  if (!server.configured) return "configuration-missing";
+  const server = await serverResponse.json() as {
+    configured?: boolean;
+    configurationIssue?: string | null;
+    enabled?: boolean;
+    registered?: boolean;
+  };
+  if (!server.configured) return pushConfigurationState(server.configurationIssue);
   return server.enabled && server.registered ? "subscribed" : "permission-granted";
 }
 
@@ -79,9 +98,13 @@ export async function enableCurrentDevicePush(deviceLabel?: string) {
   if (!configResponse.ok) {
     return { ok: false as const, state: "configuration-missing" as const };
   }
-  const config = await configResponse.json() as { configured?: boolean; vapidPublicKey?: string | null };
+  const config = await configResponse.json() as {
+    configured?: boolean;
+    configurationIssue?: string | null;
+    vapidPublicKey?: string | null;
+  };
   if (!config.configured || !config.vapidPublicKey) {
-    return { ok: false as const, state: "configuration-missing" as const };
+    return { ok: false as const, state: pushConfigurationState(config.configurationIssue) };
   }
 
   const registration = await ensureServiceWorkerRegistration();
@@ -108,6 +131,13 @@ export async function enableCurrentDevicePush(deviceLabel?: string) {
     }),
   });
   if (!response.ok) {
+    const body = await response.json().catch(() => null) as {
+      code?: string;
+      configurationIssue?: string | null;
+    } | null;
+    if (body?.code === "WEB_PUSH_CONFIGURATION_UNAVAILABLE") {
+      return { ok: false as const, state: pushConfigurationState(body.configurationIssue) };
+    }
     return { ok: false as const, state: "permission-granted" as const };
   }
 
