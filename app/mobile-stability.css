@@ -67,6 +67,7 @@
        visibly readable through the navigation. */
     background: var(--dtsc-surface) !important;
     background-color: var(--dtsc-surface) !important;
+    background-clip: padding-box;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     filter: none !important;
