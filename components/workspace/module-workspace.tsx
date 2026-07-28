@@ -53,7 +53,7 @@ export function ModuleToolbar({
   controls,
   activeFilters,
   summary,
-  ariaLabel,
+  ariaLabel = "Contrôles du module",
   className,
 }: {
   search?: ReactNode;
