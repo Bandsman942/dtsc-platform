@@ -25,13 +25,20 @@
 @media (pointer: coarse) {
   button,
   a,
-  input,
-  textarea,
-  select,
   [role="button"],
-  [role="combobox"],
   [role="menuitem"] {
     touch-action: manipulation;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable="true"],
+  [role="textbox"],
+  [role="combobox"] {
+    /* Preserve WebKit's native tap/focus gesture for the software keyboard and
+       native pickers instead of layering touch-action: manipulation on top. */
+    touch-action: auto;
   }
 }
 
@@ -49,4 +56,26 @@
   /* Give Safari room to reveal the focused field above the virtual keyboard. */
   scroll-margin-top: 18dvh;
   scroll-margin-bottom: 28dvh;
+}
+
+@media (max-width: 1023px) {
+  [data-mobile-bottom-nav] {
+    /* iOS/WebKit can paint transformed bottom:fixed layers against a stale
+       viewport after browser-chrome or keyboard transitions. Keep the DTSC
+       bottom bar on a non-transformed fixed layer. */
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+    transform: none !important;
+    transition: opacity 180ms ease, visibility 180ms ease !important;
+    will-change: opacity !important;
+  }
+
+  html[data-private-mobile-nav="hidden"] [data-mobile-bottom-nav],
+  html[data-dtsc-mobile-input="active"] [data-mobile-bottom-nav] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    transform: none !important;
+  }
 }
