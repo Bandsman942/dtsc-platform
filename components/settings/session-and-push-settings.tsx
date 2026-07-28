@@ -25,6 +25,9 @@ const copy = {
     absoluteHelp: "Même avec une activité régulière, une réauthentification est requise au plus tard après 30 jours.",
     saved: "Politique de session mise à jour.",
     saveFailed: "Impossible de mettre à jour la politique de session.",
+    storageUnavailable: "Le stockage de la préférence de session est temporairement indisponible. Votre durée précédente reste active.",
+    sessionExpired: "Votre session doit être renouvelée avant de modifier ce réglage.",
+    rateLimited: "Trop de modifications rapprochées. Réessayez dans quelques instants.",
     pushTitle: "Notifications en arrière-plan",
     pushHelp: "Recevez les messages et alertes DTSC via le service Push du navigateur même lorsqu'aucune page DTSC n'est ouverte, lorsque la plateforme le permet.",
     enable: "Activer sur cet appareil",
@@ -50,6 +53,9 @@ const copy = {
     absoluteHelp: "Even with regular activity, authentication is required again after at most 30 days.",
     saved: "Session policy updated.",
     saveFailed: "Unable to update the session policy.",
+    storageUnavailable: "Session preference storage is temporarily unavailable. Your previous duration remains active.",
+    sessionExpired: "Your session must be renewed before changing this setting.",
+    rateLimited: "Too many changes in a short time. Try again in a few moments.",
     pushTitle: "Background notifications",
     pushHelp: "Receive DTSC messages and alerts through the browser Push Service even when no DTSC page is open, where supported.",
     enable: "Enable on this device",
@@ -100,16 +106,56 @@ export function SessionAndPushSettings({
   const showAppleGuidance = useMemo(() => pushState === "unsupported" && needsAppleHomeScreenGuidance(), [pushState]);
 
   async function updateTimeout(next: SessionIdleTimeoutMinutes) {
+    const previous = idleTimeoutMinutes;
     setIdleTimeoutMinutes(next);
     setSavingSession(true);
     setMessage("");
-    const response = await fetch("/api/account/session-policy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionIdleTimeoutMinutes: next }),
-    });
-    setSavingSession(false);
-    setMessage(response.ok ? labels.saved : labels.saveFailed);
+
+    try {
+      const response = await fetch("/api/account/session-policy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionIdleTimeoutMinutes: next }),
+      });
+      const body = await response.json().catch(() => null) as {
+        code?: string;
+        idleTimeoutMinutes?: number;
+      } | null;
+
+      if (!response.ok) {
+        const serverValue = SESSION_IDLE_TIMEOUT_OPTIONS.some((item) => item.value === body?.idleTimeoutMinutes)
+          ? body?.idleTimeoutMinutes as SessionIdleTimeoutMinutes
+          : previous;
+        setIdleTimeoutMinutes(serverValue);
+
+        if (response.status === 401 || body?.code === "SESSION_EXPIRED" || body?.code === "SESSION_ABSOLUTE_EXPIRED") {
+          setMessage(labels.sessionExpired);
+          window.setTimeout(() => window.location.assign("/session-expired"), 350);
+          return;
+        }
+        if (response.status === 429 || body?.code === "SESSION_POLICY_RATE_LIMITED") {
+          setMessage(labels.rateLimited);
+          return;
+        }
+        if (body?.code === "SESSION_POLICY_STORAGE_UNAVAILABLE") {
+          setMessage(labels.storageUnavailable);
+          return;
+        }
+        setMessage(labels.saveFailed);
+        return;
+      }
+
+      const persistedValue = SESSION_IDLE_TIMEOUT_OPTIONS.some((item) => item.value === body?.idleTimeoutMinutes)
+        ? body?.idleTimeoutMinutes as SessionIdleTimeoutMinutes
+        : next;
+      setIdleTimeoutMinutes(persistedValue);
+      setMessage(labels.saved);
+    } catch {
+      setIdleTimeoutMinutes(previous);
+      setMessage(labels.saveFailed);
+    } finally {
+      setSavingSession(false);
+    }
   }
 
   async function enablePush() {
