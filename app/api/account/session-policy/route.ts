@@ -6,6 +6,10 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import {
+  getUserSessionIdleTimeoutMinutes,
+  updateUserSessionIdleTimeoutMinutes,
+} from "@/lib/session-preference";
 import { sessionWarningSeconds } from "@/lib/session-policy";
 
 const sessionPolicySchema = z.object({
@@ -54,7 +58,6 @@ export async function POST(req: Request) {
       name: true,
       role: true,
       status: true,
-      sessionIdleTimeoutMinutes: true,
     },
   });
   if (!user || user.status !== UserStatus.ACTIVE) {
@@ -62,13 +65,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const previousValue = user.sessionIdleTimeoutMinutes;
+  const previousValue = await getUserSessionIdleTimeoutMinutes(user.id);
   const nextValue = parsed.data.sessionIdleTimeoutMinutes;
   if (previousValue !== nextValue) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { sessionIdleTimeoutMinutes: nextValue },
-    });
+    await updateUserSessionIdleTimeoutMinutes(user.id, nextValue);
     await writeAuditLog({
       userId: user.id,
       action: "ACCOUNT_SESSION_POLICY_UPDATE",
