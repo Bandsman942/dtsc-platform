@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import legacySettingsStyles from "@/components/settings/legacy-settings-panel.module.css";
 import { SessionAndPushSettings } from "@/components/settings/session-and-push-settings";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { requireUser } from "@/lib/auth";
@@ -22,7 +23,9 @@ export default async function SettingsPage() {
           </p>
         </section>
         <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} />
-        <SettingsPanel user={{ ...user, pushNotificationsEnabled: false }} models={models} />
+        <div className={legacySettingsStyles.scope}>
+          <SettingsPanel user={{ ...user, pushNotificationsEnabled: false }} models={models} />
+        </div>
       </div>
     </AppShell>
   );
