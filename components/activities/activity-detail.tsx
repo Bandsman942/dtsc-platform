@@ -10,6 +10,8 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { formatEnumLabel } from "@/lib/labels";
 import type { ActivityAttachment, ActivityComment, ActivityItem, CollaboratorOption } from "./activity-types";
 
+const TERMINAL_TASK_STATUSES = new Set(["COMPLETED", "VALIDATED", "CANCELED", "CANCELLED"]);
+
 export function ActivityDetail({
   item,
   collaborators,
@@ -80,7 +82,7 @@ export function ActivityDetail({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityType: item.entityType, entityId: item.id, content: message, mentionedUserIds, replyToId: replyingTo?.id || "" }),
     });
-    setStatusMessage(response.ok ? "Commentaire ajouté." : "Impossible d'ajouter le commentaire.");
+    setStatusMessage(response.ok ? "Commentaire ajouté." : "Impossible d’ajouter le commentaire.");
     if (response.ok) {
       setMessage("");
       setMentionedUserIds([]);
@@ -141,6 +143,9 @@ export function ActivityDetail({
   }
 
   async function updateTask(status: "IN_PROGRESS" | "COMPLETED") {
+    if (TERMINAL_TASK_STATUSES.has(item.status)) {
+      return;
+    }
     const response = await fetch(`/api/activities/tasks/${item.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -168,6 +173,8 @@ export function ActivityDetail({
     }
   }
 
+  const isMutableTask = item.entityType === "TASK" && !TERMINAL_TASK_STATUSES.has(item.status);
+
   return (
     <div className="min-w-0 space-y-5">
       <div className="min-w-0">
@@ -186,9 +193,11 @@ export function ActivityDetail({
         )}
       </div>
 
-      {item.entityType === "TASK" && (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => void updateTask("IN_PROGRESS")} className="rounded-xl bg-dtsc-blue text-white">Marquer en cours</Button>
+      {isMutableTask && (
+        <div className="flex flex-wrap gap-2" aria-label="Actions de la tâche">
+          {item.status !== "IN_PROGRESS" && (
+            <Button type="button" onClick={() => void updateTask("IN_PROGRESS")} className="rounded-xl bg-dtsc-blue text-white">Marquer en cours</Button>
+          )}
           <Button type="button" onClick={() => void updateTask("COMPLETED")} className="rounded-xl bg-cyan-500 text-[#001736]">Marquer terminée</Button>
         </div>
       )}
