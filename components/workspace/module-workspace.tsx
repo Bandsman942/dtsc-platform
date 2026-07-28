@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 export function ModuleWorkspace({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("min-w-0 space-y-5 overflow-x-hidden pb-[calc(1rem+env(safe-area-inset-bottom))]", className)}>
+    <div data-module-workspace className={cn("min-w-0 space-y-5 overflow-x-hidden pb-[calc(1rem+env(safe-area-inset-bottom))]", className)}>
       {children}
     </div>
   );
@@ -53,16 +53,18 @@ export function ModuleToolbar({
   controls,
   activeFilters,
   summary,
+  ariaLabel,
   className,
 }: {
   search?: ReactNode;
   controls?: ReactNode;
   activeFilters?: ReactNode;
   summary?: ReactNode;
+  ariaLabel?: string;
   className?: string;
 }) {
   return (
-    <section className={cn("min-w-0 border-b border-dtsc-border pb-4", className)} aria-label="Contrôles du module">
+    <section className={cn("min-w-0 border-b border-dtsc-border pb-4", className)} aria-label={ariaLabel}>
       <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div className="min-w-0">{search}</div>
         {controls ? <div className="flex min-w-0 flex-wrap items-end gap-2 lg:justify-end">{controls}</div> : null}
@@ -78,7 +80,7 @@ export function ModuleToolbar({
 }
 
 export function ModuleContent({ children, className }: { children: ReactNode; className?: string }) {
-  return <main className={cn("min-w-0 space-y-6", className)}>{children}</main>;
+  return <div data-module-content className={cn("min-w-0 space-y-6", className)}>{children}</div>;
 }
 
 export function ModuleSection({
