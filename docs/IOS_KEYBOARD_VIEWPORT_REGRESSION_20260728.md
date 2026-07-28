@@ -73,6 +73,24 @@ La navigation basse ne doit plus dépendre d'une translation `transform` ou d'un
 - absence de transform/backdrop sur la navigation basse pendant le clavier ;
 - conservation des protections Select, ActionMenu et PWA du Sprint 1.
 
+## Incident Preview Vercel constaté pendant la correction
+
+La branche a été volontairement ramenée temporairement à un arbre de fichiers **strictement identique à `main`** pour distinguer une erreur de code d'une erreur du pipeline Preview.
+
+Probe : `dba3f468c0fb00f1d960bc1af914aea88d9550a3`.
+
+Résultat GitHub `compare main...fix/ios-keyboard-viewport-navigation` à ce point : aucun fichier modifié.
+
+Résultat Vercel Preview : `Error` malgré ce zéro diff.
+
+Le `vercel.json` du repository utilise :
+
+```text
+pnpm prisma migrate deploy && pnpm build
+```
+
+Ce probe prouve que le statut Preview rouge observé pendant ce chantier n'est pas un signal permettant d'attribuer l'échec au diff iOS. L'environnement ou le pipeline Preview doit être diagnostiqué séparément ; il ne faut ni masquer cette anomalie, ni modifier artificiellement le code mobile pour tenter de la faire disparaître.
+
 ## Matrice manuelle iPhone à exécuter après déploiement
 
 Tester au minimum à 375, 390 et 414 px lorsque l'appareil le permet :
