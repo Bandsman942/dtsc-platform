@@ -148,6 +148,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
       }}
     >
       <div
+        data-dtsc-dialog-panel
         className={cn(
           "flex max-h-full w-full min-w-0 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.65rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.35)] sm:min-h-[min(34rem,calc(100dvh-2rem))] sm:max-w-2xl sm:rounded-2xl",
           className,
@@ -155,10 +156,10 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         )}
         style={panelStyle}
       >
-        <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b border-dtsc-border bg-dtsc-page px-4 py-3 sm:px-5 sm:py-4">
-          <div className="min-w-0">
-            <h2 id={titleId} className="break-words text-lg font-black text-dtsc-ink">{title}</h2>
-            {description && <p className="mt-1 break-words text-sm leading-6 text-dtsc-muted">{description}</p>}
+        <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b-2 border-dtsc-border bg-dtsc-page px-4 py-3.5 sm:px-5 sm:py-4">
+          <div className="min-w-0 border-l-[3px] border-cyan-500 pl-3.5">
+            <h2 id={titleId} className="break-words text-xl font-black tracking-[-0.02em] text-dtsc-ink sm:text-2xl">{title}</h2>
+            {description && <p className="mt-1.5 break-words text-sm leading-6 text-dtsc-muted">{description}</p>}
           </div>
           <Button type="button" variant="ghost" size="icon" onClick={onClose} className="shrink-0 rounded-xl text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink" aria-label="Fermer" title="Fermer le formulaire">
             <X className="h-4 w-4" />
@@ -167,7 +168,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         <div
           ref={scrollRef}
           data-dtsc-dialog-scroll
-          className="min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 scroll-pb-24 sm:px-5 sm:py-5"
+          className="min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain bg-dtsc-surface px-3 py-4 scroll-pb-24 sm:px-5 sm:py-5"
         >
           {children}
         </div>
