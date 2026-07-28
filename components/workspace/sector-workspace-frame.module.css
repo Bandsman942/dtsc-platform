@@ -1,0 +1,73 @@
+.healthFrame {
+  min-width: 0;
+}
+
+.healthFrame > section {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.healthFrame > section > div:nth-of-type(1) {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--dtsc-border);
+}
+
+.healthFrame > section > div:nth-of-type(2) {
+  display: flex;
+  max-width: 100%;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.25rem 0 0.5rem;
+  border-bottom: 1px solid var(--dtsc-border);
+  scrollbar-width: none;
+}
+
+.healthFrame > section > div:nth-of-type(2)::-webkit-scrollbar {
+  display: none;
+}
+
+.healthFrame > section > div:nth-of-type(2) > button {
+  width: auto;
+  min-height: 44px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  box-shadow: none;
+}
+
+.healthFrame > section > div:nth-of-type(2) > button > div {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.healthFrame > section > div:nth-of-type(2) > button > div > span:first-child {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+}
+
+.healthFrame > section > div:nth-of-type(2) > button > div > span:last-child > span:nth-child(2) {
+  display: none;
+}
+
+.healthFrame > section > div:nth-of-type(2) > button > div > span:last-child > span:nth-child(3) {
+  margin-top: 0.125rem;
+  background: transparent;
+  padding: 0;
+}
+
+@media (max-width: 639px) {
+  .healthFrame > section > div:nth-of-type(1) {
+    gap: 0.75rem;
+  }
+
+  .healthFrame > section > div:nth-of-type(2) > button > div > span:first-child {
+    display: none;
+  }
+}
