@@ -25,13 +25,21 @@
 @media (pointer: coarse) {
   button,
   a,
-  input,
-  textarea,
-  select,
   [role="button"],
-  [role="combobox"],
   [role="menuitem"] {
     touch-action: manipulation;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable="true"],
+  [role="textbox"],
+  [role="combobox"] {
+    /* Let WebKit own the native tap/focus gesture that summons the software
+       keyboard or picker. Applying manipulation to editable controls can add
+       another gesture layer inside fixed/scrollable mobile dialogs. */
+    touch-action: auto;
   }
 }
 
@@ -44,9 +52,21 @@
     textarea,
     select,
     [contenteditable="true"],
+    [role="textbox"],
     [role="combobox"]
   ) {
   /* Give Safari room to reveal the focused field above the virtual keyboard. */
   scroll-margin-top: 18dvh;
   scroll-margin-bottom: 28dvh;
+}
+
+@media (max-width: 1023px) {
+  html[data-dtsc-mobile-input="active"] [data-mobile-bottom-nav] {
+    /* iOS/WKWebView can paint bottom:fixed layers at the old keyboard viewport.
+       Keep global navigation out of that compositor transition entirely. */
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    transform: none !important;
+  }
 }
