@@ -1,4 +1,3 @@
-import "server-only";
 import { prisma } from "@/lib/prisma";
 import { resolveSessionIdleTimeoutMinutes } from "@/lib/session-policy";
 import type { SessionIdleTimeoutMinutes } from "@/lib/session-config";
