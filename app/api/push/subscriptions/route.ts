@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { getPublicWebPushVapidKey, isWebPushConfigured } from "@/lib/push/config";
+import { isAllowedPushEndpoint } from "@/lib/push/endpoint";
 import { pushSubscriptionCreateSchema, pushSubscriptionDeleteSchema } from "@/lib/push/validators";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -64,28 +65,48 @@ export async function POST(req: Request) {
   }
 
   const parsed = pushSubscriptionCreateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    await writeApiLog({ request: req, statusCode: 400, userId: user.id, startedAt });
+  if (!parsed.success || !isAllowedPushEndpoint(parsed.data?.endpoint || "")) {
+    await writeApiLog({ request: req, statusCode: 400, userId: user.id, startedAt, metadata: { reason: "INVALID_PUSH_ENDPOINT" } });
     return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });
   }
 
-  const subscription = await prisma.pushSubscription.upsert({
+  const existing = await prisma.pushSubscription.findUnique({
     where: { endpoint: parsed.data.endpoint },
-    update: {
-      userId: user.id,
-      p256dh: parsed.data.keys.p256dh,
-      auth: parsed.data.keys.auth,
-      userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
-    },
-    create: {
-      userId: user.id,
-      endpoint: parsed.data.endpoint,
-      p256dh: parsed.data.keys.p256dh,
-      auth: parsed.data.keys.auth,
-      userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
-    },
-    select: { id: true },
+    select: { id: true, userId: true },
   });
+  if (existing && existing.userId !== user.id) {
+    await writeAuditLog({
+      userId: user.id,
+      action: "ACCOUNT_PUSH_SUBSCRIPTION_OWNERSHIP_REJECTED",
+      entity: "PushSubscription",
+      entityId: existing.id,
+      request: req,
+      metadata: { reason: "endpoint_owned_by_another_user" },
+    });
+    await writeApiLog({ request: req, statusCode: 409, userId: user.id, startedAt });
+    return NextResponse.json({ error: "Push subscription already belongs to another account" }, { status: 409 });
+  }
+
+  const subscription = existing
+    ? await prisma.pushSubscription.update({
+        where: { id: existing.id },
+        data: {
+          p256dh: parsed.data.keys.p256dh,
+          auth: parsed.data.keys.auth,
+          userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
+        },
+        select: { id: true },
+      })
+    : await prisma.pushSubscription.create({
+        data: {
+          userId: user.id,
+          endpoint: parsed.data.endpoint,
+          p256dh: parsed.data.keys.p256dh,
+          auth: parsed.data.keys.auth,
+          userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
+        },
+        select: { id: true },
+      });
 
   if (!user.pushNotificationsEnabled) {
     await prisma.user.update({ where: { id: user.id }, data: { pushNotificationsEnabled: true } });
@@ -127,7 +148,7 @@ export async function DELETE(req: Request) {
   }
 
   const parsed = pushSubscriptionDeleteSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
+  if (!parsed.success || !isAllowedPushEndpoint(parsed.data?.endpoint || "")) {
     await writeApiLog({ request: req, statusCode: 400, userId: user.id, startedAt });
     return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });
   }
