@@ -3,7 +3,7 @@ import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { getPublicWebPushVapidKey, isWebPushConfigured } from "@/lib/push/config";
+import { getWebPushConfigurationState } from "@/lib/push/config";
 import { isAllowedPushEndpoint } from "@/lib/push/endpoint";
 import { pushSubscriptionCreateSchema, pushSubscriptionDeleteSchema } from "@/lib/push/validators";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -31,12 +31,14 @@ export async function GET(req: Request) {
   }
 
   const activeSubscriptionCount = await prisma.pushSubscription.count({ where: { userId: user.id } });
+  const configuration = getWebPushConfigurationState();
   await writeApiLog({ request: req, statusCode: 200, userId: user.id, startedAt });
   return NextResponse.json({
-    configured: isWebPushConfigured(),
+    configured: configuration.configured,
+    configurationIssue: configuration.issue,
     enabled: user.pushNotificationsEnabled,
     activeSubscriptionCount,
-    vapidPublicKey: getPublicWebPushVapidKey(),
+    vapidPublicKey: configuration.config?.publicKey || null,
   });
 }
 
@@ -62,6 +64,25 @@ export async function POST(req: Request) {
   if (!user || user.status !== UserStatus.ACTIVE) {
     await writeApiLog({ request: req, statusCode: 401, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const configuration = getWebPushConfigurationState();
+  if (!configuration.configured) {
+    await writeApiLog({
+      request: req,
+      statusCode: 503,
+      userId: user.id,
+      startedAt,
+      metadata: { code: "WEB_PUSH_CONFIGURATION_UNAVAILABLE", issue: configuration.issue || "unknown" },
+    });
+    return NextResponse.json(
+      {
+        error: "Web Push configuration is unavailable",
+        code: "WEB_PUSH_CONFIGURATION_UNAVAILABLE",
+        configurationIssue: configuration.issue,
+      },
+      { status: 503 }
+    );
   }
 
   const parsed = pushSubscriptionCreateSchema.safeParse(await req.json().catch(() => null));

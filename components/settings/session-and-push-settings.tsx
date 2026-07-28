@@ -25,6 +25,9 @@ const copy = {
     absoluteHelp: "Même avec une activité régulière, une réauthentification est requise au plus tard après 30 jours.",
     saved: "Politique de session mise à jour.",
     saveFailed: "Impossible de mettre à jour la politique de session.",
+    storageUnavailable: "Le stockage de la préférence de session est temporairement indisponible. Votre durée précédente reste active.",
+    sessionExpired: "Votre session doit être renouvelée avant de modifier ce réglage.",
+    rateLimited: "Trop de modifications rapprochées. Réessayez dans quelques instants.",
     pushTitle: "Notifications en arrière-plan",
     pushHelp: "Recevez les messages et alertes DTSC via le service Push du navigateur même lorsqu'aucune page DTSC n'est ouverte, lorsque la plateforme le permet.",
     enable: "Activer sur cet appareil",
@@ -36,6 +39,7 @@ const copy = {
     permissionGranted: "Autorisation accordée, abonnement à renouveler",
     unsupported: "Web Push non supporté dans ce contexte navigateur",
     configMissing: "Web Push n'est pas encore configuré côté serveur",
+    configInvalid: "La configuration Web Push du serveur est invalide. Vérifiez les clés VAPID puis redéployez DTSC.",
     apple: "Sur iPhone/iPad, ajoutez DTSC Platform à l'écran d'accueil puis ouvrez la PWA pour activer les notifications si cette option n'est pas disponible dans Safari.",
     pushEnabled: "Notifications Web Push activées.",
     pushDisabled: "Notifications désactivées sur cet appareil.",
@@ -50,6 +54,9 @@ const copy = {
     absoluteHelp: "Even with regular activity, authentication is required again after at most 30 days.",
     saved: "Session policy updated.",
     saveFailed: "Unable to update the session policy.",
+    storageUnavailable: "Session preference storage is temporarily unavailable. Your previous duration remains active.",
+    sessionExpired: "Your session must be renewed before changing this setting.",
+    rateLimited: "Too many changes in a short time. Try again in a few moments.",
     pushTitle: "Background notifications",
     pushHelp: "Receive DTSC messages and alerts through the browser Push Service even when no DTSC page is open, where supported.",
     enable: "Enable on this device",
@@ -61,6 +68,7 @@ const copy = {
     permissionGranted: "Permission granted, subscription needs renewal",
     unsupported: "Web Push is not supported in this browser context",
     configMissing: "Web Push is not configured on the server yet",
+    configInvalid: "The server Web Push configuration is invalid. Check the VAPID keys and redeploy DTSC.",
     apple: "On iPhone/iPad, add DTSC Platform to the Home Screen and open the PWA before enabling notifications if this option is unavailable in Safari.",
     pushEnabled: "Web Push notifications enabled.",
     pushDisabled: "Notifications disabled on this device.",
@@ -72,6 +80,7 @@ function stateLabel(state: PushCapabilityState, labels: (typeof copy)["fr"] | (t
   if (state === "permission-denied") return labels.permissionDenied;
   if (state === "permission-granted") return labels.permissionGranted;
   if (state === "configuration-missing") return labels.configMissing;
+  if (state === "configuration-invalid") return labels.configInvalid;
   if (state === "unsupported") return labels.unsupported;
   return labels.permissionDefault;
 }
@@ -98,18 +107,59 @@ export function SessionAndPushSettings({
   }, []);
 
   const showAppleGuidance = useMemo(() => pushState === "unsupported" && needsAppleHomeScreenGuidance(), [pushState]);
+  const canEnablePush = pushState === "permission-default" || pushState === "permission-granted";
 
   async function updateTimeout(next: SessionIdleTimeoutMinutes) {
+    const previous = idleTimeoutMinutes;
     setIdleTimeoutMinutes(next);
     setSavingSession(true);
     setMessage("");
-    const response = await fetch("/api/account/session-policy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionIdleTimeoutMinutes: next }),
-    });
-    setSavingSession(false);
-    setMessage(response.ok ? labels.saved : labels.saveFailed);
+
+    try {
+      const response = await fetch("/api/account/session-policy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionIdleTimeoutMinutes: next }),
+      });
+      const body = await response.json().catch(() => null) as {
+        code?: string;
+        idleTimeoutMinutes?: number;
+      } | null;
+
+      if (!response.ok) {
+        const serverValue = SESSION_IDLE_TIMEOUT_OPTIONS.some((item) => item.value === body?.idleTimeoutMinutes)
+          ? body?.idleTimeoutMinutes as SessionIdleTimeoutMinutes
+          : previous;
+        setIdleTimeoutMinutes(serverValue);
+
+        if (response.status === 401 || body?.code === "SESSION_EXPIRED" || body?.code === "SESSION_ABSOLUTE_EXPIRED") {
+          setMessage(labels.sessionExpired);
+          window.setTimeout(() => window.location.assign("/session-expired"), 350);
+          return;
+        }
+        if (response.status === 429 || body?.code === "SESSION_POLICY_RATE_LIMITED") {
+          setMessage(labels.rateLimited);
+          return;
+        }
+        if (body?.code === "SESSION_POLICY_STORAGE_UNAVAILABLE") {
+          setMessage(labels.storageUnavailable);
+          return;
+        }
+        setMessage(labels.saveFailed);
+        return;
+      }
+
+      const persistedValue = SESSION_IDLE_TIMEOUT_OPTIONS.some((item) => item.value === body?.idleTimeoutMinutes)
+        ? body?.idleTimeoutMinutes as SessionIdleTimeoutMinutes
+        : next;
+      setIdleTimeoutMinutes(persistedValue);
+      setMessage(labels.saved);
+    } catch {
+      setIdleTimeoutMinutes(previous);
+      setMessage(labels.saveFailed);
+    } finally {
+      setSavingSession(false);
+    }
   }
 
   async function enablePush() {
@@ -120,8 +170,9 @@ export function SessionAndPushSettings({
       setPushState(result.state);
       setMessage(result.ok ? labels.pushEnabled : stateLabel(result.state, labels));
     } catch {
-      setPushState(await getPushCapabilityState().catch(() => "unsupported" as const));
-      setMessage(labels.configMissing);
+      const nextState = await getPushCapabilityState().catch(() => "unsupported" as const);
+      setPushState(nextState);
+      setMessage(stateLabel(nextState, labels));
     } finally {
       setPushBusy(false);
     }
@@ -184,7 +235,7 @@ export function SessionAndPushSettings({
                   <Button type="button" variant="outline" disabled={pushBusy} onClick={() => void disablePush()} className="rounded-xl border-dtsc-border">
                     {labels.disable}
                   </Button>
-                ) : pushState !== "permission-denied" && pushState !== "unsupported" ? (
+                ) : canEnablePush ? (
                   <Button type="button" disabled={pushBusy} onClick={() => void enablePush()} className="rounded-xl bg-dtsc-blue text-white">
                     {pushState === "permission-granted" ? labels.renew : labels.enable}
                   </Button>

@@ -4,13 +4,30 @@ export type PushCapabilityState =
   | "permission-denied"
   | "permission-granted"
   | "subscribed"
-  | "configuration-missing";
+  | "configuration-missing"
+  | "configuration-invalid";
+
+type PushServerConfiguration = {
+  configured?: boolean;
+  configurationIssue?: string | null;
+  vapidPublicKey?: string | null;
+};
 
 function urlBase64ToUint8Array(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from(rawData, (character) => character.charCodeAt(0));
+}
+
+function pushConfigurationState(issue?: string | null): PushCapabilityState {
+  return issue?.startsWith("invalid-") ? "configuration-invalid" : "configuration-missing";
+}
+
+async function getPushServerConfiguration(): Promise<PushServerConfiguration | null> {
+  const response = await fetch("/api/push/subscriptions", { cache: "no-store" }).catch(() => null);
+  if (!response?.ok) return null;
+  return response.json() as Promise<PushServerConfiguration>;
 }
 
 export function supportsWebPush() {
@@ -44,6 +61,12 @@ export async function getCurrentPushSubscription() {
 
 export async function getPushCapabilityState(): Promise<PushCapabilityState> {
   if (!supportsWebPush()) return "unsupported";
+
+  const configuration = await getPushServerConfiguration();
+  if (configuration && !configuration.configured) {
+    return pushConfigurationState(configuration.configurationIssue);
+  }
+
   if (Notification.permission === "denied") return "permission-denied";
   if (Notification.permission === "default") return "permission-default";
 
@@ -58,8 +81,13 @@ export async function getPushCapabilityState(): Promise<PushCapabilityState> {
   }).catch(() => null);
   if (!serverResponse?.ok) return "permission-granted";
 
-  const server = await serverResponse.json() as { configured?: boolean; enabled?: boolean; registered?: boolean };
-  if (!server.configured) return "configuration-missing";
+  const server = await serverResponse.json() as {
+    configured?: boolean;
+    configurationIssue?: string | null;
+    enabled?: boolean;
+    registered?: boolean;
+  };
+  if (!server.configured) return pushConfigurationState(server.configurationIssue);
   return server.enabled && server.registered ? "subscribed" : "permission-granted";
 }
 
@@ -68,20 +96,19 @@ export async function enableCurrentDevicePush(deviceLabel?: string) {
     return { ok: false as const, state: "unsupported" as PushCapabilityState };
   }
 
+  const config = await getPushServerConfiguration();
+  if (!config?.configured || !config.vapidPublicKey) {
+    return {
+      ok: false as const,
+      state: pushConfigurationState(config?.configurationIssue),
+    };
+  }
+
   const permission = Notification.permission === "granted"
     ? "granted"
     : await Notification.requestPermission();
   if (permission !== "granted") {
     return { ok: false as const, state: permission === "denied" ? "permission-denied" as const : "permission-default" as const };
-  }
-
-  const configResponse = await fetch("/api/push/subscriptions", { cache: "no-store" });
-  if (!configResponse.ok) {
-    return { ok: false as const, state: "configuration-missing" as const };
-  }
-  const config = await configResponse.json() as { configured?: boolean; vapidPublicKey?: string | null };
-  if (!config.configured || !config.vapidPublicKey) {
-    return { ok: false as const, state: "configuration-missing" as const };
   }
 
   const registration = await ensureServiceWorkerRegistration();
@@ -108,6 +135,13 @@ export async function enableCurrentDevicePush(deviceLabel?: string) {
     }),
   });
   if (!response.ok) {
+    const body = await response.json().catch(() => null) as {
+      code?: string;
+      configurationIssue?: string | null;
+    } | null;
+    if (body?.code === "WEB_PUSH_CONFIGURATION_UNAVAILABLE") {
+      return { ok: false as const, state: pushConfigurationState(body.configurationIssue) };
+    }
     return { ok: false as const, state: "permission-granted" as const };
   }
 
