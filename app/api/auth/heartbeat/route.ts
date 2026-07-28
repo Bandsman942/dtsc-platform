@@ -4,6 +4,7 @@ import { clearSessionCookie, getSession, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
 import { sessionWarningSeconds } from "@/lib/session-policy";
 
 export async function POST(req: Request) {
@@ -29,7 +30,6 @@ export async function POST(req: Request) {
       name: true,
       role: true,
       status: true,
-      sessionIdleTimeoutMinutes: true,
     },
   });
 
@@ -38,9 +38,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Session unavailable" }, { status: 401 });
   }
 
+  const sessionIdleTimeoutMinutes = await getUserSessionIdleTimeoutMinutes(user.id);
   const renewed = await setSessionCookie(
     {
       ...user,
+      sessionIdleTimeoutMinutes,
       activeContext: session.activeContext,
       activeOrganizationId: session.activeOrganizationId || null,
       activeOrganizationName: session.activeOrganizationName || null,
