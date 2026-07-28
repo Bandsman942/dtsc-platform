@@ -60,7 +60,7 @@ check("cookie garde les flags et domaine SSO", all(auth, ['httpOnly: true', 'sam
 check("préférence de session utilise un modèle Prisma dédié", all(sessionSchema, ["model UserSessionPreference", "sessionIdleTimeoutMinutes", "@default(30)"]) && all(preference, ["prisma.userSessionPreference.findUnique", "prisma.userSessionPreference.upsert"]));
 check("lecture de préférence ne peut pas casser le login", all(preference, ["try {", "catch {", "return resolveSessionIdleTimeoutMinutes(undefined)"]));
 check("migration session crée table, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'CONSTRAINT "UserSessionPreference_pkey"', "43200"]));
-check("migration de réparation session est idempotente", all(repairMigration, ['CREATE TABLE IF NOT EXISTS "UserSessionPreference"', "ADD COLUMN IF NOT EXISTS", "CREATE INDEX IF NOT EXISTS", "pg_constraint", "43200"]));
+check("migration de réparation session est idempotente et répare la clé primaire", all(repairMigration, ['CREATE TABLE IF NOT EXISTS "UserSessionPreference"', "ADD COLUMN IF NOT EXISTS", "CREATE INDEX IF NOT EXISTS", "conrelid", "contype = 'p'", 'ADD CONSTRAINT "UserSessionPreference_pkey" PRIMARY KEY', "43200"]));
 check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema": "./prisma"'));
 check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
 check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
