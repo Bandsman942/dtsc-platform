@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
@@ -89,15 +90,11 @@ async function notifyRequestUpdate(
   actorId: string
 ) {
   const recipients = [...new Set([request.requesterUserId, request.targetUserId].filter((id): id is string => Boolean(id) && id !== actorId))];
-  for (const userId of recipients) {
-    await prisma.notification.create({
-      data: {
-        userId,
-        title: "Demande collaborateur mise à jour",
-        body: `${request.title} est maintenant ${request.status}.`,
-        type: "COLLAB_REQUEST",
-        targetUrl: "/activities",
-      },
-    });
-  }
+  await notifyUsers({
+    userIds: recipients,
+    title: "Demande collaborateur mise à jour",
+    body: `${request.title} est maintenant ${request.status}.`,
+    type: "COLLAB_REQUEST",
+    targetUrl: "/activities",
+  });
 }
