@@ -13,8 +13,9 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs",
+    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs",
     "qa:workspace": "node scripts/qa-workspace-ui-checks.mjs",
+    "qa:workspace:generalization": "node scripts/qa-workspace-generalization-checks.mjs",
     "qa:mobile": "node scripts/qa-mobile-ios-checks.mjs"
   },
   "dependencies": {
@@ -53,5 +54,5 @@
     "tailwindcss": "^4.1.5",
     "typescript": "^5.8.3"
   },
-  "packageManager": "pnpm@10.6.2+sha512.47870716bea1572b53df34ad8647b42962bc790ce2bf4562ba0f643237d7302a3d6a8ecef9e4bdfc01d23af1969aa90485d4cebb0b9638fa5ef1daef656f6c1b"
+  "packageManager": "pnpm@10.6.2+sha512.47870716bea1572b53df34ad8647b42962bc790ce2bf4560ba0f643237d7302a3d6a8ecef9e4bdfc01d23af1969aa90485d4cebb0b9638fa5ef1daef656f6c1b"
 }
