@@ -21,11 +21,11 @@ Correction :
 - menus contextuels placés à `z-[1200]` ;
 - listes bornées à la hauteur réellement disponible et scrollables au toucher.
 
-### 2. Dialogs non synchronisés avec le viewport visuel iOS
+### 2. Dialogs et viewport visuel iOS
 
-Le viewport CSS (`dvh`) améliore fortement Safari moderne mais ne suffit pas toujours lorsque le clavier virtuel réduit ou décale le viewport réellement visible.
+Le viewport CSS (`dvh`) améliore fortement Safari moderne mais ne suffit pas toujours lorsque le clavier virtuel réduit le viewport réellement visible. WebKit peut également publier des valeurs `visualViewport.offsetTop` transitoires ou périmées pendant l'animation du clavier ou des barres du navigateur.
 
-Correction : `Dialog` observe `window.visualViewport` lorsqu'il existe et borne l'overlay à sa hauteur et son offset. Aucun hack n'essaie d'ouvrir artificiellement le clavier. Le focus reste déclenché par l'interaction utilisateur normale.
+Correction : `Dialog` observe `window.visualViewport` pour borner sa hauteur visible, mais ne repositionne plus l'overlay à partir de `offsetTop`. Le champ focalisé reste dans le scroll interne du dialog et aucune logique ne synthétise `.focus()` : le clavier ou le picker natif reste déclenché uniquement par le geste réel de l'utilisateur.
 
 ### 3. Safe areas globales incomplètes
 
@@ -61,6 +61,28 @@ Correction :
 - les API, pages privées et navigations restent hors cache applicatif ;
 - fallback offline enrichi avec `viewport-fit=cover` et safe areas.
 
+### 7. Clavier iPhone et chrome mobile privé
+
+Le contrôleur de navigation mobile réagit au scroll et au resize de la fenêtre. Sur iOS, l'ouverture ou la fermeture du clavier produit elle-même des événements `resize`/`scroll`, ce qui pouvait être interprété comme une navigation de page : le premier bloc se repliait et la navigation basse pouvait remonter dans le viewport visuel.
+
+Correction :
+
+- les contrôles de formulaire conservent `touch-action: auto` pour ne pas interférer avec le geste de focus natif WebKit ;
+- `PrivateMobileChromeController` détecte `focusin`/`focusout` sur les champs et suspend les transitions de chrome mobile pendant la saisie ;
+- la navigation basse est masquée pendant la saisie et rétablie après stabilisation du clavier ;
+- les événements de viewport liés au clavier ne déclenchent plus le repli de la navigation.
+
+### 8. Navigation basse transparente après désactivation du backdrop
+
+Pour éviter le bug WebKit des couches `position: fixed` transformées pendant les transitions du clavier, le backdrop de la navigation basse a été désactivé. Le composant conservait toutefois un fond translucide `bg-dtsc-surface/86`, ce qui rendait les cartes situées derrière clairement visibles.
+
+Correction :
+
+- la navigation basse utilise désormais une vraie balise `nav` fixe non transformée ;
+- son fond est `bg-dtsc-surface`, totalement opaque ;
+- la couche de stabilité mobile force également `background: var(--dtsc-surface)` lorsque le backdrop iOS est désactivé ;
+- la navigation reste masquée pendant la saisie clavier et conserve les safe areas.
+
 ## Fichiers principaux
 
 - `app/layout.tsx`
@@ -68,11 +90,13 @@ Correction :
 - `components/ui/dialog.tsx`
 - `components/ui/select.tsx`
 - `components/ui/action-menu.tsx`
+- `components/layout/private-mobile-chrome-controller.tsx`
+- `components/dtsc/mobile-shell.tsx`
 - `public/sw.js`
 - `scripts/qa-mobile-ios-checks.mjs`
 - `package.json`
 
-## Nouvelle gate source-level
+## Gate source-level
 
 ```bash
 pnpm qa:mobile
@@ -89,7 +113,9 @@ Cette gate contrôle notamment :
 - `viewport-fit=cover` ;
 - couche de stabilité mobile chargée ;
 - absence de verrouillage artificiel du body dans le Dialog partagé ;
-- utilisation de `visualViewport` ;
+- utilisation de `visualViewport` sans repositionnement via `offsetTop` ;
+- focus natif WebKit et suspension du chrome mobile pendant la saisie ;
+- navigation basse non transformée et opaque ;
 - hiérarchie z-index Dialog / Select ;
 - scroll tactile des listes ;
 - exclusions privées du service worker ;
