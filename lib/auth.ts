@@ -4,7 +4,7 @@ import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAuthCookieDomain, getSignInUrl, getDashboardUrl } from "@/lib/domains";
 import { requireEnv } from "@/lib/env";
-import { SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES } from "@/lib/session-config";
+import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
 import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
 import {
   createSessionToken,
@@ -28,7 +28,7 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: session.userId },
     select: {
       id: true,
@@ -49,7 +49,6 @@ export async function getCurrentUser() {
       notifyUsageEnabled: true,
       notifyBroadcastEnabled: true,
       pushNotificationsEnabled: true,
-      sessionIdleTimeoutMinutes: true,
       interfaceDensity: true,
       startPage: true,
       locale: true,
@@ -79,6 +78,10 @@ export async function getCurrentUser() {
       updatedAt: true,
     },
   });
+  if (!user) return null;
+
+  const sessionIdleTimeoutMinutes = await getUserSessionIdleTimeoutMinutes(user.id);
+  return { ...user, sessionIdleTimeoutMinutes };
 }
 
 export async function requireUser() {
@@ -116,12 +119,7 @@ export async function setSessionCookie(
   options: { previousSession?: SessionPayload | null } = {}
 ) {
   const cookieStore = await cookies();
-  const storedIdleTimeout = user.sessionIdleTimeoutMinutes ?? (
-    await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { sessionIdleTimeoutMinutes: true },
-    })
-  )?.sessionIdleTimeoutMinutes ?? SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES;
+  const storedIdleTimeout = user.sessionIdleTimeoutMinutes ?? await getUserSessionIdleTimeoutMinutes(user.id);
 
   const created = await createSessionToken(
     {
