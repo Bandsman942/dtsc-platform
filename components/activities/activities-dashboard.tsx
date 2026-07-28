@@ -10,6 +10,7 @@ import type { ActivityItem, ActivitySection, CollaboratorOption } from "@/compon
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -280,37 +281,28 @@ function SectionDialog({
     <Dialog open title={section.title} description={section.description} onClose={onClose} className="h-[92dvh] max-w-6xl">
       <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className={`min-w-0 ${detailOpen ? "hidden lg:block" : "block"}`}>
-          <div className="mb-3 flex min-w-0 flex-col gap-2 border-b border-dtsc-border pb-3 sm:flex-row sm:items-center">
-            <label className="relative block min-w-0 flex-1">
-              <span className="sr-only">Rechercher dans {section.title}</span>
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" aria-hidden="true" />
-              <Input value={list.query} onChange={(event) => list.setQuery(event.target.value)} placeholder="Rechercher dans cette section..." className="h-11 min-w-0 rounded-xl bg-dtsc-surface pl-9" />
-            </label>
-            <span className="shrink-0 text-xs font-bold text-dtsc-muted">{list.filteredCount}/{list.totalCount}</span>
-          </div>
+          <ListControls
+            query={list.query}
+            onQueryChange={list.setQuery}
+            page={list.page}
+            pageCount={list.pageCount}
+            totalCount={list.totalCount}
+            filteredCount={list.filteredCount}
+            placeholder="Rechercher dans cette section..."
+            onPageChange={list.setPage}
+          />
           {list.paginatedItems.length ? (
-            <>
-              <BusinessList ariaLabel={`Liste ${section.title}`} className="max-h-[54dvh] overflow-y-auto overscroll-contain pr-1 lg:max-h-[55vh]">
-                {list.paginatedItems.map((item) => (
-                  <ActivityBusinessItem
-                    key={`${item.entityType}-${item.id}`}
-                    item={item}
-                    onOpen={() => { setSelected(item); setDetailOpen(true); }}
-                    onCreateRelatedRequest={() => onCreateRelatedRequest(item)}
-                    onTaskStatus={(status) => onTaskStatus(item, status)}
-                  />
-                ))}
-              </BusinessList>
-              {list.pageCount > 1 ? (
-                <nav aria-label="Pagination de la section" className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-dtsc-muted">
-                  <span>Page {list.page}/{list.pageCount}</span>
-                  <div className="flex gap-2">
-                    <Button type="button" size="sm" variant="outline" disabled={list.page <= 1} onClick={() => list.setPage(Math.max(1, list.page - 1))} className="rounded-xl border-dtsc-border">Précédent</Button>
-                    <Button type="button" size="sm" variant="outline" disabled={list.page >= list.pageCount} onClick={() => list.setPage(Math.min(list.pageCount, list.page + 1))} className="rounded-xl border-dtsc-border">Suivant</Button>
-                  </div>
-                </nav>
-              ) : null}
-            </>
+            <BusinessList ariaLabel={`Liste ${section.title}`} className="max-h-[54dvh] overflow-y-auto overscroll-contain pr-1 lg:max-h-[55vh]">
+              {list.paginatedItems.map((item) => (
+                <ActivityBusinessItem
+                  key={`${item.entityType}-${item.id}`}
+                  item={item}
+                  onOpen={() => { setSelected(item); setDetailOpen(true); }}
+                  onCreateRelatedRequest={() => onCreateRelatedRequest(item)}
+                  onTaskStatus={(status) => onTaskStatus(item, status)}
+                />
+              ))}
+            </BusinessList>
           ) : <EmptyState compact title="Aucun résultat" description="Aucun élément ne correspond à cette recherche." />}
         </div>
         <div className={`min-w-0 lg:border-l lg:border-dtsc-border lg:pl-5 ${detailOpen ? "block" : "hidden lg:block"}`}>
