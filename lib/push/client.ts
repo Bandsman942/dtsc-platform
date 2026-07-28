@@ -26,10 +26,20 @@ export function needsAppleHomeScreenGuidance() {
   return "standalone" in appleNavigator && appleNavigator.standalone !== true;
 }
 
+async function getExistingServiceWorkerRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  return navigator.serviceWorker.getRegistration("/");
+}
+
+async function ensureServiceWorkerRegistration() {
+  const existing = await getExistingServiceWorkerRegistration();
+  return existing || navigator.serviceWorker.register("/sw.js", { scope: "/" });
+}
+
 export async function getCurrentPushSubscription() {
   if (!supportsWebPush()) return null;
-  const registration = await navigator.serviceWorker.ready;
-  return registration.pushManager.getSubscription();
+  const registration = await getExistingServiceWorkerRegistration();
+  return registration ? registration.pushManager.getSubscription() : null;
 }
 
 export async function getPushCapabilityState(): Promise<PushCapabilityState> {
@@ -61,7 +71,7 @@ export async function enableCurrentDevicePush(deviceLabel?: string) {
     return { ok: false as const, state: "configuration-missing" as const };
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await ensureServiceWorkerRegistration();
   let subscription = await registration.pushManager.getSubscription();
   if (!subscription) {
     subscription = await registration.pushManager.subscribe({
