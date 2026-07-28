@@ -16,7 +16,22 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
-    WHERE conname = 'UserSessionPreference_sessionIdleTimeoutMinutes_allowed'
+    WHERE conrelid = '"UserSessionPreference"'::regclass
+      AND contype = 'p'
+  ) THEN
+    ALTER TABLE "UserSessionPreference"
+      ADD CONSTRAINT "UserSessionPreference_pkey" PRIMARY KEY ("userId");
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = '"UserSessionPreference"'::regclass
+      AND conname = 'UserSessionPreference_sessionIdleTimeoutMinutes_allowed'
   ) THEN
     ALTER TABLE "UserSessionPreference"
       ADD CONSTRAINT "UserSessionPreference_sessionIdleTimeoutMinutes_allowed"
