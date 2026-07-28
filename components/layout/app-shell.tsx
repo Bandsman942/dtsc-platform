@@ -8,6 +8,7 @@ import { SessionTimeoutGuard } from "@/components/auth/session-timeout-guard";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { NavLinks } from "@/components/layout/nav-links";
+import { AppResumeSync } from "@/components/pwa/app-resume-sync";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
@@ -122,6 +123,7 @@ export async function AppShell({
     <LocaleProvider locale={user.locale}>
       <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
         <SessionTimeoutGuard />
+        <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} />
         <PrivateMobileChromeController />
         <GlobalCallToast />
         <PromotionalBannerHost banners={promotionalBanners} />
