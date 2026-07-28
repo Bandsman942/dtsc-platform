@@ -29,7 +29,7 @@ expect("business list is row/separator based", businessList.includes("divide-y")
 expect("context actions reuse shared ActionMenu", actions.includes("ActionMenu") && actions.includes("hidden") && actions.includes("separatorBefore"));
 expect("ActionMenu keeps Sprint 1 visualViewport hardening", actionMenu.includes("window.visualViewport") && actionMenu.includes("zIndex: 1200") && actionMenu.includes('className="fixed z-[1000]'));
 expect("Activities uses reusable workspace primitives", dashboard.includes("ModuleWorkspace") && dashboard.includes("ModuleHeader") && dashboard.includes("ModuleToolbar") && dashboard.includes("ModuleMetrics") && dashboard.includes("BusinessList"));
-expect("Activities composes ModuleToolbar with useSmartList instead of duplicate list UI", dashboard.includes("ModuleToolbar") && dashboard.includes("useSmartList") && !dashboard.includes('from "@/components/ui/list-controls"'));
+expect("Activities reuses ListControls with useSmartList", dashboard.includes('from "@/components/ui/list-controls"') && dashboard.includes("<ListControls") && dashboard.includes("useSmartList"));
 expect("Activities no longer uses top-level DTSC card wrappers", !dashboard.includes("dtsc-panel") && !dashboard.includes("dtsc-card"));
 expect("Activities keeps global search and date filters", dashboard.includes("matchesFilters") && dashboard.includes('type="date"') && dashboard.includes("normalizeSearch"));
 expect("Activities keeps centralized collaborative request form", dashboard.includes("RequestDialog") && forms.includes('/api/activities/requests'));
