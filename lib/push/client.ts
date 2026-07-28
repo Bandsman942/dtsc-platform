@@ -46,8 +46,21 @@ export async function getPushCapabilityState(): Promise<PushCapabilityState> {
   if (!supportsWebPush()) return "unsupported";
   if (Notification.permission === "denied") return "permission-denied";
   if (Notification.permission === "default") return "permission-default";
+
   const subscription = await getCurrentPushSubscription();
-  return subscription ? "subscribed" : "permission-granted";
+  if (!subscription) return "permission-granted";
+
+  const serverResponse = await fetch("/api/push/subscriptions/current", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!serverResponse?.ok) return "permission-granted";
+
+  const server = await serverResponse.json() as { configured?: boolean; enabled?: boolean; registered?: boolean };
+  if (!server.configured) return "configuration-missing";
+  return server.enabled && server.registered ? "subscribed" : "permission-granted";
 }
 
 export async function enableCurrentDevicePush(deviceLabel?: string) {
