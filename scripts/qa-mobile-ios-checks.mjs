@@ -31,6 +31,7 @@ const mobileCss = read("app/mobile-stability.css");
 const dialog = read("components/ui/dialog.tsx");
 const select = read("components/ui/select.tsx");
 const actionMenu = read("components/ui/action-menu.tsx");
+const mobileChrome = read("components/layout/private-mobile-chrome-controller.tsx");
 const serviceWorker = read("public/sw.js");
 const pwaRegister = read("components/pwa/pwa-register.tsx");
 const manifest = read("app/manifest.ts");
@@ -41,18 +42,35 @@ check(
 );
 
 check(
-  "formulaires mobiles évitent le zoom Safari et conservent le geste tactile",
-  containsAll(mobileCss, ["font-size: 16px !important", "touch-action: manipulation", "safe-area-inset-top"])
+  "formulaires mobiles évitent le zoom Safari et laissent le geste de saisie natif à WebKit",
+  containsAll(mobileCss, ["font-size: 16px !important", "touch-action: manipulation", "touch-action: auto", "safe-area-inset-top"])
 );
 
 check(
-  "dialog partagé est porté au body et borné par VisualViewport",
-  containsAll(dialog, ["createPortal", "window.visualViewport", "data-dtsc-dialog-scroll", 'z-[1000]', "onPointerDown", "panelStyle"])
+  "dialog partagé utilise VisualViewport sans rerendre le champ focalisé",
+  containsAll(dialog, ["createPortal", "window.visualViewport", "data-dtsc-dialog-scroll", 'z-[1000]', "useRef", "--dtsc-dialog-visual-height", "ensureFocusedControlVisible", "onClick"])
+    && !dialog.includes("useState<VisualViewportBounds")
+    && !dialog.includes("onPointerDown")
 );
 
 check(
-  "dialog partagé ne bloque pas artificiellement le scroll du body",
-  !dialog.includes('document.body.style.overflow = "hidden"') && !dialog.includes("preventDefault()")
+  "dialog partagé ne se repositionne plus avec visualViewport.offsetTop",
+  !dialog.includes("visualViewportBounds.offsetTop") && !dialog.includes("viewport.offsetTop")
+);
+
+check(
+  "dialog partagé ne bloque ni le body ni le focus natif",
+  !dialog.includes('document.body.style.overflow = "hidden"') && !dialog.includes("preventDefault()") && !dialog.includes(".focus()")
+);
+
+check(
+  "chrome mobile ignore scroll et resize clavier pendant la saisie",
+  containsAll(mobileChrome, ["MOBILE_FORM_CONTROL_SELECTOR", 'document.addEventListener("focusin"', 'document.addEventListener("focusout"', 'root.dataset.dtscMobileInput = "active"', "formControlActive", "isMobileFormControl(document.activeElement)"])
+);
+
+check(
+  "navigation basse évite le chemin transform/backdrop pendant les transitions clavier",
+  containsAll(mobileCss, ['[data-mobile-bottom-nav]', "backdrop-filter: none !important", "transform: none !important", 'html[data-dtsc-mobile-input="active"]', 'html[data-private-mobile-nav="hidden"]'])
 );
 
 check(
