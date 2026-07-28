@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, email: true, name: true, role: true, status: true },
+    select: { id: true, email: true, name: true, role: true, status: true, sessionIdleTimeoutMinutes: true },
   });
   if (!user || user.status !== "ACTIVE") {
     await writeApiLog({ request: req, statusCode: 401, userId: session.userId, startedAt });
@@ -49,13 +49,21 @@ export async function POST(req: Request) {
     }
   }
 
-  await setSessionCookie({
-    ...user,
-    activeContext: context.activeContext,
-    activeOrganizationId: context.activeOrganizationId,
-    activeOrganizationName: context.activeOrganizationName,
-    activeOrganizationRole: context.activeOrganizationRole,
-  });
+  const renewedSession = await setSessionCookie(
+    {
+      ...user,
+      activeContext: context.activeContext,
+      activeOrganizationId: context.activeOrganizationId,
+      activeOrganizationName: context.activeOrganizationName,
+      activeOrganizationRole: context.activeOrganizationRole,
+    },
+    { previousSession: session }
+  );
+  if (!renewedSession) {
+    await writeApiLog({ request: req, statusCode: 401, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Session expired" }, { status: 401 });
+  }
+
   await writeAuditLog({
     userId: session.userId,
     action: "ORGANIZATION_CONTEXT_SWITCHED",
