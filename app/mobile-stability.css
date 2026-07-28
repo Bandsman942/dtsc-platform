@@ -25,21 +25,13 @@
 @media (pointer: coarse) {
   button,
   a,
-  [role="button"],
-  [role="menuitem"] {
-    touch-action: manipulation;
-  }
-
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  input,
   textarea,
   select,
-  [contenteditable="true"],
-  [role="textbox"],
-  [role="combobox"] {
-    /* Let WebKit own the native tap/focus gesture that summons the software
-       keyboard or picker. Applying manipulation to editable controls can add
-       another gesture layer inside fixed/scrollable mobile dialogs. */
-    touch-action: auto;
+  [role="button"],
+  [role="combobox"],
+  [role="menuitem"] {
+    touch-action: manipulation;
   }
 }
 
@@ -52,32 +44,9 @@
     textarea,
     select,
     [contenteditable="true"],
-    [role="textbox"],
     [role="combobox"]
   ) {
   /* Give Safari room to reveal the focused field above the virtual keyboard. */
   scroll-margin-top: 18dvh;
   scroll-margin-bottom: 28dvh;
-}
-
-@media (max-width: 1023px) {
-  [data-mobile-bottom-nav] {
-    /* iOS 26 / WKWebView can mispaint transformed bottom:fixed layers after a
-       keyboard or browser-chrome transition. Keep this critical navigation on
-       the fixed-position layer without transform/backdrop-filter promotion. */
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    filter: none !important;
-    transform: none !important;
-    transition: opacity 180ms ease, visibility 180ms ease !important;
-    will-change: opacity !important;
-  }
-
-  html[data-private-mobile-nav="hidden"] [data-mobile-bottom-nav],
-  html[data-dtsc-mobile-input="active"] [data-mobile-bottom-nav] {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    visibility: hidden !important;
-    transform: none !important;
-  }
 }
