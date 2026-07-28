@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildUrlForHostType, getAuthCookieDomain, getCurrentHostType, getDashboardUrl, getSignInUrl, type HostType } from "@/lib/domains";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
-import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
+import { SESSION_HEARTBEAT_THROTTLE_MS } from "@/lib/session-config";
+import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
@@ -72,7 +73,6 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "public") {
-    // Public keeps marketing pages only; product routes move to their owning host.
     if (isPathMatch(pathname, authRoutes)) {
       return redirectToHost(request, "account", requestPathWithSearch(request));
     }
@@ -83,7 +83,6 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "app") {
-    // The SaaS host must not expose the DTSC console or support paths directly.
     if (pathname === "/") {
       return session ? redirectToHost(request, "app", "/dashboard") : redirectToSignIn(request, "/dashboard");
     }
@@ -100,7 +99,6 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "console") {
-    // Console protects /admin, while SaaS and support paths remain navigable via SSO.
     if (pathname === "/") {
       return redirectToHost(request, "console", "/admin");
     }
@@ -126,7 +124,6 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "account") {
-    // Account owns authentication; signed-in users leave it through a trusted next target.
     if (pathname === "/") {
       return redirectToHost(request, "account", "/auth/sign-in");
     }
@@ -143,7 +140,6 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
   }
 
   if (hostType === "support") {
-    // Support protects tickets and delegates app/console routes to the right host.
     if (pathname === "/") {
       return redirectToHost(request, "support", "/support");
     }
@@ -180,7 +176,6 @@ export async function middleware(request: NextRequest) {
   const session = secret ? await verifySessionToken(token, secret) : null;
   const hostType = getCurrentHostType(request.headers.get("host"));
 
-  // API routes are never host-rewritten; only auth/RBAC guards run here.
   if (pathname.startsWith("/api/")) {
     if (isPathMatch(pathname, dtscInternalApiRoutes)) {
       if (!session) {
@@ -218,9 +213,16 @@ export async function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
-  if (session && isPathMatch(pathname, [...privateRoutes, ...adminRoutes]) && secret) {
-    // Refresh the shared SSO cookie without changing its context payload.
-    const tokenValue = await createSessionToken(
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const canRenewSignedPolicy = Boolean(
+    session?.authTime &&
+    session.absoluteExp &&
+    session.idleTimeoutMinutes &&
+    (!session.issuedAt || (nowSeconds - session.issuedAt) * 1000 >= SESSION_HEARTBEAT_THROTTLE_MS)
+  );
+
+  if (session && canRenewSignedPolicy && isPathMatch(pathname, [...privateRoutes, ...adminRoutes]) && secret) {
+    const created = await createSessionToken(
       {
         userId: session.userId,
         email: session.email,
@@ -231,17 +233,25 @@ export async function middleware(request: NextRequest) {
         activeOrganizationName: session.activeOrganizationName || null,
         activeOrganizationRole: session.activeOrganizationRole || null,
       },
-      secret
+      secret,
+      {
+        idleTimeoutMinutes: session.idleTimeoutMinutes,
+        previous: { authTime: session.authTime, absoluteExp: session.absoluteExp },
+        nowSeconds,
+      }
     );
-    const cookieDomain = getAuthCookieDomain();
-    response.cookies.set(SESSION_COOKIE, tokenValue, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: SESSION_MAX_AGE_SECONDS,
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    });
+
+    if (created) {
+      const cookieDomain = getAuthCookieDomain();
+      response.cookies.set(SESSION_COOKIE, created.token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: sessionCookieMaxAgeSeconds(created.session.exp, nowSeconds),
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
+      });
+    }
   }
 
   return response;

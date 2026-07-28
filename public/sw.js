@@ -1,4 +1,4 @@
-const STATIC_CACHE = "dtsc-static-v7-20260728";
+const STATIC_CACHE = "dtsc-static-v8-20260728";
 const OFFLINE_URL = "/offline.html";
 
 const STATIC_PATH_PREFIXES = ["/_next/static/", "/icons/"];
@@ -53,6 +53,31 @@ function isPrivateOrApiPath(pathname) {
 
 function isStaticAsset(pathname) {
   return STATIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix)) || STATIC_FILE_PATTERN.test(pathname);
+}
+
+function normalizeNotificationTarget(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return "/notifications";
+  }
+  try {
+    const parsed = new URL(value, self.location.origin);
+    if (parsed.origin !== self.location.origin) {
+      return "/notifications";
+    }
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "/notifications";
+  }
+}
+
+function normalizePushPayload(raw) {
+  const value = raw && typeof raw === "object" ? raw : {};
+  return {
+    title: typeof value.title === "string" && value.title.trim() ? value.title.slice(0, 120) : "Nouvelle notification DTSC",
+    body: typeof value.body === "string" && value.body.trim() ? value.body.slice(0, 180) : "Ouvrez DTSC Platform pour consulter les détails.",
+    url: normalizeNotificationTarget(value.url),
+    tag: typeof value.tag === "string" && value.tag.trim() ? value.tag.slice(0, 120) : `dtsc-${Date.now()}`,
+  };
 }
 
 function offlineFallback() {
@@ -113,14 +138,47 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  event.waitUntil((async () => {
+    let rawPayload = null;
+    try {
+      rawPayload = event.data ? event.data.json() : null;
+    } catch {
+      try {
+        const text = event.data ? event.data.text() : "";
+        rawPayload = text ? { body: text } : null;
+      } catch {
+        rawPayload = null;
+      }
+    }
+
+    const payload = normalizePushPayload(rawPayload);
+    await self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/dtsc-logo.png",
+      badge: "/icons/notification-badge.png",
+      tag: payload.tag,
+      data: { url: payload.url },
+    });
+
+    if (self.navigator && typeof self.navigator.setAppBadge === "function") {
+      await self.navigator.setAppBadge().catch(() => undefined);
+    }
+
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    clients.forEach((client) => client.postMessage({ type: "DTSC_PUSH_RECEIVED" }));
+  })());
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || "/notifications";
+  const targetPath = normalizeNotificationTarget(event.notification.data?.url);
+  const targetUrl = new URL(targetPath, self.location.origin).href;
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
       for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(targetUrl);
+        if ("navigate" in client && "focus" in client) {
+          await client.navigate(targetUrl);
           return client.focus();
         }
       }

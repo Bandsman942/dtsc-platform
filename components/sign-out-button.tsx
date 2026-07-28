@@ -4,12 +4,23 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getSignInUrl } from "@/lib/domains";
+import { getCurrentPushSubscription } from "@/lib/push/client";
+import { broadcastBrowserSessionLogout } from "@/lib/session-client";
 
 export function SignOutButton() {
   const router = useRouter();
 
   async function signOut() {
-    const response = await fetch("/api/auth/sign-out", { method: "POST" });
+    const subscription = await getCurrentPushSubscription().catch(() => null);
+    const response = await fetch("/api/auth/sign-out", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "manual", pushEndpoint: subscription?.endpoint || "" }),
+    });
+    if (response.ok && subscription) {
+      await subscription.unsubscribe().catch(() => false);
+    }
+    broadcastBrowserSessionLogout();
     const body = (await response.json().catch(() => null)) as { redirectTo?: string } | null;
     const target = body?.redirectTo || getSignInUrl();
     if (/^https?:\/\//i.test(target)) {

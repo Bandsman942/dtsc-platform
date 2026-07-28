@@ -72,7 +72,7 @@ check(
 
 check(
   "service worker rafraîchit les assets stables en arrière-plan",
-  containsAll(serviceWorker, ["event.waitUntil(networkResponse", "cache.put(request, responseClone)", "return cachedResponse", "dtsc-static-v7-20260728"])
+  containsAll(serviceWorker, ["event.waitUntil(networkResponse", "cache.put(request, responseClone)", "return cachedResponse", "dtsc-static-v8-20260728"])
 );
 
 check(

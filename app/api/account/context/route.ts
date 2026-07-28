@@ -4,6 +4,7 @@ import { getSession, setSessionCookie } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { resolveDefaultOrganizationContext, resolveOrganizationLoginContext } from "@/lib/organizations";
+import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
 
 const contextSchema = z.object({
   organizationId: z.string().max(120).nullable().optional(),
@@ -49,13 +50,23 @@ export async function POST(req: Request) {
     }
   }
 
-  await setSessionCookie({
-    ...user,
-    activeContext: context.activeContext,
-    activeOrganizationId: context.activeOrganizationId,
-    activeOrganizationName: context.activeOrganizationName,
-    activeOrganizationRole: context.activeOrganizationRole,
-  });
+  const sessionIdleTimeoutMinutes = await getUserSessionIdleTimeoutMinutes(user.id);
+  const renewedSession = await setSessionCookie(
+    {
+      ...user,
+      sessionIdleTimeoutMinutes,
+      activeContext: context.activeContext,
+      activeOrganizationId: context.activeOrganizationId,
+      activeOrganizationName: context.activeOrganizationName,
+      activeOrganizationRole: context.activeOrganizationRole,
+    },
+    { previousSession: session }
+  );
+  if (!renewedSession) {
+    await writeApiLog({ request: req, statusCode: 401, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "Session expired" }, { status: 401 });
+  }
+
   await writeAuditLog({
     userId: session.userId,
     action: "ORGANIZATION_CONTEXT_SWITCHED",

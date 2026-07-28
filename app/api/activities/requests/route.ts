@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
@@ -89,14 +90,12 @@ export async function POST(req: Request) {
   });
 
   if (target.userId && target.userId !== user.id) {
-    await prisma.notification.create({
-      data: {
-        userId: target.userId,
-        title: "Nouvelle demande collaborateur",
-        body: `${employee.fullName} vous a envoyé une demande: ${parsed.data.title}.`,
-        type: "COLLAB_REQUEST",
-        targetUrl: "/activities",
-      },
+    await notifyUser({
+      userId: target.userId,
+      title: "Nouvelle demande collaborateur",
+      body: `${employee.fullName} vous a envoyé une demande: ${parsed.data.title}.`,
+      type: "COLLAB_REQUEST",
+      targetUrl: "/activities",
     });
   }
 

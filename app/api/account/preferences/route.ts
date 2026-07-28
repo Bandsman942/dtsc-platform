@@ -48,7 +48,6 @@ export async function PATCH(req: Request) {
       notifySupportEnabled: body.data.notifySupportEnabled,
       notifyUsageEnabled: body.data.notifyUsageEnabled,
       notifyBroadcastEnabled: body.data.notifyBroadcastEnabled,
-      pushNotificationsEnabled: body.data.pushNotificationsEnabled,
       interfaceDensity: body.data.interfaceDensity,
       startPage: body.data.startPage,
       locale: body.data.locale,
@@ -81,12 +80,12 @@ export async function PATCH(req: Request) {
     entityId: user.id,
     metadata: {
       preferredModel,
-      pushNotificationsEnabled: body.data.pushNotificationsEnabled,
       interfaceDensity: body.data.interfaceDensity,
       startPage: body.data.startPage,
       callNotificationsEnabled: body.data.callNotificationsEnabled,
       floatingCallAlertsEnabled: body.data.floatingCallAlertsEnabled,
       emailDigestFrequency: body.data.emailDigestFrequency,
+      pushManagedSeparately: true,
     },
     request: req,
   });
