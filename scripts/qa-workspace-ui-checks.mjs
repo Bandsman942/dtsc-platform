@@ -35,6 +35,7 @@ expect("Activities keeps global search and date filters", dashboard.includes("ma
 expect("Activities keeps centralized collaborative request form", dashboard.includes("RequestDialog") && forms.includes('/api/activities/requests'));
 expect("Activities keeps real blocker/report/workflow APIs", forms.includes('/api/activities/blockers') && forms.includes('/api/activities/reports') && forms.includes('/api/activities/collaborator-workflows'));
 expect("Activity details keep comments and task/request mutations", detail.includes('/api/activities/comments') && detail.includes('/api/activities/tasks/') && detail.includes('/api/activities/requests/'));
+expect("terminal tasks do not expose invalid detail mutations", detail.includes("TERMINAL_TASK_STATUSES") && detail.includes("isMutableTask") && detail.includes('item.status !== "IN_PROGRESS"'));
 expect("Activity page keeps DTSC internal session guard", activitiesPage.includes("isDtscInternalSession") && activitiesPage.includes("normalizePositionCode"));
 expect("Activities does not implement fake archive/delete actions", !dashboard.includes('label: "Archiver"') && !dashboard.includes('label: "Supprimer"'));
 expect("AGENTS codifies reusable workspace rules", agents.includes("UI/UX métier DTSC") && agents.includes("components/workspace/*") && agents.includes("permission serveur"));
