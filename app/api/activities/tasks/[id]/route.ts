@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
+import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -81,15 +82,11 @@ async function notifyTask(task: { assigneeEmployeeId: string | null; responsible
     select: { userId: true },
   });
   const recipients = [...new Set([...employees.map((employee) => employee.userId), task.createdById].filter((id): id is string => Boolean(id) && id !== actorId))];
-  for (const userId of recipients) {
-    await prisma.notification.create({
-      data: {
-        userId,
-        title: "Tâche COO mise à jour",
-        body: `${task.title} est maintenant ${status}.`,
-        type: "COO_TASK",
-        targetUrl: "/activities",
-      },
-    });
-  }
+  await notifyUsers({
+    userIds: recipients,
+    title: "Tâche COO mise à jour",
+    body: `${task.title} est maintenant ${status}.`,
+    type: "COO_TASK",
+    targetUrl: "/activities",
+  });
 }
