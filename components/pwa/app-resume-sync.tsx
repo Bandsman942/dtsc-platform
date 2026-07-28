@@ -18,28 +18,25 @@ export function AppResumeSync({ pushEnabled }: { pushEnabled: boolean }) {
     lastSyncRef.current = now;
     const task = (async () => {
       try {
-        const heartbeat = await fetch("/api/auth/heartbeat", { method: "POST", cache: "no-store" });
-        if (heartbeat.status === 401) {
+        await reconcileCurrentDevicePush(pushEnabled).catch(() => undefined);
+        const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
+        if (response.status === 401) {
           router.push("/session-expired");
           router.refresh();
           return;
         }
-        if (!heartbeat.ok) return;
+        if (!response.ok) return;
 
-        await reconcileCurrentDevicePush(pushEnabled).catch(() => undefined);
-        const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
-        if (response.ok) {
-          const body = await response.json() as { unreadCount?: number };
-          const unreadCount = Math.max(0, Number(body.unreadCount) || 0);
-          const badgeNavigator = navigator as Navigator & {
-            setAppBadge?: (contents?: number) => Promise<void>;
-            clearAppBadge?: () => Promise<void>;
-          };
-          if (unreadCount > 0 && badgeNavigator.setAppBadge) {
-            await badgeNavigator.setAppBadge(unreadCount).catch(() => undefined);
-          } else if (unreadCount === 0 && badgeNavigator.clearAppBadge) {
-            await badgeNavigator.clearAppBadge().catch(() => undefined);
-          }
+        const body = await response.json() as { unreadCount?: number };
+        const unreadCount = Math.max(0, Number(body.unreadCount) || 0);
+        const badgeNavigator = navigator as Navigator & {
+          setAppBadge?: (contents?: number) => Promise<void>;
+          clearAppBadge?: () => Promise<void>;
+        };
+        if (unreadCount > 0 && badgeNavigator.setAppBadge) {
+          await badgeNavigator.setAppBadge(unreadCount).catch(() => undefined);
+        } else if (unreadCount === 0 && badgeNavigator.clearAppBadge) {
+          await badgeNavigator.clearAppBadge().catch(() => undefined);
         }
         router.refresh();
       } catch {
