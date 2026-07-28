@@ -15,6 +15,7 @@ import {
 const CHANNEL_NAME = "dtsc-session";
 const STORAGE_EVENT_KEY = "dtsc-session-sync";
 const LAST_ACTIVITY_KEY = "dtsc-session-last-activity";
+const ACTIVITY_BROADCAST_THROTTLE_MS = 5_000;
 
 type SessionHeartbeatResponse = {
   ok: true;
@@ -49,6 +50,7 @@ export function SessionTimeoutGuard() {
   const [remainingSeconds, setRemainingSeconds] = useState(SESSION_WARNING_MIN_SECONDS);
   const [showWarning, setShowWarning] = useState(false);
   const lastActivityRef = useRef(Date.now());
+  const lastActivityBroadcastRef = useRef(0);
   const lastHeartbeatRef = useRef(0);
   const expiresAtRef = useRef(0);
   const absoluteExpiresAtRef = useRef<number | null>(null);
@@ -135,12 +137,17 @@ export function SessionTimeoutGuard() {
     if (expiredRef.current) return;
     const now = Date.now();
     lastActivityRef.current = now;
-    try {
-      window.localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
-    } catch {
-      // Activity remains valid in-memory if storage is unavailable.
+
+    if (now - lastActivityBroadcastRef.current >= ACTIVITY_BROADCAST_THROTTLE_MS) {
+      lastActivityBroadcastRef.current = now;
+      try {
+        window.localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+      } catch {
+        // Activity remains valid in-memory if storage is unavailable.
+      }
+      publish({ type: "activity", at: now });
     }
-    publish({ type: "activity", at: now });
+
     setShowWarning(false);
     void heartbeat(false);
   }, [heartbeat, publish]);
