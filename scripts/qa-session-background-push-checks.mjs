@@ -35,6 +35,7 @@ const settings = read("components/settings/session-and-push-settings.tsx");
 const settingsPage = read("app/settings/page.tsx");
 const legacySettingsCss = read("components/settings/legacy-settings-panel.module.css");
 const migration = read("prisma/migrations/20260728113000_session_idle_timeout_policy/migration.sql");
+const repairMigration = read("prisma/migrations/20260728153000_repair_session_preference_storage/migration.sql");
 const sessionSchema = read("prisma/session-policy.prisma");
 const baseSchema = read("prisma/schema.prisma");
 const pushApi = read("app/api/push/subscriptions/route.ts");
@@ -59,6 +60,7 @@ check("cookie garde les flags et domaine SSO", all(auth, ['httpOnly: true', 'sam
 check("préférence de session utilise un modèle Prisma dédié", all(sessionSchema, ["model UserSessionPreference", "sessionIdleTimeoutMinutes", "@default(30)"]) && all(preference, ["prisma.userSessionPreference.findUnique", "prisma.userSessionPreference.upsert"]));
 check("lecture de préférence ne peut pas casser le login", all(preference, ["try {", "catch {", "return resolveSessionIdleTimeoutMinutes(undefined)"]));
 check("migration session crée table, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'CONSTRAINT "UserSessionPreference_pkey"', "43200"]));
+check("migration de réparation session est idempotente", all(repairMigration, ['CREATE TABLE IF NOT EXISTS "UserSessionPreference"', "ADD COLUMN IF NOT EXISTS", "CREATE INDEX IF NOT EXISTS", "pg_constraint", "43200"]));
 check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema": "./prisma"'));
 check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
 check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
@@ -94,4 +96,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log("\nQA session/Web Push: 37 contrôles source-level passent.");
+console.log("\nQA session/Web Push: 38 contrôles source-level passent.");
