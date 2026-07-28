@@ -77,6 +77,9 @@ check("état Activé vérifie navigateur, ownership serveur et préférence", al
 check("PushSubscription existant reste endpoint unique multi-device", all(baseSchema, ["model PushSubscription", "endpoint  String @unique", "pushSubscriptions"]));
 check("API Push vérifie origine, session, ACTIVE, rate limit et ownership", all(pushApi, ["isSameOriginRequest", "UserStatus.ACTIVE", "rateLimit", "userId: user.id", "pushSubscription.findUnique", "existing.userId !== user.id", "pushSubscription.create", "pushSubscription.delete"]));
 check("VAPID private key n'est jamais NEXT_PUBLIC", all(pushConfig, ["NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "WEB_PUSH_SUBJECT"]) && !pushConfig.includes("NEXT_PUBLIC_WEB_PUSH_VAPID_PRIVATE_KEY"));
+check("configuration VAPID valide les longueurs P-256 avant activation", all(pushConfig, ["decodedBase64UrlLength(publicKey) !== 65", "decodedBase64UrlLength(privateKey) !== 32", "invalid-public-key", "invalid-private-key"]));
+check("API Push refuse un abonnement si la configuration VAPID n'est pas prête", all(pushApi, ["getWebPushConfigurationState", "WEB_PUSH_CONFIGURATION_UNAVAILABLE", "statusCode: 503", "configurationIssue"]));
+check("UI distingue une configuration VAPID invalide et n'affiche pas une activation en boucle", all(pushClient, ["configuration-invalid", "pushConfigurationState"]) && all(settings, ["configInvalid", "const canEnablePush", "canEnablePush ?"]));
 check("transport Web Push utilise P-256, HKDF, AES-128-GCM et VAPID ES256", all(webPush, ["createECDH", "prime256v1", "hkdfExtract", "aes-128-gcm", 'alg: "ES256"', 'dsaEncoding: "ieee-p1363"', 'Content-Encoding": "aes128gcm', "AbortSignal.timeout"]));
 check("payload Push est minimal et target interne", all(pushPayload, ["Ouvrez DTSC Platform pour consulter les détails.", "normalizePushTargetUrl", 'value.startsWith("//")', '"/notifications"']));
 check("notifications DB déclenchent le dispatcher en best effort", all(notifications, ["prisma.notification.create", "dispatchPushForNotification", "dispatchPushForNotifications"]) && all(pushSender, ["Promise.allSettled", "result.status === 404", "result.status === 410", "pushSubscription.deleteMany"]));
@@ -91,4 +94,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log("\nQA session/Web Push: 34 contrôles source-level passent.");
+console.log("\nQA session/Web Push: 37 contrôles source-level passent.");
