@@ -57,6 +57,7 @@ check("durée absolue bornée à 30 jours", sessionConfig.includes("30 * 24 * 60
 check("token signé transporte la politique et reste compatible legacy", all(session, ["authTime?: number", "idleTimeoutMinutes?", "absoluteExp?: number", "constantTimeEqual", "verifySessionToken"]));
 check("cookie garde les flags et domaine SSO", all(auth, ['httpOnly: true', 'sameSite: "lax"', 'secure: process.env.NODE_ENV === "production"', "getAuthCookieDomain"]));
 check("préférence de session utilise un modèle Prisma dédié", all(sessionSchema, ["model UserSessionPreference", "sessionIdleTimeoutMinutes", "@default(30)"]) && all(preference, ["prisma.userSessionPreference.findUnique", "prisma.userSessionPreference.upsert"]));
+check("lecture de préférence ne peut pas casser le login", all(preference, ["try {", "catch {", "return resolveSessionIdleTimeoutMinutes(undefined)"]));
 check("migration session crée table, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'CONSTRAINT "UserSessionPreference_pkey"', "43200"]));
 check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema": "./prisma"'));
 check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
@@ -86,4 +87,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log("\nQA session/Web Push: 29 contrôles source-level passent.");
+console.log("\nQA session/Web Push: 30 contrôles source-level passent.");
