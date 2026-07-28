@@ -38,6 +38,7 @@ const migration = read("prisma/migrations/20260728113000_session_idle_timeout_po
 const sessionSchema = read("prisma/session-policy.prisma");
 const baseSchema = read("prisma/schema.prisma");
 const pushApi = read("app/api/push/subscriptions/route.ts");
+const currentPushApi = read("app/api/push/subscriptions/current/route.ts");
 const pushClient = read("lib/push/client.ts");
 const pushConfig = read("lib/push/config.ts");
 const pushPayload = read("lib/push/payload.ts");
@@ -67,6 +68,7 @@ check("Rester connecté fait un heartbeat serveur forcé", guard.includes("await
 check("UI paramètres expose timeout et activation Push sur action explicite", all(settings, ["SESSION_IDLE_TIMEOUT_OPTIONS", "/api/account/session-policy", "enableCurrentDevicePush", "Activer sur cet appareil", "needsAppleHomeScreenGuidance"]));
 check("ancien toggle Push n'est plus une seconde source UX", settingsPage.includes("legacySettingsStyles.scope") && legacySettingsCss.includes('input[name="pushNotificationsEnabled"]'));
 check("activation Push enregistre explicitement le Service Worker", all(pushClient, ['navigator.serviceWorker.register("/sw.js"', "PushManager", "Notification.requestPermission", "pushManager.subscribe"]));
+check("état Activé vérifie navigateur, ownership serveur et préférence", all(pushClient, ["/api/push/subscriptions/current", "server.enabled && server.registered", "configuration-missing"]) && all(currentPushApi, ["isSameOriginRequest", "UserStatus.ACTIVE", "userId: user.id", "endpoint: parsed.data.endpoint", "registered: Boolean(subscription)"]));
 check("PushSubscription existant reste endpoint unique multi-device", all(baseSchema, ["model PushSubscription", "endpoint  String @unique", "pushSubscriptions"]));
 check("API Push vérifie origine, session, ACTIVE, rate limit et ownership", all(pushApi, ["isSameOriginRequest", "UserStatus.ACTIVE", "rateLimit", "userId: user.id", "pushSubscription.findUnique", "existing.userId !== user.id", "pushSubscription.create", "pushSubscription.delete"]));
 check("VAPID private key n'est jamais NEXT_PUBLIC", all(pushConfig, ["NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "WEB_PUSH_SUBJECT"]) && !pushConfig.includes("NEXT_PUBLIC_WEB_PUSH_VAPID_PRIVATE_KEY"));
@@ -84,4 +86,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log("\nQA session/Web Push: 28 contrôles source-level passent.");
+console.log("\nQA session/Web Push: 29 contrôles source-level passent.");
