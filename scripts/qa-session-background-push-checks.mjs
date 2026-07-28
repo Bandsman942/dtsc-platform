@@ -63,6 +63,10 @@ check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema":
 check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
 check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
 check("endpoint de préférence refuse les valeurs arbitraires et audite", all(policyRoute, ["z.literal(15)", "z.literal(43200)", "ACCOUNT_SESSION_POLICY_UPDATE", "isSameOriginRequest", "rateLimit"]));
+check("échec d'écriture de préférence renvoie un 503 structuré sans modifier la session", all(policyRoute, ["SESSION_POLICY_STORAGE_UNAVAILABLE", "statusCode: 503", "idleTimeoutMinutes: currentValue", "try {", "updateUserSessionIdleTimeoutMinutes"]));
+check("API session distingue expiration, rate limit et erreur de stockage", all(policyRoute, ["SESSION_EXPIRED", "SESSION_POLICY_RATE_LIMITED", "SESSION_ABSOLUTE_EXPIRED", "SESSION_USER_INACTIVE"]));
+check("UI remet la durée précédente si l'enregistrement échoue", all(settings, ["const previous = idleTimeoutMinutes", "setIdleTimeoutMinutes(serverValue)", "setIdleTimeoutMinutes(previous)", "SESSION_POLICY_STORAGE_UNAVAILABLE"]));
+check("UI redirige proprement quand la session n'est plus renouvelable", all(settings, ['window.location.assign("/session-expired")', "SESSION_ABSOLUTE_EXPIRED", "response.status === 401"]));
 check("middleware ne renouvelle que la politique signée et conserve le contexte", all(middleware, ["session.authTime", "session.absoluteExp", "session.idleTimeoutMinutes", "SESSION_HEARTBEAT_THROTTLE_MS", "activeOrganizationId", "activeOrganizationRole"]));
 check("guard synchronise multi-onglets et sleep/resume", all(guard, ["BroadcastChannel", "localStorage", "ACTIVITY_BROADCAST_THROTTLE_MS", "visibilitychange", "pageshow", 'window.addEventListener("focus"', "heartbeat(true)", 'type: "logout"']));
 check("Rester connecté fait un heartbeat serveur forcé", guard.includes("await heartbeat(true)") && guard.includes("Rester connecté"));
@@ -87,4 +91,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log("\nQA session/Web Push: 30 contrôles source-level passent.");
+console.log("\nQA session/Web Push: 34 contrôles source-level passent.");
