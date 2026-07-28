@@ -5,11 +5,29 @@ import { useRouter } from "next/navigation";
 import { Clock3, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { SESSION_MAX_AGE_SECONDS, SESSION_WARNING_SECONDS } from "@/lib/session-config";
+import {
+  SESSION_ACTIVE_HEARTBEAT_INTERVAL_MS,
+  SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES,
+  SESSION_HEARTBEAT_THROTTLE_MS,
+  SESSION_WARNING_MIN_SECONDS,
+} from "@/lib/session-config";
 
-const timeoutMs = SESSION_MAX_AGE_SECONDS * 1000;
-const warningMs = SESSION_WARNING_SECONDS * 1000;
-const heartbeatIntervalMs = 45 * 1000;
+const CHANNEL_NAME = "dtsc-session";
+const STORAGE_EVENT_KEY = "dtsc-session-sync";
+const LAST_ACTIVITY_KEY = "dtsc-session-last-activity";
+
+type SessionHeartbeatResponse = {
+  ok: true;
+  expiresAt: string;
+  idleTimeoutMinutes: number;
+  absoluteExpiresAt: string | null;
+  warningSeconds: number;
+};
+
+type SessionSyncMessage =
+  | { type: "activity"; at: number }
+  | { type: "session"; expiresAt: number; absoluteExpiresAt: number | null; idleTimeoutMinutes: number; warningSeconds: number }
+  | { type: "logout"; at: number };
 
 function formatCountdown(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -17,76 +35,235 @@ function formatCountdown(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
+function readStoredActivity() {
+  try {
+    const stored = Number(window.localStorage.getItem(LAST_ACTIVITY_KEY));
+    return Number.isFinite(stored) && stored > 0 ? stored : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+
 export function SessionTimeoutGuard() {
   const router = useRouter();
-  const [remainingSeconds, setRemainingSeconds] = useState(SESSION_WARNING_SECONDS);
+  const [remainingSeconds, setRemainingSeconds] = useState(SESSION_WARNING_MIN_SECONDS);
   const [showWarning, setShowWarning] = useState(false);
   const lastActivityRef = useRef(Date.now());
   const lastHeartbeatRef = useRef(0);
+  const expiresAtRef = useRef(0);
+  const absoluteExpiresAtRef = useRef<number | null>(null);
+  const idleTimeoutMinutesRef = useRef<number>(SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES);
+  const warningSecondsRef = useRef(SESSION_WARNING_MIN_SECONDS);
   const expiredRef = useRef(false);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const heartbeatPromiseRef = useRef<Promise<boolean> | null>(null);
 
-  const expireSession = useCallback(async () => {
-    if (expiredRef.current) {
-      return;
+  const publish = useCallback((message: SessionSyncMessage) => {
+    channelRef.current?.postMessage(message);
+    try {
+      window.localStorage.setItem(STORAGE_EVENT_KEY, JSON.stringify({ ...message, nonce: crypto.randomUUID?.() || String(Math.random()) }));
+    } catch {
+      // BroadcastChannel remains the primary synchronization mechanism when storage is unavailable.
     }
+  }, []);
+
+  const redirectExpired = useCallback(() => {
+    if (expiredRef.current) return;
     expiredRef.current = true;
-    await fetch("/api/auth/sign-out", { method: "POST" }).catch(() => null);
+    setShowWarning(false);
+    publish({ type: "logout", at: Date.now() });
     router.push("/session-expired");
-  }, [router]);
+    router.refresh();
+  }, [publish, router]);
+
+  const applySession = useCallback((body: SessionHeartbeatResponse, broadcast = true) => {
+    const expiresAt = new Date(body.expiresAt).getTime();
+    const absoluteExpiresAt = body.absoluteExpiresAt ? new Date(body.absoluteExpiresAt).getTime() : null;
+    if (!Number.isFinite(expiresAt)) return;
+
+    expiresAtRef.current = expiresAt;
+    absoluteExpiresAtRef.current = absoluteExpiresAt && Number.isFinite(absoluteExpiresAt) ? absoluteExpiresAt : null;
+    idleTimeoutMinutesRef.current = body.idleTimeoutMinutes;
+    warningSecondsRef.current = body.warningSeconds;
+    expiredRef.current = false;
+
+    if (broadcast) {
+      publish({
+        type: "session",
+        expiresAt,
+        absoluteExpiresAt: absoluteExpiresAtRef.current,
+        idleTimeoutMinutes: body.idleTimeoutMinutes,
+        warningSeconds: body.warningSeconds,
+      });
+    }
+  }, [publish]);
 
   const heartbeat = useCallback(async (force = false) => {
-    if (!force && Date.now() - lastHeartbeatRef.current < heartbeatIntervalMs) {
-      return;
+    const now = Date.now();
+    if (!force && now - lastHeartbeatRef.current < SESSION_HEARTBEAT_THROTTLE_MS) {
+      return true;
     }
-    lastHeartbeatRef.current = Date.now();
-    const response = await fetch("/api/auth/heartbeat", { method: "POST" });
-    if (response.status === 401) {
-      await expireSession();
+    if (heartbeatPromiseRef.current) {
+      return heartbeatPromiseRef.current;
     }
-  }, [expireSession]);
+
+    lastHeartbeatRef.current = now;
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/auth/heartbeat", { method: "POST", cache: "no-store" });
+        if (response.status === 401) {
+          redirectExpired();
+          return false;
+        }
+        if (!response.ok) {
+          return false;
+        }
+        const body = await response.json() as SessionHeartbeatResponse;
+        applySession(body);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        heartbeatPromiseRef.current = null;
+      }
+    })();
+    heartbeatPromiseRef.current = request;
+    return request;
+  }, [applySession, redirectExpired]);
 
   const registerActivity = useCallback(() => {
-    if (expiredRef.current) {
-      return;
+    if (expiredRef.current) return;
+    const now = Date.now();
+    lastActivityRef.current = now;
+    try {
+      window.localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+    } catch {
+      // Activity remains valid in-memory if storage is unavailable.
     }
-    lastActivityRef.current = Date.now();
+    publish({ type: "activity", at: now });
     setShowWarning(false);
-    void heartbeat();
-  }, [heartbeat]);
+    void heartbeat(false);
+  }, [heartbeat, publish]);
+
+  const keepConnected = useCallback(async () => {
+    const ok = await heartbeat(true);
+    if (ok) {
+      registerActivity();
+    }
+  }, [heartbeat, registerActivity]);
 
   useEffect(() => {
-    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    lastActivityRef.current = readStoredActivity();
+
+    if ("BroadcastChannel" in window) {
+      channelRef.current = new BroadcastChannel(CHANNEL_NAME);
+    }
+
+    const handleSyncMessage = (message: SessionSyncMessage) => {
+      if (!message || typeof message !== "object") return;
+      if (message.type === "activity") {
+        lastActivityRef.current = Math.max(lastActivityRef.current, message.at);
+        setShowWarning(false);
+        return;
+      }
+      if (message.type === "session") {
+        expiresAtRef.current = Math.max(expiresAtRef.current, message.expiresAt);
+        absoluteExpiresAtRef.current = message.absoluteExpiresAt;
+        idleTimeoutMinutesRef.current = message.idleTimeoutMinutes;
+        warningSecondsRef.current = message.warningSeconds;
+        expiredRef.current = false;
+        return;
+      }
+      if (message.type === "logout") {
+        expiredRef.current = true;
+        setShowWarning(false);
+        router.push("/session-expired");
+        router.refresh();
+      }
+    };
+
+    const channel = channelRef.current;
+    const onChannelMessage = (event: MessageEvent<SessionSyncMessage>) => handleSyncMessage(event.data);
+    channel?.addEventListener("message", onChannelMessage);
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === LAST_ACTIVITY_KEY && event.newValue) {
+        const at = Number(event.newValue);
+        if (Number.isFinite(at)) lastActivityRef.current = Math.max(lastActivityRef.current, at);
+        return;
+      }
+      if (event.key !== STORAGE_EVENT_KEY || !event.newValue) return;
+      try {
+        handleSyncMessage(JSON.parse(event.newValue) as SessionSyncMessage);
+      } catch {
+        // Ignore malformed local synchronization messages.
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    const events = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
     events.forEach((eventName) => window.addEventListener(eventName, registerActivity, { passive: true }));
+
+    const verifyOnResume = () => {
+      if (document.visibilityState === "visible") {
+        lastActivityRef.current = Math.max(lastActivityRef.current, readStoredActivity());
+        void heartbeat(true);
+      }
+    };
+    const onFocus = () => void heartbeat(true);
+    const onPageShow = () => void heartbeat(true);
+    document.addEventListener("visibilitychange", verifyOnResume);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onPageShow);
+
     void heartbeat(true);
 
-    const interval = window.setInterval(() => {
+    const activeHeartbeatInterval = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || expiredRef.current) return;
       const idleFor = Date.now() - lastActivityRef.current;
-      const remainingMs = timeoutMs - idleFor;
+      if (idleFor <= idleTimeoutMinutesRef.current * 60 * 1000) {
+        void heartbeat(false);
+      }
+    }, SESSION_ACTIVE_HEARTBEAT_INTERVAL_MS);
+
+    const countdownInterval = window.setInterval(() => {
+      if (!expiresAtRef.current || expiredRef.current) return;
+      const now = Date.now();
+      const remainingMs = expiresAtRef.current - now;
       const nextRemainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
       setRemainingSeconds(nextRemainingSeconds);
 
       if (remainingMs <= 0) {
-        void expireSession();
+        // Timers can be stale after sleep. The server is the source of truth before expiring the shared SSO session.
+        void heartbeat(true);
         return;
       }
 
-      setShowWarning(remainingMs <= warningMs);
+      setShowWarning(remainingMs <= warningSecondsRef.current * 1000);
     }, 1000);
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(activeHeartbeatInterval);
+      window.clearInterval(countdownInterval);
       events.forEach((eventName) => window.removeEventListener(eventName, registerActivity));
+      document.removeEventListener("visibilitychange", verifyOnResume);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("storage", onStorage);
+      channel?.removeEventListener("message", onChannelMessage);
+      channel?.close();
+      channelRef.current = null;
     };
-  }, [expireSession, heartbeat, registerActivity]);
+  }, [heartbeat, registerActivity, router]);
 
   return (
     <Dialog
       open={showWarning}
       title="Session bientôt expirée"
-      description="Aucune activité récente n'a été détectée dans votre espace DTSC."
-      onClose={registerActivity}
+      description="Votre période d'inactivité arrive à son terme. Le serveur vérifiera votre session avant toute déconnexion."
+      onClose={() => setShowWarning(false)}
       footer={
-        <Button type="button" onClick={registerActivity} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+        <Button type="button" onClick={() => void keepConnected()} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           Rester connecté
         </Button>
       }
@@ -105,7 +282,7 @@ export function SessionTimeoutGuard() {
           </div>
         </div>
         <p className="mt-4 text-sm leading-7 text-dtsc-muted">
-          Pour votre sécurité, vous serez redirigé vers la page de session expirée puis invité à vous reconnecter.
+          « Rester connecté » demande un renouvellement réel au serveur. Une session ne peut jamais dépasser sa durée absolue de sécurité.
         </p>
       </div>
     </Dialog>
