@@ -1,4 +1,3 @@
-import "server-only";
 import { UserStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getWebPushConfig } from "@/lib/push/config";
