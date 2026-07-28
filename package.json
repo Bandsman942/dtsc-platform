@@ -16,10 +16,10 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs && node scripts/qa-session-background-push-checks.mjs && node scripts/qa-mobile-ios-checks.mjs",
+    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs && node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs && node scripts/qa-mobile-ios-checks.mjs",
     "qa:workspace": "node scripts/qa-workspace-ui-checks.mjs",
     "qa:workspace:generalization": "node scripts/qa-workspace-generalization-checks.mjs",
-    "qa:session-push": "node scripts/qa-session-background-push-checks.mjs",
+    "qa:session-push": "node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs",
     "qa:mobile": "node scripts/qa-mobile-ios-checks.mjs"
   },
   "dependencies": {
