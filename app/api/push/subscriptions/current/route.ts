@@ -3,7 +3,7 @@ import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { isWebPushConfigured } from "@/lib/push/config";
+import { getWebPushConfigurationState } from "@/lib/push/config";
 import { isAllowedPushEndpoint } from "@/lib/push/endpoint";
 import { pushSubscriptionDeleteSchema } from "@/lib/push/validators";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -47,10 +47,12 @@ export async function POST(req: Request) {
     where: { userId: user.id, endpoint: parsed.data.endpoint },
     select: { id: true },
   });
+  const configuration = getWebPushConfigurationState();
 
   await writeApiLog({ request: req, statusCode: 200, userId: user.id, startedAt });
   return NextResponse.json({
-    configured: isWebPushConfigured(),
+    configured: configuration.configured,
+    configurationIssue: configuration.issue,
     enabled: user.pushNotificationsEnabled,
     registered: Boolean(subscription),
   });
