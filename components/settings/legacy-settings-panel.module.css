@@ -1,0 +1,3 @@
+.scope label:has(input[name="pushNotificationsEnabled"]) {
+  display: none;
+}
