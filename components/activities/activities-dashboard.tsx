@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { CalendarDays, CircleAlert, ClipboardList, FileInput, FileText, GitBranch, Search, Send, Users } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarDays, CircleAlert, FileInput, FileText, Search, Send } from "lucide-react";
 import { ActivityDetail } from "@/components/activities/activity-detail";
 import { BlockerDialog, ReportDialog, RequestDialog, WorkflowDialog } from "@/components/activities/activity-forms";
 import { ActivityBusinessItem } from "@/components/activities/activity-list-item";
@@ -10,7 +10,6 @@ import type { ActivityItem, ActivitySection, CollaboratorOption } from "@/compon
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -19,6 +18,8 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
 const PREVIEW_COUNT = 6;
+
+type FilteredActivitySection = ActivitySection & { originalCount: number };
 
 export function ActivitiesDashboard({
   currentUserId,
@@ -50,11 +51,13 @@ export function ActivitiesDashboard({
 
   const businessSections = useMemo(() => sections.filter((section) => section.id !== "collaborator-forms"), [sections]);
   const totalCount = useMemo(() => businessSections.reduce((sum, section) => sum + section.items.length, 0), [businessSections]);
-  const filteredSections = useMemo(() => businessSections.map((section) => ({
+  const filteredSections = useMemo<FilteredActivitySection[]>(() => businessSections.map((section) => ({
     ...section,
+    originalCount: section.items.length,
     items: section.items.filter((item) => matchesFilters(item, query, dateStart, dateEnd)),
   })), [businessSections, dateEnd, dateStart, query]);
   const visibleCount = useMemo(() => filteredSections.reduce((sum, section) => sum + section.items.length, 0), [filteredSections]);
+  const visibleMetrics = useMemo(() => getVisibleMetrics(businessSections, metrics, dateStart, dateEnd), [businessSections, dateEnd, dateStart, metrics]);
   const hasFilters = Boolean(query.trim() || dateStart || dateEnd);
   const hasAnyVisibleItem = visibleCount > 0;
 
@@ -90,63 +93,77 @@ export function ActivitiesDashboard({
       <ModuleHeader
         eyebrow="Espace collaborateur"
         title="Activités DTSC"
-        count={`${totalCount} élément(s)`}
+        count={`${totalCount} élément${totalCount > 1 ? "s" : ""}`}
         description="Pilotez les tâches, opérations, demandes, réunions, rapports et suivis qui vous concernent sans multiplier les conteneurs visuels."
-        secondaryActions={
+        secondaryActions={(
           <Button type="button" variant="outline" onClick={() => setWorkflowOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
             <FileInput className="h-4 w-4" />
             <span className="hidden sm:inline">Formulaires métier</span>
             <span className="sm:hidden">Formulaires</span>
           </Button>
-        }
-        primaryAction={
+        )}
+        primaryAction={(
           <Button type="button" onClick={() => openRequest()} className="rounded-xl bg-dtsc-blue text-white">
             <Send className="h-4 w-4" />
             <span className="hidden sm:inline">Formuler une demande</span>
             <span className="sm:hidden">Demande</span>
           </Button>
-        }
+        )}
       />
 
       <ModuleMetrics label="Suivi opérationnel">
-        <ModuleMetric label="Tâches ouvertes" value={metrics.openTasks} />
-        <ModuleMetric label="Terminées / validées" value={metrics.completed} />
-        <ModuleMetric label="Points bloqués" value={metrics.blocked} />
+        <ModuleMetric label="Tâches ouvertes" value={visibleMetrics.openTasks} hint={dateStart || dateEnd ? "Période filtrée" : undefined} />
+        <ModuleMetric label="Terminées / validées" value={visibleMetrics.completed} hint={dateStart || dateEnd ? "Période filtrée" : undefined} />
+        <ModuleMetric label="Points bloqués" value={visibleMetrics.blocked} hint={dateStart || dateEnd ? "Période filtrée" : undefined} />
         <ModuleMetric label="Éléments visibles" value={visibleCount} hint={hasFilters ? `sur ${totalCount}` : "dans votre périmètre"} />
       </ModuleMetrics>
 
       <ModuleToolbar
-        search={
-          <div className="relative min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" />
+        search={(
+          <label className="relative block min-w-0">
+            <span className="sr-only">Rechercher dans les activités DTSC</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" aria-hidden="true" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une activité, un statut, un responsable..." className="h-11 w-full min-w-0 rounded-xl bg-dtsc-surface pl-10" />
-          </div>
-        }
-        controls={
+          </label>
+        )}
+        controls={(
           <>
-            <label className="grid min-w-[9.5rem] gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted">
+            <label className="grid min-w-[8.5rem] flex-1 gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted sm:flex-none sm:min-w-[9.5rem]">
               Début
-              <Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-11 rounded-xl bg-dtsc-surface text-dtsc-ink" />
+              <Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-11 min-w-0 rounded-xl bg-dtsc-surface text-dtsc-ink" />
             </label>
-            <label className="grid min-w-[9.5rem] gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted">
+            <label className="grid min-w-[8.5rem] flex-1 gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted sm:flex-none sm:min-w-[9.5rem]">
               Fin
-              <Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-11 rounded-xl bg-dtsc-surface text-dtsc-ink" />
+              <Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-11 min-w-0 rounded-xl bg-dtsc-surface text-dtsc-ink" />
             </label>
-            {hasFilters ? <Button type="button" variant="outline" onClick={resetFilters} className="h-11 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"><CalendarDays className="h-4 w-4" />Réinitialiser</Button> : null}
+            {hasFilters ? (
+              <Button type="button" variant="outline" onClick={resetFilters} className="h-11 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                <CalendarDays className="h-4 w-4" />
+                <span className="hidden sm:inline">Réinitialiser</span>
+              </Button>
+            ) : null}
           </>
-        }
+        )}
         activeFilters={hasFilters ? <span>{query.trim() ? `Recherche : “${query.trim()}”` : ""}{query.trim() && (dateStart || dateEnd) ? " · " : ""}{dateStart || dateEnd ? `Période : ${dateStart || "…"} → ${dateEnd || "…"}` : ""}</span> : <span>Aucun filtre actif</span>}
-        summary={`${visibleCount}/${totalCount} élément(s)`}
+        summary={`${visibleCount}/${totalCount} élément${totalCount > 1 ? "s" : ""}`}
       />
 
       <ModuleContent>
         {!hasAnyVisibleItem && hasFilters ? (
-          <EmptyState title="Aucun résultat" description="Aucune activité ne correspond à la recherche ou à la période sélectionnée." action={<Button type="button" variant="outline" onClick={resetFilters} className="rounded-xl border-dtsc-border">Réinitialiser les filtres</Button>} />
+          <EmptyState
+            title="Aucun résultat"
+            description="Aucune activité ne correspond à la recherche ou à la période sélectionnée."
+            icon={Search}
+            action={<Button type="button" variant="outline" onClick={resetFilters} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">Réinitialiser les filtres</Button>}
+          />
+        ) : businessSections.length === 0 ? (
+          <EmptyState title="Aucune activité disponible" description="Aucune section métier n’est disponible dans votre périmètre actuel." />
         ) : (
           filteredSections.map((section) => (
             <ActivitySectionBlock
               key={section.id}
               section={section}
+              hasFilters={hasFilters}
               onOpen={(item) => setActiveSection({ section, initialItem: item })}
               onOpenAll={() => setActiveSection({ section })}
               onCreateRelatedRequest={openRequest}
@@ -185,31 +202,49 @@ export function ActivitiesDashboard({
 
 function ActivitySectionBlock({
   section,
+  hasFilters,
   onOpen,
   onOpenAll,
   onCreateRelatedRequest,
   onTaskStatus,
   sectionAction: action,
 }: {
-  section: ActivitySection;
+  section: FilteredActivitySection;
+  hasFilters: boolean;
   onOpen: (item: ActivityItem) => void;
   onOpenAll: () => void;
   onCreateRelatedRequest: (item: ActivityItem) => void;
   onTaskStatus: (item: ActivityItem, status: "IN_PROGRESS" | "COMPLETED") => void;
-  sectionAction?: React.ReactNode;
+  sectionAction?: ReactNode;
 }) {
   const previewItems = section.items.slice(0, PREVIEW_COUNT);
   return (
-    <ModuleSection id={`activities-${section.id}`} title={section.title} description={section.description} count={`${section.items.length} élément(s)`} action={action}>
+    <ModuleSection id={`activities-${section.id}`} title={section.title} description={section.description} count={`${section.items.length}/${section.originalCount}`} action={action}>
       {section.items.length ? (
         <>
           <BusinessList ariaLabel={section.title}>
-            {previewItems.map((item) => <ActivityBusinessItem key={`${item.entityType}-${item.id}`} item={item} onOpen={() => onOpen(item)} onCreateRelatedRequest={() => onCreateRelatedRequest(item)} onTaskStatus={(status) => onTaskStatus(item, status)} />)}
+            {previewItems.map((item) => (
+              <ActivityBusinessItem
+                key={`${item.entityType}-${item.id}`}
+                item={item}
+                onOpen={() => onOpen(item)}
+                onCreateRelatedRequest={() => onCreateRelatedRequest(item)}
+                onTaskStatus={(status) => onTaskStatus(item, status)}
+              />
+            ))}
           </BusinessList>
-          {section.items.length > PREVIEW_COUNT ? <div className="mt-2 flex justify-end"><Button type="button" variant="ghost" onClick={onOpenAll} className="rounded-xl text-dtsc-blue">Voir les {section.items.length} éléments</Button></div> : null}
+          {section.items.length > PREVIEW_COUNT ? (
+            <div className="mt-2 flex justify-end">
+              <Button type="button" variant="ghost" onClick={onOpenAll} className="rounded-xl text-dtsc-blue">Voir les {section.items.length} éléments</Button>
+            </div>
+          ) : null}
         </>
       ) : (
-        <EmptyState compact title="Aucun contenu" description="Aucune activité enregistrée dans cette section pour le filtre actuel." />
+        <EmptyState
+          compact
+          title={hasFilters && section.originalCount > 0 ? "Aucun résultat dans cette section" : "Aucun contenu"}
+          description={hasFilters && section.originalCount > 0 ? "Les filtres actifs excluent les activités de cette section." : "Aucune activité enregistrée dans cette section."}
+        />
       )}
     </ModuleSection>
   );
@@ -238,15 +273,45 @@ function SectionDialog({
 }) {
   const [selected, setSelected] = useState<ActivityItem | null>(initialItem || section.items[0] || null);
   const [detailOpen, setDetailOpen] = useState(Boolean(initialItem));
-  const getSearchText = useCallback((item: ActivityItem) => [item.title, item.status, item.detail, item.body, item.priority].join(" "), []);
+  const getSearchText = (item: ActivityItem) => [item.title, item.status, item.detail, item.body, item.priority].filter(Boolean).join(" ");
   const list = useSmartList({ items: section.items, pageSize: 10, getSearchText });
 
   return (
     <Dialog open title={section.title} description={section.description} onClose={onClose} className="h-[92dvh] max-w-6xl">
       <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className={`min-w-0 ${detailOpen ? "hidden lg:block" : "block"}`}>
-          <ListControls query={list.query} onQueryChange={list.setQuery} page={list.page} pageCount={list.pageCount} totalCount={list.totalCount} filteredCount={list.filteredCount} placeholder="Rechercher dans cette section..." onPageChange={list.setPage} />
-          {list.paginatedItems.length ? <BusinessList ariaLabel={`Liste ${section.title}`} className="max-h-[60dvh] overflow-y-auto pr-1 lg:max-h-[58vh]">{list.paginatedItems.map((item) => <ActivityBusinessItem key={`${item.entityType}-${item.id}`} item={item} onOpen={() => { setSelected(item); setDetailOpen(true); }} onCreateRelatedRequest={() => onCreateRelatedRequest(item)} onTaskStatus={(status) => onTaskStatus(item, status)} />)}</BusinessList> : <EmptyState compact title="Aucun résultat" description="Aucun élément ne correspond à cette recherche." />}
+          <div className="mb-3 flex min-w-0 flex-col gap-2 border-b border-dtsc-border pb-3 sm:flex-row sm:items-center">
+            <label className="relative block min-w-0 flex-1">
+              <span className="sr-only">Rechercher dans {section.title}</span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" aria-hidden="true" />
+              <Input value={list.query} onChange={(event) => list.setQuery(event.target.value)} placeholder="Rechercher dans cette section..." className="h-11 min-w-0 rounded-xl bg-dtsc-surface pl-9" />
+            </label>
+            <span className="shrink-0 text-xs font-bold text-dtsc-muted">{list.filteredCount}/{list.totalCount}</span>
+          </div>
+          {list.paginatedItems.length ? (
+            <>
+              <BusinessList ariaLabel={`Liste ${section.title}`} className="max-h-[54dvh] overflow-y-auto overscroll-contain pr-1 lg:max-h-[55vh]">
+                {list.paginatedItems.map((item) => (
+                  <ActivityBusinessItem
+                    key={`${item.entityType}-${item.id}`}
+                    item={item}
+                    onOpen={() => { setSelected(item); setDetailOpen(true); }}
+                    onCreateRelatedRequest={() => onCreateRelatedRequest(item)}
+                    onTaskStatus={(status) => onTaskStatus(item, status)}
+                  />
+                ))}
+              </BusinessList>
+              {list.pageCount > 1 ? (
+                <nav aria-label="Pagination de la section" className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-dtsc-muted">
+                  <span>Page {list.page}/{list.pageCount}</span>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" variant="outline" disabled={list.page <= 1} onClick={() => list.setPage(Math.max(1, list.page - 1))} className="rounded-xl border-dtsc-border">Précédent</Button>
+                    <Button type="button" size="sm" variant="outline" disabled={list.page >= list.pageCount} onClick={() => list.setPage(Math.min(list.pageCount, list.page + 1))} className="rounded-xl border-dtsc-border">Suivant</Button>
+                  </div>
+                </nav>
+              ) : null}
+            </>
+          ) : <EmptyState compact title="Aucun résultat" description="Aucun élément ne correspond à cette recherche." />}
         </div>
         <div className={`min-w-0 lg:border-l lg:border-dtsc-border lg:pl-5 ${detailOpen ? "block" : "hidden lg:block"}`}>
           {detailOpen ? <Button type="button" variant="ghost" onClick={() => setDetailOpen(false)} className="mb-2 rounded-xl text-dtsc-blue lg:hidden">← Retour à la liste</Button> : null}
@@ -262,6 +327,22 @@ function sectionAction(sectionId: string, handlers: { openRequest: () => void; o
   if (sectionId === "reports") return <Button type="button" size="sm" variant="outline" onClick={handlers.openReport} className="rounded-xl border-dtsc-border"><FileText className="h-4 w-4" />Rapport</Button>;
   if (sectionId === "blockers") return <Button type="button" size="sm" variant="outline" onClick={handlers.openBlocker} className="rounded-xl border-dtsc-border"><CircleAlert className="h-4 w-4" />Blocage</Button>;
   return undefined;
+}
+
+function getVisibleMetrics(
+  sections: ActivitySection[],
+  fallback: { openTasks: number; completed: number; blocked: number },
+  start: string,
+  end: string,
+) {
+  if (!start && !end) return fallback;
+  const tasks = sections.find((section) => section.id === "tasks")?.items.filter((item) => isInDateRange(item.date, start, end)) || [];
+  const blockers = sections.find((section) => section.id === "blockers")?.items.filter((item) => item.entityType === "BLOCKER" && isInDateRange(item.date, start, end)) || [];
+  return {
+    openTasks: tasks.filter((item) => item.status !== "VALIDATED" && item.status !== "CANCELED").length,
+    completed: tasks.filter((item) => item.status === "COMPLETED" || item.status === "VALIDATED").length,
+    blocked: tasks.filter((item) => item.status === "BLOCKED").length + blockers.filter((item) => item.status !== "RESOLVED").length,
+  };
 }
 
 function matchesFilters(item: ActivityItem, query: string, start: string, end: string) {
@@ -282,14 +363,3 @@ function isInDateRange(value: string, start: string, end: string) {
 function normalizeSearch(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
-
-function sectionIcon(sectionId: string) {
-  if (sectionId === "tasks") return ClipboardList;
-  if (sectionId === "operations" || sectionId === "workflows") return GitBranch;
-  if (sectionId === "blockers") return CircleAlert;
-  if (sectionId === "reports") return FileText;
-  if (sectionId === "collab-requests" || sectionId === "requests") return Users;
-  return ClipboardList;
-}
-
-void sectionIcon;
