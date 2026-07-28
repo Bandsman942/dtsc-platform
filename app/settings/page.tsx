@@ -22,7 +22,7 @@ export default async function SettingsPage() {
           </p>
         </section>
         <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} />
-        <SettingsPanel user={user} models={models} />
+        <SettingsPanel user={{ ...user, pushNotificationsEnabled: false }} models={models} />
       </div>
     </AppShell>
   );
