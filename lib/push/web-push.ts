@@ -1,4 +1,3 @@
-import "server-only";
 import {
   createCipheriv,
   createECDH,
@@ -144,7 +143,7 @@ export async function sendEncryptedWebPush({
       TTL: String(Math.max(0, Math.min(ttlSeconds, 24 * 60 * 60))),
       Urgency: "normal",
     },
-    body: encryptedBody,
+    body: Uint8Array.from(encryptedBody),
     redirect: "error",
     cache: "no-store",
   });
