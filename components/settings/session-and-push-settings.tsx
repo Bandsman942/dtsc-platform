@@ -39,6 +39,7 @@ const copy = {
     permissionGranted: "Autorisation accordée, abonnement à renouveler",
     unsupported: "Web Push non supporté dans ce contexte navigateur",
     configMissing: "Web Push n'est pas encore configuré côté serveur",
+    configInvalid: "La configuration Web Push du serveur est invalide. Vérifiez les clés VAPID puis redéployez DTSC.",
     apple: "Sur iPhone/iPad, ajoutez DTSC Platform à l'écran d'accueil puis ouvrez la PWA pour activer les notifications si cette option n'est pas disponible dans Safari.",
     pushEnabled: "Notifications Web Push activées.",
     pushDisabled: "Notifications désactivées sur cet appareil.",
@@ -67,6 +68,7 @@ const copy = {
     permissionGranted: "Permission granted, subscription needs renewal",
     unsupported: "Web Push is not supported in this browser context",
     configMissing: "Web Push is not configured on the server yet",
+    configInvalid: "The server Web Push configuration is invalid. Check the VAPID keys and redeploy DTSC.",
     apple: "On iPhone/iPad, add DTSC Platform to the Home Screen and open the PWA before enabling notifications if this option is unavailable in Safari.",
     pushEnabled: "Web Push notifications enabled.",
     pushDisabled: "Notifications disabled on this device.",
@@ -78,6 +80,7 @@ function stateLabel(state: PushCapabilityState, labels: (typeof copy)["fr"] | (t
   if (state === "permission-denied") return labels.permissionDenied;
   if (state === "permission-granted") return labels.permissionGranted;
   if (state === "configuration-missing") return labels.configMissing;
+  if (state === "configuration-invalid") return labels.configInvalid;
   if (state === "unsupported") return labels.unsupported;
   return labels.permissionDefault;
 }
@@ -104,6 +107,7 @@ export function SessionAndPushSettings({
   }, []);
 
   const showAppleGuidance = useMemo(() => pushState === "unsupported" && needsAppleHomeScreenGuidance(), [pushState]);
+  const canEnablePush = pushState === "permission-default" || pushState === "permission-granted";
 
   async function updateTimeout(next: SessionIdleTimeoutMinutes) {
     const previous = idleTimeoutMinutes;
@@ -166,8 +170,9 @@ export function SessionAndPushSettings({
       setPushState(result.state);
       setMessage(result.ok ? labels.pushEnabled : stateLabel(result.state, labels));
     } catch {
-      setPushState(await getPushCapabilityState().catch(() => "unsupported" as const));
-      setMessage(labels.configMissing);
+      const nextState = await getPushCapabilityState().catch(() => "unsupported" as const);
+      setPushState(nextState);
+      setMessage(stateLabel(nextState, labels));
     } finally {
       setPushBusy(false);
     }
@@ -230,7 +235,7 @@ export function SessionAndPushSettings({
                   <Button type="button" variant="outline" disabled={pushBusy} onClick={() => void disablePush()} className="rounded-xl border-dtsc-border">
                     {labels.disable}
                   </Button>
-                ) : pushState !== "permission-denied" && pushState !== "unsupported" ? (
+                ) : canEnablePush ? (
                   <Button type="button" disabled={pushBusy} onClick={() => void enablePush()} className="rounded-xl bg-dtsc-blue text-white">
                     {pushState === "permission-granted" ? labels.renew : labels.enable}
                   </Button>
