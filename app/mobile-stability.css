@@ -62,11 +62,17 @@
   [data-mobile-bottom-nav] {
     /* iOS/WebKit can paint transformed bottom:fixed layers against a stale
        viewport after browser-chrome or keyboard transitions. Keep the DTSC
-       bottom bar on a non-transformed fixed layer. */
+       bottom bar on a non-transformed fixed layer. Once backdrop filtering is
+       disabled, the surface must be fully opaque or page content becomes
+       visibly readable through the navigation. */
+    background: var(--dtsc-surface) !important;
+    background-color: var(--dtsc-surface) !important;
+    background-clip: padding-box;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     filter: none !important;
     transform: none !important;
+    isolation: isolate;
     transition: opacity 180ms ease, visibility 180ms ease !important;
     will-change: opacity !important;
   }
