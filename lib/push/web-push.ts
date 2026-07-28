@@ -7,6 +7,7 @@ import {
   sign as signBytes,
 } from "node:crypto";
 import type { WebPushConfig } from "@/lib/push/config";
+import { isAllowedPushEndpoint } from "@/lib/push/endpoint";
 
 export type WebPushSubscriptionData = {
   endpoint: string;
@@ -132,6 +133,9 @@ export async function sendEncryptedWebPush({
   config: WebPushConfig;
   ttlSeconds?: number;
 }): Promise<WebPushSendResult> {
+  if (!isAllowedPushEndpoint(subscription.endpoint)) {
+    return { ok: false, status: 400 };
+  }
   const encryptedBody = createEncryptedBody(subscription, payload);
   const authorization = createVapidAuthorization(subscription.endpoint, config);
   const response = await fetch(subscription.endpoint, {
@@ -146,6 +150,7 @@ export async function sendEncryptedWebPush({
     body: Uint8Array.from(encryptedBody),
     redirect: "error",
     cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
   });
 
   return { ok: response.ok, status: response.status };
