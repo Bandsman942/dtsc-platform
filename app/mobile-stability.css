@@ -61,9 +61,20 @@
 }
 
 @media (max-width: 1023px) {
+  [data-mobile-bottom-nav] {
+    /* iOS 26 / WKWebView can mispaint transformed bottom:fixed layers after a
+       keyboard or browser-chrome transition. Keep this critical navigation on
+       the fixed-position layer without transform/backdrop-filter promotion. */
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+    transform: none !important;
+    transition: opacity 180ms ease, visibility 180ms ease !important;
+    will-change: opacity !important;
+  }
+
+  html[data-private-mobile-nav="hidden"] [data-mobile-bottom-nav],
   html[data-dtsc-mobile-input="active"] [data-mobile-bottom-nav] {
-    /* iOS/WKWebView can paint bottom:fixed layers at the old keyboard viewport.
-       Keep global navigation out of that compositor transition entirely. */
     opacity: 0 !important;
     pointer-events: none !important;
     visibility: hidden !important;
