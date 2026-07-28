@@ -6,7 +6,6 @@ import { Clock3, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import {
-  SESSION_ACTIVE_HEARTBEAT_INTERVAL_MS,
   SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES,
   SESSION_HEARTBEAT_THROTTLE_MS,
   SESSION_WARNING_MIN_SECONDS,
@@ -178,6 +177,7 @@ export function SessionTimeoutGuard() {
         absoluteExpiresAtRef.current = message.absoluteExpiresAt;
         idleTimeoutMinutesRef.current = message.idleTimeoutMinutes;
         warningSecondsRef.current = message.warningSeconds;
+        lastHeartbeatRef.current = Date.now();
         expiredRef.current = false;
         return;
       }
@@ -225,14 +225,6 @@ export function SessionTimeoutGuard() {
 
     void heartbeat(true);
 
-    const activeHeartbeatInterval = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || expiredRef.current) return;
-      const idleFor = Date.now() - lastActivityRef.current;
-      if (idleFor <= idleTimeoutMinutesRef.current * 60 * 1000) {
-        void heartbeat(false);
-      }
-    }, SESSION_ACTIVE_HEARTBEAT_INTERVAL_MS);
-
     const countdownInterval = window.setInterval(() => {
       if (!expiresAtRef.current || expiredRef.current) return;
       const now = Date.now();
@@ -250,7 +242,6 @@ export function SessionTimeoutGuard() {
     }, 1000);
 
     return () => {
-      window.clearInterval(activeHeartbeatInterval);
       window.clearInterval(countdownInterval);
       events.forEach((eventName) => window.removeEventListener(eventName, registerActivity));
       document.removeEventListener("visibilitychange", verifyOnResume);
