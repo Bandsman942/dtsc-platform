@@ -33,10 +33,12 @@ export function ActivityBusinessItem({
     });
   }
 
-  if (item.entityType === "TASK" && item.status !== "IN_PROGRESS") {
+  const taskStatus = item.status.toUpperCase();
+  const taskIsTerminal = taskStatus === "COMPLETED" || taskStatus === "VALIDATED" || taskStatus === "CANCELED" || taskStatus === "CANCELLED";
+  if (item.entityType === "TASK" && !taskIsTerminal && taskStatus !== "IN_PROGRESS") {
     actions.push({ id: "task-progress", label: "Marquer en cours", icon: Clock3, onSelect: () => onTaskStatus("IN_PROGRESS") });
   }
-  if (item.entityType === "TASK" && item.status !== "COMPLETED" && item.status !== "VALIDATED") {
+  if (item.entityType === "TASK" && !taskIsTerminal) {
     actions.push({ id: "task-complete", label: "Marquer terminée", icon: CheckCircle2, onSelect: () => onTaskStatus("COMPLETED") });
   }
 
