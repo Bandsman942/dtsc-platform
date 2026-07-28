@@ -1,0 +1,82 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const failures = [];
+const read = (relativePath) => {
+  const absolutePath = path.join(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    failures.push(`Fichier introuvable: ${relativePath}`);
+    return "";
+  }
+  return readFileSync(absolutePath, "utf8").replace(/\r\n/g, "\n");
+};
+const check = (label, condition, hint = "") => {
+  if (condition) console.log(`PASS ${label}`);
+  else {
+    failures.push(`${label}${hint ? `\n  ${hint}` : ""}`);
+    console.error(`FAIL ${label}`);
+  }
+};
+const all = (source, values) => values.every((value) => source.includes(value));
+
+const packageJson = read("package.json");
+const sessionConfig = read("lib/session-config.ts");
+const sessionPolicy = read("lib/session-policy.ts");
+const session = read("lib/session.ts");
+const auth = read("lib/auth.ts");
+const preference = read("lib/session-preference.ts");
+const middleware = read("middleware.ts");
+const heartbeat = read("app/api/auth/heartbeat/route.ts");
+const contextRoute = read("app/api/account/context/route.ts");
+const policyRoute = read("app/api/account/session-policy/route.ts");
+const guard = read("components/auth/session-timeout-guard.tsx");
+const settings = read("components/settings/session-and-push-settings.tsx");
+const migration = read("prisma/migrations/20260728113000_session_idle_timeout_policy/migration.sql");
+const sessionSchema = read("prisma/session-policy.prisma");
+const baseSchema = read("prisma/schema.prisma");
+const pushApi = read("app/api/push/subscriptions/route.ts");
+const pushConfig = read("lib/push/config.ts");
+const pushPayload = read("lib/push/payload.ts");
+const webPush = read("lib/push/web-push.ts");
+const pushSender = read("lib/push/sender.ts");
+const notifications = read("lib/notifications.ts");
+const serviceWorker = read("public/sw.js");
+const bridge = read("components/pwa/pwa-notification-bridge.tsx");
+const resumeSync = read("components/pwa/app-resume-sync.tsx");
+const logoutRoute = read("app/api/auth/sign-out/route.ts");
+const logoutButton = read("components/sign-out-button.tsx");
+
+check("5 minutes n'est plus la politique globale", !sessionConfig.includes("SESSION_MAX_AGE_SECONDS = 5 * 60") && !guard.includes("SESSION_MAX_AGE_SECONDS"));
+check("durées idle autorisées et défaut 30 minutes", all(sessionConfig, ["15, 30, 60, 240, 480, 1440, 10080, 43200", "SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES", "= 30"]));
+check("durée absolue bornée à 30 jours", sessionConfig.includes("30 * 24 * 60 * 60") && all(sessionPolicy, ["authTime", "absoluteExp", "Math.min"]));
+check("token signé transporte la politique et reste compatible legacy", all(session, ["authTime?: number", "idleTimeoutMinutes?", "absoluteExp?: number", "constantTimeEqual", "verifySessionToken"]));
+check("cookie garde les flags et domaine SSO", all(auth, ['httpOnly: true', 'sameSite: "lax"', 'secure: process.env.NODE_ENV === "production"', "getAuthCookieDomain"]));
+check("préférence de session utilise un modèle Prisma dédié", all(sessionSchema, ["model UserSessionPreference", "sessionIdleTimeoutMinutes", "@default(30)"]) && all(preference, ["prisma.userSessionPreference.findUnique", "prisma.userSessionPreference.upsert"]));
+check("migration session crée FK, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'REFERENCES "User"("id")', "43200"]));
+check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema": "./prisma"'));
+check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
+check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
+check("endpoint de préférence refuse les valeurs arbitraires et audite", all(policyRoute, ["z.literal(15)", "z.literal(43200)", "ACCOUNT_SESSION_POLICY_UPDATE", "isSameOriginRequest", "rateLimit"]));
+check("middleware ne renouvelle que la politique signée et conserve le contexte", all(middleware, ["session.authTime", "session.absoluteExp", "session.idleTimeoutMinutes", "SESSION_HEARTBEAT_THROTTLE_MS", "activeOrganizationId", "activeOrganizationRole"]));
+check("guard synchronise multi-onglets et sleep/resume", all(guard, ["BroadcastChannel", "localStorage", 'visibilitychange', 'pageshow', 'window.addEventListener("focus"', "heartbeat(true)", 'type: "logout"']));
+check("Rester connecté fait un heartbeat serveur forcé", guard.includes("await heartbeat(true)") && guard.includes("Rester connecté"));
+check("UI paramètres expose timeout et activation Push sur action explicite", all(settings, ["SESSION_IDLE_TIMEOUT_OPTIONS", "/api/account/session-policy", "enableCurrentDevicePush", "Activer sur cet appareil", "needsAppleHomeScreenGuidance"]));
+check("PushSubscription existant reste endpoint unique multi-device", all(baseSchema, ["model PushSubscription", "endpoint  String @unique", "pushSubscriptions"]));
+check("API Push vérifie origine, session, ACTIVE, rate limit et ownership", all(pushApi, ["isSameOriginRequest", "UserStatus.ACTIVE", "rateLimit", "userId: user.id", "pushSubscription.upsert", "pushSubscription.delete"]));
+check("VAPID private key n'est jamais NEXT_PUBLIC", all(pushConfig, ["NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "WEB_PUSH_SUBJECT"]) && !pushConfig.includes("NEXT_PUBLIC_WEB_PUSH_VAPID_PRIVATE_KEY"));
+check("transport Web Push utilise P-256, HKDF, AES-128-GCM et VAPID ES256", all(webPush, ["createECDH", 'prime256v1', "hkdfExtract", "aes-128-gcm", 'alg: "ES256"', 'dsaEncoding: "ieee-p1363"', 'Content-Encoding": "aes128gcm']));
+check("payload Push est minimal et target interne", all(pushPayload, ["Ouvrez DTSC Platform pour consulter les détails.", "normalizePushTargetUrl", 'value.startsWith("//")', '"/notifications"']));
+check("notifications DB déclenchent le dispatcher en best effort", all(notifications, ["prisma.notification.create", "dispatchPushForNotification", "dispatchPushForNotifications"]) && all(pushSender, ["Promise.allSettled", "result.status === 404", "result.status === 410", "pushSubscription.deleteMany"]));
+check("service worker gère vrai push, notification click et cache privé", all(serviceWorker, ['addEventListener("push"', "showNotification", 'addEventListener("notificationclick"', "normalizeNotificationTarget", '"/api/"', '"/admin"', '"/activities"']));
+check("Web Push ne renouvelle jamais la session", !serviceWorker.includes("/api/auth/heartbeat") && !pushSender.includes("setSessionCookie") && !webPush.includes("heartbeat"));
+check("bridge foreground n'usurpe pas le vrai Web Push", all(bridge, ["pushManager.getSubscription", "activePushSubscription", "Nouvelle notification DTSC"]));
+check("resume sync revalide session, Push et badge sans polling caché", all(resumeSync, ["/api/auth/heartbeat", "reconcileCurrentDevicePush", "/api/notifications/unread-count", "setAppBadge", "visibilitychange", "pageshow"]) && !resumeSync.includes("setInterval"));
+check("logout manuel révoque seulement le terminal courant et synchronise les onglets", all(logoutRoute, ['reason === "manual"', "pushEndpoint", "pushSubscription.deleteMany"]) && all(logoutButton, ["getCurrentPushSubscription", "subscription.unsubscribe", "broadcastBrowserSessionLogout"]));
+
+if (failures.length) {
+  console.error("\nQA session/Web Push en échec:\n");
+  failures.forEach((failure) => console.error(`- ${failure}`));
+  process.exit(1);
+}
+console.log(`\nQA session/Web Push: ${26} contrôles source-level passent.`);
