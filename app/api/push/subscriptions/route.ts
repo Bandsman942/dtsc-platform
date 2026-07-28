@@ -29,9 +29,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const activeSubscriptionCount = await prisma.pushSubscription.count({
-    where: { userId: user.id, revokedAt: null },
-  });
+  const activeSubscriptionCount = await prisma.pushSubscription.count({ where: { userId: user.id } });
   await writeApiLog({ request: req, statusCode: 200, userId: user.id, startedAt });
   return NextResponse.json({
     configured: isWebPushConfigured(),
@@ -78,9 +76,6 @@ export async function POST(req: Request) {
       p256dh: parsed.data.keys.p256dh,
       auth: parsed.data.keys.auth,
       userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
-      deviceLabel: parsed.data.deviceLabel || null,
-      revokedAt: null,
-      lastUsedAt: new Date(),
     },
     create: {
       userId: user.id,
@@ -88,8 +83,6 @@ export async function POST(req: Request) {
       p256dh: parsed.data.keys.p256dh,
       auth: parsed.data.keys.auth,
       userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
-      deviceLabel: parsed.data.deviceLabel || null,
-      lastUsedAt: new Date(),
     },
     select: { id: true },
   });
@@ -144,17 +137,18 @@ export async function DELETE(req: Request) {
     select: { id: true },
   });
   if (existing) {
-    await prisma.pushSubscription.update({
-      where: { id: existing.id },
-      data: { revokedAt: new Date() },
-    });
+    await prisma.pushSubscription.delete({ where: { id: existing.id } });
+    const remaining = await prisma.pushSubscription.count({ where: { userId: user.id } });
+    if (remaining === 0 && user.pushNotificationsEnabled) {
+      await prisma.user.update({ where: { id: user.id }, data: { pushNotificationsEnabled: false } });
+    }
     await writeAuditLog({
       userId: user.id,
       action: "ACCOUNT_PUSH_SUBSCRIPTION_REVOKE",
       entity: "PushSubscription",
       entityId: existing.id,
       request: req,
-      metadata: { source: "current_device" },
+      metadata: { source: "current_device", deleted: true },
     });
   }
 
