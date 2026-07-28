@@ -32,10 +32,13 @@ const contextRoute = read("app/api/account/context/route.ts");
 const policyRoute = read("app/api/account/session-policy/route.ts");
 const guard = read("components/auth/session-timeout-guard.tsx");
 const settings = read("components/settings/session-and-push-settings.tsx");
+const settingsPage = read("app/settings/page.tsx");
+const legacySettingsCss = read("components/settings/legacy-settings-panel.module.css");
 const migration = read("prisma/migrations/20260728113000_session_idle_timeout_policy/migration.sql");
 const sessionSchema = read("prisma/session-policy.prisma");
 const baseSchema = read("prisma/schema.prisma");
 const pushApi = read("app/api/push/subscriptions/route.ts");
+const pushClient = read("lib/push/client.ts");
 const pushConfig = read("lib/push/config.ts");
 const pushPayload = read("lib/push/payload.ts");
 const webPush = read("lib/push/web-push.ts");
@@ -59,9 +62,11 @@ check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(he
 check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
 check("endpoint de préférence refuse les valeurs arbitraires et audite", all(policyRoute, ["z.literal(15)", "z.literal(43200)", "ACCOUNT_SESSION_POLICY_UPDATE", "isSameOriginRequest", "rateLimit"]));
 check("middleware ne renouvelle que la politique signée et conserve le contexte", all(middleware, ["session.authTime", "session.absoluteExp", "session.idleTimeoutMinutes", "SESSION_HEARTBEAT_THROTTLE_MS", "activeOrganizationId", "activeOrganizationRole"]));
-check("guard synchronise multi-onglets et sleep/resume", all(guard, ["BroadcastChannel", "localStorage", "visibilitychange", "pageshow", 'window.addEventListener("focus"', "heartbeat(true)", 'type: "logout"']));
+check("guard synchronise multi-onglets et sleep/resume", all(guard, ["BroadcastChannel", "localStorage", "ACTIVITY_BROADCAST_THROTTLE_MS", "visibilitychange", "pageshow", 'window.addEventListener("focus"', "heartbeat(true)", 'type: "logout"']));
 check("Rester connecté fait un heartbeat serveur forcé", guard.includes("await heartbeat(true)") && guard.includes("Rester connecté"));
 check("UI paramètres expose timeout et activation Push sur action explicite", all(settings, ["SESSION_IDLE_TIMEOUT_OPTIONS", "/api/account/session-policy", "enableCurrentDevicePush", "Activer sur cet appareil", "needsAppleHomeScreenGuidance"]));
+check("ancien toggle Push n'est plus une seconde source UX", settingsPage.includes("legacySettingsStyles.scope") && legacySettingsCss.includes('input[name="pushNotificationsEnabled"]'));
+check("activation Push enregistre explicitement le Service Worker", all(pushClient, ['navigator.serviceWorker.register("/sw.js"', "PushManager", "Notification.requestPermission", "pushManager.subscribe"]));
 check("PushSubscription existant reste endpoint unique multi-device", all(baseSchema, ["model PushSubscription", "endpoint  String @unique", "pushSubscriptions"]));
 check("API Push vérifie origine, session, ACTIVE, rate limit et ownership", all(pushApi, ["isSameOriginRequest", "UserStatus.ACTIVE", "rateLimit", "userId: user.id", "pushSubscription.findUnique", "existing.userId !== user.id", "pushSubscription.create", "pushSubscription.delete"]));
 check("VAPID private key n'est jamais NEXT_PUBLIC", all(pushConfig, ["NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "WEB_PUSH_SUBJECT"]) && !pushConfig.includes("NEXT_PUBLIC_WEB_PUSH_VAPID_PRIVATE_KEY"));
@@ -79,4 +84,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log("\nQA session/Web Push: 26 contrôles source-level passent.");
+console.log("\nQA session/Web Push: 28 contrôles source-level passent.");
