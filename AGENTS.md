@@ -162,6 +162,21 @@ Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Ne
 - Les rendez-vous HEALTH_CARE doivent utiliser `HealthAppointment` et `HealthAppointmentEvent`, obligatoirement référencer un `HealthPatient` du même `organizationId`, conserver un miroir `legacyRecordId` pour les consultations génériques et appliquer les transitions de statut dans le service serveur dédié. Une conversion en consultation doit rester idempotente.
 - Les consultations HEALTH_CARE doivent utiliser `HealthConsultation` et `HealthConsultationEvent`, obligatoirement référencer un patient et un professionnel actifs du même `organizationId`, verrouiller les consultations clôturées ou annulées et appliquer clôture, réouverture et annulation dans le service serveur dédié. Les données cliniques sensibles doivent être masquées côté API sans permission.
 
+## UI/UX métier DTSC — architecture workspace
+
+- Pour tout nouveau module métier ou refactor significatif, privilégier la hiérarchie `Page → header métier → contrôles → contenu métier → actions contextuelles`; éviter `container → card → nested card` sauf séparation sémantique réelle.
+- Réutiliser en priorité les primitives existantes, notamment `components/workspace/*` et `components/ui/*`, avant de créer un composant parallèle ou une seconde bibliothèque UI.
+- Préférer la composition de petites primitives à un God Component piloté par des dizaines de flags ou props métier.
+- Garder les primitives `components/workspace/*` sans logique métier spécifique; les transformations, statuts, permissions et actions propres à un domaine restent dans le dossier du domaine.
+- Concevoir mobile-first avec `min-w-0`, safe areas, targets tactiles, dialogues scrollables et aucun scroll horizontal de page. Un scroll horizontal local est acceptable uniquement lorsqu'il est intentionnel et borné, par exemple pour des KPI compacts.
+- Sur desktop, augmenter la densité utile et exploiter l'espace horizontal sans simplement étirer l'interface mobile; éviter les cartes géantes et les lignes inutilement hautes.
+- Les KPI doivent rester compacts et provenir de données réelles; ne pas transformer chaque indicateur en grande carte décorative.
+- Les listes métier doivent prioriser titre, statut et quelques métadonnées utiles, puis utiliser séparateurs, typographie et whitespace avant d'ajouter borders/shadows supplémentaires.
+- Les actions contextuelles doivent rester cohérentes, accessibles par un libellé explicite, et n'être affichées que lorsqu'elles sont réellement implémentées. Une permission UI ne remplace jamais la permission serveur, l'appartenance ou la propriété.
+- Ne jamais ajouter une action fictive `Dupliquer`, `Historique`, `Archiver`, `Partager` ou `Supprimer` uniquement pour enrichir un menu; implémenter d'abord le backend et les règles d'autorisation correspondants.
+- Préserver les durcissements mobile/PWA du Sprint 1: `visualViewport`, z-index des overlays, safe areas, champs iOS, scroll interne des dialogues, dropdowns tactiles et service worker sans cache privé.
+- Documenter les règles détaillées et les nouveaux patterns dans `docs/UI_UX_ARCHITECTURE.md`; `AGENTS.md` doit rester la liste courte des contraintes automatiquement applicables aux futurs sprints.
+
 ## Conversation, comments and content UX standards
 
 - Tous les fils de commentaires doivent avoir une hauteur bornée, un scroll vertical et une pagination/cursor ou un bouton `Charger les précédents`; ne jamais laisser les commentaires étirer indéfiniment une page ou une modale.
