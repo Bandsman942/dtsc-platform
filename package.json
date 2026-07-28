@@ -13,7 +13,8 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "qa:regression": "node scripts/qa-regression-checks.mjs",
+    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs",
+    "qa:workspace": "node scripts/qa-workspace-ui-checks.mjs",
     "qa:mobile": "node scripts/qa-mobile-ios-checks.mjs"
   },
   "dependencies": {
