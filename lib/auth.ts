@@ -4,11 +4,13 @@ import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAuthCookieDomain, getSignInUrl, getDashboardUrl } from "@/lib/domains";
 import { requireEnv } from "@/lib/env";
-import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-config";
+import { SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES } from "@/lib/session-config";
+import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
 import {
   createSessionToken,
   SESSION_COOKIE,
   verifySessionToken,
+  type SessionContext,
   type SessionPayload,
 } from "@/lib/session";
 
@@ -47,6 +49,7 @@ export async function getCurrentUser() {
       notifyUsageEnabled: true,
       notifyBroadcastEnabled: true,
       pushNotificationsEnabled: true,
+      sessionIdleTimeoutMinutes: true,
       interfaceDensity: true,
       startPage: true,
       locale: true,
@@ -96,18 +99,31 @@ export async function requireRole(roles: UserRole[]) {
   return user;
 }
 
-export async function setSessionCookie(user: {
+type SessionCookieUser = {
   id: string;
   email: string;
   name: string;
   role: UserRole;
-  activeContext?: "GLOBAL_CLIENT" | "COMMUNITY" | "DTSC_INTERNAL" | "ORGANIZATION";
+  sessionIdleTimeoutMinutes?: number | null;
+  activeContext?: SessionContext;
   activeOrganizationId?: string | null;
   activeOrganizationName?: string | null;
   activeOrganizationRole?: string | null;
-}) {
+};
+
+export async function setSessionCookie(
+  user: SessionCookieUser,
+  options: { previousSession?: SessionPayload | null } = {}
+) {
   const cookieStore = await cookies();
-  const token = await createSessionToken(
+  const storedIdleTimeout = user.sessionIdleTimeoutMinutes ?? (
+    await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { sessionIdleTimeoutMinutes: true },
+    })
+  )?.sessionIdleTimeoutMinutes ?? SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES;
+
+  const created = await createSessionToken(
     {
       userId: user.id,
       email: user.email,
@@ -118,18 +134,31 @@ export async function setSessionCookie(user: {
       activeOrganizationName: user.activeOrganizationName || null,
       activeOrganizationRole: user.activeOrganizationRole || null,
     },
-    requireEnv("AUTH_SECRET")
+    requireEnv("AUTH_SECRET"),
+    {
+      idleTimeoutMinutes: storedIdleTimeout,
+      previous: options.previousSession
+        ? { authTime: options.previousSession.authTime, absoluteExp: options.previousSession.absoluteExp }
+        : null,
+    }
   );
 
+  if (!created) {
+    await clearSessionCookie();
+    return null;
+  }
+
   const cookieDomain = getAuthCookieDomain();
-  cookieStore.set(SESSION_COOKIE, token, {
+  cookieStore.set(SESSION_COOKIE, created.token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
+    maxAge: sessionCookieMaxAgeSeconds(created.session.exp),
     ...(cookieDomain ? { domain: cookieDomain } : {}),
   });
+
+  return created.session;
 }
 
 export async function clearSessionCookie() {
