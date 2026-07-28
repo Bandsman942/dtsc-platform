@@ -23,7 +23,6 @@ export async function dispatchPushForNotification(input: PushNotificationInput) 
         status: true,
         pushNotificationsEnabled: true,
         pushSubscriptions: {
-          where: { revokedAt: null },
           select: { id: true, endpoint: true, p256dh: true, auth: true },
           orderBy: { updatedAt: "desc" },
           take: 12,
@@ -39,18 +38,9 @@ export async function dispatchPushForNotification(input: PushNotificationInput) 
     await Promise.allSettled(user.pushSubscriptions.map(async (subscription) => {
       try {
         const result = await sendEncryptedWebPush({ subscription, payload, config });
-        if (result.ok) {
-          await prisma.pushSubscription.updateMany({
-            where: { id: subscription.id, userId: input.userId, revokedAt: null },
-            data: { lastUsedAt: new Date() },
-          });
-          return;
-        }
-
-        if (result.status === 404 || result.status === 410) {
-          await prisma.pushSubscription.updateMany({
+        if ((result.status === 404 || result.status === 410) && !result.ok) {
+          await prisma.pushSubscription.deleteMany({
             where: { id: subscription.id, userId: input.userId },
-            data: { revokedAt: new Date() },
           });
         }
       } catch {
