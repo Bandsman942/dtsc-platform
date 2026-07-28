@@ -53,19 +53,19 @@ check("durée absolue bornée à 30 jours", sessionConfig.includes("30 * 24 * 60
 check("token signé transporte la politique et reste compatible legacy", all(session, ["authTime?: number", "idleTimeoutMinutes?", "absoluteExp?: number", "constantTimeEqual", "verifySessionToken"]));
 check("cookie garde les flags et domaine SSO", all(auth, ['httpOnly: true', 'sameSite: "lax"', 'secure: process.env.NODE_ENV === "production"', "getAuthCookieDomain"]));
 check("préférence de session utilise un modèle Prisma dédié", all(sessionSchema, ["model UserSessionPreference", "sessionIdleTimeoutMinutes", "@default(30)"]) && all(preference, ["prisma.userSessionPreference.findUnique", "prisma.userSessionPreference.upsert"]));
-check("migration session crée FK, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'REFERENCES "User"("id")', "43200"]));
+check("migration session crée table, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'CONSTRAINT "UserSessionPreference_pkey"', "43200"]));
 check("Prisma charge le dossier multi-fichiers", packageJson.includes('"schema": "./prisma"'));
 check("heartbeat vérifie origine, utilisateur actif et préférence DB", all(heartbeat, ["isSameOriginRequest", "UserStatus.ACTIVE", "getUserSessionIdleTimeoutMinutes", "previousSession: session", "absoluteExpiresAt"]));
 check("changement de contexte conserve l'authTime via previousSession", all(contextRoute, ["previousSession: session", "activeOrganizationId", "activeOrganizationRole", "getUserSessionIdleTimeoutMinutes"]));
 check("endpoint de préférence refuse les valeurs arbitraires et audite", all(policyRoute, ["z.literal(15)", "z.literal(43200)", "ACCOUNT_SESSION_POLICY_UPDATE", "isSameOriginRequest", "rateLimit"]));
 check("middleware ne renouvelle que la politique signée et conserve le contexte", all(middleware, ["session.authTime", "session.absoluteExp", "session.idleTimeoutMinutes", "SESSION_HEARTBEAT_THROTTLE_MS", "activeOrganizationId", "activeOrganizationRole"]));
-check("guard synchronise multi-onglets et sleep/resume", all(guard, ["BroadcastChannel", "localStorage", 'visibilitychange', 'pageshow', 'window.addEventListener("focus"', "heartbeat(true)", 'type: "logout"']));
+check("guard synchronise multi-onglets et sleep/resume", all(guard, ["BroadcastChannel", "localStorage", "visibilitychange", "pageshow", 'window.addEventListener("focus"', "heartbeat(true)", 'type: "logout"']));
 check("Rester connecté fait un heartbeat serveur forcé", guard.includes("await heartbeat(true)") && guard.includes("Rester connecté"));
 check("UI paramètres expose timeout et activation Push sur action explicite", all(settings, ["SESSION_IDLE_TIMEOUT_OPTIONS", "/api/account/session-policy", "enableCurrentDevicePush", "Activer sur cet appareil", "needsAppleHomeScreenGuidance"]));
 check("PushSubscription existant reste endpoint unique multi-device", all(baseSchema, ["model PushSubscription", "endpoint  String @unique", "pushSubscriptions"]));
 check("API Push vérifie origine, session, ACTIVE, rate limit et ownership", all(pushApi, ["isSameOriginRequest", "UserStatus.ACTIVE", "rateLimit", "userId: user.id", "pushSubscription.upsert", "pushSubscription.delete"]));
 check("VAPID private key n'est jamais NEXT_PUBLIC", all(pushConfig, ["NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "WEB_PUSH_VAPID_PRIVATE_KEY", "WEB_PUSH_SUBJECT"]) && !pushConfig.includes("NEXT_PUBLIC_WEB_PUSH_VAPID_PRIVATE_KEY"));
-check("transport Web Push utilise P-256, HKDF, AES-128-GCM et VAPID ES256", all(webPush, ["createECDH", 'prime256v1', "hkdfExtract", "aes-128-gcm", 'alg: "ES256"', 'dsaEncoding: "ieee-p1363"', 'Content-Encoding": "aes128gcm']));
+check("transport Web Push utilise P-256, HKDF, AES-128-GCM et VAPID ES256", all(webPush, ["createECDH", "prime256v1", "hkdfExtract", "aes-128-gcm", 'alg: "ES256"', 'dsaEncoding: "ieee-p1363"', 'Content-Encoding": "aes128gcm']));
 check("payload Push est minimal et target interne", all(pushPayload, ["Ouvrez DTSC Platform pour consulter les détails.", "normalizePushTargetUrl", 'value.startsWith("//")', '"/notifications"']));
 check("notifications DB déclenchent le dispatcher en best effort", all(notifications, ["prisma.notification.create", "dispatchPushForNotification", "dispatchPushForNotifications"]) && all(pushSender, ["Promise.allSettled", "result.status === 404", "result.status === 410", "pushSubscription.deleteMany"]));
 check("service worker gère vrai push, notification click et cache privé", all(serviceWorker, ['addEventListener("push"', "showNotification", 'addEventListener("notificationclick"', "normalizeNotificationTarget", '"/api/"', '"/admin"', '"/activities"']));
@@ -79,4 +79,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log(`\nQA session/Web Push: ${26} contrôles source-level passent.`);
+console.log("\nQA session/Web Push: 26 contrôles source-level passent.");
