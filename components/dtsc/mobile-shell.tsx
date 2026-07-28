@@ -233,12 +233,9 @@ export function MobileBottomNavigation({
       ];
 
   return (
-    <motion.nav
+    <nav
       data-mobile-bottom-nav
-      initial={{ y: 90 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.24, ease: "easeOut" }}
-      className="fixed inset-x-3 bottom-3 z-40 rounded-[1.75rem] border border-white/18 bg-dtsc-surface/86 px-2 py-2 shadow-[0_24px_90px_rgba(0,23,54,0.24)] backdrop-blur-2xl lg:hidden"
+      className="fixed inset-x-3 bottom-3 z-40 rounded-[1.75rem] border border-dtsc-border bg-dtsc-surface px-2 py-2 shadow-[0_24px_90px_rgba(0,23,54,0.28)] lg:hidden"
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       aria-label="Navigation mobile DTSC"
     >
@@ -288,7 +285,7 @@ export function MobileBottomNavigation({
           </Link>
         )}
       </div>
-    </motion.nav>
+    </nav>
   );
 }
 
