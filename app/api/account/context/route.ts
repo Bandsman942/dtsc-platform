@@ -4,6 +4,7 @@ import { getSession, setSessionCookie } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { resolveDefaultOrganizationContext, resolveOrganizationLoginContext } from "@/lib/organizations";
+import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
 
 const contextSchema = z.object({
   organizationId: z.string().max(120).nullable().optional(),
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, email: true, name: true, role: true, status: true, sessionIdleTimeoutMinutes: true },
+    select: { id: true, email: true, name: true, role: true, status: true },
   });
   if (!user || user.status !== "ACTIVE") {
     await writeApiLog({ request: req, statusCode: 401, userId: session.userId, startedAt });
@@ -49,9 +50,11 @@ export async function POST(req: Request) {
     }
   }
 
+  const sessionIdleTimeoutMinutes = await getUserSessionIdleTimeoutMinutes(user.id);
   const renewedSession = await setSessionCookie(
     {
       ...user,
+      sessionIdleTimeoutMinutes,
       activeContext: context.activeContext,
       activeOrganizationId: context.activeOrganizationId,
       activeOrganizationName: context.activeOrganizationName,
