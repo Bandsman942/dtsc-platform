@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { dispatchPushForNotification, dispatchPushForNotifications } from "@/lib/push/sender";
 
 function notificationPreferenceField(type: string) {
   if (type === "SUPPORT") {
@@ -54,9 +55,16 @@ export async function notifyUser({
     }
   }
 
-  return prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: { userId, organizationId, title, body, type, targetUrl },
   });
+  await dispatchPushForNotification({
+    userId,
+    notificationId: notification.id,
+    type,
+    targetUrl,
+  });
+  return notification;
 }
 
 export async function notifyUsers({
@@ -101,4 +109,11 @@ export async function notifyUsers({
   await prisma.notification.createMany({
     data: allowedUserIds.map((userId) => ({ userId, organizationId, title, body, type, targetUrl })),
   });
+  const eventId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  await dispatchPushForNotifications(allowedUserIds.map((userId) => ({
+    userId,
+    notificationId: `${eventId}-${userId}`,
+    type,
+    targetUrl,
+  })));
 }
