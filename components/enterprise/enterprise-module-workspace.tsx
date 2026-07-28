@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, Building2, CalendarDays, ClipboardList, Settings, ShieldCheck, UsersRound } from "lucide-react";
+import { ArrowRight, Building2, CalendarDays, ClipboardList, Settings, UsersRound } from "lucide-react";
 import { EnterpriseCoreWorkspace } from "@/components/enterprise/enterprise-core-workspace";
+import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { EmptyState } from "@/components/workspace/empty-state";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { StatusBadge } from "@/components/workspace/status-badge";
 import { ENTERPRISE_CORE_MODULES, isEnterpriseCoreModuleCode } from "@/lib/enterprise/enterprise-core";
 import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
 
@@ -50,65 +55,73 @@ export function EnterpriseModuleWorkspace({
   const upcomingMeetings = coreData.calendarEvents.filter((event) => event.startDateTime >= new Date() && !["CANCELLED", "CLOSED"].includes(event.status));
   const moduleItems = resolveModuleItems(enterpriseModule.code, coreData, records);
   const commonDefinition = isEnterpriseCoreModuleCode(enterpriseModule.code) ? ENTERPRISE_CORE_MODULES[enterpriseModule.code] : null;
+
   return (
-    <div className="min-w-0 space-y-5">
-      <section className="dtsc-panel p-5 sm:p-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">{enterpriseModule.isCore ? (isEnglish ? "Common foundation" : "Socle commun") : enterpriseModule.category}</p>
-        <h1 className="mt-2 text-3xl font-black text-dtsc-ink sm:text-4xl">{enterpriseModule.label}</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-7 text-dtsc-muted">{enterpriseModule.description}</p>
-        <p className="mt-3 text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{organizationName}</p>
-      </section>
+    <ModuleWorkspace>
+      <ModuleHeader
+        eyebrow={enterpriseModule.isCore ? (isEnglish ? "Common foundation" : "Socle commun") : enterpriseModule.category}
+        title={enterpriseModule.label}
+        count={organizationName}
+        description={enterpriseModule.description}
+        secondaryActions={canManage ? <Link href="/enterprise-admin" className="inline-flex h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-black text-dtsc-blue"><Settings className="h-4 w-4" />{isEnglish ? "Configure" : "Configurer"}</Link> : undefined}
+        primaryAction={<Link href="/enterprise-activities" className="inline-flex h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-3 text-sm font-black text-white"><ArrowRight className="h-4 w-4" />{isEnglish ? "Open activities" : "Ouvrir les activités"}</Link>}
+      />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric icon={UsersRound} label={isEnglish ? "Active collaborators" : "Collaborateurs actifs"} value={activeMembers.length} />
-        <Metric icon={Building2} label={isEnglish ? "Active departments" : "Départements actifs"} value={coreData.departments.filter((item) => item.isActive).length} />
-        <Metric icon={ClipboardList} label={isEnglish ? "Open requests" : "Demandes ouvertes"} value={openRequests.length} />
-        <Metric icon={CalendarDays} label={isEnglish ? "Upcoming meetings" : "Réunions à venir"} value={upcomingMeetings.length} />
-      </section>
+      <ModuleMetrics label={isEnglish ? "Company indicators" : "Indicateurs entreprise"}>
+        <ModuleMetric label={isEnglish ? "Active collaborators" : "Collaborateurs actifs"} value={activeMembers.length} hint={<span className="inline-flex items-center gap-1"><UsersRound className="h-3.5 w-3.5" />{organizationName}</span>} />
+        <ModuleMetric label={isEnglish ? "Active departments" : "Départements actifs"} value={coreData.departments.filter((item) => item.isActive).length} hint={<span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />{isEnglish ? "Current context" : "Contexte actif"}</span>} />
+        <ModuleMetric label={isEnglish ? "Open requests" : "Demandes ouvertes"} value={openRequests.length} hint={<span className="inline-flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" />{isEnglish ? "To process" : "À traiter"}</span>} />
+        <ModuleMetric label={isEnglish ? "Upcoming meetings" : "Réunions à venir"} value={upcomingMeetings.length} hint={<span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{isEnglish ? "Scheduled" : "Planifiées"}</span>} />
+      </ModuleMetrics>
 
-      {commonDefinition ? (
-        <EnterpriseCoreWorkspace
-          organizationId={organizationId}
-          moduleCode={enterpriseModule.code}
-          title={commonDefinition.title}
-          description={commonDefinition.description}
-          recordTypes={commonDefinition.recordTypes}
-          initialRecords={coreRecords}
-          members={activeMembers.map((member) => ({ id: member.user.id, label: `${member.user.name} · ${member.role}` }))}
-          departments={coreData.departments.filter((item) => item.isActive).map((item) => ({ id: item.id, label: item.labelFr }))}
-          canCreate={canCreate}
-          canManage={canManage}
-        />
-      ) : <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-          <div className="flex items-center gap-2"><ClipboardList className="h-4 w-4 text-cyan-500" /><h2 className="font-black text-dtsc-ink">{isEnglish ? "Current company data" : "Données actuelles de l'entreprise"}</h2></div>
-          <div className="mt-4 grid gap-3">
-            {moduleItems.map((item) => <article key={item.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase text-cyan-600">{item.meta}</p><h3 className="mt-1 font-black text-dtsc-ink">{item.title}</h3><p className="mt-1 text-sm text-dtsc-muted">{item.detail}</p></article>)}
-            {!moduleItems.length && <p className="rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{isEnglish ? "No company data has been recorded for this module yet." : "Aucune donnée n'est encore enregistrée pour ce module. Utilisez les actions disponibles pour créer le premier élément."}</p>}
+      <ModuleContent>
+        {commonDefinition ? (
+          <EnterpriseCoreWorkspace
+            organizationId={organizationId}
+            moduleCode={enterpriseModule.code}
+            title={commonDefinition.title}
+            description={commonDefinition.description}
+            recordTypes={commonDefinition.recordTypes}
+            initialRecords={coreRecords}
+            members={activeMembers.map((member) => ({ id: member.user.id, label: `${member.user.name} · ${member.role}` }))}
+            departments={coreData.departments.filter((item) => item.isActive).map((item) => ({ id: item.id, label: item.labelFr }))}
+            canCreate={canCreate}
+            canManage={canManage}
+          />
+        ) : (
+          <ModuleSection title={isEnglish ? "Current company data" : "Données actuelles de l'entreprise"} count={`${moduleItems.length}`} description={isEnglish ? "Objects available in the current company context." : "Objets disponibles dans le contexte de l’entreprise active."}>
+            {moduleItems.length ? (
+              <BusinessList ariaLabel={isEnglish ? "Current company data" : "Données actuelles de l'entreprise"}>
+                {moduleItems.map((item) => (
+                  <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{item.meta}</StatusBadge>} description={item.detail} />
+                ))}
+              </BusinessList>
+            ) : <EmptyState compact title={isEnglish ? "No company data" : "Aucune donnée"} description={isEnglish ? "No company data has been recorded for this module yet." : "Aucune donnée n'est encore enregistrée pour ce module. Utilisez les actions disponibles pour créer le premier élément."} />}
+          </ModuleSection>
+        )}
+
+        <ModuleSection title={isEnglish ? "Access and responsibilities" : "Accès et responsabilités"} description={isEnglish ? `Actions are limited to active members of ${organizationName} according to their responsibilities.` : `Les actions sont limitées aux membres actifs de ${organizationName}, selon leurs responsabilités et les modules activés.`}>
+          <div className="border-y border-dtsc-border py-3 text-sm leading-6 text-dtsc-muted">
+            {isEnglish ? "Server permissions and the active organization remain the authority for every action." : "Les permissions serveur et l’organisation active restent l’autorité pour chaque action."}
           </div>
-        </div>
-        <aside className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-          <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-500" /><h2 className="font-black text-dtsc-ink">{isEnglish ? "Access and responsibilities" : "Accès et responsabilités"}</h2></div>
-          <p className="mt-3 text-sm leading-6 text-dtsc-muted">{isEnglish ? `Actions are limited to active members of ${organizationName} according to their responsibilities.` : `Les actions sont limitées aux membres actifs de ${organizationName}, selon leurs responsabilités et les modules activés.`}</p>
-          {canManage && <Link href="/enterprise-admin" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#002b5b] px-3 py-2 text-sm font-black text-white"><Settings className="h-4 w-4" />{isEnglish ? "Configure" : "Configurer"}</Link>}
-          <Link href="/enterprise-activities" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-black text-dtsc-ink"><ArrowRight className="h-4 w-4" />{isEnglish ? "Open activities" : "Ouvrir les activités"}</Link>
-        </aside>
-      </section>}
+        </ModuleSection>
 
-      {activityBlocks.length > 0 && (
-        <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-          <h2 className="font-black text-dtsc-ink">{isEnglish ? "Available actions" : "Actions disponibles"}</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {activityBlocks.map((block) => <Link key={block.id} href={`/enterprise-activities?block=${encodeURIComponent(block.blockCode)}`} className="flex items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-ink transition hover:border-cyan-300"><span>{isEnglish ? block.labelEn : block.labelFr}</span><ArrowRight className="h-4 w-4 text-cyan-500" /></Link>)}
-          </div>
-        </section>
-      )}
-    </div>
+        {activityBlocks.length > 0 ? (
+          <ModuleSection title={isEnglish ? "Available actions" : "Actions disponibles"} count={`${activityBlocks.length}`}>
+            <BusinessList ariaLabel={isEnglish ? "Available actions" : "Actions disponibles"}>
+              {activityBlocks.map((block) => (
+                <BusinessListItem
+                  key={block.id}
+                  title={isEnglish ? block.labelEn : block.labelFr}
+                  actions={<Link href={`/enterprise-activities?block=${encodeURIComponent(block.blockCode)}`} aria-label={`${isEnglish ? "Open" : "Ouvrir"} ${isEnglish ? block.labelEn : block.labelFr}`} className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-dtsc-blue hover:bg-dtsc-soft"><ArrowRight className="h-4 w-4" /></Link>}
+                />
+              ))}
+            </BusinessList>
+          </ModuleSection>
+        ) : null}
+      </ModuleContent>
+    </ModuleWorkspace>
   );
-}
-
-function Metric({ icon: Icon, label, value }: { icon: typeof UsersRound; label: string; value: number }) {
-  return <article className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4"><div className="flex items-center gap-2 text-cyan-600"><Icon className="h-4 w-4" /><p className="text-xs font-black uppercase">{label}</p></div><p className="mt-2 text-3xl font-black text-dtsc-ink">{value}</p></article>;
 }
 
 function resolveModuleItems(code: string, data: CoreData, records: SectorRecord[]) {

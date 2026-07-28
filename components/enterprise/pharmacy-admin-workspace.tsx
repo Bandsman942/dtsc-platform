@@ -3,62 +3,39 @@
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, AlertTriangle, BadgeCheck, Boxes, ClipboardList, FileText, PackageCheck, Pill, Plus, ReceiptText, Settings2, Trash2 } from "lucide-react";
-import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import { PharmacyAlertsWorkspace } from "@/components/enterprise/pharmacy-alerts-workspace";
+import { PharmacyBatchesWorkspace } from "@/components/enterprise/pharmacy-batches-workspace";
+import { PharmacyCashWorkspace } from "@/components/enterprise/pharmacy-cash-workspace";
+import { PharmacyDocumentsWorkspace } from "@/components/enterprise/pharmacy-documents-workspace";
+import { PharmacyProductsWorkspace } from "@/components/enterprise/pharmacy-products-workspace";
+import { PharmacyPrescriptionsWorkspace } from "@/components/enterprise/pharmacy-prescriptions-workspace";
+import { PharmacyPurchasesWorkspace } from "@/components/enterprise/pharmacy-purchases-workspace";
+import { PharmacyQualityWorkspace } from "@/components/enterprise/pharmacy-quality-workspace";
+import { PharmacyReceiptsWorkspace } from "@/components/enterprise/pharmacy-receipts-workspace";
+import { PharmacyReportsWorkspace } from "@/components/enterprise/pharmacy-reports-workspace";
+import { PharmacyReturnLossWorkspace } from "@/components/enterprise/pharmacy-return-loss-workspace";
+import { PharmacySalesWorkspace } from "@/components/enterprise/pharmacy-sales-workspace";
+import { PharmacySettingsWorkspace } from "@/components/enterprise/pharmacy-settings-workspace";
+import { PharmacyStockWorkspace } from "@/components/enterprise/pharmacy-stock-workspace";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { useToastMessage } from "@/components/ui/use-toast-message";
+import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
+import { EmptyState } from "@/components/workspace/empty-state";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import type { EnterpriseDepartmentItem, EnterpriseMemberItem, EnterpriseSectorRecordItem } from "@/lib/enterprise/enterprise-admin-types";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
-import { PharmacyProductsWorkspace } from "@/components/enterprise/pharmacy-products-workspace";
-import { PharmacyBatchesWorkspace } from "@/components/enterprise/pharmacy-batches-workspace";
-import { PharmacyStockWorkspace } from "@/components/enterprise/pharmacy-stock-workspace";
-import { PharmacyReceiptsWorkspace } from "@/components/enterprise/pharmacy-receipts-workspace";
-import { PharmacySalesWorkspace } from "@/components/enterprise/pharmacy-sales-workspace";
-import { PharmacyPrescriptionsWorkspace } from "@/components/enterprise/pharmacy-prescriptions-workspace";
-import { PharmacyPurchasesWorkspace } from "@/components/enterprise/pharmacy-purchases-workspace";
-import { PharmacyCashWorkspace } from "@/components/enterprise/pharmacy-cash-workspace";
-import { PharmacyReturnLossWorkspace } from "@/components/enterprise/pharmacy-return-loss-workspace";
-import { PharmacyAlertsWorkspace } from "@/components/enterprise/pharmacy-alerts-workspace";
-import { PharmacyQualityWorkspace } from "@/components/enterprise/pharmacy-quality-workspace";
-import { PharmacyDocumentsWorkspace } from "@/components/enterprise/pharmacy-documents-workspace";
-import { PharmacyReportsWorkspace } from "@/components/enterprise/pharmacy-reports-workspace";
-import { PharmacySettingsWorkspace } from "@/components/enterprise/pharmacy-settings-workspace";
 
-import { useToastMessage } from "@/components/ui/use-toast-message";
-type ModuleCode =
-  | "PHARMACY_DASHBOARD"
-  | "MEDICINES_PRODUCTS"
-  | "BATCH_EXPIRY"
-  | "STOCK_INVENTORY"
-  | "STOCK_RECEIPTS"
-  | "SALES_DISPENSATION"
-  | "PRESCRIPTIONS"
-  | "SUPPLIERS_ORDERS"
-  | "CASH_INVOICES_PAYMENTS"
-  | "RETURNS_ADJUSTMENTS_LOSSES"
-  | "ALERTS_EXPIRY_LOW_STOCK"
-  | "QUALITY_PHARMACOVIGILANCE"
-  | "PHARMACY_DOCUMENTS"
-  | "PHARMACY_REPORTS"
-  | "PHARMACY_SETTINGS";
+type ModuleCode = "PHARMACY_DASHBOARD" | "MEDICINES_PRODUCTS" | "BATCH_EXPIRY" | "STOCK_INVENTORY" | "STOCK_RECEIPTS" | "SALES_DISPENSATION" | "PRESCRIPTIONS" | "SUPPLIERS_ORDERS" | "CASH_INVOICES_PAYMENTS" | "RETURNS_ADJUSTMENTS_LOSSES" | "ALERTS_EXPIRY_LOW_STOCK" | "QUALITY_PHARMACOVIGILANCE" | "PHARMACY_DOCUMENTS" | "PHARMACY_REPORTS" | "PHARMACY_SETTINGS";
 type RecordModuleCode = Exclude<ModuleCode, "PHARMACY_DASHBOARD">;
 
 const recordTypeByModule: Record<RecordModuleCode, string> = {
-  MEDICINES_PRODUCTS: "PHARMACY_PRODUCT",
-  BATCH_EXPIRY: "PHARMACY_BATCH",
-  STOCK_INVENTORY: "PHARMACY_INVENTORY",
-  STOCK_RECEIPTS: "PHARMACY_RECEIPT",
-  SALES_DISPENSATION: "PHARMACY_SALE",
-  PRESCRIPTIONS: "PHARMACY_PRESCRIPTION",
-  SUPPLIERS_ORDERS: "PHARMACY_SUPPLIER_ORDER",
-  CASH_INVOICES_PAYMENTS: "PHARMACY_CASH",
-  RETURNS_ADJUSTMENTS_LOSSES: "PHARMACY_ADJUSTMENT",
-  ALERTS_EXPIRY_LOW_STOCK: "PHARMACY_ALERT",
-  QUALITY_PHARMACOVIGILANCE: "PHARMACY_QUALITY_INCIDENT",
-  PHARMACY_DOCUMENTS: "PHARMACY_DOCUMENT",
-  PHARMACY_REPORTS: "PHARMACY_REPORT",
-  PHARMACY_SETTINGS: "PHARMACY_SETTING",
+  MEDICINES_PRODUCTS: "PHARMACY_PRODUCT", BATCH_EXPIRY: "PHARMACY_BATCH", STOCK_INVENTORY: "PHARMACY_INVENTORY", STOCK_RECEIPTS: "PHARMACY_RECEIPT", SALES_DISPENSATION: "PHARMACY_SALE", PRESCRIPTIONS: "PHARMACY_PRESCRIPTION", SUPPLIERS_ORDERS: "PHARMACY_SUPPLIER_ORDER", CASH_INVOICES_PAYMENTS: "PHARMACY_CASH", RETURNS_ADJUSTMENTS_LOSSES: "PHARMACY_ADJUSTMENT", ALERTS_EXPIRY_LOW_STOCK: "PHARMACY_ALERT", QUALITY_PHARMACOVIGILANCE: "PHARMACY_QUALITY_INCIDENT", PHARMACY_DOCUMENTS: "PHARMACY_DOCUMENT", PHARMACY_REPORTS: "PHARMACY_REPORT", PHARMACY_SETTINGS: "PHARMACY_SETTING",
 };
 
 const submodules: Array<{ code: ModuleCode; label: string; description: string; icon: typeof Pill; createLabel?: string }> = [
@@ -88,27 +65,10 @@ type FormState = {
   documentUrl: string; prescriptionRequired: boolean; controlledProduct: boolean; pharmacistValidationRequired: boolean;
 };
 
-function text(record: EnterpriseSectorRecordItem, key: string) {
-  const value = record.payloadJson?.[key];
-  return typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
-}
-function bool(record: EnterpriseSectorRecordItem, key: string) {
-  return record.payloadJson?.[key] === true;
-}
-function defaultForm(moduleCode: RecordModuleCode): FormState {
-  return { moduleCode, recordType: recordTypeByModule[moduleCode], title: "", summary: "", status: moduleCode === "MEDICINES_PRODUCTS" || moduleCode === "BATCH_EXPIRY" ? "ACTIVE" : "DRAFT", priority: "NORMAL", assignedToUserId: "", productId: "", batchId: "", supplierId: "", purchaseOrderId: "", prescriptionId: "", departmentId: "", responsibleUserId: "", recordKind: "", internalCode: "", genericName: "", barcode: "", category: "", pharmaceuticalForm: "", dosage: "", unit: "unité", batchNumber: "", expiryDate: "", transactionDate: new Date().toISOString().slice(0, 10), quantity: "0", availableQuantity: "0", minStock: "0", maxStock: "", unitPrice: "0", totalAmount: "0", currency: "USD", location: "", paymentMethod: "", customerName: "", reason: "", notes: "", documentUrl: "", prescriptionRequired: false, controlledProduct: false, pharmacistValidationRequired: false };
-}
-function formFromRecord(record: EnterpriseSectorRecordItem): FormState {
-  const base = defaultForm(record.moduleCode as RecordModuleCode);
-  const next = { ...base, title: record.title, summary: record.summary || "", status: record.status, priority: record.priority, assignedToUserId: record.assignedTo?.id || "" };
-  for (const key of Object.keys(base) as Array<keyof FormState>) {
-    if (typeof base[key] === "string" && record.payloadJson?.[key] !== undefined && record.payloadJson?.[key] !== null) Object.assign(next, { [key]: text(record, key) });
-  }
-  next.prescriptionRequired = bool(record, "prescriptionRequired");
-  next.controlledProduct = bool(record, "controlledProduct");
-  next.pharmacistValidationRequired = bool(record, "pharmacistValidationRequired");
-  return next;
-}
+function text(record: EnterpriseSectorRecordItem, key: string) { const value = record.payloadJson?.[key]; return typeof value === "string" ? value : typeof value === "number" ? String(value) : ""; }
+function bool(record: EnterpriseSectorRecordItem, key: string) { return record.payloadJson?.[key] === true; }
+function defaultForm(moduleCode: RecordModuleCode): FormState { return { moduleCode, recordType: recordTypeByModule[moduleCode], title: "", summary: "", status: moduleCode === "MEDICINES_PRODUCTS" || moduleCode === "BATCH_EXPIRY" ? "ACTIVE" : "DRAFT", priority: "NORMAL", assignedToUserId: "", productId: "", batchId: "", supplierId: "", purchaseOrderId: "", prescriptionId: "", departmentId: "", responsibleUserId: "", recordKind: "", internalCode: "", genericName: "", barcode: "", category: "", pharmaceuticalForm: "", dosage: "", unit: "unité", batchNumber: "", expiryDate: "", transactionDate: new Date().toISOString().slice(0, 10), quantity: "0", availableQuantity: "0", minStock: "0", maxStock: "", unitPrice: "0", totalAmount: "0", currency: "USD", location: "", paymentMethod: "", customerName: "", reason: "", notes: "", documentUrl: "", prescriptionRequired: false, controlledProduct: false, pharmacistValidationRequired: false }; }
+function formFromRecord(record: EnterpriseSectorRecordItem): FormState { const base = defaultForm(record.moduleCode as RecordModuleCode); const next = { ...base, title: record.title, summary: record.summary || "", status: record.status, priority: record.priority, assignedToUserId: record.assignedTo?.id || "" }; for (const key of Object.keys(base) as Array<keyof FormState>) { if (typeof base[key] === "string" && record.payloadJson?.[key] !== undefined && record.payloadJson?.[key] !== null) Object.assign(next, { [key]: text(record, key) }); } next.prescriptionRequired = bool(record, "prescriptionRequired"); next.controlledProduct = bool(record, "controlledProduct"); next.pharmacistValidationRequired = bool(record, "pharmacistValidationRequired"); return next; }
 
 export function PharmacyAdminWorkspace({ organizationId, records, members, departments, activeModuleCodes }: { organizationId: string; records: EnterpriseSectorRecordItem[]; members: EnterpriseMemberItem[]; departments: EnterpriseDepartmentItem[]; activeModuleCodes: Set<string> }) {
   const router = useRouter();
@@ -132,44 +92,71 @@ export function PharmacyAdminWorkspace({ organizationId, records, members, depar
   function change<K extends keyof FormState>(key: K, value: FormState[K]) { setForm((current) => ({ ...current, [key]: value })); }
   function openCreate(code: ModuleCode) { if (code === "PHARMACY_DASHBOARD") return; setEditing(null); setForm(defaultForm(code)); setFormOpen(true); setMessage(""); }
   function openEdit(record: EnterpriseSectorRecordItem) { setEditing(record); setForm(formFromRecord(record)); setFormOpen(true); }
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const response = await fetch(editing ? `/api/enterprise/${organizationId}/pharmacy/${editing.id}` : `/api/enterprise/${organizationId}/pharmacy`, { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? "Élément pharmacie enregistré." : body?.message || "Enregistrement impossible.");
-    if (response.ok) { setFormOpen(false); router.refresh(); }
-  }
-  async function action(record: EnterpriseSectorRecordItem, actionName: string) {
-    const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/${record.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName }) });
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? "Action pharmacie enregistrée." : body?.message || "Action impossible.");
-    if (response.ok) router.refresh();
-  }
-  async function archive(record: EnterpriseSectorRecordItem) {
-    const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/${record.id}`, { method: "DELETE" });
-    setMessage(response.ok ? "Élément archivé." : "Archivage impossible.");
-    if (response.ok) router.refresh();
-  }
+  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const response = await fetch(editing ? `/api/enterprise/${organizationId}/pharmacy/${editing.id}` : `/api/enterprise/${organizationId}/pharmacy`, { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const body = (await response.json().catch(() => null)) as { message?: string } | null; setMessage(response.ok ? "Élément pharmacie enregistré." : body?.message || "Enregistrement impossible."); if (response.ok) { setFormOpen(false); router.refresh(); } }
+  async function action(record: EnterpriseSectorRecordItem, actionName: string) { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/${record.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName }) }); const body = (await response.json().catch(() => null)) as { message?: string } | null; setMessage(response.ok ? "Action pharmacie enregistrée." : body?.message || "Action impossible."); if (response.ok) router.refresh(); }
+  async function archive(record: EnterpriseSectorRecordItem) { const response = await fetch(`/api/enterprise/${organizationId}/pharmacy/${record.id}`, { method: "DELETE" }); setMessage(response.ok ? "Élément archivé." : "Archivage impossible."); if (response.ok) router.refresh(); }
+
+  const canGenericCreate = activeCode !== "PHARMACY_DASHBOARD" && !["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "STOCK_INVENTORY", "STOCK_RECEIPTS", "SALES_DISPENSATION", "PRESCRIPTIONS", "SUPPLIERS_ORDERS", "CASH_INVOICES_PAYMENTS", "RETURNS_ADJUSTMENTS_LOSSES", "ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE", "PHARMACY_DOCUMENTS", "PHARMACY_REPORTS", "PHARMACY_SETTINGS"].includes(activeCode);
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex max-w-full gap-2 overflow-x-auto pb-2">
-        {enabled.map((item) => <button key={item.code} type="button" onClick={() => setActiveCode(item.code)} className={`shrink-0 rounded-2xl border px-4 py-3 text-left ${activeCode === item.code ? "border-emerald-300 bg-emerald-400/14 text-emerald-700" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}><span className="block max-w-56 truncate text-sm font-black">{item.label}</span><span className="mt-1 block max-w-56 truncate text-xs font-semibold text-dtsc-muted">{item.description}</span></button>)}
-      </div>
-      {activeCode === "PHARMACY_DASHBOARD" ? <Dashboard records={records} /> : activeCode === "MEDICINES_PRODUCTS" ? <PharmacyProductsWorkspace organizationId={organizationId} /> : activeCode === "BATCH_EXPIRY" ? <PharmacyBatchesWorkspace organizationId={organizationId} /> : activeCode === "STOCK_INVENTORY" ? <PharmacyStockWorkspace organizationId={organizationId} /> : activeCode === "STOCK_RECEIPTS" ? <PharmacyReceiptsWorkspace organizationId={organizationId} /> : activeCode === "SALES_DISPENSATION" ? <PharmacySalesWorkspace organizationId={organizationId} /> : activeCode === "PRESCRIPTIONS" ? <PharmacyPrescriptionsWorkspace organizationId={organizationId} /> : activeCode === "SUPPLIERS_ORDERS" ? <PharmacyPurchasesWorkspace organizationId={organizationId} /> : activeCode === "CASH_INVOICES_PAYMENTS" ? <PharmacyCashWorkspace organizationId={organizationId} /> : activeCode === "RETURNS_ADJUSTMENTS_LOSSES" ? <PharmacyReturnLossWorkspace organizationId={organizationId} /> : activeCode === "ALERTS_EXPIRY_LOW_STOCK" ? <PharmacyAlertsWorkspace organizationId={organizationId} /> : activeCode === "QUALITY_PHARMACOVIGILANCE" ? <PharmacyQualityWorkspace organizationId={organizationId} /> : activeCode === "PHARMACY_DOCUMENTS" ? <PharmacyDocumentsWorkspace organizationId={organizationId} /> : activeCode === "PHARMACY_REPORTS" ? <PharmacyReportsWorkspace organizationId={organizationId} /> : activeCode === "PHARMACY_SETTINGS" ? <PharmacySettingsWorkspace organizationId={organizationId} /> : (
-        <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-black text-dtsc-ink">{active?.label}</h3><p className="text-sm text-dtsc-muted">{active?.description}</p></div><Button type="button" onClick={() => openCreate(activeCode)} className="rounded-xl bg-[#002b5b] text-white"><Plus className="h-4 w-4" />{active?.createLabel}</Button></div>
-          <div className="mt-4"><ListControls query={list.query} onQueryChange={list.setQuery} page={list.page} pageCount={list.pageCount} totalCount={list.totalCount} filteredCount={list.filteredCount} placeholder="Rechercher..." onPageChange={list.setPage} /></div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {list.paginatedItems.map((record) => <article key={record.id} className="dtsc-glass-list-item rounded-2xl p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-black uppercase text-emerald-600">{record.status} · {record.priority}</p><h4 className="mt-1 truncate font-black text-dtsc-ink">{record.title}</h4><p className="mt-1 line-clamp-2 text-xs text-dtsc-muted">{record.summary || text(record, "notes") || "Aucun résumé."}</p></div><ActionMenu label="Actions" items={recordActions(record, setDetails, openEdit, action, archive)} /></div><div className="mt-3 flex flex-wrap gap-2"><Tag value={text(record, "internalCode")} /><Tag value={text(record, "batchNumber")} /><Tag value={text(record, "availableQuantity") ? `${text(record, "availableQuantity")} ${text(record, "unit")}` : ""} /><Tag value={text(record, "expiryDate")} /></div></article>)}
-            {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">Aucun élément enregistré dans ce sous-module.</p>}
-          </div>
-        </section>
-      )}
+    <ModuleWorkspace>
+      <ModuleHeader
+        eyebrow="Secteur pharmacie"
+        title="Pilotage pharmacie"
+        count={`${records.length} élément${records.length > 1 ? "s" : ""}`}
+        description="Accédez aux produits, lots, stocks, réceptions, ventes, prescriptions, achats, caisse, qualité, documents et paramètres sans empiler des cartes de navigation."
+        primaryAction={canGenericCreate ? <Button type="button" onClick={() => openCreate(activeCode)} className="rounded-xl bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{active?.createLabel || "Nouveau"}</Button> : undefined}
+      />
 
-      <Dialog open={formOpen} title={editing ? "Modifier l'élément pharmacie" : active?.createLabel || "Nouvel élément"} description="Formulaire métier persistant, isolé dans la pharmacie active." onClose={() => setFormOpen(false)} className="h-[94dvh] max-w-6xl"><form onSubmit={save} className="grid gap-4"><FormSection title="Identification"><div className="grid gap-3 md:grid-cols-2"><Field label="Titre"><Input value={form.title} onChange={(event) => change("title", event.target.value)} required /></Field><Field label="Statut"><Input value={form.status} onChange={(event) => change("status", event.target.value)} required /></Field><Field label="Résumé"><Input value={form.summary} onChange={(event) => change("summary", event.target.value)} /></Field><Select label="Responsable" value={form.assignedToUserId} onChange={(value) => change("assignedToUserId", value)} options={members.map((member) => [member.user.id, member.user.name])} /></div></FormSection><SpecificFields form={form} change={change} products={products} batches={batches} suppliers={suppliers} orders={orders} prescriptions={prescriptions} departments={departments} members={members} /><FormSection title="Notes et suivi"><div className="grid gap-3 md:grid-cols-2"><Field label="Motif / justification"><textarea value={form.reason} onChange={(event) => change("reason", event.target.value)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field><Field label="Notes internes"><textarea value={form.notes} onChange={(event) => change("notes", event.target.value)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field></div></FormSection><Button className="w-fit rounded-xl bg-[#002b5b] text-white">Enregistrer</Button></form></Dialog>
+      <ModuleSection title="Sous-modules" description={active?.description} count={`${enabled.length}`}>
+        <div className="-mx-1 flex max-w-full gap-1 overflow-x-auto border-y border-dtsc-border px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Sous-modules pharmacie">
+          {enabled.map((item) => {
+            const Icon = item.icon;
+            const count = item.code === "PHARMACY_DASHBOARD" ? records.length : records.filter((record) => record.moduleCode === item.code).length;
+            const selected = activeCode === item.code;
+            return (
+              <button key={item.code} type="button" role="tab" aria-selected={selected} onClick={() => setActiveCode(item.code)} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-black transition ${selected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"}`}>
+                <Icon className="h-4 w-4" /><span>{item.label}</span><span className="text-xs opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </ModuleSection>
+
+      <ModuleContent>
+        {activeCode === "PHARMACY_DASHBOARD" ? <Dashboard records={records} /> : activeCode === "MEDICINES_PRODUCTS" ? <PharmacyProductsWorkspace organizationId={organizationId} /> : activeCode === "BATCH_EXPIRY" ? <PharmacyBatchesWorkspace organizationId={organizationId} /> : activeCode === "STOCK_INVENTORY" ? <PharmacyStockWorkspace organizationId={organizationId} /> : activeCode === "STOCK_RECEIPTS" ? <PharmacyReceiptsWorkspace organizationId={organizationId} /> : activeCode === "SALES_DISPENSATION" ? <PharmacySalesWorkspace organizationId={organizationId} /> : activeCode === "PRESCRIPTIONS" ? <PharmacyPrescriptionsWorkspace organizationId={organizationId} /> : activeCode === "SUPPLIERS_ORDERS" ? <PharmacyPurchasesWorkspace organizationId={organizationId} /> : activeCode === "CASH_INVOICES_PAYMENTS" ? <PharmacyCashWorkspace organizationId={organizationId} /> : activeCode === "RETURNS_ADJUSTMENTS_LOSSES" ? <PharmacyReturnLossWorkspace organizationId={organizationId} /> : activeCode === "ALERTS_EXPIRY_LOW_STOCK" ? <PharmacyAlertsWorkspace organizationId={organizationId} /> : activeCode === "QUALITY_PHARMACOVIGILANCE" ? <PharmacyQualityWorkspace organizationId={organizationId} /> : activeCode === "PHARMACY_DOCUMENTS" ? <PharmacyDocumentsWorkspace organizationId={organizationId} /> : activeCode === "PHARMACY_REPORTS" ? <PharmacyReportsWorkspace organizationId={organizationId} /> : activeCode === "PHARMACY_SETTINGS" ? <PharmacySettingsWorkspace organizationId={organizationId} /> : (
+          <ModuleSection title={active?.label || "Sous-module"} description={active?.description} count={`${list.filteredCount}/${visible.length}`} action={<Button type="button" onClick={() => openCreate(activeCode)} className="rounded-xl bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{active?.createLabel}</Button>}>
+            <ListControls query={list.query} onQueryChange={list.setQuery} page={list.page} pageCount={list.pageCount} totalCount={list.totalCount} filteredCount={list.filteredCount} placeholder="Rechercher..." onPageChange={list.setPage} />
+            {list.paginatedItems.length ? (
+              <BusinessList ariaLabel={active?.label || "Éléments pharmacie"}>
+                {list.paginatedItems.map((record) => (
+                  <BusinessListItem
+                    key={record.id}
+                    title={record.title}
+                    status={<StatusBadge tone={statusTone(record.status)}>{record.status}</StatusBadge>}
+                    meta={[record.priority, text(record, "internalCode"), text(record, "batchNumber"), text(record, "availableQuantity") ? `${text(record, "availableQuantity")} ${text(record, "unit")}` : "", text(record, "expiryDate")].filter(Boolean).join(" · ")}
+                    description={record.summary || text(record, "notes") || "Aucun résumé."}
+                    onOpen={() => setDetails(record)}
+                    openLabel={`Ouvrir ${record.title}`}
+                    actions={<ContextActions label={`Actions pour ${record.title}`} actions={recordActions(record, setDetails, openEdit, action, archive)} />}
+                  />
+                ))}
+              </BusinessList>
+            ) : <EmptyState compact title={visible.length ? "Aucun résultat" : "Aucun contenu"} description={visible.length ? "Aucun élément ne correspond à cette recherche." : "Aucun élément enregistré dans ce sous-module."} />}
+          </ModuleSection>
+        )}
+      </ModuleContent>
+
+      <Dialog open={formOpen} title={editing ? "Modifier l'élément pharmacie" : active?.createLabel || "Nouvel élément"} description="Formulaire métier persistant, isolé dans la pharmacie active." onClose={() => setFormOpen(false)} className="h-[94dvh] max-w-6xl">
+        <form onSubmit={save} className="grid gap-4">
+          <FormSection title="Identification"><div className="grid gap-3 md:grid-cols-2"><Field label="Titre"><Input value={form.title} onChange={(event) => change("title", event.target.value)} required /></Field><Field label="Statut"><Input value={form.status} onChange={(event) => change("status", event.target.value)} required /></Field><Field label="Résumé"><Input value={form.summary} onChange={(event) => change("summary", event.target.value)} /></Field><Select label="Responsable" value={form.assignedToUserId} onChange={(value) => change("assignedToUserId", value)} options={members.map((member) => [member.user.id, member.user.name])} /></div></FormSection>
+          <SpecificFields form={form} change={change} products={products} batches={batches} suppliers={suppliers} orders={orders} prescriptions={prescriptions} departments={departments} members={members} />
+          <FormSection title="Notes et suivi"><div className="grid gap-3 md:grid-cols-2"><Field label="Motif / justification"><textarea value={form.reason} onChange={(event) => change("reason", event.target.value)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field><Field label="Notes internes"><textarea value={form.notes} onChange={(event) => change("notes", event.target.value)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field></div></FormSection>
+          <Button className="w-fit rounded-xl bg-dtsc-blue text-white">Enregistrer</Button>
+        </form>
+      </Dialog>
       <Dialog open={Boolean(details)} title={details?.title || "Détail"} description="Données pharmacie confinées à l'entreprise active." onClose={() => setDetails(null)} className="max-w-4xl">{details && <Details record={details} />}</Dialog>
-    </div>
+    </ModuleWorkspace>
   );
 }
 
@@ -178,17 +165,19 @@ function Dashboard({ records }: { records: EnterpriseSectorRecordItem[] }) {
   const today = new Date().toISOString().slice(0, 10);
   const near = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
   const metrics = [
-    ["Produits actifs", records.filter((record) => record.moduleCode === "MEDICINES_PRODUCTS" && record.status === "ACTIVE").length],
-    ["Lots actifs", batches.filter((record) => record.status === "ACTIVE").length],
-    ["Stock faible", records.filter((record) => record.status === "LOW_STOCK").length],
-    ["Ruptures", records.filter((record) => record.status === "OUT_OF_STOCK" || record.status === "DEPLETED").length],
-    ["Lots expirés", batches.filter((record) => text(record, "expiryDate") && text(record, "expiryDate") < today).length],
-    ["Péremptions proches", batches.filter((record) => text(record, "expiryDate") >= today && text(record, "expiryDate") <= near).length],
-    ["Ventes du jour", records.filter((record) => record.moduleCode === "SALES_DISPENSATION" && text(record, "transactionDate") === today).length],
-    ["Incidents ouverts", records.filter((record) => record.moduleCode === "QUALITY_PHARMACOVIGILANCE" && !["RESOLVED", "CLOSED", "ARCHIVED"].includes(record.status)).length],
-  ];
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(([label, value]) => <article key={label} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><p className="text-xs font-black uppercase text-emerald-600">{label}</p><p className="mt-2 text-3xl font-black text-dtsc-ink">{value}</p></article>)}</div>;
+    ["Produits actifs", records.filter((record) => record.moduleCode === "MEDICINES_PRODUCTS" && record.status === "ACTIVE").length, "Référentiel disponible"],
+    ["Lots actifs", batches.filter((record) => record.status === "ACTIVE").length, "Lots utilisables"],
+    ["Stock faible", records.filter((record) => record.status === "LOW_STOCK").length, "À surveiller"],
+    ["Ruptures", records.filter((record) => record.status === "OUT_OF_STOCK" || record.status === "DEPLETED").length, "Action requise"],
+    ["Lots expirés", batches.filter((record) => text(record, "expiryDate") && text(record, "expiryDate") < today).length, "Hors utilisation"],
+    ["Péremptions proches", batches.filter((record) => text(record, "expiryDate") >= today && text(record, "expiryDate") <= near).length, "Sous 90 jours"],
+    ["Ventes du jour", records.filter((record) => record.moduleCode === "SALES_DISPENSATION" && text(record, "transactionDate") === today).length, "Transactions"],
+    ["Incidents ouverts", records.filter((record) => record.moduleCode === "QUALITY_PHARMACOVIGILANCE" && !["RESOLVED", "CLOSED", "ARCHIVED"].includes(record.status)).length, "Qualité / vigilance"],
+  ] as const;
+  return <ModuleSection title="Tableau de bord pharmacie" description="Lecture compacte des signaux opérationnels prioritaires."><ModuleMetrics label="Indicateurs pharmacie">{metrics.map(([label, value, hint]) => <ModuleMetric key={label} label={label} value={value} hint={hint} />)}</ModuleMetrics></ModuleSection>;
 }
+
+function statusTone(status: string): StatusBadgeTone { if (/OUT_OF_STOCK|DEPLETED|EXPIRED|REJECTED|CANCELLED|RECALLED/i.test(status)) return "danger"; if (/LOW_STOCK|WAITING|PENDING|DRAFT|QUARANTINED/i.test(status)) return "warning"; if (/ACTIVE|VALIDATED|PAID|RESOLVED|CLOSED|RECEIVED/i.test(status)) return "success"; if (/IN_PROGRESS|PROCESSING/i.test(status)) return "info"; return "neutral"; }
 
 function SpecificFields({ form, change, products, batches, suppliers, orders, prescriptions, departments, members }: { form: FormState; change: <K extends keyof FormState>(key: K, value: FormState[K]) => void; products: EnterpriseSectorRecordItem[]; batches: EnterpriseSectorRecordItem[]; suppliers: EnterpriseSectorRecordItem[]; orders: EnterpriseSectorRecordItem[]; prescriptions: EnterpriseSectorRecordItem[]; departments: EnterpriseDepartmentItem[]; members: EnterpriseMemberItem[] }) {
   const batchOptions = batches.filter((record) => !form.productId || text(record, "productId") === form.productId);
@@ -214,21 +203,20 @@ function SpecificFields({ form, change, products, batches, suppliers, orders, pr
   </div></FormSection>;
 }
 
-function recordActions(record: EnterpriseSectorRecordItem, details: (record: EnterpriseSectorRecordItem) => void, edit: (record: EnterpriseSectorRecordItem) => void, action: (record: EnterpriseSectorRecordItem, actionName: string) => Promise<void>, archive: (record: EnterpriseSectorRecordItem) => Promise<void>): ActionMenuItem[] {
-  const items: ActionMenuItem[] = [{ key: "details", label: "Voir détail", icon: Pill, onSelect: () => details(record) }, { key: "edit", label: "Modifier", icon: ClipboardList, onSelect: () => edit(record) }];
-  if (record.moduleCode === "SALES_DISPENSATION") items.push({ key: "pay", label: "Valider / payer", icon: BadgeCheck, onSelect: () => void action(record, "pay") }, { key: "cancel", label: "Annuler et restaurer le stock", icon: Trash2, destructive: true, onSelect: () => void action(record, "cancel") });
-  if (record.moduleCode === "STOCK_RECEIPTS") items.push({ key: "receive", label: "Valider la réception", icon: BadgeCheck, onSelect: () => void action(record, "receive") });
-  if (record.moduleCode === "BATCH_EXPIRY") items.push({ key: "quarantine", label: "Mettre en quarantaine", icon: AlertTriangle, onSelect: () => void action(record, "quarantine") }, { key: "recall", label: "Rappeler le lot", icon: AlertTriangle, destructive: true, onSelect: () => void action(record, "recall") });
-  if (record.moduleCode === "RETURNS_ADJUSTMENTS_LOSSES") items.push({ key: "validate", label: "Valider l'ajustement", icon: BadgeCheck, onSelect: () => void action(record, "validate") });
-  if (["ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE"].includes(record.moduleCode)) items.push({ key: "resolve", label: "Marquer résolu", icon: BadgeCheck, onSelect: () => void action(record, "resolve") });
-  items.push({ key: "archive", label: "Archiver", icon: Trash2, destructive: true, onSelect: () => void archive(record) });
+function recordActions(record: EnterpriseSectorRecordItem, details: (record: EnterpriseSectorRecordItem) => void, edit: (record: EnterpriseSectorRecordItem) => void, action: (record: EnterpriseSectorRecordItem, actionName: string) => Promise<void>, archive: (record: EnterpriseSectorRecordItem) => Promise<void>): BusinessContextAction[] {
+  const items: BusinessContextAction[] = [{ id: "details", label: "Voir détail", icon: Pill, onSelect: () => details(record) }, { id: "edit", label: "Modifier", icon: ClipboardList, onSelect: () => edit(record) }];
+  if (record.moduleCode === "SALES_DISPENSATION") items.push({ id: "pay", label: "Valider / payer", icon: BadgeCheck, onSelect: () => void action(record, "pay") }, { id: "cancel", label: "Annuler et restaurer le stock", icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => void action(record, "cancel") });
+  if (record.moduleCode === "STOCK_RECEIPTS") items.push({ id: "receive", label: "Valider la réception", icon: BadgeCheck, onSelect: () => void action(record, "receive") });
+  if (record.moduleCode === "BATCH_EXPIRY") items.push({ id: "quarantine", label: "Mettre en quarantaine", icon: AlertTriangle, onSelect: () => void action(record, "quarantine") }, { id: "recall", label: "Rappeler le lot", icon: AlertTriangle, destructive: true, separatorBefore: true, onSelect: () => void action(record, "recall") });
+  if (record.moduleCode === "RETURNS_ADJUSTMENTS_LOSSES") items.push({ id: "validate", label: "Valider l'ajustement", icon: BadgeCheck, onSelect: () => void action(record, "validate") });
+  if (["ALERTS_EXPIRY_LOW_STOCK", "QUALITY_PHARMACOVIGILANCE"].includes(record.moduleCode)) items.push({ id: "resolve", label: "Marquer résolu", icon: BadgeCheck, onSelect: () => void action(record, "resolve") });
+  items.push({ id: "archive", label: "Archiver", icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => void archive(record) });
   return items;
 }
 
-function Details({ record }: { record: EnterpriseSectorRecordItem }) { const rows = Object.entries(record.payloadJson || {}).filter(([, value]) => value !== null && value !== "" && value !== false); return <div className="grid gap-3 md:grid-cols-2">{rows.map(([key, value]) => <div key={key} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase text-dtsc-muted">{key}</p><p className="mt-1 whitespace-pre-wrap text-sm font-bold text-dtsc-ink">{String(value)}</p></div>)}</div>; }
-function Tag({ value }: { value: string }) { return value ? <span className="rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">{value}</span> : null; }
+function Details({ record }: { record: EnterpriseSectorRecordItem }) { const rows = Object.entries(record.payloadJson || {}).filter(([, value]) => value !== null && value !== "" && value !== false); return <BusinessList ariaLabel="Détails pharmacie">{rows.map(([key, value]) => <BusinessListItem key={key} title={key} description={String(value)} />)}</BusinessList>; }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-1 text-sm font-black text-dtsc-ink"><span className="text-xs uppercase tracking-[0.14em] text-dtsc-muted">{label}</span>{children}</label>; }
-function FormSection({ title, children }: { title: string; children: ReactNode }) { return <section className="space-y-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h3 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-600">{title}</h3>{children}</section>; }
+function FormSection({ title, children }: { title: string; children: ReactNode }) { return <section className="space-y-3 border-t border-dtsc-border pt-4 first:border-t-0 first:pt-0"><h3 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-600">{title}</h3>{children}</section>; }
 function Select({ label, value, options, onChange }: { label: string; value: string; options: string[][]; onChange: (value: string) => void }) { return <Field label={label}><select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3"><option value="">Sélectionner</option>{options.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field>; }
 function RecordSelect({ label, value, records, onChange }: { label: string; value: string; records: EnterpriseSectorRecordItem[]; onChange: (value: string) => void }) { return <Select label={label} value={value} onChange={onChange} options={records.map((record) => [record.id, `${record.title} · ${record.status}`])} />; }
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) { return <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />{label}</label>; }
