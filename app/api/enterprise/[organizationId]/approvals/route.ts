@@ -114,6 +114,8 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Validation invalide." }, { status: 400 });
   const data = parsed.data;
   if (!(await canAccessTarget(organizationId, session.userId, access.canManage, data.targetEntityType, data.targetEntityId))) return NextResponse.json({ error: "Forbidden", message: "Vous ne pouvez pas demander une validation sur cet objet." }, { status: 403 });
+  const pendingForTarget = await prisma.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: data.targetEntityType, targetEntityId: data.targetEntityId, status: "PENDING", archivedAt: null }, select: { id: true } });
+  if (pendingForTarget) return NextResponse.json({ error: "Pending approval exists", message: "Une validation est déjà en attente pour cet objet. Le Sprint 6 utilise une approbation simple à un approbateur ; les chaînes multi-étapes viendront avec le Workflow Engine." }, { status: 409 });
   try {
     const approval = await createEnterpriseApproval({ organizationId, actorUserId: session.userId, targetEntityType: data.targetEntityType, targetEntityId: data.targetEntityId, approverUserId: data.approverUserId });
     await notifyUser({ userId: approval.approverUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Validation requise", body: "Une décision vous a été attribuée.", targetUrl: "/enterprise-modules/VALIDATIONS" });
