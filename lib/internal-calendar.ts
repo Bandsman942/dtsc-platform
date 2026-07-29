@@ -5,6 +5,7 @@ import { notifyUsers } from "@/lib/notifications";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
+import { resolveDtscEffectiveAvailability } from "@/lib/work-schedule";
 
 export type CalendarContext = Awaited<ReturnType<typeof getCalendarContext>>;
 
@@ -46,13 +47,19 @@ export async function getCalendarContext(
   const organizationRole = organizationMember?.role || session?.activeOrganizationRole || null;
   const canViewOrganizationGlobal = organizationRole === "OWNER" || organizationRole === "ADMIN_ENTREPRISE" || organizationRole === "ADMIN_ENTERPRISE" || organizationRole === "MANAGER";
   const canViewGlobal = dtscInternal
-    ? user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO"
+    ? user.role === UserRole.ADMIN || positionCode === "CEO" || positionCode === "COO"
     : canViewOrganizationGlobal;
-  const canViewPeopleAvailability = dtscInternal && user.role === UserRole.SUPPORT;
-  const canManagePeople = canViewGlobal || positionCode === "HR_CFO";
+  const canViewOrganizationAvailability = dtscInternal
+    ? user.role === UserRole.ADMIN || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO"
+    : canViewOrganizationGlobal;
+  const canViewPeopleAvailability = canViewOrganizationAvailability;
+  const canManagePeople = dtscInternal
+    ? user.role === UserRole.ADMIN || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO"
+    : canViewOrganizationGlobal;
   const canOverrideConflicts = dtscInternal
-    ? user.role === "ADMIN" || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO"
+    ? user.role === UserRole.ADMIN || positionCode === "CEO" || positionCode === "COO" || positionCode === "HR_CFO"
     : canViewOrganizationGlobal;
+  const calendarCollaboratorId = dtscInternal ? employee?.id || null : organizationMember?.id || null;
 
   return {
     userId: user.id,
@@ -61,10 +68,12 @@ export async function getCalendarContext(
     dtscInternal,
     employee,
     organizationMember,
-    calendarCollaboratorId: dtscInternal ? employee?.id || null : organizationMember?.id || null,
+    calendarCollaboratorId,
     positionCode,
     canViewGlobal,
     canViewPeopleAvailability,
+    canViewOrganizationAvailability,
+    canManageOwnAvailability: Boolean(calendarCollaboratorId),
     canManagePeople,
     canOverrideConflicts,
   };
@@ -99,7 +108,7 @@ export function canManageCollaboratorCalendar(context: CalendarContext, collabor
 
 export function collaboratorAvailabilityWhere(context: CalendarContext, collaboratorId?: string): Prisma.CollaboratorAvailabilityWhereInput {
   const base = { organizationId: context.activeOrganizationId, deletedAt: null };
-  if (context.canViewGlobal || context.canManagePeople || context.canViewPeopleAvailability) {
+  if (context.canViewOrganizationAvailability || context.canViewPeopleAvailability || (!context.dtscInternal && context.canManagePeople)) {
     return { ...base, ...(collaboratorId ? { collaboratorId } : {}) };
   }
   return { ...base, collaboratorId: context.calendarCollaboratorId || "__no_employee__" };
@@ -107,7 +116,7 @@ export function collaboratorAvailabilityWhere(context: CalendarContext, collabor
 
 export function calendarCollaboratorWhere(context: CalendarContext) {
   if (context.dtscInternal) {
-    return context.canViewGlobal || context.canManagePeople || context.canViewPeopleAvailability
+    return context.canViewGlobal || context.canViewOrganizationAvailability
       ? { status: { not: "EXITED" as const } }
       : { id: context.employee?.id || "__no_employee__" };
   }
@@ -204,7 +213,13 @@ export async function detectCalendarConflicts({
   endDateTime: Date;
   excludeEventId?: string;
 }) {
-  const calendarContext = context ?? ({ activeOrganizationId: DTSC_INTERNAL_ORGANIZATION_ID, dtscInternal: true } as CalendarContext);
+  const calendarContext = context ?? ({
+    activeOrganizationId: DTSC_INTERNAL_ORGANIZATION_ID,
+    dtscInternal: true,
+    positionCode: null,
+    calendarCollaboratorId: null,
+    userId: "system",
+  } as CalendarContext);
   const uniqueIds = [...new Set(participantIds.filter(Boolean))];
   if (!uniqueIds.length) {
     return [];
@@ -225,14 +240,6 @@ export async function detectCalendarConflicts({
     include: { participants: true },
     take: 80,
   });
-
-  const availabilities = await prisma.collaboratorAvailability.findMany({
-    where: {
-      organizationId: calendarContext.activeOrganizationId,
-      collaboratorId: { in: uniqueIds },
-      deletedAt: null,
-    },
-  });
   const collaboratorNames = await calendarCollaboratorNames(calendarContext, uniqueIds);
 
   const conflicts: Array<{
@@ -243,6 +250,17 @@ export async function detectCalendarConflicts({
     severity: string;
     message: string;
   }> = [];
+
+  const legacyAvailabilities = calendarContext.dtscInternal
+    ? []
+    : await prisma.collaboratorAvailability.findMany({
+        where: {
+          organizationId: calendarContext.activeOrganizationId,
+          collaboratorId: { in: uniqueIds },
+          deletedAt: null,
+        },
+        take: 500,
+      });
 
   for (const collaboratorId of uniqueIds) {
     const overlappingEvent = existingEvents.find((event) =>
@@ -259,7 +277,42 @@ export async function detectCalendarConflicts({
       });
     }
 
-    const collaboratorAvailabilities = availabilities.filter((availability) =>
+    if (calendarContext.dtscInternal) {
+      const effective = await resolveDtscEffectiveAvailability({ collaboratorId, startDateTime, endDateTime });
+      const name = collaboratorNames.get(collaboratorId) || "Ce collaborateur";
+      const firstBlocking = effective.blocking[0];
+      if (firstBlocking) {
+        conflicts.push({
+          collaboratorId,
+          conflictType: firstBlocking.status,
+          conflictWithAvailabilityId: firstBlocking.id,
+          severity: "Bloquant",
+          message: `${name} est indisponible sur ce créneau (${firstBlocking.status}, ${firstBlocking.startTime}-${firstBlocking.endTime}).`,
+        });
+        continue;
+      }
+      const firstWarning = effective.warnings[0];
+      if (firstWarning) {
+        conflicts.push({
+          collaboratorId,
+          conflictType: firstWarning.status,
+          conflictWithAvailabilityId: firstWarning.id,
+          severity: "Avertissement",
+          message: `${name} a une exception opérationnelle « ${firstWarning.status} » sur ce créneau.`,
+        });
+      }
+      if (effective.outsideAvailability) {
+        conflicts.push({
+          collaboratorId,
+          conflictType: "Hors disponibilité déclarée",
+          severity: "Info",
+          message: `${name} n'a pas de disponibilité effective couvrant entièrement ce créneau.`,
+        });
+      }
+      continue;
+    }
+
+    const collaboratorAvailabilities = legacyAvailabilities.filter((availability) =>
       availability.collaboratorId === collaboratorId && availabilityAppliesToDate(availability, startDateTime)
     );
     const eventStart = timeValue(startDateTime);
