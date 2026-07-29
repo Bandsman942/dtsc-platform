@@ -49,29 +49,3 @@ jobs:
 
       - name: Lint
         run: pnpm lint
-
-  sprint3-baseline-qa-fix:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feat/sprint-03-work-availability'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: feat/sprint-03-work-availability
-
-      - name: Synchronize stale baseline QA assertions
-        run: node scripts/sprint3-baseline-qa-fix.mjs
-
-      - name: Commit QA synchronization
-        run: |
-          if git diff --quiet; then
-            echo "Baseline QA assertions already synchronized."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/qa-regression-checks.mjs
-          git commit -m "test: align baseline QA with current workspace contracts"
-          git push origin HEAD:feat/sprint-03-work-availability
