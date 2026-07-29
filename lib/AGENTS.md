@@ -28,3 +28,19 @@ Ces règles complètent `../AGENTS.md` pour l'authentification, les sessions, le
 - Meeting decisions may create `EnterpriseTask` actions only through a linked, transaction-safe path that prevents duplicate task generation.
 - Comments and operational timelines must stay bounded/paginated and reusable; do not duplicate four identical comment systems unless a domain-specific integrity rule requires it.
 - Vercel deployments remain production-only from `main`; no feature-branch Preview deployment or manual production deployment is introduced by ERP Core work.
+
+## ERP Core v2 — règles permanentes Sprint 8
+
+- New organization ERP budgets, expenses and reports use `EnterpriseBudget`, `EnterpriseExpense` and `EnterpriseReport` as their sources of truth. Do not create new generic `EnterpriseCoreRecord` `BUDGET`, `EXPENSE` or `REPORT` records when dedicated models apply.
+- Organization client finance is isolated from `DTSC_INTERNAL` HR & CFO finance (`HrcfoBudget`, `HrcfoExpense`, payroll and `FinancialAccount`) and from sector-specific financial or stock models.
+- Budget totals, commitments, realized expenses and available amounts are calculated server-side with decimal-safe arithmetic. The client is never authoritative for a financial total.
+- Never aggregate different currencies into one monetary total without an explicit FX engine. Sprint 8 has no FX engine.
+- Purchase commitments and approved expenses must not double-count the same budget consumption. Purchase approval creates an idempotent commitment; approved expenses realize it; purchase cancellation releases its remaining amount.
+- `EnterpriseApproval` is reused for budget and expense decisions. Do not create parallel financial approval engines or hidden amount thresholds.
+- No user may self-approve a budget or expense in the normal workflow. Global DTSC roles never bypass active organization membership.
+- `ACTIVE` budgets and `APPROVED` expenses are immutable in their financially material fields. Future amendment/reversal workflows must be explicit and auditable.
+- `EnterpriseExpense` represents ERP budget consumption, not a bank payment, general-ledger entry or tax/accounting journal.
+- `EnterpriseReport` is a derived immutable snapshot. Its JSON contains versioned aggregates and filters, never primary financial truth, private document contents, patient data or banking secrets.
+- Report generation must use bounded server-side aggregates/grouping and keep currencies separated. Do not load the entire organization database into Node to build a report.
+- Sprint 9 Workflow Engine may orchestrate the stabilized entrypoints, but Sprint 8 must not introduce BPMN, dynamic multi-stage approval chains or automation-builder behavior.
+- Vercel remains production-only from `main`; intentionally disabled previews are expected and are never treated as functional validation.
