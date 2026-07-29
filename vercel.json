@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm prisma migrate deploy && pnpm build"
+  "buildCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then pnpm prisma migrate deploy; fi && pnpm build"
 }
