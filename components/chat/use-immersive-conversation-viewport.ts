@@ -79,8 +79,11 @@ export function useImmersiveConversationViewport() {
     function onNestedScroll(event: Event) {
       if (!media.matches) return;
       const target = event.target;
-      if (!(target instanceof Element) || !target.matches("[data-collaboration-scroll]")) return;
-      const current = (target as HTMLElement).scrollTop;
+      if (!(target instanceof Element) || !target.closest("[data-collaboration-immersive-root]")) return;
+      const element = target as HTMLElement;
+      const overflowY = window.getComputedStyle(element).overflowY;
+      if (overflowY !== "auto" && overflowY !== "scroll") return;
+      const current = element.scrollTop;
       const previous = lastScrollTop.get(target) ?? current;
       lastScrollTop.set(target, current);
       const delta = current - previous;
