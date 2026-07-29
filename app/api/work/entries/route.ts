@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { isDtscInternalSession } from "@/lib/organizations";
+import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import {
@@ -10,6 +11,7 @@ import {
   isWorkPrestationError,
   listOwnEntries,
   serializeWorkEntry,
+  weekPeriodForDate,
   workEntryCreateSchema,
 } from "@/lib/work-prestations";
 
@@ -70,7 +72,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Employee required" }, { status: 403 });
   }
   try {
+    const period = weekPeriodForDate(parsed.data.workDate);
+    const existingSubmission = await prisma.dtscWorkSubmission.findUnique({
+      where: {
+        employeeId_periodStart_periodEnd: {
+          employeeId: actor.id,
+          periodStart: new Date(`${period.periodStart}T00:00:00.000Z`),
+          periodEnd: new Date(`${period.periodEnd}T00:00:00.000Z`),
+        },
+      },
+      select: { id: true },
+    });
     const entry = await createWorkEntry(actor, parsed.data);
+    if (!existingSubmission && entry.submissionId) {
+      await writeAuditLog({ userId: session.userId, action: "WORK_SUBMISSION_CREATED", entity: "DtscWorkSubmission", entityId: entry.submissionId, request: req, metadata: { employeeId: actor.id, periodStart: period.periodStart, periodEnd: period.periodEnd, source: "first_work_entry" } });
+    }
     await writeAuditLog({ userId: session.userId, action: "WORK_ENTRY_CREATED", entity: "DtscWorkEntry", entityId: entry.id, request: req, metadata: { employeeId: actor.id, workedMinutes: entry.workedMinutes } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true, entry: serializeWorkEntry(entry) }, { status: 201 });
