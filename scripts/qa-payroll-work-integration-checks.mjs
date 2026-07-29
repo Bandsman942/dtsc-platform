@@ -14,6 +14,7 @@ const ceoReview = read("app/api/admin/ceo/payroll-approvals/[id]/review/route.ts
 const cooReview = read("app/api/admin/coo/payroll-approvals/[id]/review/route.ts");
 const payslip = read("app/api/admin/payrolls/[id]/pdf/route.ts");
 const activities = read("app/activities/page.tsx");
+const docs = read("docs/DTSC_PAYROLL_WORKFLOW.md");
 const agents = read("AGENTS.md");
 const packageJson = read("package.json");
 const vercelJson = read("vercel.json");
@@ -61,6 +62,7 @@ expect("Payroll submit route is audited", submitRoute.includes("PAYROLL_SUBMITTE
 expect("Payslip access is hardened", payslip.includes("HR_CFO") && !payslip.includes("UserRole.SUPPORT") && !payslip.includes("UserRole.MANAGER"));
 expect("Collaborator payroll view does not expose budget or account", !activities.includes("payroll.budget?.name") && !activities.includes("payroll.account?.name"));
 expect("Collaborator payslip is limited to validated or paid payroll", activities.includes('["VALIDATED", "PAID"].includes(payroll.status)'));
+expect("Sprint 5 documentation keeps Sprint 6 out of scope", docs.includes("getApprovedWorkForPayroll") && docs.includes("Aucun Preview Deployment") && docs.includes("Frontière Sprint 6"));
 expect("Sprint 5 QA is wired into regression", packageJson.includes('"qa:payroll-workflow"') && packageJson.includes("qa-payroll-work-integration-checks.mjs"));
 expect("Permanent Sprint 5 rules are documented", agents.includes("SPRINT_05_PAYROLL_WORKFLOW_RULES") && agents.includes("approved DTSC work") && agents.includes("No employee may approve their own payroll"));
 expect("Vercel remains production-only", vercelJson.includes('"main": true') && vercelJson.includes('"*": false') && vercelJson.includes("ignoreCommand"));
