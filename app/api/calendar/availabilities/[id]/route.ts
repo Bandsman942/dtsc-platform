@@ -170,8 +170,8 @@ export async function PATCH(req: Request, { params }: Params) {
             }
             return tx.collaboratorAvailability.create({
               data: {
-                organizationId: context.activeOrganizationId,
-                collaboratorId: context.calendarCollaboratorId,
+                organizationId: context.activeOrganizationId!,
+                collaboratorId: context.calendarCollaboratorId!,
                 dayOfWeek: merged.data.dayOfWeek,
                 specificDate: null,
                 startTime: merged.data.startTime,

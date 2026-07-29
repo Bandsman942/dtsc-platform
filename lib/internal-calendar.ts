@@ -219,7 +219,7 @@ export async function detectCalendarConflicts({
     positionCode: null,
     calendarCollaboratorId: null,
     userId: "system",
-  } as CalendarContext);
+  } as unknown as CalendarContext);
   const uniqueIds = [...new Set(participantIds.filter(Boolean))];
   if (!uniqueIds.length) {
     return [];

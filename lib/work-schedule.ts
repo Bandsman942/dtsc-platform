@@ -342,7 +342,10 @@ export async function resolveDtscEffectiveAvailability({
     const blockersForDay = relevantExceptions
       .filter((record) => isBlockingScheduleStatus(record.availabilityStatus))
       .map((record) => isDtscScheduleException(record) ? intervalForExceptionDay(record, dateKey) : interval(record.startTime, record.endTime, record.id));
-    const effectiveIntervals = blockersForDay.reduce((current, blocker) => subtractIntervalList(current, blocker), availableIntervals);
+    const effectiveIntervals = blockersForDay.reduce<Array<{ id?: string; start: number; end: number }>>(
+      (current, blocker) => subtractIntervalList(current, blocker),
+      availableIntervals,
+    );
     if (availableIntervals.length > 0 && !effectiveIntervals.some((item) => item.start <= eventStart && item.end >= eventEnd)) {
       outsideAvailability = true;
     }
