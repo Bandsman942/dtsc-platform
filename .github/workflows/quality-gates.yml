@@ -50,7 +50,7 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-  sprint3-type-fix:
+  sprint3-baseline-qa-fix:
     if: github.event_name == 'pull_request' && github.head_ref == 'feat/sprint-03-work-availability'
     runs-on: ubuntu-latest
     permissions:
@@ -61,21 +61,17 @@ jobs:
         with:
           ref: feat/sprint-03-work-availability
 
-      - name: Apply type fixes
-        run: node scripts/sprint3-type-fix.mjs
+      - name: Synchronize stale baseline QA assertions
+        run: node scripts/sprint3-baseline-qa-fix.mjs
 
-      - name: Commit type fixes
+      - name: Commit QA synchronization
         run: |
           if git diff --quiet; then
-            echo "Sprint 3 type fixes already applied."
+            echo "Baseline QA assertions already synchronized."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            app/api/calendar/availabilities/[id]/route.ts \
-            components/calendar/dtsc-work-schedule-panel.tsx \
-            lib/internal-calendar.ts \
-            lib/work-schedule.ts
-          git commit -m "fix(calendar): resolve Sprint 3 type errors"
+          git add scripts/qa-regression-checks.mjs
+          git commit -m "test: align baseline QA with current workspace contracts"
           git push origin HEAD:feat/sprint-03-work-availability
