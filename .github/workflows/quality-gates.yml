@@ -1,6 +1,8 @@
 name: Quality gates
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - "feat/sprint-05-approved-work-payroll"
@@ -9,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: sprint5-integration-${{ github.ref }}
+  group: sprint5-integration-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,6 +22,7 @@ jobs:
       - name: Checkout feature branch
         uses: actions/checkout@v4
         with:
+          ref: feat/sprint-05-approved-work-payroll
           fetch-depth: 0
 
       - name: Apply Sprint 5 integration patch
@@ -29,7 +32,7 @@ jobs:
         run: |
           git fetch origin main
           git checkout origin/main -- .github/workflows/quality-gates.yml
-          git rm -f scripts/sprint5-integrate.py
+          git rm -f scripts/sprint5-integrate.py scripts/sprint5-trigger.txt
 
       - name: Validate and push integrated branch
         run: |
