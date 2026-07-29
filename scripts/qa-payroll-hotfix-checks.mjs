@@ -3,6 +3,7 @@ import fs from "node:fs";
 const read = (path) => fs.readFileSync(path, "utf8");
 const schema = read("prisma/schema.prisma");
 const payrollModel = schema.slice(schema.indexOf("model HrcfoPayroll {"), schema.indexOf("model HrcfoPayrollWorkEntry {"));
+const workSubmissionModel = schema.slice(schema.indexOf("model DtscWorkSubmission {"), schema.indexOf("model DtscWorkSubmissionReview {"));
 const migration = read("prisma/migrations/20260729054500_payroll_active_period_retry/migration.sql");
 const workflow = read("lib/payroll-workflow.ts");
 const panel = read("components/admin/payroll-workflow-panel.tsx");
@@ -14,6 +15,7 @@ const checks = [];
 const expect = (label, condition) => checks.push({ label, ok: Boolean(condition) });
 
 expect("Payroll period is no longer globally unique in Prisma", !payrollModel.includes("@@unique([employeeId, periodStart, periodEnd])") && payrollModel.includes("@@index([employeeId, periodStart, periodEnd])"));
+expect("Sprint 4 weekly submissions keep their original period uniqueness", workSubmissionModel.includes("@@unique([employeeId, periodStart, periodEnd])"));
 expect("DB keeps a partial unique active-period guard", migration.includes("HrcfoPayroll_active_period_key") && migration.includes("NOT IN ('CANCELLED', 'CANCELED', 'REJECTED')"));
 expect("Migration creates partial guard before dropping legacy unique index", migration.indexOf("CREATE UNIQUE INDEX") < migration.indexOf("DROP INDEX"));
 expect("Cancelled and rejected payrolls do not block a retry", workflow.includes('status: { notIn: ["CANCELLED", "CANCELED", "REJECTED"] }'));
