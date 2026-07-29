@@ -64,8 +64,8 @@ const expenseBase = z.object({
   description: optionalText(8000),
   expenseDate: z.coerce.date(),
   category: optionalText(120),
-  currency: currency.default("USD"),
-  amount,
+  currency: currency.optional(),
+  amount: amount.optional(),
   supplierId: optionalId,
   purchaseId: optionalId,
   budgetLineId: optionalId,
@@ -80,6 +80,7 @@ const expenseBase = z.object({
 export const enterpriseExpenseCreateSchema = expenseBase.superRefine((data, ctx) => {
   const sourceCount = [data.sourceModule, data.sourceEntityType, data.sourceEntityId].filter(Boolean).length;
   if (sourceCount !== 0 && sourceCount !== 3) ctx.addIssue({ code: "custom", path: ["sourceEntityId"], message: "La source liée doit être complète." });
+  if (!data.purchaseId && data.amount === undefined) ctx.addIssue({ code: "custom", path: ["amount"], message: "Le montant est obligatoire sans achat source." });
 });
 
 export const enterpriseExpenseUpdateSchema = z.object({
