@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Banknote, CheckCircle2, Clock3, Eye, FileCheck2, Plus, RefreshCw, Send, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -355,7 +355,7 @@ function PayrollDetail({ payroll, locale, t }: { payroll: PayrollWorkflowItem; l
   </BusinessDetail>;
 }
 
-function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-2 text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted"><span>{label}</span>{children}</label>; }
+function FieldLabel({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-2 text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted"><span>{label}</span>{children}</label>; }
 function formatMoney(value: number) { return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + " USD"; }
 function formatMinutes(minutes: number) { const safe = Math.max(0, Math.round(minutes || 0)); const hours = Math.floor(safe / 60); const rest = safe % 60; return rest ? `${hours} h ${String(rest).padStart(2, "0")}` : `${hours} h`; }
 function formatDate(value: string, locale?: string | null) { return new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00.000Z`)); }

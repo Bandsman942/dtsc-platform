@@ -1,5 +1,6 @@
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
+import { getCollaboratorBusinessContext } from "@/lib/business-roles";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -24,8 +25,6 @@ export async function GET(_req: Request, { params }: Params) {
     where: { id },
     include: {
       employee: true,
-      account: true,
-      budget: true,
       transaction: true,
     },
   });
@@ -33,12 +32,11 @@ export async function GET(_req: Request, { params }: Params) {
   if (!payroll) {
     return new Response("Not found", { status: 404 });
   }
-  const canReadPayroll =
-    user.role === UserRole.ADMIN ||
-    user.role === UserRole.MANAGER ||
-    user.role === UserRole.SUPPORT ||
-    payroll.employee.userId === user.id;
-  if (!canReadPayroll) {
+  const businessContext = await getCollaboratorBusinessContext(user.id);
+  const isHrCfo = businessContext.positionCode === "HR_CFO";
+  const isOwner = payroll.employee.userId === user.id;
+  const canReadPayroll = user.role === UserRole.ADMIN || isHrCfo || isOwner;
+  if (!canReadPayroll || (isOwner && !["VALIDATED", "PAID"].includes(payroll.status))) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -50,9 +48,10 @@ export async function GET(_req: Request, { params }: Params) {
   const bonus = Number(payroll.bonusAmount).toFixed(2);
   const deduction = Number(payroll.deductionAmount).toFixed(2);
   const net = Number(payroll.netAmount).toFixed(2);
-  const account = escapeHtml(payroll.account?.name || "Non renseigné");
-  const budget = escapeHtml(payroll.budget?.name || "Non renseigné");
-  const status = escapeHtml(payroll.status);
+  const approvedTime = payroll.approvedWorkMinutes == null ? "Historique non disponible" : `${Math.floor(payroll.approvedWorkMinutes / 60)} h ${String(payroll.approvedWorkMinutes % 60).padStart(2, "0")}`;
+  const status = escapeHtml(payroll.status === "VALIDATED" ? "Validée" : payroll.status === "PAID" ? "Payée" : payroll.status);
+  const validatedAt = payroll.approvedAt ? payroll.approvedAt.toLocaleDateString("fr-FR") : "Non renseignée";
+  const paidAt = payroll.paidAt ? payroll.paidAt.toLocaleDateString("fr-FR") : "Non renseignée";
   const notes = escapeHtml(payroll.notes || "");
 
   const html = `<!doctype html>
@@ -86,7 +85,7 @@ export async function GET(_req: Request, { params }: Params) {
         </div>
         <div class="grid">
           <div class="box"><strong>Collaborateur</strong><br />${fullName}<br /><span class="muted">${jobTitle} · ${department}</span></div>
-          <div class="box"><strong>Statut</strong><br />${status}<br /><span class="muted">Compte: ${account}<br />Budget: ${budget}</span></div>
+          <div class="box"><strong>Statut</strong><br />${status}<br /><span class="muted">Temps approuvé: ${escapeHtml(approvedTime)}<br />Validation: ${escapeHtml(validatedAt)} · Paiement: ${escapeHtml(paidAt)}</span></div>
         </div>
         <table>
           <thead><tr><th>Élément</th><th>Montant USD</th></tr></thead>

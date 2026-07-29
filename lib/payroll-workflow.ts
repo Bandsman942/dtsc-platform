@@ -102,6 +102,7 @@ type WorkEvidenceSnapshot = {
     submissionId: string;
     workDate: Date;
     workedMinutes: number;
+    approvedMinutes: number;
     summary: string;
     workType: string;
   }>;
@@ -803,7 +804,7 @@ async function lockPayroll(tx: Prisma.TransactionClient, payrollId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`payroll:${payrollId}`}))`;
 }
 
-function validatePayrollPreparationInput(value: z.infer<typeof payrollPrepareSchema>, ctx: z.RefinementCtx) {
+function validatePayrollPreparationInput(value: { periodStart: string; periodEnd: string; bonusAmount: number; bonusReason?: string; deductionAmount: number; deductionReason?: string }, ctx: z.RefinementCtx) {
   if (value.periodStart > value.periodEnd) ctx.addIssue({ code: "custom", path: ["periodEnd"], message: "La fin de période doit être postérieure au début." });
   if (value.bonusAmount > 0 && !value.bonusReason?.trim()) ctx.addIssue({ code: "custom", path: ["bonusReason"], message: "Un motif de prime est obligatoire." });
   if (value.deductionAmount > 0 && !value.deductionReason?.trim()) ctx.addIssue({ code: "custom", path: ["deductionReason"], message: "Un motif de retenue est obligatoire." });

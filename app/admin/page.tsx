@@ -17,6 +17,8 @@ import { CreateUserForm } from "@/components/admin/create-user-form";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
+import { PayrollApprovalPanel } from "@/components/admin/payroll-approval-panel";
+import { PayrollWorkflowPanel } from "@/components/admin/payroll-workflow-panel";
 import { WorkSubmissionReviewPanel } from "@/components/admin/work-submission-review-panel";
 import { PromotionalBannerManager } from "@/components/admin/promotional-banner-manager";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
@@ -357,14 +359,17 @@ export default async function AdminPage({
         )}
 
         {activeSection === "hrCfo" && canView("hrCfo") && (
-          <OperationsAdminPanel
-            eyebrow="Gestion interne"
-            title="Opérations HR & CFO"
-            description="Centralisez les dossiers RH, budgets, dépenses, factures, alertes et contrôles internes de DTSC. Cette section suit les principes de reporting capital humain, contrôle interne, séparation des validations et pilotage financier utile aux décisions."
-            playbook={["Dossier RH complet", "Budget cadré", "Dépense soumise", "Validation financière", "Paiement ou clôture", "Audit"]}
-            datasets={internalModulesDataset.hrcfoDatasets}
-            canEdit={canView("hrCfo")}
-          />
+          <div className="space-y-5">
+            <PayrollWorkflowPanel locale={user.locale} />
+            <OperationsAdminPanel
+              eyebrow="Gestion interne"
+              title="Opérations HR & CFO"
+              description="Centralisez les dossiers RH, budgets, dépenses, factures, alertes et contrôles internes de DTSC. La paie utilise désormais son workflow dédié ci-dessus."
+              playbook={["Dossier RH complet", "Budget cadré", "Dépense soumise", "Validation financière", "Paiement ou clôture", "Audit"]}
+              datasets={internalModulesDataset.hrcfoDatasets.filter((dataset) => dataset.id !== "payrolls")}
+              canEdit={canView("hrCfo")}
+            />
+          </div>
         )}
 
         {activeSection === "sco" && canView("sco") && (
@@ -380,6 +385,7 @@ export default async function AdminPage({
 
         {activeSection === "coo" && canView("coo") && (
           <div className="space-y-5">
+            <PayrollApprovalPanel approverRole="COO" locale={user.locale} />
             <WorkSubmissionReviewPanel reviewerRole="COO" locale={user.locale} />
             <OperationsAdminPanel
               eyebrow="Chief Operating Officer"
@@ -395,6 +401,7 @@ export default async function AdminPage({
         {activeSection === "ceo" && canView("ceo") && (
           <div className="space-y-5">
             <CeoExecutiveSummary groups={internalModulesDataset.ceoExecutiveGroups} dateStart={selectedCeoStart} dateEnd={selectedCeoEnd} />
+            <PayrollApprovalPanel approverRole="CEO" locale={user.locale} />
             <WorkSubmissionReviewPanel reviewerRole="CEO" locale={user.locale} />
             <OperationsAdminPanel
               eyebrow="Chief Executive Officer"

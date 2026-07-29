@@ -3,15 +3,15 @@ import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { syncDtscInternalMembershipForEmployee } from "@/lib/dtsc-internal-membership";
-import { deleteHrcfoTransaction, updateHrcfoTransaction, updatePayroll } from "@/lib/hr-cfo-finance";
+import { deleteHrcfoTransaction, updateHrcfoTransaction } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string; id: string }> };
-type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts" | "positions";
+type HrcfoEntity = "employees" | "budgets" | "transactions" | "departments" | "accounts" | "positions";
 
 function isHrcfoEntity(value: string): value is HrcfoEntity {
-  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts" || value === "positions";
+  return value === "employees" || value === "budgets" || value === "transactions" || value === "departments" || value === "accounts" || value === "positions";
 }
 
 export async function PATCH(req: Request, { params }: Params) {

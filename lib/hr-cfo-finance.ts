@@ -134,150 +134,114 @@ export async function createHrcfoBudget(input: {
 }
 
 export async function createValidatedTransaction(input: HrcfoTransactionInput) {
+  return prisma.$transaction((tx) => createValidatedTransactionInTx(tx, input));
+}
+
+export async function createValidatedTransactionInTx(tx: Prisma.TransactionClient, input: HrcfoTransactionInput) {
   const normalizedCategory = input.transactionCategory || input.category;
   if (input.category !== normalizedCategory) {
     throw new Error("La catégorie de transaction est incohérente.");
   }
 
   const existing = input.sourceType && input.sourceId
-    ? await prisma.hrcfoExpense.findFirst({ where: { sourceType: input.sourceType, sourceId: input.sourceId } })
+    ? await tx.hrcfoExpense.findFirst({ where: { sourceType: input.sourceType, sourceId: input.sourceId } })
     : null;
-  if (existing) {
-    return existing;
-  }
+  if (existing) return existing;
 
   const status = input.status || "PENDING";
-  return prisma.$transaction(async (tx) => {
-    let accountId = input.accountId;
-    if (normalizedCategory === "OUT") {
-      if (!input.budgetId) {
-        throw new Error("Une transaction de sortie doit être liée à un budget disponible.");
-      }
-      const budget = await tx.hrcfoBudget.findUnique({
-        where: { id: input.budgetId },
-        select: { id: true, accountId: true, amount: true, spentAmount: true, status: true },
-      });
-      if (!budget || !["OPEN", "MONITORING"].includes(budget.status)) {
-        throw new Error("Le budget sélectionné n'est pas actif.");
-      }
-      if (!budget.accountId) {
-        throw new Error("Le budget sélectionné n'est lié à aucun compte financier.");
-      }
-      accountId = budget.accountId;
-      await assertBudgetAndAccountCanSpend(tx, budget.id, accountId, input.amount);
-    }
+  let accountId = input.accountId;
+  if (normalizedCategory === "OUT") {
+    if (!input.budgetId) throw new Error("Une transaction de sortie doit être liée à un budget disponible.");
+    await tx.$queryRaw`SELECT "id" FROM "HrcfoBudget" WHERE "id" = ${input.budgetId} FOR UPDATE`;
+    const budget = await tx.hrcfoBudget.findUnique({
+      where: { id: input.budgetId },
+      select: { id: true, accountId: true, amount: true, spentAmount: true, status: true },
+    });
+    if (!budget || !["OPEN", "MONITORING"].includes(budget.status)) throw new Error("Le budget sélectionné n'est pas actif.");
+    if (!budget.accountId) throw new Error("Le budget sélectionné n'est lié à aucun compte financier.");
+    accountId = budget.accountId;
+    await tx.$queryRaw`SELECT "id" FROM "FinancialAccount" WHERE "id" = ${accountId} FOR UPDATE`;
+    await assertBudgetAndAccountCanSpend(tx, budget.id, accountId, input.amount);
+  }
 
-    if (!accountId) {
-      throw new Error("Une transaction d'entrée doit être liée à un compte financier.");
-    }
-    const account = await tx.financialAccount.findUnique({ where: { id: accountId } });
-    if (!account || account.status !== "ACTIVE") {
-      throw new Error("Le compte financier sélectionné est inactif ou introuvable.");
-    }
+  if (!accountId) throw new Error("Une transaction d'entrée doit être liée à un compte financier.");
+  if (normalizedCategory !== "OUT") {
+    await tx.$queryRaw`SELECT "id" FROM "FinancialAccount" WHERE "id" = ${accountId} FOR UPDATE`;
+  }
+  const account = await tx.financialAccount.findUnique({ where: { id: accountId } });
+  if (!account || account.status !== "ACTIVE") throw new Error("Le compte financier sélectionné est inactif ou introuvable.");
 
-    const transaction = await tx.hrcfoExpense.create({
-      data: {
+  const transaction = await tx.hrcfoExpense.create({
+    data: {
+      title: input.title,
+      requesterName: input.requesterName || "DTSC",
+      category: normalizedCategory,
+      transactionCategory: normalizedCategory,
+      transactionType: input.transactionType || "MANUAL",
+      amount: input.amount,
+      currency: input.currency || "USD",
+      transactionDate: input.transactionDate || new Date(),
+      accountId,
+      departmentId: input.departmentId || null,
+      budgetId: input.budgetId || null,
+      paymentMethod: input.paymentMethod || null,
+      attachmentUrl: input.attachmentUrl || null,
+      sourceType: input.sourceType || null,
+      sourceId: input.sourceId || null,
+      clientUserId: input.clientUserId || null,
+      status,
+      priority: input.priority || "MEDIUM",
+      validatedAt: isFinanciallyImpactingStatus(status) ? new Date() : null,
+      paidAt: status === "PAID" ? new Date() : null,
+      notes: input.notes || null,
+      createdById: input.createdById || null,
+    },
+  });
+
+  if (isFinanciallyImpactingStatus(status)) {
+    await reconcileFinancialState(tx);
+    if (!input.skipInvoice) {
+      await createOperationalInvoice(tx, transaction.id, {
+        userId: input.clientUserId || input.createdById,
         title: input.title,
-        requesterName: input.requesterName || "DTSC",
-        category: normalizedCategory,
-        transactionCategory: normalizedCategory,
-        transactionType: input.transactionType || "MANUAL",
         amount: input.amount,
         currency: input.currency || "USD",
-        transactionDate: input.transactionDate || new Date(),
-        accountId,
-        departmentId: input.departmentId || null,
-        budgetId: input.budgetId || null,
-        paymentMethod: input.paymentMethod || null,
-        attachmentUrl: input.attachmentUrl || null,
-        sourceType: input.sourceType || null,
-        sourceId: input.sourceId || null,
-        clientUserId: input.clientUserId || null,
-        status,
-        priority: input.priority || "MEDIUM",
-        validatedAt: isFinanciallyImpactingStatus(status) ? new Date() : null,
-        paidAt: status === "PAID" ? new Date() : null,
-        notes: input.notes || null,
-        createdById: input.createdById || null,
-      },
-    });
-
-    if (isFinanciallyImpactingStatus(status)) {
-      await reconcileFinancialState(tx);
-      if (!input.skipInvoice) {
-        await createOperationalInvoice(tx, transaction.id, {
-          userId: input.clientUserId || input.createdById,
-          title: input.title,
-          amount: input.amount,
-          currency: input.currency || "USD",
-          paidAt: normalizedCategory === "IN" ? transaction.validatedAt : null,
-        });
-      }
+        paidAt: normalizedCategory === "IN" ? transaction.validatedAt : null,
+      });
     }
-
-    return transaction;
-  });
+  }
+  return transaction;
 }
 
 export async function createPayroll(input: PayrollInput) {
+  if (input.status && input.status !== "DRAFT") {
+    throw new Error("Le CRUD historique de paie ne peut créer qu'un brouillon. Le workflow Sprint 5 doit être utilisé pour soumettre, valider ou payer.");
+  }
   const employee = await prisma.hrcfoEmployee.findUnique({ where: { id: input.employeeId } });
-  if (!employee) {
-    throw new Error("Collaborateur introuvable pour la paie.");
-  }
+  if (!employee) throw new Error("Collaborateur introuvable pour la paie.");
   const budget = await prisma.hrcfoBudget.findUnique({ where: { id: input.budgetId } });
-  if (!budget || !budget.accountId) {
-    throw new Error("Le budget de paie doit être lié à un compte financier.");
-  }
-
+  if (!budget || !budget.accountId) throw new Error("Le budget de paie doit être lié à un compte financier.");
   const grossAmount = Number(employee.monthlyCompensation || input.grossAmount || 0);
-  const netAmount = grossAmount + (input.bonusAmount || 0) - (input.deductionAmount || 0);
-  if (netAmount <= 0) {
-    throw new Error("Le montant net de paie doit être positif.");
-  }
-
-  const payroll = await prisma.hrcfoPayroll.create({
+  const bonusAmount = Number(input.bonusAmount || 0);
+  const deductionAmount = Number(input.deductionAmount || 0);
+  const netAmount = grossAmount + bonusAmount - deductionAmount;
+  if (netAmount <= 0) throw new Error("Le montant net de paie doit être positif.");
+  return prisma.hrcfoPayroll.create({
     data: {
       employeeId: input.employeeId,
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       grossAmount,
-      bonusAmount: input.bonusAmount || 0,
-      deductionAmount: input.deductionAmount || 0,
+      bonusAmount,
+      deductionAmount,
       netAmount,
       accountId: budget.accountId,
       budgetId: input.budgetId,
-      status: input.status,
+      status: "DRAFT",
       notes: input.notes,
       createdById: input.createdById,
     },
-    include: { employee: true },
   });
-
-  if (isFinanciallyImpactingStatus(input.status)) {
-    const transaction = await createValidatedTransaction({
-      title: `Paie ${payroll.employee.fullName}`,
-      requesterName: payroll.employee.fullName,
-      category: "OUT",
-      transactionCategory: "OUT",
-      transactionType: "PAYROLL",
-      amount: netAmount,
-      accountId: budget.accountId,
-      budgetId: input.budgetId,
-      departmentId: payroll.employee.departmentId || undefined,
-      status: input.status === "PAID" ? "PAID" : "VALIDATED",
-      sourceType: "PAYROLL",
-      sourceId: payroll.id,
-      createdById: input.createdById,
-      notes: input.notes,
-    });
-
-    return prisma.hrcfoPayroll.update({
-      where: { id: payroll.id },
-      data: { transactionId: transaction.id, status: input.status === "PAID" ? "PAID" : "VALIDATED" },
-    });
-  }
-
-  return payroll;
 }
 
 export async function updateHrcfoTransaction(id: string, input: Partial<HrcfoTransactionInput>) {
@@ -334,104 +298,38 @@ export async function updateHrcfoTransaction(id: string, input: Partial<HrcfoTra
 }
 
 export async function updatePayroll(id: string, input: Partial<PayrollInput>) {
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.hrcfoPayroll.findUnique({ where: { id }, include: { employee: true, transaction: true } });
-    if (!existing) {
-      throw new Error("Paie introuvable.");
-    }
-    const budgetId = input.budgetId || existing.budgetId;
-    if (!budgetId) {
-      throw new Error("La paie doit être liée à un budget.");
-    }
-    const budget = await tx.hrcfoBudget.findUnique({ where: { id: budgetId }, select: { accountId: true, status: true } });
-    if (!budget || !budget.accountId || !["OPEN", "MONITORING"].includes(budget.status)) {
-      throw new Error("Le budget de paie est inactif ou sans compte financier.");
-    }
-    const grossAmount = Number(existing.employee.monthlyCompensation || existing.grossAmount || 0);
-    const bonusAmount = Number(input.bonusAmount ?? existing.bonusAmount);
-    const deductionAmount = Number(input.deductionAmount ?? existing.deductionAmount);
-    const netAmount = grossAmount + bonusAmount - deductionAmount;
-    if (netAmount <= 0) {
-      throw new Error("Le montant net de paie doit être positif.");
-    }
-    const status = String(input.status || existing.status);
-    if (isFinanciallyImpactingStatus(status)) {
-      await assertBudgetAndAccountCanSpend(tx, budgetId, budget.accountId, netAmount, existing.transactionId || undefined);
-    }
-
-    const payroll = await tx.hrcfoPayroll.update({
-      where: { id },
-      data: {
-        periodStart: input.periodStart || existing.periodStart,
-        periodEnd: input.periodEnd || existing.periodEnd,
-        grossAmount,
-        bonusAmount,
-        deductionAmount,
-        netAmount,
-        accountId: budget.accountId,
-        budgetId,
-        status,
-        notes: input.notes ?? existing.notes,
-      },
-      include: { employee: true, account: true, budget: true },
-    });
-
-    if (isFinanciallyImpactingStatus(status)) {
-      const transaction = existing.transactionId
-        ? await tx.hrcfoExpense.update({
-            where: { id: existing.transactionId },
-            data: {
-              title: `Paie ${payroll.employee.fullName}`,
-              requesterName: payroll.employee.fullName,
-              category: "OUT",
-              transactionCategory: "OUT",
-              transactionType: "PAYROLL",
-              amount: netAmount,
-              accountId: budget.accountId,
-              budgetId,
-              departmentId: payroll.employee.departmentId,
-              status: status === "PAID" ? "PAID" : "VALIDATED",
-              validatedAt: existing.transaction?.validatedAt || new Date(),
-              paidAt: status === "PAID" ? (existing.transaction?.paidAt || new Date()) : null,
-              notes: payroll.notes,
-            },
-          })
-        : await tx.hrcfoExpense.create({
-            data: {
-              title: `Paie ${payroll.employee.fullName}`,
-              requesterName: payroll.employee.fullName,
-              category: "OUT",
-              transactionCategory: "OUT",
-              transactionType: "PAYROLL",
-              amount: netAmount,
-              accountId: budget.accountId,
-              budgetId,
-              departmentId: payroll.employee.departmentId,
-              status: status === "PAID" ? "PAID" : "VALIDATED",
-              validatedAt: new Date(),
-              paidAt: status === "PAID" ? new Date() : null,
-              sourceType: "PAYROLL",
-              sourceId: payroll.id,
-              createdById: input.createdById || payroll.createdById,
-              notes: payroll.notes,
-            },
-          });
-      await tx.hrcfoPayroll.update({ where: { id }, data: { transactionId: transaction.id } });
-    } else if (existing.transactionId && isCanceledFinancialStatus(status)) {
-      await tx.hrcfoExpense.update({
-        where: { id: existing.transactionId },
-        data: { status: "CANCELED", validatedAt: null, paidAt: null },
-      });
-    }
-
-    await reconcileFinancialState(tx);
-    return {
-      ...payroll,
-      employeeName: payroll.employee.fullName,
-      accountName: payroll.account?.name,
-      budgetName: payroll.budget?.name,
-    };
+  const existing = await prisma.hrcfoPayroll.findUnique({ where: { id }, include: { employee: true } });
+  if (!existing) throw new Error("Paie introuvable.");
+  if (existing.workflowVersion === 1) throw new Error("Le workflow Sprint 5 doit être utilisé pour modifier cette paie.");
+  if (existing.status !== "DRAFT" || (input.status && input.status !== "DRAFT")) {
+    throw new Error("Le CRUD historique de paie ne peut modifier qu'un brouillon sans impact financier. Le workflow Sprint 5 doit être utilisé.");
+  }
+  const budgetId = input.budgetId || existing.budgetId;
+  if (!budgetId) throw new Error("La paie doit être liée à un budget.");
+  const budget = await prisma.hrcfoBudget.findUnique({ where: { id: budgetId }, select: { accountId: true, status: true } });
+  if (!budget || !budget.accountId || !["OPEN", "MONITORING"].includes(budget.status)) throw new Error("Le budget de paie est inactif ou sans compte financier.");
+  const grossAmount = Number(existing.employee.monthlyCompensation || existing.grossAmount || 0);
+  const bonusAmount = Number(input.bonusAmount ?? existing.bonusAmount);
+  const deductionAmount = Number(input.deductionAmount ?? existing.deductionAmount);
+  const netAmount = grossAmount + bonusAmount - deductionAmount;
+  if (netAmount <= 0) throw new Error("Le montant net de paie doit être positif.");
+  const payroll = await prisma.hrcfoPayroll.update({
+    where: { id },
+    data: {
+      periodStart: input.periodStart || existing.periodStart,
+      periodEnd: input.periodEnd || existing.periodEnd,
+      grossAmount,
+      bonusAmount,
+      deductionAmount,
+      netAmount,
+      accountId: budget.accountId,
+      budgetId,
+      status: "DRAFT",
+      notes: input.notes ?? existing.notes,
+    },
+    include: { employee: true, account: true, budget: true },
   });
+  return { ...payroll, employeeName: payroll.employee.fullName, accountName: payroll.account?.name, budgetName: payroll.budget?.name };
 }
 
 export async function deleteHrcfoTransaction(id: string) {
