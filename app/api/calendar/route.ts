@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { internalCalendarEventSchema } from "@/lib/validators";
+import { detectEffectiveWorkScheduleConflicts, listDtscWorkSchedule } from "@/lib/work-schedule";
 
 export async function GET(req: Request) {
   const startedAt = Date.now();
@@ -82,11 +83,13 @@ export async function GET(req: Request) {
       orderBy: [{ startDateTime: "asc" }, { createdAt: "desc" }],
       take: 200,
     }),
-    prisma.collaboratorAvailability.findMany({
-      where: collaboratorAvailabilityWhere(context),
-      orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
-      take: 200,
-    }),
+    context.dtscInternal
+      ? listDtscWorkSchedule(context, collaboratorId || undefined).then((schedule) => schedule.weekly)
+      : prisma.collaboratorAvailability.findMany({
+          where: collaboratorAvailabilityWhere(context),
+          orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
+          take: 200,
+        }),
     getCalendarCollaborators(context),
   ]);
 
@@ -153,16 +156,13 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid participants", message: "Tous les collaborateurs doivent appartenir à l'organisation active." }, { status: 400 });
   }
-  const conflicts = await detectCalendarConflicts({
-    context,
-    participantIds: allParticipantIds,
-    startDateTime: data.startDateTime,
-    endDateTime: data.endDateTime,
-  });
+  const conflicts = context.dtscInternal
+    ? await detectEffectiveWorkScheduleConflicts({ context, participantIds: allParticipantIds, startDateTime: data.startDateTime, endDateTime: data.endDateTime })
+    : await detectCalendarConflicts({ context, participantIds: allParticipantIds, startDateTime: data.startDateTime, endDateTime: data.endDateTime });
   const hasBlockingConflict = conflicts.some((conflict) => conflict.severity === "Bloquant");
   if ((hasBlockingConflict && !context.canOverrideConflicts) || (conflicts.length > 0 && !allowConflicts)) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { conflictCount: conflicts.length } });
-    return NextResponse.json({ error: "CALENDAR_CONFLICT", message: "Conflit de disponibilité détecté.", conflicts }, { status: 409 });
+    return NextResponse.json({ error: "CALENDAR_CONFLICT", message: "Conflit de disponibilité effective détecté.", conflicts }, { status: 409 });
   }
 
   const linkedSource = await createCalendarLinkedSource({
@@ -398,14 +398,8 @@ function timeString(date: Date) {
 }
 
 function calendarPriorityToInternalPriority(priority: string) {
-  if (priority === "Critique") {
-    return "CRITICAL";
-  }
-  if (priority === "Élevée") {
-    return "HIGH";
-  }
-  if (priority === "Faible") {
-    return "LOW";
-  }
+  if (priority === "Critique") return "CRITICAL";
+  if (priority === "Élevée") return "HIGH";
+  if (priority === "Faible") return "LOW";
   return "NORMAL";
 }
