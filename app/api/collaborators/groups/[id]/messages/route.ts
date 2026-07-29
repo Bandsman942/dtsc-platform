@@ -5,6 +5,8 @@ import { assertGroupMemberForSession, groupMemberUserIds, markGroupMessagesRead,
 import { notifyUsers } from "@/lib/notifications";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { collaborationMessageSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -49,11 +51,17 @@ export async function GET(req: Request, { params }: Params) {
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-message:${session.userId}`), 300, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   await touchUserPresence(session.userId);
   const { id } = await params;
   const member = await assertGroupMemberForSession(id, session);
@@ -66,25 +74,28 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid message" }, { status: 400 });
   }
+  if (parsed.data.replyToId) {
+    const reply = await prisma.collaborationGroupMessage.findFirst({ where: { id: parsed.data.replyToId, groupId: id }, select: { id: true } });
+    if (!reply) {
+      await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { reason: "cross_group_reply" } });
+      return NextResponse.json({ error: "Invalid reply target" }, { status: 400 });
+    }
+  }
+
   const organizationId = getActiveOrganizationId(session);
   const sharedConversation = parsed.data.sharedChatbotConversationId
     ? await prisma.conversation.findFirst({
-      where: { id: parsed.data.sharedChatbotConversationId, userId: session.userId, organizationId },
-      select: {
-        id: true,
-        title: true,
-        updatedAt: true,
-        messages: {
-          orderBy: { createdAt: "asc" },
-          take: 300,
-          select: { id: true, role: true, content: true, createdAt: true },
+        where: { id: parsed.data.sharedChatbotConversationId, userId: session.userId, organizationId },
+        select: {
+          id: true,
+          title: true,
+          updatedAt: true,
+          messages: { orderBy: { createdAt: "asc" }, take: 300, select: { id: true, role: true, content: true, createdAt: true } },
         },
-      },
-    })
+      })
     : null;
-  if (parsed.data.sharedChatbotConversationId && !sharedConversation) {
-    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
-  }
+  if (parsed.data.sharedChatbotConversationId && !sharedConversation) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+
   const memberUserIds = await groupMemberUserIds(id);
   const mentionedUserIds = await parseMentionedUserIds(parsed.data.mentionedUserIds, memberUserIds);
   const message = await prisma.$transaction(async (tx) => {
@@ -111,12 +122,7 @@ export async function POST(req: Request, { params }: Params) {
             conversationId: sharedConversation.id,
             title: sharedConversation.title,
             updatedAt: sharedConversation.updatedAt.toISOString(),
-            messages: sharedConversation.messages.map((item) => ({
-              id: item.id,
-              role: item.role,
-              content: item.content,
-              createdAt: item.createdAt.toISOString(),
-            })),
+            messages: sharedConversation.messages.map((item) => ({ id: item.id, role: item.role, content: item.content, createdAt: item.createdAt.toISOString() })),
           },
         },
       });
@@ -135,15 +141,26 @@ export async function POST(req: Request, { params }: Params) {
   });
   await markGroupMessagesRead({ groupId: id, userId: session.userId, messageIds: [message.id] });
 
-  const recipients = mentionedUserIds.length
+  const candidates = mentionedUserIds.length
     ? mentionedUserIds.filter((userId) => userId !== session.userId)
     : memberUserIds.filter((userId) => userId !== session.userId);
+  const preferences = candidates.length ? await prisma.collaborationGroupPreference.findMany({ where: { groupId: id, userId: { in: candidates } } }) : [];
+  const preferenceByUser = new Map(preferences.map((item) => [item.userId, item]));
+  const now = Date.now();
+  const recipients = [...new Set(candidates)].filter((userId) => {
+    const preference = preferenceByUser.get(userId);
+    if (!preference) return true;
+    if (preference.notifications === "NONE") return false;
+    if (!mentionedUserIds.length && preference.notifications === "MENTIONS") return false;
+    if (preference.mutedUntil && preference.mutedUntil.getTime() > now) return false;
+    return true;
+  });
   await notifyUsers({
-    userIds: [...new Set(recipients)],
+    userIds: recipients,
     title: mentionedUserIds.length ? "Mention dans un groupe DTSC" : "Nouveau message de groupe",
     body: `${session.name}: ${parsed.data.content.slice(0, 160)}`,
     type: "COLLABORATION",
-    targetUrl: "/collaborators",
+    targetUrl: `/collaborators?groupId=${encodeURIComponent(id)}`,
     organizationId: member.group.organizationId,
   });
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: "message.create", entityType: "CollaborationGroupMessage", entityId: message.id });
