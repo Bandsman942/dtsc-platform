@@ -50,6 +50,12 @@ export type PayrollWorkflowItem = {
   revision: number;
   notes: string | null;
   transactionId: string | null;
+  submissionReadiness: {
+    ready: boolean;
+    requiredApproverCode: "CEO" | "COO";
+    approverName: string | null;
+    blockers: Array<{ code: string; message: string; status: number }>;
+  } | null;
   createdAt: string;
   updatedAt: string;
   employee: {

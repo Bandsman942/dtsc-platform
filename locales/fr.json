@@ -691,6 +691,14 @@
     "review_REJECTED": "Refusée",
     "review_PAID": "Paiement confirmé",
     "review_CANCELLED": "Annulée",
-    "openAdjustmentEvidence": "Ouvrir le justificatif privé"
+    "openAdjustmentEvidence": "Ouvrir le justificatif privé",
+    "submissionReadiness": "Préparation avant soumission",
+    "submissionReadinessDescription": "Vérifiez les prérequis financiers et opérationnels avant l'envoi à l'approbateur.",
+    "submissionState": "État de soumission",
+    "submissionReady": "Prête à soumettre",
+    "submissionBlocked": "Corrections requises",
+    "requiredApprover": "Approbateur financier",
+    "submissionBlockers": "Points à corriger avant soumission",
+    "submissionReadyHelp": "Tous les contrôles préalables visibles sont satisfaits. La vérification serveur sera répétée au moment de la soumission."
   }
 }

@@ -439,4 +439,6 @@ Conserver une hiérarchie visible pour:
 - Validated and paid payroll evidence and financial amounts are immutable in the normal workflow.
 - Legacy payrolls remain readable without fabricated Sprint 4 evidence.
 - Vercel remains production-only from main; feature branches must never enable or trigger preview deployments.
+- Cancelled or rejected payroll history must not permanently reserve an employee+period; active-period uniqueness must remain DB-enforced while terminal retryable records stay auditable.
+- Payroll submission blockers must be returned by the server and displayed explicitly as errors/readiness items; financial-action UX must never infer success or failure only from message wording.
 <!-- /SPRINT_05_PAYROLL_WORKFLOW_RULES -->

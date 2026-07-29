@@ -761,3 +761,8 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Compatibilité
 - Les anciennes `HrcfoPayroll` restent consultables sans backfill artificiel de prestations Sprint 4. La migration Sprint 5 est additive et n'effectue aucun `DROP` ni réécriture destructive des historiques.
 <!-- /SPRINT_05_PAYROLL_CHANGELOG -->
+
+<!-- SPRINT_05_PAYROLL_RETRY_CHANGELOG -->
+- Hotfix Sprint 5 : une paie annulée ou refusée ne bloque plus une nouvelle préparation de la même période, tout en conservant son historique.
+- Ajout d'une readiness de soumission HR & CFO, de blocages lisibles avant envoi CEO/COO et d'erreurs d'action explicitement affichées comme erreurs.
+<!-- /SPRINT_05_PAYROLL_RETRY_CHANGELOG -->

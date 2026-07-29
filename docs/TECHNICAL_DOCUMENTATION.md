@@ -2527,3 +2527,9 @@ Les bulletins et l'espace Activités restent propriétaires : le collaborateur v
 
 Le déploiement reste Production Only : feature branch → GitHub Quality Gates → PR/review → merge `main` → Vercel Production → `prisma migrate deploy` → `pnpm build`. Aucun Preview Deployment n'est requis ou activé.
 <!-- /SPRINT_05_PAYROLL_TECHNICAL -->
+
+<!-- SPRINT_05_PAYROLL_RETRY_HOTFIX -->
+### Hotfix Sprint 5 — retry de période et readiness de soumission
+
+`HrcfoPayroll` conserve l'historique CANCELLED/REJECTED. L'unicité active est portée par l'index PostgreSQL partiel `HrcfoPayroll_active_period_key`, tandis que Prisma conserve un index de recherche non unique. `preparePayroll()` ignore les lignes terminales libératrices et transforme aussi une collision concurrente P2002 en 409 métier. La workspace HR & CFO reçoit une readiness calculée côté serveur ; le POST de soumission répète les mêmes préconditions et les vérifications fortes de budget et de preuves approuvées.
+<!-- /SPRINT_05_PAYROLL_RETRY_HOTFIX -->

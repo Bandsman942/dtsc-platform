@@ -108,6 +108,14 @@ type WorkEvidenceSnapshot = {
   }>;
 };
 
+type PayrollSubmissionBlocker = { code: string; message: string; status: number };
+type PayrollSubmissionReadiness = {
+  ready: boolean;
+  requiredApproverCode: PayrollApproverCode;
+  approverName: string | null;
+  blockers: PayrollSubmissionBlocker[];
+};
+
 export class PayrollWorkflowError extends Error {
   constructor(public code: string, message: string, public status = 400) {
     super(message);
@@ -173,7 +181,16 @@ export async function getPayrollWorkspace(actor: PayrollActor) {
       accountId: budget.accountId,
       accountName: budget.account?.name || null,
     })),
-    payrolls: payrolls.map(serializePayroll),
+    payrolls: payrolls.map((payroll) => {
+      const requiredApproverCode = resolvePayrollApproverCode(payroll.employee);
+      const approver = employees.find((candidate) =>
+        candidate.id !== payroll.employeeId &&
+        candidate.status !== "EXITED" &&
+        Boolean(candidate.userId) &&
+        getEmployeePositionCode(candidate) === requiredApproverCode
+      );
+      return serializePayroll(payroll, buildPayrollSubmissionReadiness(payroll, approver?.fullName || null));
+    }),
   };
 }
 
@@ -193,11 +210,16 @@ export async function preparePayroll(actor: PayrollActor, input: z.infer<typeof 
   const employee = await prisma.hrcfoEmployee.findUnique({ where: { id: input.employeeId }, include: { position: true } });
   if (!employee || employee.status === "EXITED") throw new PayrollWorkflowError("EMPLOYEE_NOT_FOUND", "Collaborateur actif introuvable.", 404);
   const budget = await getUsableBudget(input.budgetId);
-  const duplicate = await prisma.hrcfoPayroll.findUnique({
-    where: { employeeId_periodStart_periodEnd: { employeeId: employee.id, periodStart, periodEnd } },
+  const duplicate = await prisma.hrcfoPayroll.findFirst({
+    where: {
+      employeeId: employee.id,
+      periodStart,
+      periodEnd,
+      status: { notIn: ["CANCELLED", "CANCELED", "REJECTED"] },
+    },
     select: { id: true, status: true },
   });
-  if (duplicate) throw new PayrollWorkflowError("PAYROLL_PERIOD_EXISTS", "Une paie existe déjà pour ce collaborateur et cette période.", 409);
+  if (duplicate) throw new PayrollWorkflowError("PAYROLL_PERIOD_EXISTS", "Une paie active existe déjà pour ce collaborateur et cette période.", 409);
 
   const evidence = await loadApprovedWorkEvidence(employee.id, periodStart, periodEnd);
   await assertEvidenceAvailable(evidence.entries.map((entry) => entry.id));
@@ -212,8 +234,10 @@ export async function preparePayroll(actor: PayrollActor, input: z.infer<typeof 
   assertAdjustmentReasons(input.bonusAmount, input.bonusReason, input.deductionAmount, input.deductionReason);
   assertOwnedOperationEvidence(input.adjustmentEvidenceUrl, actor.userId);
 
-  const payroll = await prisma.$transaction(async (tx) => {
-    const created = await tx.hrcfoPayroll.create({
+  let payroll: PayrollDetail;
+  try {
+    payroll = await prisma.$transaction(async (tx) => {
+      const created = await tx.hrcfoPayroll.create({
       data: {
         employeeId: employee.id,
         periodStart,
@@ -244,9 +268,15 @@ export async function preparePayroll(actor: PayrollActor, input: z.infer<typeof 
         adjustmentEvidenceUrl: clean(input.adjustmentEvidenceUrl),
       },
     });
-    await createEvidenceLinks(tx, created.id, evidence.entries);
-    return tx.hrcfoPayroll.findUniqueOrThrow({ where: { id: created.id }, include: payrollDetailInclude });
-  });
+      await createEvidenceLinks(tx, created.id, evidence.entries);
+      return tx.hrcfoPayroll.findUniqueOrThrow({ where: { id: created.id }, include: payrollDetailInclude });
+    });
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      throw new PayrollWorkflowError("PAYROLL_PERIOD_EXISTS", "Une paie active existe déjà pour ce collaborateur et cette période.", 409);
+    }
+    throw error;
+  }
   return serializePayroll(payroll);
 }
 
@@ -328,11 +358,11 @@ export async function submitPayrollForApproval(actor: PayrollActor, payrollId: s
 
   const expectedApprover = resolvePayrollApproverCode(existing.employee);
   const approvers = await resolveEligibleApprovers(expectedApprover, existing.employeeId);
-  if (!approvers.length) {
-    throw new PayrollWorkflowError("NO_APPROVER", "Aucun approbateur financier opérationnel n'est actuellement configuré.", 409);
+  assertPayrollReadyForSubmission(existing, approvers.length > 0);
+  const budget = await getUsableBudget(existing.budgetId || "");
+  if (existing.accountId !== budget.accountId) {
+    throw new PayrollWorkflowError("BUDGET_ACCOUNT_CHANGED", "Le compte associé au budget a changé. Enregistrez à nouveau le brouillon avant de le soumettre.", 409);
   }
-  assertPayrollReadyForSubmission(existing);
-  await getUsableBudget(existing.budgetId || "");
   await assertEvidenceSnapshot(existing);
 
   const previousStatus = existing.status;
@@ -567,7 +597,7 @@ export async function cancelPayroll(actor: PayrollActor, payrollId: string, reas
   return serializePayroll(updated);
 }
 
-export function serializePayroll(payroll: PayrollDetail) {
+export function serializePayroll(payroll: PayrollDetail, submissionReadiness: PayrollSubmissionReadiness | null = null) {
   const activeEvidence = payroll.workEvidence.filter((item) => !item.releasedAt);
   return {
     id: payroll.id,
@@ -603,6 +633,7 @@ export function serializePayroll(payroll: PayrollDetail) {
     revision: payroll.revision,
     notes: payroll.notes,
     transactionId: payroll.transactionId,
+    submissionReadiness,
     createdAt: payroll.createdAt.toISOString(),
     updatedAt: payroll.updatedAt.toISOString(),
     employee: {
@@ -792,15 +823,64 @@ function assertAdjustmentReasons(bonusAmount: number, bonusReason?: string | nul
   if (deductionAmount > 0 && !deductionReason?.trim()) throw new PayrollWorkflowError("DEDUCTION_REASON_REQUIRED", "Un motif est obligatoire pour toute retenue.");
 }
 
-function assertPayrollReadyForSubmission(payroll: PayrollDetail) {
-  assertBaseAmountSource(payroll);
-  assertAdjustmentReasons(Number(payroll.bonusAmount), payroll.bonusReason, Number(payroll.deductionAmount), payroll.deductionReason);
-  const recomputed = calculatePayrollAmounts(Number(payroll.grossAmount), Number(payroll.bonusAmount), Number(payroll.deductionAmount));
-  if (recomputed.netAmount !== Number(payroll.netAmount)) throw new PayrollWorkflowError("NET_MISMATCH", "Le montant net doit être recalculé avant soumission.", 409);
+function buildPayrollSubmissionReadiness(payroll: PayrollDetail, approverName: string | null): PayrollSubmissionReadiness {
+  const blockers: PayrollSubmissionBlocker[] = [];
+  const capture = (run: () => void) => {
+    try {
+      run();
+    } catch (error) {
+      if (isPayrollWorkflowError(error)) {
+        blockers.push({ code: error.code, message: error.message, status: error.status });
+        return;
+      }
+      throw error;
+    }
+  };
+
+  capture(() => assertBaseAmountSource(payroll));
+  capture(() => assertAdjustmentReasons(Number(payroll.bonusAmount), payroll.bonusReason, Number(payroll.deductionAmount), payroll.deductionReason));
+  capture(() => {
+    const recomputed = calculatePayrollAmounts(Number(payroll.grossAmount), Number(payroll.bonusAmount), Number(payroll.deductionAmount));
+    if (recomputed.netAmount !== Number(payroll.netAmount)) {
+      throw new PayrollWorkflowError("NET_MISMATCH", "Le montant net doit être recalculé avant soumission.", 409);
+    }
+  });
+
   if (payroll.workCoverage !== "COMPLETE" && !payroll.workCoverageExceptionReason?.trim()) {
-    throw new PayrollWorkflowError("COVERAGE_REASON_REQUIRED", "Une justification est obligatoire pour une période avec prestations partielles ou absentes.", 400);
+    blockers.push({ code: "COVERAGE_REASON_REQUIRED", message: "Une justification est obligatoire pour une période avec prestations partielles ou absentes.", status: 400 });
   }
-  if (!payroll.budgetId || !payroll.accountId) throw new PayrollWorkflowError("BUDGET_REQUIRED", "La paie doit être liée à un budget et à son compte financier.", 409);
+
+  if (!payroll.budgetId || !payroll.accountId) {
+    blockers.push({ code: "BUDGET_REQUIRED", message: "La paie doit être liée à un budget et à son compte financier.", status: 409 });
+  } else if (!payroll.budget || !["OPEN", "MONITORING"].includes(payroll.budget.status) || !payroll.budget.accountId || !payroll.budget.account || payroll.budget.account.status !== "ACTIVE") {
+    blockers.push({ code: "BUDGET_UNAVAILABLE", message: "Le budget de paie est inactif ou son compte financier est indisponible.", status: 409 });
+  } else if (payroll.accountId !== payroll.budget.accountId) {
+    blockers.push({ code: "BUDGET_ACCOUNT_CHANGED", message: "Le compte associé au budget a changé. Enregistrez à nouveau le brouillon avant de le soumettre.", status: 409 });
+  }
+
+  const activeLinks = payroll.workEvidence.filter((link) => !link.releasedAt);
+  const expectedCount = payroll.approvedWorkEntryCount || 0;
+  const expectedMinutes = payroll.approvedWorkMinutes || 0;
+  if (activeLinks.length !== expectedCount || activeLinks.reduce((sum, link) => sum + link.approvedMinutes, 0) !== expectedMinutes) {
+    blockers.push({ code: "WORK_EVIDENCE_MISMATCH", message: "Le snapshot des prestations approuvées est incohérent.", status: 409 });
+  }
+
+  if (!approverName) {
+    blockers.push({ code: "NO_APPROVER", message: "Aucun approbateur financier opérationnel n'est actuellement configuré.", status: 409 });
+  }
+
+  return {
+    ready: blockers.length === 0,
+    requiredApproverCode: resolvePayrollApproverCode(payroll.employee),
+    approverName,
+    blockers,
+  };
+}
+
+function assertPayrollReadyForSubmission(payroll: PayrollDetail, approverAvailable = true) {
+  const readiness = buildPayrollSubmissionReadiness(payroll, approverAvailable ? "configured" : null);
+  const blocker = readiness.blockers[0];
+  if (blocker) throw new PayrollWorkflowError(blocker.code, blocker.message, blocker.status);
 }
 
 async function getUsableBudget(budgetId: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
@@ -900,6 +980,15 @@ function dateKey(value: Date) {
 
 function roundMoney(value: number) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function isPrismaUniqueConstraintError(error: unknown) {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
 }
 
 function clean(value?: string | null) {

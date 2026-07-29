@@ -5476,7 +5476,7 @@ model HrcfoPayroll {
   workEvidence                HrcfoPayrollWorkEntry[]
   reviews                     HrcfoPayrollReview[]
 
-  @@unique([employeeId, periodStart, periodEnd])
+  @@index([employeeId, periodStart, periodEnd])
   @@index([status, periodStart])
   @@index([accountId])
   @@index([budgetId])
