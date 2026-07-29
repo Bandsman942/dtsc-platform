@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 
 const MOBILE_QUERY = "(max-width: 1023px)";
-const INTERACTIVE_SELECTOR = "a,button,input,textarea,select,label,[contenteditable='true'],[role='button'],[role='menu'],[role='dialog'],[role='textbox'],[role='combobox']";
 
 export function useImmersiveConversationViewport() {
   useEffect(() => {
@@ -94,15 +93,6 @@ export function useImmersiveConversationViewport() {
       }
     }
 
-    function onPointerDown(event: PointerEvent) {
-      if (!media.matches || root.dataset.dtscMobileInput === "active") return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest(INTERACTIVE_SELECTOR)) return;
-      if (!target.closest("[data-collaboration-immersive-root]")) return;
-      setChromeVisible(root.dataset.privateMobileNav === "hidden");
-    }
-
     const mutationObserver = new MutationObserver((records) => {
       if (records.some((record) => record.attributeName === "data-private-mobile-nav" || record.attributeName === "data-dtsc-mobile-input")) syncViewport();
     });
@@ -117,7 +107,6 @@ export function useImmersiveConversationViewport() {
     }
 
     document.addEventListener("scroll", onNestedScroll, true);
-    document.addEventListener("pointerdown", onPointerDown, { passive: true });
     window.addEventListener("resize", syncViewport);
     window.visualViewport?.addEventListener("resize", syncViewport);
     window.visualViewport?.addEventListener("scroll", syncViewport);
@@ -129,7 +118,6 @@ export function useImmersiveConversationViewport() {
       mutationObserver.disconnect();
       resizeObserver?.disconnect();
       document.removeEventListener("scroll", onNestedScroll, true);
-      document.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("resize", syncViewport);
       window.visualViewport?.removeEventListener("resize", syncViewport);
       window.visualViewport?.removeEventListener("scroll", syncViewport);
