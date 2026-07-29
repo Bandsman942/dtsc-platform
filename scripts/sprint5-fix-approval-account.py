@@ -5,10 +5,10 @@ text = path.read_text()
 old = "        accountId: budget.accountId,\n"
 new = "        accountId: budget.accountId || undefined,\n"
 count = text.count(old)
-if count != 1:
-    raise SystemExit(f"Expected exactly one remaining approval account anchor, found {count}")
-updated = text.replace(old, new, 1)
+if count not in (1, 2):
+    raise SystemExit(f"Expected one or two remaining budget account anchors, found {count}")
+updated = text.replace(old, new)
 if old in updated or updated.count(new) < 2:
-    raise SystemExit("Approval account typing fix did not produce the expected two narrowed call sites")
+    raise SystemExit("Budget account typing fix did not narrow both transaction call sites")
 path.write_text(updated)
-print("Approval account typing narrowed successfully.")
+print(f"Narrowed {count} remaining budget account call site(s).")
