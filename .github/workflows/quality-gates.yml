@@ -49,3 +49,33 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+  sprint3-type-fix:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/sprint-03-work-availability'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/sprint-03-work-availability
+
+      - name: Apply type fixes
+        run: node scripts/sprint3-type-fix.mjs
+
+      - name: Commit type fixes
+        run: |
+          if git diff --quiet; then
+            echo "Sprint 3 type fixes already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/api/calendar/availabilities/[id]/route.ts \
+            components/calendar/dtsc-work-schedule-panel.tsx \
+            lib/internal-calendar.ts \
+            lib/work-schedule.ts
+          git commit -m "fix(calendar): resolve Sprint 3 type errors"
+          git push origin HEAD:feat/sprint-03-work-availability
