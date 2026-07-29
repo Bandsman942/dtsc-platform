@@ -56,11 +56,15 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     workflowDataset,
     calendarEvents,
     sectorRecords,
-    legacyCoreRecords,
     tasks,
     requests,
     pendingValidationsCount,
     meetings,
+    recentDocumentsCount,
+    activeBudgetsCount,
+    activeSuppliersCount,
+    generatedReportsCount,
+    publishedReportsCount,
   ] = await Promise.all([
     getEnterpriseMembersDataset(organizationId),
     getEnterpriseModulesDataset(organizationId, entitlements),
@@ -69,17 +73,17 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     getEnterpriseWorkflowsDataset(organizationId),
     getEnterpriseCalendarDataset(organizationId),
     organization.sectorCode === "PHARMACY" ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode) : getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
-    prisma.enterpriseCoreRecord.findMany({
-      where: { organizationId, archivedAt: null, recordType: { in: ["DOCUMENT", "BUDGET", "SUPPLIER"] } },
-      select: { recordType: true, status: true, updatedAt: true },
-    }),
     prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, dueAt: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, createdAt: true } }),
     prisma.enterpriseApproval.count({ where: { organizationId, archivedAt: null, status: "PENDING" } }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, startAt: true } }),
+    prisma.enterpriseDocument.count({ where: { organizationId, archivedAt: null, updatedAt: { gte: recentThreshold } } }),
+    prisma.enterpriseBudget.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
+    prisma.enterpriseSupplier.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
+    prisma.enterpriseReport.count({ where: { organizationId, archivedAt: null } }),
+    prisma.enterpriseReport.count({ where: { organizationId, archivedAt: null, status: "PUBLISHED" } }),
   ]);
 
-  const closedLegacyStatuses = new Set(["COMPLETED", "APPROVED", "REJECTED", "CANCELLED", "ARCHIVED"]);
   const openTaskStatuses = new Set(["TODO", "IN_PROGRESS", "BLOCKED"]);
   const openRequestStatuses = new Set(["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED"]);
 
@@ -99,9 +103,11 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
       pendingValidationsCount,
       todayMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && meeting.startAt >= todayStart && meeting.startAt < tomorrowStart).length,
       upcomingMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && meeting.startAt >= now).length,
-      recentDocumentsCount: legacyCoreRecords.filter((record) => record.recordType === "DOCUMENT" && record.updatedAt >= recentThreshold).length,
-      activeBudgetsCount: legacyCoreRecords.filter((record) => record.recordType === "BUDGET" && !closedLegacyStatuses.has(record.status)).length,
-      activeSuppliersCount: legacyCoreRecords.filter((record) => record.recordType === "SUPPLIER" && !closedLegacyStatuses.has(record.status)).length,
+      recentDocumentsCount,
+      activeBudgetsCount,
+      activeSuppliersCount,
+      generatedReportsCount,
+      publishedReportsCount,
     },
     members,
     modules: moduleDataset.modules,
