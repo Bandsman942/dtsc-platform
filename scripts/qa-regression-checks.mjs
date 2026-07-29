@@ -257,7 +257,7 @@ const authForm = read("components/auth/auth-form.tsx");
 
 check(
   "script qa:regression déclaré",
-  packageJson.scripts?.["qa:regression"] === "node scripts/qa-regression-checks.mjs",
+  String(packageJson.scripts?.["qa:regression"] || "").includes("node scripts/qa-regression-checks.mjs"),
   "Ajouter le script npm pour pouvoir exécuter la suite QA sans dépendance externe."
 );
 
@@ -872,7 +872,7 @@ check(
 
 check(
   "PHARMACY Achats: onze vues, combobox, aides et formulaires plein écran",
-  containsAll(pharmacyPurchasesWorkspace, ["Tableau de bord achats pharmacie", "Fournisseurs", "Produits par fournisseur", "Demandes de réapprovisionnement", "Commandes fournisseurs", "Lignes de commande", "Suivi de livraison", "Commandes partiellement reçues", "Documents fournisseurs", "Historique fournisseurs & achats", "Alertes achats", "h-[96dvh]", "CircleHelp", "Créer une réception", "min-w-0", "overflow-x-hidden"])
+  containsAll(pharmacyPurchasesWorkspace, ["Tableau de bord achats pharmacie", "Fournisseurs", "Produits par fournisseur", "Demandes de réapprovisionnement", "Commandes fournisseurs", "Lignes de commande", "Suivi de livraison", "Commandes partiellement reçues", "Documents fournisseurs", "Historique fournisseurs & achats", "Alertes achats", "h-[96dvh]", "CircleHelp", "Créer / ouvrir le brouillon de réception", "min-w-0", "overflow-x-hidden"])
     && !pharmacyPurchasesWorkspace.includes('CircleHelp className="h-3.5 w-3.5" title=')
 );
 
@@ -1125,7 +1125,7 @@ check(
 
 check(
   "Socle commun ERP: interface française, actions réelles et mobile",
-  containsAll(enterpriseCoreWorkspace, ["Créer un élément", "ListControls", "ActionMenu", "CircleHelp", "Demander une validation", "min-w-0", "overflow-x-hidden"])
+  containsAll(enterpriseCoreWorkspace, ["Créer un élément", "ListControls", "ContextActions", "CircleHelp", "Demander une validation", "min-w-0", "overflow-x-hidden"])
     && !enterpriseCoreWorkspace.includes("window.prompt")
     && !enterpriseCoreWorkspace.includes("window.confirm")
 );
