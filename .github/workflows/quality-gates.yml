@@ -1,6 +1,8 @@
 name: Quality gates
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - feat/sprint-04-work-prestations
@@ -9,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: sprint4-integrate-${{ github.ref }}
+  group: sprint4-integrate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
