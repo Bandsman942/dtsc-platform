@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { internalCalendarEventUpdateSchema } from "@/lib/validators";
+import { detectEffectiveWorkScheduleConflicts } from "@/lib/work-schedule";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -122,11 +123,13 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const startDateTime = data.startDateTime || existing.startDateTime;
   const endDateTime = data.endDateTime || existing.endDateTime;
-  const conflicts = await detectCalendarConflicts({ context, participantIds: allParticipantIds, startDateTime, endDateTime, excludeEventId: id });
+  const conflicts = context.dtscInternal
+    ? await detectEffectiveWorkScheduleConflicts({ context, participantIds: allParticipantIds, startDateTime, endDateTime, excludeEventId: id })
+    : await detectCalendarConflicts({ context, participantIds: allParticipantIds, startDateTime, endDateTime, excludeEventId: id });
   const hasBlockingConflict = conflicts.some((conflict) => conflict.severity === "Bloquant");
   if ((hasBlockingConflict && !context.canOverrideConflicts) || (conflicts.length > 0 && !allowConflicts)) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { conflictCount: conflicts.length } });
-    return NextResponse.json({ error: "CALENDAR_CONFLICT", message: "Conflit de disponibilité détecté.", conflicts }, { status: 409 });
+    return NextResponse.json({ error: "CALENDAR_CONFLICT", message: "Conflit de disponibilité effective détecté.", conflicts }, { status: 409 });
   }
 
   const event = await prisma.$transaction(async (tx) => {
