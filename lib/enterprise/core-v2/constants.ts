@@ -3,6 +3,8 @@ export const ENTERPRISE_CORE_V2_MODULES = {
   REQUEST: "INTERNAL_REQUESTS",
   APPROVAL: "VALIDATIONS",
   MEETING: "MEETINGS",
+  DOCUMENT: "DOCUMENTS",
+  PROCUREMENT: "SUPPLIERS_PURCHASES",
 } as const;
 
 export const ENTERPRISE_CORE_V2_ENTITY_TYPES = {
@@ -11,9 +13,12 @@ export const ENTERPRISE_CORE_V2_ENTITY_TYPES = {
   APPROVAL: "EnterpriseApproval",
   MEETING: "EnterpriseMeeting",
   MEETING_DECISION: "EnterpriseMeetingDecision",
+  DOCUMENT: "EnterpriseDocument",
+  SUPPLIER: "EnterpriseSupplier",
+  PURCHASE: "EnterprisePurchase",
 } as const;
 
-export const DEDICATED_CORE_RECORD_TYPES = new Set<string>(["TASK", "OPERATION", "MEETING", "MINUTES", "INTERNAL_REQUEST", "VALIDATION"]);
+export const DEDICATED_CORE_RECORD_TYPES = new Set<string>(["TASK", "OPERATION", "MEETING", "MINUTES", "INTERNAL_REQUEST", "VALIDATION", "DOCUMENT", "SUPPLIER", "PURCHASE"]);
 export const DEDICATED_CORE_MODULE_CODES = new Set<string>(Object.values(ENTERPRISE_CORE_V2_MODULES));
 
 export const TASK_TYPES = ["TASK", "OPERATION", "ACTION"] as const;
@@ -42,7 +47,7 @@ export const REQUEST_TRANSITIONS: Record<(typeof REQUEST_ACTIONS)[number], { fro
 
 export const APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 export const APPROVAL_ACTIONS = ["APPROVE", "REJECT", "CANCEL"] as const;
-export const APPROVAL_TARGET_TYPES = ["EnterpriseRequest", "EnterpriseTask", "EnterpriseMeeting", "PharmacyQualityIncident"] as const;
+export const APPROVAL_TARGET_TYPES = ["EnterpriseRequest", "EnterpriseTask", "EnterpriseMeeting", "EnterprisePurchase", "PharmacyQualityIncident"] as const;
 
 export const MEETING_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 export const MEETING_ACTIONS = ["START", "COMPLETE", "CANCEL", "ARCHIVE"] as const;
@@ -62,12 +67,20 @@ export const SUPPORTED_SOURCE_ENTITY_TYPES = new Set<string>([
   "EnterpriseRequest",
   "EnterpriseMeeting",
   "EnterpriseMeetingDecision",
+  "EnterpriseDocument",
+  "EnterpriseSupplier",
+  "EnterprisePurchase",
   "EnterpriseActivityRequest",
   "PharmacyActivityItem",
+  "PharmacySupplier",
+  "PharmacyPurchaseOrder",
+  "PharmacyReceipt",
   "PharmacyQualityIncident",
   "HealthPatient",
   "HealthAppointment",
   "HealthConsultation",
+  "HealthDocument",
+  "HealthQualityIncident",
 ]);
 
 export function isDedicatedCoreDomain(moduleCode: string, recordType?: string) {
