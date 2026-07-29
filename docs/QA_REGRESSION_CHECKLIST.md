@@ -711,3 +711,13 @@ Documenter dans le ticket ou la PR:
 - [ ] aucune mutation HrcfoPayroll depuis le Sprint 4 ;
 - [ ] pnpm qa:work-schedule, pnpm qa:work-prestations, pnpm qa:regression, typecheck, lint, build et migration PostgreSQL+pgvector passent avant merge ;
 - [ ] aucun Vercel Preview n'est créé sur la feature branch.
+
+## Sprint 5 — Payroll / approved work
+- [ ] `pnpm qa:payroll-workflow` passe.
+- [ ] Seules les prestations APPROVED sont consommées.
+- [ ] Une entrée active ne peut être liée à deux paies.
+- [ ] DRAFT/PENDING_APPROVAL ne créent aucune transaction.
+- [ ] CEO approuve les paies standard, COO uniquement la paie CEO, aucune auto-approbation.
+- [ ] VALIDATED crée au plus une transaction `PAYROLL_WORKFLOW`; PAID la réutilise.
+- [ ] Bonus/retenue exigent un motif et les périodes partielles ne sont jamais proratisées automatiquement.
+- [ ] Les anciennes paies restent consultables et le collaborateur ne voit ni budget ni compte financier.

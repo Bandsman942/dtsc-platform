@@ -5266,8 +5266,11 @@ model HrcfoEmployee {
   managerUser         User?          @relation("EmployeeManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   departmentRef       Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   position            DtscPosition?  @relation(fields: [positionId], references: [id], onDelete: SetNull)
-  payrolls            HrcfoPayroll[]
-  workEntries         DtscWorkEntry[]            @relation("DtscWorkEntryEmployee")
+  payrolls            HrcfoPayroll[]              @relation("HrcfoPayrollEmployee")
+  preparedPayrolls    HrcfoPayroll[]              @relation("HrcfoPayrollPreparedBy")
+  approvedPayrolls    HrcfoPayroll[]              @relation("HrcfoPayrollApprover")
+  payrollReviews      HrcfoPayrollReview[]        @relation("HrcfoPayrollReviewActor")
+  workEntries         DtscWorkEntry[]             @relation("DtscWorkEntryEmployee")
   workSubmissions     DtscWorkSubmission[]       @relation("DtscWorkSubmissionEmployee")
   reviewedWorkSubmissions DtscWorkSubmission[]   @relation("DtscWorkSubmissionReviewer")
   workSubmissionReviews DtscWorkSubmissionReview[] @relation("DtscWorkSubmissionReviewActor")
@@ -5425,31 +5428,93 @@ model FinancialAccount {
 }
 
 model HrcfoPayroll {
-  id              String            @id @default(cuid())
-  employeeId      String
-  periodStart     DateTime
-  periodEnd       DateTime
-  grossAmount     Decimal           @db.Decimal(12, 2)
-  bonusAmount     Decimal           @default(0) @db.Decimal(12, 2)
-  deductionAmount Decimal           @default(0) @db.Decimal(12, 2)
-  netAmount       Decimal           @db.Decimal(12, 2)
-  accountId       String?
-  budgetId        String?
-  transactionId   String?           @unique
-  status          String            @default("DRAFT")
-  notes           String?
-  createdById     String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  employee        HrcfoEmployee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  account         FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  budget          HrcfoBudget?      @relation(fields: [budgetId], references: [id], onDelete: SetNull)
-  transaction     HrcfoExpense?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  id                          String                    @id @default(cuid())
+  employeeId                  String
+  periodStart                 DateTime
+  periodEnd                   DateTime
+  grossAmount                 Decimal                   @db.Decimal(12, 2)
+  bonusAmount                 Decimal                   @default(0) @db.Decimal(12, 2)
+  deductionAmount             Decimal                   @default(0) @db.Decimal(12, 2)
+  netAmount                   Decimal                   @db.Decimal(12, 2)
+  accountId                   String?
+  budgetId                    String?
+  transactionId               String?                   @unique
+  status                      String                    @default("DRAFT")
+  notes                       String?
+  createdById                 String?
+  workflowVersion             Int?
+  baseAmountSource            String?
+  baseAmountOverride          Decimal?                  @db.Decimal(12, 2)
+  baseAmountOverrideReason    String?
+  bonusReason                 String?
+  deductionReason             String?
+  workCoverage                String?
+  workCoverageExceptionReason String?
+  approvedWorkMinutes         Int?
+  approvedWorkEntryCount      Int?
+  approvedSubmissionCount     Int?
+  workEvidenceCapturedAt      DateTime?
+  preparedByEmployeeId        String?
+  requiredApproverCode        String?
+  approverEmployeeId          String?
+  submittedAt                 DateTime?
+  approvedAt                  DateTime?
+  rejectedAt                  DateTime?
+  paidAt                      DateTime?
+  reviewComment               String?
+  adjustmentEvidenceUrl       String?
+  paymentReference            String?
+  revision                    Int                       @default(0)
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  employee                    HrcfoEmployee             @relation("HrcfoPayrollEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  account                     FinancialAccount?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  budget                      HrcfoBudget?              @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  transaction                 HrcfoExpense?             @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  preparedBy                  HrcfoEmployee?            @relation("HrcfoPayrollPreparedBy", fields: [preparedByEmployeeId], references: [id], onDelete: SetNull)
+  approver                    HrcfoEmployee?            @relation("HrcfoPayrollApprover", fields: [approverEmployeeId], references: [id], onDelete: SetNull)
+  workEvidence                HrcfoPayrollWorkEntry[]
+  reviews                     HrcfoPayrollReview[]
 
   @@unique([employeeId, periodStart, periodEnd])
   @@index([status, periodStart])
   @@index([accountId])
   @@index([budgetId])
+  @@index([workflowVersion, status, periodStart])
+  @@index([requiredApproverCode, status])
+  @@index([preparedByEmployeeId])
+  @@index([approverEmployeeId])
+}
+
+model HrcfoPayrollWorkEntry {
+  id               String             @id @default(cuid())
+  payrollId        String
+  workEntryId      String
+  workSubmissionId String
+  approvedMinutes  Int
+  releasedAt       DateTime?
+  createdAt        DateTime           @default(now())
+  payroll          HrcfoPayroll       @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  workEntry        DtscWorkEntry      @relation(fields: [workEntryId], references: [id], onDelete: Restrict)
+  workSubmission   DtscWorkSubmission @relation(fields: [workSubmissionId], references: [id], onDelete: Restrict)
+
+  @@unique([payrollId, workEntryId])
+  @@index([payrollId, releasedAt])
+  @@index([workSubmissionId])
+}
+
+model HrcfoPayrollReview {
+  id              String        @id @default(cuid())
+  payrollId       String
+  actorEmployeeId String
+  action          String
+  comment         String?
+  createdAt       DateTime      @default(now())
+  payroll         HrcfoPayroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  actor           HrcfoEmployee @relation("HrcfoPayrollReviewActor", fields: [actorEmployeeId], references: [id], onDelete: Restrict)
+
+  @@index([payrollId, createdAt])
+  @@index([actorEmployeeId, createdAt])
 }
 
 model ScoVendor {
@@ -6817,6 +6882,7 @@ model DtscWorkSubmission {
   reviewer           HrcfoEmployee?             @relation("DtscWorkSubmissionReviewer", fields: [reviewerEmployeeId], references: [id], onDelete: SetNull)
   entries            DtscWorkEntry[]
   reviews            DtscWorkSubmissionReview[]
+  payrollEvidence    HrcfoPayrollWorkEntry[]
 
   @@unique([employeeId, periodStart, periodEnd])
   @@index([status, periodStart])
@@ -6847,7 +6913,8 @@ model DtscWorkEntry {
   updatedAt                   DateTime            @updatedAt
   deletedAt                   DateTime?
   employee                    HrcfoEmployee       @relation("DtscWorkEntryEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  submission                  DtscWorkSubmission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  submission                  DtscWorkSubmission?      @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  payrollEvidence             HrcfoPayrollWorkEntry[]
 
   @@index([employeeId, workDate, deletedAt])
   @@index([submissionId, deletedAt])

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { uploadOperationFileToSupabase } from "@/lib/supabase-storage";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 
 const allowedTypes = new Set([
   "application/pdf",
@@ -17,6 +19,10 @@ const operationFileBlocks = ["coo", "hrCfo", "sco", "mpo", "cto", "la", "ceo"] a
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) {
+    await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "operation_file_origin_denied" } });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   let lastResponse: NextResponse | undefined;
   for (const blockId of operationFileBlocks) {
     const { session, response } = await requireAdminBlockAccess(blockId);
@@ -30,6 +36,11 @@ export async function POST(req: Request) {
 }
 
 async function uploadForSession(req: Request, userId: string, startedAt: number) {
+  const limited = await rateLimit(getRateLimitKey(req, `operation-file-upload:${userId}`), 40, 60 * 60 * 1000);
+  if (!limited.ok) {
+    await writeApiLog({ request: req, statusCode: 429, userId, startedAt, metadata: { action: "operation_file_rate_limited" } });
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
   const formData = await req.formData();
   const file = formData.get("file");
   if (!(file instanceof File)) {

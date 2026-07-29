@@ -3,15 +3,15 @@ import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { syncDtscInternalMembershipForEmployee } from "@/lib/dtsc-internal-membership";
-import { deleteHrcfoTransaction, updateHrcfoTransaction, updatePayroll } from "@/lib/hr-cfo-finance";
+import { deleteHrcfoTransaction, updateHrcfoTransaction } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string; id: string }> };
-type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts" | "positions";
+type HrcfoEntity = "employees" | "budgets" | "transactions" | "departments" | "accounts" | "positions";
 
 function isHrcfoEntity(value: string): value is HrcfoEntity {
-  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts" || value === "positions";
+  return value === "employees" || value === "budgets" || value === "transactions" || value === "departments" || value === "accounts" || value === "positions";
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -109,7 +109,7 @@ function parsePatch(entity: HrcfoEntity, body: Record<string, unknown>) {
   if (entity === "budgets") {
     return hrcfoSchemas.budgets.partial().safeParse(body);
   }
-  return hrcfoSchemas.payrolls.partial().safeParse(body);
+  return hrcfoSchemas.budgets.partial().safeParse(body);
 }
 
 async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string, unknown>) {
@@ -195,7 +195,7 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
   if (entity === "transactions") {
     return updateHrcfoTransaction(id, data);
   }
-  return updatePayroll(id, data);
+  throw new Error("Entité HR & CFO non prise en charge par le CRUD générique.");
 }
 
 async function deleteRecord(entity: HrcfoEntity, id: string) {
@@ -247,9 +247,5 @@ async function deleteRecord(entity: HrcfoEntity, id: string) {
   if (entity === "transactions") {
     return deleteHrcfoTransaction(id);
   }
-  const payroll = await prisma.hrcfoPayroll.findUnique({ where: { id } });
-  if (payroll?.transactionId || payroll?.status === "VALIDATED" || payroll?.status === "PAID") {
-    throw new Error("Une paie validée ou payée ne peut pas être supprimée.");
-  }
-  return prisma.hrcfoPayroll.delete({ where: { id } });
+  throw new Error("Entité HR & CFO non prise en charge par le CRUD générique.");
 }

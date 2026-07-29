@@ -4,15 +4,15 @@ import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { syncDtscInternalMembershipForEmployee } from "@/lib/dtsc-internal-membership";
-import { createHrcfoBudget, createPayroll, createValidatedTransaction } from "@/lib/hr-cfo-finance";
+import { createHrcfoBudget, createValidatedTransaction } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string }> };
-type HrcfoEntity = "employees" | "budgets" | "transactions" | "payrolls" | "departments" | "accounts" | "positions";
+type HrcfoEntity = "employees" | "budgets" | "transactions" | "departments" | "accounts" | "positions";
 
 function isHrcfoEntity(value: string): value is HrcfoEntity {
-  return value === "employees" || value === "budgets" || value === "transactions" || value === "payrolls" || value === "departments" || value === "accounts" || value === "positions";
+  return value === "employees" || value === "budgets" || value === "transactions" || value === "departments" || value === "accounts" || value === "positions";
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -73,7 +73,7 @@ function parseEntity(entity: HrcfoEntity, body: Record<string, unknown>) {
   if (entity === "budgets") {
     return hrcfoSchemas.budgets.safeParse(body);
   }
-  return hrcfoSchemas.payrolls.safeParse(body);
+  return hrcfoSchemas.budgets.safeParse(body);
 }
 
 async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, createdById: string) {
@@ -171,15 +171,5 @@ async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, 
       invoiceId: saved.invoice?.id,
     } : transaction;
   }
-  const payroll = await createPayroll({ ...(data as Parameters<typeof createPayroll>[0]), createdById });
-  const saved = await prisma.hrcfoPayroll.findUnique({
-    where: { id: payroll.id },
-    include: { employee: true, account: true, budget: true },
-  });
-  return saved ? {
-    ...saved,
-    employeeName: saved.employee.fullName,
-    accountName: saved.account?.name,
-    budgetName: saved.budget?.name,
-  } : payroll;
+  throw new Error("Entité HR & CFO non prise en charge par le CRUD générique.");
 }

@@ -421,3 +421,22 @@ Conserver une hiérarchie visible pour:
 - Vercel deployments are production-only from main; feature branches must never enable or trigger preview deployments.
 - A work-entry duration is server-calculated in integer minutes from start/end minus break; client-provided worked totals are never authoritative.
 - Work-entry source references must be access-checked server-side and may not accept arbitrary cross-user objects.
+
+<!-- SPRINT_05_PAYROLL_WORKFLOW_RULES -->
+## Règles permanentes — paie DTSC à partir du travail approuvé
+
+- Payroll may consume only approved DTSC work submissions/entries.
+- Availability and unapproved work must never feed payroll.
+- Approved minutes are operational evidence and must not automatically determine salary without an explicit compensation policy.
+- The standard gross salary source remains the employee HR compensation record for a normal full-month payroll.
+- Bonuses and deductions require explicit audited reasons.
+- HR & CFO prepares payroll but does not financially approve its own preparation.
+- CEO approves standard DTSC payrolls; COO approves the CEO payroll.
+- No employee may approve their own payroll, including CEO, COO, HR_CFO or ADMIN.
+- Draft and pending payrolls must not create financial transactions.
+- Financially validated payrolls must create at most one idempotent PAYROLL_WORKFLOW transaction; marking paid must reuse that transaction.
+- A work entry may not be consumed by multiple active payrolls.
+- Validated and paid payroll evidence and financial amounts are immutable in the normal workflow.
+- Legacy payrolls remain readable without fabricated Sprint 4 evidence.
+- Vercel remains production-only from main; feature branches must never enable or trigger preview deployments.
+<!-- /SPRINT_05_PAYROLL_WORKFLOW_RULES -->
