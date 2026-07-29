@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
-import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { EnterpriseCoreV2Error, normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { transitionEnterpriseRequest } from "@/lib/enterprise/core-v2/service";
 import { enterpriseRequestActionSchema } from "@/lib/enterprise/core-v2/validators";
 import { notifyUser } from "@/lib/notifications";
@@ -39,11 +39,39 @@ export async function POST(req: Request, { params }: Params) {
   if (!allowed) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à exécuter cette transition." }, { status: 403 });
 
   try {
-    const updated = await transitionEnterpriseRequest({ organizationId, requestId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
+    const updated = data.action === "TAKE"
+      ? await prisma.$transaction(async (tx) => {
+          const result = await tx.enterpriseRequest.updateMany({
+            where: { id, organizationId, status: "SUBMITTED", revision: data.revision, archivedAt: null },
+            data: { status: "IN_REVIEW", assignedToUserId: session.userId, revision: { increment: 1 } },
+          });
+          if (result.count !== 1) {
+            throw new EnterpriseCoreV2Error("La demande a déjà changé. Actualisez avant de la prendre en charge.", 409, "REVISION_CONFLICT");
+          }
+          await tx.enterpriseOperationalEvent.create({
+            data: {
+              organizationId,
+              entityType: "EnterpriseRequest",
+              entityId: id,
+              eventType: "ENTERPRISE_REQUEST_REVIEW_STARTED",
+              summary: data.comment || "Demande prise en charge.",
+              fromStatus: "SUBMITTED",
+              toStatus: "IN_REVIEW",
+              actorUserId: session.userId,
+              metadataJson: { assignedToUserId: session.userId },
+            },
+          });
+          return tx.enterpriseRequest.findUnique({ where: { id } });
+        })
+      : await transitionEnterpriseRequest({ organizationId, requestId: id, actorUserId: session.userId, action: data.action, revision: data.revision, comment: data.comment || undefined });
+
+    if (data.action === "TAKE" && requestRecord.requestedByUserId !== session.userId) {
+      await notifyUser({ userId: requestRecord.requestedByUserId, organizationId, type: "ENTERPRISE_REQUEST", title: "Demande prise en charge", body: requestRecord.title, targetUrl: "/enterprise-modules/INTERNAL_REQUESTS" });
+    }
     if ((data.action === "FULFILL" || data.action === "CANCEL") && requestRecord.requestedByUserId !== session.userId) {
       await notifyUser({ userId: requestRecord.requestedByUserId, organizationId, type: "ENTERPRISE_REQUEST", title: data.action === "FULFILL" ? "Demande traitée" : "Demande annulée", body: requestRecord.title, targetUrl: "/enterprise-modules/INTERNAL_REQUESTS" });
     }
-    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_REQUEST_${data.action}`, entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, fromStatus: requestRecord.status, toStatus: updated?.status } });
+    await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_REQUEST_${data.action}`, entity: "EnterpriseRequest", entityId: id, request: req, metadata: { organizationId, fromStatus: requestRecord.status, toStatus: updated?.status, assignedToUserId: updated?.assignedToUserId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", requestId: id, action: data.action } });
     return NextResponse.json({ ok: true, request: updated });
   } catch (error) {
