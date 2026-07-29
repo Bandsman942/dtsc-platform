@@ -416,7 +416,9 @@ function intervalForExceptionDay(record: CollaboratorAvailability, dateKey: stri
   return {
     id: record.id,
     start: dateKey === startDate ? timeStringValue(record.startTime) : 0,
-    end: dateKey === endDate ? timeStringValue(record.endTime) : 1440,
+    end: dateKey === endDate
+      ? (record.startTime === "00:00" && record.endTime === "23:59" ? 1440 : timeStringValue(record.endTime))
+      : 1440,
   };
 }
 

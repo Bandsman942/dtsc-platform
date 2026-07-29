@@ -90,12 +90,14 @@ export function InternalCalendarModule({
   collaborators,
   context,
   userPreferences,
+  showLegacyAvailabilityEditor = true,
 }: {
   initialEvents: CalendarEventItem[];
   initialAvailabilities: CalendarAvailabilityItem[];
   collaborators: CollaboratorOption[];
-  context: { employeeId?: string | null; canViewGlobal: boolean; canViewPeopleAvailability?: boolean; canManagePeople: boolean; canOverrideConflicts: boolean };
+  context: { employeeId?: string | null; canViewGlobal: boolean; canViewPeopleAvailability?: boolean; canManagePeople: boolean; canManagePeopleAvailability?: boolean; canOverrideConflicts: boolean; dtscScheduleProjection?: boolean };
   userPreferences: UserDatePreferences;
+  showLegacyAvailabilityEditor?: boolean;
 }) {
   const [events, setEvents] = useState(initialEvents);
   const [availabilities, setAvailabilities] = useState(initialAvailabilities);
@@ -176,7 +178,7 @@ export function InternalCalendarModule({
   }
 
   function canManageAvailability(availability: CalendarAvailabilityItem) {
-    return context.canManagePeople || availability.collaboratorId === context.employeeId;
+    return Boolean(context.canManagePeopleAvailability) || availability.collaboratorId === context.employeeId;
   }
 
   function selectEvent(event: CalendarEventItem) {
@@ -204,10 +206,12 @@ export function InternalCalendarModule({
               <Plus className="h-4 w-4" />
               {translate(locale, "calendar.newEvent")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="max-w-full rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
-              <Clock className="h-4 w-4" />
-              {translate(locale, "calendar.availability")}
-            </Button>
+            {showLegacyAvailabilityEditor && (
+              <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface text-dtsc-blue">
+                <Clock className="h-4 w-4" />
+                {translate(locale, "calendar.availability")}
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => void refreshCalendar()} className="max-w-full rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
               <RefreshCcw className="h-4 w-4" />
               {translate(locale, "calendar.refresh")}
@@ -251,7 +255,10 @@ export function InternalCalendarModule({
 
       <section className="dtsc-card min-w-0 overflow-hidden p-4">
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {["today", "week", "month", "collaborator", "department", "conflicts", "availability"].map((view) => (
+          {(showLegacyAvailabilityEditor
+            ? ["today", "week", "month", "collaborator", "department", "conflicts", "availability"]
+            : ["today", "week", "month", "collaborator", "department", "conflicts"]
+          ).map((view) => (
             <button
               key={view}
               type="button"
@@ -353,7 +360,7 @@ export function InternalCalendarModule({
       {availabilityFormOpen && (
         <AvailabilityFormDialog
           collaborators={collaborators}
-          context={context}
+          context={{ ...context, canManagePeople: Boolean(context.canManagePeopleAvailability) }}
           locale={locale}
           onClose={() => setAvailabilityFormOpen(false)}
           onSaved={(availability) => {
@@ -368,7 +375,7 @@ export function InternalCalendarModule({
         <AvailabilityFormDialog
           availability={editingAvailability}
           collaborators={collaborators}
-          context={context}
+          context={{ ...context, canManagePeople: Boolean(context.canManagePeopleAvailability) }}
           locale={locale}
           onClose={() => setEditingAvailability(null)}
           onSaved={(availability) => {
@@ -479,7 +486,7 @@ function EventFormDialog({
   event?: CalendarEventItem;
   template?: CalendarEventTemplate | null;
   collaborators: CollaboratorOption[];
-  context: { employeeId?: string | null; canManagePeople: boolean; canOverrideConflicts: boolean };
+  context: { employeeId?: string | null; canManagePeople: boolean; canOverrideConflicts: boolean; dtscScheduleProjection?: boolean };
   locale: string;
   onClose: () => void;
   onSaved: (event: CalendarEventItem) => void;
@@ -540,7 +547,10 @@ function EventFormDialog({
           </FieldShell>
           <FieldShell label="Type d'événement" hint="Le type peut créer un objet lié dans COO, SCO ou Mes collaborateurs.">
           <select name="eventType" defaultValue={defaultEventType} className="h-12 w-full min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink">
-            {["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"].map((type) => <option key={type}>{type}</option>)}
+            {(context.dtscScheduleProjection
+              ? ["Tâche", "Réunion", "Appel audio", "Appel vidéo", "Blocage", "Deadline", "Autre"]
+              : ["Tâche", "Réunion", "Mission", "Absence", "Congé", "Télétravail", "Présence sur site", "Appel audio", "Appel vidéo", "Formation", "Blocage", "Deadline", "Autre"]
+            ).map((type) => <option key={type}>{type}</option>)}
           </select>
           </FieldShell>
           <FieldShell label="Début" hint="Date et heure de démarrage prévues.">

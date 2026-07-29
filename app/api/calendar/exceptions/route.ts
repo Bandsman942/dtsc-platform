@@ -51,11 +51,9 @@ export async function GET(req: Request) {
     orderBy: [{ specificDate: "desc" }, { startTime: "asc" }],
     take: 300,
   });
-  const canSeePrivateReason = requestedCollaboratorId
-    ? requestedCollaboratorId === context.calendarCollaboratorId || normalizePositionCode(context.positionCode || "") === "HR_CFO"
-    : !canViewOrganizationAvailability(context) || normalizePositionCode(context.positionCode || "") === "HR_CFO";
+  const isHrcfo = normalizePositionCode(context.positionCode || "") === "HR_CFO";
   const exceptions = records
-    .map((record) => serializeScheduleException(record, canSeePrivateReason && record.collaboratorId === (requestedCollaboratorId || context.calendarCollaboratorId) || normalizePositionCode(context.positionCode || "") === "HR_CFO"))
+    .map((record) => serializeScheduleException(record, isHrcfo || record.collaboratorId === context.calendarCollaboratorId))
     .filter((record) => (!start || (record.endDate || record.startDate || "") >= start) && (!end || (record.startDate || "") <= end) && (!type || record.type === type));
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });

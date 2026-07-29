@@ -393,3 +393,18 @@ Conserver une hiérarchie visible pour:
 - Toute action calendrier critique doit journaliser `AuditLog` et notifier les participants autorisés quand l'action les concerne.
 - L'UX mobile du calendrier suit le standard premium: filtres horizontaux, liste scrollable, détail plein écran ou panneau, actions dans menu `...`, formulaires en modale et aucune page mobile infinie.
 - Les KPI du calendrier qui ouvrent des listes secondaires (`Collaborateurs`, `Conflits`, `Disponibilités`) doivent afficher des dialogues scrollables mobile-first. `Collaborateurs` doit fournir un menu `...` par collaborateur avec des actions réelles de création d'événement préremplies; `Conflits` et `Disponibilités` doivent montrer les détails complets en plein écran mobile.
+
+<!-- SPRINT_03_WORK_SCHEDULE_RULES -->
+## Règles DTSC — planning de travail et disponibilités
+
+- Les collaborateurs `DTSC_INTERNAL` gèrent uniquement leurs propres disponibilités récurrentes, exceptions de planning et absences. La cible d'écriture doit être dérivée de la session et du `HrcfoEmployee` actif, jamais d'un `collaboratorId` navigateur arbitraire.
+- Les managers peuvent disposer d'une visibilité de lecture adaptée sans obtenir la propriété d'écriture sur le planning personnel d'autrui. Ne jamais réutiliser une permission générique comme `canManagePeople` pour autoriser l'édition des disponibilités DTSC.
+- La disponibilité est une donnée de planification, jamais du temps travaillé, une prestation réelle ou une donnée de paie.
+- Les absences et exceptions datées doivent rester distinctes des disponibilités hebdomadaires habituelles dans les validateurs, services, API et UX, même lorsqu'une table physique de compatibilité est conservée.
+- Les contrôles de conflit calendrier DTSC doivent utiliser la disponibilité effective après application des exceptions/absences et respecter la timezone utilisateur.
+- Les données historiques de planning ne doivent pas être réécrites silencieusement ; privilégier périodes d'effet, versionnement raisonnable et soft delete.
+- Les motifs privés d'absence ne doivent pas être exposés dans les vues opérationnelles collectives ou dans les notifications Web Push.
+- Un chantier ciblé `DTSC_INTERNAL` ne doit pas réinterpréter arbitrairement les règles calendrier des entreprises clientes `ORGANIZATION`.
+- Ne pas introduire de timesheet, pointage, prestation réelle, validation COO des prestations ou calcul paie dans le Sprint 3.
+<!-- /SPRINT_03_WORK_SCHEDULE_RULES -->
+

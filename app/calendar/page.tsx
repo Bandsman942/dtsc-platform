@@ -132,9 +132,12 @@ export default async function CalendarPage() {
             canViewGlobal: context.canViewGlobal,
             canViewPeopleAvailability: context.canViewPeopleAvailability,
             canManagePeople: context.canManagePeople,
+            canManagePeopleAvailability: !context.dtscInternal && context.canManagePeople,
             canOverrideConflicts: context.canOverrideConflicts,
+            dtscScheduleProjection: context.dtscInternal,
           }}
           userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
+          showLegacyAvailabilityEditor={!context.dtscInternal}
         />
       </div>
     </AppShell>

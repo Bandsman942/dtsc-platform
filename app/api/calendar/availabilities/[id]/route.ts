@@ -220,7 +220,6 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ error: "Forbidden", message: "Vous pouvez uniquement modifier votre propre planning." }, { status: 403 });
     }
     const mergedLegacy = internalCalendarAvailabilitySchema.safeParse({
-      collaboratorId: existing.collaboratorId,
       dayOfWeek: existing.dayOfWeek,
       specificDate: existing.specificDate,
       startTime: existing.startTime,

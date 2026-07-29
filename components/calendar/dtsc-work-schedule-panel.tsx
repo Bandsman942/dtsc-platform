@@ -259,6 +259,7 @@ export function DtscWorkSchedulePanel({
           record={exceptionDraft.record}
           lang={lang}
           text={text}
+          timezone={timezone}
           onClose={() => setExceptionDraft(null)}
           onSaved={(saved) => { upsertException(saved); setExceptionDraft(null); setMessage(text.saved); }}
         />
@@ -374,7 +375,7 @@ function WeeklyAvailabilityDialog({ record, isCopy, weekdays, text, timezone, on
   );
 }
 
-function ScheduleExceptionDialog({ mode, record, lang, text, onClose, onSaved }: { mode: "exception" | "absence"; record?: DtscScheduleExceptionItem; lang: "fr" | "en"; text: typeof copy.fr; onClose: () => void; onSaved: (item: DtscScheduleExceptionItem) => void }) {
+function ScheduleExceptionDialog({ mode, record, lang, text, timezone, onClose, onSaved }: { mode: "exception" | "absence"; record?: DtscScheduleExceptionItem; lang: "fr" | "en"; text: typeof copy.fr; timezone: string; onClose: () => void; onSaved: (item: DtscScheduleExceptionItem) => void }) {
   const [message, setMessage] = useState("");
   useToastMessage(message);
   const options = mode === "absence" ? absenceTypeOptions : exceptionTypes;
@@ -397,7 +398,7 @@ function ScheduleExceptionDialog({ mode, record, lang, text, onClose, onSaved }:
     if (!response.ok || !body?.exception) { setMessage(body?.message || text.saveFailed); return; }
     onSaved(body.exception);
   }
-  const startDate = record?.startDate || currentDateKey(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+  const startDate = record?.startDate || currentDateKey(timezone);
   return (
     <Dialog open title={record ? text.editException : mode === "absence" ? text.newAbsence : text.newException} description={mode === "absence" ? text.absenceFormDescription : text.exceptionFormDescription} onClose={onClose} className="h-[92dvh] max-w-2xl">
       <form onSubmit={submit} className="grid min-w-0 gap-4">
