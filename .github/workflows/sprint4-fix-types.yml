@@ -1,8 +1,9 @@
 name: Sprint 4 type boundary fix
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - feat/sprint-04-work-prestations
     paths:
       - .github/workflows/sprint4-fix-types.yml
 
@@ -69,8 +70,11 @@ jobs:
           path.write_text(text.replace(old, new))
           PY
 
-      - name: Remove temporary workflow
-        run: git rm -f .github/workflows/sprint4-fix-types.yml
+      - name: Restore permanent quality workflow and remove temporary workflow
+        run: |
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/quality-gates.yml
+          git rm -f .github/workflows/sprint4-fix-types.yml
 
       - name: Validate and push fix
         run: |
