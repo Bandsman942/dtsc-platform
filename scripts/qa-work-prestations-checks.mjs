@@ -18,6 +18,9 @@ const migration = read("prisma/migrations/20260729031000_sprint04_work_prestatio
 
 const checks = [];
 const expect = (label, condition) => checks.push({ label, ok: Boolean(condition) });
+const toMinutes = (value) => { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; };
+const netMinutes = (start, end, breakMinutes) => toMinutes(end) - toMinutes(start) - breakMinutes;
+const overlaps = (aStart, aEnd, bStart, bEnd) => toMinutes(aStart) < toMinutes(bEnd) && toMinutes(aEnd) > toMinutes(bStart);
 
 expect("Prisma WorkEntry exists", schema.includes("model DtscWorkEntry"));
 expect("Prisma WorkSubmission exists", schema.includes("model DtscWorkSubmission"));
@@ -26,7 +29,11 @@ expect("One submission per employee/week", schema.includes("@@unique([employeeId
 expect("Submission links employee and reviewer", schema.includes('relation("DtscWorkSubmissionEmployee"') && schema.includes('relation("DtscWorkSubmissionReviewer"'));
 expect("Migration creates all Sprint 4 tables", ["DtscWorkEntry", "DtscWorkSubmission", "DtscWorkSubmissionReview"].every((name) => migration.includes(`CREATE TABLE \"${name}\"`)));
 expect("Migration is expand-only regarding payroll", !/DROP\s+(TABLE|COLUMN)[\s\S]*HrcfoPayroll/i.test(migration) && !migration.includes('ALTER TABLE "HrcfoPayroll"'));
-expect("Server calculates worked minutes", service.includes("calculateWorkedMinutes") && service.includes("endTime") && service.includes("breakMinutes"));
+expect("08:00-17:00 minus 60 = 480 minutes", netMinutes("08:00", "17:00", 60) === 480);
+expect("09:00-12:30 minus 0 = 210 minutes", netMinutes("09:00", "12:30", 0) === 210);
+expect("11:00-14:00 overlaps 08:00-12:00", overlaps("08:00", "12:00", "11:00", "14:00"));
+expect("Adjacent 08:00-12:00 and 12:00-16:00 do not overlap", !overlaps("08:00", "12:00", "12:00", "16:00"));
+expect("Server calculates worked minutes", service.includes("calculateWorkedMinutes") && service.includes("timeToMinutes(endTime) - timeToMinutes(startTime)") && service.includes("breakMinutes"));
 expect("Server rejects overlapping entries", service.includes("ensureNoWorkOverlap") && service.includes("WORK_ENTRY_OVERLAP"));
 expect("Work ownership derives from session employee", service.includes("rejectCrossEmployeeWrite") && entriesRoute.includes("getWorkActor(session.userId)"));
 expect("No self validation is explicit", service.includes('submission.employeeId === actor.id') && service.includes("SELF_REVIEW_FORBIDDEN"));
