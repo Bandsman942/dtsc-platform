@@ -48,12 +48,14 @@ export function EnterpriseAdministrationSummary({
       <ModuleMetrics label={t("administrationIndicators")}>
         <ModuleMetric label={t("activeCollaborators")} value={activeMembers.length} hint={`${locale === "en" ? "Limit" : "Limite"} ${entitlements.limits.maxUsers}`} />
         <ModuleMetric label={locale === "en" ? "Active modules" : "Modules actifs"} value={`${enabledModules}/${visibleModules.length}`} hint={`${locale === "en" ? "Limit" : "Limite"} ${entitlements.limits.maxActiveModules}`} />
-        <ModuleMetric label={t("openRequests")} value={dashboard.openRequestsCount} hint={`${pendingMembers.length} ${locale === "en" ? "invitation(s)" : "invitation(s)"}`} />
-        <ModuleMetric label={locale === "en" ? "Open tasks" : "Tâches ouvertes"} value={dashboard.openTasksCount} hint={`${dashboard.overdueTasksCount} ${locale === "en" ? "overdue" : "en retard"}`} />
+        <ModuleMetric label={t("openRequests")} value={dashboard.openRequestsCount} hint={locale === "en" ? `${dashboard.submittedRequestsCount} submitted · ${dashboard.inReviewRequestsCount} in review` : `${dashboard.submittedRequestsCount} soumises · ${dashboard.inReviewRequestsCount} en revue`} />
+        <ModuleMetric label={locale === "en" ? "Open tasks" : "Tâches ouvertes"} value={dashboard.openTasksCount} hint={locale === "en" ? `${dashboard.overdueTasksCount} overdue · ${dashboard.blockedTasksCount} blocked` : `${dashboard.overdueTasksCount} en retard · ${dashboard.blockedTasksCount} bloquées`} />
         <ModuleMetric label={locale === "en" ? "Pending validations" : "Validations en attente"} value={dashboard.pendingValidationsCount} />
+        <ModuleMetric label={locale === "en" ? "Upcoming meetings" : "Réunions à venir"} value={dashboard.upcomingMeetingsCount} hint={locale === "en" ? `${dashboard.todayMeetingsCount} today` : `${dashboard.todayMeetingsCount} aujourd’hui`} />
         <ModuleMetric label={locale === "en" ? "Recent documents" : "Documents récents"} value={dashboard.recentDocumentsCount} />
         <ModuleMetric label={locale === "en" ? "Active budgets" : "Budgets actifs"} value={dashboard.activeBudgetsCount} />
         <ModuleMetric label={locale === "en" ? "Active suppliers" : "Fournisseurs actifs"} value={dashboard.activeSuppliersCount} />
+        <ModuleMetric label={locale === "en" ? "Pending invitations" : "Invitations en attente"} value={pendingMembers.length} />
       </ModuleMetrics>
     </>
   );
