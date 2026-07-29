@@ -23,6 +23,10 @@ ok(schema.includes("@@unique([meetingId, userId])"), "Meeting participants must 
 const migration = read("prisma/migrations/20260729150000_add_enterprise_core_v2/migration.sql");
 for (const table of ["EnterpriseTask", "EnterpriseRequest", "EnterpriseApproval", "EnterpriseMeeting"]) ok(migration.includes(`CREATE TABLE \"${table}\"`), `Migration missing ${table}.`);
 ok(!/DROP\s+(TABLE|COLUMN)/i.test(migration), "Sprint 6 migration must remain additive and non-destructive.");
+const approvalGuardMigration = read("prisma/migrations/20260729164000_guard_enterprise_approval_pending_target/migration.sql");
+ok(approvalGuardMigration.includes("EnterpriseApproval_one_pending_per_target_key"), "Pending approval unique guard migration is missing.");
+ok(approvalGuardMigration.includes('WHERE "status" = \'PENDING\''), "Pending approval guard must be a partial PENDING index.");
+ok(!/DROP\s+(TABLE|COLUMN)/i.test(approvalGuardMigration), "Approval race guard migration must remain additive.");
 
 const service = includes("lib/enterprise/core-v2/service.ts", [
   "status: \"PENDING\", revision",
@@ -35,6 +39,12 @@ const service = includes("lib/enterprise/core-v2/service.ts", [
   "enterpriseEntityLink.create",
 ]);
 ok((service.match(/updateMany\(/g) || []).length >= 6, "Sensitive transitions must use guarded updateMany calls.");
+
+const errors = read("lib/enterprise/core-v2/errors.ts");
+ok(errors.includes('error.code === "P2002"') && errors.includes("status: 409"), "Concurrent unique conflicts must normalize to HTTP 409.");
+
+const approvalRoute = read("app/api/enterprise/[organizationId]/approvals/route.ts");
+ok(approvalRoute.includes("pendingForTarget"), "Approval API must reject a second pending approval before insert when detectable.");
 
 const core = includes("lib/enterprise/enterprise-core.ts", ["LEGACY_CORE_WRITE_DENIED", "isDedicatedCoreDomain"]);
 ok(core.includes("EnterpriseCoreRecord"), "Legacy core implementation was unexpectedly removed.");
@@ -77,4 +87,4 @@ if (failures.length) {
   console.error("ERP Core v2 QA failed:\n- " + failures.join("\n- "));
   process.exit(1);
 }
-console.log("ERP Core v2 QA passed: dedicated domains, tenant guards, transitions, legacy safety and production-only Vercel policy verified.");
+console.log("ERP Core v2 QA passed: dedicated domains, tenant guards, transitions, approval race safety, legacy safety and production-only Vercel policy verified.");
