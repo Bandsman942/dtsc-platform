@@ -3,6 +3,28 @@ import fs from "node:fs";
 const path = "scripts/apply-payroll-hotfix-once.mjs";
 let source = fs.readFileSync(path, "utf8");
 
+const schemaStartMarker = 'replaceOnce(\n  "prisma/schema.prisma",';
+const schemaEndMarker = '\n\nlet workflow = read("lib/payroll-workflow.ts");';
+const schemaStart = source.indexOf(schemaStartMarker);
+const schemaEnd = source.indexOf(schemaEndMarker, schemaStart);
+if (schemaStart < 0 || schemaEnd < 0) throw new Error("Schema patch anchors not found");
+const schemaPatchLines = [
+  '{',
+  '  const schemaPath = "prisma/schema.prisma";',
+  '  const schema = read(schemaPath);',
+  '  const modelStart = schema.indexOf("model HrcfoPayroll {");',
+  '  const modelEnd = schema.indexOf("\\nmodel HrcfoPayrollWorkEntry {", modelStart);',
+  '  if (modelStart < 0 || modelEnd < 0) throw new Error("HrcfoPayroll model anchors missing");',
+  '  const model = schema.slice(modelStart, modelEnd);',
+  '  const from = "  @@unique([employeeId, periodStart, periodEnd])\\n  @@index([status, periodStart])";',
+  '  const to = "  @@index([employeeId, periodStart, periodEnd])\\n  @@index([status, periodStart])";',
+  '  if ((model.split(from).length - 1) !== 1) throw new Error("HrcfoPayroll unique period anchor missing");',
+  '  const updatedModel = model.replace(from, to);',
+  '  write(schemaPath, schema.slice(0, modelStart) + updatedModel + schema.slice(modelEnd));',
+  '}',
+];
+source = source.slice(0, schemaStart) + schemaPatchLines.join("\n") + source.slice(schemaEnd);
+
 const startMarker = 'write("scripts/qa-payroll-hotfix-checks.mjs", `';
 const endMarker = '\n\nappendOnce("docs/DTSC_PAYROLL_WORKFLOW.md"';
 const start = source.indexOf(startMarker);
@@ -14,6 +36,7 @@ const qaLines = [
   '',
   'const read = (path) => fs.readFileSync(path, "utf8");',
   'const schema = read("prisma/schema.prisma");',
+  'const payrollModel = schema.slice(schema.indexOf("model HrcfoPayroll {"), schema.indexOf("model HrcfoPayrollWorkEntry {"));',
   'const migration = read("prisma/migrations/20260729054500_payroll_active_period_retry/migration.sql");',
   'const workflow = read("lib/payroll-workflow.ts");',
   'const panel = read("components/admin/payroll-workflow-panel.tsx");',
@@ -24,7 +47,7 @@ const qaLines = [
   'const checks = [];',
   'const expect = (label, condition) => checks.push({ label, ok: Boolean(condition) });',
   '',
-  'expect("Payroll period is no longer globally unique in Prisma", !schema.includes("@@unique([employeeId, periodStart, periodEnd])") && schema.includes("@@index([employeeId, periodStart, periodEnd])"));',
+  'expect("Payroll period is no longer globally unique in Prisma", !payrollModel.includes("@@unique([employeeId, periodStart, periodEnd])") && payrollModel.includes("@@index([employeeId, periodStart, periodEnd])"));',
   'expect("DB keeps a partial unique active-period guard", migration.includes("HrcfoPayroll_active_period_key") && migration.includes("NOT IN (\'CANCELLED\', \'CANCELED\', \'REJECTED\')"));',
   'expect("Migration creates partial guard before dropping legacy unique index", migration.indexOf("CREATE UNIQUE INDEX") < migration.indexOf("DROP INDEX"));',
   'expect("Cancelled and rejected payrolls do not block a retry", workflow.includes(\'status: { notIn: ["CANCELLED", "CANCELED", "REJECTED"] }\'));',
@@ -90,4 +113,4 @@ const docsReplacement = docsCalls
 source = source.slice(0, docsStart) + docsReplacement + source.slice(docsEnd);
 
 fs.writeFileSync(path, source, "utf8");
-console.log("Payroll hotfix QA and documentation generators replaced safely.");
+console.log("Payroll hotfix schema, QA and documentation generators replaced safely.");
