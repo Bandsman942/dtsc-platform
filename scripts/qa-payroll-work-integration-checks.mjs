@@ -52,6 +52,7 @@ expect("CEO approval route is separated", ceoReview.includes('requireAdminBlockA
 expect("COO approval route is separated for CEO payroll", cooReview.includes('requireAdminBlockAccess("coo")') && cooReview.includes('expectedApproverCode: "COO"'));
 expect("Reviewer policy is CEO except CEO payroll to COO", workflow.includes('=== "CEO" ? "COO" : "CEO"'));
 expect("No self approval is enforced server-side", workflow.includes("SELF_APPROVAL_FORBIDDEN") && workflow.includes("payroll.employeeId === actor.id"));
+expect("Budget account is server-derived and narrowed before finance calls", (workflow.match(/accountId: budget\.accountId \|\| undefined/g) || []).length >= 2);
 expect("Financial transaction creation occurs only inside APPROVED review path", reviewSlice.includes('if (action === "APPROVED")') && reviewSlice.includes("createValidatedTransactionInTx") && !workflow.slice(0, reviewStart).includes("createValidatedTransactionInTx(tx"));
 expect("Approval uses the existing finance transaction engine", reviewSlice.includes("createValidatedTransactionInTx") && reviewSlice.includes('sourceType: "PAYROLL_WORKFLOW"'));
 expect("Approval is serialized with an advisory lock", workflow.includes("pg_advisory_xact_lock") && reviewSlice.includes("lockPayroll"));
