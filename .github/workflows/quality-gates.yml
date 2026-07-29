@@ -30,6 +30,22 @@ jobs:
         with:
           node-version: 22
 
+      - name: Sanitize temporary documentation literals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/sprint4-integrate.mjs")
+          text = path.read_text()
+          for token in [
+              "DtscWorkEntry", "DtscWorkSubmission", "DtscWorkSubmissionReview",
+              "HrcfoEmployee", "validatedMinutes = declaredMinutes",
+              "getApprovedWorkForPayroll()", "main", "HrcfoPayroll",
+              "pnpm qa:work-schedule", "pnpm qa:work-prestations", "pnpm qa:regression",
+          ]:
+              text = text.replace(f"`{token}`", token)
+          path.write_text(text)
+          PY
+
       - name: Apply Sprint 4 integration
         run: node scripts/sprint4-integrate.mjs
 
