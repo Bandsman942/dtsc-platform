@@ -32,7 +32,7 @@ expect("effective availability resolver applies timezone-aware dates", policy.in
 expect("partial absence resolution subtracts blocking intervals", policy.includes("subtractIntervalList") && policy.includes("intervalForExceptionDay"));
 expect("multi-day exceptions enumerate affected dates", policy.includes("enumerateDateKeys") && policy.includes("recurrenceUntil"));
 expect("calendar conflicts use effective DTSC availability", calendar.includes("resolveDtscEffectiveAvailability") && calendar.includes("Hors disponibilité déclarée"));
-expect("organization calendar keeps legacy compatibility path", calendar.includes("legacyAvailabilities") && availabilityCreate.includes("!context.dtscInternal"));
+expect("organization calendar keeps legacy compatibility path", calendar.includes("legacyAvailabilities") && availabilityCreate.includes("if (context.dtscInternal)") && availabilityCreate.includes("validateCalendarCollaborators(context, [parsed.data.collaboratorId])"));
 expect("absence notifications do not expose private reason", policy.includes("a déclaré ${label}") && !policy.includes("reason}`"));
 expect("workspace clearly separates weekly exceptions absences", workspace.includes('id="weekly-availability"') && workspace.includes('id="exceptions"') && workspace.includes('id="absences"'));
 expect("team view is explicitly read only", workspace.includes('id="team-availability"') && workspace.includes("lecture seule") && workspace.includes("read only"));
