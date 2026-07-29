@@ -2,68 +2,226 @@
 
 ## Objectif
 
-Le socle commun ERP fournit les objets transversaux utilisés par toutes les entreprises clientes, quel que soit leur secteur. Les modules sectoriels conservent leurs tables spécialisées et peuvent créer un objet commun lié pour organiser le travail, la validation, le reporting et la traçabilité.
+Le socle commun ERP fournit les objets transversaux utilisés par toutes les entreprises clientes, quel que soit leur secteur. Les modules sectoriels conservent leurs tables spécialisées et peuvent créer un objet transversal lié pour organiser le travail, la validation et la traçabilité.
 
-Toutes les lectures et mutations sont filtrées par `organizationId`. Un collaborateur standard ne voit que les objets qu’il a créés, demandés, reçus ou qu’il doit valider. Les responsables autorisés voient les objets de leur entreprise. Un invité ne peut pas créer ni modifier un objet.
+Depuis le Sprint 6, le socle n'utilise plus `EnterpriseCoreRecord` comme source de vérité pour les nouvelles tâches, demandes, validations et réunions. Ces domaines utilisent des modèles dédiés afin d'appliquer leurs propres champs, transitions, permissions, filtres et règles de concurrence.
 
-## Modules communs opérationnels
+Toutes les lectures et mutations sont filtrées par `organizationId`, membership actif, module activé, entitlement et permission métier. Un rôle DTSC global ne contourne jamais le membership d'une entreprise cliente.
 
-Le registre `EnterpriseCoreRecord` prend en charge les modules suivants :
+## ERP Core v2 — Sprint 6
 
-- Tâches & opérations : tâches et opérations assignables avec échéance.
-- Réunions & comptes rendus : réunions et comptes rendus suivis.
-- Demandes internes : demandes soumises depuis Administration, Activités ou un secteur.
-- Validations : décisions centralisées et motifs de rejet obligatoires.
-- Documents entreprise : références documentaires reliables aux objets métier. Le fichier privé reste géré par les routes documentaires spécialisées.
-- Rapports entreprise : rapports transversaux et rapports générés par les secteurs.
-- Finances & budgets : budgets et dépenses de suivi commun. Les règles financières spécialisées restent dans leurs services métier dédiés.
-- Fournisseurs & achats : fournisseurs et achats communs, sans remplacer les référentiels spécialisés.
-- Notifications métier : signaux métier traçables. Les notifications utilisateur continuent d’utiliser `Notification`.
+Les domaines opérationnels dédiés sont :
 
-`EnterpriseCoreEvent` conserve les changements de statut. `EnterpriseCoreComment` conserve les commentaires. `EnterpriseEntityLink` relie un objet commun à une entité commune ou sectorielle de la même entreprise.
+- `EnterpriseTask` — Tâches & opérations ;
+- `EnterpriseRequest` — Demandes internes ;
+- `EnterpriseApproval` — Validations ;
+- `EnterpriseMeeting` — Réunions & comptes rendus ;
+- `EnterpriseMeetingParticipant` — participants structurés ;
+- `EnterpriseMeetingDecision` — décisions d'une réunion ;
+- `EnterpriseOperationalEvent` et `EnterpriseOperationalComment` — timeline et commentaires communs.
+
+La documentation détaillée est disponible dans `docs/ENTERPRISE_CORE_V2.md`.
+
+## Source de vérité et Core legacy
+
+La règle est désormais :
+
+| Domaine | Source de vérité |
+| --- | --- |
+| TASK / OPERATION / ACTION | `EnterpriseTask` |
+| INTERNAL_REQUEST | `EnterpriseRequest` |
+| VALIDATION | `EnterpriseApproval` |
+| MEETING / MINUTES | `EnterpriseMeeting` |
+| DOCUMENT | `EnterpriseCoreRecord` jusqu'au Sprint 7 |
+| SUPPLIER / PURCHASE | `EnterpriseCoreRecord` jusqu'au Sprint 7 |
+| BUDGET / EXPENSE / REPORT | `EnterpriseCoreRecord` jusqu'au Sprint 8 |
+| NOTICE | `EnterpriseCoreRecord` tant qu'aucun domaine dédié ne le remplace |
+
+`EnterpriseCoreRecord` reste donc présent et lisible. Les anciens enregistrements `TASK`, `OPERATION`, `MEETING`, `MINUTES`, `INTERNAL_REQUEST` et `VALIDATION` restent visibles comme historique, mais ils sont read-only. Le serveur refuse toute nouvelle création ou mutation legacy lorsque le modèle dédié Sprint 6 s'applique.
+
+Aucune migration aveugle n'est effectuée sur les anciens `metadataJson`. Un ancien objet déterministe pourra être backfillé plus tard par une migration contrôlée ; un objet ambigu reste historique afin de ne jamais inventer de relation métier.
+
+## Tâches & opérations
+
+`EnterpriseTask` distingue créateur, assigné, département, type, priorité, début, échéance, source et éventuelle tâche parente.
+
+Machine d'état :
+
+```text
+TODO -> IN_PROGRESS
+IN_PROGRESS -> BLOCKED
+BLOCKED -> IN_PROGRESS
+IN_PROGRESS -> DONE
+TODO / IN_PROGRESS / BLOCKED -> CANCELLED
+```
+
+Les transitions passent par des commandes explicites et sont race-safe. Les modifications utilisent `revision` pour empêcher l'écrasement silencieux d'une version plus récente.
+
+## Demandes internes
+
+`EnterpriseRequest` possède son propre cycle :
+
+```text
+DRAFT -> SUBMITTED -> IN_REVIEW -> APPROVED -> FULFILLED
+                         +-------> REJECTED
+DRAFT / SUBMITTED / IN_REVIEW -> CANCELLED
+```
+
+Une demande self-service utilise toujours `session.userId` comme `requestedByUserId`. Une demande reste distincte d'une `EnterpriseApproval`.
+
+`EnterpriseActivityRequest` est conservé pour l'expérience Activités Entreprise, mais chaque nouvelle demande transversale correspondante crée un `EnterpriseRequest` lié. Il n'existe plus deux workflows éditables concurrents.
+
+## Validations
+
+`EnterpriseApproval` représente une décision sur une cible autorisée.
+
+Sprint 6 utilise volontairement une approbation simple à un approbateur désigné : une cible ne peut pas avoir plusieurs validations `PENDING` simultanées. Les chaînes multi-étapes appartiennent au Sprint 9.
+
+Règles :
+
+- approbateur membre actif de la même organisation ;
+- auto-approbation interdite par défaut ;
+- approbateur désigné vérifié côté serveur ;
+- cible vérifiée côté serveur et dans la même organisation ;
+- rejet avec `decisionComment` obligatoire ;
+- décision atomique `PENDING -> APPROVED/REJECTED` avec `revision` ;
+- double décision simultanée : une seule réussit, l'autre reçoit `409 Conflict`.
+
+## Réunions & comptes rendus
+
+`EnterpriseMeeting` contient directement l'agenda, les participants, le mode, le lieu/lien, le compte rendu et les décisions.
+
+Machine d'état :
+
+```text
+SCHEDULED -> IN_PROGRESS -> COMPLETED
+SCHEDULED / IN_PROGRESS -> CANCELLED
+```
+
+`MINUTES` n'est plus créé comme pseudo-réunion séparée. `EnterpriseMeetingParticipant` impose l'unicité `(meetingId, userId)` et tous les participants doivent être des membres actifs de la même organisation.
+
+Une `EnterpriseMeetingDecision` peut générer une `EnterpriseTask` de type `ACTION`. La génération est transactionnelle et liée par `EnterpriseEntityLink`.
+
+## EnterpriseEntityLink
+
+`EnterpriseEntityLink` reste la relation transversale commune. Les liens Sprint 6 couvrent notamment :
+
+```text
+EnterpriseActivityRequest -> EnterpriseRequest
+EnterpriseRequest -> EnterpriseApproval
+EnterpriseMeeting -> EnterpriseMeetingDecision
+EnterpriseMeetingDecision -> EnterpriseTask
+PharmacyActivityItem -> EnterpriseRequest / EnterpriseTask
+Sector entity -> EnterpriseTask
+```
+
+La source doit exister dans la même `organizationId` avant création du lien. Un lien inter-tenant est refusé.
 
 ## Administration et Activités
 
-Administration affiche des indicateurs issus des données réelles : tâches ouvertes, tâches en retard, validations en attente, documents récents, budgets actifs et fournisseurs actifs. Les modules communs compatibles ouvrent un espace avec recherche, pagination, formulaire guidé, détail, commentaires et actions de traitement.
+Administration Entreprise utilise désormais les tables v2 pour les indicateurs réels :
 
-Une demande créée depuis Activités entreprise génère aussi une demande commune liée. La demande initiale reste disponible dans `EnterpriseActivityRequest`, tandis que le suivi transversal est conservé dans `EnterpriseCoreRecord`.
+- tâches ouvertes, en retard et bloquées ;
+- demandes ouvertes, soumises et en revue ;
+- validations en attente ;
+- réunions du jour et à venir.
 
-Les libellés des formulaires sont en français métier et disposent d’une aide contextuelle. Les formulaires et listes utilisent des conteneurs `min-w-0`, des cartes responsives et des modales à hauteur bornée.
+Documents, budgets et fournisseurs continuent temporairement d'utiliser le Core legacy.
+
+Les modules Sprint 6 ouvrent des workspaces dédiés :
+
+- `EnterpriseTasksWorkspace` ;
+- `EnterpriseRequestsWorkspace` ;
+- `EnterpriseApprovalsWorkspace` ;
+- `EnterpriseMeetingsWorkspace`.
+
+Ils utilisent la logique DTSC `Header -> Metrics -> Toolbar -> BusinessList -> Detail -> Context actions`, avec filtres et pagination côté serveur et historique legacy discret en lecture seule.
 
 ## Permissions
 
-Les permissions communes sont centralisées dans `lib/enterprise/enterprise-core-permissions.ts`.
+Les permissions legacy restent centralisées dans `lib/enterprise/enterprise-core-permissions.ts`. Les nouveaux domaines utilisent `lib/enterprise/core-v2/access.ts` en réutilisant les contrôles de module/entitlement existants.
 
-- `OWNER` et `ADMIN_ENTERPRISE` : lecture, création, décision et administration.
-- `MANAGER` : lecture, création, mise à jour et validation, sans administration propriétaire.
-- `MEMBER` : lecture et création, puis actions uniquement sur les objets qui le concernent.
-- `GUEST` : lecture limitée uniquement.
+- `OWNER` / `ADMIN_ENTERPRISE` : visibilité et gestion larges selon le module ;
+- `MANAGER` : gestion du périmètre autorisé, sans privilèges propriétaire automatiques ;
+- `MEMBER` : objets où il est créateur, demandeur, assigné, participant ou approbateur désigné ;
+- `GUEST` : lecture limitée, aucune mutation métier sensible.
 
-Le backend réapplique toujours l’appartenance active, l’activation du module, l’entitlement et les droits du rôle.
+Le backend reste autoritatif. La visibilité d'un bouton n'accorde jamais une permission.
 
-## Intégration sectorielle et PHARMACY
+## Intégration sectorielle
 
-Un secteur crée un objet commun avec `sourceModule`, `sourceEntityType`, `sourceEntityId` et `sectorCode`. Le service crée alors un lien `GENERATED` vers l’objet commun. Cette abstraction est compatible avec PHARMACY, HEALTH_CARE et les futurs secteurs.
+Les tables PHARMACY et HEALTH_CARE restent les sources métier sectorielles.
 
-Les activités PHARMACY alimentent automatiquement le socle :
+PHARMACY utilise le dispatch Sprint 6 :
 
-- demandes de réapprovisionnement, ajustements, avis pharmacien et documents vers Demandes internes ;
-- rapports caisse et inventaires vers Rapports entreprise ;
-- ruptures, péremptions, anomalies, incidents qualité et actions génériques vers Tâches & opérations.
+- demandes de réapprovisionnement, ajustements, avis pharmacien et documents -> `EnterpriseRequest` ;
+- ruptures, péremptions, anomalies et actions transversales -> `EnterpriseTask` ;
+- rapports caisse et inventaire -> `EnterpriseCoreRecord(REPORT)` jusqu'au Sprint 8.
 
-Les tables PHARMACY restent la source métier spécialisée. Le socle commun sert au suivi transversal et ne modifie pas directement les stocks, ventes, lots, caisses ou incidents.
+Une tâche transversale ne recopie pas inutilement les données sectorielles sensibles. Elle conserve un résumé minimal et un lien vers la source autorisée.
+
+HEALTH_CARE peut être une source autorisée pour un objet transversal, mais les données cliniques spécialisées et confidentielles restent dans leurs modèles Santé.
 
 ## API
 
-- `GET /api/enterprise/{organizationId}/core?moduleCode=...` : liste les objets visibles avec événements et commentaires récents.
-- `POST /api/enterprise/{organizationId}/core` : crée un objet après validation Zod des références et permissions.
-- `PATCH /api/enterprise/{organizationId}/core/{id}` : commence, soumet, demande validation, valide, rejette, termine, annule, archive ou commente.
+### Sprint 6 dédié
 
-Les mutations vérifient l’origine, appliquent un rate limit, valident les références de collaborateurs et départements, puis écrivent `AuditLog` et `ApiLog`.
+```text
+GET/POST   /api/enterprise/{organizationId}/tasks
+GET/PATCH  /api/enterprise/{organizationId}/tasks/{id}
+POST       /api/enterprise/{organizationId}/tasks/{id}/actions
 
-## Limites restantes
+GET/POST   /api/enterprise/{organizationId}/requests
+GET/PATCH  /api/enterprise/{organizationId}/requests/{id}
+POST       /api/enterprise/{organizationId}/requests/{id}/actions
 
-- Les pièces jointes du noyau commun ne disposent pas encore d’une route d’upload privée dédiée ; les fichiers spécialisés restent gérés par les modules documentaires existants.
-- La matrice de permissions par poste et les overrides utilisateur ne sont pas encore persistés dans des tables dédiées ; l’itération applique un mapping serveur strict par rôle et module.
-- Les workflows communs existants sont configurables, mais leur exécution automatique étape par étape n’est pas encore migrée vers le noyau.
-- Les données historiques génériques ne sont pas transformées automatiquement en `EnterpriseCoreRecord`.
+GET/POST   /api/enterprise/{organizationId}/approvals
+GET        /api/enterprise/{organizationId}/approvals/{id}
+POST       /api/enterprise/{organizationId}/approvals/{id}/actions
+
+GET/POST   /api/enterprise/{organizationId}/meetings
+GET/PATCH  /api/enterprise/{organizationId}/meetings/{id}
+POST       /api/enterprise/{organizationId}/meetings/{id}/actions
+POST       /api/enterprise/{organizationId}/meetings/{id}/decisions
+POST       /api/enterprise/{organizationId}/meetings/{id}/decisions/{decisionId}/task
+```
+
+Les listes utilisent pagination, recherche, filtres et tri côté serveur.
+
+### Core legacy
+
+```text
+GET  /api/enterprise/{organizationId}/core?moduleCode=...
+POST /api/enterprise/{organizationId}/core
+PATCH /api/enterprise/{organizationId}/core/{id}
+```
+
+Ces routes restent disponibles pour les domaines legacy. Les créations/mutations Sprint 6 génériques sont explicitement refusées.
+
+Toutes les mutations appliquent same-origin, Zod, `await rateLimit(...)`, contrôle membership/module/permission, `AuditLog` et `ApiLog` selon la sensibilité.
+
+## Migration et QA
+
+La migration additive Sprint 6 est :
+
+```text
+prisma/migrations/20260729150000_add_enterprise_core_v2/migration.sql
+```
+
+Elle ne supprime ni `EnterpriseCoreRecord` ni ses colonnes.
+
+Le script dédié :
+
+```text
+pnpm qa:enterprise-core-v2
+```
+
+est inclus dans `pnpm qa:regression` et vérifie modèles dédiés, migration additive, isolation, transitions, sécurité des validations, producteurs migrés, workspaces dédiés et politique Vercel production-only.
+
+## Limites restantes / prochains sprints
+
+- Sprint 7 : Documents / Suppliers / Purchases ;
+- Sprint 8 : Budgets / Expenses / Reports ;
+- Sprint 9 : Workflow Engine et politiques d'approbation avancées.
+
+Aucun Kanban lourd, Gantt, workflow builder, BPMN ni moteur de reminders complexe n'est introduit au Sprint 6.
