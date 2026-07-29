@@ -26,13 +26,15 @@ jobs:
           fetch-depth: 0
 
       - name: Apply Sprint 5 integration patch
-        run: python scripts/sprint5-integrate.py
+        run: |
+          python scripts/sprint5-fix-patcher.py
+          python scripts/sprint5-integrate.py
 
       - name: Restore permanent quality workflow and clean one-shot patcher
         run: |
           git fetch origin main
           git checkout origin/main -- .github/workflows/quality-gates.yml
-          git rm -f scripts/sprint5-integrate.py scripts/sprint5-trigger.txt
+          git rm -f scripts/sprint5-integrate.py scripts/sprint5-fix-patcher.py scripts/sprint5-trigger.txt
 
       - name: Validate and push integrated branch
         run: |
