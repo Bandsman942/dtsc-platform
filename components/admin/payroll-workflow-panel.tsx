@@ -336,6 +336,7 @@ function PayrollDetail({ payroll, locale, t }: { payroll: PayrollWorkflowItem; l
       {payroll.bonusReason ? <p className="mt-3 text-sm"><strong>{t("bonusReason")}:</strong> {payroll.bonusReason}</p> : null}
       {payroll.deductionReason ? <p className="mt-2 text-sm"><strong>{t("deductionReason")}:</strong> {payroll.deductionReason}</p> : null}
       {payroll.baseAmountOverrideReason ? <p className="mt-2 text-sm"><strong>{t("baseOverrideReason")}:</strong> {payroll.baseAmountOverrideReason}</p> : null}
+      {payroll.adjustmentEvidenceUrl ? <a href={payroll.adjustmentEvidenceUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-bold text-dtsc-blue underline underline-offset-4">{t("openAdjustmentEvidence")}</a> : null}
     </BusinessDetailSection>
     <BusinessDetailSection title={t("workEvidence")} description={t("workEvidenceDescription")}>
       <BusinessDetailGrid>

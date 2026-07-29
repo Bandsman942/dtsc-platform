@@ -191,7 +191,7 @@ export async function preparePayroll(actor: PayrollActor, input: z.infer<typeof 
   assertPeriod(periodStart, periodEnd);
 
   const employee = await prisma.hrcfoEmployee.findUnique({ where: { id: input.employeeId }, include: { position: true } });
-  if (!employee) throw new PayrollWorkflowError("EMPLOYEE_NOT_FOUND", "Collaborateur introuvable.", 404);
+  if (!employee || employee.status === "EXITED") throw new PayrollWorkflowError("EMPLOYEE_NOT_FOUND", "Collaborateur actif introuvable.", 404);
   const budget = await getUsableBudget(input.budgetId);
   const duplicate = await prisma.hrcfoPayroll.findUnique({
     where: { employeeId_periodStart_periodEnd: { employeeId: employee.id, periodStart, periodEnd } },
@@ -210,6 +210,7 @@ export async function preparePayroll(actor: PayrollActor, input: z.infer<typeof 
   });
   const amounts = calculatePayrollAmounts(amount.grossAmount, input.bonusAmount, input.deductionAmount);
   assertAdjustmentReasons(input.bonusAmount, input.bonusReason, input.deductionAmount, input.deductionReason);
+  assertOwnedOperationEvidence(input.adjustmentEvidenceUrl, actor.userId);
 
   const payroll = await prisma.$transaction(async (tx) => {
     const created = await tx.hrcfoPayroll.create({
@@ -272,6 +273,10 @@ export async function updatePreparedPayroll(actor: PayrollActor, payrollId: stri
   const deductionReason = input.deductionReason === undefined ? existing.deductionReason : clean(input.deductionReason);
   assertAdjustmentReasons(bonusAmount, bonusReason, deductionAmount, deductionReason);
   const amounts = calculatePayrollAmounts(amount.grossAmount, bonusAmount, deductionAmount);
+  const adjustmentEvidenceUrl = input.adjustmentEvidenceUrl === undefined ? existing.adjustmentEvidenceUrl : clean(input.adjustmentEvidenceUrl);
+  if (input.adjustmentEvidenceUrl !== undefined && adjustmentEvidenceUrl !== existing.adjustmentEvidenceUrl) {
+    assertOwnedOperationEvidence(adjustmentEvidenceUrl, actor.userId);
+  }
 
   const refreshEvidence = existing.status === "DRAFT";
   const evidence = refreshEvidence ? await loadApprovedWorkEvidence(existing.employeeId, existing.periodStart, existing.periodEnd) : null;
@@ -302,7 +307,7 @@ export async function updatePreparedPayroll(actor: PayrollActor, payrollId: stri
         approvedWorkEntryCount: evidence?.entryCount ?? existing.approvedWorkEntryCount,
         approvedSubmissionCount: evidence?.submissionCount ?? existing.approvedSubmissionCount,
         workEvidenceCapturedAt: evidence ? new Date() : existing.workEvidenceCapturedAt,
-        adjustmentEvidenceUrl: input.adjustmentEvidenceUrl === undefined ? existing.adjustmentEvidenceUrl : clean(input.adjustmentEvidenceUrl),
+        adjustmentEvidenceUrl,
         notes: input.notes === undefined ? existing.notes : clean(input.notes),
         preparedByEmployeeId: actor.id,
       },
@@ -422,6 +427,16 @@ export async function reviewPayroll({
     let transactionId: string | null = payroll.transactionId;
     if (action === "APPROVED") {
       if (Number(payroll.netAmount) <= 0) throw new PayrollWorkflowError("INVALID_NET", "Le montant net doit être positif avant approbation.", 409);
+      const existingTransaction = await tx.hrcfoExpense.findFirst({ where: { sourceType: "PAYROLL_WORKFLOW", sourceId: payroll.id } });
+      if (existingTransaction && (
+        Number(existingTransaction.amount) !== Number(payroll.netAmount) ||
+        existingTransaction.budgetId !== budget.id ||
+        existingTransaction.accountId !== budget.accountId ||
+        existingTransaction.transactionType !== "PAYROLL" ||
+        existingTransaction.transactionCategory !== "OUT"
+      )) {
+        throw new PayrollWorkflowError("TRANSACTION_IDEMPOTENCY_MISMATCH", "Une transaction PAYROLL_WORKFLOW incohérente existe déjà pour cette paie.", 409);
+      }
       const transaction = await createValidatedTransactionInTx(tx, {
         title: `Paie ${payroll.employee.fullName}`,
         requesterName: payroll.employee.fullName,
@@ -743,12 +758,42 @@ function calculatePayrollAmounts(grossAmount: number, bonusAmount = 0, deduction
   return { grossAmount: gross, bonusAmount: bonus, deductionAmount: deduction, netAmount: net };
 }
 
+function assertBaseAmountSource(payroll: PayrollDetail) {
+  const grossAmount = roundMoney(Number(payroll.grossAmount));
+  if (payroll.baseAmountSource === "MONTHLY_COMPENSATION") {
+    const monthly = payroll.employee.monthlyCompensation == null ? null : roundMoney(Number(payroll.employee.monthlyCompensation));
+    if (!isFullCalendarMonth(payroll.periodStart, payroll.periodEnd) || monthly == null || grossAmount !== monthly) {
+      throw new PayrollWorkflowError("BASE_AMOUNT_STALE", "La rémunération de base ne correspond plus au dossier RH. HR & CFO doit corriger le brouillon avant approbation.", 409);
+    }
+    return;
+  }
+  if (payroll.baseAmountSource === "EXPLICIT_OVERRIDE") {
+    const override = payroll.baseAmountOverride == null ? null : roundMoney(Number(payroll.baseAmountOverride));
+    if (override == null || !payroll.baseAmountOverrideReason?.trim() || grossAmount !== override) {
+      throw new PayrollWorkflowError("BASE_OVERRIDE_INVALID", "Le montant de base explicite et son motif sont incohérents.", 409);
+    }
+    return;
+  }
+  throw new PayrollWorkflowError("BASE_AMOUNT_SOURCE_INVALID", "La source de rémunération de base est absente ou invalide.", 409);
+}
+
+function assertOwnedOperationEvidence(value: string | null | undefined, userId: string | null) {
+  const url = clean(value);
+  if (!url) return;
+  if (!userId) throw new PayrollWorkflowError("EVIDENCE_FORBIDDEN", "Le justificatif privé ne peut pas être rattaché à ce compte.", 403);
+  const expectedPrefix = `/api/admin/operation-files/operations/${encodeURIComponent(userId)}/`;
+  if (!url.startsWith(expectedPrefix)) {
+    throw new PayrollWorkflowError("EVIDENCE_FORBIDDEN", "Le justificatif doit provenir de l'upload privé contrôlé DTSC de l'utilisateur courant.", 403);
+  }
+}
+
 function assertAdjustmentReasons(bonusAmount: number, bonusReason?: string | null, deductionAmount = 0, deductionReason?: string | null) {
   if (bonusAmount > 0 && !bonusReason?.trim()) throw new PayrollWorkflowError("BONUS_REASON_REQUIRED", "Un motif est obligatoire pour toute prime.");
   if (deductionAmount > 0 && !deductionReason?.trim()) throw new PayrollWorkflowError("DEDUCTION_REASON_REQUIRED", "Un motif est obligatoire pour toute retenue.");
 }
 
 function assertPayrollReadyForSubmission(payroll: PayrollDetail) {
+  assertBaseAmountSource(payroll);
   assertAdjustmentReasons(Number(payroll.bonusAmount), payroll.bonusReason, Number(payroll.deductionAmount), payroll.deductionReason);
   const recomputed = calculatePayrollAmounts(Number(payroll.grossAmount), Number(payroll.bonusAmount), Number(payroll.deductionAmount));
   if (recomputed.netAmount !== Number(payroll.netAmount)) throw new PayrollWorkflowError("NET_MISMATCH", "Le montant net doit être recalculé avant soumission.", 409);

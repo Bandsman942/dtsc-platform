@@ -690,6 +690,7 @@
     "review_CHANGES_REQUESTED": "Changes requested",
     "review_REJECTED": "Rejected",
     "review_PAID": "Payment confirmed",
-    "review_CANCELLED": "Cancelled"
+    "review_CANCELLED": "Cancelled",
+    "openAdjustmentEvidence": "Open private evidence"
   }
 }

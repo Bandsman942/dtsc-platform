@@ -690,6 +690,7 @@
     "review_CHANGES_REQUESTED": "Correction demandée",
     "review_REJECTED": "Refusée",
     "review_PAID": "Paiement confirmé",
-    "review_CANCELLED": "Annulée"
+    "review_CANCELLED": "Annulée",
+    "openAdjustmentEvidence": "Ouvrir le justificatif privé"
   }
 }

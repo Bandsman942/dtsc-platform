@@ -157,3 +157,8 @@ Aucun Preview Deployment et aucun `vercel --prod` manuel n'est introduit par le 
 ## Frontière Sprint 6
 
 Le Sprint 5 ne crée aucun moteur ERP générique, aucune `EnterpriseTask`, `EnterpriseRequest`, `EnterpriseApproval` ou `EnterpriseMeeting`. Ces sujets restent hors de cette PR.
+
+
+## Sécurité des justificatifs privés
+
+Les justificatifs d'ajustement utilisent exclusivement l'upload privé `operation-files` déjà contrôlé par DTSC. Le backend refuse une URL arbitraire ou un fichier appartenant à un autre utilisateur préparateur. La route d'upload applique same-origin, limites MIME/taille, rate limiting, RBAC, audit et stockage Supabase privé. L'approbateur peut ouvrir le justificatif depuis le détail financier sans rendre le fichier public.
