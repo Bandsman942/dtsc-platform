@@ -221,7 +221,7 @@ export async function preparePayroll(actor: PayrollActor, input: z.infer<typeof 
         bonusAmount: amounts.bonusAmount,
         deductionAmount: amounts.deductionAmount,
         netAmount: amounts.netAmount,
-        accountId: budget.accountId,
+        accountId: budget.accountId || undefined,
         budgetId: budget.id,
         status: "DRAFT",
         notes: clean(input.notes),

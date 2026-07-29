@@ -73,7 +73,7 @@ function parseEntity(entity: HrcfoEntity, body: Record<string, unknown>) {
   if (entity === "budgets") {
     return hrcfoSchemas.budgets.safeParse(body);
   }
-  return hrcfoSchemas.payrolls.safeParse(body);
+  return hrcfoSchemas.budgets.safeParse(body);
 }
 
 async function createRecord(entity: HrcfoEntity, data: Record<string, unknown>, createdById: string) {
