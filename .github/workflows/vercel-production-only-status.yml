@@ -1,0 +1,36 @@
+name: Vercel production-only status
+
+on:
+  repository_dispatch:
+    types:
+      - vercel.deployment.error
+      - vercel.deployment.failed
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  normalize-disabled-preview:
+    if: ${{ github.event.client_payload.environment == 'preview' && github.event.client_payload.git.sha != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mark disabled preview as expected
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.client_payload?.git?.sha;
+            if (!sha) {
+              core.setFailed('Vercel repository_dispatch payload is missing git.sha');
+              return;
+            }
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state: 'success',
+              context: 'Vercel',
+              description: 'Preview intentionally disabled; production deploys only from main.',
+            });
