@@ -16,6 +16,15 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import { translate } from "@/lib/i18n";
 
+type ScheduleConflict = { workEntryId: string; workDate: string; id: string; status: string; startTime: string; endTime: string };
+type ScheduleContext = {
+  timezone: string;
+  blocking: Array<{ id: string; status: string; startTime: string; endTime: string }>;
+  warnings: Array<{ id: string; status: string; startTime: string; endTime: string }>;
+  outsideAvailability: boolean;
+  hasDeclaredAvailability: boolean;
+};
+
 type WorkEntry = {
   id: string;
   workDate: string;
@@ -32,6 +41,7 @@ type WorkEntry = {
   scheduleOutsideAvailability: boolean;
   scheduleBlockingCount: number;
   scheduleWarningCount: number;
+  scheduleContext?: ScheduleContext;
 };
 
 type Review = { id: string; actorEmployeeId: string; action: string; comment: string | null; createdAt: string };
@@ -50,6 +60,13 @@ type Submission = {
   entries: WorkEntry[];
   reviews: Review[];
   employee: { id: string; fullName: string; jobTitle: string; positionCode: string; department: string };
+  planning?: {
+    timezone: string;
+    entriesWithDeclaredAvailability: number;
+    entriesOutsideAvailability: number;
+    blockingConflicts: ScheduleConflict[];
+    warningConflicts: ScheduleConflict[];
+  };
 };
 
 type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REJECTED";
@@ -61,6 +78,7 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [selected, setSelected] = useState<Submission | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState("");
@@ -93,6 +111,16 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
   const changesCount = submissions.filter((item) => item.status === "CHANGES_REQUESTED").length;
   const approvedCount = submissions.filter((item) => item.status === "APPROVED").length;
   const rejectedCount = submissions.filter((item) => item.status === "REJECTED").length;
+
+  const openSubmission = useCallback(async (submission: Submission) => {
+    setSelected(submission);
+    setDetailLoading(true);
+    const response = await fetch(`${endpoint}/${submission.id}`, { cache: "no-store" });
+    const body = (await response.json().catch(() => null)) as { submission?: Submission; message?: string } | null;
+    if (response.ok && body?.submission) setSelected(body.submission);
+    else setMessage(body?.message || t("reviewLoadError"));
+    setDetailLoading(false);
+  }, [endpoint, t]);
 
   async function review() {
     if (!selected || !decision) return;
@@ -164,11 +192,11 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
                   meta={`${submission.employee.jobTitle} · ${submission.employee.department} · ${formatDate(submission.periodStart, locale)} → ${formatDate(submission.periodEnd, locale)}`}
                   description={`${t("declaredTime")}: ${formatMinutes(submission.declaredMinutes)} · ${t("entries")}: ${submission.entries.length}${scheduleIssueCount(submission) ? ` · ${t("scheduleIssues")}: ${scheduleIssueCount(submission)}` : ""}`}
                   status={<StatusBadge tone={statusTone(submission.status)}>{statusLabel(t, submission.status)}</StatusBadge>}
-                  onOpen={() => setSelected(submission)}
+                  onOpen={() => void openSubmission(submission)}
                   openLabel={`${t("review")} ${submission.employee.fullName}`}
                   actions={(
                     <ContextActions label={t("actions")} actions={[
-                      { id: "review", label: t("review"), icon: Eye, onSelect: () => setSelected(submission) },
+                      { id: "review", label: t("review"), icon: Eye, onSelect: () => void openSubmission(submission) },
                     ]} />
                   )}
                 />
@@ -184,7 +212,7 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
         description={t("reviewDetailDescription")}
         onClose={() => { setSelected(null); setDecision(null); setComment(""); }}
         className="h-[94dvh] sm:h-[92dvh]"
-        footer={selected?.status === "SUBMITTED" ? (
+        footer={selected?.status === "SUBMITTED" && !detailLoading ? (
           <>
             <Button type="button" variant="outline" onClick={() => setDecision("CHANGES_REQUESTED")} className="rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-300"><RotateCcw className="h-4 w-4" /> {t("requestChanges")}</Button>
             <Button type="button" variant="outline" onClick={() => setDecision("REJECTED")} className="rounded-xl border-red-500/40 text-red-700 dark:text-red-300"><XCircle className="h-4 w-4" /> {t("reject")}</Button>
@@ -192,7 +220,7 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
           </>
         ) : undefined}
       >
-        {selected ? <SubmissionDetail submission={selected} locale={locale} t={t} /> : null}
+        {detailLoading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("loading")}</p> : selected ? <SubmissionDetail submission={selected} locale={locale} t={t} /> : null}
       </Dialog>
 
       <Dialog
@@ -228,6 +256,8 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale }: { reviewerRo
 
 function SubmissionDetail({ submission, locale, t }: { submission: Submission; locale?: string | null; t: (key: string) => string }) {
   const issues = scheduleIssueCount(submission);
+  const planning = submission.planning;
+  const planningConflicts = planning ? [...planning.blockingConflicts, ...planning.warningConflicts] : [];
   return (
     <BusinessDetail>
       <BusinessDetailHeader
@@ -244,14 +274,43 @@ function SubmissionDetail({ submission, locale, t }: { submission: Submission; l
           <BusinessDetailField label={t("scheduleIssues")} value={String(issues)} />
         </BusinessDetailGrid>
       </BusinessDetailSection>
-      {issues ? (
-        <BusinessDetailSection title={t("planningComparison")} description={t("planningComparisonDescription")}>
+      <BusinessDetailSection title={t("planningComparison")} description={t("planningComparisonDescription")}>
+        {planning ? (
+          <div className="space-y-4">
+            <BusinessDetailGrid>
+              <BusinessDetailField label={t("scheduleOk")} value={String(planning.entriesWithDeclaredAvailability)} />
+              <BusinessDetailField label={t("outsideSchedule")} value={String(planning.entriesOutsideAvailability)} />
+              <BusinessDetailField label={t("absenceConflict")} value={String(planning.blockingConflicts.length)} />
+              <BusinessDetailField label={t("scheduleWarning")} value={String(planning.warningConflicts.length)} />
+            </BusinessDetailGrid>
+            {planningConflicts.length ? (
+              <BusinessList ariaLabel={t("planningComparison")}>
+                {planningConflicts.map((conflict, index) => (
+                  <BusinessListItem
+                    key={`${conflict.workEntryId}-${conflict.id}-${index}`}
+                    title={planning.blockingConflicts.some((item) => item.id === conflict.id && item.workEntryId === conflict.workEntryId) ? t("absenceConflict") : t("scheduleWarning")}
+                    meta={`${formatDate(conflict.workDate, locale)} · ${conflict.startTime} → ${conflict.endTime}`}
+                    description={conflict.status}
+                  />
+                ))}
+              </BusinessList>
+            ) : (
+              <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">
+                <CheckCircle2 className="h-5 w-5 shrink-0" /> {t("scheduleOk")}
+              </div>
+            )}
+          </div>
+        ) : issues ? (
           <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-6 text-amber-800 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{t("planningIssuesPresent")}</span>
           </div>
-        </BusinessDetailSection>
-      ) : null}
+        ) : (
+          <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">
+            <CheckCircle2 className="h-5 w-5 shrink-0" /> {t("scheduleOk")}
+          </div>
+        )}
+      </BusinessDetailSection>
       <BusinessDetailSection title={t("entries")} description={t("entriesDetailDescription")}>
         <BusinessList ariaLabel={t("entries")}>
           {submission.entries.map((entry) => (
@@ -260,11 +319,11 @@ function SubmissionDetail({ submission, locale, t }: { submission: Submission; l
               title={entry.summary}
               meta={`${formatDate(entry.workDate, locale)} · ${entry.startTime} → ${entry.endTime} · ${formatMinutes(entry.workedMinutes)}`}
               description={`${workTypeLabel(t, entry.workType)} · ${entry.locationMode || t("locationUnknown")}${entry.details ? ` · ${entry.details}` : ""}`}
-              status={entry.scheduleBlockingCount > 0
+              status={entry.scheduleContext?.blocking.length || entry.scheduleBlockingCount > 0
                 ? <StatusBadge tone="danger">{t("absenceConflict")}</StatusBadge>
-                : entry.scheduleOutsideAvailability
+                : entry.scheduleContext?.outsideAvailability || entry.scheduleOutsideAvailability
                   ? <StatusBadge tone="warning">{t("outsideSchedule")}</StatusBadge>
-                  : entry.scheduleWarningCount > 0
+                  : entry.scheduleContext?.warnings.length || entry.scheduleWarningCount > 0
                     ? <StatusBadge tone="info">{t("scheduleWarning")}</StatusBadge>
                     : <StatusBadge tone="success">{t("scheduleOk")}</StatusBadge>}
             />
