@@ -46,6 +46,7 @@ expect("DB guards workflow transitions", migration.includes("guard_dtsc_payroll_
 expect("Approved work helper is reused", workflow.includes("getApprovedWorkForPayroll") && workflow.includes("loadApprovedWorkEvidence"));
 expect("Cross-month weekly evidence filters by workDate", workflow.includes("entry.workDate >= periodStart && entry.workDate <= periodEnd") && workflow.includes("mondayOnOrBefore") && workflow.includes("sundayOnOrAfter"));
 expect("Only approved submissions feed evidence", workflow.includes("getApprovedWorkForPayroll") && workflow.includes('submission: { status: "APPROVED" }'));
+expect("Exited employees cannot receive a new Sprint 5 preparation", workflow.includes('employee.status === "EXITED"') && workflow.includes("Collaborateur actif introuvable"));
 expect("Standard gross comes from HR compensation", workflow.includes("employeeMonthlyCompensation") && workflow.includes('source: "MONTHLY_COMPENSATION"'));
 expect("Standard gross is revalidated before financial approval", workflow.includes("assertBaseAmountSource(payroll)") && workflow.includes("BASE_AMOUNT_STALE"));
 expect("Partial periods require explicit override", workflow.includes("BASE_OVERRIDE_REQUIRED") && workflow.includes("Une période partielle ne peut pas être proratisée automatiquement"));
