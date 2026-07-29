@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import {
-  canViewOrganizationAvailability,
   dateOnlyToUtcDate,
   dtscScheduleExceptionSchema,
   dtscScheduleExceptionWhere,
@@ -16,7 +15,6 @@ import {
   rejectCrossCollaboratorWrite,
   scheduleExceptionStatusForType,
   serializeScheduleException,
-  todayDateKey,
 } from "@/lib/work-schedule";
 
 export async function GET(req: Request) {
