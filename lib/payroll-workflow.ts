@@ -414,7 +414,7 @@ export async function getPayrollApprovalQueue(actor: PayrollActor, expectedAppro
     orderBy: [{ submittedAt: "desc" }, { updatedAt: "desc" }],
     take: 250,
   });
-  return payrolls.filter((payroll) => payroll.employeeId !== actor.id).map(serializePayroll);
+  return payrolls.filter((payroll) => payroll.employeeId !== actor.id).map((payroll) => serializePayroll(payroll));
 }
 
 export async function getPayrollApprovalDetail(actor: PayrollActor, payrollId: string, expectedApproverCode: PayrollApproverCode) {
