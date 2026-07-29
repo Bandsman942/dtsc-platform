@@ -32,6 +32,8 @@ export type EnterpriseAdminDashboard = {
   recentDocumentsCount: number;
   activeBudgetsCount: number;
   activeSuppliersCount: number;
+  generatedReportsCount: number;
+  publishedReportsCount: number;
 };
 
 export type EnterpriseSaasEntitlements = {
