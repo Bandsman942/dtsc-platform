@@ -13,8 +13,8 @@ export const ENTERPRISE_CORE_V2_ENTITY_TYPES = {
   MEETING_DECISION: "EnterpriseMeetingDecision",
 } as const;
 
-export const DEDICATED_CORE_RECORD_TYPES = new Set(["TASK", "OPERATION", "MEETING", "MINUTES", "INTERNAL_REQUEST", "VALIDATION"]);
-export const DEDICATED_CORE_MODULE_CODES = new Set(Object.values(ENTERPRISE_CORE_V2_MODULES));
+export const DEDICATED_CORE_RECORD_TYPES = new Set<string>(["TASK", "OPERATION", "MEETING", "MINUTES", "INTERNAL_REQUEST", "VALIDATION"]);
+export const DEDICATED_CORE_MODULE_CODES = new Set<string>(Object.values(ENTERPRISE_CORE_V2_MODULES));
 
 export const TASK_TYPES = ["TASK", "OPERATION", "ACTION"] as const;
 export const TASK_PRIORITIES = ["LOW", "NORMAL", "HIGH", "CRITICAL"] as const;
@@ -57,7 +57,7 @@ export const MEETING_LOCATION_MODES = ["ONLINE", "PHYSICAL", "HYBRID"] as const;
 export const MEETING_PARTICIPANT_ROLES = ["PARTICIPANT", "OPTIONAL", "OBSERVER"] as const;
 export const MEETING_RESPONSE_STATUSES = ["INVITED", "ACCEPTED", "DECLINED", "TENTATIVE"] as const;
 
-export const SUPPORTED_SOURCE_ENTITY_TYPES = new Set([
+export const SUPPORTED_SOURCE_ENTITY_TYPES = new Set<string>([
   "EnterpriseTask",
   "EnterpriseRequest",
   "EnterpriseMeeting",
