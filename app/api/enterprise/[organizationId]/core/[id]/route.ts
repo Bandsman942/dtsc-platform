@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCoreAccess } from "@/lib/enterprise/enterprise-core-access";
 import { enterpriseCoreUpdateSchema } from "@/lib/enterprise/enterprise-core-validators";
+import { isDedicatedCoreDomain } from "@/lib/enterprise/core-v2/constants";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -31,28 +32,21 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = enterpriseCoreUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "L’action demandée est invalide." }, { status: 400 });
   const data = parsed.data;
-  if (data.action === "REJECT" && !data.comment) {
-    return NextResponse.json({ error: "Comment required", message: "Un motif est obligatoire pour rejeter un élément." }, { status: 400 });
-  }
+  if (data.action === "REJECT" && !data.comment) return NextResponse.json({ error: "Comment required", message: "Un motif est obligatoire pour rejeter un élément." }, { status: 400 });
   const record = await prisma.enterpriseCoreRecord.findFirst({ where: { id, organizationId, archivedAt: null } });
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (isDedicatedCoreDomain(record.moduleCode, record.recordType)) {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { organizationId, recordId: id, legacyReadOnly: true } });
+    return NextResponse.json({ error: "Legacy read only", message: "Cet ancien objet reste consultable en historique mais n’est plus éditable. Utilisez le module ERP dédié pour les nouvelles opérations." }, { status: 409 });
+  }
   const isDesignatedValidator = record.validatorUserId === session.userId && (data.action === "APPROVE" || data.action === "REJECT");
   const sensitiveAction = ["APPROVE", "REJECT", "ARCHIVE", "CANCEL"].includes(data.action) && !isDesignatedValidator;
-  const access = await getEnterpriseCoreAccess({
-    session,
-    organizationId,
-    moduleCode: record.moduleCode,
-    action: sensitiveAction ? "write" : "submit",
-  });
+  const access = await getEnterpriseCoreAccess({ session, organizationId, moduleCode: record.moduleCode, action: sensitiveAction ? "write" : "submit" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const related = [record.createdById, record.requestedById, record.assignedToUserId, record.validatorUserId].includes(session.userId);
   if (!access.canSeeAll && !related) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if ((data.action === "APPROVE" || data.action === "REJECT") && record.status !== "PENDING_VALIDATION") {
-    return NextResponse.json({ error: "Invalid status", message: "Cet élément doit être en attente de validation avant toute décision." }, { status: 400 });
-  }
-  if ((data.action === "APPROVE" || data.action === "REJECT") && !access.canManage && !isDesignatedValidator) {
-    return NextResponse.json({ error: "Forbidden", message: "Seul le validateur désigné ou un responsable peut prendre cette décision." }, { status: 403 });
-  }
+  if ((data.action === "APPROVE" || data.action === "REJECT") && record.status !== "PENDING_VALIDATION") return NextResponse.json({ error: "Invalid status", message: "Cet élément doit être en attente de validation avant toute décision." }, { status: 400 });
+  if ((data.action === "APPROVE" || data.action === "REJECT") && !access.canManage && !isDesignatedValidator) return NextResponse.json({ error: "Forbidden", message: "Seul le validateur désigné ou un responsable peut prendre cette décision." }, { status: 403 });
 
   const nextStatus = data.action === "COMMENT" ? record.status : statusByAction[data.action];
   const updated = await prisma.$transaction(async (tx) => {
@@ -66,32 +60,11 @@ export async function PATCH(req: Request, { params }: Params) {
         archivedAt: data.action === "ARCHIVE" ? new Date() : undefined,
       },
     });
-    await tx.enterpriseCoreEvent.create({
-      data: {
-        organizationId,
-        recordId: id,
-        eventType: data.action,
-        summary: data.comment || `Statut mis à jour : ${nextStatus}.`,
-        fromStatus: record.status,
-        toStatus: nextStatus,
-        actorUserId: session.userId,
-      },
-    });
-    if (data.comment) {
-      await tx.enterpriseCoreComment.create({
-        data: { organizationId, recordId: id, authorUserId: session.userId, content: data.comment },
-      });
-    }
+    await tx.enterpriseCoreEvent.create({ data: { organizationId, recordId: id, eventType: data.action, summary: data.comment || `Statut mis à jour : ${nextStatus}.`, fromStatus: record.status, toStatus: nextStatus, actorUserId: session.userId } });
+    if (data.comment) await tx.enterpriseCoreComment.create({ data: { organizationId, recordId: id, authorUserId: session.userId, content: data.comment } });
     return saved;
   });
-  await writeAuditLog({
-    userId: session.userId,
-    action: `ENTERPRISE_CORE_${data.action}`,
-    entity: "EnterpriseCoreRecord",
-    entityId: id,
-    request: req,
-    metadata: { organizationId, moduleCode: record.moduleCode, fromStatus: record.status, toStatus: nextStatus },
-  });
+  await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_CORE_${data.action}`, entity: "EnterpriseCoreRecord", entityId: id, request: req, metadata: { organizationId, moduleCode: record.moduleCode, fromStatus: record.status, toStatus: nextStatus, legacyDomain: true } });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: data.action } });
   return NextResponse.json({ ok: true, record: updated });
 }
