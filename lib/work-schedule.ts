@@ -10,6 +10,8 @@ export const DTSC_WEEKLY_RECURRENCE_TYPE = "Hebdomadaire" as const;
 
 export const scheduleExceptionTypes = [
   "ABSENCE",
+  "ADMINISTRATIVE_ABSENCE",
+  "OTHER_ABSENCE",
   "LEAVE",
   "SICKNESS",
   "MISSION",
@@ -95,7 +97,9 @@ export const dtscScheduleExceptionUpdateSchema = z.object({
 }).strict();
 
 const exceptionStatusByType: Record<ScheduleExceptionType, string> = {
-  ABSENCE: "Absent",
+  ABSENCE: "Absence personnelle",
+  ADMINISTRATIVE_ABSENCE: "Absence administrative",
+  OTHER_ABSENCE: "Autre absence",
   LEAVE: "Congé",
   SICKNESS: "Maladie",
   MISSION: "Mission",
@@ -109,7 +113,8 @@ const exceptionStatusByType: Record<ScheduleExceptionType, string> = {
 const exceptionTypeByStatus: Record<string, ScheduleExceptionType> = {
   Absent: "ABSENCE",
   "Absence personnelle": "ABSENCE",
-  "Absence administrative": "ABSENCE",
+  "Absence administrative": "ADMINISTRATIVE_ABSENCE",
+  "Autre absence": "OTHER_ABSENCE",
   Congé: "LEAVE",
   Maladie: "SICKNESS",
   Mission: "MISSION",
@@ -365,7 +370,8 @@ export async function notifyScheduleExceptionManagers({
   startDate: string;
   organizationId?: string;
 }) {
-  const targetPositions = ["ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE"].includes(exceptionType)
+  const absenceTypes = ["ABSENCE", "ADMINISTRATIVE_ABSENCE", "OTHER_ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE"];
+  const targetPositions = absenceTypes.includes(exceptionType)
     ? ["COO", "HR_CFO"]
     : ["MISSION", "TRAINING"].includes(exceptionType) ? ["COO"] : [];
   if (!targetPositions.length) return;
@@ -381,7 +387,7 @@ export async function notifyScheduleExceptionManagers({
     .filter((userId): userId is string => Boolean(userId));
   if (!userIds.length) return;
 
-  const label = ["ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE"].includes(exceptionType) ? "une absence" : "une exception de planning";
+  const label = absenceTypes.includes(exceptionType) ? "une absence" : "une exception de planning";
   await notifyUsers({
     userIds: [...new Set(userIds)],
     title: "Mise à jour du planning DTSC",
@@ -393,7 +399,7 @@ export async function notifyScheduleExceptionManagers({
 }
 
 function isBlockingScheduleStatus(status: string) {
-  return ["Absent", "Congé", "Maladie", "Absence personnelle", "Absence administrative", "Indisponible"].includes(status);
+  return ["Absent", "Congé", "Maladie", "Absence personnelle", "Absence administrative", "Autre absence", "Indisponible"].includes(status);
 }
 
 function isWarningScheduleStatus(status: string) {

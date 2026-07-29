@@ -61,14 +61,16 @@ type ScheduleSummary = {
 
 type DeleteTarget = { kind: "weekly" | "exception"; id: string; label: string } | null;
 
-const absenceTypes = new Set(["ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE"]);
+const absenceTypes = new Set(["ABSENCE", "ADMINISTRATIVE_ABSENCE", "OTHER_ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE"]);
 const exceptionTypes = ["MISSION", "TRAINING", "REMOTE_WORK", "EXTRA_AVAILABILITY", "OTHER"];
-const absenceTypeOptions = ["ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE", "OTHER"];
+const absenceTypeOptions = ["ABSENCE", "ADMINISTRATIVE_ABSENCE", "LEAVE", "SICKNESS", "UNAVAILABLE", "OTHER_ABSENCE"];
 const weekdaysFr = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const weekdaysEn = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const exceptionLabels: Record<string, { fr: string; en: string }> = {
   ABSENCE: { fr: "Absence personnelle", en: "Personal absence" },
+  ADMINISTRATIVE_ABSENCE: { fr: "Absence administrative", en: "Administrative absence" },
+  OTHER_ABSENCE: { fr: "Autre absence", en: "Other absence" },
   LEAVE: { fr: "Congé", en: "Leave" },
   SICKNESS: { fr: "Maladie", en: "Sickness" },
   MISSION: { fr: "Mission", en: "Mission" },

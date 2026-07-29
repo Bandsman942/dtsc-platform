@@ -75,6 +75,8 @@ availabilityStatus = libellé contrôlé correspondant au type d'exception
 Types métier contrôlés :
 
 - `ABSENCE`
+- `ADMINISTRATIVE_ABSENCE`
+- `OTHER_ABSENCE`
 - `LEAVE`
 - `SICKNESS`
 - `MISSION`
