@@ -82,13 +82,6 @@ export const workReviewSchema = z.object({
 
 export type WorkActor = NonNullable<Awaited<ReturnType<typeof getWorkActor>>>;
 
-type EntryLike = {
-  workDate: Date;
-  startTime: string;
-  endTime: string;
-  breakMinutes: number;
-};
-
 export async function getWorkActor(userId: string) {
   return prisma.hrcfoEmployee.findFirst({
     where: { userId, status: { not: "EXITED" } },
@@ -256,15 +249,31 @@ export async function getOwnWorkState(actor: WorkActor, limit = 12) {
     orderBy: { periodStart: "desc" },
     take: Math.min(Math.max(limit, 1), 30),
   });
-  const currentSubmission = submissions.find((item) => dateKeyFromUtcDate(item.periodStart) === currentPeriod.periodStart)
-    || await ensureDraftSubmissionForDate(actor, today);
+  const currentSubmission = submissions.find((item) => dateKeyFromUtcDate(item.periodStart) === currentPeriod.periodStart) || {
+    id: `unsaved-${actor.id}-${currentPeriod.periodStart}`,
+    employeeId: actor.id,
+    periodStart: dateOnlyToUtc(currentPeriod.periodStart),
+    periodEnd: dateOnlyToUtc(currentPeriod.periodEnd),
+    status: "DRAFT",
+    declaredMinutes: 0,
+    validatedMinutes: null,
+    submittedAt: null,
+    reviewerEmployeeId: null,
+    reviewedAt: null,
+    reviewComment: null,
+    revision: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    entries: [],
+    reviews: [],
+  };
   const all = submissions.some((item) => item.id === currentSubmission.id) ? submissions : [currentSubmission, ...submissions];
   return {
     timezone,
     today,
     currentPeriod,
     currentSubmission: serializeSubmission(currentSubmission),
-    submissions: all.map(serializeSubmission),
+    submissions: all.map((submission) => serializeSubmission(submission)),
   };
 }
 
