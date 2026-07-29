@@ -62,11 +62,13 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "warning" | "error">("success");
+  const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"SUBMIT" | "PAID" | "CANCEL" | null>(null);
   const [actionText, setActionText] = useState("");
-  useToastMessage(message);
+  useToastMessage(message, messageTone);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +79,7 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
       setBudgets(body?.budgets || []);
       setPayrolls(body?.payrolls || []);
     } else {
+      setMessageTone("error");
       setMessage(body?.message || t("loadError"));
     }
     setLoading(false);
@@ -151,12 +154,15 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
     const body = (await response.json().catch(() => null)) as { payroll?: PayrollWorkflowItem; message?: string } | null;
     setSaving(false);
     if (!response.ok) {
+      setMessageTone("error");
       setMessage(body?.message || t("saveError"));
       return;
     }
+    setMessageTone("success");
     setMessage(editTarget ? t("updated") : t("prepared"));
     setFormOpen(false);
     setEditTarget(null);
+    setSelected(null);
     await load();
   }
 
@@ -166,10 +172,12 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
     const response = await fetch("/api/admin/operation-files", { method: "POST", body: data });
     const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
     if (!response.ok || !body?.url) {
+      setMessageTone("error");
       setMessage(body?.error || t("uploadError"));
       return;
     }
     setForm((current) => ({ ...current, adjustmentEvidenceUrl: body.url || "" }));
+    setMessageTone("success");
     setMessage(t("uploadDone"));
   }
 
@@ -186,9 +194,14 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
     const body = (await response.json().catch(() => null)) as { payroll?: PayrollWorkflowItem; message?: string } | null;
     setSaving(false);
     if (!response.ok) {
-      setMessage(body?.message || t("actionError"));
+      const errorMessage = body?.message || t("actionError");
+      setMessageTone("error");
+      setMessage(errorMessage);
+      setActionError(errorMessage);
       return;
     }
+    setMessageTone("success");
+    setActionError("");
     setMessage(confirmAction === "SUBMIT" ? t("submitted") : confirmAction === "PAID" ? t("markedPaid") : t("cancelled"));
     setConfirmAction(null);
     setActionText("");
@@ -301,18 +314,19 @@ export function PayrollWorkflowPanel({ locale }: { locale?: string | null }) {
         onClose={() => { setSelected(null); setConfirmAction(null); setActionText(""); }}
         className="h-[94dvh] sm:h-[92dvh]"
         footer={selected && !selected.isLegacy ? <>
-          {(selected.status === "DRAFT" || selected.status === "CHANGES_REQUESTED") ? <Button type="button" onClick={() => setConfirmAction("SUBMIT")} className="rounded-xl bg-dtsc-blue text-white"><Send className="h-4 w-4" />{t("submit")}</Button> : null}
-          {selected.status === "DRAFT" ? <Button type="button" variant="outline" onClick={() => setConfirmAction("CANCEL")} className="rounded-xl border-red-500/40 text-red-700"><XCircle className="h-4 w-4" />{t("cancelPayroll")}</Button> : null}
-          {selected.status === "VALIDATED" ? <Button type="button" onClick={() => setConfirmAction("PAID")} className="rounded-xl bg-emerald-700 text-white"><CheckCircle2 className="h-4 w-4" />{t("markPaid")}</Button> : null}
+          {(selected.status === "DRAFT" || selected.status === "CHANGES_REQUESTED") ? <Button type="button" disabled={selected.submissionReadiness?.ready === false} title={selected.submissionReadiness?.blockers[0]?.message} onClick={() => { setActionError(""); setConfirmAction("SUBMIT"); }} className="rounded-xl bg-dtsc-blue text-white"><Send className="h-4 w-4" />{t("submit")}</Button> : null}
+          {selected.status === "DRAFT" ? <Button type="button" variant="outline" onClick={() => { setActionError(""); setConfirmAction("CANCEL"); }} className="rounded-xl border-red-500/40 text-red-700"><XCircle className="h-4 w-4" />{t("cancelPayroll")}</Button> : null}
+          {selected.status === "VALIDATED" ? <Button type="button" onClick={() => { setActionError(""); setConfirmAction("PAID"); }} className="rounded-xl bg-emerald-700 text-white"><CheckCircle2 className="h-4 w-4" />{t("markPaid")}</Button> : null}
         </> : undefined}
       >
         {selected ? <PayrollDetail payroll={selected} locale={locale} t={t} /> : null}
       </Dialog>
 
-      <Dialog open={Boolean(confirmAction)} title={confirmAction === "SUBMIT" ? t("submitTitle") : confirmAction === "PAID" ? t("paidTitle") : t("cancelTitle")} description={confirmAction === "SUBMIT" ? t("submitConfirm") : confirmAction === "PAID" ? t("paidConfirm") : t("cancelConfirm")} onClose={() => { setConfirmAction(null); setActionText(""); }} footer={<>
+      <Dialog open={Boolean(confirmAction)} title={confirmAction === "SUBMIT" ? t("submitTitle") : confirmAction === "PAID" ? t("paidTitle") : t("cancelTitle")} description={confirmAction === "SUBMIT" ? t("submitConfirm") : confirmAction === "PAID" ? t("paidConfirm") : t("cancelConfirm")} onClose={() => { setConfirmAction(null); setActionText(""); setActionError(""); }} footer={<>
         <Button type="button" variant="outline" onClick={() => { setConfirmAction(null); setActionText(""); }} className="rounded-xl">{t("close")}</Button>
         <Button type="button" onClick={() => void executeAction()} disabled={saving || (confirmAction === "CANCEL" && actionText.trim().length < 3)} className="rounded-xl bg-dtsc-blue text-white">{t("confirm")}</Button>
       </>}>
+        {actionError ? <div role="alert" className="rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-sm font-semibold text-red-700">{actionError}</div> : null}
         {confirmAction === "CANCEL" || confirmAction === "PAID" ? <FieldLabel label={confirmAction === "CANCEL" ? t("cancelReason") : t("paymentReference")}><Input value={actionText} onChange={(event) => setActionText(event.target.value)} /></FieldLabel> : <div className="flex gap-3 rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-3 text-sm"><FileCheck2 className="h-5 w-5 shrink-0" />{t("submitEvidenceFrozen")}</div>}
       </Dialog>
     </ModuleWorkspace>
@@ -350,6 +364,16 @@ function PayrollDetail({ payroll, locale, t }: { payroll: PayrollWorkflowItem; l
         {payroll.workEntries.map((entry) => <BusinessListItem key={entry.id} title={entry.summary} meta={`${formatDate(entry.workDate, locale)} · ${formatMinutes(entry.approvedMinutes)}`} description={workTypeLabel(t, entry.workType)} />)}
       </BusinessList> : <EmptyState compact title={t("noWorkEvidence")} description={t("noWorkEvidenceDescription")} icon={Clock3} />}
     </BusinessDetailSection>
+    {(payroll.status === "DRAFT" || payroll.status === "CHANGES_REQUESTED") && payroll.submissionReadiness ? <BusinessDetailSection title={t("submissionReadiness")} description={t("submissionReadinessDescription")}>
+      <BusinessDetailGrid>
+        <BusinessDetailField label={t("submissionState")} value={payroll.submissionReadiness.ready ? t("submissionReady") : t("submissionBlocked")} />
+        <BusinessDetailField label={t("requiredApprover")} value={payroll.submissionReadiness.approverName ? `${payroll.submissionReadiness.requiredApproverCode} · ${payroll.submissionReadiness.approverName}` : payroll.submissionReadiness.requiredApproverCode} />
+      </BusinessDetailGrid>
+      {payroll.submissionReadiness.blockers.length ? <div role="alert" className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-800">
+        <p className="font-black">{t("submissionBlockers")}</p>
+        <div className="mt-2 grid gap-1">{payroll.submissionReadiness.blockers.map((blocker) => <p key={blocker.code}>• {blocker.message}</p>)}</div>
+      </div> : <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-800">{t("submissionReadyHelp")}</p>}
+    </BusinessDetailSection> : null}
     <BusinessDetailSection title={t("history")} description={t("historyDescription")}>
       {payroll.reviewHistory.length ? <BusinessList ariaLabel={t("history")}>{payroll.reviewHistory.map((item) => <BusinessListItem key={item.id} title={reviewActionLabel(t, item.action)} meta={`${item.actorName} · ${formatDateTime(item.createdAt, locale)}`} description={item.comment || t("noComment")} />)}</BusinessList> : <EmptyState compact title={t("noHistory")} description={t("noHistoryDescription")} icon={Clock3} />}
     </BusinessDetailSection>

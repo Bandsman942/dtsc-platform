@@ -721,3 +721,12 @@ Documenter dans le ticket ou la PR:
 - [ ] VALIDATED crée au plus une transaction `PAYROLL_WORKFLOW`; PAID la réutilise.
 - [ ] Bonus/retenue exigent un motif et les périodes partielles ne sont jamais proratisées automatiquement.
 - [ ] Les anciennes paies restent consultables et le collaborateur ne voit ni budget ni compte financier.
+
+<!-- SPRINT_05_PAYROLL_RETRY_QA -->
+### Hotfix paie — retry et soumission
+- DRAFT/PENDING/VALIDATED/PAID bloque une seconde paie active de même collaborateur+période.
+- CANCELLED et REJECTED conservent l'historique mais permettent une nouvelle préparation.
+- Une collision concurrente de période renvoie PAYROLL_PERIOD_EXISTS/409.
+- PARTIAL/NONE sans justification, approbateur absent, budget/compte invalide ou snapshot incohérent apparaît comme blocage lisible avant soumission.
+- Une erreur de soumission est affichée comme erreur dans le toast et dans la modale.
+<!-- /SPRINT_05_PAYROLL_RETRY_QA -->

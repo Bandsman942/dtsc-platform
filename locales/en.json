@@ -691,6 +691,14 @@
     "review_REJECTED": "Rejected",
     "review_PAID": "Payment confirmed",
     "review_CANCELLED": "Cancelled",
-    "openAdjustmentEvidence": "Open private evidence"
+    "openAdjustmentEvidence": "Open private evidence",
+    "submissionReadiness": "Submission readiness",
+    "submissionReadinessDescription": "Review operational and financial prerequisites before sending payroll for approval.",
+    "submissionState": "Submission state",
+    "submissionReady": "Ready to submit",
+    "submissionBlocked": "Corrections required",
+    "requiredApprover": "Financial approver",
+    "submissionBlockers": "Items to fix before submission",
+    "submissionReadyHelp": "All visible prerequisites are satisfied. Server-side validation will run again when payroll is submitted."
   }
 }

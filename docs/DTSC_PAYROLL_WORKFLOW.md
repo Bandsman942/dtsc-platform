@@ -162,3 +162,11 @@ Le Sprint 5 ne crée aucun moteur ERP générique, aucune `EnterpriseTask`, `Ent
 ## Sécurité des justificatifs privés
 
 Les justificatifs d'ajustement utilisent exclusivement l'upload privé `operation-files` déjà contrôlé par DTSC. Le backend refuse une URL arbitraire ou un fichier appartenant à un autre utilisateur préparateur. La route d'upload applique same-origin, limites MIME/taille, rate limiting, RBAC, audit et stockage Supabase privé. L'approbateur peut ouvrir le justificatif depuis le détail financier sans rendre le fichier public.
+
+<!-- PAYROLL_PERIOD_RETRY_HOTFIX -->
+## Hotfix — soumission explicite et nouvelle préparation après annulation/refus
+
+Une paie `CANCELLED` ou `REJECTED` reste conservée pour l'audit mais ne réserve plus définitivement le couple collaborateur + période. La base conserve une unicité partielle sur les paies financièrement actives ; une nouvelle préparation est donc autorisée après annulation/refus, tandis qu'un DRAFT, PENDING_APPROVAL, CHANGES_REQUESTED, VALIDATED ou PAID continue de bloquer un doublon actif.
+
+La préparation HR & CFO expose désormais une readiness de soumission avec l'approbateur attendu et les blocages lisibles (couverture à justifier, budget/compte, montant, preuve de travail ou approbateur absent). Le bouton de soumission est désactivé lorsque ces prérequis visibles ne sont pas satisfaits, et le backend répète les contrôles au moment du POST. Les erreurs d'action financière sont affichées explicitement comme erreurs et dans la modale, sans dépendre d'une déduction par mots-clés du toast.
+<!-- /PAYROLL_PERIOD_RETRY_HOTFIX -->
