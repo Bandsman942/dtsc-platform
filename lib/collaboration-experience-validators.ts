@@ -13,7 +13,14 @@ export const collaborationStoryMetadataSchema = z.object({
 });
 
 export const collaborationVoiceMetadataSchema = z.object({
-  durationMs: z.coerce.number().int().min(250).max(10 * 60 * 1000),
+  durationMs: z.coerce.number().int().min(250).max(60 * 60 * 1000),
   replyToId: z.string().max(120).optional().or(z.literal("")),
   waveform: z.array(z.coerce.number().min(0).max(1)).max(96).optional().default([]),
+});
+
+export const collaborationVoiceSettingsSchema = z.object({
+  enabled: z.boolean(),
+  maxDurationSeconds: z.coerce.number().int().min(1).max(60 * 60),
+  maxFileSizeBytes: z.coerce.number().int().min(256 * 1024).max(100 * 1024 * 1024),
+  rateLimitPerHour: z.coerce.number().int().min(1).max(2000),
 });
