@@ -67,7 +67,7 @@ export async function canAccessEnterpriseDocument({
   return null;
 }
 
-export function enterpriseDocumentVisibilityWhere({
+export async function enterpriseDocumentVisibilityWhere({
   organizationId,
   userId,
   canSeeAll,
@@ -75,20 +75,19 @@ export function enterpriseDocumentVisibilityWhere({
   organizationId: string;
   userId: string;
   canSeeAll: boolean;
-}): Prisma.EnterpriseDocumentWhereInput {
+}): Promise<Prisma.EnterpriseDocumentWhereInput> {
+  if (canSeeAll) return { organizationId, archivedAt: null };
+  const departmentId = await memberDepartmentId(organizationId, userId);
   return {
     organizationId,
     archivedAt: null,
-    ...(canSeeAll
-      ? {}
-      : {
-          OR: [
-            { visibility: "ORGANIZATION" },
-            { createdByUserId: userId },
-            { ownerUserId: userId },
-            { access: { some: { userId } } },
-          ],
-        }),
+    OR: [
+      { visibility: "ORGANIZATION" },
+      ...(departmentId ? [{ visibility: "DEPARTMENT", departmentId }] : []),
+      { createdByUserId: userId },
+      { ownerUserId: userId },
+      { access: { some: { userId } } },
+    ],
   };
 }
 
