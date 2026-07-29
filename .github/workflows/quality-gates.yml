@@ -52,29 +52,3 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-  sprint3-absence-type-fix:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feat/sprint-03-work-availability'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: feat/sprint-03-work-availability
-
-      - name: Refine controlled absence types
-        run: node scripts/sprint3-absence-types-fix.mjs
-
-      - name: Commit absence type refinement
-        run: |
-          if git diff --quiet; then
-            echo "Absence types already refined."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/work-schedule.ts components/calendar/dtsc-work-schedule-panel.tsx docs/DTSC_WORK_SCHEDULE.md
-          git commit -m "fix(calendar): distinguish administrative and other absences"
-          git push origin HEAD:feat/sprint-03-work-availability
