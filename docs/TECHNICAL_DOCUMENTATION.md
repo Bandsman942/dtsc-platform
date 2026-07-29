@@ -2474,3 +2474,31 @@ Les routes `GET|POST /api/enterprise/[organizationId]/healthcare/laboratory`, `G
 La migration additive `20260613203000_healthcare_insurance_coverage` ajoute `HealthInsuranceProvider`, `HealthPatientInsuranceCoverage`, `HealthCoverageRequest` et `HealthCoverageRequestEvent`. Les routes `/api/enterprise/[organizationId]/healthcare/insurance`, `/insurance/providers`, `/insurance/coverages` et `/insurance/[requestId]` appliquent session, module actif, origine, rate limit, Zod, permissions, validation multi-tenant et audit.
 
 `lib/health-insurance.ts` centralise les références, montants, transitions et l’application idempotente à `HealthMedicalInvoice`. Le workspace responsive est partagé entre Administration et Activités; les justificatifs restent représentés par métadonnées tant qu’un stockage privé Santé dédié n’est pas livré.
+
+<!-- SPRINT_03_WORK_SCHEDULE -->
+## Sprint 3 — disponibilités DTSC, exceptions, absences et calendrier effectif
+
+Le planning interne DTSC sépare désormais trois concepts métier : **disponibilité hebdomadaire habituelle**, **exception ponctuelle** et **absence**. La table physique `CollaboratorAvailability` reste conservée pour préserver les données historiques, mais les nouveaux contrats métier/API/UI sont distincts et documentés dans `docs/DTSC_WORK_SCHEDULE.md`.
+
+Principes techniques :
+
+- écriture `DTSC_INTERNAL` strictement self-service : la cible est résolue par `session.userId -> HrcfoEmployee.id`; un `collaboratorId` arbitraire ne donne aucun droit d'écriture ;
+- lecture organisationnelle séparée pour CEO, COO et HR & CFO sans transfert de propriété d'écriture ;
+- disponibilité hebdomadaire canonique : `Hebdomadaire + Disponible + dayOfWeek + effectiveFrom/effectiveUntil` ;
+- exception/absence canonique : entrée datée `Aucune + specificDate + recurrenceUntil` avec type contrôlé ;
+- historique protégé par périodes d'effet et soft delete ; les données passées ne sont pas réécrites silencieusement ;
+- `detectCalendarConflicts()` résout désormais la disponibilité effective en tenant compte des absences/exceptions et de la timezone utilisateur ;
+- niveaux de conflit : blocage pour absence/congé/maladie/indisponibilité, avertissement pour mission/formation/chevauchement, information hors disponibilité déclarée ;
+- notifications centralisées et sobres : absence significative vers COO/HR & CFO, mission/formation vers COO, sans motif privé dans le Web Push ;
+- les entreprises clientes `ORGANIZATION` conservent le comportement calendrier historique dans ce Sprint afin d'éviter une réinterprétation arbitraire ;
+- aucun lien planning → prestation → paie n'est créé. Les prestations réelles appartiennent au Sprint 4, la paie au Sprint 5.
+
+Nouvelles routes :
+
+- `GET /api/calendar/my-schedule` ;
+- `POST/PATCH/DELETE /api/calendar/availabilities` pour le planning hebdomadaire self-service DTSC ;
+- `GET/POST/PATCH/DELETE /api/calendar/exceptions` pour exceptions et absences DTSC.
+
+La migration versionnée `20260729011500_sprint03_work_schedule_boundaries` est non destructive. Elle ne tente pas de convertir aveuglément les anciens statuts ambigus (par exemple une mission récurrente). Le resolver maintient une compatibilité de lecture avec les anciennes lignes.
+<!-- /SPRINT_03_WORK_SCHEDULE -->
+

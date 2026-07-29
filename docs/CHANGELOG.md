@@ -706,3 +706,31 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout des sessions de caisse, paiements multi-modes, factures, reçus de caisse, remboursements, écarts et validation de clôture isolés par entreprise.
 - Remplacement du placeholder `CASH_INVOICES_PAYMENTS` par treize vues métier responsives et des formulaires plein écran guidés.
 - Ajout des calculs transactionnels de clôture, du recalcul du statut de paiement des ventes, de la génération facture/reçu et des garde-fous contre doubles sessions et remboursements excessifs.
+
+<!-- SPRINT_03_WORK_SCHEDULE_CHANGELOG -->
+## 29 juillet 2026 — Sprint 3 : planning opérationnel DTSC
+
+### Ajouté
+
+- Workspace `Mon planning` avec disponibilités hebdomadaires, exceptions et absences séparées.
+- API self-service DTSC et résumé hebdomadaire sans assimilation au temps travaillé.
+- Resolver de disponibilité effective timezone-aware utilisé par les conflits calendrier.
+- Absences partielles et multi-jours, disponibilité exceptionnelle, mission et formation.
+- Vue équipe en lecture seule pour les responsables autorisés et confidentialité des motifs privés.
+- Audit `WORK_AVAILABILITY_*` et `WORK_SCHEDULE_EXCEPTION_*`.
+- Notifications sobres COO/HR & CFO selon l'impact opérationnel.
+- Migration Prisma non destructive et documentation `docs/DTSC_WORK_SCHEDULE.md`.
+- QA dédiée `qa:work-schedule` intégrée à la régression globale.
+
+### Sécurité / corrections
+
+- CEO, COO, HR & CFO et ADMIN ne peuvent plus utiliser une permission générique de gestion des personnes pour modifier le planning personnel d'un autre collaborateur DTSC.
+- Les mutations résolvent le collaborateur depuis la session et refusent les écritures croisées.
+- Les modifications futures préservent l'historique temporel ; les données passées ne sont pas réécrites silencieusement.
+- Le comportement calendrier des organisations clientes reste compatible et isolé du durcissement `DTSC_INTERNAL`.
+
+### Hors périmètre
+
+- Aucun timesheet, pointage, prestation réelle, validation COO des prestations ni calcul de paie n'est introduit. Ces sujets restent réservés aux Sprints 4 et 5.
+<!-- /SPRINT_03_WORK_SCHEDULE_CHANGELOG -->
+

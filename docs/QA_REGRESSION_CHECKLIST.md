@@ -649,3 +649,47 @@ Documenter dans le ticket ou la PR:
 - [ ] Vérifier les permissions de validation/assignation, le masquage financier et sensible, les notifications, AuditLog et ApiLog.
 - [ ] Vérifier les dix-sept vues, libellés français, infos-bulles, menus `...`, combobox relationnelles et l'absence de dépassement horizontal mobile.
 - [ ] Exécuter `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build` et les contrôles Git.
+
+<!-- SPRINT_03_WORK_SCHEDULE_QA -->
+## Sprint 3 — planning DTSC / disponibilités / exceptions
+
+### Autorisation critique
+
+- [ ] CEO → PATCH disponibilité d'un autre collaborateur = 403.
+- [ ] COO → DELETE disponibilité d'un autre collaborateur = 403.
+- [ ] HR_CFO → POST avec `collaboratorId` d'un autre collaborateur = 403 ou cible serveur forcée sur soi.
+- [ ] Collaborateur → CRUD de sa propre disponibilité = succès.
+- [ ] COO/CEO/HR_CFO → lecture équipe autorisée selon leur rôle, sans boutons Modifier/Supprimer sur autrui.
+- [ ] Une organisation ne peut jamais lire/écrire le planning d'une autre organisation.
+
+### Planning et resolver
+
+- [ ] Rejeter `14:00 → 10:00` et toute plage vide.
+- [ ] Rejeter deux disponibilités hebdomadaires qui se chevauchent.
+- [ ] Accepter des plages adjacentes sans fusion silencieuse.
+- [ ] Disponibilité 08:00–17:00 + réunion 10:00–11:00 = pas de conflit de disponibilité.
+- [ ] Disponibilité 08:00–17:00 + absence 08:00–12:00 + réunion 10:00 = conflit bloquant.
+- [ ] Disponibilité 08:00–12:00 + réunion 15:00 = information hors disponibilité.
+- [ ] Disponibilité exceptionnelle 18:00–20:00 + réunion 19:00 = créneau couvert.
+- [ ] Absence partielle 08:00–12:00 sur planning 08:00–17:00 laisse 12:00–17:00 effectif.
+- [ ] Absence multi-jours 3→7 août s'applique correctement à chaque journée.
+- [ ] Tester une timezone non UTC, au minimum `Africa/Kinshasa`, sans hardcoder cette timezone comme seule valeur.
+
+### Historique / confidentialité / notifications
+
+- [ ] Une modification future versionne/clôture l'ancienne plage au lieu de réécrire le passé.
+- [ ] PATCH/DELETE d'une exception déjà passée est refusé dans le workflow self-service.
+- [ ] Le motif privé d'une absence n'est pas visible dans la vue opérationnelle CEO/COO.
+- [ ] Le Web Push d'absence ne contient aucun détail médical ou motif privé.
+- [ ] Un changement ordinaire de disponibilité ne spamme pas les responsables.
+
+### UI / régressions
+
+- [ ] `Mon planning` sépare Disponibilités habituelles / Exceptions / Absences.
+- [ ] Vue équipe lecture seule avec filtres collaborateur lorsque autorisée.
+- [ ] Mobile 320/375/390/414, tablette 768/1024, desktop 1440 : formulaires et menus restent utilisables.
+- [ ] Clavier iOS, dropdowns, dialogues hauts, safe areas et bottom navigation ne régressent pas.
+- [ ] Affichage explicite : disponibilité ≠ temps travaillé ≠ paie.
+- [ ] `pnpm prisma:generate`, `pnpm type-check`, `pnpm qa:regression`, `pnpm lint` et `pnpm build` sont verts avant merge.
+<!-- /SPRINT_03_WORK_SCHEDULE_QA -->
+
