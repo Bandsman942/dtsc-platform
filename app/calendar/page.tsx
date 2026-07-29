@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import type { CollaboratorAvailability, Prisma } from "@prisma/client";
 import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
+import { DtscWorkSchedulePanel } from "@/components/calendar/dtsc-work-schedule-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canAccessInternalCalendar, calendarEventInclude, canUseInternalCalendarFeature, collaboratorAvailabilityWhere, getCalendarCollaborators, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
 import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
+import { serializeScheduleException, serializeWeeklyAvailability, todayDateKey } from "@/lib/work-schedule";
 
 export default async function CalendarPage() {
   const user = await requireUser();
@@ -35,7 +37,11 @@ export default async function CalendarPage() {
     );
   }
 
-  const [events, availabilities, collaborators] = await Promise.all([
+  const ownAvailabilityWhere = context.dtscInternal
+    ? { organizationId: context.activeOrganizationId, collaboratorId: context.calendarCollaboratorId, deletedAt: null }
+    : collaboratorAvailabilityWhere(context);
+  const teamReadAllowed = context.dtscInternal && context.canViewOrganizationAvailability;
+  const [events, availabilities, collaborators, weeklyRecords, exceptionRecords, teamWeeklyRecords, teamExceptionRecords] = await Promise.all([
     prisma.internalCalendarEvent.findMany({
       where: internalCalendarAccessWhere(context),
       include: calendarEventInclude(),
@@ -43,28 +49,94 @@ export default async function CalendarPage() {
       take: 200,
     }),
     prisma.collaboratorAvailability.findMany({
-      where: collaboratorAvailabilityWhere(context),
+      where: ownAvailabilityWhere,
       orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
       take: 200,
     }),
     getCalendarCollaborators(context),
+    context.dtscInternal
+      ? prisma.collaboratorAvailability.findMany({
+          where: {
+            organizationId: context.activeOrganizationId,
+            collaboratorId: context.calendarCollaboratorId,
+            deletedAt: null,
+            recurrenceType: "Hebdomadaire",
+            specificDate: null,
+            dayOfWeek: { not: null },
+            availabilityStatus: "Disponible",
+          },
+          orderBy: [{ dayOfWeek: "asc" }, { recurrenceStart: "desc" }, { startTime: "asc" }],
+          take: 300,
+        })
+      : Promise.resolve([]),
+    context.dtscInternal
+      ? prisma.collaboratorAvailability.findMany({
+          where: { organizationId: context.activeOrganizationId, collaboratorId: context.calendarCollaboratorId, deletedAt: null, recurrenceType: "Aucune", specificDate: { not: null } },
+          orderBy: [{ specificDate: "desc" }, { startTime: "asc" }],
+          take: 300,
+        })
+      : Promise.resolve([]),
+    teamReadAllowed
+      ? prisma.collaboratorAvailability.findMany({
+          where: { organizationId: context.activeOrganizationId, deletedAt: null, recurrenceType: "Hebdomadaire", specificDate: null, dayOfWeek: { not: null }, availabilityStatus: "Disponible" },
+          orderBy: [{ collaboratorId: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
+          take: 500,
+        })
+      : Promise.resolve([]),
+    teamReadAllowed
+      ? prisma.collaboratorAvailability.findMany({
+          where: { organizationId: context.activeOrganizationId, deletedAt: null, recurrenceType: "Aucune", specificDate: { not: null } },
+          orderBy: [{ specificDate: "desc" }, { startTime: "asc" }],
+          take: 500,
+        })
+      : Promise.resolve([]),
   ]);
+
+  const today = todayDateKey(user.timezone || "Africa/Kinshasa");
+  const activeWeekly = weeklyRecords.filter((record) => {
+    const from = record.recurrenceStart?.toISOString().slice(0, 10) || null;
+    const until = record.recurrenceUntil?.toISOString().slice(0, 10) || null;
+    return (!from || from <= today) && (!until || until >= today);
+  });
+  const weeklyMinutes = activeWeekly.reduce((sum, record) => sum + Math.max(0, timeMinutes(record.endTime) - timeMinutes(record.startTime)), 0);
+  const activeDays = new Set(activeWeekly.map((record) => record.dayOfWeek).filter((value): value is number => typeof value === "number"));
 
   return (
     <AppShell user={user}>
-      <InternalCalendarModule
-        initialEvents={events.map(serializeCalendarEvent)}
-        initialAvailabilities={availabilities.map(serializeAvailability)}
-        collaborators={collaborators}
-        context={{
-          employeeId: context.calendarCollaboratorId || null,
-          canViewGlobal: context.canViewGlobal,
-          canViewPeopleAvailability: context.canViewPeopleAvailability,
-          canManagePeople: context.canManagePeople,
-          canOverrideConflicts: context.canOverrideConflicts,
-        }}
-        userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
-      />
+      <div className="min-w-0 space-y-7">
+        {context.dtscInternal && (
+          <DtscWorkSchedulePanel
+            initialWeeklyAvailabilities={weeklyRecords.map(serializeWeeklyAvailability)}
+            initialExceptions={exceptionRecords.map((record) => serializeScheduleException(record, true))}
+            teamWeeklyAvailabilities={teamWeeklyRecords.map(serializeWeeklyAvailability)}
+            teamExceptions={teamExceptionRecords.map((record) => serializeScheduleException(record, false))}
+            collaborators={collaborators}
+            employeeId={context.calendarCollaboratorId}
+            canViewOrganizationAvailability={context.canViewOrganizationAvailability}
+            summary={{
+              hoursAvailableThisWeek: Math.round((weeklyMinutes / 60) * 100) / 100,
+              availableDays: activeDays.size,
+              configuredSlots: activeWeekly.length,
+              overlapConflicts: 0,
+            }}
+            locale={user.locale}
+            timezone={user.timezone || "Africa/Kinshasa"}
+          />
+        )}
+        <InternalCalendarModule
+          initialEvents={events.map(serializeCalendarEvent)}
+          initialAvailabilities={availabilities.map(serializeAvailability)}
+          collaborators={collaborators}
+          context={{
+            employeeId: context.calendarCollaboratorId || null,
+            canViewGlobal: context.canViewGlobal,
+            canViewPeopleAvailability: context.canViewPeopleAvailability,
+            canManagePeople: context.canManagePeople,
+            canOverrideConflicts: context.canOverrideConflicts,
+          }}
+          userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -122,4 +194,9 @@ function serializeAvailability(availability: CollaboratorAvailability): Calendar
     locationMode: availability.locationMode,
     notes: availability.notes,
   };
+}
+
+function timeMinutes(value: string) {
+  const [hours = "0", minutes = "0"] = value.split(":");
+  return Number(hours) * 60 + Number(minutes);
 }
