@@ -26,6 +26,9 @@ const paidStart = workflow.indexOf("export async function markPayrollPaid");
 const cancelStart = workflow.indexOf("export async function cancelPayroll");
 const reviewSlice = reviewStart >= 0 && paidStart > reviewStart ? workflow.slice(reviewStart, paidStart) : "";
 const paidSlice = paidStart >= 0 && cancelStart > paidStart ? workflow.slice(paidStart, cancelStart) : "";
+const prepareStart = workflow.indexOf("export async function preparePayroll");
+const submitStart = workflow.indexOf("export async function submitPayrollForApproval");
+const preApprovalSlice = prepareStart >= 0 && reviewStart > prepareStart ? workflow.slice(prepareStart, reviewStart) : "";
 
 const checks = [];
 const expect = (label, condition) => checks.push({ label, ok: Boolean(condition) });
@@ -55,6 +58,7 @@ expect("COO approval route is separated for CEO payroll", cooReview.includes('re
 expect("Reviewer policy is CEO except CEO payroll to COO", workflow.includes('=== "CEO" ? "COO" : "CEO"'));
 expect("No self approval is enforced server-side", workflow.includes("SELF_APPROVAL_FORBIDDEN") && workflow.includes("payroll.employeeId === actor.id"));
 expect("Budget account is server-derived and narrowed before finance calls", (workflow.match(/accountId: budget\.accountId \|\| undefined/g) || []).length >= 2);
+expect("Draft and pending payroll paths create no financial transaction", submitStart > prepareStart && !preApprovalSlice.includes("createValidatedTransactionInTx(") && !preApprovalSlice.includes("hrcfoExpense.create("));
 expect("Financial transaction creation occurs only inside APPROVED review path", reviewSlice.includes('if (action === "APPROVED")') && reviewSlice.includes("createValidatedTransactionInTx") && !workflow.slice(0, reviewStart).includes("createValidatedTransactionInTx(tx"));
 expect("Approval uses the existing finance transaction engine", reviewSlice.includes("createValidatedTransactionInTx") && reviewSlice.includes('sourceType: "PAYROLL_WORKFLOW"'));
 expect("Approval is serialized with an advisory lock", workflow.includes("pg_advisory_xact_lock") && reviewSlice.includes("lockPayroll"));
