@@ -22,6 +22,7 @@ expect("Cancellation still releases active work evidence", workflow.includes('st
 expect("Submission readiness exposes financial blockers", workflow.includes("buildPayrollSubmissionReadiness") && workflow.includes("COVERAGE_REASON_REQUIRED") && workflow.includes("BUDGET_ACCOUNT_CHANGED"));
 expect("Submission readiness exposes missing approver", workflow.includes("NO_APPROVER") && workflow.includes("approverName"));
 expect("Live submit uses the same readiness guard", workflow.includes("assertPayrollReadyForSubmission(existing, approvers.length > 0)"));
+expect("Submission readiness is limited to editable Sprint 5 payrolls", workflow.includes('payroll.workflowVersion !== 1 || !["DRAFT", "CHANGES_REQUESTED"].includes(payroll.status)'));
 expect("HR CFO UI has an explicit submission readiness model", types.includes("submissionReadiness") && panel.includes("submissionReadiness.blockers.map"));
 expect("Blocked submission button is disabled", panel.includes("submissionReadiness?.ready === false"));
 expect("Action failures use an explicit error tone", panel.includes('setMessageTone("error")') && panel.includes("setActionError(errorMessage)") && panel.includes('role="alert"'));

@@ -182,6 +182,9 @@ export async function getPayrollWorkspace(actor: PayrollActor) {
       accountName: budget.account?.name || null,
     })),
     payrolls: payrolls.map((payroll) => {
+      if (payroll.workflowVersion !== 1 || !["DRAFT", "CHANGES_REQUESTED"].includes(payroll.status)) {
+        return serializePayroll(payroll);
+      }
       const requiredApproverCode = resolvePayrollApproverCode(payroll.employee);
       const approver = employees.find((candidate) =>
         candidate.id !== payroll.employeeId &&
