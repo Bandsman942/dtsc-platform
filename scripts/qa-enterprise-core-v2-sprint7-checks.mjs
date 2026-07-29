@@ -14,7 +14,7 @@ ok(schema.includes("@@unique([organizationId, normalizedName])"), "Supplier dupl
 ok(schema.includes("@@unique([organizationId, documentId, versionNumber])"), "Document versions must be unique per document/version.");
 
 const migration = read("prisma/migrations/20260729194500_add_enterprise_documents_procurement/migration.sql");
-for (const table of ["EnterpriseDocument", "EnterpriseDocumentVersion", "EnterpriseSupplier", "EnterprisePurchase", "EnterprisePurchaseItem", "EnterprisePurchaseReceipt"]) ok(migration.includes(`CREATE TABLE \"${table}\"`), `Sprint 7 migration missing ${table}`);
+for (const table of ["EnterpriseDocument", "EnterpriseDocumentVersion", "EnterpriseSupplier", "EnterprisePurchase", "EnterprisePurchaseItem", "EnterprisePurchaseReceipt"]) ok(migration.includes(`CREATE TABLE "${table}"`), `Sprint 7 migration missing ${table}`);
 ok(!/DROP\s+(TABLE|COLUMN)/i.test(migration), "Sprint 7 migration must remain additive.");
 
 const storage = includes("lib/enterprise/procurement/document-storage.ts", ["SUPABASE_STORAGE_SERVICE_ROLE_KEY", "createSignedUrl", "sha256", "enterprise/${organizationId}/documents/${documentId}/", "10 * 1024 * 1024"]);
@@ -22,10 +22,14 @@ ok(!storage.includes("getPublicUrl"), "Enterprise documents must never use publi
 
 const purchase = includes("lib/enterprise/procurement/purchase-service.ts", ["Prisma.Decimal", "ENTERPRISE_PURCHASE_SUBMITTED", "EnterprisePurchase", "EnterpriseApproval", "PURCHASE_OVER_RECEIPT", "updateMany", "PARTIALLY_RECEIVED", "RECEIVED"]);
 ok((purchase.match(/updateMany\(/g) || []).length >= 5, "Sensitive purchase transitions must use guarded updateMany operations.");
-ok(!purchase.includes("enterpriseExpense") && !purchase.includes("enterpriseBudget") && !purchase.includes("pharmacyStockMovement.create"), "Sprint 7 purchases must not mutate Sprint 8 finance or sector stock.");
+ok(!purchase.includes("pharmacyStockMovement.create") && !purchase.includes("health" + "StockMovement.create"), "Common enterprise purchases must not mutate sector stock truth directly.");
+if (fs.existsSync(path.join(root, "prisma/enterprise-finance-reporting.prisma"))) {
+  ok(purchase.includes("createPurchaseBudgetCommitment"), "Sprint 8 may extend Sprint 7 purchases only through the dedicated budget commitment service.");
+  ok(purchase.includes("releasePurchaseBudgetCommitment"), "Sprint 8 purchase cancellation must release the dedicated commitment.");
+}
 
 const constants = read("lib/enterprise/core-v2/constants.ts");
-for (const type of ["DOCUMENT", "SUPPLIER", "PURCHASE"]) ok(constants.includes(`\"${type}\"`), `Dedicated Core type missing: ${type}`);
+for (const type of ["DOCUMENT", "SUPPLIER", "PURCHASE"]) ok(constants.includes(`"${type}"`), `Dedicated Core type missing: ${type}`);
 ok(constants.includes("EnterprisePurchase"), "EnterpriseApproval must support EnterprisePurchase targets.");
 
 const dispatcher = read("lib/enterprise/core-v2/dispatcher.ts");
@@ -50,7 +54,7 @@ const moduleWorkspace = read("components/enterprise/enterprise-module-workspace.
 for (const component of ["EnterpriseDocumentsWorkspace", "EnterpriseSuppliersWorkspace", "EnterprisePurchasesWorkspace"]) ok(moduleWorkspace.includes(component), `Dedicated Sprint 7 workspace missing: ${component}`);
 
 const core = read("lib/enterprise/enterprise-core.ts");
-ok(core.includes("EnterpriseCoreRecord"), "Legacy EnterpriseCoreRecord must remain available for Sprint 8 and history.");
+ok(core.includes("EnterpriseCoreRecord"), "Legacy EnterpriseCoreRecord must remain available for history and compatibility.");
 const vercel = read("vercel.json");
 ok(vercel.includes('"main": true') && vercel.includes('"*": false'), "Vercel must remain production-only from main.");
 ok(vercel.includes("VERCEL_ENV") && vercel.includes("production"), "Vercel ignoreCommand must preserve production-only behavior.");
@@ -60,4 +64,4 @@ const previewStatus = read(".github/workflows/vercel-production-only-status.yml"
 ok(previewStatus.includes("Preview intentionally disabled") && previewStatus.includes("environment == 'preview'"), "Disabled-preview normalization must stay preview-only.");
 
 if (failures.length) { console.error("ERP Core v2 Sprint 7 QA failed:\n- " + failures.join("\n- ")); process.exit(1); }
-console.log("ERP Core v2 Sprint 7 QA passed: dedicated documents/procurement, private storage, server totals, receipt guards, legacy safety and production-only Vercel policy verified.");
+console.log("ERP Core v2 Sprint 7 QA passed: dedicated documents/procurement, private storage, server totals, receipt guards, additive finance integration, legacy safety and production-only Vercel policy verified.");
