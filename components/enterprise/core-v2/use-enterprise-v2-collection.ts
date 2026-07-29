@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type ServerPagination = { page: number; pageSize: number; total: number; pageCount: number };
-export type ServerCollectionMeta = { canManage?: boolean; currentUserId?: string };
+export type ServerCollectionMeta = { canManage?: boolean; currentUserId?: string; metrics?: Record<string, number> };
 
 export function useEnterpriseV2Collection<T>({ endpoint, params, refreshKey = 0 }: { endpoint: string; params: URLSearchParams; refreshKey?: number }) {
   const [items, setItems] = useState<T[]>([]);
@@ -17,11 +17,11 @@ export function useEnterpriseV2Collection<T>({ endpoint, params, refreshKey = 0 
     setLoading(true);
     setError("");
     const response = await fetch(`${endpoint}?${serializedParams}`, { cache: "no-store" });
-    const body = (await response.json().catch(() => null)) as ({ items?: T[]; pagination?: ServerPagination; message?: string } & ServerCollectionMeta) | null;
+    const body = (await response.json().catch(() => null)) as ({ items?: T[]; pagination?: ServerPagination; message?: string; metrics?: Record<string, number> } & ServerCollectionMeta) | null;
     if (response.ok && body?.items && body.pagination) {
       setItems(body.items);
       setPagination(body.pagination);
-      setMeta({ canManage: body.canManage, currentUserId: body.currentUserId });
+      setMeta({ canManage: body.canManage, currentUserId: body.currentUserId, metrics: body.metrics });
     } else {
       setError(body?.message || "LOAD_FAILED");
     }

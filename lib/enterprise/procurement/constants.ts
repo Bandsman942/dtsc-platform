@@ -1,0 +1,33 @@
+export const ENTERPRISE_DOCUMENT_STATUSES = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
+export const ENTERPRISE_DOCUMENT_VISIBILITIES = ["ORGANIZATION", "DEPARTMENT", "RESTRICTED"] as const;
+export const ENTERPRISE_DOCUMENT_TYPES = ["GENERAL", "CONTRACT", "CERTIFICATE", "QUOTE", "PURCHASE_ORDER", "SUPPLIER_INVOICE", "DELIVERY_NOTE", "RECEIPT_PROOF", "TAX_DOCUMENT"] as const;
+
+export const ENTERPRISE_SUPPLIER_STATUSES = ["PROSPECT", "ACTIVE", "SUSPENDED", "INACTIVE"] as const;
+export const ENTERPRISE_SUPPLIER_ACTIONS = ["ACTIVATE", "SUSPEND", "DEACTIVATE", "ARCHIVE"] as const;
+
+export const ENTERPRISE_PURCHASE_PRIORITIES = ["LOW", "NORMAL", "HIGH", "CRITICAL"] as const;
+export const ENTERPRISE_PURCHASE_STATUSES = [
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "APPROVED",
+  "ORDERED",
+  "PARTIALLY_RECEIVED",
+  "RECEIVED",
+  "CLOSED",
+  "REJECTED",
+  "CANCELLED",
+] as const;
+export const ENTERPRISE_PURCHASE_ACTIONS = ["SUBMIT", "ORDER", "CLOSE", "CANCEL", "ARCHIVE"] as const;
+
+export const ENTERPRISE_PURCHASE_TRANSITIONS: Record<
+  (typeof ENTERPRISE_PURCHASE_ACTIONS)[number],
+  { from: readonly (typeof ENTERPRISE_PURCHASE_STATUSES)[number][]; to?: (typeof ENTERPRISE_PURCHASE_STATUSES)[number] }
+> = {
+  SUBMIT: { from: ["DRAFT"], to: "PENDING_APPROVAL" },
+  ORDER: { from: ["APPROVED"], to: "ORDERED" },
+  CLOSE: { from: ["RECEIVED"], to: "CLOSED" },
+  CANCEL: { from: ["DRAFT", "APPROVED"], to: "CANCELLED" },
+  ARCHIVE: { from: ["DRAFT", "APPROVED", "RECEIVED", "CLOSED", "REJECTED", "CANCELLED"] },
+};
+
+export const SPRINT7_OPERATIONAL_ENTITY_TYPES = ["EnterpriseDocument", "EnterpriseSupplier", "EnterprisePurchase"] as const;

@@ -5,6 +5,7 @@ import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { decideEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
 import { enterpriseApprovalActionSchema } from "@/lib/enterprise/core-v2/validators";
+import { decideEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -28,7 +29,9 @@ export async function POST(req: Request, { params }: Params) {
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const data = parsed.data;
   try {
-    const approval = await decideEnterpriseApproval({ organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage });
+    const approval = current.targetEntityType === "EnterprisePurchase"
+      ? await decideEnterprisePurchaseApproval({ organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage })
+      : await decideEnterpriseApproval({ organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage });
     if (current.requestedByUserId !== session.userId) {
       await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || `Décision sur ${current.targetEntityType}.`, targetUrl: "/enterprise-modules/VALIDATIONS" });
     }

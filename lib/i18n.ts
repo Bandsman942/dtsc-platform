@@ -1,5 +1,7 @@
 import fr from "@/locales/fr.json";
 import en from "@/locales/en.json";
+import enterpriseProcurementFr from "@/locales/enterprise-procurement.fr.json";
+import enterpriseProcurementEn from "@/locales/enterprise-procurement.en.json";
 
 type Dictionary = typeof fr;
 type Locale = "fr" | "en";
@@ -121,7 +123,13 @@ const workspaceGeneralizationDictionaries = {
   },
 } as const;
 
+const enterpriseProcurementDictionaries = {
+  fr: enterpriseProcurementFr,
+  en: enterpriseProcurementEn,
+} as const;
+
 export type WorkspaceGeneralizationKey = keyof typeof workspaceGeneralizationDictionaries.fr;
+export type EnterpriseProcurementKey = keyof typeof enterpriseProcurementDictionaries.fr;
 
 export function getDictionary(locale?: string | null) {
   return dictionaries[locale === "en" ? "en" : "fr"];
@@ -150,4 +158,9 @@ export function translate(locale: string | null | undefined, key: string) {
 export function translateWorkspaceGeneralization(locale: string | null | undefined, key: WorkspaceGeneralizationKey) {
   const dictionary = workspaceGeneralizationDictionaries[locale === "en" ? "en" : "fr"];
   return dictionary[key] || workspaceGeneralizationDictionaries.fr[key];
+}
+
+export function translateEnterpriseProcurement(locale: string | null | undefined, key: EnterpriseProcurementKey) {
+  const dictionary = enterpriseProcurementDictionaries[locale === "en" ? "en" : "fr"];
+  return dictionary[key] || enterpriseProcurementDictionaries.fr[key];
 }

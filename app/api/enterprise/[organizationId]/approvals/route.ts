@@ -6,6 +6,7 @@ import { enterpriseApprovalVisibilityWhere, getEnterpriseCoreV2Access } from "@/
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { createEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
 import { enterpriseApprovalCreateSchema } from "@/lib/enterprise/core-v2/validators";
+import { createEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -17,16 +18,18 @@ type ApprovalTargetSummary = { type: string; id: string; title: string; priority
 
 async function targetSummaries(organizationId: string, search = "") {
   const contains = search ? { contains: search, mode: "insensitive" as const } : undefined;
-  const [tasks, requests, meetings, incidents] = await Promise.all([
+  const [tasks, requests, meetings, purchases, incidents] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take: search ? 80 : 0 }),
+    prisma.enterprisePurchase.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
     prisma.pharmacyQualityIncident.findMany({ where: { organizationId, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take: search ? 80 : 0 }),
   ]);
   const map = new Map<string, ApprovalTargetSummary>();
   for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item });
   for (const item of requests) map.set(`EnterpriseRequest:${item.id}`, { type: "EnterpriseRequest", ...item });
   for (const item of meetings) map.set(`EnterpriseMeeting:${item.id}`, { type: "EnterpriseMeeting", ...item });
+  for (const item of purchases) map.set(`EnterprisePurchase:${item.id}`, { type: "EnterprisePurchase", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
   return map;
 }
@@ -36,6 +39,7 @@ async function canAccessTarget(organizationId: string, userId: string, canManage
   if (targetEntityType === "EnterpriseTask") return Boolean(await prisma.enterpriseTask.findFirst({ where: { id: targetEntityId, organizationId, archivedAt: null, OR: [{ createdByUserId: userId }, { assignedToUserId: userId }] }, select: { id: true } }));
   if (targetEntityType === "EnterpriseRequest") return Boolean(await prisma.enterpriseRequest.findFirst({ where: { id: targetEntityId, organizationId, archivedAt: null, OR: [{ requestedByUserId: userId }, { assignedToUserId: userId }] }, select: { id: true } }));
   if (targetEntityType === "EnterpriseMeeting") return Boolean(await prisma.enterpriseMeeting.findFirst({ where: { id: targetEntityId, organizationId, archivedAt: null, OR: [{ organizerUserId: userId }, { participants: { some: { userId } } }] }, select: { id: true } }));
+  if (targetEntityType === "EnterprisePurchase") return Boolean(await prisma.enterprisePurchase.findFirst({ where: { id: targetEntityId, organizationId, archivedAt: null, OR: [{ requestedByUserId: userId }, { buyerUserId: userId }, { createdByUserId: userId }] }, select: { id: true } }));
   if (targetEntityType === "PharmacyQualityIncident") return Boolean(await prisma.pharmacyQualityIncident.findFirst({ where: { id: targetEntityId, organizationId, OR: [{ reportedById: userId }, { assignedToId: userId }, { createdById: userId }] }, select: { id: true } }));
   return false;
 }
@@ -86,16 +90,18 @@ export async function GET(req: Request, { params }: Params) {
 async function resolveTargets(organizationId: string, approvals: Array<{ targetEntityType: string; targetEntityId: string }>) {
   const byType = new Map<string, string[]>();
   for (const approval of approvals) byType.set(approval.targetEntityType, [...(byType.get(approval.targetEntityType) || []), approval.targetEntityId]);
-  const [tasks, requests, meetings, incidents] = await Promise.all([
+  const [tasks, requests, meetings, purchases, incidents] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseTask") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseRequest") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseMeeting") || [] } }, select: { id: true, title: true, status: true } }),
+    prisma.enterprisePurchase.findMany({ where: { organizationId, id: { in: byType.get("EnterprisePurchase") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.pharmacyQualityIncident.findMany({ where: { organizationId, id: { in: byType.get("PharmacyQualityIncident") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
   ]);
   const map = new Map<string, ApprovalTargetSummary>();
   for (const item of tasks) map.set(`EnterpriseTask:${item.id}`, { type: "EnterpriseTask", ...item });
   for (const item of requests) map.set(`EnterpriseRequest:${item.id}`, { type: "EnterpriseRequest", ...item });
   for (const item of meetings) map.set(`EnterpriseMeeting:${item.id}`, { type: "EnterpriseMeeting", ...item });
+  for (const item of purchases) map.set(`EnterprisePurchase:${item.id}`, { type: "EnterprisePurchase", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
   return map;
 }
@@ -115,9 +121,11 @@ export async function POST(req: Request, { params }: Params) {
   const data = parsed.data;
   if (!(await canAccessTarget(organizationId, session.userId, access.canManage, data.targetEntityType, data.targetEntityId))) return NextResponse.json({ error: "Forbidden", message: "Vous ne pouvez pas demander une validation sur cet objet." }, { status: 403 });
   const pendingForTarget = await prisma.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: data.targetEntityType, targetEntityId: data.targetEntityId, status: "PENDING", archivedAt: null }, select: { id: true } });
-  if (pendingForTarget) return NextResponse.json({ error: "Pending approval exists", message: "Une validation est déjà en attente pour cet objet. Le Sprint 6 utilise une approbation simple à un approbateur ; les chaînes multi-étapes viendront avec le Workflow Engine." }, { status: 409 });
+  if (pendingForTarget) return NextResponse.json({ error: "Pending approval exists", message: "Une validation est déjà en attente pour cet objet. Les chaînes multi-étapes viendront avec le Workflow Engine." }, { status: 409 });
   try {
-    const approval = await createEnterpriseApproval({ organizationId, actorUserId: session.userId, targetEntityType: data.targetEntityType, targetEntityId: data.targetEntityId, approverUserId: data.approverUserId });
+    const approval = data.targetEntityType === "EnterprisePurchase"
+      ? await createEnterprisePurchaseApproval({ organizationId, purchaseId: data.targetEntityId, actorUserId: session.userId, approverUserId: data.approverUserId })
+      : await createEnterpriseApproval({ organizationId, actorUserId: session.userId, targetEntityType: data.targetEntityType, targetEntityId: data.targetEntityId, approverUserId: data.approverUserId });
     await notifyUser({ userId: approval.approverUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Validation requise", body: "Une décision vous a été attribuée.", targetUrl: "/enterprise-modules/VALIDATIONS" });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_APPROVAL_REQUESTED", entity: "EnterpriseApproval", entityId: approval.id, request: req, metadata: { organizationId, targetEntityType: approval.targetEntityType, targetEntityId: approval.targetEntityId, approverUserId: approval.approverUserId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals" } });
