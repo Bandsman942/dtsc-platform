@@ -1,0 +1,45 @@
+name: Payroll hotfix integrator
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.head_ref == 'fix/sprint-05-payroll-submission-retry'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply hotfix
+        run: node scripts/apply-payroll-hotfix-once.mjs
+      - name: Remove one-shot integration files
+        run: rm scripts/apply-payroll-hotfix-once.mjs .github/workflows/zz-payroll-hotfix-once.yml
+      - name: Diff checks
+        run: git diff --check
+      - name: Commit integrated hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "fix: unblock payroll submission and cancelled-period retry"
+          git push origin HEAD:${{ github.head_ref }}
