@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!allowed) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à exécuter cette transition d’achat." }, { status: 403 });
   try {
     const result = await transitionEnterprisePurchase(organizationId, id, session.userId, parsed.data);
-    if (action === "SUBMIT" && "approverUserId" in result) await notifyUser({ userId: result.approverUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Approbation d’achat requise", body: "Un achat attend votre décision.", targetUrl: "/enterprise-modules/VALIDATIONS" });
+    if (action === "SUBMIT" && result && "approverUserId" in result) await notifyUser({ userId: result.approverUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Approbation d’achat requise", body: "Un achat attend votre décision.", targetUrl: "/enterprise-modules/VALIDATIONS" });
     if ((action === "ORDER" || action === "CANCEL") && current.requestedByUserId !== session.userId) await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_PURCHASE", title: action === "ORDER" ? "Achat commandé" : "Achat annulé", body: current.title, targetUrl: "/enterprise-modules/SUPPLIERS_PURCHASES" });
     const auditAction = action === "SUBMIT" ? "ENTERPRISE_PURCHASE_SUBMITTED" : action === "ORDER" ? "ENTERPRISE_PURCHASE_ORDERED" : action === "CLOSE" ? "ENTERPRISE_PURCHASE_CLOSED" : action === "CANCEL" ? "ENTERPRISE_PURCHASE_CANCELLED" : "ENTERPRISE_PURCHASE_ARCHIVED";
     await writeAuditLog({ userId: session.userId, action: auditAction, entity: "EnterprisePurchase", entityId: id, request: req, metadata: { organizationId, fromStatus: current.status } });
