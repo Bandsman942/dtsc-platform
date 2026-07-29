@@ -28,6 +28,8 @@ export async function POST(req: Request, { params }: Params) {
   if (!meetingAccess.canManage && meeting.organizerUserId !== session.userId) return NextResponse.json({ error: "Forbidden", message: "Seul l’organisateur ou un responsable peut créer une tâche depuis une décision." }, { status: 403 });
   const parsed = enterpriseMeetingDecisionTaskSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Tâche invalide." }, { status: 400 });
+  const decision = await prisma.enterpriseMeetingDecision.findFirst({ where: { id: decisionId, meetingId: id, organizationId }, select: { title: true } });
+  if (!decision) return NextResponse.json({ error: "Not found", message: "Décision de réunion introuvable." }, { status: 404 });
   try {
     const data = parsed.data;
     const task = await createTaskFromMeetingDecision({
@@ -37,7 +39,7 @@ export async function POST(req: Request, { params }: Params) {
       actorUserId: session.userId,
       input: {
         taskType: "ACTION",
-        title: data.title,
+        title: data.title || decision.title,
         description: data.description || undefined,
         priority: data.priority,
         assignedToUserId: data.assignedToUserId || undefined,
