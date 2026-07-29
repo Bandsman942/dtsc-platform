@@ -8,6 +8,8 @@
 - Les photos de groupe sont modifiables uniquement par un OWNER/ADMIN du groupe autorisé.
 - Les statuts image expirent à 24 h par défaut et restent visibles uniquement aux membres autorisés du groupe.
 - Un vocal crée toujours un vrai `CollaborationGroupMessage` de type `VOICE` plus une ligne `CollaborationVoiceMessage`; ne jamais stocker un vocal uniquement comme blob sans message métier.
+- Les paramètres des vocaux (`enabled`, durée, taille et rate limit) sont autoritaires côté serveur via `CollaborationVoiceSetting`; le frontend ne peut jamais augmenter ou contourner ces limites.
+- Normaliser les MIME audio avec paramètres (`audio/webm;codecs=opus`, etc.) avant validation et stockage ; ne jamais dépendre d’une égalité brute du header MIME navigateur.
 - Les réponses (`replyToId`) doivent pointer vers un message du même groupe.
 - Les préférences de notification doivent être appliquées côté serveur avant `notifyUser(s)` ; le frontend n’est jamais la source de vérité du mute.
 - Les suppressions de messages vocaux doivent rendre le média inaccessible et nettoyer le blob privé lorsque possible.
