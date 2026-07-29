@@ -2,19 +2,25 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { canAccessGroupInSessionWithSubscription, canManageGroup, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
+import { removeCollaborationMedia } from "@/lib/collaboration-media";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { collaborationMessageUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-message-update:${session.userId}`), 180, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { id } = await params;
   const message = await prisma.collaborationGroupMessage.findUnique({
     where: { id },
@@ -26,9 +32,9 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const parsed = collaborationMessageUpdateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid message" }, { status: 400 });
-  }
+  if (!parsed.success) return NextResponse.json({ error: "Invalid message" }, { status: 400 });
+  if (message.messageType === "VOICE" && parsed.data.content) return NextResponse.json({ error: "Voice messages cannot be edited" }, { status: 409 });
+
   const memberUserIds = await groupMemberUserIds(message.groupId);
   const mentionedUserIds = await parseMentionedUserIds(parsed.data.mentionedUserIds, memberUserIds);
   const updated = await prisma.$transaction(async (tx) => {
@@ -52,6 +58,7 @@ export async function PATCH(req: Request, { params }: Params) {
         where: { messageId: id },
         data: { status: parsed.data.status, deletedAt: parsed.data.status === "DELETED" ? new Date() : null },
       });
+      if (parsed.data.status === "DELETED") await tx.collaborationVoiceMessage.updateMany({ where: { messageId: id }, data: { deletedAt: new Date() } });
     }
     return saved;
   });
@@ -61,7 +68,7 @@ export async function PATCH(req: Request, { params }: Params) {
       title: "Mention dans un message DTSC",
       body: parsed.data.content?.slice(0, 160) || "Vous avez été mentionné dans un groupe.",
       type: "COLLABORATION",
-      targetUrl: "/collaborators",
+      targetUrl: `/collaborators?groupId=${encodeURIComponent(message.groupId)}`,
       organizationId: message.group.organizationId,
     });
   }
@@ -72,11 +79,14 @@ export async function PATCH(req: Request, { params }: Params) {
 
 export async function DELETE(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-message-delete:${session.userId}`), 180, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { id } = await params;
   const message = await prisma.collaborationGroupMessage.findUnique({
     where: { id },
@@ -87,17 +97,14 @@ export async function DELETE(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const voice = await prisma.collaborationVoiceMessage.findUnique({ where: { messageId: id } });
   const deletedAt = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.collaborationGroupMessage.update({
-      where: { id },
-      data: { status: "DELETED", deletedAt },
-    });
-    await tx.collaborationSharedConversation.updateMany({
-      where: { messageId: id },
-      data: { status: "DELETED", deletedAt },
-    });
+    await tx.collaborationGroupMessage.update({ where: { id }, data: { status: "DELETED", deletedAt } });
+    await tx.collaborationSharedConversation.updateMany({ where: { messageId: id }, data: { status: "DELETED", deletedAt } });
+    await tx.collaborationVoiceMessage.updateMany({ where: { messageId: id }, data: { deletedAt } });
   });
+  if (voice) await removeCollaborationMedia(message.groupId, voice.storageBucket, voice.storagePath);
   await writeGroupAudit({ groupId: message.groupId, actorId: session.userId, action: "message.delete", entityType: "CollaborationGroupMessage", entityId: id });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true });

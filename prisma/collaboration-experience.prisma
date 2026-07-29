@@ -1,0 +1,66 @@
+model CollaborationGroupExperience {
+  id                  String   @id @default(cuid())
+  groupId             String   @unique
+  avatarStorageBucket String?
+  avatarStoragePath   String?
+  avatarMimeType      String?
+  avatarSizeBytes     Int?
+  avatarUpdatedById   String?
+  avatarUpdatedAt     DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([groupId, updatedAt])
+}
+
+model CollaborationGroupStory {
+  id            String    @id @default(cuid())
+  groupId       String
+  authorId      String
+  caption       String?
+  storageBucket String
+  storagePath   String
+  mimeType      String
+  sizeBytes     Int
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([groupId, expiresAt, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CollaborationVoiceMessage {
+  id            String    @id @default(cuid())
+  groupId       String
+  messageId     String    @unique
+  authorId      String
+  storageBucket String
+  storagePath   String
+  mimeType      String
+  sizeBytes     Int
+  durationMs    Int
+  waveformJson  Json?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([groupId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CollaborationGroupPreference {
+  id            String   @id @default(cuid())
+  groupId       String
+  userId        String
+  pinned        Boolean  @default(false)
+  favorite      Boolean  @default(false)
+  archived      Boolean  @default(false)
+  notifications String   @default("ALL")
+  mutedUntil    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([userId, pinned, favorite, updatedAt])
+  @@index([groupId, userId])
+}

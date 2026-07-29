@@ -3,20 +3,25 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { assertGroupMemberForSession, canManageGroup, createGroupSystemMessage, writeGroupAudit } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { collaborationGroupUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-group-update:${session.userId}`), 100, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { id } = await params;
   const member = await assertGroupMemberForSession(id, session);
-  if (!canManageGroup(member, session.role)) {
+  if (!member || !canManageGroup(member, session.role)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -45,16 +50,17 @@ export async function PATCH(req: Request, { params }: Params) {
 
 export async function DELETE(req: Request, { params }: Params) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const limited = await rateLimit(getRateLimitKey(req, `collaboration-group-delete:${session.userId}`), 40, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { id } = await params;
   const member = await assertGroupMemberForSession(id, session);
-  if (!member) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   if (member.role === "OWNER") {
     const activeMemberCount = await prisma.collaborationGroupMember.count({ where: { groupId: id, status: "ACTIVE" } });
@@ -70,10 +76,7 @@ export async function DELETE(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ message: "Seul le propriétaire peut supprimer ce groupe." }, { status: 403 });
   } else {
-    await prisma.collaborationGroupMember.updateMany({
-      where: { groupId: id, userId: session.userId },
-      data: { status: "LEFT", leftAt: new Date() },
-    });
+    await prisma.collaborationGroupMember.updateMany({ where: { groupId: id, userId: session.userId }, data: { status: "LEFT", leftAt: new Date() } });
     await createGroupSystemMessage({ groupId: id, actorId: session.userId, content: `${session.name} a quitté le groupe.` });
     await writeGroupAudit({ groupId: id, actorId: session.userId, action: "group.leave", entityType: "CollaborationGroupMember", entityId: member.id });
   }
