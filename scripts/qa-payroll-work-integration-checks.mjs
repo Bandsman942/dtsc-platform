@@ -1,0 +1,66 @@
+import fs from "node:fs";
+
+const read = (path) => fs.readFileSync(path, "utf8");
+const schema = read("prisma/schema.prisma");
+const migration = read("prisma/migrations/20260729043000_sprint05_payroll_workflow/migration.sql");
+const workflow = read("lib/payroll-workflow.ts");
+const finance = read("lib/hr-cfo-finance.ts");
+const genericCreate = read("app/api/admin/hr-cfo/[entity]/route.ts");
+const genericUpdate = read("app/api/admin/hr-cfo/[entity]/[id]/route.ts");
+const hrRoute = read("app/api/admin/hr-cfo/payrolls/route.ts");
+const submitRoute = read("app/api/admin/hr-cfo/payrolls/[id]/submit/route.ts");
+const paidRoute = read("app/api/admin/hr-cfo/payrolls/[id]/mark-paid/route.ts");
+const ceoReview = read("app/api/admin/ceo/payroll-approvals/[id]/review/route.ts");
+const cooReview = read("app/api/admin/coo/payroll-approvals/[id]/review/route.ts");
+const payslip = read("app/api/admin/payrolls/[id]/pdf/route.ts");
+const agents = read("AGENTS.md");
+const packageJson = read("package.json");
+const vercelJson = read("vercel.json");
+const vercelScript = read("vercel.sh");
+
+const checks = [];
+const expect = (label, condition) => checks.push({ label, ok: Boolean(condition) });
+
+expect("Payroll workflow fields are modeled", schema.includes("workflowVersion") && schema.includes("approvedWorkMinutes") && schema.includes("requiredApproverCode"));
+expect("Payroll work evidence relation exists", schema.includes("model HrcfoPayrollWorkEntry") && schema.includes("workEntryId") && schema.includes("workSubmissionId"));
+expect("Payroll review history exists", schema.includes("model HrcfoPayrollReview") && schema.includes("actorEmployeeId"));
+expect("Legacy payroll fields are expanded non-destructively", !/DROP\s+(TABLE|COLUMN)/i.test(migration) && migration.includes('ADD COLUMN "workflowVersion"'));
+expect("Active work entries cannot be consumed twice", migration.includes("HrcfoPayrollWorkEntry_active_workEntry_key") && migration.includes('WHERE "releasedAt" IS NULL'));
+expect("New payroll financial source is DB-idempotent", migration.includes("HrcfoExpense_payroll_workflow_source_key") && migration.includes("PAYROLL_WORKFLOW"));
+expect("DB blocks payroll self approval", migration.includes("sprint5_no_self_approval_check") && migration.includes('"approverEmployeeId" <> "employeeId"'));
+expect("DB guards workflow transitions", migration.includes("guard_dtsc_payroll_workflow") && migration.includes("PENDING_APPROVAL") && migration.includes("Validated or terminal payroll financial evidence is immutable"));
+expect("Approved work helper is reused", workflow.includes("getApprovedWorkForPayroll") && workflow.includes("loadApprovedWorkEvidence"));
+expect("Cross-month weekly evidence filters by workDate", workflow.includes("entry.workDate >= periodStart && entry.workDate <= periodEnd") && workflow.includes("mondayOnOrBefore") && workflow.includes("sundayOnOrAfter"));
+expect("Only approved submissions feed evidence", workflow.includes("getApprovedWorkForPayroll") && workflow.includes('submission: { status: "APPROVED" }'));
+expect("Standard gross comes from HR compensation", workflow.includes("employeeMonthlyCompensation") && workflow.includes('source: "MONTHLY_COMPENSATION"'));
+expect("Partial periods require explicit override", workflow.includes("BASE_OVERRIDE_REQUIRED") && workflow.includes("Une période partielle ne peut pas être proratisée automatiquement"));
+expect("Approved minutes never calculate salary", !/approvedWorkMinutes\s*[*/+-]\s*(grossAmount|monthlyCompensation)/.test(workflow));
+expect("Bonus reason is mandatory", workflow.includes("BONUS_REASON_REQUIRED") && migration.includes("sprint5_bonus_reason_check"));
+expect("Deduction reason is mandatory", workflow.includes("DEDUCTION_REASON_REQUIRED") && migration.includes("sprint5_deduction_reason_check"));
+expect("Coverage does not zero salary automatically", workflow.includes('coverage = entries.length === 0') && !/coverage[^\n]{0,100}grossAmount\s*=\s*0/.test(workflow));
+expect("Incomplete coverage requires an explicit reason before submission", workflow.includes("COVERAGE_REASON_REQUIRED") && migration.includes("Incomplete payroll work coverage requires an explicit reason"));
+expect("HR CFO prepares payroll", hrRoute.includes('requireAdminBlockAccess("hrCfo")') && workflow.includes('assertOfficialPosition(actor, "HR_CFO"'));
+expect("CEO approval route is separated", ceoReview.includes('requireAdminBlockAccess("ceo")') && ceoReview.includes('expectedApproverCode: "CEO"'));
+expect("COO approval route is separated for CEO payroll", cooReview.includes('requireAdminBlockAccess("coo")') && cooReview.includes('expectedApproverCode: "COO"'));
+expect("Reviewer policy is CEO except CEO payroll to COO", workflow.includes('=== "CEO" ? "COO" : "CEO"'));
+expect("No self approval is enforced server-side", workflow.includes("SELF_APPROVAL_FORBIDDEN") && workflow.includes("payroll.employeeId === actor.id"));
+expect("DRAFT and PENDING do not call transaction creation", workflow.indexOf("createValidatedTransactionInTx") > workflow.indexOf('if (action === "APPROVED")'));
+expect("Approval uses the existing finance transaction engine", workflow.includes("createValidatedTransactionInTx") && workflow.includes('sourceType: "PAYROLL_WORKFLOW"'));
+expect("Approval is serialized with an advisory lock", workflow.includes("pg_advisory_xact_lock") && workflow.includes("lockPayroll"));
+expect("PAID updates the existing transaction only", paidRoute.includes("markPayrollPaid") && workflow.includes('transaction.status !== "PAID"') && workflow.includes('hrcfoExpense.update') && !workflow.slice(workflow.indexOf("export async function markPayrollPaid"), workflow.indexOf("export async function cancelPayroll")).includes("hrcfoExpense.create"));
+expect("Generic HR CFO CRUD no longer exposes payroll", !genericCreate.includes('"payrolls" |') && !genericUpdate.includes('"payrolls" |'));
+expect("Legacy finance helpers cannot directly validate a payroll", finance.includes("Le CRUD historique de paie ne peut créer qu'un brouillon") && finance.includes("Le workflow Sprint 5 doit être utilisé"));
+expect("Payroll submit route is audited", submitRoute.includes("PAYROLL_SUBMITTED") && submitRoute.includes("writeApiLog"));
+expect("Payslip access is hardened", payslip.includes("HR_CFO") && !payslip.includes("UserRole.SUPPORT") && !payslip.includes("UserRole.MANAGER"));
+expect("Sprint 5 QA is wired into regression", packageJson.includes('"qa:payroll-workflow"') && packageJson.includes("qa-payroll-work-integration-checks.mjs"));
+expect("Permanent Sprint 5 rules are documented", agents.includes("SPRINT_05_PAYROLL_WORKFLOW_RULES") && agents.includes("approved DTSC work") && agents.includes("No employee may approve their own payroll"));
+expect("Vercel remains production-only", vercelJson.includes('"main": true') && vercelJson.includes('"*": false') && vercelJson.includes("ignoreCommand"));
+expect("Production still migrates before build", vercelScript.indexOf("prisma migrate deploy") >= 0 && vercelScript.indexOf("prisma migrate deploy") < vercelScript.indexOf("pnpm build"));
+
+let failed = 0;
+for (const check of checks) {
+  console.log(`${check.ok ? "✓" : "✗"} ${check.label}`);
+  if (!check.ok) failed += 1;
+}
+console.log(`\nSprint 5 QA: ${checks.length - failed}/${checks.length} checks passed.`);
+if (failed) process.exit(1);
