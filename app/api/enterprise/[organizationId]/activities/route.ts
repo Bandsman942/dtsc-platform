@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canAccessEnterpriseActivity, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
-import { createEnterpriseCoreRecord } from "@/lib/enterprise/enterprise-core";
+import { createEnterpriseRequestInTransaction } from "@/lib/enterprise/core-v2/service";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -117,36 +117,34 @@ export async function POST(req: Request, { params }: Params) {
     }
   }
 
-  const requestRecord = await prisma.enterpriseActivityRequest.create({
-    data: {
-      organizationId,
-      blockId: block.id,
-      blockCode: block.blockCode,
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      status: "SUBMITTED",
-      targetModuleCode: block.targetModuleCode,
-      assignedToUserId: data.assignedToUserId || null,
-      createdById: session.userId,
-      metadataJson: { membershipRole: membership.role, ...data.metadata },
-    },
-  });
-  await createEnterpriseCoreRecord({
-    organizationId,
-    actorUserId: session.userId,
-    data: {
-      moduleCode: "INTERNAL_REQUESTS",
-      recordType: "INTERNAL_REQUEST",
+  const requestRecord = await prisma.$transaction(async (tx) => {
+    const activityRequest = await tx.enterpriseActivityRequest.create({
+      data: {
+        organizationId,
+        blockId: block.id,
+        blockCode: block.blockCode,
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        status: "SUBMITTED",
+        targetModuleCode: block.targetModuleCode,
+        assignedToUserId: data.assignedToUserId || null,
+        createdById: session.userId,
+        metadataJson: { membershipRole: membership.role, ...data.metadata },
+      },
+    });
+    await createEnterpriseRequestInTransaction(tx, organizationId, session.userId, {
+      requestType: block.blockCode,
       title: data.title,
       description: data.description,
       priority: data.priority,
       assignedToUserId: data.assignedToUserId || undefined,
       sourceModule: "ENTERPRISE_ACTIVITIES",
       sourceEntityType: "EnterpriseActivityRequest",
-      sourceEntityId: requestRecord.id,
-      metadata: { blockCode: block.blockCode, targetModuleCode: block.targetModuleCode },
-    },
+      sourceEntityId: activityRequest.id,
+      initialStatus: "SUBMITTED",
+    });
+    return activityRequest;
   });
 
   const adminMembers = data.assignedToUserId
@@ -184,7 +182,7 @@ export async function POST(req: Request, { params }: Params) {
     entity: "EnterpriseActivityRequest",
     entityId: requestRecord.id,
     request: req,
-    metadata: { organizationId, blockCode: block.blockCode },
+    metadata: { organizationId, blockCode: block.blockCode, enterpriseRequestSource: true },
   });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, request: requestRecord }, { status: 201 });

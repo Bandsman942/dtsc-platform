@@ -36,40 +36,52 @@ export async function getEnterpriseOrganizationForAdmin(organizationId: string) 
 
 export async function getEnterpriseAdministrationDataset(organizationId: string): Promise<EnterpriseAdminDataset | null> {
   const organization = await getEnterpriseOrganizationForAdmin(organizationId);
-  if (!organization) {
-    return null;
-  }
+  if (!organization) return null;
 
   const entitlements = await getOrganizationEntitlements(organizationId);
-  if (!entitlements) {
-    return null;
-  }
+  if (!entitlements) return null;
 
-  const [members, moduleDataset, departments, positions, workflowDataset, calendarEvents, sectorRecords, coreRecords] = await Promise.all([
-    getEnterpriseMembersDataset(organizationId),
-    getEnterpriseModulesDataset(organizationId, entitlements),
-    prisma.enterpriseDepartment.findMany({
-      where: { organizationId },
-      orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }],
-    }),
-    prisma.enterprisePosition.findMany({
-      where: { organizationId },
-      orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }],
-      include: { department: { select: { labelFr: true, labelEn: true } } },
-    }),
-    getEnterpriseWorkflowsDataset(organizationId),
-    getEnterpriseCalendarDataset(organizationId),
-    organization.sectorCode === "PHARMACY"
-      ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode)
-      : getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
-    prisma.enterpriseCoreRecord.findMany({
-      where: { organizationId, archivedAt: null },
-      select: { moduleCode: true, recordType: true, status: true, dueAt: true, updatedAt: true },
-    }),
-  ]);
-  const closedStatuses = new Set(["COMPLETED", "APPROVED", "REJECTED", "CANCELLED", "ARCHIVED"]);
   const now = new Date();
   const recentThreshold = new Date(now.getTime() - 30 * 86400000);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+  const [
+    members,
+    moduleDataset,
+    departments,
+    positions,
+    workflowDataset,
+    calendarEvents,
+    sectorRecords,
+    legacyCoreRecords,
+    tasks,
+    requests,
+    pendingValidationsCount,
+    meetings,
+  ] = await Promise.all([
+    getEnterpriseMembersDataset(organizationId),
+    getEnterpriseModulesDataset(organizationId, entitlements),
+    prisma.enterpriseDepartment.findMany({ where: { organizationId }, orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }] }),
+    prisma.enterprisePosition.findMany({ where: { organizationId }, orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }], include: { department: { select: { labelFr: true, labelEn: true } } } }),
+    getEnterpriseWorkflowsDataset(organizationId),
+    getEnterpriseCalendarDataset(organizationId),
+    organization.sectorCode === "PHARMACY" ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode) : getEnterpriseHealthcareDataset(organizationId, organization.sectorCode),
+    prisma.enterpriseCoreRecord.findMany({
+      where: { organizationId, archivedAt: null, recordType: { in: ["DOCUMENT", "BUDGET", "SUPPLIER"] } },
+      select: { recordType: true, status: true, updatedAt: true },
+    }),
+    prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, dueAt: true } }),
+    prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, createdAt: true } }),
+    prisma.enterpriseApproval.count({ where: { organizationId, archivedAt: null, status: "PENDING" } }),
+    prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, startAt: true } }),
+  ]);
+
+  const closedLegacyStatuses = new Set(["COMPLETED", "APPROVED", "REJECTED", "CANCELLED", "ARCHIVED"]);
+  const openTaskStatuses = new Set(["TODO", "IN_PROGRESS", "BLOCKED"]);
+  const openRequestStatuses = new Set(["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED"]);
 
   return toJson<EnterpriseAdminDataset>({
     organization,
@@ -77,14 +89,19 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
       membersCount: members.length,
       activeModulesCount: moduleDataset.modules.filter((enterpriseModule) => enterpriseModule.isEnabled).length,
       modulesCount: moduleDataset.modules.length,
-      openRequestsCount: workflowDataset.openRequestsCount,
-      recentRequestsCount: workflowDataset.recentRequests.length,
-      openTasksCount: coreRecords.filter((record) => record.moduleCode === "TASKS_OPERATIONS" && !closedStatuses.has(record.status)).length,
-      overdueTasksCount: coreRecords.filter((record) => record.moduleCode === "TASKS_OPERATIONS" && !closedStatuses.has(record.status) && record.dueAt && record.dueAt < now).length,
-      pendingValidationsCount: coreRecords.filter((record) => record.status === "PENDING_VALIDATION").length,
-      recentDocumentsCount: coreRecords.filter((record) => record.recordType === "DOCUMENT" && record.updatedAt >= recentThreshold).length,
-      activeBudgetsCount: coreRecords.filter((record) => record.recordType === "BUDGET" && !closedStatuses.has(record.status)).length,
-      activeSuppliersCount: coreRecords.filter((record) => record.recordType === "SUPPLIER" && !closedStatuses.has(record.status)).length,
+      openRequestsCount: requests.filter((requestRecord) => openRequestStatuses.has(requestRecord.status)).length,
+      recentRequestsCount: requests.filter((requestRecord) => requestRecord.createdAt >= recentThreshold).length,
+      submittedRequestsCount: requests.filter((requestRecord) => requestRecord.status === "SUBMITTED").length,
+      inReviewRequestsCount: requests.filter((requestRecord) => requestRecord.status === "IN_REVIEW").length,
+      openTasksCount: tasks.filter((task) => openTaskStatuses.has(task.status)).length,
+      overdueTasksCount: tasks.filter((task) => openTaskStatuses.has(task.status) && task.dueAt && task.dueAt < now).length,
+      blockedTasksCount: tasks.filter((task) => task.status === "BLOCKED").length,
+      pendingValidationsCount,
+      todayMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && meeting.startAt >= todayStart && meeting.startAt < tomorrowStart).length,
+      upcomingMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && meeting.startAt >= now).length,
+      recentDocumentsCount: legacyCoreRecords.filter((record) => record.recordType === "DOCUMENT" && record.updatedAt >= recentThreshold).length,
+      activeBudgetsCount: legacyCoreRecords.filter((record) => record.recordType === "BUDGET" && !closedLegacyStatuses.has(record.status)).length,
+      activeSuppliersCount: legacyCoreRecords.filter((record) => record.recordType === "SUPPLIER" && !closedLegacyStatuses.has(record.status)).length,
     },
     members,
     modules: moduleDataset.modules,

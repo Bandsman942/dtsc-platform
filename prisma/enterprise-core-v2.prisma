@@ -1,0 +1,187 @@
+model EnterpriseTask {
+  id               String   @id @default(cuid())
+  organizationId   String
+  taskType         String   @default("TASK")
+  title            String
+  description      String?
+  status           String   @default("TODO")
+  priority         String   @default("NORMAL")
+  createdByUserId  String
+  assignedToUserId String?
+  departmentId     String?
+  startAt          DateTime?
+  dueAt            DateTime?
+  completedAt      DateTime?
+  sourceModule     String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  parentTaskId     String?
+  revision         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  archivedAt       DateTime?
+
+  @@index([organizationId, status])
+  @@index([organizationId, assignedToUserId, status])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, dueAt])
+  @@index([organizationId, createdByUserId, createdAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+  @@index([organizationId, parentTaskId])
+  @@index([archivedAt])
+}
+
+model EnterpriseRequest {
+  id               String   @id @default(cuid())
+  organizationId   String
+  requestType      String
+  title            String
+  description      String
+  priority         String   @default("NORMAL")
+  status           String   @default("DRAFT")
+  requestedByUserId String
+  assignedToUserId String?
+  departmentId     String?
+  dueAt            DateTime?
+  sourceModule     String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  revision         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  closedAt         DateTime?
+  archivedAt       DateTime?
+
+  @@index([organizationId, status])
+  @@index([organizationId, requestedByUserId, status])
+  @@index([organizationId, assignedToUserId, status])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+  @@index([archivedAt])
+}
+
+model EnterpriseApproval {
+  id               String   @id @default(cuid())
+  organizationId   String
+  targetEntityType String
+  targetEntityId   String
+  requestedByUserId String
+  approverUserId   String
+  status           String   @default("PENDING")
+  requestedAt      DateTime @default(now())
+  decidedAt        DateTime?
+  decisionComment  String?
+  revision         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  archivedAt       DateTime?
+
+  @@index([organizationId, approverUserId, status])
+  @@index([organizationId, requestedByUserId, status])
+  @@index([organizationId, targetEntityType, targetEntityId])
+  @@index([organizationId, requestedAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseMeeting {
+  id               String                         @id @default(cuid())
+  organizationId   String
+  title            String
+  agenda           String?
+  organizerUserId  String
+  startAt          DateTime
+  endAt            DateTime
+  status           String                         @default("SCHEDULED")
+  locationMode     String                         @default("ONLINE")
+  physicalLocation String?
+  meetingLink      String?
+  minutes          String?
+  departmentId     String?
+  sourceModule     String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  revision         Int                            @default(1)
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+  archivedAt       DateTime?
+  participants     EnterpriseMeetingParticipant[]
+  decisions        EnterpriseMeetingDecision[]
+
+  @@index([organizationId, startAt])
+  @@index([organizationId, organizerUserId, startAt])
+  @@index([organizationId, departmentId, startAt])
+  @@index([organizationId, status, startAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+  @@index([archivedAt])
+}
+
+model EnterpriseMeetingParticipant {
+  id             String            @id @default(cuid())
+  organizationId String
+  meetingId      String
+  userId         String
+  role           String            @default("PARTICIPANT")
+  responseStatus String            @default("INVITED")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  meeting        EnterpriseMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([organizationId, userId, createdAt])
+  @@index([organizationId, meetingId])
+}
+
+model EnterpriseMeetingDecision {
+  id              String            @id @default(cuid())
+  organizationId  String
+  meetingId       String
+  title           String
+  description     String?
+  decidedAt       DateTime           @default(now())
+  createdByUserId String
+  taskId          String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  meeting         EnterpriseMeeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, meetingId, decidedAt])
+  @@index([organizationId, taskId])
+}
+
+model EnterpriseOperationalEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  eventType      String
+  summary        String
+  fromStatus     String?
+  toStatus       String?
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@index([organizationId, eventType, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model EnterpriseOperationalComment {
+  id             String   @id @default(cuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  authorUserId   String
+  content        String
+  visibility     String   @default("INTERNAL")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@index([authorUserId, createdAt])
+  @@index([deletedAt])
+}

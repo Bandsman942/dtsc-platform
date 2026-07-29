@@ -1,4 +1,6 @@
 import { Prisma } from "@prisma/client";
+import { isDedicatedCoreDomain } from "@/lib/enterprise/core-v2/constants";
+import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { prisma } from "@/lib/prisma";
 
 export const ENTERPRISE_CORE_MODULES = {
@@ -112,6 +114,14 @@ export async function createEnterpriseCoreRecord({
     metadata?: Record<string, unknown>;
   };
 }) {
+  if (isDedicatedCoreDomain(data.moduleCode, data.recordType)) {
+    throw new EnterpriseCoreV2Error(
+      "Les nouvelles tâches, demandes, validations et réunions utilisent les modèles ERP Core v2 dédiés.",
+      409,
+      "LEGACY_CORE_WRITE_DENIED"
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
     const record = await tx.enterpriseCoreRecord.create({
       data: {
@@ -142,7 +152,7 @@ export async function createEnterpriseCoreRecord({
         organizationId,
         recordId: record.id,
         eventType: "CREATED",
-        summary: "Élément créé dans le socle commun ERP.",
+        summary: "Élément créé dans le socle commun ERP legacy.",
         toStatus: record.status,
         actorUserId,
       },

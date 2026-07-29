@@ -6,6 +6,8 @@ DTSC Platform utilise une architecture SaaS hybride: le tenant interne DTSC rest
 
 La couche sectorielle ajoute des modèles prêts à appliquer pour générer les modules, postes, départements, blocs d'activités et workflows adaptés au secteur choisi par l'entreprise.
 
+Depuis le Sprint 6, les objets transversaux `Task`, `Request`, `Approval` et `Meeting` sont représentés par les modèles ERP Core v2 dédiés. Les tables sectorielles restent toujours la source métier de leur domaine ; le Core v2 sert uniquement au travail transversal lié.
+
 ## Références métier
 
 Les modèles sont structurés pour rester compatibles avec des cadres reconnus sans copier un référentiel externe:
@@ -36,8 +38,10 @@ Les modèles sont structurés pour rester compatibles avec des cadres reconnus s
 - `EnterpriseDepartment`: départements réellement disponibles.
 - `EnterpriseActivityBlock`: blocs réellement visibles dans `Activités [Entreprise]`.
 - `EnterpriseWorkflow`: workflows réellement activés.
-- `EnterpriseActivityRequest`: demandes, rapports ou signalements soumis par les membres de l'entreprise.
-- `EnterpriseSectorRecord`: enregistrements métier sectoriels génériques isolés par `organizationId`, `sectorCode`, `moduleCode` et `recordType`.
+- `EnterpriseActivityRequest`: objet d'entrée de l'expérience Activités Entreprise. Pour une nouvelle demande transversale, il est désormais lié à un `EnterpriseRequest` dédié Sprint 6.
+- `EnterpriseSectorRecord`: enregistrements métier sectoriels génériques isolés par `organizationId`, `sectorCode`, `moduleCode` et `recordType` pour les secteurs encore basés sur ce registre.
+- `EnterpriseTask`, `EnterpriseRequest`, `EnterpriseApproval`, `EnterpriseMeeting`: objets ERP transversaux dédiés Sprint 6, jamais remplaçants des tables sectorielles.
+- `EnterpriseEntityLink`: lien transverse entre l'objet sectoriel et l'objet ERP, toujours dans la même organisation.
 
 ## Secteurs préchargés
 
@@ -99,6 +103,8 @@ Le module `/enterprise-admin` est visible uniquement en contexte `ORGANIZATION` 
 
 Ce module permet de consulter et gérer les modules, sections, postes, départements, blocs d'activités et workflows de l'organisation active. Il ne donne pas accès à l'administration globale DTSC.
 
+Les KPI communs Sprint 6 lisent désormais les tables dédiées : tâches ouvertes/bloquées/en retard, demandes soumises/en revue, validations en attente et réunions du jour/à venir. Documents, budgets et fournisseurs restent temporairement issus du Core legacy jusqu'aux Sprints 7 et 8.
+
 ### Itération `HEALTH_CARE`
 
 La première itération sectorielle approfondie concerne `HEALTH_CARE`. Quand une entreprise active possède `sectorCode = HEALTH_CARE`, `Administration [Entreprise]` affiche un bloc `Santé - sous-modules métier` avec dashboard, sous-modules, listes, formulaires, détails et actions persistées.
@@ -128,7 +134,7 @@ Chaque sous-module expose:
 - une fiche de détail;
 - des statuts et priorités;
 - un menu `...` pour consulter, modifier, archiver ou déclencher les actions métier autorisées;
-- une écriture réelle dans `EnterpriseSectorRecord`;
+- une écriture réelle dans `EnterpriseSectorRecord` pour les sous-modules encore génériques;
 - un audit `ENTERPRISE_HEALTHCARE_RECORD_CREATED`, `ENTERPRISE_HEALTHCARE_RECORD_UPDATED` ou `ENTERPRISE_HEALTHCARE_RECORD_ARCHIVED`.
 
 Les actions métier persistées incluent notamment confirmation/annulation de rendez-vous, marquage absent, conversion en consultation, clôture/réouverture de consultation, validation de résultat labo, soumission/approbation/rejet d'une prise en charge, mouvements de pharmacie et résolution d'incident.
@@ -142,7 +148,19 @@ Routes associées:
 
 Les routes exigent un membership actif, une organisation cliente active, `sectorCode = HEALTH_CARE`, un module santé activé et une permission organisationnelle compatible. Les sous-modules documents, confidentialité, paramètres et rapports s'appuient sur les modules entreprise `MEDICAL_RECORDS`, `SETTINGS` ou `REPORTS` pour vérifier les droits. Le rôle global DTSC ne donne aucun accès automatique aux données santé d'une entreprise cliente.
 
+Les données cliniques ne doivent jamais être aplaties dans `EnterpriseTask` ou `EnterpriseRequest`. Si un dossier Santé produit une tâche transversale, le Core v2 conserve uniquement un contexte minimal (`sourceModule`, `sourceEntityType`, `sourceEntityId`) et le détail sensible reste dans la source HEALTH_CARE autorisée.
+
 Voir `docs/sectors/health-care.md` pour les workflows, permissions et limites de cette itération.
+
+### Intégration `PHARMACY` avec ERP Core v2
+
+Les tables PHARMACY restent la source métier spécialisée. Les activités pharmacie peuvent produire un objet transversal via le dispatcher Sprint 6 :
+
+- demande de réapprovisionnement, ajustement, avis pharmacien ou demande documentaire -> `EnterpriseRequest`;
+- rupture, péremption, anomalie, incident qualité ou action transversale -> `EnterpriseTask`;
+- rapport caisse ou inventaire -> `EnterpriseCoreRecord(REPORT)` uniquement jusqu'au Sprint 8.
+
+`PharmacyActivityItem` reste lié à l'objet transversal par `EnterpriseEntityLink`. Les données de stock, vente, lot, prescription ou incident détaillées ne sont pas dupliquées dans le Core v2.
 
 ## Activités [Entreprise]
 
@@ -159,11 +177,34 @@ Chaque bloc d'activité crée un vrai `EnterpriseActivityRequest` lié à:
 - priorité;
 - module cible éventuel.
 
+Lorsqu'il s'agit d'une demande transversale, la même transaction crée aussi un `EnterpriseRequest` dédié avec `requestedByUserId = session.userId` et un lien source vers `EnterpriseActivityRequest`. Le `EnterpriseActivityRequest` reste l'objet d'entrée de l'UX Activités, tandis que `EnterpriseRequest` devient la source de vérité du cycle de demande ERP. Il n'existe pas de projection Core générique éditable en parallèle.
+
 Les admins entreprise et managers voient les demandes de l'organisation. Les membres voient leurs propres demandes ou celles qui leur sont assignées.
 
 L'interface est découpée en panels maintenables: dashboard, blocs d'activités, demandes, workflows, repères santé et dialogue de création. Les formulaires restent plein écran mobile-first, les demandes restent recherchables/paginées, et aucune action affichée ne doit être un placeholder.
 
 La route `POST /api/enterprise/[organizationId]/activities` vérifie l'origine de la requête, applique un rate limiting, valide le payload avec Zod, contrôle le membership actif, le bloc activé et le destinataire membre de la même entreprise. Les notifications sont non bloquantes afin de préserver la persistance de la demande.
+
+## ERP Core v2 et modules sectoriels
+
+La règle d'intégration transversale est :
+
+```text
+Source sectorielle
+      |
+      +-- résumé minimal + lien --> objet ERP Core v2
+```
+
+Exemples :
+
+```text
+PharmacyQualityIncident -> EnterpriseTask
+EnterpriseActivityRequest -> EnterpriseRequest
+EnterpriseRequest -> EnterpriseApproval
+EnterpriseMeetingDecision -> EnterpriseTask
+```
+
+Le serveur doit toujours vérifier que la source existe dans la même `organizationId` avant de créer le lien. `EnterpriseEntityLink` ne peut jamais traverser deux organisations.
 
 ## Sécurité multi-tenant
 
@@ -172,7 +213,8 @@ Les fonctions centrales sont:
 - `canAccessEnterpriseModule(userId, organizationId, moduleCode, action)`;
 - `canAccessEnterpriseActivity(userId, organizationId, blockCode, action)`;
 - `canManageEnterpriseAdministration(userId, organizationId)`;
-- `requireEnterpriseMembership(session, organizationId)`.
+- `requireEnterpriseMembership(session, organizationId)`;
+- `getEnterpriseCoreV2Access(...)` pour les domaines Sprint 6.
 
 Elles vérifient au minimum:
 
@@ -181,7 +223,8 @@ Elles vérifient au minimum:
 - organisation active;
 - rôle organisationnel;
 - module ou bloc activé;
-- plan d'abonnement si le module l'exige.
+- plan d'abonnement si le module l'exige;
+- visibilité/ownership de l'objet pour les domaines Sprint 6.
 
 Un rôle global DTSC ne donne aucun droit automatique sur ces modules.
 
@@ -199,4 +242,5 @@ Un rôle global DTSC ne donne aucun droit automatique sur ces modules.
 2. Ajouter une section `EnterpriseAdminSection` via l'application du template.
 3. Ajouter les permissions attendues dans les postes concernés.
 4. Ajouter un bloc d'activité si les collaborateurs doivent soumettre des informations vers ce module.
-5. Ajouter les routes métier avant d'afficher des actions avancées dans l'UI.
+5. Pour toute action transversale, utiliser le modèle ERP Core v2 dédié approprié plutôt qu'un nouveau `EnterpriseCoreRecord` générique.
+6. Ajouter les routes métier avant d'afficher des actions avancées dans l'UI.
