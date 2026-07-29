@@ -111,7 +111,7 @@ type Props = {
 const GROUP_TYPES = ["COMPANY", "PROJECT", "INTERNAL", "CLIENT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "OTHER"];
 
 export function CollaboratorsConversationWorkspace(props: Props) {
-  const { currentUserId, initialActiveGroupId, initialJoinCallId, userPreferences, users, conversations, callPreferences } = props;
+  const { currentUserId, initialActiveGroupId, initialJoinCallId, userPreferences, users } = props;
   const t = useCallback((key: Parameters<typeof collaborationExperienceT>[1]) => collaborationExperienceT(userPreferences.locale, key), [userPreferences.locale]);
   const [groups, setGroups] = useState(props.initialGroups);
   const [invitations, setInvitations] = useState(props.initialInvitations);
@@ -493,7 +493,7 @@ function MessageBubble({ message, voice, currentUserId, userPreferences, canMana
 
 function buildGroupMenu({ activeGroup, activePreference, canManage, isOwner, t, onInfo, onFavorite, onPin, onArchive, onNotifications, onPhoto, onStory, onInvite, onSettings, onCalls, onLeave }: { activeGroup: Group; activePreference: Preference; canManage: boolean; isOwner: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onInfo: () => void; onFavorite: () => void; onPin: () => void; onArchive: () => void; onNotifications: () => void; onPhoto: () => void; onStory: () => void; onInvite: () => void; onSettings: () => void; onCalls: () => void; onLeave: () => void }): ActionMenuItem[] {
   return [
-    { key: "info", label: t("groupInfo"), icon: Info, onSelect: onInfo },
+    { key: "info", label: `${t("groupInfo")} · ${activeGroup.name}`, icon: Info, onSelect: onInfo },
     { key: "favorite", label: activePreference.favorite ? t("removeFavorite") : t("addFavorite"), icon: Heart, onSelect: onFavorite },
     { key: "pin", label: activePreference.pinned ? t("unpin") : t("pin"), icon: Pin, onSelect: onPin },
     { key: "archive", label: activePreference.archived ? t("unarchive") : t("archive"), icon: Archive, onSelect: onArchive },
