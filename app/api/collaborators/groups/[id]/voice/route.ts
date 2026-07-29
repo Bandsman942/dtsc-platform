@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, groupMemberUserIds, markGroupMessagesRead, writeGroupAudit } from "@/lib/collaboration";
 import { collaborationVoiceMetadataSchema } from "@/lib/collaboration-experience-validators";
+import { getCollaborationVoiceSettings } from "@/lib/collaboration-voice-settings";
 import { createCollaborationMediaSignedUrl, removeCollaborationMedia, uploadVoiceMessage, validateCollaborationAudio } from "@/lib/collaboration-media";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +33,7 @@ export async function GET(req: Request, { params }: Params) {
     durationMs: voice.durationMs,
     waveform: voice.waveformJson,
     createdAt: voice.createdAt,
-    audioUrl: await createCollaborationMediaSignedUrl(id, voice.storageBucket, voice.storagePath).catch(() => null),
+    audioUrl: await createCollaborationMediaSignedUrl(id, voice.storageBucket, voice.storagePath, 15 * 60).catch(() => null),
   })));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ voices });
@@ -43,8 +44,19 @@ export async function POST(req: Request, { params }: Params) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const limited = await rateLimit(getRateLimitKey(req, `collaboration-voice:${session.userId}`), 120, 60 * 60 * 1000);
+
+  const voiceSettings = await getCollaborationVoiceSettings();
+  if (!voiceSettings.enabled) {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { reason: "voice_disabled" } });
+    return NextResponse.json({ error: "VOICE_DISABLED", message: "Les messages vocaux sont désactivés par l’administrateur." }, { status: 409 });
+  }
+  const limited = await rateLimit(
+    getRateLimitKey(req, `collaboration-voice:${session.userId}`),
+    voiceSettings.rateLimitPerHour,
+    60 * 60 * 1000
+  );
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+
   const { id } = await params;
   const member = await assertGroupMemberForSession(id, session);
   if (!member || member.group.status !== "ACTIVE") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -52,7 +64,7 @@ export async function POST(req: Request, { params }: Params) {
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "Audio required" }, { status: 400 });
-  const validation = validateCollaborationAudio(file);
+  const validation = validateCollaborationAudio(file, voiceSettings.maxFileSizeBytes);
   if (!validation.ok) return NextResponse.json({ error: "Invalid audio", message: validation.message }, { status: validation.status });
 
   let waveform: unknown = [];
@@ -67,6 +79,12 @@ export async function POST(req: Request, { params }: Params) {
     waveform,
   });
   if (!metadata.success) return NextResponse.json({ error: "Invalid voice message" }, { status: 400 });
+  if (metadata.data.durationMs > voiceSettings.maxDurationSeconds * 1000) {
+    return NextResponse.json({
+      error: "VOICE_DURATION_EXCEEDED",
+      message: `La durée maximale autorisée est de ${voiceSettings.maxDurationSeconds} seconde(s).`,
+    }, { status: 413 });
+  }
   if (metadata.data.replyToId) {
     const reply = await prisma.collaborationGroupMessage.findFirst({ where: { id: metadata.data.replyToId, groupId: id, deletedAt: null }, select: { id: true } });
     if (!reply) return NextResponse.json({ error: "Invalid reply target" }, { status: 400 });
@@ -126,7 +144,7 @@ export async function POST(req: Request, { params }: Params) {
       organizationId: member.group.organizationId,
     });
     await writeGroupAudit({ groupId: id, actorId: session.userId, action: "message.voice.create", entityType: "CollaborationVoiceMessage", entityId: voiceId });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
+    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { mimeType: validation.mimeType, durationMs: metadata.data.durationMs } });
     return NextResponse.json({ ok: true, messageId }, { status: 201 });
   } catch (error) {
     await removeCollaborationMedia(id, uploaded.storageBucket, uploaded.storagePath);
