@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, CircleAlert, FileInput, FileText, Search, Send } from "lucide-react";
 import { ActivityDetail } from "@/components/activities/activity-detail";
+import { WorkPrestationsPanel } from "@/components/activities/work-prestations-panel";
 import { BlockerDialog, ReportDialog, RequestDialog, WorkflowDialog } from "@/components/activities/activity-forms";
 import { ActivityBusinessItem } from "@/components/activities/activity-list-item";
 import type { ActivityItem, ActivitySection, CollaboratorOption } from "@/components/activities/activity-types";
@@ -25,6 +26,7 @@ type FilteredActivitySection = ActivitySection & { originalCount: number };
 export function ActivitiesDashboard({
   currentUserId,
   currentUserRole,
+  locale,
   sections,
   collaborators,
   operations,
@@ -32,6 +34,7 @@ export function ActivitiesDashboard({
 }: {
   currentUserId: string;
   currentUserRole: string;
+  locale?: string | null;
   sections: ActivitySection[];
   collaborators: CollaboratorOption[];
   operations: CollaboratorOption[];
@@ -151,6 +154,7 @@ export function ActivitiesDashboard({
       />
 
       <ModuleContent>
+        <WorkPrestationsPanel locale={locale} />
         {!hasAnyVisibleItem && hasFilters ? (
           <EmptyState
             title="Aucun résultat"

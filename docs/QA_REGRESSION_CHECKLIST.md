@@ -693,3 +693,21 @@ Documenter dans le ticket ou la PR:
 - [ ] `pnpm prisma:generate`, `pnpm type-check`, `pnpm qa:regression`, `pnpm lint` et `pnpm build` sont verts avant merge.
 <!-- /SPRINT_03_WORK_SCHEDULE_QA -->
 
+<!-- SPRINT_04_WORK_PRESTATIONS_QA -->
+## Sprint 4 — QA prestations DTSC
+
+- [ ] création d'une entrée personnelle et refus d'un employeeId tiers ;
+- [ ] calcul 08:00-17:00 moins 60 min = 480 min ;
+- [ ] calcul 09:00-12:30 = 210 min ;
+- [ ] chevauchement d'entrées refusé ;
+- [ ] indicateur hors disponibilité et conflit absence via resolver Sprint 3 ;
+- [ ] DRAFT → SUBMITTED → APPROVED ;
+- [ ] SUBMITTED → CHANGES_REQUESTED → édition → RESUBMITTED ;
+- [ ] SUBMITTED → REJECTED avec commentaire obligatoire ;
+- [ ] APPROVED non modifiable ;
+- [ ] COO approuve standard/HR_CFO/CEO mais jamais sa propre soumission ;
+- [ ] CEO approuve COO mais jamais sa propre soumission ;
+- [ ] notifications de soumission/correction/validation/refus passent par le système central Web Push ;
+- [ ] aucune mutation HrcfoPayroll depuis le Sprint 4 ;
+- [ ] pnpm qa:work-schedule, pnpm qa:work-prestations, pnpm qa:regression, typecheck, lint, build et migration PostgreSQL+pgvector passent avant merge ;
+- [ ] aucun Vercel Preview n'est créé sur la feature branch.

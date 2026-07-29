@@ -17,6 +17,7 @@ import { CreateUserForm } from "@/components/admin/create-user-form";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
+import { WorkSubmissionReviewPanel } from "@/components/admin/work-submission-review-panel";
 import { PromotionalBannerManager } from "@/components/admin/promotional-banner-manager";
 import { PublicPublicationsManager } from "@/components/admin/public-publications-manager";
 import { SiteVisitsChart } from "@/components/admin/site-visits-chart";
@@ -378,19 +379,23 @@ export default async function AdminPage({
         )}
 
         {activeSection === "coo" && canView("coo") && (
-          <OperationsAdminPanel
-            eyebrow="Chief Operating Officer"
-            title="Pilotage COO"
-            description="Organisez les opérations internes, distribuez les tâches, suivez les blocages, structurez les réunions et consolidez les rapports opérationnels DTSC."
-            playbook={["Opération cadrée", "Tâches assignées", "Coordination", "Blocages traités", "Validation", "Rapport opérationnel"]}
-            datasets={internalModulesDataset.cooDatasets}
-            canEdit={canView("coo")}
-          />
+          <div className="space-y-5">
+            <WorkSubmissionReviewPanel reviewerRole="COO" locale={user.locale} />
+            <OperationsAdminPanel
+              eyebrow="Chief Operating Officer"
+              title="Pilotage COO"
+              description="Organisez les opérations internes, distribuez les tâches, suivez les blocages, structurez les réunions et consolidez les rapports opérationnels DTSC."
+              playbook={["Opération cadrée", "Tâches assignées", "Coordination", "Blocages traités", "Validation", "Rapport opérationnel"]}
+              datasets={internalModulesDataset.cooDatasets}
+              canEdit={canView("coo")}
+            />
+          </div>
         )}
 
         {activeSection === "ceo" && canView("ceo") && (
           <div className="space-y-5">
             <CeoExecutiveSummary groups={internalModulesDataset.ceoExecutiveGroups} dateStart={selectedCeoStart} dateEnd={selectedCeoEnd} />
+            <WorkSubmissionReviewPanel reviewerRole="CEO" locale={user.locale} />
             <OperationsAdminPanel
               eyebrow="Chief Executive Officer"
               title="Supervision CEO"

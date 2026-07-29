@@ -5267,6 +5267,10 @@ model HrcfoEmployee {
   departmentRef       Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   position            DtscPosition?  @relation(fields: [positionId], references: [id], onDelete: SetNull)
   payrolls            HrcfoPayroll[]
+  workEntries         DtscWorkEntry[]            @relation("DtscWorkEntryEmployee")
+  workSubmissions     DtscWorkSubmission[]       @relation("DtscWorkSubmissionEmployee")
+  reviewedWorkSubmissions DtscWorkSubmission[]   @relation("DtscWorkSubmissionReviewer")
+  workSubmissionReviews DtscWorkSubmissionReview[] @relation("DtscWorkSubmissionReviewActor")
 
   @@index([status, department])
   @@index([userId])
@@ -6791,4 +6795,75 @@ model LegalReport {
   @@index([departmentId])
   @@index([responsibleLegalId])
   @@index([periodEnd])
+}
+
+model DtscWorkSubmission {
+  id                 String                     @id @default(cuid())
+  employeeId         String
+  periodStart        DateTime
+  periodEnd          DateTime
+  status             String                     @default("DRAFT")
+  declaredMinutes    Int                        @default(0)
+  validatedMinutes   Int?
+  submittedAt        DateTime?
+  reviewerEmployeeId String?
+  reviewedAt         DateTime?
+  reviewComment      String?
+  revision           Int                        @default(0)
+  createdById        String
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  employee           HrcfoEmployee              @relation("DtscWorkSubmissionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  reviewer           HrcfoEmployee?             @relation("DtscWorkSubmissionReviewer", fields: [reviewerEmployeeId], references: [id], onDelete: SetNull)
+  entries            DtscWorkEntry[]
+  reviews            DtscWorkSubmissionReview[]
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([status, periodStart])
+  @@index([reviewerEmployeeId, status])
+  @@index([employeeId, periodStart])
+}
+
+model DtscWorkEntry {
+  id                          String              @id @default(cuid())
+  employeeId                  String
+  workDate                    DateTime
+  startTime                   String
+  endTime                     String
+  breakMinutes                Int                 @default(0)
+  workedMinutes               Int
+  locationMode                String?
+  workType                    String              @default("NORMAL_WORK")
+  summary                     String
+  details                     String?
+  sourceType                  String?
+  sourceId                    String?
+  submissionId                String?
+  scheduleOutsideAvailability Boolean             @default(false)
+  scheduleBlockingCount       Int                 @default(0)
+  scheduleWarningCount        Int                 @default(0)
+  createdById                 String
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  deletedAt                   DateTime?
+  employee                    HrcfoEmployee       @relation("DtscWorkEntryEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  submission                  DtscWorkSubmission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, workDate, deletedAt])
+  @@index([submissionId, deletedAt])
+  @@index([sourceType, sourceId])
+}
+
+model DtscWorkSubmissionReview {
+  id              String             @id @default(cuid())
+  submissionId    String
+  actorEmployeeId String
+  action          String
+  comment         String?
+  createdAt       DateTime           @default(now())
+  submission      DtscWorkSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  actor           HrcfoEmployee      @relation("DtscWorkSubmissionReviewActor", fields: [actorEmployeeId], references: [id], onDelete: Restrict)
+
+  @@index([submissionId, createdAt])
+  @@index([actorEmployeeId, createdAt])
 }

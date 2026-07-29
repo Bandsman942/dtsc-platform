@@ -408,3 +408,16 @@ Conserver une hiérarchie visible pour:
 - Ne pas introduire de timesheet, pointage, prestation réelle, validation COO des prestations ou calcul paie dans le Sprint 3.
 <!-- /SPRINT_03_WORK_SCHEDULE_RULES -->
 
+<!-- SPRINT_04_WORK_PRESTATIONS_RULES -->
+## Règles permanentes — prestations réelles DTSC
+
+- DTSC work availability is planning data and must never be treated as worked time.
+- Worked time must come from explicit work entries submitted by the employee.
+- No employee, including CEO, COO or ADMIN, may approve their own work submission.
+- Regular DTSC work submissions are reviewed by COO; COO submissions are reviewed by CEO; CEO submissions are reviewed by COO.
+- HR & CFO work submissions are reviewed by COO.
+- Approved work submissions are immutable in normal workflows; corrections require a reviewer-driven correction cycle before resubmission.
+- Payroll must consume approved work only; it must never derive directly from availability or unapproved work entries.
+- Vercel deployments are production-only from main; feature branches must never enable or trigger preview deployments.
+- A work-entry duration is server-calculated in integer minutes from start/end minus break; client-provided worked totals are never authoritative.
+- Work-entry source references must be access-checked server-side and may not accept arbitrary cross-user objects.

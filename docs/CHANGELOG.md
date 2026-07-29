@@ -734,3 +734,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Aucun timesheet, pointage, prestation réelle, validation COO des prestations ni calcul de paie n'est introduit. Ces sujets restent réservés aux Sprints 4 et 5.
 <!-- /SPRINT_03_WORK_SCHEDULE_CHANGELOG -->
 
+<!-- SPRINT_04_WORK_PRESTATIONS_CHANGELOG -->
+## 2026-07-29 — Sprint 4 : prestations réelles DTSC
+
+- Ajout des prestations réelles self-service, durées serveur et contrôle des chevauchements.
+- Ajout des soumissions hebdomadaires, cycles de correction/resoumission et verrouillage des périodes validées.
+- Ajout de la validation indépendante COO/CEO avec interdiction absolue de l'auto-validation.
+- Réutilisation du planning effectif Sprint 3 pour signaler les écarts et conflits d'absence sans transformer le planning en temps travaillé.
+- Ajout des notifications/Web Push, audits, API logs, UI workspace mobile-first et frontière de lecture Sprint 5 sans calcul de paie.
+- Maintien du déploiement Vercel Production Only depuis main.
