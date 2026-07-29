@@ -24,10 +24,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Repair patcher generator syntax
+        run: node scripts/fix-payroll-hotfix-patcher.mjs
       - name: Apply hotfix
         run: node scripts/apply-payroll-hotfix-once.mjs
       - name: Remove one-shot integration files
-        run: rm scripts/apply-payroll-hotfix-once.mjs .github/workflows/zz-payroll-hotfix-once.yml
+        run: rm -f scripts/apply-payroll-hotfix-once.mjs scripts/fix-payroll-hotfix-patcher.mjs .github/workflows/zz-payroll-hotfix-once.yml docs/.payroll-hotfix-pr-trigger
       - name: Diff checks
         run: git diff --check
       - name: Commit integrated hotfix
