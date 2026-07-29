@@ -35,9 +35,15 @@ export async function PATCH(req: Request, { params }: Params) {
   try {
     const supplier = await updateEnterpriseSupplier(organizationId, id, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SUPPLIER_UPDATED", entity: "EnterpriseSupplier", entityId: id, request: req, metadata: { organizationId } });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", supplierId: id, action: "update" } });
     return NextResponse.json({ ok: true, supplier });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "SUPPLIER_DUPLICATE", message: "Un fournisseur équivalent existe déjà." }, { status: 409 });
-    const normalized = normalizeEnterpriseCoreV2Error(error); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", supplierId: id, error: "SUPPLIER_DUPLICATE" } });
+      return NextResponse.json({ error: "SUPPLIER_DUPLICATE", message: "Un fournisseur équivalent existe déjà." }, { status: 409 });
+    }
+    const normalized = normalizeEnterpriseCoreV2Error(error);
+    await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", supplierId: id, error: normalized.code } });
+    return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
   }
 }
