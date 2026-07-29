@@ -2502,3 +2502,11 @@ Nouvelles routes :
 La migration versionnée `20260729011500_sprint03_work_schedule_boundaries` est non destructive. Elle ne tente pas de convertir aveuglément les anciens statuts ambigus (par exemple une mission récurrente). Le resolver maintient une compatibilité de lecture avec les anciennes lignes.
 <!-- /SPRINT_03_WORK_SCHEDULE -->
 
+<!-- SPRINT_04_WORK_PRESTATIONS -->
+## Sprint 4 — prestations réelles et validation opérationnelle
+
+DTSC internal dispose désormais d'entrées de travail réelles (DtscWorkEntry) regroupées en soumissions hebdomadaires (DtscWorkSubmission) et d'un historique de review append-only (DtscWorkSubmissionReview). L'identité d'écriture vient du dossier HrcfoEmployee lié à la session. Les minutes sont calculées côté serveur, les overlaps sont refusés, et le resolver du Sprint 3 est utilisé uniquement pour produire des indicateurs de comparaison au planning.
+
+La matrice de review est centralisée : COO soumet au CEO ; tous les autres collaborateurs, CEO et HR_CFO compris, soumettent au COO. Une égalité reviewer/submission.employeeId retourne un refus serveur. Une validation simple fixe validatedMinutes = declaredMinutes; une correction ou un refus exige un motif et reste historisé.
+
+Aucun calcul salarial n'est déclenché. Le helper getApprovedWorkForPayroll() est uniquement une frontière de lecture pour le Sprint 5. Le workflow Vercel demeure Production Only depuis main.
