@@ -2510,3 +2510,20 @@ DTSC internal dispose désormais d'entrées de travail réelles (DtscWorkEntry) 
 La matrice de review est centralisée : COO soumet au CEO ; tous les autres collaborateurs, CEO et HR_CFO compris, soumettent au COO. Une égalité reviewer/submission.employeeId retourne un refus serveur. Une validation simple fixe validatedMinutes = declaredMinutes; une correction ou un refus exige un motif et reste historisé.
 
 Aucun calcul salarial n'est déclenché. Le helper getApprovedWorkForPayroll() est uniquement une frontière de lecture pour le Sprint 5. Le workflow Vercel demeure Production Only depuis main.
+
+
+<!-- SPRINT_05_PAYROLL_TECHNICAL -->
+## Sprint 5 — Prestations approuvées vers paie DTSC
+
+Le workflow de paie interne consomme uniquement les prestations approuvées via `getApprovedWorkForPayroll()`. `HrcfoPayroll` conserve la compatibilité des historiques existants et les nouvelles paies `workflowVersion = 1` suivent une machine d'état explicite : `DRAFT → PENDING_APPROVAL → VALIDATED → PAID`, avec branches `CHANGES_REQUESTED`, `REJECTED` et `CANCELLED`.
+
+Les preuves opérationnelles sont figées dans `HrcfoPayrollWorkEntry` avec les minutes approuvées, la soumission source et la vraie date de travail. Une unicité partielle empêche qu'une même entrée de travail soit consommée par plusieurs paies actives. Les périodes mensuelles coupant une semaine Sprint 4 filtrent les entrées par `workDate`; une semaine 27 juillet–2 août est donc répartie selon les dates réelles, jamais entièrement imputée à un seul mois.
+
+Pour un mois calendrier complet, la rémunération de base vient de `HrcfoEmployee.monthlyCompensation`. Les minutes approuvées restent une preuve et ne sont jamais transformées automatiquement en salaire, prorata ou retenue. Une période partielle exige un montant de base explicite et un motif. Toute prime ou retenue positive exige également un motif audité.
+
+HR & CFO prépare, corrige, soumet et confirme le paiement. Le CEO approuve les paies standards et le COO approuve uniquement la paie du CEO. Le serveur réévalue le poste officiel et interdit toute auto-approbation, y compris pour ADMIN. DRAFT et PENDING_APPROVAL n'ont aucun impact financier. Lors de VALIDATED, le moteur existant `createValidatedTransactionInTx()` crée au plus une transaction `PAYROLL_WORKFLOW` idempotente; PAID réutilise cette transaction sans second débit.
+
+Les bulletins et l'espace Activités restent propriétaires : le collaborateur voit uniquement ses paies et bulletins validés/payés, sans budget ni compte financier. Les paies historiques sans snapshot Sprint 4 restent lisibles comme legacy et ne reçoivent aucun faux lien de prestation.
+
+Le déploiement reste Production Only : feature branch → GitHub Quality Gates → PR/review → merge `main` → Vercel Production → `prisma migrate deploy` → `pnpm build`. Aucun Preview Deployment n'est requis ou activé.
+<!-- /SPRINT_05_PAYROLL_TECHNICAL -->

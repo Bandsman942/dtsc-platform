@@ -743,3 +743,21 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Réutilisation du planning effectif Sprint 3 pour signaler les écarts et conflits d'absence sans transformer le planning en temps travaillé.
 - Ajout des notifications/Web Push, audits, API logs, UI workspace mobile-first et frontière de lecture Sprint 5 sans calcul de paie.
 - Maintien du déploiement Vercel Production Only depuis main.
+
+
+<!-- SPRINT_05_PAYROLL_CHANGELOG -->
+## 2026-07-29 — Sprint 5 paie DTSC
+
+### Ajouté
+- Ajout du workflow de paie DTSC fondé uniquement sur les prestations Sprint 4 approuvées, avec snapshots de travail, liens `HrcfoPayrollWorkEntry`, couverture opérationnelle et historique `HrcfoPayrollReview`.
+- Ajout des espaces dédiés HR & CFO pour préparer/soumettre/payer, CEO pour approuver les paies standards et COO pour contre-valider uniquement la paie du CEO.
+- Ajout des protections PostgreSQL contre l'auto-approbation, les transitions arbitraires, la double consommation d'une prestation et la double transaction `PAYROLL_WORKFLOW`.
+
+### Sécurisé
+- Suppression de la paie du CRUD HR & CFO générique afin qu'un statut client ne puisse plus créer directement une paie VALIDATED/PAID ou provoquer une sortie financière.
+- La rémunération mensuelle standard vient du dossier RH; les périodes partielles, primes, retenues et couvertures incomplètes nécessitent des motifs explicites et audités.
+- Les collaborateurs ne voient que leurs propres paies et bulletins validés/payés; budgets et comptes financiers ne sont plus exposés dans leur vue ou leur bulletin.
+
+### Compatibilité
+- Les anciennes `HrcfoPayroll` restent consultables sans backfill artificiel de prestations Sprint 4. La migration Sprint 5 est additive et n'effectue aucun `DROP` ni réécriture destructive des historiques.
+<!-- /SPRINT_05_PAYROLL_CHANGELOG -->
