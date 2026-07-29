@@ -84,13 +84,13 @@ changed = replace(
 changed = replace(
   "components/calendar/internal-calendar-module.tsx",
   `            <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="max-w-full rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">\n              <Clock className="h-4 w-4" />\n              {translate(locale, "calendar.availability")}\n            </Button>`,
-  `            {showLegacyAvailabilityEditor && (\n              <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="max-w-full rounded-2xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">\n                <Clock className="h-4 w-4" />\n                {translate(locale, "calendar.availability")}\n              </Button>\n            )}`,
+  `            {showLegacyAvailabilityEditor && (\n              <Button type="button" variant="outline" onClick={() => setAvailabilityFormOpen(true)} className="max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface text-dtsc-blue">\n                <Clock className="h-4 w-4" />\n                {translate(locale, "calendar.availability")}\n              </Button>\n            )}`,
   "hide legacy mixed availability creation in DTSC",
 ) || changed;
 
 changed = replace(
   "components/calendar/internal-calendar-module.tsx",
-  `          {(["today", "week", "month", "collaborator", "department", "conflicts", "availability"]).map((view) => (`,
+  `          {["today", "week", "month", "collaborator", "department", "conflicts", "availability"].map((view) => (`,
   `          {(showLegacyAvailabilityEditor\n            ? ["today", "week", "month", "collaborator", "department", "conflicts", "availability"]\n            : ["today", "week", "month", "collaborator", "department", "conflicts"]\n          ).map((view) => (`,
   "hide legacy availability tab in DTSC",
 ) || changed;
