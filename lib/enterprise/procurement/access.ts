@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { getEnterpriseCoreV2Access, type EnterpriseCoreV2Action } from "@/lib/enterprise/core-v2/access";
+import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
 
@@ -14,7 +15,20 @@ export async function getEnterpriseProcurementAccess({
   moduleCode: "DOCUMENTS" | "SUPPLIERS_PURCHASES" | "VALIDATIONS";
   action: EnterpriseCoreV2Action;
 }) {
-  return getEnterpriseCoreV2Access({ session, organizationId, moduleCode, action });
+  if (moduleCode === "VALIDATIONS") return getEnterpriseCoreV2Access({ session, organizationId, moduleCode, action });
+  const membership = await requireEnterpriseMembership(session, organizationId);
+  if (!membership) return null;
+  if (membership.role === "GUEST" && action !== "read") return null;
+  const moduleReadable = await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, "read");
+  if (!moduleReadable) return null;
+  const isManager = ENTERPRISE_MANAGER_ROLES.has(membership.role);
+  if (!isManager && action !== "read" && !(await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, action))) return null;
+  return {
+    membership,
+    canSeeAll: isManager,
+    canManage: isManager,
+    canCreate: membership.role !== "GUEST" && (isManager || action === "read" || action === "submit" || await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, "submit")),
+  };
 }
 
 async function memberDepartmentId(organizationId: string, userId: string) {
