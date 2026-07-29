@@ -50,28 +50,41 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-  sprint3-docs-sync:
-    if: github.event_name == 'push' && github.ref_name == 'feat/sprint-03-work-availability' && github.event.head_commit.message != 'docs: sync Sprint 3 documentation'
+  sprint3-branch-sync:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/sprint-03-work-availability'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout branch
+      - name: Checkout feature branch
         uses: actions/checkout@v4
         with:
           ref: feat/sprint-03-work-availability
 
+      - name: Apply Sprint 3 review fixups
+        run: node scripts/sprint3-fixups.mjs
+
       - name: Synchronize Sprint 3 documentation
         run: node scripts/sync-sprint3-docs.mjs
 
-      - name: Commit documentation changes
+      - name: Commit synchronized changes
         run: |
           if git diff --quiet; then
-            echo "Documentation already synchronized."
+            echo "Sprint 3 branch already synchronized."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add AGENTS.md docs/TECHNICAL_DOCUMENTATION.md docs/QA_REGRESSION_CHECKLIST.md docs/CHANGELOG.md
-          git commit -m "docs: sync Sprint 3 documentation"
+          git add \
+            AGENTS.md \
+            docs/TECHNICAL_DOCUMENTATION.md \
+            docs/QA_REGRESSION_CHECKLIST.md \
+            docs/CHANGELOG.md \
+            app/api/calendar/availabilities/[id]/route.ts \
+            app/api/calendar/exceptions/route.ts \
+            app/calendar/page.tsx \
+            components/calendar/dtsc-work-schedule-panel.tsx \
+            components/calendar/internal-calendar-module.tsx \
+            lib/work-schedule.ts
+          git commit -m "fix(calendar): finalize Sprint 3 ownership and documentation"
           git push origin HEAD:feat/sprint-03-work-availability
