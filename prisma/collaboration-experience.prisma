@@ -1,0 +1,132 @@
+model CollaborationGroupExperience {
+  id                  String   @id @default(cuid())
+  groupId             String   @unique
+  avatarStorageBucket String?
+  avatarStoragePath   String?
+  avatarMimeType      String?
+  avatarSizeBytes     Int?
+  avatarUpdatedById   String?
+  avatarUpdatedAt     DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([groupId, updatedAt])
+}
+
+model CollaborationGroupStory {
+  id            String    @id @default(cuid())
+  groupId       String
+  authorId      String
+  caption       String?
+  storageBucket String
+  storagePath   String
+  mimeType      String
+  sizeBytes     Int
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([groupId, expiresAt, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CollaborationVoiceMessage {
+  id            String    @id @default(cuid())
+  groupId       String
+  messageId     String    @unique
+  authorId      String
+  storageBucket String
+  storagePath   String
+  mimeType      String
+  sizeBytes     Int
+  durationMs    Int
+  waveformJson  Json?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([groupId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CollaborationGroupPreference {
+  id            String   @id @default(cuid())
+  groupId       String
+  userId        String
+  pinned        Boolean  @default(false)
+  favorite      Boolean  @default(false)
+  archived      Boolean  @default(false)
+  notifications String   @default("ALL")
+  mutedUntil    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([userId, pinned, favorite, updatedAt])
+  @@index([groupId, userId])
+}
+
+model CollaborationVoiceSetting {
+  id                 String   @id @default("global")
+  enabled            Boolean  @default(true)
+  maxDurationSeconds Int      @default(300)
+  maxFileSizeBytes   Int      @default(16777216)
+  rateLimitPerHour   Int      @default(120)
+  updatedByUserId    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model CollaborationPresenceSession {
+  id               String    @id @default(cuid())
+  userId           String
+  clientSessionId  String
+  clientType       String    @default("UNKNOWN")
+  connectedAt      DateTime  @default(now())
+  lastHeartbeatAt  DateTime  @default(now())
+  disconnectedAt   DateTime?
+  disconnectReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, connectedAt])
+  @@index([userId, clientSessionId, disconnectedAt])
+  @@index([lastHeartbeatAt, disconnectedAt])
+  @@index([clientType, connectedAt])
+}
+
+model CollaborationMeetingLink {
+  id            String   @id @default(cuid())
+  meetingId     String   @unique
+  groupId       String
+  messageId     String   @unique
+  callType      String
+  scheduledAt   DateTime
+  availableFrom DateTime
+  status        String   @default("SCHEDULED")
+  lastCallId    String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([groupId, scheduledAt, status])
+  @@index([lastCallId])
+}
+
+model CollaborationMeetingMinutesPublication {
+  id               String   @id @default(cuid())
+  meetingId        String
+  callId           String   @unique
+  groupId          String
+  promptMessageId  String   @unique
+  summaryMessageId String?  @unique
+  minutesId        String?
+  summary          String?
+  status           String   @default("PENDING")
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([meetingId, status, createdAt])
+  @@index([groupId, createdAt])
+  @@index([minutesId])
+}

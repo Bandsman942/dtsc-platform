@@ -1,8 +1,10 @@
 import { notFound, redirect } from "next/navigation";
-import { EnterpriseAiWorkspace } from "@/components/enterprise/enterprise-ai-workspace";
+import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
+import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
+import { getConfiguredOpenAIModels, getDisplayName } from "@/lib/openai-config";
 import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 
@@ -30,33 +32,21 @@ export default async function EnterpriseModulePage({ params }: Params) {
     prisma.internalCalendarEvent.findMany({ where: { organizationId, deletedAt: null }, orderBy: { startDateTime: "desc" }, take: 20, select: { id: true, title: true, status: true, startDateTime: true } }),
     prisma.auditLog.findMany({ where: { metadata: { path: ["organizationId"], equals: organizationId } }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, action: true, entity: true, createdAt: true } }),
     prisma.enterpriseCoreRecord.findMany({
-      where: {
-        organizationId,
-        moduleCode,
-        archivedAt: null,
-        ...(ENTERPRISE_MANAGER_ROLES.has(membership.role) ? {} : { OR: [{ createdById: user.id }, { requestedById: user.id }, { assignedToUserId: user.id }, { validatorUserId: user.id }] }),
-      },
+      where: { organizationId, moduleCode, archivedAt: null, ...(ENTERPRISE_MANAGER_ROLES.has(membership.role) ? {} : { OR: [{ createdById: user.id }, { requestedById: user.id }, { assignedToUserId: user.id }, { validatorUserId: user.id }] }) },
       orderBy: { updatedAt: "desc" },
       take: 100,
-      select: {
-        id: true, moduleCode: true, recordType: true, title: true, description: true, status: true, priority: true, assignedToUserId: true,
-        validatorUserId: true, dueAt: true, sourceModule: true, sourceEntityType: true, sourceEntityId: true, updatedAt: true,
-        events: { orderBy: { createdAt: "desc" }, take: 4, select: { id: true, summary: true, eventType: true, createdAt: true } },
-        comments: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 4, select: { id: true, content: true, createdAt: true } },
-      },
+      select: { id: true, moduleCode: true, recordType: true, title: true, description: true, status: true, priority: true, assignedToUserId: true, validatorUserId: true, dueAt: true, sourceModule: true, sourceEntityType: true, sourceEntityId: true, updatedAt: true, events: { orderBy: { createdAt: "desc" }, take: 4, select: { id: true, summary: true, eventType: true, createdAt: true } }, comments: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 4, select: { id: true, content: true, createdAt: true } } },
     }),
   ]);
   if (!organization || !enterpriseModule || !enterpriseModule.isCore) notFound();
 
   if (enterpriseModule.moduleCode === "AI_ASSISTANT") {
+    const models = getConfiguredOpenAIModels().map((id) => ({ id, label: getDisplayName(id) }));
     return (
       <AppShell user={user}>
-        <EnterpriseAiWorkspace
-          organizationId={organizationId}
-          organizationName={organization.name}
-          sectorCode={organization.sectorCode}
-          canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)}
-        />
+        <AssistantImmersiveWorkspaceShell variant="enterprise">
+          <EnterpriseAiWorkspaceV2 organizationId={organizationId} organizationName={organization.name} sectorCode={organization.sectorCode} canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)} models={models} />
+        </AssistantImmersiveWorkspaceShell>
       </AppShell>
     );
   }
@@ -73,13 +63,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
         canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)}
         canCreate={membership.role !== "GUEST"}
         locale={user.locale}
-        coreRecords={coreRecords.map((record) => ({
-          ...record,
-          dueAt: record.dueAt?.toISOString() || null,
-          updatedAt: record.updatedAt.toISOString(),
-          events: record.events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })),
-          comments: record.comments.map((comment) => ({ ...comment, createdAt: comment.createdAt.toISOString() })),
-        }))}
+        coreRecords={coreRecords.map((record) => ({ ...record, dueAt: record.dueAt?.toISOString() || null, updatedAt: record.updatedAt.toISOString(), events: record.events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })), comments: record.comments.map((comment) => ({ ...comment, createdAt: comment.createdAt.toISOString() })) }))}
       />
     </AppShell>
   );

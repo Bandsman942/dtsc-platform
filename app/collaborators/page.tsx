@@ -1,7 +1,7 @@
 import { UserStatus } from "@prisma/client";
 import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { AppShell } from "@/components/layout/app-shell";
-import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
+import { CollaboratorsImmersiveConversationShell } from "@/components/collaborators/collaborators-immersive-conversation-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { collaborationGroupScopeWhere, touchUserPresence } from "@/lib/collaboration";
@@ -144,8 +144,8 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
 
   return (
     <AppShell user={user}>
-      <div className="min-w-0 overflow-x-hidden">
-        <CollaboratorsWorkspace
+      <div className="h-full min-h-0 min-w-0 overflow-hidden">
+        <CollaboratorsImmersiveConversationShell
           currentUserId={user.id}
           initialActiveGroupId={params?.groupId || null}
           initialJoinCallId={params?.joinCall || null}
