@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     await markCollaborationPresenceOnline({
       userId: session.userId,
       clientSessionId: parsed.data.clientSessionId,
-      clientType: parsed.data.clientType,
+      clientType: parsed.data.clientType || inferClientType(req.headers.get("user-agent")),
     });
   }
 
@@ -68,4 +68,12 @@ function safeJsonParse(value: string) {
   } catch {
     return {};
   }
+}
+
+function inferClientType(userAgent: string | null): "MOBILE" | "TABLET" | "DESKTOP" | "UNKNOWN" {
+  const value = (userAgent || "").toLowerCase();
+  if (!value) return "UNKNOWN";
+  if (/ipad|tablet|kindle|silk/.test(value)) return "TABLET";
+  if (/android|iphone|ipod|mobile/.test(value)) return "MOBILE";
+  return "DESKTOP";
 }
