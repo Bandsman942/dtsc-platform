@@ -10,12 +10,13 @@ export function useImmersiveConversationViewport() {
     const body = document.body;
     const privateMain = document.querySelector<HTMLElement>(".dtsc-private-main");
     if (!privateMain) return;
+    const privateMainElement = privateMain;
 
     const media = window.matchMedia(MOBILE_QUERY);
     const previousRootOverflow = root.style.overflow;
     const previousBodyOverflow = body.style.overflow;
     const previousBodyOverscroll = body.style.overscrollBehavior;
-    const previousMainStyle = privateMain.getAttribute("style");
+    const previousMainStyle = privateMainElement.getAttribute("style");
     const previousImmersive = root.dataset.dtscConversationImmersive;
     const lastScrollTop = new WeakMap<Element, number>();
     let frameId = 0;
@@ -37,8 +38,8 @@ export function useImmersiveConversationViewport() {
           root.style.overflow = previousRootOverflow;
           body.style.overflow = previousBodyOverflow;
           body.style.overscrollBehavior = previousBodyOverscroll;
-          if (previousMainStyle === null) privateMain.removeAttribute("style");
-          else privateMain.setAttribute("style", previousMainStyle);
+          if (previousMainStyle === null) privateMainElement.removeAttribute("style");
+          else privateMainElement.setAttribute("style", previousMainStyle);
           return;
         }
 
@@ -61,18 +62,18 @@ export function useImmersiveConversationViewport() {
         const contentBottom = navHidden || !bottomRect ? viewportBottom : Math.min(viewportBottom, bottomRect.top);
         const availableHeight = Math.max(1, contentBottom - contentTop);
 
-        privateMain.style.position = "fixed";
-        privateMain.style.left = `${viewportLeft}px`;
-        privateMain.style.right = "auto";
-        privateMain.style.top = `${contentTop}px`;
-        privateMain.style.bottom = "auto";
-        privateMain.style.width = `${viewportWidth}px`;
-        privateMain.style.height = `${availableHeight}px`;
-        privateMain.style.minHeight = "0";
-        privateMain.style.overflow = "hidden";
-        privateMain.style.padding = "0";
-        privateMain.style.zIndex = "20";
-        privateMain.style.transition = "top 220ms cubic-bezier(0.22,1,0.36,1), height 220ms cubic-bezier(0.22,1,0.36,1)";
+        privateMainElement.style.position = "fixed";
+        privateMainElement.style.left = `${viewportLeft}px`;
+        privateMainElement.style.right = "auto";
+        privateMainElement.style.top = `${contentTop}px`;
+        privateMainElement.style.bottom = "auto";
+        privateMainElement.style.width = `${viewportWidth}px`;
+        privateMainElement.style.height = `${availableHeight}px`;
+        privateMainElement.style.minHeight = "0";
+        privateMainElement.style.overflow = "hidden";
+        privateMainElement.style.padding = "0";
+        privateMainElement.style.zIndex = "20";
+        privateMainElement.style.transition = "top 220ms cubic-bezier(0.22,1,0.36,1), height 220ms cubic-bezier(0.22,1,0.36,1)";
       });
     }
 
@@ -128,8 +129,8 @@ export function useImmersiveConversationViewport() {
       root.style.overflow = previousRootOverflow;
       body.style.overflow = previousBodyOverflow;
       body.style.overscrollBehavior = previousBodyOverscroll;
-      if (previousMainStyle === null) privateMain.removeAttribute("style");
-      else privateMain.setAttribute("style", previousMainStyle);
+      if (previousMainStyle === null) privateMainElement.removeAttribute("style");
+      else privateMainElement.setAttribute("style", previousMainStyle);
       if (previousImmersive === undefined) delete root.dataset.dtscConversationImmersive;
       else root.dataset.dtscConversationImmersive = previousImmersive;
     };
