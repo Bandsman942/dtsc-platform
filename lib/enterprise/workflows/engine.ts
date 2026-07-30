@@ -24,6 +24,10 @@ function outputOutcome(value: Prisma.JsonValue | null | undefined) {
   return typeof outcome === "string" ? outcome : "DEFAULT";
 }
 
+function payloadObject(value: Prisma.JsonValue | null) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
+}
+
 async function timeline(input: { organizationId: string; runId: string; stepRunId?: string | null; eventType: string; status?: string | null; actorType?: "SYSTEM" | "USER"; actorUserId?: string | null; summary: string; metadata?: Prisma.InputJsonValue }) {
   return prisma.enterpriseWorkflowEvent.create({ data: { organizationId: input.organizationId, workflowRunId: input.runId, stepRunId: input.stepRunId || null, eventType: input.eventType, status: input.status || null, actorType: input.actorType || (input.actorUserId ? "USER" : "SYSTEM"), actorUserId: input.actorUserId || null, summary: input.summary, metadataJson: input.metadata } });
 }
@@ -112,10 +116,8 @@ export async function startWorkflowRun({
     const member = await prisma.organizationMember.findFirst({ where: { organizationId, userId: startedByUserId, status: "ACTIVE", removedAt: null }, select: { id: true } });
     if (!member) throw new EnterpriseWorkflowError("Le lanceur n’est pas un membre actif de l’entreprise.", 403, "WORKFLOW_STARTER_NOT_MEMBER", "SECURITY");
   }
-  if (definition.singleActiveRun) {
-    const active = await prisma.enterpriseWorkflowRun.findFirst({ where: { organizationId, workflowDefinitionId, sourceEntityType, sourceEntityId, status: { in: ACTIVE_RUN_STATUSES } } });
-    if (active) return active;
-  }
+  const active = await prisma.enterpriseWorkflowRun.findFirst({ where: { organizationId, workflowDefinitionId, sourceEntityType, sourceEntityId, status: { in: ACTIVE_RUN_STATUSES } } });
+  if (active) return active;
   let run;
   try {
     run = await prisma.enterpriseWorkflowRun.create({ data: { organizationId, workflowDefinitionId, workflowVersionId: version.id, status: "RUNNING", triggerType, triggerEventId: triggerEventId || null, sourceEntityType, sourceEntityId, currentStepId: start.id, startedByUserId: startedByUserId || null } });
@@ -141,11 +143,13 @@ export async function advanceWorkflowRun(runId: string) {
     if (!step) throw new EnterpriseWorkflowError("Étape courante introuvable.", 409, "WORKFLOW_CURRENT_STEP_MISSING", "CONFIGURATION");
     const adapter = getWorkflowEntityAdapter(run.sourceEntityType);
     const entity = await adapter.loadEntity(run.organizationId, run.sourceEntityId);
-    const stepRun = await getOrCreateStepRun(run.organizationId, run.id, step.id);
+    let stepRun = await getOrCreateStepRun(run.organizationId, run.id, step.id);
 
     if (stepRun.status === "WAITING" && run.status === "WAITING_TIME" && (!run.resumeAt || run.resumeAt.getTime() <= Date.now())) {
-      await prisma.enterpriseWorkflowRun.update({ where: { id: run.id }, data: { status: "RUNNING", resumeAt: null, revision: { increment: 1 } } });
-      await prisma.enterpriseWorkflowStepRun.update({ where: { id: stepRun.id }, data: { status: "RUNNING", startedAt: stepRun.startedAt || new Date() } });
+      const reset = await prisma.enterpriseWorkflowStepRun.updateMany({ where: { id: stepRun.id, status: "WAITING" }, data: { status: "PENDING" } });
+      if (reset.count !== 1) return loadRun(run.id);
+      await prisma.enterpriseWorkflowRun.updateMany({ where: { id: run.id, status: "WAITING_TIME" }, data: { status: "RUNNING", resumeAt: null, revision: { increment: 1 } } });
+      stepRun = { ...stepRun, status: "PENDING" };
     } else if (stepRun.status === "WAITING") return run;
 
     if (stepRun.status === "SUCCEEDED") {
@@ -154,8 +158,15 @@ export async function advanceWorkflowRun(runId: string) {
       if (next) await prisma.enterpriseWorkflowRun.update({ where: { id: run.id }, data: { status: "RUNNING", currentStepId: next.id, resumeAt: null, revision: { increment: 1 } } });
       continue;
     }
+    if (stepRun.status === "RUNNING") return run;
 
-    const runningStep = await prisma.enterpriseWorkflowStepRun.update({ where: { id: stepRun.id }, data: { status: "RUNNING", startedAt: stepRun.startedAt || new Date(), attemptCount: { increment: 1 }, failureCategory: null, failureCode: null, failureMessage: null } });
+    const claimed = await prisma.enterpriseWorkflowStepRun.updateMany({
+      where: { id: stepRun.id, status: { in: ["PENDING", "FAILED"] }, attemptCount: stepRun.attemptCount },
+      data: { status: "RUNNING", startedAt: stepRun.startedAt || new Date(), attemptCount: { increment: 1 }, failureCategory: null, failureCode: null, failureMessage: null },
+    });
+    if (claimed.count !== 1) return loadRun(run.id);
+    const runningStep = await prisma.enterpriseWorkflowStepRun.findUnique({ where: { id: stepRun.id } });
+    if (!runningStep) throw new EnterpriseWorkflowError("L’étape courante est introuvable après son claim.", 409, "WORKFLOW_STEP_CLAIM_MISSING", "TERMINAL");
     await timeline({ organizationId: run.organizationId, runId: run.id, stepRunId: runningStep.id, eventType: "ENTERPRISE_WORKFLOW_STEP_STARTED", status: "RUNNING", summary: `Étape « ${step.name} » démarrée.` });
     try {
       const result = await executeWorkflowStep({ run, step, stepRun: runningStep, workflowName: run.definition.name, adapter, entity, previousStepActorUserId: run.decisionActorUserId });
@@ -208,11 +219,14 @@ export async function resumeWorkflowFromApproval(approvalId: string, decisionAct
   const stepRun = await prisma.enterpriseWorkflowStepRun.findFirst({ where: { id: approval.workflowStepRunId, organizationId: approval.organizationId, workflowRunId: run.id } });
   if (!stepRun) throw new EnterpriseWorkflowError("L’étape liée à la validation est introuvable.", 409, "WORKFLOW_APPROVAL_STEP_MISSING", "CONFIGURATION");
   if (stepRun.status !== "SUCCEEDED") {
-    await prisma.$transaction([
-      prisma.enterpriseWorkflowStepRun.update({ where: { id: stepRun.id }, data: { status: "SUCCEEDED", completedAt: new Date(), assignedUserId: approval.approverUserId, outputJson: { approvalId: approval.id, decision: approval.status, outcome: approval.status } } }),
-      prisma.enterpriseWorkflowRun.update({ where: { id: run.id }, data: { status: "RUNNING", decisionActorUserId: decisionActorUserId || approval.approverUserId, resumeAt: null, failureCategory: null, failureCode: null, failureMessage: null, revision: { increment: 1 } } }),
-    ]);
-    await timeline({ organizationId: run.organizationId, runId: run.id, stepRunId: stepRun.id, eventType: "ENTERPRISE_WORKFLOW_APPROVAL_DECIDED", status: approval.status, actorUserId: decisionActorUserId || approval.approverUserId, summary: `Validation ${approval.status.toLowerCase()}.`, metadata: { approvalId: approval.id } });
+    const updated = await prisma.enterpriseWorkflowStepRun.updateMany({
+      where: { id: stepRun.id, status: "WAITING" },
+      data: { status: "SUCCEEDED", completedAt: new Date(), assignedUserId: approval.approverUserId, outputJson: { approvalId: approval.id, decision: approval.status, outcome: approval.status } },
+    });
+    if (updated.count === 1) {
+      await prisma.enterpriseWorkflowRun.updateMany({ where: { id: run.id, status: "WAITING_APPROVAL" }, data: { status: "RUNNING", decisionActorUserId: decisionActorUserId || approval.approverUserId, resumeAt: null, failureCategory: null, failureCode: null, failureMessage: null, revision: { increment: 1 } } });
+      await timeline({ organizationId: run.organizationId, runId: run.id, stepRunId: stepRun.id, eventType: "ENTERPRISE_WORKFLOW_APPROVAL_DECIDED", status: approval.status, actorUserId: decisionActorUserId || approval.approverUserId, summary: `Validation ${approval.status.toLowerCase()}.`, metadata: { approvalId: approval.id } });
+    }
   }
   return advanceWorkflowRun(run.id);
 }
@@ -253,7 +267,7 @@ export async function cancelWorkflowRun(runId: string, actorUserId: string, reas
   return loadRun(run.id);
 }
 
-export async function resumeWaitingRuns(batchSize = WORKFLOW_LIMITS.workerBatchSize) {
+export async function resumeWaitingRuns(batchSize: number = WORKFLOW_LIMITS.workerBatchSize) {
   const due = await prisma.enterpriseWorkflowRun.findMany({ where: { status: "WAITING_TIME", resumeAt: { lte: new Date() } }, orderBy: { resumeAt: "asc" }, take: Math.min(batchSize, WORKFLOW_LIMITS.workerBatchSize), select: { id: true } });
   const results = [];
   for (const item of due) {
@@ -266,21 +280,25 @@ export async function resumeWaitingRuns(batchSize = WORKFLOW_LIMITS.workerBatchS
 export async function processWorkflowDomainEvent(eventId: string) {
   const event = await prisma.enterpriseDomainEvent.findUnique({ where: { id: eventId } });
   if (!event) throw new EnterpriseWorkflowError("Événement métier introuvable.", 404, "WORKFLOW_DOMAIN_EVENT_NOT_FOUND", "BUSINESS");
+  const payload = payloadObject(event.payloadJson);
   if (event.entityType === "EnterpriseApproval" && ["ENTERPRISE_APPROVAL_APPROVED", "ENTERPRISE_APPROVAL_REJECTED", "ENTERPRISE_APPROVAL_CANCELLED"].includes(event.eventType)) {
-    await resumeWorkflowFromApproval(event.entityId, event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson) ? String((event.payloadJson as Record<string, Prisma.JsonValue>).actorUserId || "") || null : null);
+    await resumeWorkflowFromApproval(event.entityId, typeof payload.actorUserId === "string" ? payload.actorUserId : null);
     return [];
   }
+
+  const triggerFilters: Prisma.EnterpriseWorkflowDefinitionWhereInput[] = [{ triggerEventType: event.eventType }];
+  if (event.eventType.endsWith("_CREATED")) triggerFilters.push({ triggerType: "ENTITY_CREATED", triggerEventType: null });
+  const fromStatus = typeof payload.fromStatus === "string" ? payload.fromStatus : null;
+  const toStatus = typeof payload.toStatus === "string" ? payload.toStatus : null;
+  if (fromStatus && toStatus && fromStatus !== toStatus) triggerFilters.push({ triggerType: "ENTITY_STATUS_CHANGED", triggerEventType: null });
+
   const definitions = await prisma.enterpriseWorkflowDefinition.findMany({
     where: {
       organizationId: event.organizationId,
       status: "ACTIVE",
       archivedAt: null,
       triggerEntityType: event.entityType,
-      OR: [
-        { triggerEventType: event.eventType },
-        { triggerType: "ENTITY_CREATED", triggerEventType: null, ...(event.eventType.endsWith("_CREATED") ? {} : { id: "__never__" }) },
-        { triggerType: "ENTITY_STATUS_CHANGED", triggerEventType: null },
-      ],
+      OR: triggerFilters,
     },
   });
   const runs = [];
