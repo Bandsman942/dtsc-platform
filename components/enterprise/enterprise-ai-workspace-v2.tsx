@@ -9,7 +9,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { toastError, toastInfo, toastSuccess } from "@/lib/client-toast";
+import { toastError, toastSuccess } from "@/lib/client-toast";
 import { formatRelativeUserDateTime, formatUserDateTime } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
