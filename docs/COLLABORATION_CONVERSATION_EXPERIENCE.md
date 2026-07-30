@@ -41,12 +41,28 @@ Sur mobile/PWA, la page privée ne défile plus verticalement lorsque `Mes Colla
 - verrouille le scroll global du document ;
 - utilise `VisualViewport` pour suivre l'écran réellement disponible, y compris sur iOS avec clavier ouvert ;
 - conserve uniquement le scroll interne de la liste des groupes et du fil de messages ;
-- s'étend automatiquement lorsque les navigations DTSC haute et basse sont masquées ;
-- se réduit exactement entre ces deux navigations lorsqu'elles réapparaissent ;
+- garde la géométrie du fil stable pendant l'apparition/disparition des navigations DTSC ;
+- laisse les navigations haute et basse s'animer comme des overlays sans recalculer la hauteur du fil à chaque changement de chrome ;
 - réutilise le contrôleur mobile DTSC existant pour le tap d'apparition/disparition des barres ;
-- masque les barres lors d'un scroll descendant du fil et les restitue lors d'un scroll remontant ou au retour en haut.
+- masque les barres après un déplacement descendant significatif et les restitue après un déplacement remontant significatif ou au retour en haut.
 
 Le composant réutilisable `useImmersiveConversationViewport()` centralise ce comportement afin d'éviter un second moteur de navigation mobile propre à Collaboration.
+
+### Fluidité du scroll
+
+Le chemin chaud du scroll ne doit provoquer ni reflow répété ni boucle de mutations DOM. Le contrôleur applique donc les règles suivantes :
+
+```text
+scroll interne
+→ un seul traitement par requestAnimationFrame
+→ détection de direction avec seuil minimal
+→ hystérésis avant changement du chrome
+→ écriture data-private-mobile-nav seulement si l'état change
+→ aucun getComputedStyle par événement
+→ aucun recalcul top/bottom depuis les barres de navigation
+```
+
+Le `VisualViewport` reste synchronisé séparément, sans transition retardée sur `top` ou `height`. Ainsi les changements de viewport du navigateur ou du clavier sont suivis directement sans animation concurrente avec le mouvement du doigt.
 
 ## Couleurs des participants
 

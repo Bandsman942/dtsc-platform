@@ -3,6 +3,8 @@
 - L’expérience principale reste conversationnelle et mobile-first : liste/discussion plein écran sur mobile, split view sur desktop.
 - Sur mobile/PWA, le workspace conversationnel verrouille le scroll global de page : seules la liste des groupes et le fil de messages défilent en interne, en suivant `VisualViewport` et le chrome mobile DTSC existant.
 - Ne pas créer un second moteur concurrent pour le tap d’apparition/disparition des navigations haute/basse ; le shell immersif synchronise uniquement l’espace disponible et le scroll interne.
+- Le scroll interne ne doit jamais recalculer la géométrie du workspace à chaque événement : limiter le travail à `requestAnimationFrame`, ne changer l’état du chrome que lorsqu’il change réellement, utiliser une hystérésis de direction et laisser les navigations mobiles s’animer en overlay sans reflow du fil.
+- Éviter `getComputedStyle`, mesures répétées du header/footer ou écritures de styles synchrones dans la boucle chaude d’un scroll conversationnel ; toute détection de scroller doit être mise en cache après la première validation.
 - Réutiliser les composants conversationnels communs (`ConversationHeader`, `ConversationListItem`, `ConversationAvatar`, `ActionMenu`) plutôt que recréer des cartes décoratives.
 - Les filtres de discussions doivent rester compacts, horizontaux et tactiles ; ne pas introduire de tableau ou de grands conteneurs imbriqués.
 - Les couleurs des participants doivent rester stables et déterministes à partir d’un identifiant utilisateur lorsque possible, jamais aléatoires à chaque rendu, et lisibles en thème clair/sombre.

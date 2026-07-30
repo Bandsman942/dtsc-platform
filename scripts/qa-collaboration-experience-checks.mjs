@@ -84,6 +84,12 @@ assert(immersiveShell.includes("getParticipantColor"), "Conversation bubbles mus
 assert(immersiveViewport.includes("visualViewport"), "Immersive mobile conversations must follow VisualViewport changes");
 assert(immersiveViewport.includes("overflow = \"hidden\""), "Global page scrolling must be locked during immersive mobile conversations");
 assert(immersiveViewport.includes("privateMobileNav"), "Immersive conversation must preserve top/bottom mobile chrome behavior");
+assert(immersiveViewport.includes("NAV_HIDE_DISTANCE") && immersiveViewport.includes("NAV_SHOW_DISTANCE"), "Mobile chrome changes must use scroll hysteresis");
+assert(immersiveViewport.includes("requestAnimationFrame(processNestedScroll)"), "Nested conversation scroll handling must be frame-throttled");
+assert(immersiveViewport.includes('if (root.dataset.privateMobileNav === nextState) return;'), "Repeated scroll events must not rewrite an unchanged chrome state");
+assert(immersiveViewport.includes('privateMainElement.style.transition = "none"'), "Conversation viewport geometry must not lag behind browser viewport motion");
+assert(!immersiveViewport.includes("getComputedStyle"), "Conversation scroll must not force style recalculation on every scroll event");
+assert(!immersiveViewport.includes("topRect") && !immersiveViewport.includes("bottomRect"), "Mobile nav animation must not resize the conversation viewport");
 assert(participantColors.includes("bubbleClassName"), "Participant color helper must expose reusable bubble tones");
 assert(page.includes("CollaboratorsImmersiveConversationShell"), "Collaborators page must use the immersive conversation shell");
 assert(experienceRoute.includes("collaborationGroupScopeWhere"), "Experience state must preserve current tenant/context scope");
@@ -92,4 +98,4 @@ assert(vercel.includes('"main": true'), "Vercel production-only main deployment 
 assert(vercel.includes('"*": false'), "Feature branch Vercel deployments must stay disabled");
 assert(vercel.includes("ignoreCommand"), "Vercel preview ignoreCommand must remain configured");
 
-console.log("Collaboration immersive conversation and voice settings QA passed.");
+console.log("Collaboration immersive conversation, smooth scroll and voice settings QA passed.");
