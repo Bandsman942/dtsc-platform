@@ -4,7 +4,6 @@ import {
   WORKFLOW_CONDITION_OPERATORS,
   WORKFLOW_ENTITY_TYPES,
   WORKFLOW_LIMITS,
-  WORKFLOW_STEP_TYPES,
   WORKFLOW_TRIGGER_TYPES,
 } from "@/lib/enterprise/workflows/constants";
 
