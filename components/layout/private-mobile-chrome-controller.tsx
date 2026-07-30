@@ -11,6 +11,20 @@ const MOBILE_FORM_CONTROL_SELECTOR = [
   "[role='combobox']",
 ].join(",");
 
+const IMMERSIVE_ROOT_SELECTOR = "[data-collaboration-immersive-root]";
+const IMMERSIVE_DRAG_THRESHOLD = 22;
+const IMMERSIVE_TAP_THRESHOLD = 10;
+const IMMERSIVE_TAP_MAX_MS = 360;
+
+type ImmersivePointerGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startedAt: number;
+  decided: boolean;
+  moved: boolean;
+};
+
 function isInteractiveTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
   return Boolean(
@@ -24,6 +38,10 @@ function isMobileFormControl(target: EventTarget | null) {
   return target instanceof Element && target.matches(MOBILE_FORM_CONTROL_SELECTOR);
 }
 
+function isImmersiveConversationTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest(IMMERSIVE_ROOT_SELECTOR));
+}
+
 export function PrivateMobileChromeController() {
   useEffect(() => {
     const root = document.documentElement;
@@ -34,17 +52,26 @@ export function PrivateMobileChromeController() {
     let scrollEndTimer: number | undefined;
     let focusRestoreTimer: number | undefined;
     let latestProgress = 0;
+    let immersiveGesture: ImmersivePointerGesture | null = null;
 
     function applyNavState() {
-      root.dataset.privateMobileNav = navHidden ? "hidden" : "visible";
+      const nextState = navHidden ? "hidden" : "visible";
+      if (root.dataset.privateMobileNav !== nextState) {
+        root.dataset.privateMobileNav = nextState;
+      }
+    }
+
+    function setNavigationHidden(hidden: boolean) {
+      if (navHidden === hidden) return;
+      navHidden = hidden;
+      applyNavState();
     }
 
     function setFormControlActive(active: boolean) {
       formControlActive = active;
       if (active) {
         root.dataset.dtscMobileInput = "active";
-        navHidden = true;
-        applyNavState();
+        setNavigationHidden(true);
         return;
       }
       delete root.dataset.dtscMobileInput;
@@ -68,6 +95,7 @@ export function PrivateMobileChromeController() {
       if (!media.matches) {
         root.dataset.privateScroll = "desktop";
         root.dataset.privateMobileNav = "visible";
+        navHidden = false;
         delete root.dataset.privateScrollActive;
         delete root.dataset.dtscMobileInput;
         formControlActive = false;
@@ -79,6 +107,15 @@ export function PrivateMobileChromeController() {
       // software keyboard. Those viewport events are not page-navigation input.
       if (formControlActive || isMobileFormControl(document.activeElement)) {
         setFormControlActive(true);
+        return;
+      }
+
+      // Immersive conversations own no window/page scroll. Their chrome is
+      // controlled exclusively by the pointer gesture below, so this legacy
+      // page-scroll state must not fight the conversation during a drag.
+      if (root.dataset.dtscConversationImmersive === "active") {
+        root.dataset.privateScroll = "immersive";
+        clearFirstBlockProperties();
         return;
       }
 
@@ -97,14 +134,8 @@ export function PrivateMobileChromeController() {
         nextScrollState = "collapsing";
       }
       root.dataset.privateScroll = nextScrollState;
-      if (nextScrollState === "top" && navHidden) {
-        navHidden = false;
-        applyNavState();
-      }
-      if (nextScrollState === "collapsed" && !navHidden) {
-        navHidden = true;
-        applyNavState();
-      }
+      if (nextScrollState === "top") setNavigationHidden(false);
+      if (nextScrollState === "collapsed") setNavigationHidden(true);
       root.style.setProperty("--dtsc-private-first-block-height", `${fullHeight}px`);
       root.style.setProperty("--dtsc-private-first-block-progress", progress.toFixed(3));
       root.style.setProperty("--dtsc-private-first-block-opacity", String(Math.max(0.16, 1 - progress * 0.72)));
@@ -113,7 +144,7 @@ export function PrivateMobileChromeController() {
     }
 
     function markScrollActive() {
-      if (formControlActive) return;
+      if (formControlActive || root.dataset.dtscConversationImmersive === "active") return;
       root.dataset.privateScrollActive = "true";
       window.clearTimeout(scrollEndTimer);
       scrollEndTimer = window.setTimeout(() => {
@@ -123,13 +154,11 @@ export function PrivateMobileChromeController() {
     }
 
     function onScroll() {
-      if (formControlActive || isMobileFormControl(document.activeElement)) {
+      if (formControlActive || isMobileFormControl(document.activeElement) || root.dataset.dtscConversationImmersive === "active") {
         return;
       }
       markScrollActive();
-      if (ticking) {
-        return;
-      }
+      if (ticking) return;
       ticking = true;
       window.requestAnimationFrame(() => {
         updateScrollState();
@@ -137,26 +166,71 @@ export function PrivateMobileChromeController() {
       });
     }
 
-    function toggleMobileNavigation(event: PointerEvent) {
-      if (!media.matches || formControlActive || isInteractiveTarget(event.target)) {
+    function onPointerDown(event: PointerEvent) {
+      if (!media.matches || formControlActive || isInteractiveTarget(event.target)) return;
+
+      if (isImmersiveConversationTarget(event.target)) {
+        immersiveGesture = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          startedAt: performance.now(),
+          decided: false,
+          moved: false,
+        };
         return;
       }
-      navHidden = !navHidden;
-      applyNavState();
+
+      // Preserve the established behavior for every other private module.
+      setNavigationHidden(!navHidden);
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      const gesture = immersiveGesture;
+      if (!gesture || gesture.pointerId !== event.pointerId || gesture.decided || formControlActive) return;
+      const dx = event.clientX - gesture.startX;
+      const dy = event.clientY - gesture.startY;
+      const distance = Math.hypot(dx, dy);
+      if (distance > IMMERSIVE_TAP_THRESHOLD) gesture.moved = true;
+      if (Math.abs(dy) < IMMERSIVE_DRAG_THRESHOLD || Math.abs(dy) <= Math.abs(dx)) return;
+
+      // Decide only once per finger gesture. Finger-up movement scrolls content
+      // down and hides chrome; finger-down movement reveals it. Inertial bounce
+      // cannot reverse this decision because no scroll listener owns nav state.
+      gesture.decided = true;
+      setNavigationHidden(dy < 0);
+    }
+
+    function finishImmersiveGesture(event: PointerEvent, allowTap: boolean) {
+      const gesture = immersiveGesture;
+      if (!gesture || gesture.pointerId !== event.pointerId) return;
+      immersiveGesture = null;
+      if (!allowTap || gesture.decided || gesture.moved || formControlActive) return;
+      const elapsed = performance.now() - gesture.startedAt;
+      const dx = event.clientX - gesture.startX;
+      const dy = event.clientY - gesture.startY;
+      if (elapsed <= IMMERSIVE_TAP_MAX_MS && Math.hypot(dx, dy) <= IMMERSIVE_TAP_THRESHOLD) {
+        setNavigationHidden(!navHidden);
+      }
+    }
+
+    function onPointerUp(event: PointerEvent) {
+      finishImmersiveGesture(event, true);
+    }
+
+    function onPointerCancel(event: PointerEvent) {
+      finishImmersiveGesture(event, false);
     }
 
     function updateSettledScrollState() {
-      if (formControlActive || isMobileFormControl(document.activeElement)) {
-        return;
-      }
+      if (formControlActive || isMobileFormControl(document.activeElement)) return;
       updateScrollState({ settled: true });
     }
 
     function onFocusIn(event: FocusEvent) {
-      if (!media.matches || !isMobileFormControl(event.target)) {
-        return;
-      }
+      if (!media.matches || !isMobileFormControl(event.target)) return;
       window.clearTimeout(focusRestoreTimer);
+      immersiveGesture = null;
       setFormControlActive(true);
     }
 
@@ -178,19 +252,26 @@ export function PrivateMobileChromeController() {
     updateScrollState({ settled: true });
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", updateSettledScrollState);
-    document.addEventListener("pointerdown", toggleMobileNavigation, { passive: true });
+    document.addEventListener("pointerdown", onPointerDown, { passive: true });
+    document.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.addEventListener("pointerup", onPointerUp, { passive: true });
+    document.addEventListener("pointercancel", onPointerCancel, { passive: true });
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
     media.addEventListener("change", updateSettledScrollState);
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", updateSettledScrollState);
-      document.removeEventListener("pointerdown", toggleMobileNavigation);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerCancel);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       media.removeEventListener("change", updateSettledScrollState);
       window.clearTimeout(scrollEndTimer);
       window.clearTimeout(focusRestoreTimer);
+      immersiveGesture = null;
       delete root.dataset.privateScroll;
       delete root.dataset.privateMobileNav;
       delete root.dataset.privateScrollActive;
