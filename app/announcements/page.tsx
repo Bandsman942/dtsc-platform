@@ -1,11 +1,14 @@
 import type { Prisma } from "@prisma/client";
-import { AppShell } from "@/components/layout/app-shell";
+import { AnnouncementMediaEnhancer } from "@/components/announcements/announcement-media-enhancer";
 import { AnnouncementWall } from "@/components/announcements/announcement-wall";
+import { AppShell } from "@/components/layout/app-shell";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { getSession, requireUser } from "@/lib/auth";
 import { translate } from "@/lib/i18n";
 import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
-import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
+import { getAppSettings } from "@/lib/settings";
 
 export default async function AnnouncementsPage() {
   const user = await requireUser();
@@ -70,35 +73,51 @@ export default async function AnnouncementsPage() {
     });
   }
 
+  const commentCount = announcements.reduce((total, announcement) => total + announcement.comments.length, 0);
+  const reactionCount = announcements.reduce((total, announcement) => total + announcement.reactions.length, 0);
+  const pinnedCount = announcements.filter((announcement) => announcement.pinnedAt).length;
+
   return (
     <AppShell user={user}>
-      <div className="space-y-6">
-        <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">{t("announcements.feedEyebrow")}</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">{t("announcements.pageTitle")}</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            {t("announcements.pageDescription")}
-          </p>
-        </section>
-        <AnnouncementWall
-          announcements={JSON.parse(JSON.stringify(announcements))}
-          currentUserId={user.id}
-          role={user.role}
-          locale={user.locale}
-          allowClientAnnouncements={settings.allowClientAnnouncements}
-          commentEditWindowMinutes={settings.commentEditWindowMinutes}
-          transferRecipients={users.map((item) => ({
-            id: item.id,
-            name: item.name,
-            email: item.email,
-            role: item.role,
-            avatarUrl: item.avatarUrl,
-            jobTitle: item.hrcfoEmployee?.jobTitle || item.jobTitle,
-            departmentName: item.hrcfoEmployee?.department,
-            positionTitle: item.hrcfoEmployee?.position?.title || item.hrcfoEmployee?.positionTitle,
-          }))}
+      <ModuleWorkspace>
+        <ModuleHeader
+          eyebrow={t("announcements.feedEyebrow")}
+          title={t("announcements.pageTitle")}
+          count={`${announcements.length}`}
+          description={t("announcements.pageDescription")}
         />
-      </div>
+        <ModuleMetrics label="Indicateurs des annonces">
+          <ModuleMetric label="Annonces visibles" value={announcements.length} hint="Dans votre périmètre" />
+          <ModuleMetric label="Commentaires" value={commentCount} hint="Interactions du fil" />
+          <ModuleMetric label="Réactions" value={reactionCount} hint="Avis enregistrés" />
+          <ModuleMetric label="Épinglées" value={pinnedCount} hint="Prioritaires" />
+        </ModuleMetrics>
+        <ModuleContent>
+          <ModuleSection title="Fil d’actualité" description="Les commentaires restent repliables et chaque image publiée peut être ouverte en plein écran sans recadrage.">
+            <div data-announcement-media-root className="min-w-0">
+              <AnnouncementMediaEnhancer />
+              <AnnouncementWall
+                announcements={JSON.parse(JSON.stringify(announcements))}
+                currentUserId={user.id}
+                role={user.role}
+                locale={user.locale}
+                allowClientAnnouncements={settings.allowClientAnnouncements}
+                commentEditWindowMinutes={settings.commentEditWindowMinutes}
+                transferRecipients={users.map((item) => ({
+                  id: item.id,
+                  name: item.name,
+                  email: item.email,
+                  role: item.role,
+                  avatarUrl: item.avatarUrl,
+                  jobTitle: item.hrcfoEmployee?.jobTitle || item.jobTitle,
+                  departmentName: item.hrcfoEmployee?.department,
+                  positionTitle: item.hrcfoEmployee?.position?.title || item.hrcfoEmployee?.positionTitle,
+                }))}
+              />
+            </div>
+          </ModuleSection>
+        </ModuleContent>
+      </ModuleWorkspace>
     </AppShell>
   );
 }
