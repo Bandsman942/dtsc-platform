@@ -97,7 +97,7 @@ assert(presenceJournal.includes("clientType") && presenceJournal.includes("durat
 assert(workspace.includes("presenceJournalOpen") && workspace.includes("presenceJournal"), "Conversation menu must expose the manager presence journal");
 
 // Message read info reuses the existing readAt source of truth and displays precise read time + presence.
-assert(readInfoRoute.includes("readAt: true") && readInfoRoute.includes("lastSeenAt: true"), "Read info API must expose exact read time and presence data");
+assert(readInfoRoute.includes('orderBy: { readAt: "desc" }') && readInfoRoute.includes("readAt: read.readAt") && readInfoRoute.includes("lastSeenAt: true"), "Read info API must expose exact read time and presence data");
 assert(workspace.includes("readAt: string") && workspace.includes("formatUserDateTime(item.readAt"), "Message info UI must preserve and render readAt instead of dropping it");
 assert(workspace.includes("OnlineBadge") && workspace.includes("isOnline(item.user.lastSeenAt)"), "Message info UI must show online/offline state");
 
