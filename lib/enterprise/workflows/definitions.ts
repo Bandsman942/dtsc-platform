@@ -58,7 +58,7 @@ export async function createWorkflowDefinition(organizationId: string, actorUser
     if (!member) throw new EnterpriseWorkflowError("Vous n’êtes pas membre actif de cette entreprise.", 403, "WORKFLOW_MEMBERSHIP_REQUIRED", "SECURITY");
     let code = baseCode;
     for (let suffix = 2; await tx.enterpriseWorkflowDefinition.findUnique({ where: { organizationId_code: { organizationId, code } }, select: { id: true } }); suffix += 1) code = `${baseCode.slice(0, 74)}_${suffix}`;
-    return tx.enterpriseWorkflowDefinition.create({
+    const definition = await tx.enterpriseWorkflowDefinition.create({
       data: {
         organizationId,
         code,
@@ -71,10 +71,10 @@ export async function createWorkflowDefinition(organizationId: string, actorUser
         allowManualStart: input.allowManualStart,
         singleActiveRun: input.singleActiveRun,
         createdByUserId: actorUserId,
-        versions: { create: { organizationId, versionNumber: 1, status: "DRAFT", createdByUserId: actorUserId } },
       },
-      include: { versions: true },
     });
+    const version = await tx.enterpriseWorkflowVersion.create({ data: { organizationId, definitionId: definition.id, versionNumber: 1, status: "DRAFT", createdByUserId: actorUserId } });
+    return { ...definition, versions: [version] };
   });
 }
 
@@ -112,7 +112,7 @@ function json(value: unknown): Prisma.InputJsonValue {
 
 export async function saveWorkflowVersion(organizationId: string, definitionId: string, versionId: string, actorUserId: string, raw: unknown) {
   const input = workflowVersionSchema.parse(raw);
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const version = await tx.enterpriseWorkflowVersion.findFirst({ where: { id: versionId, organizationId, definitionId }, select: { id: true, status: true } });
     if (!version) throw new EnterpriseWorkflowError("Version de workflow introuvable.", 404, "WORKFLOW_VERSION_NOT_FOUND", "BUSINESS");
     if (version.status !== "DRAFT") throw new EnterpriseWorkflowError("Une version publiée ou retirée est immuable.", 409, "PUBLISHED_WORKFLOW_IMMUTABLE", "BUSINESS");
@@ -127,8 +127,8 @@ export async function saveWorkflowVersion(organizationId: string, definitionId: 
     }
     await tx.enterpriseWorkflowVersion.update({ where: { id: versionId }, data: { configurationJson: input.configuration ? json(input.configuration) : undefined } });
     await tx.enterpriseWorkflowDefinition.update({ where: { id: definitionId }, data: { updatedByUserId: actorUserId } });
-    return { versionId, readiness: await getWorkflowVersionReadiness(organizationId, definitionId, versionId) };
   });
+  return { versionId, readiness: await getWorkflowVersionReadiness(organizationId, definitionId, versionId) };
 }
 
 export async function duplicateWorkflowVersion(organizationId: string, definitionId: string, sourceVersionId: string, actorUserId: string) {
@@ -151,7 +151,7 @@ export async function duplicateWorkflowVersion(organizationId: string, definitio
   });
 }
 
-async function versionToInput(organizationId: string, definitionId: string, versionId: string): Promise<{ definition: Awaited<ReturnType<typeof prisma.enterpriseWorkflowDefinition.findFirst>>; input: WorkflowVersionInput }> {
+async function versionToInput(organizationId: string, definitionId: string, versionId: string): Promise<{ definition: NonNullable<Awaited<ReturnType<typeof prisma.enterpriseWorkflowDefinition.findFirst>>>; input: WorkflowVersionInput }> {
   const definition = await prisma.enterpriseWorkflowDefinition.findFirst({ where: { id: definitionId, organizationId, archivedAt: null } });
   if (!definition) throw new EnterpriseWorkflowError("Workflow introuvable.", 404, "WORKFLOW_DEFINITION_NOT_FOUND", "BUSINESS");
   const version = await prisma.enterpriseWorkflowVersion.findFirst({ where: { id: versionId, organizationId, definitionId }, include: { steps: { orderBy: { position: "asc" } }, transitions: { include: { fromStep: { select: { code: true } }, toStep: { select: { code: true } } } } } });
@@ -169,17 +169,38 @@ async function validateAssignmentsAndConfiguration(organizationId: string, defin
 
   const assignments: Array<{ stepCode: string; value: { strategy: string; userId?: string; role?: string; departmentId?: string } }> = [];
   for (const step of steps) {
-    const config = step.configuration;
-    if (step.stepType === "CONDITION") {
-      if (!adapter.conditionFields.has(config.condition.field)) blockers.push({ code: "INVALID_CONDITION_FIELD", message: "Ce champ ne peut pas être utilisé dans une condition.", stepCode: step.code });
+    switch (step.stepType) {
+      case "CONDITION":
+        if (!adapter.conditionFields.has(step.configuration.condition.field)) blockers.push({ code: "INVALID_CONDITION_FIELD", message: "Ce champ ne peut pas être utilisé dans une condition.", stepCode: step.code });
+        break;
+      case "WAIT_UNTIL":
+        if (step.configuration.mode === "ENTITY_DATE" && !adapter.conditionFields.has(step.configuration.field)) blockers.push({ code: "INVALID_WAIT_FIELD", message: "Ce champ de date n’est pas autorisé.", stepCode: step.code });
+        break;
+      case "DOMAIN_ACTION":
+        if (!adapter.domainActions.has(step.configuration.action)) blockers.push({ code: "INVALID_DOMAIN_ACTION", message: "Cette action métier n’est pas autorisée par l’adapter.", stepCode: step.code });
+        if (step.configuration.commentTemplate) validateTemplatePlaceholders(step.configuration.commentTemplate, adapter.placeholders);
+        break;
+      case "ASSIGN":
+        assignments.push({ stepCode: step.code, value: step.configuration.assignment });
+        break;
+      case "CREATE_APPROVAL":
+        if (definition.triggerEntityType === "EnterpriseReport") blockers.push({ code: "APPROVAL_TARGET_UNSUPPORTED", message: "Les rapports ne prennent pas en charge une étape de validation métier.", stepCode: step.code });
+        assignments.push({ stepCode: step.code, value: step.configuration.assignment });
+        if (step.configuration.titleTemplate) validateTemplatePlaceholders(step.configuration.titleTemplate, adapter.placeholders);
+        break;
+      case "CREATE_TASK":
+        if (step.configuration.assignment) assignments.push({ stepCode: step.code, value: step.configuration.assignment });
+        validateTemplatePlaceholders(step.configuration.titleTemplate, adapter.placeholders);
+        if (step.configuration.descriptionTemplate) validateTemplatePlaceholders(step.configuration.descriptionTemplate, adapter.placeholders);
+        break;
+      case "NOTIFICATION":
+        assignments.push({ stepCode: step.code, value: step.configuration.recipient });
+        validateTemplatePlaceholders(step.configuration.titleTemplate, adapter.placeholders);
+        validateTemplatePlaceholders(step.configuration.bodyTemplate, adapter.placeholders);
+        break;
+      default:
+        break;
     }
-    if (step.stepType === "WAIT_UNTIL" && config.mode === "ENTITY_DATE" && !adapter.conditionFields.has(config.field)) blockers.push({ code: "INVALID_WAIT_FIELD", message: "Ce champ de date n’est pas autorisé.", stepCode: step.code });
-    if (step.stepType === "DOMAIN_ACTION" && !adapter.domainActions.has(config.action)) blockers.push({ code: "INVALID_DOMAIN_ACTION", message: "Cette action métier n’est pas autorisée par l’adapter.", stepCode: step.code });
-    if (step.stepType === "ASSIGN") assignments.push({ stepCode: step.code, value: config.assignment });
-    if (step.stepType === "CREATE_APPROVAL") { assignments.push({ stepCode: step.code, value: config.assignment }); if (config.titleTemplate) validateTemplatePlaceholders(config.titleTemplate, adapter.placeholders); }
-    if (step.stepType === "CREATE_TASK") { if (config.assignment) assignments.push({ stepCode: step.code, value: config.assignment }); validateTemplatePlaceholders(config.titleTemplate, adapter.placeholders); if (config.descriptionTemplate) validateTemplatePlaceholders(config.descriptionTemplate, adapter.placeholders); }
-    if (step.stepType === "DOMAIN_ACTION" && config.commentTemplate) validateTemplatePlaceholders(config.commentTemplate, adapter.placeholders);
-    if (step.stepType === "NOTIFICATION") { assignments.push({ stepCode: step.code, value: config.recipient }); validateTemplatePlaceholders(config.titleTemplate, adapter.placeholders); validateTemplatePlaceholders(config.bodyTemplate, adapter.placeholders); }
   }
   for (const assignment of assignments) {
     if (assignment.value.strategy === "SPECIFIC_USER") {
@@ -199,7 +220,7 @@ export async function getWorkflowVersionReadiness(organizationId: string, defini
   try {
     const { definition, input } = await versionToInput(organizationId, definitionId, versionId);
     const graph = validateWorkflowGraph(input);
-    const blockers = [...graph.blockers, ...(await validateAssignmentsAndConfiguration(organizationId, definition!, input.steps))];
+    const blockers = [...graph.blockers, ...(await validateAssignmentsAndConfiguration(organizationId, definition, input.steps))];
     return { ready: blockers.length === 0, blockers, orderedStepCodes: graph.orderedStepCodes };
   } catch (error) {
     if (error instanceof EnterpriseWorkflowError) return { ready: false, blockers: [{ code: error.code, message: error.message }], orderedStepCodes: [] };
