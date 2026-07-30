@@ -44,3 +44,5 @@
 - Aucune Preview Vercel fonctionnelle n’est activée.
 - `vercel.json`, `deploymentEnabled` et `ignoreCommand` restent conformes à la politique production-only.
 - Le déploiement reste: feature branch → Quality Gates → PR → review → merge main → unique Vercel Production → `prisma migrate deploy` → `pnpm build` → vérification du SHA.
+- La validation de la PR est pilotée par `.github/workflows/quality-gates.yml`: diff checks, génération Prisma, type-check, QA de régression, lint, build et migration-from-scratch.
+- Le merge vers `main` n’est autorisé qu’après réussite des jobs `quality` et `migration` sur le head final de la PR.
