@@ -13,5 +13,10 @@
 - Les réponses (`replyToId`) doivent pointer vers un message du même groupe.
 - Les préférences de notification doivent être appliquées côté serveur avant `notifyUser(s)` ; le frontend n’est jamais la source de vérité du mute.
 - Les suppressions de messages vocaux doivent rendre le média inaccessible et nettoyer le blob privé lorsque possible.
-- Les migrations Collaboration restent additives et ne détruisent pas les groupes/messages/appels existants.
+- Les heartbeats de présence alimentent `CollaborationPresenceSession` en mettant à jour une session existante ; ne jamais créer une ligne par heartbeat.
+- Le journal de présence d’un groupe exige membership actif puis permission OWNER/ADMIN, borne les requêtes et limite chaque membre à sa fenêtre `joinedAt` → `leftAt`.
+- `CollaborationGroupMessageRead.readAt` reste l’unique source des heures de lecture. Ne jamais dupliquer l’accusé de lecture dans une table parallèle.
+- Un lien de réunion dans le fil doit dériver d’un vrai `CooMeeting` AUDIO/VIDEO lié au groupe ; l’API de join revérifie membership, horaire planifié et réutilise l’appel `RINGING`/`ACTIVE` existant avant toute création de room.
+- La fin d’un appel COO lié peut créer un prompt de compte-rendu idempotent. Le contenu détaillé va dans `CooMeetingMinutes`; le résumé publié dans le groupe reste un message dérivé et ne remplace pas le compte-rendu COO.
+- Les migrations Collaboration restent additives et ne détruisent pas les groupes/messages/appels/réunions existants.
 - Vercel reste production-only depuis `main`; aucune Preview de feature branch ne doit être activée.
