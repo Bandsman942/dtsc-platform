@@ -20,8 +20,17 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseWorkflowAccess(session, organizationId); if (!access?.canRead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const [definitions, legacyCount] = await Promise.all([listWorkflowDefinitions(organizationId), prisma.enterpriseWorkflow.count({ where: { organizationId } })]);
+  const templates = ENTERPRISE_WORKFLOW_TEMPLATES.map((template) => ({
+    code: template.code,
+    nameFr: template.nameFr,
+    nameEn: template.nameEn,
+    descriptionFr: template.descriptionFr,
+    descriptionEn: template.descriptionEn,
+    triggerEntityType: template.triggerEntityType,
+    triggerEventType: template.triggerEventType,
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "workflow-definitions" } });
-  return NextResponse.json({ definitions, templates: ENTERPRISE_WORKFLOW_TEMPLATES.map(({ version: _version, ...template }) => template), legacy: { count: legacyCount, strategy: "CATALOG_READ_ONLY" }, permissions: access });
+  return NextResponse.json({ definitions, templates, legacy: { count: legacyCount, strategy: "CATALOG_READ_ONLY" }, permissions: access });
 }
 
 export async function POST(req: Request, { params }: Params) {
