@@ -5,13 +5,13 @@ export const COLLABORATION_PRESENCE_STALE_MS = 60_000;
 export const COLLABORATION_CLIENT_TYPES = ["MOBILE", "TABLET", "DESKTOP", "PWA", "UNKNOWN"] as const;
 export type CollaborationClientType = (typeof COLLABORATION_CLIENT_TYPES)[number];
 
-function normalizedClientSessionId(value: string | null | undefined, userId: string) {
-  const trimmed = value?.trim().slice(0, 160);
-  return trimmed || `legacy-${userId}`;
-}
-
 function normalizedClientType(value: string | null | undefined): CollaborationClientType {
   return COLLABORATION_CLIENT_TYPES.includes(value as CollaborationClientType) ? (value as CollaborationClientType) : "UNKNOWN";
+}
+
+function normalizedClientSessionId(value: string | null | undefined, userId: string, clientType?: string | null) {
+  const trimmed = value?.trim().slice(0, 160);
+  return trimmed || `legacy-${userId}-${normalizedClientType(clientType).toLowerCase()}`;
 }
 
 export async function markCollaborationPresenceOnline({
@@ -24,7 +24,8 @@ export async function markCollaborationPresenceOnline({
   clientType?: string | null;
 }) {
   const now = new Date();
-  const sessionId = normalizedClientSessionId(clientSessionId, userId);
+  const normalizedType = normalizedClientType(clientType);
+  const sessionId = normalizedClientSessionId(clientSessionId, userId, normalizedType);
   const staleBefore = new Date(now.getTime() - COLLABORATION_PRESENCE_STALE_MS);
 
   const staleSessions = await prisma.collaborationPresenceSession.findMany({
@@ -62,14 +63,14 @@ export async function markCollaborationPresenceOnline({
   if (openSession) {
     await prisma.collaborationPresenceSession.update({
       where: { id: openSession.id },
-      data: { lastHeartbeatAt: now, clientType: normalizedClientType(clientType) },
+      data: { lastHeartbeatAt: now, clientType: normalizedType },
     });
   } else {
     await prisma.collaborationPresenceSession.create({
       data: {
         userId,
         clientSessionId: sessionId,
-        clientType: normalizedClientType(clientType),
+        clientType: normalizedType,
         connectedAt: now,
         lastHeartbeatAt: now,
       },
@@ -83,14 +84,16 @@ export async function markCollaborationPresenceOnline({
 export async function markCollaborationPresenceOffline({
   userId,
   clientSessionId,
+  clientType,
   reason,
 }: {
   userId: string;
   clientSessionId?: string | null;
+  clientType?: string | null;
   reason?: string | null;
 }) {
   const now = new Date();
-  const sessionId = normalizedClientSessionId(clientSessionId, userId);
+  const sessionId = normalizedClientSessionId(clientSessionId, userId, clientType);
   const normalizedReason = reason?.trim().slice(0, 80) || "CLIENT_OFFLINE";
 
   await prisma.collaborationPresenceSession.updateMany({
