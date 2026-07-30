@@ -55,6 +55,7 @@ export function EnterpriseAdministrationSummary({
         <ModuleMetric label={locale === "en" ? "Recent documents" : "Documents récents"} value={dashboard.recentDocumentsCount} />
         <ModuleMetric label={locale === "en" ? "Active budgets" : "Budgets actifs"} value={dashboard.activeBudgetsCount} />
         <ModuleMetric label={locale === "en" ? "Active suppliers" : "Fournisseurs actifs"} value={dashboard.activeSuppliersCount} />
+        <ModuleMetric label={locale === "en" ? "Generated reports" : "Rapports générés"} value={dashboard.generatedReportsCount} hint={locale === "en" ? `${dashboard.publishedReportsCount} published` : `${dashboard.publishedReportsCount} publiés`} />
         <ModuleMetric label={locale === "en" ? "Pending invitations" : "Invitations en attente"} value={pendingMembers.length} />
       </ModuleMetrics>
     </>

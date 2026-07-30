@@ -1,0 +1,152 @@
+model EnterpriseBudget {
+  id              String                    @id @default(cuid())
+  organizationId  String
+  reference       String
+  title           String
+  description     String?
+  status          String                    @default("DRAFT")
+  periodStart     DateTime
+  periodEnd       DateTime
+  currency        String                    @default("USD")
+  departmentId    String?
+  createdByUserId String
+  updatedByUserId String?
+  approvedAt      DateTime?
+  closedAt        DateTime?
+  revision        Int                       @default(1)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  archivedAt      DateTime?
+  lines           EnterpriseBudgetLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, periodStart, periodEnd])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, currency, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseBudgetLine {
+  id             String                       @id @default(cuid())
+  organizationId String
+  budgetId       String
+  code           String?
+  name           String
+  description    String?
+  category       String?
+  departmentId   String?
+  plannedAmount  Decimal                      @db.Decimal(18, 2)
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  budget         EnterpriseBudget             @relation(fields: [organizationId, budgetId], references: [organizationId, id], onDelete: Cascade)
+  commitments    EnterpriseBudgetCommitment[]
+  purchases      EnterprisePurchase[]
+  expenses       EnterpriseExpense[]
+
+  @@unique([organizationId, id])
+  @@index([budgetId])
+  @@index([organizationId, budgetId])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, category])
+}
+
+model EnterpriseBudgetCommitment {
+  id               String               @id @default(cuid())
+  organizationId   String
+  budgetLineId     String
+  sourceEntityType String
+  sourceEntityId   String
+  committedAmount  Decimal              @db.Decimal(18, 2)
+  realizedAmount   Decimal              @default(0) @db.Decimal(18, 2)
+  releasedAmount   Decimal              @default(0) @db.Decimal(18, 2)
+  status            String               @default("ACTIVE")
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  budgetLine        EnterpriseBudgetLine @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, sourceEntityType, sourceEntityId])
+  @@index([budgetLineId, status])
+  @@index([organizationId, budgetLineId, status])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+}
+
+model EnterpriseExpense {
+  id                       String                @id @default(cuid())
+  organizationId           String
+  reference                String
+  title                    String
+  description              String?
+  status                   String                @default("DRAFT")
+  expenseDate              DateTime
+  category                 String?
+  currency                 String                @default("USD")
+  amount                   Decimal               @db.Decimal(18, 2)
+  supplierId               String?
+  purchaseId               String?
+  budgetLineId             String?
+  departmentId             String?
+  requestedByUserId        String
+  createdByUserId          String
+  updatedByUserId          String?
+  approvedAt               DateTime?
+  amountVarianceReason     String?
+  sourceModule             String?
+  sourceEntityType         String?
+  sourceEntityId           String?
+  budgetImpactAppliedAt    DateTime?
+  commitmentRealizedAmount Decimal               @default(0) @db.Decimal(18, 2)
+  revision                 Int                   @default(1)
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  archivedAt               DateTime?
+  supplier                 EnterpriseSupplier?   @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  purchase                 EnterprisePurchase?   @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Restrict)
+  budgetLine               EnterpriseBudgetLine? @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, expenseDate])
+  @@index([organizationId, budgetLineId, status])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, purchaseId])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, currency, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseReport {
+  id                String   @id @default(cuid())
+  organizationId    String
+  reference         String
+  title             String
+  description       String?
+  reportType        String
+  status            String   @default("GENERATED")
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  currency          String?
+  generatedByUserId String
+  generatedAt       DateTime @default(now())
+  sourceModule      String?
+  sourceEntityType  String?
+  sourceEntityId    String?
+  schemaVersion     Int      @default(1)
+  filtersJson       Json?
+  snapshotJson      Json
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, reportType, generatedAt])
+  @@index([organizationId, status])
+  @@index([organizationId, generatedByUserId, generatedAt])
+  @@index([organizationId, currency, generatedAt])
+  @@index([archivedAt])
+}

@@ -1,27 +1,27 @@
 model EnterpriseDocument {
-  id              String                      @id @default(cuid())
-  organizationId  String
-  title           String
-  description     String?
-  documentType    String
-  category        String?
-  status          String                      @default("DRAFT")
-  visibility      String                      @default("ORGANIZATION")
-  ownerUserId     String?
-  departmentId    String?
-  currentVersion  Int                         @default(0)
-  sourceModule    String?
+  id               String                      @id @default(cuid())
+  organizationId   String
+  title            String
+  description      String?
+  documentType     String
+  category         String?
+  status           String                      @default("DRAFT")
+  visibility       String                      @default("ORGANIZATION")
+  ownerUserId      String?
+  departmentId     String?
+  currentVersion   Int                         @default(0)
+  sourceModule     String?
   sourceEntityType String?
-  sourceEntityId  String?
-  expiresAt       DateTime?
-  createdByUserId String
-  updatedByUserId String?
-  revision        Int                         @default(1)
-  createdAt       DateTime                    @default(now())
-  updatedAt       DateTime                    @updatedAt
-  archivedAt      DateTime?
-  versions        EnterpriseDocumentVersion[]
-  access          EnterpriseDocumentAccess[]
+  sourceEntityId   String?
+  expiresAt        DateTime?
+  createdByUserId  String
+  updatedByUserId  String?
+  revision         Int                         @default(1)
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  archivedAt       DateTime?
+  versions         EnterpriseDocumentVersion[]
+  access           EnterpriseDocumentAccess[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, updatedAt])
@@ -58,14 +58,14 @@ model EnterpriseDocumentVersion {
 }
 
 model EnterpriseDocumentAccess {
-  id             String             @id @default(cuid())
-  organizationId String
-  documentId     String
-  userId         String
-  accessLevel    String             @default("READ")
+  id              String             @id @default(cuid())
+  organizationId  String
+  documentId      String
+  userId          String
+  accessLevel     String             @default("READ")
   grantedByUserId String
-  createdAt      DateTime           @default(now())
-  document       EnterpriseDocument @relation(fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  document        EnterpriseDocument @relation(fields: [organizationId, documentId], references: [organizationId, id], onDelete: Cascade)
 
   @@unique([organizationId, documentId, userId])
   @@index([organizationId, userId, createdAt])
@@ -97,6 +97,7 @@ model EnterpriseSupplier {
   archivedAt      DateTime?
   contacts        EnterpriseSupplierContact[]
   purchases       EnterprisePurchase[]
+  expenses        EnterpriseExpense[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, normalizedName])
@@ -137,6 +138,7 @@ model EnterprisePurchase {
   buyerUserId       String?
   departmentId      String?
   requestId         String?
+  budgetLineId      String?
   currency          String                      @default("USD")
   subtotalAmount    Decimal                     @default(0) @db.Decimal(18, 2)
   taxAmount         Decimal                     @default(0) @db.Decimal(18, 2)
@@ -155,8 +157,10 @@ model EnterprisePurchase {
   updatedAt         DateTime                    @updatedAt
   archivedAt        DateTime?
   supplier          EnterpriseSupplier?         @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  budgetLine        EnterpriseBudgetLine?       @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Restrict)
   items             EnterprisePurchaseItem[]
   receipts          EnterprisePurchaseReceipt[]
+  expenses          EnterpriseExpense[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -166,6 +170,7 @@ model EnterprisePurchase {
   @@index([organizationId, requestedByUserId, status])
   @@index([organizationId, buyerUserId, status])
   @@index([organizationId, requestId])
+  @@index([organizationId, budgetLineId, status])
   @@index([organizationId, expectedAt])
   @@index([organizationId, sourceEntityType, sourceEntityId])
   @@index([archivedAt])
@@ -197,15 +202,15 @@ model EnterprisePurchaseItem {
 }
 
 model EnterprisePurchaseReceipt {
-  id               String                         @id @default(cuid())
+  id               String                          @id @default(cuid())
   organizationId   String
   purchaseId       String
   reference        String
   receivedAt       DateTime
   receivedByUserId String
   notes            String?
-  createdAt        DateTime                       @default(now())
-  purchase         EnterprisePurchase             @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Restrict)
+  createdAt        DateTime                        @default(now())
+  purchase         EnterprisePurchase              @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Restrict)
   items            EnterprisePurchaseReceiptItem[]
 
   @@unique([organizationId, id])

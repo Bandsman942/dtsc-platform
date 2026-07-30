@@ -5,6 +5,8 @@ export const ENTERPRISE_CORE_V2_MODULES = {
   MEETING: "MEETINGS",
   DOCUMENT: "DOCUMENTS",
   PROCUREMENT: "SUPPLIERS_PURCHASES",
+  FINANCE: "FINANCE_BUDGETS",
+  REPORTS: "REPORTS",
 } as const;
 
 export const ENTERPRISE_CORE_V2_ENTITY_TYPES = {
@@ -16,16 +18,19 @@ export const ENTERPRISE_CORE_V2_ENTITY_TYPES = {
   DOCUMENT: "EnterpriseDocument",
   SUPPLIER: "EnterpriseSupplier",
   PURCHASE: "EnterprisePurchase",
+  BUDGET: "EnterpriseBudget",
+  BUDGET_LINE: "EnterpriseBudgetLine",
+  EXPENSE: "EnterpriseExpense",
+  REPORT: "EnterpriseReport",
 } as const;
 
-export const DEDICATED_CORE_RECORD_TYPES = new Set<string>(["TASK", "OPERATION", "MEETING", "MINUTES", "INTERNAL_REQUEST", "VALIDATION", "DOCUMENT", "SUPPLIER", "PURCHASE"]);
+export const DEDICATED_CORE_RECORD_TYPES = new Set<string>(["TASK", "OPERATION", "MEETING", "MINUTES", "INTERNAL_REQUEST", "VALIDATION", "DOCUMENT", "SUPPLIER", "PURCHASE", "BUDGET", "EXPENSE", "REPORT"]);
 export const DEDICATED_CORE_MODULE_CODES = new Set<string>(Object.values(ENTERPRISE_CORE_V2_MODULES));
 
 export const TASK_TYPES = ["TASK", "OPERATION", "ACTION"] as const;
 export const TASK_PRIORITIES = ["LOW", "NORMAL", "HIGH", "CRITICAL"] as const;
 export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"] as const;
 export const TASK_ACTIONS = ["START", "BLOCK", "RESUME", "COMPLETE", "CANCEL", "ARCHIVE"] as const;
-
 export const TASK_TRANSITIONS: Record<(typeof TASK_ACTIONS)[number], { from: readonly (typeof TASK_STATUSES)[number][]; to?: (typeof TASK_STATUSES)[number] }> = {
   START: { from: ["TODO"], to: "IN_PROGRESS" },
   BLOCK: { from: ["IN_PROGRESS"], to: "BLOCKED" },
@@ -47,7 +52,7 @@ export const REQUEST_TRANSITIONS: Record<(typeof REQUEST_ACTIONS)[number], { fro
 
 export const APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 export const APPROVAL_ACTIONS = ["APPROVE", "REJECT", "CANCEL"] as const;
-export const APPROVAL_TARGET_TYPES = ["EnterpriseRequest", "EnterpriseTask", "EnterpriseMeeting", "EnterprisePurchase", "PharmacyQualityIncident"] as const;
+export const APPROVAL_TARGET_TYPES = ["EnterpriseRequest", "EnterpriseTask", "EnterpriseMeeting", "EnterprisePurchase", "EnterpriseBudget", "EnterpriseExpense", "PharmacyQualityIncident"] as const;
 
 export const MEETING_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 export const MEETING_ACTIONS = ["START", "COMPLETE", "CANCEL", "ARCHIVE"] as const;
@@ -70,6 +75,10 @@ export const SUPPORTED_SOURCE_ENTITY_TYPES = new Set<string>([
   "EnterpriseDocument",
   "EnterpriseSupplier",
   "EnterprisePurchase",
+  "EnterpriseBudget",
+  "EnterpriseBudgetLine",
+  "EnterpriseExpense",
+  "EnterpriseReport",
   "EnterpriseActivityRequest",
   "PharmacyActivityItem",
   "PharmacySupplier",

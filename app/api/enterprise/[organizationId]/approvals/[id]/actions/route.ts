@@ -5,6 +5,8 @@ import { getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { decideEnterpriseApproval } from "@/lib/enterprise/core-v2/service";
 import { enterpriseApprovalActionSchema } from "@/lib/enterprise/core-v2/validators";
+import { decideEnterpriseBudgetApproval } from "@/lib/enterprise/finance/budget-service";
+import { decideEnterpriseExpenseApproval } from "@/lib/enterprise/finance/expense-service";
 import { decideEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/purchase-service";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -29,11 +31,16 @@ export async function POST(req: Request, { params }: Params) {
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const data = parsed.data;
   try {
+    const args = { organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage };
     const approval = current.targetEntityType === "EnterprisePurchase"
-      ? await decideEnterprisePurchaseApproval({ organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage })
-      : await decideEnterpriseApproval({ organizationId, approvalId: id, actorUserId: session.userId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage: access.canManage });
+      ? await decideEnterprisePurchaseApproval(args)
+      : current.targetEntityType === "EnterpriseBudget"
+        ? await decideEnterpriseBudgetApproval(args)
+        : current.targetEntityType === "EnterpriseExpense"
+          ? await decideEnterpriseExpenseApproval(args)
+          : await decideEnterpriseApproval(args);
     if (current.requestedByUserId !== session.userId) {
-      await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || `Décision sur ${current.targetEntityType}.`, targetUrl: "/enterprise-modules/VALIDATIONS" });
+      await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || "Une décision a été prise sur votre demande de validation.", targetUrl: "/enterprise-modules/VALIDATIONS" });
     }
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_APPROVAL_${data.action}`, entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, targetEntityType: current.targetEntityType, targetEntityId: current.targetEntityId, fromStatus: current.status, toStatus: approval?.status } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action: data.action } });

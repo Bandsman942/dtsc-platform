@@ -29,13 +29,9 @@ const documentBase = z.object({
 });
 
 export const enterpriseDocumentCreateSchema = documentBase.superRefine((data, ctx) => {
-  if (data.visibility === "DEPARTMENT" && !data.departmentId) {
-    ctx.addIssue({ code: "custom", path: ["departmentId"], message: "Le département est obligatoire pour une visibilité départementale." });
-  }
+  if (data.visibility === "DEPARTMENT" && !data.departmentId) ctx.addIssue({ code: "custom", path: ["departmentId"], message: "Le département est obligatoire pour une visibilité départementale." });
   const sourceCount = [data.sourceModule, data.sourceEntityType, data.sourceEntityId].filter(Boolean).length;
-  if (sourceCount !== 0 && sourceCount !== 3) {
-    ctx.addIssue({ code: "custom", path: ["sourceEntityId"], message: "La source liée doit préciser module, type et identifiant." });
-  }
+  if (sourceCount !== 0 && sourceCount !== 3) ctx.addIssue({ code: "custom", path: ["sourceEntityId"], message: "La source liée doit préciser module, type et identifiant." });
 });
 
 export const enterpriseDocumentUpdateSchema = z.object({
@@ -50,11 +46,7 @@ export const enterpriseDocumentUpdateSchema = z.object({
   expiresAt: optionalDate,
 });
 
-export const enterpriseDocumentAccessSchema = z.object({
-  userId: z.string().trim().min(1).max(180),
-  accessLevel: z.enum(["READ", "DOWNLOAD", "EDIT"]).default("READ"),
-});
-
+export const enterpriseDocumentAccessSchema = z.object({ userId: z.string().trim().min(1).max(180), accessLevel: z.enum(["READ", "DOWNLOAD", "EDIT"]).default("READ") });
 export const enterpriseDocumentArchiveSchema = z.object({ revision });
 
 const supplierContactSchema = z.object({
@@ -100,11 +92,7 @@ export const enterpriseSupplierUpdateSchema = z.object({
   notes: optionalText(5000),
 });
 export const enterpriseSupplierContactCreateSchema = supplierContactSchema;
-export const enterpriseSupplierActionSchema = z.object({
-  revision,
-  action: z.enum(ENTERPRISE_SUPPLIER_ACTIONS),
-  reason: optionalText(1000),
-}).superRefine((data, ctx) => {
+export const enterpriseSupplierActionSchema = z.object({ revision, action: z.enum(ENTERPRISE_SUPPLIER_ACTIONS), reason: optionalText(1000) }).superRefine((data, ctx) => {
   if (data.action === "SUSPEND" && !data.reason) ctx.addIssue({ code: "custom", path: ["reason"], message: "Un motif est obligatoire pour suspendre un fournisseur." });
 });
 
@@ -126,6 +114,7 @@ const purchaseBase = z.object({
   buyerUserId: optionalId,
   departmentId: optionalId,
   requestId: optionalId,
+  budgetLineId: optionalId,
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default("USD"),
   expectedAt: optionalDate,
   sourceModule: optionalText(120),
@@ -147,17 +136,13 @@ export const enterprisePurchaseUpdateSchema = z.object({
   supplierId: optionalId,
   buyerUserId: optionalId,
   departmentId: optionalId,
+  budgetLineId: optionalId,
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
   expectedAt: optionalDate,
   items: z.array(purchaseItemSchema).min(1).max(200).optional(),
 });
 
-export const enterprisePurchaseActionSchema = z.object({
-  revision,
-  action: z.enum(ENTERPRISE_PURCHASE_ACTIONS),
-  approverUserId: optionalId,
-  comment: optionalText(3000),
-}).superRefine((data, ctx) => {
+export const enterprisePurchaseActionSchema = z.object({ revision, action: z.enum(ENTERPRISE_PURCHASE_ACTIONS), approverUserId: optionalId, comment: optionalText(3000) }).superRefine((data, ctx) => {
   if (data.action === "SUBMIT" && !data.approverUserId) ctx.addIssue({ code: "custom", path: ["approverUserId"], message: "Un approbateur doit être désigné avant soumission." });
 });
 
@@ -165,10 +150,7 @@ export const enterprisePurchaseReceiptSchema = z.object({
   revision,
   receivedAt: z.coerce.date(),
   notes: optionalText(5000),
-  items: z.array(z.object({
-    purchaseItemId: z.string().trim().min(1).max(180),
-    quantityReceived: z.coerce.number().positive().max(1_000_000),
-  })).min(1).max(200),
+  items: z.array(z.object({ purchaseItemId: z.string().trim().min(1).max(180), quantityReceived: z.coerce.number().positive().max(1_000_000) })).min(1).max(200),
 });
 
 export const enterpriseSprint7OperationalCommentSchema = z.object({

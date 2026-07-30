@@ -33,11 +33,18 @@ export async function enterpriseSourceEntityExists(tx: ProcurementTransaction, o
   if (entityType === "EnterpriseDocument") return Boolean(await tx.enterpriseDocument.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterpriseSupplier") return Boolean(await tx.enterpriseSupplier.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterprisePurchase") return Boolean(await tx.enterprisePurchase.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "EnterpriseBudget") return Boolean(await tx.enterpriseBudget.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "EnterpriseBudgetLine") return Boolean(await tx.enterpriseBudgetLine.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "EnterpriseExpense") return Boolean(await tx.enterpriseExpense.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "EnterpriseReport") return Boolean(await tx.enterpriseReport.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterpriseActivityRequest") return Boolean(await tx.enterpriseActivityRequest.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacySupplier") return Boolean(await tx.pharmacySupplier.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacyPurchaseOrder") return Boolean(await tx.pharmacyPurchaseOrder.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacyReceipt") return Boolean(await tx.pharmacyReceipt.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "PharmacyQualityIncident") return Boolean(await tx.pharmacyQualityIncident.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "HealthPatient") return Boolean(await tx.healthPatient.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "HealthAppointment") return Boolean(await tx.healthAppointment.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
+  if (entityType === "HealthConsultation") return Boolean(await tx.healthConsultation.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "HealthDocument") return Boolean(await tx.healthDocument.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "HealthQualityIncident") return Boolean(await tx.healthQualityIncident.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   return false;
