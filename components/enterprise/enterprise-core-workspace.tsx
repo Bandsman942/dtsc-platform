@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { CollapsibleThread } from "@/components/workspace/collapsible-thread";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleSection } from "@/components/workspace/module-workspace";
@@ -161,7 +162,7 @@ export function EnterpriseCoreWorkspace({
 
       <CoreCreateDialog open={formOpen} close={() => setFormOpen(false)} submit={createRecord} recordTypes={recordTypes} members={members} departments={departments} />
       <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || "Détail"} description="Historique récent et informations de suivi de cet élément." className="h-[92dvh] max-w-4xl">
-        {detail && <CoreDetail record={detail} />}
+        {detail ? <CoreDetail record={detail} /> : null}
       </Dialog>
       <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title="Confirmer l’action" description="Cette décision sera conservée dans l’historique et le journal d’audit.">
         <Field label="Commentaire ou motif" help="Expliquez la décision pour faciliter le suivi. Un motif est obligatoire en cas de rejet.">
@@ -210,6 +211,13 @@ function CoreDetail({ record }: { record: CoreRecord }) {
           </BusinessList>
         ) : <EmptyState compact title="Aucun événement récent" />}
       </section>
+      <CollapsibleThread count={record.comments.length} label="commentaire(s)" defaultOpen={false}>
+        {record.comments.length ? (
+          <BusinessList ariaLabel="Commentaires de l’élément">
+            {record.comments.map((item) => <BusinessListItem key={item.id} title={item.content} meta={formatDate(item.createdAt)} />)}
+          </BusinessList>
+        ) : <EmptyState compact title="Aucun commentaire" description="Aucun commentaire n’a encore été ajouté à cet élément." />}
+      </CollapsibleThread>
     </div>
   );
 }

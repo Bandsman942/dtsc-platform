@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { announcementNotificationTarget } from "@/lib/notification-targets";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { announcementTransferSchema } from "@/lib/validators";
@@ -54,7 +55,7 @@ export async function POST(req: Request, { params }: Params) {
     title: "Annonce DTSC transférée",
     body: `${session.name} vous a transféré: ${announcement.title}`,
     type: "ANNOUNCEMENT",
-    targetUrl: "/announcements",
+    targetUrl: announcementNotificationTarget(announcement.id),
   });
   await writeAuditLog({ userId: session.userId, action: "announcement.transfer", entity: "Announcement", entityId: id, metadata: { recipients: recipients.length }, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

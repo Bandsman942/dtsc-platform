@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { announcementNotificationTarget } from "@/lib/notification-targets";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { announcementReportSchema } from "@/lib/validators";
@@ -53,7 +54,7 @@ export async function POST(req: Request, { params }: Params) {
     title: "Signalement d'annonce",
     body: `${session.name} a signalé: ${announcement.title}`,
     type: "ANNOUNCEMENT",
-    targetUrl: "/announcements",
+    targetUrl: announcementNotificationTarget(announcement.id),
   });
   await writeAuditLog({ userId: session.userId, action: "announcement.report", entity: "AnnouncementReport", entityId: report.id, metadata: { announcementId: id }, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });

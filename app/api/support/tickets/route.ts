@@ -3,6 +3,7 @@ import { UserRole, UserStatus, type SupportTicket } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getSession } from "@/lib/auth";
+import { supportNotificationTarget } from "@/lib/notification-targets";
 import { notifyUsers } from "@/lib/notifications";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -11,10 +12,7 @@ import { supportTicketSchema } from "@/lib/validators";
 
 function isSameOriginRequest(req: Request) {
   const origin = req.headers.get("origin");
-  if (!origin) {
-    return true;
-  }
-
+  if (!origin) return true;
   const requestHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || new URL(req.url).host;
   try {
     return new URL(origin).host === requestHost;
@@ -25,15 +23,11 @@ function isSameOriginRequest(req: Request) {
 
 async function resolveSupportTicketOrganizationId(session: SessionPayload) {
   const activeOrganizationId = getActiveOrganizationId(session);
-  if (!activeOrganizationId) {
-    return null;
-  }
-
+  if (!activeOrganizationId) return null;
   const organization = await prisma.organization.findFirst({
     where: { id: activeOrganizationId, status: "ACTIVE", deletedAt: null },
     select: { id: true },
   });
-
   return organization?.id || null;
 }
 
@@ -110,7 +104,7 @@ export async function POST(req: Request) {
       title: "Nouveau ticket support",
       body: body.data.subject,
       type: "SUPPORT",
-      targetUrl: "/support",
+      targetUrl: supportNotificationTarget(ticket.id),
       organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
     });
   } catch (error) {

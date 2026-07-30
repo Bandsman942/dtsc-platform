@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { supportNotificationTarget } from "@/lib/notification-targets";
+import { notifyUser } from "@/lib/notifications";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
-import { notifyUser } from "@/lib/notifications";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { canManageSupportRole } from "@/lib/support-access";
@@ -58,7 +59,7 @@ export async function PATCH(req: Request, { params }: Params) {
     title: "Ticket support mis à jour",
     body: `${ticket.subject} · ${ticket.status}`,
     type: "SUPPORT",
-    targetUrl: "/support",
+    targetUrl: supportNotificationTarget(ticket.id),
     organizationId: ticket.organizationId,
   }).catch(() => null);
 

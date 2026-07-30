@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { NotificationList } from "@/components/notifications/notification-list";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { getSession, requireUser } from "@/lib/auth";
 import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { prisma } from "@/lib/prisma";
@@ -21,25 +23,29 @@ export default async function NotificationsPage() {
   });
 
   const unreadCount = notifications.filter((notification) => !notification.readAt).length;
+  const readCount = notifications.length - unreadCount;
 
   return (
     <AppShell user={user}>
-      <div className="space-y-6">
-        <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">Centre d&apos;activité</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Notifications</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            Retrouvez les tickets, annonces, réponses support, alertes de limites, messages administratifs et événements importants de la plateforme.
-          </p>
-        </section>
-        <section className="dtsc-panel p-4 sm:p-5">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Synthèse</p>
-          <div className="mt-3 rounded-2xl bg-dtsc-soft p-4 text-sm font-bold text-dtsc-blue">
-            {unreadCount} notification(s) non lue(s)
-          </div>
-        </section>
-        <NotificationList notifications={JSON.parse(JSON.stringify(notifications))} />
-      </div>
+      <ModuleWorkspace>
+        <ModuleHeader
+          eyebrow="Centre d’activité"
+          title="Notifications"
+          count={`${notifications.length}`}
+          description="Retrouvez les tickets, annonces, réponses support, alertes de limites, messages administratifs et événements importants de la plateforme. Une notification liée à un objet ouvre désormais directement cet élément."
+        />
+        <ModuleMetrics label="Synthèse des notifications">
+          <ModuleMetric label="Total" value={notifications.length} hint="Période conservée" />
+          <ModuleMetric label="Non lues" value={unreadCount} hint="À consulter" />
+          <ModuleMetric label="Lues" value={readCount} hint="Déjà consultées" />
+          <ModuleMetric label="Rétention" value={`${settings.notificationRetentionDays} j`} hint="Historique disponible" />
+        </ModuleMetrics>
+        <ModuleContent>
+          <ModuleSection title="Centre de notifications" description="Filtrez, recherchez ou ouvrez directement l’élément précis à l’origine de la notification.">
+            <NotificationList notifications={JSON.parse(JSON.stringify(notifications))} />
+          </ModuleSection>
+        </ModuleContent>
+      </ModuleWorkspace>
     </AppShell>
   );
 }

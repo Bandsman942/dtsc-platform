@@ -15,10 +15,21 @@ Ces règles s'appliquent à toutes les pages, layouts, routes UI et feuilles de 
 - Préserver `viewportFit`, safe areas, comportement clavier iOS, PWA standalone, navigation mobile et scroll interne des dialogues.
 - Ne jamais masquer un défaut de largeur uniquement avec `overflow-x-hidden` ou `overflow-x-clip`; corriger le composant responsable.
 
+## Pages, notifications et contenus
+
+- Les modules standards Dashboard, Notifications, Annonces, Entreprise, Abonnement, Support, Paramètres et Profil utilisent les primitives `components/workspace/*`; une nouvelle divergence doit être justifiée par la nature du module.
+- Les KPI utilisent le rail horizontal mobile de `ModuleMetrics`. Une page ne doit pas remplacer ce rail par une grille verticale mobile locale.
+- Toute route qui crée une notification liée à un objet métier doit utiliser un builder de `lib/notification-targets.ts` et inclure l'identifiant disponible de l'objet, du commentaire ou du message.
+- Une page recevant `ticketId`, `commentId`, `messageId`, `focusId` ou un identifiant équivalent doit ouvrir, déplier et mettre en évidence l'élément autorisé, sans contourner ses contrôles d'accès serveur.
+- Les anciennes notifications sans identifiant peuvent conserver un fallback vers le module; aucune nouvelle notification liée à une entité ne doit régresser vers ce fallback.
+- Les pages affichant des commentaires doivent conserver un contrôle masquer/démasquer accessible et un contenu borné.
+- Les pages Annonces doivent monter `AnnouncementMediaEnhancer` autour du contenu riche afin que les images restent consultables en plein écran sans perte de ratio.
+
 ## Validation obligatoire
 
 ```bash
 pnpm qa:responsive-ui
+pnpm qa:standard-experience
 pnpm qa:regression
 pnpm type-check
 pnpm lint

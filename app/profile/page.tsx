@@ -3,6 +3,8 @@ import { ProfileActivityHistory, type ProfileActivityItem } from "@/components/p
 import { ProfileAccountInfo } from "@/components/profile/profile-account-info";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { requireUser } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -73,38 +75,44 @@ export default async function ProfilePage() {
 
   return (
     <AppShell user={user}>
-      <section className="dtsc-panel max-w-6xl overflow-hidden p-0">
-        <div className="border-b border-slate-200 bg-[#001736] p-8 text-white">
-          <p className="text-sm font-semibold text-cyan-300">Compte client</p>
-          <h1 className="mt-2 text-3xl font-black">Profil utilisateur</h1>
-          <p className="mt-2 text-sm text-slate-300">Informations de contact, identité professionnelle et visibilité publique maîtrisée.</p>
-        </div>
-      </section>
-
-      <section className="dtsc-panel max-w-6xl overflow-hidden p-0">
-        <div className="p-4 sm:p-6">
-          <Accordion>
-            <AccordionItem title="Informations du compte" defaultOpen>
-              <ProfileAccountInfo
-                account={{
-                  name: user.name,
-                  email: user.email,
-                  companyName: user.companyName || "Non renseignée",
-                  phone: user.phone || "Non renseigné",
-                  role: formatEnumLabel(user.role),
-                  createdAt: formatDate(user.createdAt),
-                }}
-              />
-            </AccordionItem>
-            <AccordionItem title="Modifier le profil">
-              <ProfileEditor user={JSON.parse(JSON.stringify(user))} />
-            </AccordionItem>
-            <AccordionItem title="Historique d'activité">
-              <ProfileActivityHistory items={activityItems} retentionDays={settings.notificationRetentionDays} />
-            </AccordionItem>
-          </Accordion>
-        </div>
-      </section>
+      <ModuleWorkspace>
+        <ModuleHeader
+          eyebrow="Compte client"
+          title="Profil utilisateur"
+          count={formatEnumLabel(user.role)}
+          description="Informations de contact, identité professionnelle, préférences personnelles et visibilité publique maîtrisée."
+        />
+        <ModuleMetrics label="Indicateurs du profil">
+          <ModuleMetric label="Notifications récentes" value={notifications.length} hint="Activité enregistrée" />
+          <ModuleMetric label="Conversations" value={conversations.length} hint="Historique récent" />
+          <ModuleMetric label="Tickets support" value={tickets.length} hint="Demandes suivies" />
+          <ModuleMetric label="Messages de groupe" value={groupMessages.length} hint="Contributions récentes" />
+        </ModuleMetrics>
+        <ModuleContent>
+          <ModuleSection title="Compte et activité" description={`Historique limité selon la politique de rétention de ${settings.notificationRetentionDays} jours.`}>
+            <Accordion>
+              <AccordionItem title="Informations du compte" defaultOpen>
+                <ProfileAccountInfo
+                  account={{
+                    name: user.name,
+                    email: user.email,
+                    companyName: user.companyName || "Non renseignée",
+                    phone: user.phone || "Non renseigné",
+                    role: formatEnumLabel(user.role),
+                    createdAt: formatDate(user.createdAt),
+                  }}
+                />
+              </AccordionItem>
+              <AccordionItem title="Modifier le profil">
+                <ProfileEditor user={JSON.parse(JSON.stringify(user))} />
+              </AccordionItem>
+              <AccordionItem title="Historique d’activité">
+                <ProfileActivityHistory items={activityItems} retentionDays={settings.notificationRetentionDays} />
+              </AccordionItem>
+            </Accordion>
+          </ModuleSection>
+        </ModuleContent>
+      </ModuleWorkspace>
     </AppShell>
   );
 }
