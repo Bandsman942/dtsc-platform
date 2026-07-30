@@ -64,3 +64,14 @@ model CollaborationGroupPreference {
   @@index([userId, pinned, favorite, updatedAt])
   @@index([groupId, userId])
 }
+
+model CollaborationVoiceSetting {
+  id                 String   @id @default("global")
+  enabled            Boolean  @default(true)
+  maxDurationSeconds Int      @default(300)
+  maxFileSizeBytes   Int      @default(16777216)
+  rateLimitPerHour   Int      @default(120)
+  updatedByUserId    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

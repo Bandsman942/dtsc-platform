@@ -3,10 +3,16 @@
 import { Mic, Send, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type VoicePayload = { blob: Blob; durationMs: number; waveform: number[] };
+type VoiceCapabilities = { enabled: boolean; maxDurationSeconds: number; maxFileSizeBytes: number };
+
+const DEFAULT_VOICE_CAPABILITIES: VoiceCapabilities = {
+  enabled: true,
+  maxDurationSeconds: 300,
+  maxFileSizeBytes: 16 * 1024 * 1024,
+};
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
@@ -47,11 +53,29 @@ export function VoiceConversationComposer({
 }) {
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
+  const [voiceCapabilities, setVoiceCapabilities] = useState<VoiceCapabilities>(DEFAULT_VOICE_CAPABILITIES);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef(0);
   const cancelledRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/collaborators/voice-settings", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ voice?: VoiceCapabilities }>;
+      })
+      .then((body) => {
+        if (!cancelled && body?.voice) setVoiceCapabilities(body.voice);
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => () => {
     recorderRef.current?.stop();
@@ -59,13 +83,36 @@ export function VoiceConversationComposer({
   }, []);
 
   useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 120 ? "auto" : "hidden";
+  }, [value]);
+
+  useEffect(() => {
     if (!recording) return;
-    const timer = window.setInterval(() => setRecordingMs(Date.now() - startedAtRef.current), 250);
+    const maxDurationMs = voiceCapabilities.maxDurationSeconds * 1000;
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAtRef.current;
+      setRecordingMs(elapsed);
+      if (elapsed >= maxDurationMs) {
+        const recorder = recorderRef.current;
+        if (recorder && recorder.state !== "inactive") {
+          cancelledRef.current = false;
+          recorder.stop();
+        }
+      }
+    }, 250);
     return () => window.clearInterval(timer);
-  }, [recording]);
+  }, [recording, voiceCapabilities.maxDurationSeconds]);
 
   async function startRecording() {
     if (disabled || sending || recording) return;
+    if (!voiceCapabilities.enabled) {
+      onError?.("Les messages vocaux sont désactivés par l’administrateur.");
+      return;
+    }
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       onError?.("L’enregistrement vocal n’est pas disponible sur ce navigateur.");
       return;
@@ -84,7 +131,7 @@ export function VoiceConversationComposer({
         if (event.data.size > 0) chunksRef.current.push(event.data);
       });
       recorder.addEventListener("stop", () => {
-        const durationMs = Date.now() - startedAtRef.current;
+        const durationMs = Math.min(Date.now() - startedAtRef.current, voiceCapabilities.maxDurationSeconds * 1000);
         const chunks = chunksRef.current;
         const wasCancelled = cancelledRef.current;
         stream.getTracks().forEach((track) => track.stop());
@@ -94,7 +141,13 @@ export function VoiceConversationComposer({
         setRecordingMs(0);
         if (wasCancelled || !chunks.length) return;
         const blob = new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || "audio/webm" });
-        if (blob.size > 0) void onSendVoice({ blob, durationMs, waveform: [] });
+        if (blob.size <= 0) return;
+        if (blob.size > voiceCapabilities.maxFileSizeBytes) {
+          const maxMb = Math.max(1, Math.floor(voiceCapabilities.maxFileSizeBytes / (1024 * 1024)));
+          onError?.(`Le message vocal dépasse la limite de ${maxMb} Mo.`);
+          return;
+        }
+        void onSendVoice({ blob, durationMs, waveform: [] });
       });
       recorder.start(250);
       setRecording(true);
@@ -118,7 +171,7 @@ export function VoiceConversationComposer({
       {recording ? (
         <div className="flex min-w-0 items-center gap-2 rounded-[1.35rem] border border-dtsc-border bg-dtsc-page p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
           <span className="ml-2 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
-          <span className="min-w-0 flex-1 text-sm font-bold text-dtsc-ink">{labels?.recording || "Enregistrement"} · {formatDuration(recordingMs)}</span>
+          <span className="min-w-0 flex-1 text-sm font-bold text-dtsc-ink">{labels?.recording || "Enregistrement"} · {formatDuration(recordingMs)} / {formatDuration(voiceCapabilities.maxDurationSeconds * 1000)}</span>
           <Button type="button" variant="outline" size="icon" onClick={() => finishRecording(true)} className="h-11 w-11 shrink-0 rounded-full" aria-label={labels?.cancel || "Annuler"}>
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -127,14 +180,37 @@ export function VoiceConversationComposer({
           </Button>
         </div>
       ) : (
-        <form onSubmit={(event) => { event.preventDefault(); if (value.trim()) void onSendText(); }} className="flex min-w-0 items-center gap-2 rounded-[1.35rem] border border-dtsc-border bg-dtsc-page p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
-          <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="h-11 min-w-0 border-0 bg-transparent text-dtsc-ink focus-visible:ring-0" disabled={disabled || sending} />
+        <form onSubmit={(event) => { event.preventDefault(); if (value.trim()) void onSendText(); }} className="flex min-w-0 items-end gap-2 rounded-[1.35rem] border border-dtsc-border bg-dtsc-page p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && value.trim()) {
+                event.preventDefault();
+                void onSendText();
+              }
+            }}
+            rows={1}
+            placeholder={placeholder}
+            className="min-h-11 max-h-[120px] min-w-0 flex-1 resize-none bg-transparent px-3 py-2.5 text-base leading-6 text-dtsc-ink outline-none placeholder:text-dtsc-muted"
+            disabled={disabled || sending}
+            aria-label={placeholder}
+          />
           {value.trim() ? (
             <Button type="submit" size="icon" className="h-11 w-11 shrink-0 rounded-full bg-[#002b5b] text-white" disabled={disabled || sending} aria-label={labels?.send || "Envoyer"}>
               <Send className="h-4 w-4" />
             </Button>
           ) : (
-            <Button type="button" size="icon" className="h-11 w-11 shrink-0 rounded-full bg-[#002b5b] text-white" disabled={disabled || sending} onClick={() => void startRecording()} aria-label={labels?.record || "Enregistrer un vocal"}>
+            <Button
+              type="button"
+              size="icon"
+              className="h-11 w-11 shrink-0 rounded-full bg-[#002b5b] text-white"
+              disabled={disabled || sending || !voiceCapabilities.enabled}
+              onClick={() => void startRecording()}
+              aria-label={labels?.record || "Enregistrer un vocal"}
+              title={voiceCapabilities.enabled ? labels?.record || "Enregistrer un vocal" : "Messages vocaux désactivés"}
+            >
               <Mic className="h-5 w-5" />
             </Button>
           )}

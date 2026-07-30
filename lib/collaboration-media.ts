@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
-const AUDIO_MAX_BYTES = 16 * 1024 * 1024;
+const DEFAULT_AUDIO_MAX_BYTES = 16 * 1024 * 1024;
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const AUDIO_TYPES = new Set([
@@ -25,16 +25,21 @@ function storageClient() {
   });
 }
 
+export function normalizeCollaborationMimeType(value: string | null | undefined) {
+  return String(value || "application/octet-stream").split(";", 1)[0].trim().toLowerCase();
+}
+
 function safeExtension(file: File) {
+  const mimeType = normalizeCollaborationMimeType(file.type);
   const fromName = file.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   if (fromName && fromName.length <= 8) return fromName;
-  if (file.type === "image/jpeg") return "jpg";
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  if (file.type.includes("ogg")) return "ogg";
-  if (file.type.includes("mpeg")) return "mp3";
-  if (file.type.includes("mp4")) return "m4a";
-  if (file.type.includes("wav")) return "wav";
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("wav")) return "wav";
   return "webm";
 }
 
@@ -43,7 +48,7 @@ function expectedPrefix(groupId: string) {
 }
 
 export function validateCollaborationImage(file: File) {
-  if (!IMAGE_TYPES.has(file.type)) {
+  if (!IMAGE_TYPES.has(normalizeCollaborationMimeType(file.type))) {
     return { ok: false as const, status: 415, message: "Image non prise en charge. Utilisez JPEG, PNG ou WEBP." };
   }
   if (file.size <= 0 || file.size > IMAGE_MAX_BYTES) {
@@ -52,29 +57,31 @@ export function validateCollaborationImage(file: File) {
   return { ok: true as const };
 }
 
-export function validateCollaborationAudio(file: File) {
-  if (!AUDIO_TYPES.has(file.type)) {
+export function validateCollaborationAudio(file: File, maxBytes = DEFAULT_AUDIO_MAX_BYTES) {
+  const mimeType = normalizeCollaborationMimeType(file.type);
+  if (!AUDIO_TYPES.has(mimeType)) {
     return { ok: false as const, status: 415, message: "Format audio non pris en charge." };
   }
-  if (file.size <= 0 || file.size > AUDIO_MAX_BYTES) {
-    return { ok: false as const, status: 413, message: "Le message vocal doit peser au maximum 16 Mo." };
+  if (file.size <= 0 || file.size > maxBytes) {
+    return { ok: false as const, status: 413, message: `Le message vocal doit peser au maximum ${Math.max(1, Math.floor(maxBytes / (1024 * 1024)))} Mo.` };
   }
-  return { ok: true as const };
+  return { ok: true as const, mimeType };
 }
 
 async function upload(groupId: string, category: "avatar" | "stories" | "voice", objectId: string, file: File) {
   const client = storageClient();
   const storagePath = `${expectedPrefix(groupId)}${category}/${objectId}/${randomUUID()}.${safeExtension(file)}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  const contentType = normalizeCollaborationMimeType(file.type);
   const { data, error } = await client.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storagePath, buffer, {
-    contentType: file.type,
+    contentType,
     upsert: false,
   });
   if (error) throw new Error(`COLLABORATION_MEDIA_UPLOAD_FAILED:${error.message}`);
   return {
     storageBucket: env.SUPABASE_STORAGE_BUCKET,
     storagePath: data.path,
-    mimeType: file.type,
+    mimeType: contentType,
     sizeBytes: file.size,
   };
 }
