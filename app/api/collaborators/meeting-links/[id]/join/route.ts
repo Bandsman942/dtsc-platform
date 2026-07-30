@@ -37,6 +37,12 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ message: "Lien de réunion introuvable." }, { status: 404 });
   }
 
+  const callType = link.callType === "AUDIO" || link.callType === "VIDEO" ? link.callType : null;
+  if (!callType) {
+    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { reason: "invalid_meeting_call_type" } });
+    return NextResponse.json({ message: "Le type d’appel de cette réunion est invalide." }, { status: 409 });
+  }
+
   const member = await assertGroupMemberForSession(link.groupId, session);
   if (!member || member.group.meetingId !== link.meetingId) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
@@ -65,7 +71,7 @@ export async function POST(req: Request, { params }: Params) {
     where: { id: link.meetingId, collaborationGroupId: link.groupId, status: { not: "CANCELED" } },
     select: { id: true, title: true, meetingMode: true },
   });
-  if (!meeting || meeting.meetingMode !== link.callType) {
+  if (!meeting || meeting.meetingMode !== callType) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
     return NextResponse.json({ message: "La réunion planifiée a été modifiée. Rechargez la conversation." }, { status: 409 });
   }
@@ -81,14 +87,14 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const memberUserIds = await groupMemberUserIds(link.groupId);
-  const roomName = buildLiveKitRoomName({ groupId: link.groupId, meetingId: link.meetingId, callType: link.callType });
-  const content = `${session.name} a démarré la réunion ${link.callType === "VIDEO" ? "vidéo" : "audio"} planifiée.`;
+  const roomName = buildLiveKitRoomName({ groupId: link.groupId, meetingId: link.meetingId, callType });
+  const content = `${session.name} a démarré la réunion ${callType === "VIDEO" ? "vidéo" : "audio"} planifiée.`;
   const call = await prisma.$transaction(async (tx) => {
     const createdCall = await tx.collaborationGroupCall.create({
       data: {
         groupId: link.groupId,
         meetingId: link.meetingId,
-        callType: link.callType,
+        callType,
         provider: "LIVEKIT",
         roomName,
         status: "RINGING",
@@ -98,7 +104,7 @@ export async function POST(req: Request, { params }: Params) {
             userId,
             status: userId === session.userId ? "JOINED" : "INVITED",
             joinedAt: userId === session.userId ? new Date() : null,
-            cameraEnabled: link.callType === "VIDEO" && userId === session.userId,
+            cameraEnabled: callType === "VIDEO" && userId === session.userId,
           })),
         },
         events: {
@@ -120,7 +126,7 @@ export async function POST(req: Request, { params }: Params) {
   await createGroupSystemMessage({ groupId: link.groupId, actorId: session.userId, content });
   await notifyUsers({
     userIds: memberUserIds.filter((userId) => userId !== session.userId),
-    title: link.callType === "VIDEO" ? "Réunion vidéo DTSC démarrée" : "Réunion audio DTSC démarrée",
+    title: callType === "VIDEO" ? "Réunion vidéo DTSC démarrée" : "Réunion audio DTSC démarrée",
     body: `${meeting.title} est maintenant ouverte.`,
     type: "COLLABORATION",
     targetUrl: `/collaborators?groupId=${encodeURIComponent(link.groupId)}&joinCall=${encodeURIComponent(call.id)}`,
