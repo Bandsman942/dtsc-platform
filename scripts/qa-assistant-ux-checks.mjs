@@ -12,6 +12,9 @@ const helper = read("lib/assistant-conversation-preferences.ts");
 const chatPage = read("app/chat/page.tsx");
 const chatWorkspace = read("components/chat/chat-workspace-v2.tsx");
 const assistantUi = read("components/chat/assistant-conversation-ui.tsx");
+const immersiveShell = read("components/chat/assistant-immersive-workspace-shell.tsx");
+const immersiveViewport = read("components/chat/use-immersive-conversation-viewport.ts");
+const mobileChrome = read("components/layout/private-mobile-chrome-controller.tsx");
 const chatRoute = read("app/api/chat/v2/route.ts");
 const conversationsRoute = read("app/api/conversations/[id]/route.ts");
 const enterprisePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
@@ -41,6 +44,14 @@ assert(chatRoute.includes("useCompanyContext") && chatRoute.includes("useKnowled
 assert(chatRoute.includes("performPrivateChatActionFromHistory") && chatRoute.includes("retrieveKnowledgeContext") && chatRoute.includes("getCompanyContextForUser"), "Chatbot v2 must preserve existing private actions, RAG and company context");
 assert(conversationsRoute.includes("isConfiguredOpenAIModel") && conversationsRoute.includes("chatConversationPreference.upsert"), "Chat conversation configuration must validate models and persist server-side");
 
+assert(immersiveShell.includes("useImmersiveConversationViewport") && immersiveShell.includes("data-collaboration-immersive-root"), "Assistant workspaces must reuse the proven immersive viewport and chrome gesture contract");
+assert(immersiveShell.includes('variant: AssistantWorkspaceVariant') && immersiveShell.includes('data-assistant-immersive-variant={variant}'), "Immersive assistant shell must distinguish chatbot and enterprise layouts");
+assert(immersiveShell.includes("overscroll-behavior: contain") && immersiveShell.includes("overflow-y: auto"), "Enterprise assistant secondary tabs must scroll internally instead of scrolling the private page");
+assert(immersiveViewport.includes('privateMainElement.style.position = "fixed"') && immersiveViewport.includes("visualViewport"), "Immersive assistant viewport must remain VisualViewport-aware for mobile keyboards");
+assert(mobileChrome.includes("IMMERSIVE_ROOT_SELECTOR") && mobileChrome.includes("finishImmersiveGesture"), "Top and bottom navigation visibility must remain controlled by the established immersive gestures");
+assert(chatPage.includes('<AssistantImmersiveWorkspaceShell variant="chatbot">'), "Chatbot page must mount the immersive workspace shell");
+assert(enterprisePage.includes('<AssistantImmersiveWorkspaceShell variant="enterprise">'), "Enterprise assistant page must mount the immersive workspace shell");
+
 assert(enterprisePage.includes("EnterpriseAiWorkspaceV2") && enterprisePage.includes("getConfiguredOpenAIModels"), "Enterprise AI module must use the new workspace with configured models");
 assert(enterpriseWorkspace.includes("Sources internes") && enterpriseWorkspace.includes("Outils métier"), "Enterprise assistant must expose only real internal sources and read tools");
 assert(enterpriseWorkspace.includes("asCitations") && enterpriseWorkspace.includes("feedbackValue") && enterpriseWorkspace.includes("ThumbsUp") && enterpriseWorkspace.includes("ThumbsDown"), "Enterprise assistant must render citations and persistent feedback controls");
@@ -52,4 +63,4 @@ assert(enterpriseMessage.includes("enterpriseAiMessageFeedback.upsert") && enter
 assert(!chatWorkspace.includes("useWeb") && !enterpriseWorkspace.includes("useWeb") && !enterpriseChat.includes("useWeb"), "Do not advertise a web-search source that DTSC does not implement");
 
 assert(vercel.includes('"main": true') && vercel.includes('"*": false') && vercel.includes("ignoreCommand"), "Vercel must remain production-only from main");
-console.log("Assistant UI/UX, conversation preferences, tenant-safe sources and production-only CI/CD QA passed.");
+console.log("Assistant UI/UX, immersive viewport, conversation preferences, tenant-safe sources and production-only CI/CD QA passed.");

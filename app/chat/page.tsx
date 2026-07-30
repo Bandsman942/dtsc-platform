@@ -1,3 +1,4 @@
+import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
 import { ChatWorkspaceV2 } from "@/components/chat/chat-workspace-v2";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -44,16 +45,18 @@ export default async function ChatPage({
 
   return (
     <AppShell user={user}>
-      <ChatWorkspaceV2
-        initialConversations={JSON.parse(JSON.stringify(conversations))}
-        initialProjects={JSON.parse(JSON.stringify(projects))}
-        collaborationGroups={JSON.parse(JSON.stringify(collaborationGroups))}
-        initialConversationId={conversationId}
-        userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
-        usage={{ messagesToday, dailyMessageLimit: user.dailyMessageLimit, tokensToday: tokensToday._sum.totalTokens ?? 0, dailyTokenLimit: user.dailyTokenLimit, resetAt: resetAt.toISOString() }}
-        models={models}
-        assistantDefaults={{ preferredModel: user.preferredModel || null, responseStyle: user.chatResponseStyle || "PROFESSIONAL", responseLength: user.chatResponseLength || "BALANCED" }}
-      />
+      <AssistantImmersiveWorkspaceShell variant="chatbot">
+        <ChatWorkspaceV2
+          initialConversations={JSON.parse(JSON.stringify(conversations))}
+          initialProjects={JSON.parse(JSON.stringify(projects))}
+          collaborationGroups={JSON.parse(JSON.stringify(collaborationGroups))}
+          initialConversationId={conversationId}
+          userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
+          usage={{ messagesToday, dailyMessageLimit: user.dailyMessageLimit, tokensToday: tokensToday._sum.totalTokens ?? 0, dailyTokenLimit: user.dailyTokenLimit, resetAt: resetAt.toISOString() }}
+          models={models}
+          assistantDefaults={{ preferredModel: user.preferredModel || null, responseStyle: user.chatResponseStyle || "PROFESSIONAL", responseLength: user.chatResponseLength || "BALANCED" }}
+        />
+      </AssistantImmersiveWorkspaceShell>
     </AppShell>
   );
 }

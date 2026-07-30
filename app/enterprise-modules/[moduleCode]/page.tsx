@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
 import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
@@ -43,7 +44,9 @@ export default async function EnterpriseModulePage({ params }: Params) {
     const models = getConfiguredOpenAIModels().map((id) => ({ id, label: getDisplayName(id) }));
     return (
       <AppShell user={user}>
-        <EnterpriseAiWorkspaceV2 organizationId={organizationId} organizationName={organization.name} sectorCode={organization.sectorCode} canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)} models={models} />
+        <AssistantImmersiveWorkspaceShell variant="enterprise">
+          <EnterpriseAiWorkspaceV2 organizationId={organizationId} organizationName={organization.name} sectorCode={organization.sectorCode} canManage={ENTERPRISE_MANAGER_ROLES.has(membership.role)} models={models} />
+        </AssistantImmersiveWorkspaceShell>
       </AppShell>
     );
   }
