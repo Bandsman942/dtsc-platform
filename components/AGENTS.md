@@ -15,12 +15,22 @@ Ces règles s'appliquent à tous les composants de `components/` et de ses sous-
 - Réutiliser `components/workspace/*`, `components/ui/*` et le contrat racine `data-dtsc-responsive-root` avant de créer une nouvelle structure responsive parallèle.
 - Ne jamais considérer `overflow-x-hidden` ou `overflow-x-clip` comme la correction unique d'un composant trop large: corriger aussi sa grille, ses enfants flexibles, ses textes longs et ses actions.
 
+## Expérience standard obligatoire
+
+- Les KPI des modules standards utilisent `ModuleMetrics` et conservent un rail horizontal tactile, borné et snapé sur mobile; ils ne deviennent une grille dense qu'au breakpoint desktop `lg`.
+- Les pages standardisées réutilisent la hiérarchie `ModuleWorkspace → ModuleHeader → ModuleMetrics/ModuleToolbar → ModuleContent → ModuleSection`.
+- Tout fil de commentaires doit être masquable et démasquable. Réutiliser `CollapsibleThread` ou conserver un mécanisme existant équivalent, accessible via `aria-expanded`, avec scroll interne et pagination lorsque le volume peut grandir.
+- Une notification liée à une entité doit transporter une cible précise vers cette entité, et si possible vers le commentaire ou message concerné. Ne pas créer de nouvelle notification métier avec une simple racine de module lorsqu'un identifiant existe.
+- Les images intégrées aux annonces doivent rester cliquables et s'ouvrir dans la visionneuse partagée sans recadrage destructif, avec zoom, fermeture clavier et conservation du ratio/pixel source.
+- Les comportements ci-dessus sont contrôlés par `pnpm qa:standard-experience` et ne doivent pas être réimplémentés localement dans chaque module.
+
 ## Validation obligatoire
 
 Avant commit et push d'une modification UI:
 
 ```bash
 pnpm qa:responsive-ui
+pnpm qa:standard-experience
 pnpm qa:regression
 pnpm type-check
 pnpm lint
