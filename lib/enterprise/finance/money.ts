@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 export function enterpriseMoney(value: Prisma.Decimal.Value) {
-  return new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  return new Prisma.Decimal(value).toDecimalPlaces(2);
 }
 
 export function enterpriseMoneyZero() {

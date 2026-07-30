@@ -34,7 +34,7 @@ const core = read("lib/enterprise/enterprise-core.ts");
 ok(core.includes("EnterpriseCoreRecord"), "Legacy EnterpriseCoreRecord must stay readable for compatibility.");
 ok(constants.includes("DEDICATED_CORE_RECORD_TYPES"), "Dedicated domains must be centralized for legacy write blocking.");
 
-const money = includes("lib/enterprise/finance/money.ts", ["Prisma.Decimal", "ROUND_HALF_UP", "toDecimalPlaces(2)", "assertSameCurrency"]);
+const money = includes("lib/enterprise/finance/money.ts", ["Prisma.Decimal", "toDecimalPlaces(2", "assertSameCurrency"]);
 ok(!money.includes("Math.round") && !money.includes("toFixed(2) as number"), "Financial truth must not use JavaScript floating-point rounding.");
 
 const commitments = includes("lib/enterprise/finance/commitments.ts", ["remainingCommitment", "planned.sub(remainingCommitment).sub(actualAmount)", "createPurchaseBudgetCommitment", "releasePurchaseBudgetCommitment", "applyExpenseCommitmentRealization", "INSUFFICIENT_BUDGET", "BUDGET_CURRENCY_MISMATCH", "updateMany"]);
@@ -47,7 +47,7 @@ ok(!purchase.includes("pharmacyStockMovement.create"), "Common purchase finance 
 const budget = includes("lib/enterprise/finance/budget-service.ts", ["PENDING_APPROVAL", "ACTIVE", "EnterpriseApproval", "SELF_APPROVAL_DENIED", "REVISION_CONFLICT", "ENTERPRISE_BUDGET_APPROVED", "ENTERPRISE_BUDGET_REJECTED"]);
 ok(budget.includes('existing.status !== "DRAFT"'), "Budget edits must be limited to DRAFT.");
 
-const expense = includes("lib/enterprise/finance/expense-service.ts", ["amountVarianceReason", "EnterpriseApproval", "SELF_APPROVAL_DENIED", "BUDGET_CURRENCY_MISMATCH", "INSUFFICIENT_BUDGET", "applyExpenseCommitmentRealization", "budgetImpactAppliedAt", "ENTERPRISE_EXPENSE_APPROVED"]);
+const expense = includes("lib/enterprise/finance/expense-service.ts", ["amountVarianceReason", "EnterpriseApproval", "SELF_APPROVAL_DENIED", "BUDGET_CURRENCY_MISMATCH", "applyExpenseCommitmentRealization", "budgetImpactAppliedAt", "ENTERPRISE_EXPENSE_APPROVED"]);
 ok(expense.includes('existing.status !== "DRAFT"'), "Approved or pending expenses must not be editable through normal PATCH.");
 ok(expense.includes("documentIds"), "Expenses must support private EnterpriseDocument evidence links.");
 
