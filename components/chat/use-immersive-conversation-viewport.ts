@@ -30,6 +30,7 @@ export function useImmersiveConversationViewport() {
     const previousMainStyle = privateMainElement.getAttribute("style");
     const previousImmersive = root.dataset.dtscConversationImmersive;
     const scrollStates = new WeakMap<HTMLElement, ScrollState>();
+    const collaborationScrollers = new WeakSet<HTMLElement>();
     let viewportFrameId = 0;
     let scrollFrameId = 0;
     let pendingScrollElement: HTMLElement | null = null;
@@ -77,8 +78,8 @@ export function useImmersiveConversationViewport() {
         if (signature === lastViewportSignature) return;
         lastViewportSignature = signature;
 
-        // The conversation follows the actual VisualViewport directly. Mobile
-        // navigation is an overlay and must never resize/reflow the message
+        // Follow the real VisualViewport directly. The DTSC mobile navigation
+        // overlays this stable surface and must never resize/reflow the message
         // viewport while a finger or inertial scroll is still moving.
         privateMainElement.style.position = "fixed";
         privateMainElement.style.left = `${viewportLeft}px`;
@@ -93,6 +94,15 @@ export function useImmersiveConversationViewport() {
         privateMainElement.style.zIndex = "20";
         privateMainElement.style.transition = "none";
       });
+    }
+
+    function isCollaborationScroller(element: HTMLElement) {
+      if (collaborationScrollers.has(element)) return true;
+      if (!element.closest("[data-collaboration-immersive-root]")) return false;
+      if (!element.parentElement?.matches("main, aside")) return false;
+      if (element.scrollHeight <= element.clientHeight) return false;
+      collaborationScrollers.add(element);
+      return true;
     }
 
     function processNestedScroll() {
@@ -140,7 +150,7 @@ export function useImmersiveConversationViewport() {
     function onNestedScroll(event: Event) {
       if (!media.matches) return;
       const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches("[data-collaboration-scroll]")) return;
+      if (!(target instanceof HTMLElement) || !isCollaborationScroller(target)) return;
       pendingScrollElement = target;
       if (scrollFrameId) return;
       scrollFrameId = window.requestAnimationFrame(processNestedScroll);
