@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     siteName: "DTSC Platform",
     title: "DTSC Platform | 7 leviers numériques de performance",
     description:
-      "Cabinet DTSC basé à Kinshasa: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.",
+      "Cabinet DTSC basé à Kinshasa: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations numériques, Marketing digital et Imprimerie numérique.",
     images: [
       {
         url: "/dtsc-logo.png",
@@ -119,7 +119,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
-      <body className="min-w-0 antialiased">
+      <body data-dtsc-responsive-root className="min-w-0 max-w-full overflow-x-clip antialiased">
         <script
           type="application/ld+json"
           suppressHydrationWarning
