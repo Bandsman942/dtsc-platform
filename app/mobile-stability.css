@@ -1,12 +1,121 @@
 /*
- * DTSC mobile/iOS stability layer.
- * Keep these rules narrowly focused on browser interaction quirks rather than
- * hiding layout bugs globally. Components still own their responsive sizing.
+ * DTSC mobile/iOS stability and responsive contract layer.
+ * Browser-specific rules stay narrow; the responsive contract below prevents
+ * components from enlarging the page viewport and provides safe defaults for
+ * long content, controls and shared workspace primitives.
  */
 
 .dtsc-mobile-mesh {
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+[data-dtsc-responsive-root] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+[data-dtsc-responsive-root] :where(
+    div,
+    main,
+    section,
+    article,
+    header,
+    footer,
+    nav,
+    aside,
+    form,
+    fieldset,
+    ul,
+    ol,
+    li
+  ) {
+  min-width: 0;
+}
+
+[data-dtsc-responsive-root] :where(
+    main,
+    [data-responsive-scope],
+    [data-module-workspace],
+    [data-module-content],
+    [data-workspace-section],
+    [data-workspace-section-body],
+    [data-business-list],
+    [data-business-list-item]
+  ) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-dtsc-responsive-root] :where([class~="grid"], [class~="flex"]) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-dtsc-responsive-root] :where(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    li,
+    dd,
+    dt,
+    strong,
+    small,
+    a,
+    [data-responsive-text]
+  ) {
+  overflow-wrap: anywhere;
+}
+
+[data-dtsc-responsive-root] :where(input, textarea, select, button) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-dtsc-responsive-root] :where(img, video, canvas, svg, iframe) {
+  max-width: 100%;
+}
+
+[data-responsive-actions] {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+[data-responsive-actions] > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 479px) {
+  [data-responsive-actions] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-responsive-actions] > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  [data-responsive-actions] > :only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@supports not (overflow: clip) {
+  [data-dtsc-responsive-root] {
+    overflow-x: hidden;
+  }
 }
 
 [data-mobile-top-nav] {
