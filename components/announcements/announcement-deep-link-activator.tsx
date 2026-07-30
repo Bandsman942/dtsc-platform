@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 export function AnnouncementDeepLinkActivator({ commentId }: { commentId?: string | null }) {
   useEffect(() => {
-    const targetCommentId = commentId;
+    const targetCommentId = typeof commentId === "string" ? commentId : "";
     if (!targetCommentId) return;
 
     let attempts = 0;
