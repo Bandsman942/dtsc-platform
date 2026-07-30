@@ -14,7 +14,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs && node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs && node scripts/qa-mobile-ios-checks.mjs && node scripts/qa-work-schedule-checks.mjs && node scripts/qa-work-prestations-checks.mjs && node scripts/qa-payroll-work-integration-checks.mjs && node scripts/qa-payroll-hotfix-checks.mjs && node scripts/qa-enterprise-core-v2-checks.mjs && node scripts/qa-enterprise-core-v2-sprint7-checks.mjs && node scripts/qa-enterprise-finance-reports-checks.mjs",
+    "qa:regression": "node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs && node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs && node scripts/qa-mobile-ios-checks.mjs && node scripts/qa-work-schedule-checks.mjs && node scripts/qa-work-prestations-checks.mjs && node scripts/qa-payroll-work-integration-checks.mjs && node scripts/qa-payroll-hotfix-checks.mjs && node scripts/qa-enterprise-core-v2-checks.mjs && node scripts/qa-enterprise-core-v2-sprint7-checks.mjs && node scripts/qa-enterprise-finance-reports-checks.mjs && node scripts/qa-collaboration-experience-checks.mjs && node scripts/qa-assistant-ux-checks.mjs",
     "qa:workspace": "node scripts/qa-workspace-ui-checks.mjs",
     "qa:workspace:generalization": "node scripts/qa-workspace-generalization-checks.mjs",
     "qa:session-push": "node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs",
@@ -25,7 +25,9 @@
     "qa:payroll-hotfix": "node scripts/qa-payroll-hotfix-checks.mjs",
     "qa:enterprise-core-v2": "node scripts/qa-enterprise-core-v2-checks.mjs",
     "qa:enterprise-core-v2-sprint7": "node scripts/qa-enterprise-core-v2-sprint7-checks.mjs",
-    "qa:enterprise-finance-reports": "node scripts/qa-enterprise-finance-reports-checks.mjs"
+    "qa:enterprise-finance-reports": "node scripts/qa-enterprise-finance-reports-checks.mjs",
+    "qa:collaboration-experience": "node scripts/qa-collaboration-experience-checks.mjs",
+    "qa:assistant-ux": "node scripts/qa-assistant-ux-checks.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
