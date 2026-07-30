@@ -38,7 +38,7 @@ const constants = includes("lib/enterprise/workflows/constants.ts", ["WORKFLOW_S
 for (const stepType of ["START", "CONDITION", "ASSIGN", "CREATE_APPROVAL", "CREATE_TASK", "DOMAIN_ACTION", "NOTIFICATION", "WAIT_UNTIL", "END"]) ok(constants.includes(`"${stepType}"`), `Missing bounded step type ${stepType}`);
 ok(!constants.includes("BPMN") && !constants.includes("JAVASCRIPT") && !constants.includes("HTTP_REQUEST"), "Sprint 9 must not introduce BPMN, arbitrary scripts or arbitrary HTTP steps.");
 
-const validators = includes("lib/enterprise/workflows/validators.ts", ["z.discriminatedUnion", "workflowConditionSchema", "workflowAssignmentSchema", "workflowVersionSchema", "workflowManualStartSchema", "workflowRetrySchema", "workflowCancelSchema"]);
+const validators = includes("lib/enterprise/workflows/validators.ts", ["z.discriminatedUnion", "workflowConditionSchema", "workflowAssignmentSchema", "workflowVersionSchema", "workflowManualStartSchema", "workflowRetrySchema", "workflowCancelSchema", "ENTITY_DATE", "RELATIVE_HOURS"]);
 ok(!validators.includes("z.any()"), "Workflow step configuration must remain typed, not z.any().");
 const graph = includes("lib/enterprise/workflows/graph.ts", ["MISSING_START", "MULTIPLE_START", "MISSING_END", "ORPHAN_STEP", "CYCLE_NOT_ALLOWED", "UNREACHABLE_STEP", "AMBIGUOUS_BRANCH"]);
 ok(graph.includes("CONDITION_BRANCHES_REQUIRED") && graph.includes("APPROVAL_BRANCHES_REQUIRED"), "Publication readiness must validate explicit condition and approval outcomes.");
@@ -62,7 +62,7 @@ const createTask = includes("lib/enterprise/workflows/steps/create-task.ts", ["c
 ok(!createTask.includes("enterpriseTask.create({"), "Task steps must reuse Sprint 6 task service.");
 const notification = includes("lib/enterprise/workflows/steps/notification.ts", ["notifyUser", "idempotencyKey", "resolveWorkflowAssignment"]);
 ok(notification.includes("organizationId: run.organizationId"), "Workflow notifications must remain organization-scoped.");
-const wait = includes("lib/enterprise/workflows/steps/wait-until.ts", ["RELATIVE_HOURS", "ENTITY_DATE", "WAITING_TIME", "resumeAt"]);
+const wait = includes("lib/enterprise/workflows/steps/wait-until.ts", ["RELATIVE_HOURS", "WAITING_TIME", "resumeAt", "adapter.conditionFields"]);
 ok(wait.includes("Date.now()"), "Wait steps must resolve to durable dates, not open HTTP requests.");
 
 const worker = includes("lib/enterprise/workflows/worker.ts", ["FOR UPDATE SKIP LOCKED", "lockedBy", "workerBatchSize", "DEAD", "processPendingWorkflowEvents"]);
