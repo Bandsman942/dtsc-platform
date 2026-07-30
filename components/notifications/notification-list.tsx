@@ -1,15 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Bell, CheckCircle2, ExternalLink, Trash2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, Info, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ListControls } from "@/components/ui/list-controls";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
+import { normalizeNotificationTarget } from "@/lib/notification-targets";
 
 type NotificationItem = {
   id: string;
@@ -22,22 +22,16 @@ type NotificationItem = {
 };
 
 function fallbackTarget(type: string) {
-  if (type === "SUPPORT") {
-    return "/support";
-  }
-  if (type === "ANNOUNCEMENT") {
-    return "/announcements";
-  }
-  if (type === "ENTERPRISE_INVITATION" || type === "ORGANIZATION_INVITATION") {
-    return "/enterprise-invitations";
-  }
-  if (type === "CALENDAR" || type.startsWith("CALENDAR_")) {
-    return "/calendar";
-  }
-  if (type === "COLLAB_REQUEST" || type.startsWith("ACTIVITY_") || type.startsWith("LEGAL_") || type === "COO_MEETING") {
-    return "/activities";
-  }
+  if (type === "SUPPORT") return "/support";
+  if (type === "ANNOUNCEMENT") return "/announcements";
+  if (type === "ENTERPRISE_INVITATION" || type === "ORGANIZATION_INVITATION") return "/enterprise-invitations";
+  if (type === "CALENDAR" || type.startsWith("CALENDAR_")) return "/calendar";
+  if (type === "COLLAB_REQUEST" || type.startsWith("ACTIVITY_") || type.startsWith("LEGAL_") || type === "COO_MEETING") return "/activities";
   return "/notifications";
+}
+
+function targetFor(notification: NotificationItem) {
+  return normalizeNotificationTarget(notification.targetUrl, fallbackTarget(notification.type));
 }
 
 function preview(body: string) {
@@ -88,56 +82,24 @@ function isCallNotification(type: string, searchable: string) {
 
 function filterNotification(notification: NotificationItem, filterId: string): boolean {
   const type = notification.type.toUpperCase();
-  const targetUrl = notification.targetUrl || fallbackTarget(type);
+  const targetUrl = targetFor(notification);
   const searchable = normalizedNotificationText(notification);
-  if (filterId === "unread") {
-    return !notification.readAt;
-  }
-  if (filterId === "mentions") {
-    return type.includes("MENTION") || /(^|\s)@[\w.-]+/.test(`${notification.title} ${notification.body}`) || /\bMENTION(?:NE|NEE|S)?\b/.test(searchable);
-  }
-  if (filterId === "calls") {
-    return isCallNotification(type, searchable);
-  }
-  if (filterId === "groups") {
-    return type === "COLLABORATION" && targetUrl.startsWith("/collaborators") && !isCallNotification(type, searchable);
-  }
-  if (filterId === "invitations") {
-    return type === "ENTERPRISE_INVITATION" || type === "ORGANIZATION_INVITATION" || targetUrl.startsWith("/enterprise-invitations");
-  }
-  if (filterId === "announcements") {
-    return type === "ANNOUNCEMENT" || targetUrl.startsWith("/announcements");
-  }
-  if (filterId === "publications") {
-    return type === "PUBLICATION" || targetUrl.startsWith("/ressources");
-  }
-  if (filterId === "support") {
-    return type === "SUPPORT" || targetUrl.startsWith("/support");
-  }
-  if (filterId === "calendar") {
-    return type === "CALENDAR" || type.startsWith("CALENDAR_") || targetUrl.startsWith("/calendar");
-  }
-  if (filterId === "activities") {
-    return activityTypes.has(type) || targetUrl.startsWith("/activities");
-  }
-  if (filterId === "admin") {
-    return adminTypes.has(type) || type.startsWith("ADMIN_") || type.startsWith("AUDIT_") || targetUrl.startsWith("/admin");
-  }
-  if (filterId === "workflows") {
-    return type === "COO_WORKFLOW" || type.endsWith("_WORKFLOW");
-  }
-  if (filterId === "legal") {
-    return legalTypePrefixes.some((prefix) => type.startsWith(prefix)) || type.includes("LEGAL");
-  }
-  if (filterId === "hr") {
-    return hrTypePrefixes.some((prefix) => type.startsWith(prefix));
-  }
-  if (filterId === "system") {
-    return type === "INFO" || type === "USAGE" || type === "SYSTEM" || type.startsWith("SYSTEM_") || type.includes("SECURITY") || type.includes("PWA");
-  }
-  if (filterId === "critical") {
-    return type.includes("CRITICAL") || type.includes("ERROR") || /\b(CRITIQUE|URGENT|ERREUR|ECHEC|BLOQUE)\b/.test(searchable);
-  }
+  if (filterId === "unread") return !notification.readAt;
+  if (filterId === "mentions") return type.includes("MENTION") || /(^|\s)@[\w.-]+/.test(`${notification.title} ${notification.body}`) || /\bMENTION(?:NE|NEE|S)?\b/.test(searchable);
+  if (filterId === "calls") return isCallNotification(type, searchable);
+  if (filterId === "groups") return type === "COLLABORATION" && targetUrl.startsWith("/collaborators") && !isCallNotification(type, searchable);
+  if (filterId === "invitations") return type === "ENTERPRISE_INVITATION" || type === "ORGANIZATION_INVITATION" || targetUrl.startsWith("/enterprise-invitations");
+  if (filterId === "announcements") return type === "ANNOUNCEMENT" || targetUrl.startsWith("/announcements");
+  if (filterId === "publications") return type === "PUBLICATION" || targetUrl.startsWith("/ressources");
+  if (filterId === "support") return type === "SUPPORT" || targetUrl.startsWith("/support");
+  if (filterId === "calendar") return type === "CALENDAR" || type.startsWith("CALENDAR_") || targetUrl.startsWith("/calendar");
+  if (filterId === "activities") return activityTypes.has(type) || targetUrl.startsWith("/activities");
+  if (filterId === "admin") return adminTypes.has(type) || type.startsWith("ADMIN_") || type.startsWith("AUDIT_") || targetUrl.startsWith("/admin");
+  if (filterId === "workflows") return type === "COO_WORKFLOW" || type.endsWith("_WORKFLOW");
+  if (filterId === "legal") return legalTypePrefixes.some((prefix) => type.startsWith(prefix)) || type.includes("LEGAL");
+  if (filterId === "hr") return hrTypePrefixes.some((prefix) => type.startsWith(prefix));
+  if (filterId === "system") return type === "INFO" || type === "USAGE" || type === "SYSTEM" || type.startsWith("SYSTEM_") || type.includes("SECURITY") || type.includes("PWA");
+  if (filterId === "critical") return type.includes("CRITICAL") || type.includes("ERROR") || /\b(CRITIQUE|URGENT|ERREUR|ECHEC|BLOQUE)\b/.test(searchable);
   return true;
 }
 
@@ -148,7 +110,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
   const [activeFilter, setActiveFilter] = useState<(typeof notificationFilters)[number]["id"]>("all");
   const filteredNotifications = useMemo(
     () => notifications.filter((notification) => filterNotification(notification, activeFilter)),
-    [activeFilter, notifications]
+    [activeFilter, notifications],
   );
   const notificationList = useSmartList({
     items: filteredNotifications,
@@ -158,24 +120,19 @@ export function NotificationList({ notifications }: { notifications: Notificatio
 
   async function markRead(id: string) {
     const response = await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
-    if (response.ok) {
-      router.refresh();
-    }
+    if (response.ok) router.refresh();
   }
 
-  async function openNotification(notification: NotificationItem) {
-    setSelected(notification);
+  async function activateNotification(notification: NotificationItem) {
     if (!notification.readAt) {
       await fetch(`/api/notifications/${notification.id}/read`, { method: "PATCH" });
-      setSelected({ ...notification, readAt: new Date().toISOString() });
-      router.refresh();
     }
+    setSelected(null);
+    router.push(targetFor(notification));
   }
 
   async function deleteNotification() {
-    if (!selected) {
-      return;
-    }
+    if (!selected) return;
     const response = await fetch(`/api/notifications/${selected.id}`, { method: "DELETE" });
     if (response.ok) {
       setSelected(null);
@@ -199,17 +156,17 @@ export function NotificationList({ notifications }: { notifications: Notificatio
   }
 
   return (
-    <div className="space-y-4">
-      {notifications.length > 0 && (
+    <div className="min-w-0 space-y-4">
+      {notifications.length > 0 ? (
         <div className="flex justify-end">
           <Button type="button" variant="outline" onClick={() => setClearOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
             <Trash2 className="h-4 w-4" />
             Vider les notifications
           </Button>
         </div>
-      )}
-      {notifications.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+      ) : null}
+      {notifications.length > 0 ? (
+        <div className="flex max-w-full touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {notificationFilters.map((filter) => {
             const count = notifications.filter((notification) => filterNotification(notification, filter.id)).length;
             return (
@@ -220,19 +177,15 @@ export function NotificationList({ notifications }: { notifications: Notificatio
                   setActiveFilter(filter.id);
                   notificationList.setPage(1);
                 }}
-                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black transition ${
-                  activeFilter === filter.id
-                    ? "border-cyan-300 bg-[#001736] text-white"
-                    : "border-dtsc-border bg-white text-dtsc-blue hover:bg-dtsc-soft"
-                }`}
+                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black transition ${activeFilter === filter.id ? "border-cyan-300 bg-[#001736] text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"}`}
               >
                 {filter.label} · {count}
               </button>
             );
           })}
         </div>
-      )}
-      {notifications.length > 0 && (
+      ) : null}
+      {notifications.length > 0 ? (
         <ListControls
           query={notificationList.query}
           onQueryChange={notificationList.setQuery}
@@ -243,85 +196,80 @@ export function NotificationList({ notifications }: { notifications: Notificatio
           placeholder="Rechercher par titre, type ou contenu..."
           onPageChange={notificationList.setPage}
         />
-      )}
-      {notificationList.paginatedItems.map((notification) => {
-        const unread = !notification.readAt;
-
-        return (
-          <article key={notification.id} className="dtsc-glass-list-item flex flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-cyan-500">
-                <Bell className="h-5 w-5" />
-              </div>
-              <button type="button" onClick={() => openNotification(notification)} className="text-left">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className={unread ? "font-black text-dtsc-ink" : "font-bold text-dtsc-ink"}>{notification.title}</h2>
-                  <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{formatNotificationType(notification.type)}</span>
-                  {unread && <span className="rounded-full bg-cyan-400 px-2.5 py-1 text-xs font-black text-[#001736]">Nouveau</span>}
-                </div>
-                <p className={unread ? "mt-2 text-sm font-bold leading-6 text-dtsc-muted" : "mt-2 text-sm leading-6 text-dtsc-muted"}>
-                  {preview(notification.body)}
-                </p>
-                <p className="mt-2 text-xs text-dtsc-muted">{new Date(notification.createdAt).toLocaleString("fr-FR")}</p>
+      ) : null}
+      <div className="divide-y divide-dtsc-border border-y border-dtsc-border bg-dtsc-surface/40">
+        {notificationList.paginatedItems.map((notification) => {
+          const unread = !notification.readAt;
+          return (
+            <article key={notification.id} data-notification-id={notification.id} className="flex min-w-0 flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between">
+              <button type="button" onClick={() => void activateNotification(notification)} className="group flex min-w-0 flex-1 items-start gap-3 rounded-xl p-1.5 text-left transition hover:bg-dtsc-page focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-dtsc-soft text-cyan-500">
+                  <Bell className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <strong className={unread ? "min-w-0 break-words font-black text-dtsc-ink" : "min-w-0 break-words font-bold text-dtsc-ink"}>{notification.title}</strong>
+                    <span className="shrink-0 rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{formatNotificationType(notification.type)}</span>
+                    {unread ? <span className="shrink-0 rounded-full bg-cyan-400 px-2.5 py-1 text-xs font-black text-[#001736]">Nouveau</span> : null}
+                  </span>
+                  <span className={unread ? "mt-2 block break-words text-sm font-bold leading-6 text-dtsc-muted" : "mt-2 block break-words text-sm leading-6 text-dtsc-muted"}>{preview(notification.body)}</span>
+                  <span className="mt-2 flex items-center gap-1 text-xs font-bold text-dtsc-blue">
+                    Ouvrir l&apos;élément notifié <ExternalLink className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="mt-1 block text-xs text-dtsc-muted">{new Date(notification.createdAt).toLocaleString("fr-FR")}</span>
+                </span>
               </button>
-            </div>
-            {unread && (
-              <Button onClick={() => markRead(notification.id)} variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
-                <CheckCircle2 className="h-4 w-4" />
-                Marquer lu
-              </Button>
-            )}
-          </article>
-        );
-      })}
-      {!notificationList.filteredCount && (
-        <div className="dtsc-card p-8 text-center text-dtsc-muted">
+              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                {unread ? (
+                  <Button type="button" onClick={() => void markRead(notification.id)} variant="outline" size="sm" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Marquer lu
+                  </Button>
+                ) : null}
+                <Button type="button" onClick={() => setSelected(notification)} variant="ghost" size="icon" className="rounded-xl text-dtsc-muted" aria-label="Voir les détails de la notification">
+                  <Info className="h-4 w-4" />
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {!notificationList.filteredCount ? (
+        <div className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-page/35 p-8 text-center text-dtsc-muted">
           {notifications.length ? "Aucune notification ne correspond à votre recherche." : "Aucune notification pour le moment."}
         </div>
-      )}
+      ) : null}
       <Dialog
         open={Boolean(selected)}
         title={selected?.title || "Notification"}
         description={selected ? `${formatNotificationType(selected.type)} · ${new Date(selected.createdAt).toLocaleString("fr-FR")}` : undefined}
         onClose={() => setSelected(null)}
-        footer={
-          selected && (
-            <>
-              <Button type="button" variant="destructive" onClick={deleteNotification} className="rounded-xl">
-                <Trash2 className="h-4 w-4" />
-                Supprimer
-              </Button>
-              <Button asChild className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-                <Link href={selected.targetUrl || fallbackTarget(selected.type)}>
-                  <ExternalLink className="h-4 w-4" />
-                  Ouvrir le module
-                </Link>
-              </Button>
-            </>
-          )
-        }
+        footer={selected ? (
+          <>
+            <Button type="button" variant="destructive" onClick={deleteNotification} className="rounded-xl">
+              <Trash2 className="h-4 w-4" />
+              Supprimer
+            </Button>
+            <Button type="button" onClick={() => void activateNotification(selected)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <ExternalLink className="h-4 w-4" />
+              Ouvrir l&apos;élément
+            </Button>
+          </>
+        ) : null}
       >
-        {selected && (
-          <div className="space-y-4">
-            <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{formatNotificationText(selected.body)}</p>
-          </div>
-        )}
+        {selected ? <p className="whitespace-pre-wrap text-sm leading-7 text-dtsc-muted">{formatNotificationText(selected.body)}</p> : null}
       </Dialog>
       <Dialog
         open={clearOpen}
         title="Vider les notifications"
         description="Cette action supprime uniquement vos notifications personnelles."
         onClose={() => setClearOpen(false)}
-        footer={
+        footer={(
           <>
-            <Button type="button" variant="outline" onClick={() => setClearOpen(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
-              Annuler
-            </Button>
-            <Button type="button" variant="destructive" onClick={clearNotifications} className="rounded-xl">
-              Vider
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setClearOpen(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">Annuler</Button>
+            <Button type="button" variant="destructive" onClick={clearNotifications} className="rounded-xl">Vider</Button>
           </>
-        }
+        )}
       >
         <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression de toutes vos notifications. Les annonces, tickets et messages liés ne seront pas supprimés.</p>
       </Dialog>
