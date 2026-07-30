@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { UserRole, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { supportNotificationTarget } from "@/lib/notification-targets";
+import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
-import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { canUserAccessSupportTicket } from "@/lib/support-access";
@@ -77,6 +78,7 @@ export async function POST(req: Request, { params }: Params) {
     data: { status: "IN_PROGRESS" },
   });
 
+  const targetUrl = supportNotificationTarget(ticket.id, message.id);
   if (ticket.userId === session.userId) {
     const supportUsers = await prisma.user.findMany({
       where: {
@@ -93,7 +95,7 @@ export async function POST(req: Request, { params }: Params) {
       title: "Nouveau message client sur ticket",
       body: ticket.subject,
       type: "SUPPORT",
-      targetUrl: "/support",
+      targetUrl,
       organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
     }).catch(() => null);
   } else {
@@ -102,7 +104,7 @@ export async function POST(req: Request, { params }: Params) {
       title: "Réponse DTSC sur votre ticket",
       body: ticket.subject,
       type: "SUPPORT",
-      targetUrl: "/support",
+      targetUrl,
       organizationId: ticket.organizationId,
     }).catch(() => null);
   }
