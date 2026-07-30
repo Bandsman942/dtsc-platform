@@ -5,7 +5,7 @@ import { useEffect } from "react";
 const PRESENCE_INTERVAL_MS = 15_000;
 const SESSION_STORAGE_KEY = "dtsc.collaboration.presenceSessionId";
 
-type ClientType = "MOBILE" | "TABLET" | "DESKTOP" | "PWA" | "UNKNOWN";
+type ClientType = "DESKTOP" | "UNKNOWN";
 
 function getClientSessionId() {
   try {
@@ -20,18 +20,16 @@ function getClientSessionId() {
 }
 
 function detectClientType(): ClientType {
-  const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as Navigator & { standalone?: boolean }).standalone;
-  if (standalone) return "PWA";
-  const width = window.innerWidth;
-  const coarse = window.matchMedia?.("(pointer: coarse)")?.matches;
-  if (coarse && width < 768) return "MOBILE";
-  if (coarse && width < 1180) return "TABLET";
-  if (width >= 1024) return "DESKTOP";
-  return "UNKNOWN";
+  return window.innerWidth >= 1024 ? "DESKTOP" : "UNKNOWN";
 }
 
 export function CollaborationPresenceTracker() {
   useEffect(() => {
+    // Mobile/PWA already sends its lightweight heartbeat from MobilePwaHeader.
+    // This tracker fills the historical gap on desktop without producing a
+    // second concurrent mobile session for the same browser tab.
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
+
     const clientSessionId = getClientSessionId();
     let stopped = false;
 
