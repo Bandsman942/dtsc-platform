@@ -32,25 +32,25 @@ model EnterpriseTask {
 }
 
 model EnterpriseRequest {
-  id               String   @id @default(cuid())
-  organizationId   String
-  requestType      String
-  title            String
-  description      String
-  priority         String   @default("NORMAL")
-  status           String   @default("DRAFT")
+  id                String   @id @default(cuid())
+  organizationId    String
+  requestType       String
+  title             String
+  description       String
+  priority          String   @default("NORMAL")
+  status            String   @default("DRAFT")
   requestedByUserId String
-  assignedToUserId String?
-  departmentId     String?
-  dueAt            DateTime?
-  sourceModule     String?
-  sourceEntityType String?
-  sourceEntityId   String?
-  revision         Int      @default(1)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  closedAt         DateTime?
-  archivedAt       DateTime?
+  assignedToUserId  String?
+  departmentId      String?
+  dueAt              DateTime?
+  sourceModule      String?
+  sourceEntityType  String?
+  sourceEntityId    String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  closedAt          DateTime?
+  archivedAt        DateTime?
 
   @@index([organizationId, status])
   @@index([organizationId, requestedByUserId, status])
@@ -62,24 +62,30 @@ model EnterpriseRequest {
 }
 
 model EnterpriseApproval {
-  id               String   @id @default(cuid())
-  organizationId   String
-  targetEntityType String
-  targetEntityId   String
+  id                String                     @id @default(cuid())
+  organizationId    String
+  targetEntityType  String
+  targetEntityId    String
   requestedByUserId String
-  approverUserId   String
-  status           String   @default("PENDING")
-  requestedAt      DateTime @default(now())
-  decidedAt        DateTime?
-  decisionComment  String?
-  revision         Int      @default(1)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  archivedAt       DateTime?
+  approverUserId    String
+  workflowRunId     String?
+  workflowStepRunId String?
+  status            String                     @default("PENDING")
+  requestedAt       DateTime                   @default(now())
+  decidedAt         DateTime?
+  decisionComment   String?
+  revision          Int                        @default(1)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  archivedAt        DateTime?
+  workflowRun       EnterpriseWorkflowRun?     @relation(fields: [organizationId, workflowRunId], references: [organizationId, id], onDelete: SetNull)
+  workflowStepRun   EnterpriseWorkflowStepRun? @relation(fields: [organizationId, workflowStepRunId], references: [organizationId, id], onDelete: SetNull)
 
   @@index([organizationId, approverUserId, status])
   @@index([organizationId, requestedByUserId, status])
   @@index([organizationId, targetEntityType, targetEntityId])
+  @@index([organizationId, workflowRunId, status])
+  @@index([organizationId, workflowStepRunId, status])
   @@index([organizationId, requestedAt])
   @@index([archivedAt])
 }

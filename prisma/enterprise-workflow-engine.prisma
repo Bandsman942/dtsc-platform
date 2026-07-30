@@ -1,0 +1,232 @@
+model EnterpriseWorkflowDefinition {
+  id                String                      @id @default(cuid())
+  organizationId    String
+  code              String
+  name              String
+  description       String?
+  status            String                      @default("DRAFT")
+  triggerType       String                      @default("MANUAL")
+  triggerEntityType String?
+  triggerEventType  String?
+  allowManualStart  Boolean                     @default(false)
+  singleActiveRun   Boolean                     @default(true)
+  createdByUserId   String
+  updatedByUserId   String?
+  currentVersionId  String?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  archivedAt        DateTime?
+  versions          EnterpriseWorkflowVersion[]
+  runs              EnterpriseWorkflowRun[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, triggerEntityType, triggerEventType, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseWorkflowVersion {
+  id                String                         @id @default(cuid())
+  organizationId    String
+  definitionId      String
+  versionNumber     Int
+  status            String                         @default("DRAFT")
+  configurationJson Json?
+  publishedAt       DateTime?
+  publishedByUserId String?
+  createdByUserId   String
+  createdAt         DateTime                       @default(now())
+  definition        EnterpriseWorkflowDefinition   @relation(fields: [organizationId, definitionId], references: [organizationId, id], onDelete: Cascade)
+  steps             EnterpriseWorkflowStep[]
+  transitions       EnterpriseWorkflowTransition[]
+  runs              EnterpriseWorkflowRun[]
+
+  @@unique([organizationId, id])
+  @@unique([definitionId, versionNumber])
+  @@index([organizationId, status, createdAt])
+  @@index([definitionId, status])
+}
+
+model EnterpriseWorkflowStep {
+  id                String                         @id @default(cuid())
+  organizationId    String
+  workflowVersionId String
+  code              String
+  name              String
+  description       String?
+  stepType          String
+  position          Int
+  configurationJson Json
+  createdAt         DateTime                       @default(now())
+  version           EnterpriseWorkflowVersion      @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Cascade)
+  outgoing          EnterpriseWorkflowTransition[] @relation("WorkflowTransitionFrom")
+  incoming          EnterpriseWorkflowTransition[] @relation("WorkflowTransitionTo")
+  stepRuns          EnterpriseWorkflowStepRun[]
+
+  @@unique([organizationId, id])
+  @@unique([workflowVersionId, code])
+  @@index([workflowVersionId, position])
+  @@index([organizationId, stepType])
+}
+
+model EnterpriseWorkflowTransition {
+  id                String                    @id @default(cuid())
+  organizationId    String
+  workflowVersionId String
+  fromStepId        String
+  toStepId          String
+  outcome           String?
+  priority          Int                       @default(0)
+  conditionJson     Json?
+  createdAt         DateTime                  @default(now())
+  version           EnterpriseWorkflowVersion @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Cascade)
+  fromStep          EnterpriseWorkflowStep    @relation("WorkflowTransitionFrom", fields: [organizationId, fromStepId], references: [organizationId, id], onDelete: Cascade)
+  toStep            EnterpriseWorkflowStep    @relation("WorkflowTransitionTo", fields: [organizationId, toStepId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([workflowVersionId, fromStepId, outcome, priority])
+  @@index([workflowVersionId, fromStepId, priority])
+  @@index([workflowVersionId, toStepId])
+}
+
+model EnterpriseWorkflowRun {
+  id                   String                       @id @default(cuid())
+  organizationId       String
+  workflowDefinitionId String
+  workflowVersionId    String
+  status               String                       @default("QUEUED")
+  triggerType          String
+  triggerEventId       String?
+  sourceEntityType     String
+  sourceEntityId       String
+  currentStepId        String?
+  resumeAt             DateTime?
+  startedByUserId      String?
+  decisionActorUserId  String?
+  startedAt            DateTime                     @default(now())
+  completedAt          DateTime?
+  failedAt             DateTime?
+  cancelledAt          DateTime?
+  failureCategory      String?
+  failureCode          String?
+  failureMessage       String?
+  revision             Int                          @default(1)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  definition           EnterpriseWorkflowDefinition @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  version              EnterpriseWorkflowVersion    @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
+  stepRuns             EnterpriseWorkflowStepRun[]
+  events               EnterpriseWorkflowEvent[]
+  approvals            EnterpriseApproval[]
+
+  @@unique([organizationId, id])
+  @@unique([workflowDefinitionId, triggerEventId, sourceEntityType, sourceEntityId])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, workflowDefinitionId, startedAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+  @@index([resumeAt, status])
+}
+
+model EnterpriseWorkflowStepRun {
+  id              String                            @id @default(cuid())
+  organizationId  String
+  workflowRunId   String
+  workflowStepId  String
+  status          String                            @default("PENDING")
+  attemptCount    Int                               @default(0)
+  assignedUserId  String?
+  inputJson       Json?
+  outputJson      Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  failedAt        DateTime?
+  failureCategory String?
+  failureCode     String?
+  failureMessage  String?
+  createdAt       DateTime                          @default(now())
+  updatedAt       DateTime                          @updatedAt
+  run             EnterpriseWorkflowRun             @relation(fields: [organizationId, workflowRunId], references: [organizationId, id], onDelete: Cascade)
+  step            EnterpriseWorkflowStep            @relation(fields: [organizationId, workflowStepId], references: [organizationId, id], onDelete: Restrict)
+  actionAttempts  EnterpriseWorkflowActionAttempt[]
+  events          EnterpriseWorkflowEvent[]
+  approvals       EnterpriseApproval[]
+
+  @@unique([organizationId, id])
+  @@unique([workflowRunId, workflowStepId])
+  @@index([workflowRunId, status])
+  @@index([workflowRunId, workflowStepId])
+  @@index([organizationId, assignedUserId, status])
+}
+
+model EnterpriseWorkflowEvent {
+  id             String                     @id @default(cuid())
+  organizationId String
+  workflowRunId  String
+  stepRunId      String?
+  eventType      String
+  status         String?
+  actorType      String                     @default("SYSTEM")
+  actorUserId    String?
+  summary        String
+  metadataJson   Json?
+  createdAt      DateTime                   @default(now())
+  run            EnterpriseWorkflowRun      @relation(fields: [organizationId, workflowRunId], references: [organizationId, id], onDelete: Cascade)
+  stepRun        EnterpriseWorkflowStepRun? @relation(fields: [organizationId, stepRunId], references: [organizationId, id], onDelete: SetNull)
+
+  @@unique([organizationId, id])
+  @@index([workflowRunId, createdAt])
+  @@index([stepRunId, createdAt])
+  @@index([organizationId, eventType, createdAt])
+}
+
+model EnterpriseWorkflowActionAttempt {
+  id               String                    @id @default(cuid())
+  organizationId   String
+  stepRunId        String
+  actionType       String
+  idempotencyKey   String
+  status           String                    @default("PENDING")
+  attemptNumber    Int                       @default(1)
+  resultEntityType String?
+  resultEntityId   String?
+  errorCategory    String?
+  errorCode        String?
+  errorMessage     String?
+  startedAt        DateTime                  @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  stepRun          EnterpriseWorkflowStepRun @relation(fields: [organizationId, stepRunId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([idempotencyKey])
+  @@unique([organizationId, id])
+  @@index([stepRunId, status])
+  @@index([organizationId, status, updatedAt])
+}
+
+model EnterpriseDomainEvent {
+  id               String   @id @default(cuid())
+  organizationId   String
+  eventType        String
+  entityType       String
+  entityId         String
+  payloadJson      Json?
+  idempotencyKey   String
+  occurredAt       DateTime @default(now())
+  processingStatus String   @default("PENDING")
+  attemptCount     Int      @default(0)
+  availableAt      DateTime @default(now())
+  lockedAt         DateTime?
+  lockedBy         String?
+  processedAt      DateTime?
+  lastError        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([idempotencyKey])
+  @@unique([organizationId, id])
+  @@index([processingStatus, availableAt])
+  @@index([organizationId, entityType, entityId, occurredAt])
+  @@index([lockedAt, processingStatus])
+}

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { dispatchPushForNotification, dispatchPushForNotifications } from "@/lib/push/sender";
 
@@ -26,6 +28,10 @@ function acceptsNotification(
   return preferenceField ? user[preferenceField] : true;
 }
 
+function deterministicNotificationId(idempotencyKey: string) {
+  return `wf_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 48)}`;
+}
+
 export async function notifyUser({
   userId,
   title,
@@ -33,6 +39,7 @@ export async function notifyUser({
   type = "INFO",
   targetUrl,
   organizationId = null,
+  idempotencyKey,
 }: {
   userId: string;
   title: string;
@@ -40,6 +47,7 @@ export async function notifyUser({
   type?: string;
   targetUrl?: string;
   organizationId?: string | null;
+  idempotencyKey?: string;
 }) {
   if (notificationPreferenceField(type)) {
     const user = await prisma.user.findUnique({
@@ -55,9 +63,17 @@ export async function notifyUser({
     }
   }
 
-  const notification = await prisma.notification.create({
-    data: { userId, organizationId, title, body, type, targetUrl },
-  });
+  let notification;
+  try {
+    notification = await prisma.notification.create({
+      data: { ...(idempotencyKey ? { id: deterministicNotificationId(idempotencyKey) } : {}), userId, organizationId, title, body, type, targetUrl },
+    });
+  } catch (error) {
+    if (idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return prisma.notification.findUnique({ where: { id: deterministicNotificationId(idempotencyKey) } });
+    }
+    throw error;
+  }
   await dispatchPushForNotification({
     userId,
     notificationId: notification.id,
