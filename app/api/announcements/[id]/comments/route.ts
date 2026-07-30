@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { announcementNotificationTarget } from "@/lib/notification-targets";
 import { notifyUser } from "@/lib/notifications";
+import { prisma } from "@/lib/prisma";
 import { announcementCommentSchema } from "@/lib/validators";
 
 type Params = {
@@ -30,14 +31,14 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (parentId) {
-    const parentComment = await prisma.announcementComment.findFirst({
-      where: { id: parentId, announcementId: announcement.id },
-      select: { id: true },
-    });
-    if (!parentComment) {
-      return NextResponse.json({ error: "Parent comment not found" }, { status: 404 });
-    }
+  const parentComment = parentId
+    ? await prisma.announcementComment.findFirst({
+        where: { id: parentId, announcementId: announcement.id },
+        select: { id: true, userId: true },
+      })
+    : null;
+  if (parentId && !parentComment) {
+    return NextResponse.json({ error: "Parent comment not found" }, { status: 404 });
   }
 
   const comment = await prisma.announcementComment.create({
@@ -49,15 +50,14 @@ export async function POST(req: Request, { params }: Params) {
     },
   });
 
-  if (announcement.authorId !== session.userId) {
-    await notifyUser({
-      userId: announcement.authorId,
-      title: "Nouveau commentaire sur votre annonce",
-      body: announcement.title,
-      type: "ANNOUNCEMENT",
-      targetUrl: "/announcements",
-    });
-  }
+  const recipientIds = new Set([announcement.authorId, parentComment?.userId].filter((userId): userId is string => Boolean(userId && userId !== session.userId)));
+  await Promise.all(Array.from(recipientIds).map((userId) => notifyUser({
+    userId,
+    title: parentComment?.userId === userId ? "Nouvelle réponse à votre commentaire" : "Nouveau commentaire sur votre annonce",
+    body: announcement.title,
+    type: "ANNOUNCEMENT",
+    targetUrl: announcementNotificationTarget(announcement.id, comment.id),
+  })));
 
   return NextResponse.json({ ok: true, comment });
 }
