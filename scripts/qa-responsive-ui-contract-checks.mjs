@@ -43,7 +43,7 @@ const workspace = includesAll("components/workspace/module-workspace.tsx", [
 ]);
 ok(workspace.includes("sm:flex-nowrap"), "Section headers must wrap on mobile before switching to a denser desktop layout.");
 
-const businessList = includesAll("components/workspace/business-list.tsx", [
+includesAll("components/workspace/business-list.tsx", [
   "w-full min-w-0 max-w-full",
   "overflow-x-clip",
   "[overflow-wrap:anywhere]",
@@ -55,19 +55,23 @@ ok(workflowWorkspace.includes("min-w-0"), "Workflow workspace must keep shrinkab
 ok(workflowWorkspace.includes("flex flex-wrap gap-2"), "Workflow actions must wrap instead of forcing the mobile viewport wider.");
 ok(!workflowWorkspace.includes("whitespace-nowrap"), "Workflow workspace must not force long labels or technical identifiers onto one line.");
 
-const agents = includesAll("AGENTS.md", [
-  "Contrat responsive obligatoire",
-  "320, 360, 375, 390, 414, 768 et 1024 px",
-  "minmax(0, 1fr)",
-  "overflow-wrap:anywhere",
-  "qa:responsive-ui",
-]);
+for (const agentsFile of ["app/AGENTS.md", "components/AGENTS.md"]) {
+  includesAll(agentsFile, [
+    "Contrat responsive obligatoire",
+    "320, 360, 375, 390, 414, 768 et 1024 px",
+    "minmax(0, 1fr)",
+    "overflow-wrap:anywhere",
+    "qa:responsive-ui",
+  ]);
+}
 
-const architecture = includesAll("docs/UI_UX_ARCHITECTURE.md", [
+includesAll("docs/RESPONSIVE_UI_CONTRACT.md", [
   "Contrat responsive obligatoire",
   "data-dtsc-responsive-root",
   "data-responsive-actions",
   "qa:responsive-ui",
+  "320 px",
+  "1024 px",
 ]);
 
 const packageJson = read("package.json");
@@ -79,4 +83,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Responsive UI contract QA passed: global root, shared workspace primitives, long-content wrapping, mobile action layout, documentation and CI guard are present.");
+console.log("Responsive UI contract QA passed: global root, shared workspace primitives, long-content wrapping, mobile action layout, scoped AGENTS rules, documentation and CI guard are present.");
