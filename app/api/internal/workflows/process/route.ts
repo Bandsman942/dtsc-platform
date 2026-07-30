@@ -14,11 +14,11 @@ function safeEqual(left: string, right: string) {
 }
 
 function authorize(request: NextRequest) {
-  const secret = process.env.WORKFLOW_WORKER_SECRET;
-  if (!secret) return { ok: false, status: 503, message: "Workflow worker is not configured." };
+  const acceptedSecrets = [process.env.CRON_SECRET, process.env.WORKFLOW_WORKER_SECRET].filter((value): value is string => Boolean(value));
+  if (!acceptedSecrets.length) return { ok: false, status: 503, message: "Workflow worker is not configured." };
   const authorization = request.headers.get("authorization") || "";
   const presented = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (!presented || !safeEqual(presented, secret)) return { ok: false, status: 401, message: "Unauthorized." };
+  if (!presented || !acceptedSecrets.some((secret) => safeEqual(presented, secret))) return { ok: false, status: 401, message: "Unauthorized." };
   return { ok: true, status: 200, message: "OK" };
 }
 
