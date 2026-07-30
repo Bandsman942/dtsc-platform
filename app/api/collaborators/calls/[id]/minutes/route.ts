@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ message: "Le compte-rendu ou son résumé est invalide." }, { status: 400 });
   }
 
-  const summary = parsed.data.summary.trim() || summarizeMinutes(parsed.data.content);
+  const summary = (parsed.data.summary || "").trim() || summarizeMinutes(parsed.data.content);
   const publication = await prisma.collaborationMeetingMinutesPublication.findUnique({ where: { callId: call.id } });
   if (!publication) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { action: "meeting_minutes_missing_prompt" } });
