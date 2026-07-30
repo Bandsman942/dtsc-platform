@@ -1,5 +1,7 @@
 -- Durable transactional outbox: every allow-listed ERP operational event is mirrored
 -- in the same database transaction without changing the authoritative domain services.
+-- The payload deliberately excludes the source event metadata to avoid copying sensitive
+-- or unbounded domain content into the workflow queue.
 CREATE OR REPLACE FUNCTION "enqueueEnterpriseWorkflowDomainEvent"()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -23,13 +25,12 @@ BEGIN
       NEW."eventType",
       NEW."entityType",
       NEW."entityId",
-      jsonb_build_object(
+      jsonb_strip_nulls(jsonb_build_object(
         'fromStatus', NEW."fromStatus",
         'toStatus', NEW."toStatus",
         'actorUserId', NEW."actorUserId",
-        'occurredAt', NEW."createdAt",
-        'metadata', NEW."metadataJson"
-      ),
+        'occurredAt', NEW."createdAt"
+      )),
       'operational-event:' || NEW."id",
       NEW."createdAt",
       'PENDING',
