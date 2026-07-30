@@ -156,7 +156,7 @@ export function useImmersiveConversationViewport() {
       scrollFrameId = window.requestAnimationFrame(processNestedScroll);
     }
 
-    document.addEventListener("scroll", onNestedScroll, true);
+    document.addEventListener("scroll", onNestedScroll, { capture: true, passive: true });
     window.addEventListener("resize", syncViewport);
     window.visualViewport?.addEventListener("resize", syncViewport);
     window.visualViewport?.addEventListener("scroll", syncViewport);
