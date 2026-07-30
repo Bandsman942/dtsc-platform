@@ -1,13 +1,18 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SupportForm } from "@/components/support/support-form";
 import { TicketBoard } from "@/components/support/ticket-board";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { getSession, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageSupportTickets, supportTicketVisibilityWhere } from "@/lib/support-access";
 
-export default async function SupportPage() {
+type PageProps = { searchParams: Promise<{ ticketId?: string }> };
+
+export default async function SupportPage({ searchParams }: PageProps) {
   const user = await requireUser();
   const session = await getSession();
+  const { ticketId } = await searchParams;
   const canManageTickets = canManageSupportTickets(session);
   const tickets = await prisma.supportTicket.findMany({
     where: session ? supportTicketVisibilityWhere(session) : { userId: user.id },
@@ -26,38 +31,38 @@ export default async function SupportPage() {
     take: canManageTickets ? 200 : 100,
   });
 
+  const openCount = tickets.filter((ticket) => ticket.status === "OPEN").length;
+  const inProgressCount = tickets.filter((ticket) => ticket.status === "IN_PROGRESS").length;
+  const completedCount = tickets.filter((ticket) => ticket.status === "RESOLVED" || ticket.status === "CLOSED").length;
+
   return (
     <AppShell user={user}>
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-        <section className="min-w-0">
-          <p className="text-sm font-bold text-cyan-600">Assistance</p>
-          <h1 className="mt-2 break-words text-3xl font-black text-dtsc-ink sm:text-4xl">Support DTSC</h1>
-          <p className="mt-3 max-w-2xl leading-7 text-dtsc-muted">
-            Créez une demande lorsqu&apos;un sujet nécessite une validation humaine, un cadrage commercial, une étude technique ou un accompagnement stratégique.
-          </p>
-          <div className="mt-6">
+      <ModuleWorkspace>
+        <ModuleHeader
+          eyebrow="Assistance"
+          title="Support DTSC"
+          count={`${tickets.length} ticket${tickets.length > 1 ? "s" : ""}`}
+          description="Créez une demande lorsqu’un sujet nécessite une validation humaine, un cadrage commercial, une étude technique ou un accompagnement stratégique. Les notifications ouvrent directement le ticket concerné."
+        />
+        <ModuleMetrics label="Indicateurs du support">
+          <ModuleMetric label="Total" value={tickets.length} hint={canManageTickets ? "Périmètre support" : "Vos demandes"} />
+          <ModuleMetric label="Ouverts" value={openCount} hint="À prendre en charge" />
+          <ModuleMetric label="En traitement" value={inProgressCount} hint="Suivi actif" />
+          <ModuleMetric label="Résolus / clos" value={completedCount} hint="Traitement terminé" />
+        </ModuleMetrics>
+        <ModuleContent>
+          <ModuleSection title="Nouvelle demande" description="Décrivez le contexte, les outils concernés, les délais et les contraintes connues.">
             <SupportForm />
-          </div>
-        </section>
-        <aside className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
-          <h2 className="font-black text-dtsc-ink">Bonnes pratiques</h2>
-          <ul className="mt-4 space-y-3 text-sm text-dtsc-muted">
-            <li>Décrivez le contexte métier.</li>
-            <li>Indiquez les outils ou sources de données concernés.</li>
-            <li>Précisez les délais et personnes impliquées.</li>
-            <li>Ajoutez les contraintes techniques connues.</li>
-          </ul>
-        </aside>
-      </div>
-      <section className="mt-6">
-        <div className="mb-4">
-          <p className="text-sm font-bold text-cyan-600">{canManageTickets ? "Traitement support" : "Suivi de vos demandes"}</p>
-          <h2 className="mt-1 text-2xl font-black text-dtsc-ink">
-            {canManageTickets ? "Tickets utilisateurs" : "Mes tickets"}
-          </h2>
-        </div>
-        <TicketBoard tickets={JSON.parse(JSON.stringify(tickets))} canManage={canManageTickets} currentUserId={user.id} />
-      </section>
+          </ModuleSection>
+          <ModuleSection
+            title={canManageTickets ? "Tickets utilisateurs" : "Mes tickets"}
+            count={`${tickets.length}`}
+            description={canManageTickets ? "Traitez les demandes visibles dans votre périmètre support." : "Suivez les réponses et l’état de vos demandes."}
+          >
+            <TicketBoard tickets={JSON.parse(JSON.stringify(tickets))} canManage={canManageTickets} currentUserId={user.id} focusTicketId={ticketId} />
+          </ModuleSection>
+        </ModuleContent>
+      </ModuleWorkspace>
     </AppShell>
   );
 }
