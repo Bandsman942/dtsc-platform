@@ -4,13 +4,14 @@ import { useEffect } from "react";
 
 export function AnnouncementDeepLinkActivator({ commentId }: { commentId?: string | null }) {
   useEffect(() => {
-    if (!commentId) return;
+    const targetCommentId = commentId;
+    if (!targetCommentId) return;
 
     let attempts = 0;
     let timer = 0;
 
     function focusComment() {
-      const target = document.querySelector<HTMLElement>(`[data-announcement-comment-id="${CSS.escape(commentId)}"]`);
+      const target = document.querySelector<HTMLElement>(`[data-announcement-comment-id="${CSS.escape(targetCommentId)}"]`);
       if (target) {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
         target.classList.add("dtsc-message-focus-pulse");
