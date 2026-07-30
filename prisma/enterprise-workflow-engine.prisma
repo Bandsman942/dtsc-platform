@@ -91,11 +91,11 @@ model EnterpriseWorkflowTransition {
 }
 
 model EnterpriseWorkflowRun {
-  id                   String                      @id @default(cuid())
+  id                   String                       @id @default(cuid())
   organizationId       String
   workflowDefinitionId String
   workflowVersionId    String
-  status               String                      @default("QUEUED")
+  status               String                       @default("QUEUED")
   triggerType          String
   triggerEventId       String?
   sourceEntityType     String
@@ -104,20 +104,21 @@ model EnterpriseWorkflowRun {
   resumeAt             DateTime?
   startedByUserId      String?
   decisionActorUserId  String?
-  startedAt            DateTime                    @default(now())
+  startedAt            DateTime                     @default(now())
   completedAt          DateTime?
   failedAt             DateTime?
   cancelledAt          DateTime?
   failureCategory      String?
   failureCode          String?
   failureMessage       String?
-  revision             Int                         @default(1)
-  createdAt            DateTime                    @default(now())
-  updatedAt            DateTime                    @updatedAt
+  revision             Int                          @default(1)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
   definition           EnterpriseWorkflowDefinition @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
-  version              EnterpriseWorkflowVersion   @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
+  version              EnterpriseWorkflowVersion    @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
   stepRuns             EnterpriseWorkflowStepRun[]
   events               EnterpriseWorkflowEvent[]
+  approvals            EnterpriseApproval[]
 
   @@unique([organizationId, id])
   @@unique([workflowDefinitionId, triggerEventId, sourceEntityType, sourceEntityId])
@@ -128,27 +129,28 @@ model EnterpriseWorkflowRun {
 }
 
 model EnterpriseWorkflowStepRun {
-  id             String                            @id @default(cuid())
-  organizationId String
-  workflowRunId  String
-  workflowStepId String
-  status         String                            @default("PENDING")
-  attemptCount   Int                               @default(0)
-  assignedUserId String?
-  inputJson      Json?
-  outputJson     Json?
-  startedAt      DateTime?
-  completedAt    DateTime?
-  failedAt       DateTime?
+  id              String                            @id @default(cuid())
+  organizationId  String
+  workflowRunId   String
+  workflowStepId  String
+  status          String                            @default("PENDING")
+  attemptCount    Int                               @default(0)
+  assignedUserId  String?
+  inputJson       Json?
+  outputJson      Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  failedAt        DateTime?
   failureCategory String?
-  failureCode    String?
-  failureMessage String?
-  createdAt      DateTime                          @default(now())
-  updatedAt      DateTime                          @updatedAt
-  run            EnterpriseWorkflowRun             @relation(fields: [organizationId, workflowRunId], references: [organizationId, id], onDelete: Cascade)
-  step           EnterpriseWorkflowStep            @relation(fields: [organizationId, workflowStepId], references: [organizationId, id], onDelete: Restrict)
-  actionAttempts EnterpriseWorkflowActionAttempt[]
-  events         EnterpriseWorkflowEvent[]
+  failureCode     String?
+  failureMessage  String?
+  createdAt       DateTime                          @default(now())
+  updatedAt       DateTime                          @updatedAt
+  run             EnterpriseWorkflowRun             @relation(fields: [organizationId, workflowRunId], references: [organizationId, id], onDelete: Cascade)
+  step            EnterpriseWorkflowStep            @relation(fields: [organizationId, workflowStepId], references: [organizationId, id], onDelete: Restrict)
+  actionAttempts  EnterpriseWorkflowActionAttempt[]
+  events          EnterpriseWorkflowEvent[]
+  approvals       EnterpriseApproval[]
 
   @@unique([organizationId, id])
   @@unique([workflowRunId, workflowStepId])
