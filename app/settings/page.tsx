@@ -2,6 +2,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import legacySettingsStyles from "@/components/settings/legacy-settings-panel.module.css";
 import { SessionAndPushSettings } from "@/components/settings/session-and-push-settings";
 import { SettingsPanel } from "@/components/settings/settings-panel";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { requireUser } from "@/lib/auth";
 import { getConfiguredOpenAIModels, getDisplayName } from "@/lib/openai-config";
 
@@ -14,19 +16,30 @@ export default async function SettingsPage() {
 
   return (
     <AppShell user={user}>
-      <div className="space-y-6">
-        <section className="dtsc-panel p-6">
-          <p className="text-sm font-bold text-cyan-600">Configuration</p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-dtsc-ink">Paramètres du compte</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-dtsc-muted">
-            Gérez votre profil, votre sécurité de session, les notifications en arrière-plan et les préférences de la plateforme DTSC.
-          </p>
-        </section>
-        <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} />
-        <div className={legacySettingsStyles.scope}>
-          <SettingsPanel user={{ ...user, pushNotificationsEnabled: false }} models={models} />
-        </div>
-      </div>
+      <ModuleWorkspace>
+        <ModuleHeader
+          eyebrow="Configuration"
+          title="Paramètres du compte"
+          count={user.locale.toUpperCase()}
+          description="Gérez votre profil, votre sécurité de session, les notifications en arrière-plan et les préférences de la plateforme DTSC."
+        />
+        <ModuleMetrics label="Résumé des préférences">
+          <ModuleMetric label="Langue" value={user.locale.toUpperCase()} hint="Interface active" />
+          <ModuleMetric label="Fuseau" value={user.timezone} hint="Dates et heures" />
+          <ModuleMetric label="Session inactive" value={`${user.sessionIdleTimeoutMinutes} min`} hint="Déconnexion automatique" />
+          <ModuleMetric label="Modèles IA" value={models.length} hint="Modèles configurés" />
+        </ModuleMetrics>
+        <ModuleContent>
+          <ModuleSection title="Session et notifications" description="Contrôlez la durée de connexion, la PWA et les notifications en arrière-plan.">
+            <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} />
+          </ModuleSection>
+          <ModuleSection title="Préférences du compte" description="Personnalisez l’interface, les réponses IA, les notifications et les options de votre profil.">
+            <div className={legacySettingsStyles.scope}>
+              <SettingsPanel user={{ ...user, pushNotificationsEnabled: false }} models={models} />
+            </div>
+          </ModuleSection>
+        </ModuleContent>
+      </ModuleWorkspace>
     </AppShell>
   );
 }
