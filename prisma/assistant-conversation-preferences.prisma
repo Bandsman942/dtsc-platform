@@ -1,0 +1,50 @@
+model ChatConversationPreference {
+  id                String   @id @default(cuid())
+  conversationId    String   @unique
+  userId            String
+  organizationId    String?
+  pinnedAt           DateTime?
+  archivedAt         DateTime?
+  modelOverride      String?
+  responseStyle      String?
+  responseLength     String?
+  useCompanyContext Boolean  @default(true)
+  useKnowledge       Boolean  @default(true)
+  customInstructions String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId, organizationId, archivedAt, pinnedAt, updatedAt])
+  @@index([userId, organizationId, updatedAt])
+}
+
+model EnterpriseAiConversationPreference {
+  id                 String   @id @default(cuid())
+  conversationId     String   @unique
+  organizationId     String
+  userId             String
+  pinnedAt            DateTime?
+  modelOverride       String?
+  responseStyle       String   @default("PROFESSIONAL")
+  responseLength      String   @default("BALANCED")
+  useKnowledge        Boolean  @default(true)
+  useTools            Boolean  @default(true)
+  customInstructions String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([organizationId, userId, pinnedAt, updatedAt])
+  @@index([organizationId, userId, updatedAt])
+}
+
+model EnterpriseAiMessageFeedback {
+  id             String   @id @default(cuid())
+  messageId      String   @unique
+  organizationId String
+  userId         String
+  value          Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, userId, updatedAt])
+}
