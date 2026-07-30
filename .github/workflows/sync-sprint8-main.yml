@@ -1,0 +1,46 @@
+name: Sync Sprint 8 with main
+
+on:
+  push:
+    branches:
+      - feat/sprint-08-budgets-expenses-reports
+    paths:
+      - .github/workflows/sync-sprint8-main.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Sprint 8 branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/sprint-08-budgets-expenses-reports
+          fetch-depth: 0
+
+      - name: Merge current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "Sprint 8 already contains current main."
+            exit 0
+          fi
+          if ! git merge --no-edit origin/main; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            if [ "$conflicts" = "package.json" ]; then
+              git checkout --ours package.json
+              git add package.json
+              git commit --no-edit
+            else
+              echo "Unexpected merge conflicts:"
+              printf '%s\n' "$conflicts"
+              exit 1
+            fi
+          fi
+          git push origin HEAD:feat/sprint-08-budgets-expenses-reports
