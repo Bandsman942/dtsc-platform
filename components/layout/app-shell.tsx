@@ -6,30 +6,31 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SessionTimeoutGuard } from "@/components/auth/session-timeout-guard";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
-import { DtscFooter } from "@/components/layout/dtsc-footer";
-import { NavLinks } from "@/components/layout/nav-links";
-import { AppResumeSync } from "@/components/pwa/app-resume-sync";
-import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
-import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { GlobalCallToast } from "@/components/calls/global-call-toast";
+import { CollaborationPresenceTracker } from "@/components/collaborators/collaboration-presence-tracker";
 import { MobileBottomNavigation, MobilePwaHeader } from "@/components/dtsc/mobile-shell";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
+import { DtscFooter } from "@/components/layout/dtsc-footer";
+import { NavLinks } from "@/components/layout/nav-links";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
 import { ProductNavigation } from "@/components/layout/product-navigation";
+import { AppResumeSync } from "@/components/pwa/app-resume-sync";
+import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
+import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
 import { PromotionalBannerHost } from "@/components/promotions/promotional-banner-host";
 import { getSession } from "@/lib/auth";
 import { getUnreadCollaborationMessageCount } from "@/lib/collaboration";
 import { getCurrentHostType, getDashboardUrl, getProductBranding } from "@/lib/domains";
 import { dtsc } from "@/lib/dtsc";
-import { initials } from "@/lib/format";
-import { formatEnumLabel } from "@/lib/labels";
-import { isDtscInternalSession } from "@/lib/organizations";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
 import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { initials } from "@/lib/format";
+import { formatEnumLabel } from "@/lib/labels";
 import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
 
@@ -124,6 +125,7 @@ export async function AppShell({
       <div className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
         <SessionTimeoutGuard />
         <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} />
+        <CollaborationPresenceTracker />
         <PrivateMobileChromeController />
         <GlobalCallToast />
         <PromotionalBannerHost banners={promotionalBanners} />
