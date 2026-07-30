@@ -8,6 +8,7 @@ import {
   Copy,
   Eye,
   Heart,
+  History,
   ImagePlus,
   Info,
   MessageCircle,
@@ -19,23 +20,31 @@ import {
   UserPlus,
   UsersRound,
   Video,
+  Wifi,
+  WifiOff,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
 import { ConversationAvatar } from "@/components/chat/ConversationAvatar";
 import { ConversationHeader } from "@/components/chat/ConversationHeader";
 import { ConversationListItem } from "@/components/chat/ConversationListItem";
 import { FloatingActionButton } from "@/components/chat/FloatingActionButton";
 import { SearchBar } from "@/components/chat/SearchBar";
 import { VoiceConversationComposer } from "@/components/chat/VoiceConversationComposer";
+import {
+  CollaborationMeetingMessageContent,
+  type CollaborationMeetingFollowUpView,
+  type CollaborationMeetingLinkView,
+} from "@/components/collaborators/collaboration-meeting-message-content";
+import { GroupPresenceJournalDialog } from "@/components/collaborators/group-presence-journal-dialog";
+import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { collaborationExperienceT } from "@/lib/collaboration-experience-i18n";
-import { formatRelativeUserDateTime, type UserDatePreferences } from "@/lib/user-format";
+import { formatRelativeUserDateTime, formatUserDateTime, type UserDatePreferences } from "@/lib/user-format";
 import { cn } from "@/lib/utils";
 
 type UserOption = { id: string; name: string; email: string; avatarUrl?: string | null; jobTitle?: string | null; role?: string; lastSeenAt?: string | null };
@@ -91,11 +100,17 @@ type GroupMessage = {
   replyTo?: { id: string; content: string; createdAt: string; deletedAt?: string | null; author: { id: string; name: string } } | null;
   mentions?: Array<{ mentionedUser: { id: string; name: string } }>;
   reads?: Array<{ userId: string; readAt: string }>;
+  meetingLink?: CollaborationMeetingLinkView | null;
+  meetingFollowUp?: CollaborationMeetingFollowUpView | null;
 };
 type Preference = { groupId: string; userId: string; pinned: boolean; favorite: boolean; archived: boolean; notifications: "ALL" | "MENTIONS" | "NONE"; mutedUntil?: string | null };
 type Story = { id: string; groupId: string; authorId: string; caption?: string | null; createdAt: string; expiresAt: string; imageUrl?: string | null };
 type Voice = { id: string; messageId: string; authorId: string; durationMs: number; waveform?: unknown; createdAt: string; audioUrl?: string | null };
 type Filter = "ALL" | "UNREAD" | "FAVORITES" | "GROUPS" | "ARCHIVED";
+type ReadInfo = {
+  readBy: Array<{ user: UserOption; readAt: string }>;
+  unreadBy: Array<{ user: UserOption }>;
+};
 type Props = {
   currentUserId: string;
   initialActiveGroupId?: string | null;
@@ -137,10 +152,11 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [presenceJournalOpen, setPresenceJournalOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(Boolean(initialJoinCallId));
   const [editMessage, setEditMessage] = useState<GroupMessage | null>(null);
   const [editContent, setEditContent] = useState("");
-  const [readInfo, setReadInfo] = useState<{ readBy: Array<{ user: UserOption }>; unreadBy: Array<{ user: UserOption }> } | null>(null);
+  const [readInfo, setReadInfo] = useState<ReadInfo | null>(null);
   const [inviteSearch, setInviteSearch] = useState("");
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<string[]>([]);
   const [feedback, setFeedback] = useState("");
@@ -150,7 +166,8 @@ export function CollaboratorsConversationWorkspace(props: Props) {
 
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMembership = activeGroup?.members.find((member) => member.userId === currentUserId) || null;
-  const canManage = activeMembership?.role === "OWNER" || activeMembership?.role === "ADMIN";
+  const currentUserRole = users.find((user) => user.id === currentUserId)?.role;
+  const canManage = Boolean(activeMembership && (activeMembership.role === "OWNER" || activeMembership.role === "ADMIN" || currentUserRole === "ADMIN"));
   const isOwner = activeMembership?.role === "OWNER";
   const activePreference = activeGroup ? preferences[activeGroup.id] || defaultPreference(activeGroup.id, currentUserId) : null;
   const voiceByMessage = voices;
@@ -355,8 +372,8 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }
 
   async function openReadInfo(messageId: string) {
-    const response = await fetch(`/api/collaborators/messages/${messageId}/reads`);
-    const body = await response.json().catch(() => null) as { readBy?: Array<{ user: UserOption }>; unreadBy?: Array<{ user: UserOption }> } | null;
+    const response = await fetch(`/api/collaborators/messages/${messageId}/reads`, { cache: "no-store" });
+    const body = await response.json().catch(() => null) as { readBy?: Array<{ user: UserOption; readAt: string }>; unreadBy?: Array<{ user: UserOption }> } | null;
     if (response.ok && body) setReadInfo({ readBy: body.readBy || [], unreadBy: body.unreadBy || [] });
   }
 
@@ -386,6 +403,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     onPin: () => void updatePreference(activeGroup.id, { pinned: !activePreference.pinned }),
     onArchive: () => void updatePreference(activeGroup.id, { archived: !activePreference.archived }),
     onNotifications: () => setNotificationsOpen(true),
+    onPresenceJournal: () => setPresenceJournalOpen(true),
     onPhoto: () => setPhotoOpen(true),
     onStory: () => setStoryOpen(true),
     onInvite: () => setInviteOpen(true),
@@ -450,9 +468,9 @@ export function CollaboratorsConversationWorkspace(props: Props) {
         {activeGroup ? (
           <>
             <ConversationHeader title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Audio"><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Video"><Video className="h-4 w-4" /></Button><ActionMenu label="Actions du groupe" items={groupMenu} /></>} />
-            <div ref={messageListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
+            <div ref={messageListRef} className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
               {hasMore ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" disabled={loadingOlder} onClick={() => void loadMessages(activeGroup.id, nextCursor)}>{loadingOlder ? "…" : userPreferences.locale === "en" ? "Older messages" : "Messages précédents"}</Button></div> : null}
-              {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} />)}
+              {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} onMeetingChanged={() => loadMessages(activeGroup.id)} onError={setFeedback} />)}
               {!messages.length ? <p className="py-12 text-center text-sm font-semibold text-dtsc-muted">{t("noMessage")}</p> : null}
             </div>
             <VoiceConversationComposer value={content} onChange={setContent} onSendText={sendText} onSendVoice={sendVoice} sending={sending} placeholder={t("writeMessage")} onError={setFeedback} labels={{ record: t("record"), cancel: t("cancel"), send: t("send"), recording: t("recording") }} before={<>{replyTo ? <div className="mb-2 flex items-center gap-2 rounded-xl border border-cyan-300/50 bg-cyan-400/10 px-3 py-2 text-xs"><span className="min-w-0 flex-1"><strong>{t("reply")} · {replyTo.author.name}</strong><span className="block truncate text-dtsc-muted">{replyTo.deletedAt ? "—" : replyTo.content}</span></span><button type="button" onClick={() => setReplyTo(null)}><X className="h-4 w-4" /></button></div> : null}{mentionSuggestions.length ? <div className="absolute bottom-20 left-3 z-20 w-[min(28rem,calc(100%-1.5rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl">{mentionSuggestions.map((member) => <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-dtsc-soft"><ConversationAvatar title={member.user.name} avatarUrl={member.user.avatarUrl} className="h-8 w-8" /><span className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{member.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span></button>)}</div> : null}</>} className="relative" />
@@ -473,31 +491,43 @@ export function CollaboratorsConversationWorkspace(props: Props) {
       <Dialog open={notificationsOpen} title={t("notifications")} onClose={() => setNotificationsOpen(false)}>{activeGroup && activePreference ? <div className="grid gap-2"><Button variant={activePreference.notifications === "ALL" ? "default" : "outline"} onClick={() => void updatePreference(activeGroup.id, { notifications: "ALL" })}>{t("allNotifications")}</Button><Button variant={activePreference.notifications === "MENTIONS" ? "default" : "outline"} onClick={() => void updatePreference(activeGroup.id, { notifications: "MENTIONS" })}>{t("mentionsNotifications")}</Button><Button variant={activePreference.notifications === "NONE" ? "default" : "outline"} onClick={() => void updatePreference(activeGroup.id, { notifications: "NONE" })}>{t("noNotifications")}</Button><div className="my-1 border-t border-dtsc-border" /><Button variant="outline" onClick={() => void updatePreference(activeGroup.id, { mutedUntil: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() } as Partial<Preference>)}><BellOff className="h-4 w-4" />{t("mute8h")}</Button><Button variant="outline" onClick={() => void updatePreference(activeGroup.id, { mutedUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() } as Partial<Preference>)}><BellOff className="h-4 w-4" />{t("muteWeek")}</Button><Button variant="outline" onClick={() => void updatePreference(activeGroup.id, { mutedUntil: null } as Partial<Preference>)}><Bell className="h-4 w-4" />{t("unmute")}</Button></div> : null}</Dialog>
 
       <Dialog open={Boolean(editMessage)} title={t("edit")} onClose={() => setEditMessage(null)}><form onSubmit={editCurrentMessage} className="grid gap-3"><Input value={editContent} onChange={(event) => setEditContent(event.target.value)} autoFocus /><Button type="submit">{t("save")}</Button></form></Dialog>
-      <Dialog open={Boolean(readInfo)} title={userPreferences.locale === "en" ? "Message info" : "Infos du message"} onClose={() => setReadInfo(null)}>{readInfo ? <div className="grid gap-4"><div><strong className="text-sm text-dtsc-ink">{userPreferences.locale === "en" ? "Read by" : "Lu par"}</strong>{readInfo.readBy.map((item) => <p key={item.user.id} className="mt-1 text-sm text-dtsc-muted">{item.user.name}</p>)}</div><div><strong className="text-sm text-dtsc-ink">{userPreferences.locale === "en" ? "Not read" : "Non lu"}</strong>{readInfo.unreadBy.map((item) => <p key={item.user.id} className="mt-1 text-sm text-dtsc-muted">{item.user.name}</p>)}</div></div> : null}</Dialog>
+      <Dialog open={Boolean(readInfo)} title={userPreferences.locale === "en" ? "Message info" : "Infos du message"} onClose={() => setReadInfo(null)}>{readInfo ? <MessageReadInfo readInfo={readInfo} preferences={userPreferences} /> : null}</Dialog>
+      {activeGroup && canManage ? <GroupPresenceJournalDialog open={presenceJournalOpen} groupId={activeGroup.id} groupName={activeGroup.name} locale={userPreferences.locale} userPreferences={userPreferences} onClose={() => setPresenceJournalOpen(false)} /> : null}
     </div>
   );
 }
 
-function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void }) {
+function MessageReadInfo({ readInfo, preferences }: { readInfo: ReadInfo; preferences: UserDatePreferences }) {
+  const english = preferences.locale === "en";
+  return <div className="grid gap-5"><section><strong className="text-sm text-dtsc-ink">{english ? "Read by" : "Lu par"}</strong><div className="mt-2 divide-y divide-dtsc-border rounded-xl border border-dtsc-border">{readInfo.readBy.length ? readInfo.readBy.map((item) => <div key={item.user.id} className="flex items-center gap-3 p-3"><ConversationAvatar title={item.user.name} avatarUrl={item.user.avatarUrl} isOnline={isOnline(item.user.lastSeenAt)} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{item.user.name}</strong><span className="block text-xs text-dtsc-muted">{english ? "Read at" : "Lu le"} {formatUserDateTime(item.readAt, preferences, { second: "2-digit" })}</span></span><OnlineBadge online={isOnline(item.user.lastSeenAt)} english={english} /></div>) : <p className="p-3 text-sm text-dtsc-muted">{english ? "No member has read this message yet." : "Aucun membre n’a encore lu ce message."}</p>}</div></section><section><strong className="text-sm text-dtsc-ink">{english ? "Not read" : "Non lu"}</strong><div className="mt-2 divide-y divide-dtsc-border rounded-xl border border-dtsc-border">{readInfo.unreadBy.length ? readInfo.unreadBy.map((item) => <div key={item.user.id} className="flex items-center gap-3 p-3"><ConversationAvatar title={item.user.name} avatarUrl={item.user.avatarUrl} isOnline={isOnline(item.user.lastSeenAt)} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{item.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{item.user.jobTitle || item.user.email}</span></span><OnlineBadge online={isOnline(item.user.lastSeenAt)} english={english} /></div>) : <p className="p-3 text-sm text-dtsc-muted">{english ? "Read by every active member." : "Lu par tous les membres actifs."}</p>}</div></section></div>;
+}
+
+function OnlineBadge({ online, english }: { online: boolean; english: boolean }) {
+  return <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.65rem] font-black", online ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-dtsc-soft text-dtsc-muted")}>{online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{online ? (english ? "Online" : "En ligne") : (english ? "Offline" : "Hors ligne")}</span>;
+}
+
+function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo, onMeetingChanged, onError }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void; onMeetingChanged: () => Promise<void> | void; onError: (message: string) => void }) {
   if (message.messageType === "SYSTEM") return <div className="flex justify-center py-1"><span className="max-w-[90%] rounded-full bg-dtsc-soft px-3 py-1 text-center text-[0.7rem] font-semibold text-dtsc-muted">{message.content}</span></div>;
   const mine = message.authorId === currentUserId;
+  const meetingMessage = message.messageType === "MEETING_LINK" || message.messageType === "MEETING_MINUTES_PROMPT" || message.messageType === "MEETING_SUMMARY";
   const items: ActionMenuItem[] = [
-    { key: "reply", label: t("reply"), icon: MessageCircle, onSelect: () => onReply(message) },
+    ...(!meetingMessage ? [{ key: "reply", label: t("reply"), icon: MessageCircle, onSelect: () => onReply(message) }] : []),
     { key: "copy", label: t("copy"), icon: Copy, onSelect: () => void navigator.clipboard?.writeText(message.content) },
     { key: "info", label: "Info", icon: Info, onSelect: () => onInfo(message.id) },
     ...(mine && message.messageType === "TEXT" && !message.deletedAt ? [{ key: "edit", label: t("edit"), icon: Pencil, onSelect: () => onEdit(message) }] : []),
-    ...((mine || canManage) && !message.deletedAt ? [{ key: "delete", label: t("deleteMessage"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => onDelete(message) }] : []),
+    ...((mine || canManage) && !message.deletedAt && !meetingMessage ? [{ key: "delete", label: t("deleteMessage"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => onDelete(message) }] : []),
   ];
-  return <div className={cn("flex", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo ? <button type="button" className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}<p className={cn("mt-1 text-right text-[0.62rem] font-semibold", mine ? "text-white/70" : "text-dtsc-muted")}>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · edit" : ""}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
+  return <div className={cn("flex", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}<p className={cn("mt-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · edit" : ""}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
 }
 
-function buildGroupMenu({ activeGroup, activePreference, canManage, isOwner, t, onInfo, onFavorite, onPin, onArchive, onNotifications, onPhoto, onStory, onInvite, onSettings, onCalls, onLeave }: { activeGroup: Group; activePreference: Preference; canManage: boolean; isOwner: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onInfo: () => void; onFavorite: () => void; onPin: () => void; onArchive: () => void; onNotifications: () => void; onPhoto: () => void; onStory: () => void; onInvite: () => void; onSettings: () => void; onCalls: () => void; onLeave: () => void }): ActionMenuItem[] {
+function buildGroupMenu({ activeGroup, activePreference, canManage, isOwner, t, onInfo, onFavorite, onPin, onArchive, onNotifications, onPresenceJournal, onPhoto, onStory, onInvite, onSettings, onCalls, onLeave }: { activeGroup: Group; activePreference: Preference; canManage: boolean; isOwner: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onInfo: () => void; onFavorite: () => void; onPin: () => void; onArchive: () => void; onNotifications: () => void; onPresenceJournal: () => void; onPhoto: () => void; onStory: () => void; onInvite: () => void; onSettings: () => void; onCalls: () => void; onLeave: () => void }): ActionMenuItem[] {
   return [
     { key: "info", label: `${t("groupInfo")} · ${activeGroup.name}`, icon: Info, onSelect: onInfo },
     { key: "favorite", label: activePreference.favorite ? t("removeFavorite") : t("addFavorite"), icon: Heart, onSelect: onFavorite },
     { key: "pin", label: activePreference.pinned ? t("unpin") : t("pin"), icon: Pin, onSelect: onPin },
     { key: "archive", label: activePreference.archived ? t("unarchive") : t("archive"), icon: Archive, onSelect: onArchive },
     { key: "notifications", label: t("notifications"), icon: Bell, onSelect: onNotifications },
+    ...(canManage ? [{ key: "presence-journal", label: t("presenceJournal"), icon: History, onSelect: onPresenceJournal, separatorBefore: true }] : []),
     ...(canManage ? [{ key: "photo", label: t("groupPhoto"), icon: ImagePlus, onSelect: onPhoto }] : []),
     { key: "story", label: t("addStatus"), icon: Eye, onSelect: onStory },
     ...(canManage ? [{ key: "invite", label: t("invite"), icon: UserPlus, onSelect: onInvite }, { key: "settings", label: t("groupSettings"), icon: Settings, onSelect: onSettings }] : []),

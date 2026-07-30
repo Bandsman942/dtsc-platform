@@ -75,3 +75,58 @@ model CollaborationVoiceSetting {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
+
+model CollaborationPresenceSession {
+  id               String    @id @default(cuid())
+  userId           String
+  clientSessionId  String
+  clientType       String    @default("UNKNOWN")
+  connectedAt      DateTime  @default(now())
+  lastHeartbeatAt  DateTime  @default(now())
+  disconnectedAt   DateTime?
+  disconnectReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, connectedAt])
+  @@index([userId, clientSessionId, disconnectedAt])
+  @@index([lastHeartbeatAt, disconnectedAt])
+  @@index([clientType, connectedAt])
+}
+
+model CollaborationMeetingLink {
+  id            String   @id @default(cuid())
+  meetingId     String   @unique
+  groupId       String
+  messageId     String   @unique
+  callType      String
+  scheduledAt   DateTime
+  availableFrom DateTime
+  status        String   @default("SCHEDULED")
+  lastCallId    String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([groupId, scheduledAt, status])
+  @@index([lastCallId])
+}
+
+model CollaborationMeetingMinutesPublication {
+  id               String   @id @default(cuid())
+  meetingId        String
+  callId           String   @unique
+  groupId          String
+  promptMessageId  String   @unique
+  summaryMessageId String?  @unique
+  minutesId        String?
+  summary          String?
+  status           String   @default("PENDING")
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([meetingId, status, createdAt])
+  @@index([groupId, createdAt])
+  @@index([minutesId])
+}

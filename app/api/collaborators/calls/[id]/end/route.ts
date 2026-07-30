@@ -39,9 +39,15 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (call.status === "ENDED") {
+    const followUp = call.meetingId ? await prisma.collaborationMeetingMinutesPublication.findUnique({ where: { callId: call.id } }) : null;
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "collaboration_call_end_idempotent" } });
+    return NextResponse.json({ ok: true, meetingFollowUp: followUp });
+  }
+
   const endedAt = new Date();
   const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - call.startedAt.getTime()) / 1000));
-  await prisma.$transaction(async (tx) => {
+  const followUp = await prisma.$transaction(async (tx) => {
     await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ENDED", endedAt, durationSeconds } });
     await tx.collaborationGroupCallParticipant.updateMany({
       where: { callId: call.id, status: { in: ["INVITED", "JOINED"] } },
@@ -57,13 +63,42 @@ export async function POST(req: Request, { params }: Params) {
         message: "L'appel est terminé.",
       },
     });
-    if (call.meetingId) {
-      await tx.cooMeeting.updateMany({ where: { id: call.meetingId, activeCallId: call.id }, data: { activeCallId: null } });
-    }
+
+    if (!call.meetingId) return null;
+
+    await tx.cooMeeting.updateMany({ where: { id: call.meetingId, activeCallId: call.id }, data: { activeCallId: null } });
+    await tx.collaborationMeetingLink.updateMany({
+      where: { meetingId: call.meetingId },
+      data: { status: "COMPLETED", lastCallId: call.id },
+    });
+
+    const existing = await tx.collaborationMeetingMinutesPublication.findUnique({ where: { callId: call.id } });
+    if (existing) return existing;
+
+    const meeting = await tx.cooMeeting.findUnique({ where: { id: call.meetingId }, select: { title: true } });
+    const prompt = await tx.collaborationGroupMessage.create({
+      data: {
+        groupId: call.groupId,
+        authorId: session.userId,
+        content: `Réunion « ${meeting?.title || "COO"} » terminée. Le responsable du compte-rendu ou un administrateur peut maintenant rédiger le compte-rendu directement depuis cette conversation.`,
+        messageType: "MEETING_MINUTES_PROMPT",
+        status: "SENT",
+      },
+    });
+    return tx.collaborationMeetingMinutesPublication.create({
+      data: {
+        meetingId: call.meetingId,
+        callId: call.id,
+        groupId: call.groupId,
+        promptMessageId: prompt.id,
+        status: "PENDING",
+      },
+    });
   });
+
   await createGroupSystemMessage({ groupId: call.groupId, actorId: session.userId, content: "L'appel est terminé." });
   await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: "call.end", entityType: "CollaborationGroupCall", entityId: call.id });
   await writeAuditLog({ userId: session.userId, action: "collaboration.call.end", entity: "CollaborationGroupCall", entityId: call.id, request: req });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, meetingFollowUp: followUp });
 }

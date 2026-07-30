@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { assertGroupMemberForSession, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, canManageGroup, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { meetingLinkCanJoin, syncCooMeetingLink } from "@/lib/collaboration-meeting-links";
 import { notifyUsers } from "@/lib/notifications";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,17 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (member.group.meetingId) {
+    const meeting = await prisma.cooMeeting.findFirst({
+      where: { id: member.group.meetingId, collaborationGroupId: id },
+      select: { id: true, title: true, meetingMode: true, meetingDate: true, meetingTime: true, collaborationGroupId: true, status: true },
+    });
+    if (meeting) {
+      await syncCooMeetingLink({ meeting, actorId: member.group.ownerId }).catch(() => null);
+    }
+  }
+
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 30), 1), 50);
   const cursor = url.searchParams.get("cursor") || undefined;
@@ -42,7 +54,72 @@ export async function GET(req: Request, { params }: Params) {
     },
   });
   const hasMore = records.length > limit;
-  const messages = records.slice(0, limit).reverse();
+  const baseMessages = records.slice(0, limit).reverse();
+  const messageIds = baseMessages.map((message) => message.id);
+  const [meetingLinks, minutePublications] = messageIds.length
+    ? await Promise.all([
+        prisma.collaborationMeetingLink.findMany({ where: { messageId: { in: messageIds } } }),
+        prisma.collaborationMeetingMinutesPublication.findMany({
+          where: { OR: [{ promptMessageId: { in: messageIds } }, { summaryMessageId: { in: messageIds } }] },
+        }),
+      ])
+    : [[], []];
+
+  const meetingLinkByMessage = new Map(meetingLinks.map((link) => [link.messageId, link]));
+  const publicationByMessage = new Map<string, (typeof minutePublications)[number]>();
+  for (const publication of minutePublications) {
+    publicationByMessage.set(publication.promptMessageId, publication);
+    if (publication.summaryMessageId) publicationByMessage.set(publication.summaryMessageId, publication);
+  }
+
+  const meetingIds = [...new Set(minutePublications.map((item) => item.meetingId))];
+  const meetings = meetingIds.length
+    ? await prisma.cooMeeting.findMany({ where: { id: { in: meetingIds } }, select: { id: true, title: true, reportOwnerEmployeeId: true } })
+    : [];
+  const reportOwnerEmployeeIds = meetings.map((meeting) => meeting.reportOwnerEmployeeId).filter((value): value is string => Boolean(value));
+  const reportOwners = reportOwnerEmployeeIds.length
+    ? await prisma.hrcfoEmployee.findMany({ where: { id: { in: reportOwnerEmployeeIds }, status: { not: "EXITED" } }, select: { id: true, userId: true } })
+    : [];
+  const reportOwnerUserByEmployee = new Map(reportOwners.map((employee) => [employee.id, employee.userId]));
+  const meetingById = new Map(meetings.map((meeting) => [meeting.id, meeting]));
+  const manager = canManageGroup(member, session.role);
+  const now = new Date();
+
+  const messages = baseMessages.map((message) => {
+    const link = meetingLinkByMessage.get(message.id);
+    const publication = publicationByMessage.get(message.id);
+    const linkedMeeting = publication ? meetingById.get(publication.meetingId) : null;
+    const reportOwnerUserId = linkedMeeting?.reportOwnerEmployeeId ? reportOwnerUserByEmployee.get(linkedMeeting.reportOwnerEmployeeId) : null;
+    return {
+      ...message,
+      meetingLink: link
+        ? {
+            id: link.id,
+            meetingId: link.meetingId,
+            groupId: link.groupId,
+            callType: link.callType,
+            scheduledAt: link.scheduledAt,
+            availableFrom: link.availableFrom,
+            status: link.status,
+            lastCallId: link.lastCallId,
+            canJoin: meetingLinkCanJoin(link, now),
+          }
+        : null,
+      meetingFollowUp: publication
+        ? {
+            id: publication.id,
+            meetingId: publication.meetingId,
+            callId: publication.callId,
+            status: publication.status,
+            minutesId: publication.minutesId,
+            summary: publication.summary,
+            meetingTitle: linkedMeeting?.title || null,
+            canCreateMinutes: manager || reportOwnerUserId === session.userId,
+          }
+        : null,
+    };
+  });
+
   const nextCursor = hasMore ? records[limit - 1]?.createdAt.toISOString() : null;
   await markGroupMessagesRead({ groupId: id, userId: session.userId, messageIds: messages.map((message) => message.id) });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });

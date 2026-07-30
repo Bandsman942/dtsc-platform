@@ -3,17 +3,6 @@
 import { useEffect } from "react";
 
 const MOBILE_QUERY = "(max-width: 1023px)";
-const NAV_HIDE_DISTANCE = 56;
-const NAV_SHOW_DISTANCE = 72;
-const NAV_TOP_REVEAL_THRESHOLD = 12;
-const SCROLL_DIRECTION_EPSILON = 2;
-
-type ScrollDirection = "up" | "down" | null;
-type ScrollState = {
-  lastTop: number;
-  anchorTop: number;
-  direction: ScrollDirection;
-};
 
 export function useImmersiveConversationViewport() {
   useEffect(() => {
@@ -29,11 +18,7 @@ export function useImmersiveConversationViewport() {
     const previousBodyOverscroll = body.style.overscrollBehavior;
     const previousMainStyle = privateMainElement.getAttribute("style");
     const previousImmersive = root.dataset.dtscConversationImmersive;
-    const scrollStates = new WeakMap<HTMLElement, ScrollState>();
-    const collaborationScrollers = new WeakSet<HTMLElement>();
     let viewportFrameId = 0;
-    let scrollFrameId = 0;
-    let pendingScrollElement: HTMLElement | null = null;
     let lastViewportSignature = "";
 
     function restoreViewportStyles() {
@@ -45,13 +30,6 @@ export function useImmersiveConversationViewport() {
       if (previousImmersive === undefined) delete root.dataset.dtscConversationImmersive;
       else root.dataset.dtscConversationImmersive = previousImmersive;
       lastViewportSignature = "";
-    }
-
-    function setChromeVisible(visible: boolean) {
-      if (!media.matches) return;
-      const nextState = root.dataset.dtscMobileInput === "active" || !visible ? "hidden" : "visible";
-      if (root.dataset.privateMobileNav === nextState) return;
-      root.dataset.privateMobileNav = nextState;
     }
 
     function syncViewport() {
@@ -78,9 +56,9 @@ export function useImmersiveConversationViewport() {
         if (signature === lastViewportSignature) return;
         lastViewportSignature = signature;
 
-        // Follow the real VisualViewport directly. The DTSC mobile navigation
-        // overlays this stable surface and must never resize/reflow the message
-        // viewport while a finger or inertial scroll is still moving.
+        // The message surface follows VisualViewport only. It never measures the
+        // animated navigation and never reacts to message-list scroll events.
+        // The global chrome controller owns tap-vs-drag navigation visibility.
         privateMainElement.style.position = "fixed";
         privateMainElement.style.left = `${viewportLeft}px`;
         privateMainElement.style.right = "auto";
@@ -96,67 +74,6 @@ export function useImmersiveConversationViewport() {
       });
     }
 
-    function isCollaborationScroller(element: HTMLElement) {
-      if (collaborationScrollers.has(element)) return true;
-      if (!element.closest("[data-collaboration-immersive-root]")) return false;
-      if (!element.parentElement?.matches("main, aside")) return false;
-      if (element.scrollHeight <= element.clientHeight) return false;
-      collaborationScrollers.add(element);
-      return true;
-    }
-
-    function processNestedScroll() {
-      scrollFrameId = 0;
-      const element = pendingScrollElement;
-      pendingScrollElement = null;
-      if (!element || !media.matches) return;
-
-      const current = element.scrollTop;
-      const existing = scrollStates.get(element);
-      if (!existing) {
-        scrollStates.set(element, { lastTop: current, anchorTop: current, direction: null });
-        if (current <= NAV_TOP_REVEAL_THRESHOLD) setChromeVisible(true);
-        return;
-      }
-
-      const delta = current - existing.lastTop;
-      existing.lastTop = current;
-
-      if (current <= NAV_TOP_REVEAL_THRESHOLD) {
-        existing.anchorTop = current;
-        existing.direction = null;
-        setChromeVisible(true);
-        return;
-      }
-
-      if (Math.abs(delta) < SCROLL_DIRECTION_EPSILON) return;
-      const direction: Exclude<ScrollDirection, null> = delta > 0 ? "down" : "up";
-      if (existing.direction !== direction) {
-        existing.direction = direction;
-        existing.anchorTop = current;
-        return;
-      }
-
-      const travelled = direction === "down" ? current - existing.anchorTop : existing.anchorTop - current;
-      if (direction === "down" && travelled >= NAV_HIDE_DISTANCE) {
-        setChromeVisible(false);
-        existing.anchorTop = current;
-      } else if (direction === "up" && travelled >= NAV_SHOW_DISTANCE) {
-        setChromeVisible(true);
-        existing.anchorTop = current;
-      }
-    }
-
-    function onNestedScroll(event: Event) {
-      if (!media.matches) return;
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !isCollaborationScroller(target)) return;
-      pendingScrollElement = target;
-      if (scrollFrameId) return;
-      scrollFrameId = window.requestAnimationFrame(processNestedScroll);
-    }
-
-    document.addEventListener("scroll", onNestedScroll, { capture: true, passive: true });
     window.addEventListener("resize", syncViewport);
     window.visualViewport?.addEventListener("resize", syncViewport);
     window.visualViewport?.addEventListener("scroll", syncViewport);
@@ -165,8 +82,6 @@ export function useImmersiveConversationViewport() {
 
     return () => {
       window.cancelAnimationFrame(viewportFrameId);
-      window.cancelAnimationFrame(scrollFrameId);
-      document.removeEventListener("scroll", onNestedScroll, true);
       window.removeEventListener("resize", syncViewport);
       window.visualViewport?.removeEventListener("resize", syncViewport);
       window.visualViewport?.removeEventListener("scroll", syncViewport);
