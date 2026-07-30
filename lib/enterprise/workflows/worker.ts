@@ -47,6 +47,6 @@ export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS
       results.push({ id: event.id, status: dead ? "DEAD" : "FAILED", error: failure.code });
     }
   }
-  const resumedRuns = await resumeWaitingRuns(Math.max(1, safeBatchSize - claimed.length));
+  const resumedRuns = await resumeWaitingRuns();
   return { workerId, claimed: claimed.length, results, resumedRuns: resumedRuns.map((run) => ({ id: run.id, status: run.status })) };
 }
