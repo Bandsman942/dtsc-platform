@@ -55,7 +55,7 @@ const workflowDefinitionBaseSchema = z.object({
   triggerEntityType: z.enum(WORKFLOW_ENTITY_TYPES).optional(),
   triggerEventType: codeSchema.optional(),
   allowManualStart: z.boolean().default(false),
-  singleActiveRun: z.boolean().default(true),
+  singleActiveRun: z.literal(true).default(true),
 });
 
 export const workflowDefinitionCreateSchema = workflowDefinitionBaseSchema.extend({ code: codeSchema.optional() }).superRefine((value, ctx) => {
@@ -70,7 +70,7 @@ export const workflowDefinitionUpdateSchema = z.object({
   triggerEntityType: z.enum(WORKFLOW_ENTITY_TYPES).nullable().optional(),
   triggerEventType: codeSchema.nullable().optional(),
   allowManualStart: z.boolean().optional(),
-  singleActiveRun: z.boolean().optional(),
+  singleActiveRun: z.literal(true).optional(),
 });
 
 export const workflowVersionSchema = z.object({
