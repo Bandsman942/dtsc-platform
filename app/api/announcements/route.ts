@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 import { notifyUsers } from "@/lib/notifications";
+import { announcementNotificationTarget } from "@/lib/notification-targets";
 import { sanitizeRichHtml } from "@/lib/rich-content";
 import { announcementSchema } from "@/lib/validators";
 
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     title: "Nouvelle annonce DTSC",
     body: body.data.title,
     type: "ANNOUNCEMENT",
-    targetUrl: "/announcements",
+    targetUrl: announcementNotificationTarget(announcement.id),
   });
 
   return NextResponse.json({ ok: true, announcement }, { status: 201 });
