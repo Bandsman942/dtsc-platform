@@ -1,7 +1,7 @@
 "use client";
 
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Copy, Eye, GitBranch, PauseCircle, Play, Plus, RefreshCw, RotateCcw, Save, Send, Settings2, ShieldAlert, Trash2, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, Eye, GitBranch, PauseCircle, Plus, RefreshCw, RotateCcw, Save, Send, ShieldAlert, Trash2, XCircle } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -18,6 +18,8 @@ type Transition = { id?: string; fromStepId?: string; toStepId?: string; fromSte
 type Version = { id: string; versionNumber: number; status: string; steps: Step[]; transitions: Transition[]; publishedAt?: string | null };
 type Definition = { id: string; code: string; name: string; description?: string | null; status: string; triggerType: string; triggerEntityType?: string | null; triggerEventType?: string | null; currentVersionId?: string | null; updatedAt: string; versions: Version[]; _count?: { runs: number } };
 type Run = { id: string; status: string; sourceEntityType: string; sourceEntityId: string; triggerType: string; startedAt: string; updatedAt: string; revision: number; failureMessage?: string | null; definition: { id: string; code: string; name: string }; version: { versionNumber: number }; stepRuns: Array<{ step: { code: string; name: string; stepType: string } }> };
+type WorkflowEvent = { id: string; createdAt: string; summary: string; status?: string | null };
+type RunDetail = Run & { events: WorkflowEvent[] };
 type Template = { code: string; nameFr: string; nameEn: string; descriptionFr: string; descriptionEn: string; triggerEntityType: string; triggerEventType: string };
 type Readiness = { ready: boolean; blockers: Array<{ code: string; message: string; stepCode?: string }> };
 type Permissions = { canCreateDraft?: boolean; canEditDraft?: boolean; canPublish?: boolean; canRetire?: boolean; canStartManual?: boolean; canViewAllRuns?: boolean; canRetry?: boolean; canCancel?: boolean };
@@ -42,7 +44,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   const [createOpen, setCreateOpen] = useState(false);
   const [stepOpen, setStepOpen] = useState(false);
   const [transitionOpen, setTransitionOpen] = useState(false);
-  const [runDetail, setRunDetail] = useState<any>(null);
+  const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
   const [runAction, setRunAction] = useState<{ run: Run; action: "retry" | "cancel" } | null>(null);
   const [draftSteps, setDraftSteps] = useState<Step[]>([]);
   const [draftTransitions, setDraftTransitions] = useState<Transition[]>([]);
@@ -51,32 +53,55 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   const published = selected?.versions.find((version) => version.status === "PUBLISHED") || null;
   const monitored = runs.filter((run) => ["BLOCKED", "FAILED", "WAITING_APPROVAL", "WAITING_TIME"].includes(run.status));
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
-    const [definitionResponse, runResponse] = await Promise.all([fetch(`/api/enterprise/${organizationId}/workflows`), fetch(`/api/enterprise/${organizationId}/workflow-runs?pageSize=50`)]);
-    const definitionBody = await definitionResponse.json().catch(() => null); const runBody = await runResponse.json().catch(() => null);
-    if (definitionResponse.ok) { setDefinitions(definitionBody?.definitions || []); setTemplates(definitionBody?.templates || []); setPermissions(definitionBody?.permissions || {}); }
-    else toastError(definitionBody?.message || (en ? "Unable to load workflows." : "Chargement des workflows impossible."));
-    if (runResponse.ok) { setRuns(runBody?.runs || []); setMetrics(runBody?.metrics || {}); setPermissions((current) => ({ ...current, ...(runBody?.permissions || {}) })); }
+    const [definitionResponse, runResponse] = await Promise.all([
+      fetch(`/api/enterprise/${organizationId}/workflows`),
+      fetch(`/api/enterprise/${organizationId}/workflow-runs?pageSize=50`),
+    ]);
+    const definitionBody = await definitionResponse.json().catch(() => null);
+    const runBody = await runResponse.json().catch(() => null);
+    if (definitionResponse.ok) {
+      setDefinitions(definitionBody?.definitions || []);
+      setTemplates(definitionBody?.templates || []);
+      setPermissions(definitionBody?.permissions || {});
+    } else {
+      toastError(definitionBody?.message || (en ? "Unable to load workflows." : "Chargement des workflows impossible."));
+    }
+    if (runResponse.ok) {
+      setRuns(runBody?.runs || []);
+      setMetrics(runBody?.metrics || {});
+      setPermissions((current) => ({ ...current, ...(runBody?.permissions || {}) }));
+    }
     setLoading(false);
-  }
+  }, [en, organizationId]);
 
-  useEffect(() => { void load(); }, [organizationId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function openDefinition(id: string) {
-    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${id}`); const body = await response.json().catch(() => null);
+    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${id}`);
+    const body = await response.json().catch(() => null);
     if (!response.ok) return toastError(body?.message || (en ? "Workflow unavailable." : "Workflow indisponible."));
-    setSelected(body.definition); setReadiness(body.readiness || {});
+    setSelected(body.definition);
+    setReadiness(body.readiness || {});
     const draft = body.definition.versions.find((version: Version) => version.status === "DRAFT");
     setDraftSteps((draft?.steps || []).map((step: Step) => ({ ...step, configuration: step.configurationJson || {} })));
     setDraftTransitions((draft?.transitions || []).map((transition: Transition) => ({ ...transition, fromStepCode: transition.fromStep?.code, toStepCode: transition.toStep?.code, condition: transition.conditionJson || undefined })));
   }
 
   async function createFromTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); const templateCode = String(form.get("templateCode") || "");
-    const response = await fetch(`/api/enterprise/${organizationId}/workflows`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateCode, locale: en ? "en" : "fr" }) }); const body = await response.json().catch(() => null);
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const templateCode = String(form.get("templateCode") || "");
+    const response = await fetch(`/api/enterprise/${organizationId}/workflows`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateCode, locale: en ? "en" : "fr" }) });
+    const body = await response.json().catch(() => null);
     if (!response.ok) return toastError(body?.message || (en ? "Creation failed." : "Création impossible."));
-    setCreateOpen(false); toastSuccess(en ? "Draft workflow created." : "Workflow brouillon créé."); await load(); await openDefinition(body.definition.id);
+    setCreateOpen(false);
+    toastSuccess(en ? "Draft workflow created." : "Workflow brouillon créé.");
+    await load();
+    await openDefinition(body.definition.id);
   }
 
   function stepConfig(form: FormData, type: string) {
@@ -94,45 +119,96 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
   }
 
   function addStep(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); const type = String(form.get("stepType") || "START"); const code = String(form.get("code") || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const type = String(form.get("stepType") || "START");
+    const code = String(form.get("code") || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
     if (!code || draftSteps.some((step) => step.code === code)) return toastError(en ? "Step code must be unique." : "Le code de l’étape doit être unique.");
-    setDraftSteps((current) => [...current, { code, name: String(form.get("name") || code), stepType: type, position: current.length, configuration: stepConfig(form, type) }]); setStepOpen(false);
+    setDraftSteps((current) => [...current, { code, name: String(form.get("name") || code), stepType: type, position: current.length, configuration: stepConfig(form, type) }]);
+    setStepOpen(false);
   }
 
   function addTransition(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); const fromStepCode = String(form.get("from") || ""); const toStepCode = String(form.get("to") || ""); const outcome = String(form.get("outcome") || "DEFAULT");
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const fromStepCode = String(form.get("from") || "");
+    const toStepCode = String(form.get("to") || "");
+    const outcome = String(form.get("outcome") || "DEFAULT");
     if (!fromStepCode || !toStepCode || fromStepCode === toStepCode) return toastError(en ? "Choose two different steps." : "Choisissez deux étapes différentes.");
-    setDraftTransitions((current) => [...current, { fromStepCode, toStepCode, outcome, priority: current.filter((item) => item.fromStepCode === fromStepCode).length }]); setTransitionOpen(false);
+    setDraftTransitions((current) => [...current, { fromStepCode, toStepCode, outcome, priority: current.filter((item) => item.fromStepCode === fromStepCode).length }]);
+    setTransitionOpen(false);
   }
 
   function moveStep(index: number, direction: -1 | 1) {
-    setDraftSteps((current) => { const target = index + direction; if (target < 0 || target >= current.length) return current; const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next.map((step, position) => ({ ...step, position })); });
+    setDraftSteps((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next.map((step, position) => ({ ...step, position }));
+    });
   }
 
-  function removeStep(code: string) { setDraftSteps((current) => current.filter((step) => step.code !== code).map((step, position) => ({ ...step, position }))); setDraftTransitions((current) => current.filter((transition) => transition.fromStepCode !== code && transition.toStepCode !== code)); }
+  function removeStep(code: string) {
+    setDraftSteps((current) => current.filter((step) => step.code !== code).map((step, position) => ({ ...step, position })));
+    setDraftTransitions((current) => current.filter((transition) => transition.fromStepCode !== code && transition.toStepCode !== code));
+  }
 
   async function saveVersion() {
     if (!selected || !currentDraft) return;
-    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ steps: draftSteps.map(({ configurationJson: _legacy, ...step }) => ({ ...step, configuration: step.configuration || {} })), transitions: draftTransitions.map((transition) => ({ fromStepCode: transition.fromStepCode, toStepCode: transition.toStepCode, outcome: transition.outcome || "DEFAULT", priority: transition.priority, ...(transition.condition ? { condition: transition.condition } : {}) })) }) }); const body = await response.json().catch(() => null);
+    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        steps: draftSteps.map(({ configurationJson, ...step }) => ({ ...step, configuration: step.configuration || configurationJson || {} })),
+        transitions: draftTransitions.map((transition) => ({ fromStepCode: transition.fromStepCode, toStepCode: transition.toStepCode, outcome: transition.outcome || "DEFAULT", priority: transition.priority, ...(transition.condition ? { condition: transition.condition } : {}) })),
+      }),
+    });
+    const body = await response.json().catch(() => null);
     if (!response.ok) return toastError(body?.message || (en ? "Save failed." : "Enregistrement impossible."));
-    toastSuccess(en ? "Draft saved." : "Brouillon enregistré."); await openDefinition(selected.id); await load();
+    toastSuccess(en ? "Draft saved." : "Brouillon enregistré.");
+    await openDefinition(selected.id);
+    await load();
   }
 
   async function publish() {
-    if (!selected || !currentDraft) return; const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}/publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acknowledgeReadiness: true }) }); const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Publication failed." : "Publication impossible.")); toastSuccess(en ? "Workflow published." : "Workflow publié."); await openDefinition(selected.id); await load();
+    if (!selected || !currentDraft) return;
+    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions/${currentDraft.id}/publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acknowledgeReadiness: true }) });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) return toastError(body?.message || (en ? "Publication failed." : "Publication impossible."));
+    toastSuccess(en ? "Workflow published." : "Workflow publié.");
+    await openDefinition(selected.id);
+    await load();
   }
 
   async function duplicateVersion() {
-    if (!selected) return; const sourceVersionId = published?.id || currentDraft?.id; const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceVersionId }) }); const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Duplication failed." : "Duplication impossible.")); toastSuccess(en ? "New draft version created." : "Nouvelle version brouillon créée."); await openDefinition(selected.id);
+    if (!selected) return;
+    const sourceVersionId = published?.id || currentDraft?.id;
+    const response = await fetch(`/api/enterprise/${organizationId}/workflows/${selected.id}/versions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceVersionId }) });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) return toastError(body?.message || (en ? "Duplication failed." : "Duplication impossible."));
+    toastSuccess(en ? "New draft version created." : "Nouvelle version brouillon créée.");
+    await openDefinition(selected.id);
   }
 
-  async function openRun(id: string) { const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/${id}`); const body = await response.json().catch(() => null); if (!response.ok) return toastError(body?.message || (en ? "Run unavailable." : "Exécution indisponible.")); setRunDetail(body.run); }
+  async function openRun(id: string) {
+    const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/${id}`);
+    const body = await response.json().catch(() => null);
+    if (!response.ok) return toastError(body?.message || (en ? "Run unavailable." : "Exécution indisponible."));
+    setRunDetail(body.run as RunDetail);
+  }
 
   async function submitRunAction(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!runAction) return; const form = new FormData(event.currentTarget); const reason = String(form.get("reason") || ""); const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/${runAction.run.id}/${runAction.action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(runAction.action === "cancel" ? { reason, revision: runAction.run.revision } : { reason }) }); const body = await response.json().catch(() => null);
-    if (!response.ok) return toastError(body?.message || (en ? "Action failed." : "Action impossible.")); setRunAction(null); toastSuccess(en ? "Run updated." : "Exécution mise à jour."); await load();
+    event.preventDefault();
+    if (!runAction) return;
+    const form = new FormData(event.currentTarget);
+    const reason = String(form.get("reason") || "");
+    const response = await fetch(`/api/enterprise/${organizationId}/workflow-runs/${runAction.run.id}/${runAction.action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(runAction.action === "cancel" ? { reason, revision: runAction.run.revision } : { reason }) });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) return toastError(body?.message || (en ? "Action failed." : "Action impossible."));
+    setRunAction(null);
+    toastSuccess(en ? "Run updated." : "Exécution mise à jour.");
+    await load();
   }
 
   const readinessForDraft = currentDraft ? readiness[currentDraft.id] : null;
@@ -158,7 +234,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
       <section className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">{selected ? <div className="grid gap-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-[0.1em] text-cyan-600">{selected.code}</p><h2 className="truncate text-lg font-black text-dtsc-ink">{selected.name}</h2><p className="text-sm text-dtsc-muted">{selected.description}</p></div><StatusBadge>{statusLabel(selected.status, en)}</StatusBadge></div>
         <div className="flex flex-wrap gap-2">{permissions.canCreateDraft && published ? <Button size="sm" variant="outline" onClick={() => void duplicateVersion()}><Copy className="h-4 w-4" />{en ? "New version" : "Nouvelle version"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => setStepOpen(true)}><Plus className="h-4 w-4" />{en ? "Step" : "Étape"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" variant="outline" onClick={() => setTransitionOpen(true)}><GitBranch className="h-4 w-4" />{en ? "Transition" : "Transition"}</Button> : null}{permissions.canEditDraft && currentDraft ? <Button size="sm" onClick={() => void saveVersion()}><Save className="h-4 w-4" />{en ? "Save" : "Enregistrer"}</Button> : null}{permissions.canPublish && currentDraft ? <Button size="sm" disabled={!readinessForDraft?.ready} onClick={() => void publish()}><Send className="h-4 w-4" />{en ? "Publish" : "Publier"}</Button> : null}</div>
         {currentDraft ? <><div className={cn("rounded-xl border p-3", readinessForDraft?.ready ? "border-emerald-400/40 bg-emerald-500/5" : "border-amber-400/40 bg-amber-500/5")}><p className="font-black text-dtsc-ink">{readinessForDraft?.ready ? (en ? "Ready to publish" : "Prêt à publier") : (en ? "Publication blockers" : "Blocages de publication")}</p>{readinessForDraft?.blockers?.length ? <ul className="mt-2 grid gap-1 text-xs text-dtsc-muted">{readinessForDraft.blockers.map((item, index) => <li key={`${item.code}-${index}`}>• {item.stepCode ? `${item.stepCode}: ` : ""}{item.message}</li>)}</ul> : null}</div>
-        <div className="grid gap-2">{draftSteps.sort((a, b) => a.position - b.position).map((step, index) => <article key={step.code} className="flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border p-2.5"><span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dtsc-soft text-xs font-black text-dtsc-ink">{index + 1}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{step.name}</strong><span className="block truncate text-xs text-dtsc-muted">{stepTypeLabel(step.stepType, en)} · {step.code}</span></div>{permissions.canEditDraft ? <div className="flex shrink-0"><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, -1)}><ArrowUp className="h-4 w-4" /></button><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, 1)}><ArrowDown className="h-4 w-4" /></button><button type="button" className="p-2 text-rose-600" onClick={() => removeStep(step.code)}><Trash2 className="h-4 w-4" /></button></div> : null}</article>)}</div>
+        <div className="grid gap-2">{[...draftSteps].sort((a, b) => a.position - b.position).map((step, index) => <article key={step.code} className="flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border p-2.5"><span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-dtsc-soft text-xs font-black text-dtsc-ink">{index + 1}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{step.name}</strong><span className="block truncate text-xs text-dtsc-muted">{stepTypeLabel(step.stepType, en)} · {step.code}</span></div>{permissions.canEditDraft ? <div className="flex shrink-0"><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, -1)}><ArrowUp className="h-4 w-4" /></button><button type="button" className="p-2 text-dtsc-muted" onClick={() => moveStep(index, 1)}><ArrowDown className="h-4 w-4" /></button><button type="button" className="p-2 text-rose-600" onClick={() => removeStep(step.code)}><Trash2 className="h-4 w-4" /></button></div> : null}</article>)}</div>
         <div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Branches" : "Branches"}</h3><div className="mt-2 grid gap-1.5">{draftTransitions.map((transition, index) => <div key={`${transition.fromStepCode}-${transition.toStepCode}-${index}`} className="flex items-center gap-2 rounded-xl bg-dtsc-page px-3 py-2 text-xs"><span className="truncate font-bold text-dtsc-ink">{transition.fromStepCode}</span><GitBranch className="h-3.5 w-3.5 shrink-0 text-cyan-600" /><span className="truncate font-bold text-dtsc-ink">{transition.toStepCode}</span><span className="ml-auto shrink-0 text-dtsc-muted">{outcomeLabel(transition.outcome, en)}</span>{permissions.canEditDraft ? <button type="button" onClick={() => setDraftTransitions((current) => current.filter((_, itemIndex) => itemIndex !== index))}><XCircle className="h-4 w-4 text-rose-600" /></button> : null}</div>)}</div></div></> : <p className="text-sm text-dtsc-muted">{en ? "Create a new draft version to edit this workflow." : "Créez une nouvelle version brouillon pour modifier ce workflow."}</p>}</div> : <EmptyState compact title={en ? "Select a workflow" : "Sélectionnez un workflow"} description={en ? "Open a definition to inspect its versions and readiness." : "Ouvrez une définition pour consulter ses versions et sa readiness."} />}</section>
     </div> : null}
 
@@ -172,7 +248,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, members, 
 
     <Dialog open={transitionOpen} title={en ? "Add a branch" : "Ajouter une branche"} onClose={() => setTransitionOpen(false)}><form onSubmit={addTransition} className="grid gap-3"><select name="from" required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{draftSteps.map((step) => <option key={step.code} value={step.code}>{step.name}</option>)}</select><select name="to" required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{draftSteps.map((step) => <option key={step.code} value={step.code}>{step.name}</option>)}</select><select name="outcome" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">{OUTCOMES.map((outcome) => <option key={outcome} value={outcome}>{outcomeLabel(outcome, en)}</option>)}</select><Button type="submit"><GitBranch className="h-4 w-4" />{en ? "Add branch" : "Ajouter la branche"}</Button></form></Dialog>
 
-    <Dialog open={Boolean(runDetail)} title={en ? "Workflow timeline" : "Timeline du workflow"} onClose={() => setRunDetail(null)}>{runDetail ? <div className="grid gap-3"><div className="rounded-xl bg-dtsc-page p-3"><strong className="text-dtsc-ink">{runDetail.definition.name}</strong><p className="text-xs text-dtsc-muted">{entityLabel(runDetail.sourceEntityType, en)} · {statusLabel(runDetail.status, en)} · v{runDetail.version.versionNumber}</p></div><div className="max-h-[60dvh] overflow-y-auto overscroll-contain border-l-2 border-dtsc-border pl-4">{runDetail.events.map((event: any) => <article key={event.id} className="relative pb-4"><span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-cyan-500" /><p className="text-xs font-bold text-dtsc-muted">{new Date(event.createdAt).toLocaleString(en ? "en-US" : "fr-FR")}</p><strong className="text-sm text-dtsc-ink">{event.summary}</strong>{event.status ? <p className="text-xs text-dtsc-muted">{statusLabel(event.status, en)}</p> : null}</article>)}</div></div> : null}</Dialog>
+    <Dialog open={Boolean(runDetail)} title={en ? "Workflow timeline" : "Timeline du workflow"} onClose={() => setRunDetail(null)}>{runDetail ? <div className="grid gap-3"><div className="rounded-xl bg-dtsc-page p-3"><strong className="text-dtsc-ink">{runDetail.definition.name}</strong><p className="text-xs text-dtsc-muted">{entityLabel(runDetail.sourceEntityType, en)} · {statusLabel(runDetail.status, en)} · v{runDetail.version.versionNumber}</p></div><div className="max-h-[60dvh] overflow-y-auto overscroll-contain border-l-2 border-dtsc-border pl-4">{runDetail.events.map((event) => <article key={event.id} className="relative pb-4"><span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-cyan-500" /><p className="text-xs font-bold text-dtsc-muted">{new Date(event.createdAt).toLocaleString(en ? "en-US" : "fr-FR")}</p><strong className="text-sm text-dtsc-ink">{event.summary}</strong>{event.status ? <p className="text-xs text-dtsc-muted">{statusLabel(event.status, en)}</p> : null}</article>)}</div></div> : null}</Dialog>
 
     <Dialog open={Boolean(runAction)} title={runAction?.action === "retry" ? (en ? "Retry current step" : "Réessayer l’étape courante") : (en ? "Cancel workflow run" : "Annuler l’exécution")} onClose={() => setRunAction(null)}><form onSubmit={submitRunAction} className="grid gap-3"><Input name="reason" required minLength={3} placeholder={en ? "Reason" : "Motif"} /><p className="text-xs text-dtsc-muted">{runAction?.action === "cancel" ? (en ? "Successful actions remain recorded; no automatic rollback is performed." : "Les actions réussies restent enregistrées; aucun rollback automatique n’est effectué.") : (en ? "Only the safe current step is retried with the same idempotency key." : "Seule l’étape courante sûre est relancée avec la même clé d’idempotence.")}</p><Button type="submit" variant={runAction?.action === "cancel" ? "destructive" : "default"}>{runAction?.action === "retry" ? <RotateCcw className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}{en ? "Confirm" : "Confirmer"}</Button></form></Dialog>
   </div>;
