@@ -19,6 +19,6 @@ requireTokens("lib/enterprise/inventory/service.ts", [
 requireTokens("lib/enterprise/procurement/common-domain-adapter.ts", [
   "PURCHASE_RECEIPT",
   "expectedItemType === \"SERVICE\"",
-  "EnterprisePurchaseReceiptItemStockLink",
+  "enterprisePurchaseReceiptItemStockLink",
 ]);
 success("enterprise inventory invariants");
