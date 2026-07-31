@@ -1,0 +1,35 @@
+name: Append finance rules to AGENTS
+
+on:
+  push:
+    branches:
+      - feat/erp-consolidation-iteration-03-finance-accounting
+    paths:
+      - docs/AGENTS_FINANCE_APPEND.md
+      - .github/workflows/append-finance-agents.yml
+
+permissions:
+  contents: write
+
+jobs:
+  append:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/erp-consolidation-iteration-03-finance-accounting
+          fetch-depth: 0
+      - name: Append durable finance rules once
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/AGENTS_FINANCE_APPEND.md || exit 0
+          if grep -q 'ERP_FINANCE_RULES_V1' AGENTS.md; then
+            exit 0
+          fi
+          cat docs/AGENTS_FINANCE_APPEND.md >> AGENTS.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add AGENTS.md
+          git commit -m 'docs: add durable enterprise finance rules to AGENTS'
+          git push origin HEAD:feat/erp-consolidation-iteration-03-finance-accounting
