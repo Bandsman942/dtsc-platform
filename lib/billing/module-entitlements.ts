@@ -1,4 +1,5 @@
 import type { SaasPlanCode } from "@/lib/billing/plans";
+import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 export type SaasFeatureCode =
   | "support"
@@ -68,78 +69,17 @@ export const FEATURE_ENTITLEMENTS: Record<SaasFeatureCode, FeatureEntitlement> =
   },
 };
 
-const CORE_MODULES = new Set([
-  "ADMIN_DASHBOARD",
-  "COLLABORATORS_POSITIONS",
-  "DEPARTMENTS",
-  "PERMISSIONS",
-  "INTERNAL_REQUESTS",
-  "REPORTS",
-  "DOCUMENTS",
-  "SETTINGS",
-]);
-
-const BUSINESS_MODULES = new Set([
-  "TASKS_OPERATIONS",
-  "MEETINGS",
-  "FINANCE_BUDGETS",
-  "SUPPLIERS_PURCHASES",
-  "WORKFLOWS",
-  "AUDIT_LOGS",
-  "AI_ASSISTANT",
-  "INTERNAL_CALENDAR",
-]);
-
-const ENTERPRISE_MODULES = new Set([
-  "PATIENTS",
-  "APPOINTMENTS",
-  "CONSULTATIONS",
-  "MEDICAL_RECORDS",
-  "CARE_TEAM",
-  "LABORATORY",
-  "INTERNAL_PHARMACY",
-  "MEDICAL_BILLING",
-  "INSURANCE_COVERAGE",
-  "QUALITY_INCIDENTS",
-  "MEDICAL_DOCUMENTS",
-  "MEDICAL_CONFIDENTIALITY",
-  "HEALTH_SETTINGS",
-  "HEALTH_REPORTS",
-  "MEDICINES_PRODUCTS",
-  "BATCH_EXPIRY",
-  "STOCK_INVENTORY",
-  "STOCK_RECEIPTS",
-  "SALES_DISPENSATION",
-  "PRESCRIPTIONS",
-  "SUPPLIERS_ORDERS",
-  "CASH_INVOICES_PAYMENTS",
-  "RETURNS_ADJUSTMENTS_LOSSES",
-  "ALERTS_EXPIRY_LOW_STOCK",
-  "QUALITY_PHARMACOVIGILANCE",
-  "PHARMACY_DOCUMENTS",
-  "PHARMACY_REPORTS",
-  "PHARMACY_SETTINGS",
-]);
-
 export function requiredPlanForModule(moduleCode: string, fallbackRequiredPlan?: SaasPlanCode | null): SaasPlanCode {
   if (fallbackRequiredPlan) {
     return fallbackRequiredPlan;
   }
-  if (ENTERPRISE_MODULES.has(moduleCode)) {
-    return "ENTERPRISE";
-  }
-  if (BUSINESS_MODULES.has(moduleCode)) {
-    return "BUSINESS";
-  }
-  if (CORE_MODULES.has(moduleCode)) {
-    return "STARTER";
-  }
-  return "BUSINESS";
+  return getEnterpriseModuleDefinition(moduleCode)?.minimumPlan || "BUSINESS";
 }
 
 export function moduleRequiresActiveSubscription(moduleCode: string, requiredPlan: SaasPlanCode) {
-  if (requiredPlan === "STARTER") {
-    return !CORE_MODULES.has(moduleCode);
+  const definition = getEnterpriseModuleDefinition(moduleCode);
+  if (definition) {
+    return definition.requiresActiveSubscription;
   }
-  return true;
+  return requiredPlan !== "STARTER";
 }
