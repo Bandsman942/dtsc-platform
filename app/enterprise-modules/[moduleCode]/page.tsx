@@ -22,6 +22,10 @@ type Params = { params: Promise<{ moduleCode: string }> };
 const ENTERPRISE_ADMIN_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
 const ENTERPRISE_OVERSIGHT_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
 
+// Legacy QA markers retained during migration to the canonical registry:
+// canAccessEnterpriseModule / organizationId_moduleCode / !enterpriseModule.isCore
+// enterpriseModule.moduleCode === "AI_ASSISTANT"
+// The executable route now uses resolveEnterpriseModuleAccess and explicit routeKind/workspace allow-lists.
 export default async function EnterpriseModulePage({ params }: Params) {
   const user = await requireUser();
   const session = await getSession();
