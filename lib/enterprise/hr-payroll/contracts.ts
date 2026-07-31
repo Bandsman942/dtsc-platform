@@ -90,7 +90,7 @@ export async function decideEnterpriseEmploymentContract(organizationId: string,
       if (updated.count !== 1) throw new EnterpriseDomainConflictError();
       await tx.enterpriseApproval.update({
         where: { id: approval.id },
-        data: { status: "REJECTED", decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } },
+        data: { status: "REJECTED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } },
       });
       return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
     }
@@ -122,7 +122,7 @@ export async function decideEnterpriseEmploymentContract(organizationId: string,
         revision: { increment: 1 },
       },
     });
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishHrEvent(tx, { organizationId, entityType: "EnterpriseEmploymentContract", entityId: contract.id, eventType: "EMPLOYMENT_CONTRACT_ACTIVATED", summary: `Contrat ${contract.reference} activé`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "ACTIVE" });
     return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
   });
