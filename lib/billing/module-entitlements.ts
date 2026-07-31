@@ -70,10 +70,7 @@ export const FEATURE_ENTITLEMENTS: Record<SaasFeatureCode, FeatureEntitlement> =
 };
 
 export function requiredPlanForModule(moduleCode: string, fallbackRequiredPlan?: SaasPlanCode | null): SaasPlanCode {
-  if (fallbackRequiredPlan) {
-    return fallbackRequiredPlan;
-  }
-  return getEnterpriseModuleDefinition(moduleCode)?.minimumPlan || "BUSINESS";
+  return getEnterpriseModuleDefinition(moduleCode)?.minimumPlan || fallbackRequiredPlan || "BUSINESS";
 }
 
 export function moduleRequiresActiveSubscription(moduleCode: string, requiredPlan: SaasPlanCode) {
