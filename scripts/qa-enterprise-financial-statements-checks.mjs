@@ -3,6 +3,7 @@ import { requirePaths, requireTokens, success } from "./qa-enterprise-common-dom
 requirePaths([
   "lib/enterprise/accounting/statements-service.ts",
   "app/api/enterprise/[organizationId]/financial-statements/route.ts",
+  "components/enterprise/enterprise-finance-workspace.tsx",
   "prisma/enterprise-finance-reporting.prisma",
 ]);
 requireTokens("lib/enterprise/accounting/statements-service.ts", [
@@ -20,6 +21,13 @@ requireTokens("app/api/enterprise/[organizationId]/financial-statements/route.ts
   "authorizeFinanceRequest",
   "statementQuerySchema.safeParse",
   "writeApiLog",
+]);
+requireTokens("components/enterprise/enterprise-finance-workspace.tsx", [
+  'value="AR_AGING"',
+  'value="AP_AGING"',
+  'value="TAX"',
+  'value="JOURNALS"',
+  'value="TREASURY"',
 ]);
 requireTokens("prisma/enterprise-finance-reporting.prisma", [
   "EnterpriseFinancialStatementSnapshot",
