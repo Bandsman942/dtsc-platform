@@ -71,7 +71,8 @@ export async function projectPharmacyInventoryAccountingEvent(
   const explicitUnitCost = input.unitCost ? money(input.unitCost) : null;
   const sourceUnitCost = source.batch?.purchasePrice ? money(source.batch.purchasePrice) : null;
   const unitCost = explicitUnitCost || sourceUnitCost;
-  if (direction === "IN" && (!unitCost || !unitCost.isPositive())) throw new EnterpriseSectorConvergenceError("PHARMACY_INVENTORY_UNIT_COST_REQUIRED", 409);
+  const usesCommonIssueValuation = eventType === "PHARMACY_SALE_STOCK_ISSUE";
+  if (!usesCommonIssueValuation && (!unitCost || !unitCost.isPositive())) throw new EnterpriseSectorConvergenceError("PHARMACY_INVENTORY_UNIT_COST_REQUIRED", 409);
 
   const projected = await prisma.$transaction(async (tx) => {
     const current = await tx.enterpriseSectorInventoryEvent.findFirst({ where: { organizationId, idempotencyKey } });
@@ -124,12 +125,12 @@ export async function projectPharmacyInventoryAccountingEvent(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   try {
-    if (["PHARMACY_PURCHASE_RECEIPT_VALUED", "PHARMACY_CUSTOMER_RETURN"].includes(eventType)) {
+    if (eventType === "PHARMACY_PURCHASE_RECEIPT_VALUED") {
       const result = await valueInventoryReceipt(organizationId, projected.movement.id, actorUserId, { unitCost: unitCost!.toFixed(), currencyCode });
       const updated = await prisma.enterpriseSectorInventoryEvent.update({ where: { id: projected.event.id }, data: { status: "POSTED", valuationId: result.event.id, journalEntryId: result.posting.entry.id, completedAt: new Date() } });
       return { event: updated, commonInventoryEvent: result.event, posting: result.posting, idempotent: false };
     }
-    if (["PHARMACY_SALE_STOCK_ISSUE", "PHARMACY_SUPPLIER_RETURN"].includes(eventType)) {
+    if (eventType === "PHARMACY_SALE_STOCK_ISSUE") {
       const result = await valueInventoryIssue(organizationId, projected.movement.id, actorUserId, { currencyCode });
       const updated = await prisma.enterpriseSectorInventoryEvent.update({ where: { id: projected.event.id }, data: { status: "POSTED", valuationId: result.event.id, journalEntryId: result.posting.entry.id, unitCost: result.event.unitCost, totalValue: result.event.totalCost, completedAt: new Date() } });
       return { event: updated, commonInventoryEvent: result.event, posting: result.posting, idempotent: false };
