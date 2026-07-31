@@ -6,13 +6,14 @@ requirePaths([
   "prisma/enterprise-finance-reporting.prisma",
 ]);
 requireTokens("lib/enterprise/accounting/statements-service.ts", [
-  "status: \"POSTED\"",
+  "e.status = 'POSTED'",
   "trialBalance",
+  "generalLedger",
   "incomeStatement",
   "balanceSheet",
   "cashFlow",
-  "agedReceivables",
-  "agedPayables",
+  "async function aging",
+  "type: \"AR\" | \"AP\"",
   "functionalCurrencyCode",
 ]);
 requireTokens("app/api/enterprise/[organizationId]/financial-statements/route.ts", [
