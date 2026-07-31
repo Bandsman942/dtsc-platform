@@ -10,7 +10,7 @@ requireTokens("lib/enterprise/accounting/receivables-service.ts", [
   "SALES_INVOICE_TOTAL_INVALID",
   "SALES_INVOICE_SELF_APPROVAL_FORBIDDEN",
   "salesInvoiceId: invoice.id",
-  "EnterpriseReceivableAllocation",
+  "enterpriseReceivableAllocation.create",
   "CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE",
   "outstandingAmount",
 ]);
