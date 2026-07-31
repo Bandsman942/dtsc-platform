@@ -62,8 +62,9 @@ model EnterpriseFiscalPeriod {
   createdAt       DateTime                   @default(now())
   updatedAt       DateTime                   @updatedAt
   fiscalYear      EnterpriseFiscalYear       @relation(fields: [organizationId, fiscalYearId], references: [organizationId, id], onDelete: Restrict)
-  journalEntries  EnterpriseJournalEntry[]
-  closes          EnterpriseFinancialClose[]
+  journalEntries         EnterpriseJournalEntry[]
+  closes                 EnterpriseFinancialClose[]
+  openingBalanceImports EnterpriseOpeningBalanceImport[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -128,6 +129,8 @@ model EnterpriseAccountGroup {
   createdAt      DateTime                  @default(now())
   updatedAt      DateTime                  @updatedAt
   chart          EnterpriseChartOfAccounts @relation(fields: [organizationId, chartId], references: [organizationId, id], onDelete: Restrict)
+  parent         EnterpriseAccountGroup?   @relation("EnterpriseAccountGroupHierarchy", fields: [organizationId, parentGroupId], references: [organizationId, id], onDelete: Restrict)
+  children       EnterpriseAccountGroup[]  @relation("EnterpriseAccountGroupHierarchy")
   accounts       EnterpriseLedgerAccount[]
 
   @@unique([organizationId, id])
@@ -162,6 +165,10 @@ model EnterpriseLedgerAccount {
   children               EnterpriseLedgerAccount[] @relation("EnterpriseLedgerAccountHierarchy")
   journalLines           EnterpriseJournalLine[]
   financialAccounts      EnterpriseFinancialAccount[]
+  accountMappings        EnterpriseAccountMapping[]
+  openingBalanceLines    EnterpriseOpeningBalanceLine[]
+  taxCodesPayable        EnterpriseTaxCode[] @relation("EnterpriseTaxCodePayableAccount")
+  taxCodesRecoverable    EnterpriseTaxCode[] @relation("EnterpriseTaxCodeRecoverableAccount")
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -184,6 +191,7 @@ model EnterpriseAccountMapping {
   revision            Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  ledgerAccount       EnterpriseLedgerAccount @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@unique([organizationId, mappingKey, effectiveFrom])
@@ -265,6 +273,10 @@ model EnterpriseJournalEntry {
   updatedAt                DateTime                 @updatedAt
   journal                  EnterpriseJournal        @relation(fields: [organizationId, journalId], references: [organizationId, id], onDelete: Restrict)
   fiscalPeriod             EnterpriseFiscalPeriod   @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)
+  reversalOf               EnterpriseJournalEntry?  @relation("EnterpriseJournalEntryReversal", fields: [organizationId, reversalOfEntryId], references: [organizationId, id], onDelete: Restrict)
+  reversals                EnterpriseJournalEntry[] @relation("EnterpriseJournalEntryReversal")
+  reversalRecordsAsOriginal EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalOriginal")
+  reversalRecordsAsResult  EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalResult")
   lines                    EnterpriseJournalLine[]
 
   @@unique([organizationId, id])
@@ -314,6 +326,8 @@ model EnterpriseJournalReversal {
   requestedByUserId     String
   approvedByUserId      String?
   createdAt             DateTime @default(now())
+  originalEntry         EnterpriseJournalEntry @relation("EnterpriseJournalReversalOriginal", fields: [organizationId, originalEntryId], references: [organizationId, id], onDelete: Restrict)
+  reversalEntry         EnterpriseJournalEntry @relation("EnterpriseJournalReversalResult", fields: [organizationId, reversalEntryId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@unique([organizationId, originalEntryId])
@@ -1087,6 +1101,10 @@ model EnterpriseTaxCode {
   updatedAt                DateTime             @updatedAt
   rates                    EnterpriseTaxRate[]
   rules                    EnterpriseTaxRule[]
+  payableAccount           EnterpriseLedgerAccount? @relation("EnterpriseTaxCodePayableAccount", fields: [organizationId, payableAccountId], references: [organizationId, id], onDelete: Restrict)
+  recoverableAccount       EnterpriseLedgerAccount? @relation("EnterpriseTaxCodeRecoverableAccount", fields: [organizationId, recoverableAccountId], references: [organizationId, id], onDelete: Restrict)
+  taxLines                 EnterpriseTaxLine[]
+  summaries                EnterpriseTaxSummary[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -1138,6 +1156,7 @@ model EnterpriseTaxLine {
   currencyCode       String
   direction          String
   createdAt          DateTime @default(now())
+  taxCode            EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@unique([organizationId, sourceEntityType, sourceEntityId, taxCodeId])
@@ -1155,6 +1174,7 @@ model EnterpriseTaxPeriod {
   createdByUserId String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  summaries       EnterpriseTaxSummary[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -1174,6 +1194,8 @@ model EnterpriseTaxSummary {
   snapshotJson      Json
   generatedByUserId String
   generatedAt       DateTime @default(now())
+  taxPeriod         EnterpriseTaxPeriod @relation(fields: [organizationId, taxPeriodId], references: [organizationId, id], onDelete: Restrict)
+  taxCode           EnterpriseTaxCode   @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@unique([organizationId, taxPeriodId, taxCodeId, currencyCode])
@@ -1387,6 +1409,7 @@ model EnterpriseOpeningBalanceImport {
   revision          Int                            @default(1)
   createdAt         DateTime                       @default(now())
   updatedAt         DateTime                       @updatedAt
+  fiscalPeriod      EnterpriseFiscalPeriod           @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)
   lines             EnterpriseOpeningBalanceLine[]
 
   @@unique([organizationId, id])
@@ -1406,6 +1429,7 @@ model EnterpriseOpeningBalanceLine {
   reference              String?
   createdAt              DateTime                       @default(now())
   openingBalanceImport   EnterpriseOpeningBalanceImport @relation(fields: [organizationId, openingBalanceImportId], references: [organizationId, id], onDelete: Cascade)
+  ledgerAccount          EnterpriseLedgerAccount         @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, id])
   @@index([organizationId, openingBalanceImportId])
