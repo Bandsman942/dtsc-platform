@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseMemberUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string; memberId: string }> };
+
+async function canManageMembers(userId: string, organizationId: string) {
+  const access = await resolveEnterpriseModuleAccess({
+    userId,
+    organizationId,
+    moduleCode: "COLLABORATORS_POSITIONS",
+    action: "manage",
+  });
+  return access.allowed;
+}
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -26,7 +36,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Too many requests", message: "Trop d'actions sur les collaborateurs." }, { status: 429 });
   }
   const { organizationId, memberId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  if (!(await canManageMembers(session.userId, organizationId))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Accès administration entreprise refusé." }, { status: 403 });
   }
@@ -71,7 +81,7 @@ export async function PATCH(req: Request, { params }: Params) {
         error: "Invitation status locked",
         message: "Une invitation en attente ne peut pas être transformée en adhésion active. Le collaborateur doit l'accepter lui-même.",
       },
-      { status: 409 }
+      { status: 409 },
     );
   }
   const updated = await prisma.organizationMember.update({
@@ -120,7 +130,7 @@ export async function DELETE(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Too many requests", message: "Trop d'actions sur les collaborateurs." }, { status: 429 });
   }
   const { organizationId, memberId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  if (!(await canManageMembers(session.userId, organizationId))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Accès administration entreprise refusé." }, { status: 403 });
   }
