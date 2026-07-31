@@ -14,22 +14,12 @@ permissions:
 jobs:
   migration-diff:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: dtsc_shadow
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: base-main
       - uses: pnpm/action-setup@v4
         with:
           run_install: false
@@ -39,14 +29,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm prisma:generate
-      - name: Generate additive SQL
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_shadow?schema=public
+      - name: Generate additive SQL from main to branch
         run: >-
           pnpm exec prisma migrate diff
-          --from-migrations prisma/migrations
+          --from-schema-datamodel base-main/prisma
           --to-schema-datamodel prisma
-          --shadow-database-url postgresql://postgres:postgres@localhost:5432/dtsc_shadow?schema=shadow
           --script > enterprise-accounting-migration.sql
       - uses: actions/upload-artifact@v4
         with:
