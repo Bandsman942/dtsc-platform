@@ -2,6 +2,7 @@ import {
   applySectorTemplateToOrganization,
   type ApplySectorTemplateMode,
 } from "@/lib/enterprise-sector-templates";
+import { ensureCanonicalCommonModulesForOrganization } from "@/lib/enterprise/common-modules";
 import {
   getEnterpriseModuleDefinition,
   isEnterpriseModuleImplemented,
@@ -22,6 +23,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
   mode?: ApplySectorTemplateMode;
 }) {
   const result = await applySectorTemplateToOrganization({ organizationId, sectorId, actorUserId, mode });
+  const commonModules = await ensureCanonicalCommonModulesForOrganization({ organizationId });
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, deletedAt: null },
     select: {
@@ -35,7 +37,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
     },
   });
   if (!organization) {
-    return result;
+    return { ...result, commonModuleCount: commonModules.length };
   }
 
   const moduleIdsToDisable = new Set<string>();
@@ -91,6 +93,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
 
   return {
     ...result,
+    commonModuleCount: commonModules.length,
     registryNormalization: {
       disabledModuleCount: moduleIdsToDisable.size,
       disabledActivityBlockCount: activityBlockIdsToDisable.size,
