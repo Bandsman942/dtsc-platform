@@ -49,6 +49,7 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const asset = await createEnterpriseAsset(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_ASSET_CREATED", entity: "EnterpriseAsset", entityId: asset.id, request: req, metadata: { organizationId } });
+    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "assets" } });
     return NextResponse.json({ ok: true, asset }, { status: 201 });
   } catch (error) {
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
