@@ -3,7 +3,7 @@ import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { sendEnterpriseInvitationEmail } from "@/lib/enterprise-invitations-mail";
-import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -32,9 +32,15 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const { organizationId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  const adminAccess = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: "COLLABORATORS_POSITIONS",
+    action: "manage",
+  });
+  if (!adminAccess.allowed) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Seul un admin de cette entreprise peut inviter des collaborateurs." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Seul un administrateur autorisé de cette entreprise peut inviter des collaborateurs." }, { status: 403 });
   }
 
   const parsed = enterpriseMemberInviteSchema.safeParse(await req.json().catch(() => null));
@@ -168,6 +174,6 @@ export async function POST(req: Request, { params }: Params) {
         ? "Invitation créée et email envoyé."
         : "Invitation interne créée. L'email d'invitation n'a pas pu être envoyé.",
     },
-    { status: 201 }
+    { status: 201 },
   );
 }
