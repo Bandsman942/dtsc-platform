@@ -80,7 +80,8 @@ jobs:
           --health-retries=5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_migration_test?schema=public
-      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_migration_test?schema=shadow
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_shadow_test?schema=public
+      PGPASSWORD: postgres
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,6 +105,13 @@ jobs:
 
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
+
+      - name: Prepare isolated shadow database
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          DROP DATABASE IF EXISTS dtsc_shadow_test;
+          CREATE DATABASE dtsc_shadow_test;
+          SQL
 
       - name: Verify migration schema parity
         run: >-
