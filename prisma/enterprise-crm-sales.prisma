@@ -33,6 +33,7 @@ model EnterpriseLead {
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
+  @@unique([organizationId, convertedOpportunityId])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, ownerUserId, status])
   @@index([organizationId, normalizedName, status])
@@ -117,6 +118,7 @@ model EnterpriseQuote {
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
+  @@unique([organizationId, convertedOrderId])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, businessPartyId, status])
   @@index([organizationId, opportunityId, status])
