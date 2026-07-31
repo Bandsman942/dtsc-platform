@@ -37,7 +37,7 @@ Added additive models for:
 - asset accounting profiles, schedules, entries and disposals;
 - accounting dimensions, opening balances and statement snapshots.
 
-Migrations are ordered from `20260731163001` through `20260731163010`, including a deterministic module backfill. Existing migrations were not edited and no table or column was removed.
+Migrations are ordered from `20260731163001` through `20260731163012`. They include the deterministic Finance-module backfill, tenant-aware relation alignment and a metadata-only alignment of two PostgreSQL-truncated foreign-key names. No table, column or financial row is removed.
 
 ## Posting events
 
@@ -117,7 +117,14 @@ Added and wired into `qa:regression`:
 - `qa:enterprise-financial-close`
 - `qa:enterprise-financial-statements`
 
-The migration Quality Gate applies every historical and Iteration 3 migration against an empty PostgreSQL 16 database with pgvector before Prisma generation.
+The migration Quality Gate:
+
+1. applies every historical and Iteration 3 migration against an empty PostgreSQL 16 database with pgvector;
+2. creates a separate PostgreSQL shadow database;
+3. runs Prisma migration diff from the complete migration history to the current multi-file schema;
+4. fails if any remaining diff touches an Iteration 3 Finance model.
+
+Repository-wide historical schema drift outside Iteration 3 remains visible but is not rewritten by this Finance delivery.
 
 ## Rollback
 
