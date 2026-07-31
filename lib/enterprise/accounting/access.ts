@@ -5,6 +5,7 @@ import {
   type EnterpriseFinanceAction,
   type EnterpriseFinanceModuleCode,
 } from "@/lib/enterprise/accounting/constants";
+import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
 
 const READ_ACTIONS = new Set<EnterpriseFinanceAction>(["view", "view_sensitive", "export"]);
 const WRITE_ACTIONS = new Set<EnterpriseFinanceAction>(["create", "update", "submit", "pay"]);
@@ -29,6 +30,8 @@ export async function getEnterpriseAccountingAccess({
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
   if (membership.role === "GUEST" && !READ_ACTIONS.has(action)) return null;
+
+  await ensureCanonicalFinanceModulesForOrganization({ organizationId });
 
   const canonicalAction = canonicalAccessAction(action);
   const moduleAllowed = await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, canonicalAction);
