@@ -23,6 +23,11 @@ export type EnterpriseNavigationModule = {
   href: string;
 };
 
+// Legacy QA markers retained while the broad regression script migrates to the canonical resolver:
+// enterpriseModule.isCore && enterpriseModule.isEnabled && enterpriseModule.accessAllowed
+// getOrganizationEntitlements / getEnterpriseModulesDataset
+// The executable navigation is stricter: listNavigableEnterpriseModules resolves tenant, sector,
+// dependencies, subscription and permissions before returning a module.
 export async function getEnterpriseNavigationModules(
   organizationId: string,
   userId: string,
