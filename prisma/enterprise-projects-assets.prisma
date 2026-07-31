@@ -1,0 +1,343 @@
+model EnterpriseProject {
+  id                    String                         @id @default(cuid())
+  organizationId        String
+  reference             String
+  name                  String
+  description           String?
+  projectType           String                         @default("CLIENT")
+  status                String                         @default("DRAFT")
+  businessPartyId       String?
+  contractId            String?
+  ownerUserId           String?
+  departmentId          String?
+  siteId                String?
+  budgetId              String?
+  currency              String?
+  indicativeBudget      Decimal?                       @db.Decimal(18, 2)
+  startDate             DateTime?
+  targetEndDate         DateTime?
+  completedAt           DateTime?
+  closedAt              DateTime?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+  progressPercent       Int                            @default(0)
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int                            @default(1)
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  archivedAt            DateTime?
+  contract              EnterpriseContract?            @relation(fields: [organizationId, contractId], references: [organizationId, id], onDelete: SetNull)
+  members               EnterpriseProjectMember[]
+  milestones            EnterpriseProjectMilestone[]
+  deliverables          EnterpriseProjectDeliverable[]
+  risks                 EnterpriseProjectRisk[]
+  issues                EnterpriseProjectIssue[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, targetEndDate])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, contractId])
+  @@index([organizationId, ownerUserId, status])
+  @@index([organizationId, departmentId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseProjectMember {
+  id              String             @id @default(cuid())
+  organizationId  String
+  projectId       String
+  employeeId      String
+  role            String             @default("MEMBER")
+  allocationPercent Int?             @default(100)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  status          String             @default("ACTIVE")
+  createdByUserId String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  project         EnterpriseProject  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  employee        EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, projectId, employeeId])
+  @@index([organizationId, employeeId, status])
+  @@index([organizationId, projectId, status])
+}
+
+model EnterpriseProjectMilestone {
+  id                String                         @id @default(cuid())
+  organizationId    String
+  projectId         String
+  reference         String
+  name              String
+  description       String?
+  dueDate           DateTime?
+  status            String                         @default("PLANNED")
+  ownerUserId       String?
+  approvalRequired  Boolean                        @default(false)
+  completedAt       DateTime?
+  approvedAt        DateTime?
+  revision          Int                            @default(1)
+  createdByUserId   String
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  project           EnterpriseProject              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  deliverables      EnterpriseProjectDeliverable[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, projectId, reference])
+  @@index([organizationId, projectId, status, dueDate])
+  @@index([organizationId, ownerUserId, status])
+}
+
+model EnterpriseProjectDeliverable {
+  id                  String                      @id @default(cuid())
+  organizationId      String
+  projectId           String
+  milestoneId         String?
+  reference           String
+  name                String
+  description         String?
+  status              String                      @default("DRAFT")
+  ownerUserId         String?
+  dueDate             DateTime?
+  documentId          String?
+  submittedAt         DateTime?
+  acceptedAt          DateTime?
+  changesRequestedAt  DateTime?
+  rejectedAt          DateTime?
+  reviewComment       String?
+  revision            Int                         @default(1)
+  createdByUserId     String
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  project             EnterpriseProject           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  milestone           EnterpriseProjectMilestone? @relation(fields: [organizationId, milestoneId], references: [organizationId, id], onDelete: SetNull)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, projectId, reference])
+  @@index([organizationId, projectId, status, dueDate])
+  @@index([organizationId, milestoneId, status])
+  @@index([organizationId, ownerUserId, status])
+}
+
+model EnterpriseProjectRisk {
+  id                String            @id @default(cuid())
+  organizationId    String
+  projectId         String
+  reference         String
+  title             String
+  description       String
+  category          String?
+  probability       String            @default("MEDIUM")
+  impact            String            @default("MEDIUM")
+  severity          String            @default("MEDIUM")
+  status            String            @default("OPEN")
+  ownerUserId       String?
+  mitigationPlan    String?
+  dueDate           DateTime?
+  closedAt          DateTime?
+  revision          Int               @default(1)
+  createdByUserId   String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  project           EnterpriseProject @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, projectId, reference])
+  @@index([organizationId, projectId, status, severity])
+  @@index([organizationId, ownerUserId, status])
+}
+
+model EnterpriseProjectIssue {
+  id                String            @id @default(cuid())
+  organizationId    String
+  projectId         String
+  reference         String
+  title             String
+  description       String
+  issueType         String?
+  priority          String            @default("NORMAL")
+  status            String            @default("OPEN")
+  ownerUserId       String?
+  dueDate           DateTime?
+  resolution        String?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  revision          Int               @default(1)
+  createdByUserId   String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  project           EnterpriseProject @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, projectId, reference])
+  @@index([organizationId, projectId, status, priority])
+  @@index([organizationId, ownerUserId, status])
+}
+
+model EnterpriseAssetCategory {
+  id              String            @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  description     String?
+  status          String            @default("ACTIVE")
+  createdByUserId String
+  revision        Int               @default(1)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  archivedAt      DateTime?
+  assets          EnterpriseAsset[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, name])
+  @@index([archivedAt])
+}
+
+model EnterpriseAsset {
+  id                    String                      @id @default(cuid())
+  organizationId        String
+  code                  String
+  name                  String
+  description           String?
+  categoryId            String?
+  serialNumber          String?
+  siteId                String?
+  storageLocationId     String?
+  responsibleEmployeeId String?
+  supplierId            String?
+  purchaseId            String?
+  acquisitionDate       DateTime?
+  indicativeValue       Decimal?                    @db.Decimal(18, 2)
+  currency              String?
+  status                String                      @default("DRAFT")
+  condition             String                      @default("GOOD")
+  warrantyEndsAt        DateTime?
+  notes                 String?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int                         @default(1)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  archivedAt            DateTime?
+  category              EnterpriseAssetCategory?    @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
+  site                  EnterpriseSite?             @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  storageLocation       EnterpriseStorageLocation?  @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
+  assignments           EnterpriseAssetAssignment[]
+  maintenanceRecords    EnterpriseAssetMaintenance[]
+  incidents             EnterpriseAssetIncident[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@unique([organizationId, serialNumber])
+  @@index([organizationId, categoryId, status])
+  @@index([organizationId, siteId, status])
+  @@index([organizationId, storageLocationId, status])
+  @@index([organizationId, responsibleEmployeeId, status])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, purchaseId])
+  @@index([archivedAt])
+}
+
+model EnterpriseAssetAssignment {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  assetId             String
+  employeeId          String?
+  departmentId        String?
+  assignedAt          DateTime
+  expectedReturnAt    DateTime?
+  returnedAt          DateTime?
+  initialCondition    String
+  returnCondition     String?
+  status              String             @default("ACTIVE")
+  assignedByUserId    String
+  returnedByUserId    String?
+  notes               String?
+  revision            Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  asset               EnterpriseAsset    @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  employee            EnterpriseEmployee? @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, assetId, status])
+  @@index([organizationId, employeeId, status])
+  @@index([organizationId, departmentId, status])
+}
+
+model EnterpriseAssetMaintenance {
+  id                  String          @id @default(cuid())
+  organizationId      String
+  assetId             String
+  reference           String
+  maintenanceType     String
+  title               String
+  description         String?
+  status              String          @default("PLANNED")
+  priority            String          @default("NORMAL")
+  responsibleUserId   String?
+  supplierId          String?
+  plannedAt           DateTime?
+  dueAt               DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  indicativeCost      Decimal?        @db.Decimal(18, 2)
+  currency            String?
+  taskId              String?
+  requestId           String?
+  purchaseId          String?
+  expenseId           String?
+  documentId          String?
+  notes               String?
+  revision            Int             @default(1)
+  createdByUserId     String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  archivedAt          DateTime?
+  asset               EnterpriseAsset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, assetId, status, dueAt])
+  @@index([organizationId, responsibleUserId, status])
+  @@index([organizationId, supplierId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseAssetIncident {
+  id                  String          @id @default(cuid())
+  organizationId      String
+  assetId             String
+  reference           String
+  incidentType        String
+  title               String
+  description         String
+  severity            String          @default("MEDIUM")
+  status              String          @default("OPEN")
+  reportedByUserId    String
+  responsibleUserId   String?
+  occurredAt          DateTime?
+  reportedAt          DateTime        @default(now())
+  resolvedAt          DateTime?
+  resolution          String?
+  maintenanceId       String?
+  taskId              String?
+  documentId          String?
+  revision            Int             @default(1)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  archivedAt          DateTime?
+  asset               EnterpriseAsset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, assetId, status, severity])
+  @@index([organizationId, responsibleUserId, status])
+  @@index([archivedAt])
+}
