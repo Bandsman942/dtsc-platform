@@ -205,7 +205,7 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
         data: { status: "REJECTED", revision: { increment: 1 } },
       });
       if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-      await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "REJECTED", decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+      await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "REJECTED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
       await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_REJECTED", summary: `Transfert ${transfer.reference} rejeté`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "REJECTED" });
       return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transfer.id }, include: { lines: true } });
     }
@@ -245,7 +245,7 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
       data: { status: "COMPLETED", approvedAt: new Date(), dispatchedAt: new Date(), receivedAt: new Date(), dispatchedByUserId: actorUserId, receivedByUserId: actorUserId, revision: { increment: 1 } },
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_COMPLETED", summary: `Transfert ${transfer.reference} exécuté`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "COMPLETED" });
     return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transfer.id }, include: { lines: true } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -293,7 +293,7 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
     if (input.decision === "REJECT") {
       const updated = await tx.enterpriseInventoryCount.updateMany({ where: { id: count.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: "REJECTED", revision: { increment: 1 } } });
       if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-      await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "REJECTED", decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+      await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "REJECTED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
       return tx.enterpriseInventoryCount.findUniqueOrThrow({ where: { id: count.id }, include: { lines: true } });
     }
 
@@ -317,7 +317,7 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
     }
     const updated = await tx.enterpriseInventoryCount.updateMany({ where: { id: count.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: "COMPLETED", approvedAt: new Date(), completedAt: new Date(), revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseInventoryCount", entityId: count.id, eventType: "INVENTORY_COUNT_COMPLETED", summary: `Inventaire ${count.reference} appliqué`, actorUserId, fromStatus: "SUBMITTED", toStatus: "COMPLETED" });
     return tx.enterpriseInventoryCount.findUniqueOrThrow({ where: { id: count.id }, include: { lines: true } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
