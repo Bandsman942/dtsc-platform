@@ -19,18 +19,25 @@ function paymentMethod(value: string) {
   return "OTHER" as const;
 }
 
-async function ensurePharmacyCustomerParty(tx: Prisma.TransactionClient, organizationId: string, sale: { id: string; saleNumber: string; customerId: string | null; customerName: string | null; customerPhone: string | null }, actorUserId: string) {
-  const migrationKey = sale.customerId ? `pharmacy-customer:${sale.customerId}` : `pharmacy-walkin-sale:${sale.id}`;
+async function ensurePharmacyCustomerParty(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  sale: { id: string; saleNumber: string; customerName: string | null; customerPhone: string | null },
+  actorUserId: string,
+) {
+  // Pharmacy currently has no deterministic customer foreign key. A sale-specific
+  // billing party avoids unsafe name/phone merging while preserving invoice scope.
+  const migrationKey = `pharmacy-sale-customer:${sale.id}`;
   const existing = await tx.enterpriseBusinessParty.findFirst({ where: { organizationId, migrationKey, archivedAt: null } });
   if (existing) return existing;
   const displayName = sale.customerName?.trim() || `Client comptoir ${sale.saleNumber}`;
-  const party = await tx.enterpriseBusinessParty.create({
+  return tx.enterpriseBusinessParty.create({
     data: {
       organizationId,
-      partyType: sale.customerId ? "PERSON" : "ORGANIZATION",
+      partyType: sale.customerName ? "PERSON" : "ORGANIZATION",
       legalName: displayName,
       displayName,
-      normalizedName: displayName.toLocaleLowerCase("fr"),
+      normalizedName: `pharmacy sale ${sale.id}`,
       code: financeReference("PHC"),
       migrationKey,
       primaryPhone: sale.customerPhone,
@@ -40,7 +47,6 @@ async function ensurePharmacyCustomerParty(tx: Prisma.TransactionClient, organiz
       contacts: sale.customerPhone ? { create: { organizationId, contactType: "PHONE", label: "Paiement", value: sale.customerPhone, normalizedValue: sale.customerPhone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId } } : undefined,
     },
   });
-  return party;
 }
 
 export async function convergePharmacySaleInvoice(
@@ -117,7 +123,10 @@ export async function convergePharmacySaleInvoice(
       if (current.generatedInvoice) {
         await tx.pharmacyInvoiceExtension.create({ data: { organizationId, pharmacyInvoiceId: current.generatedInvoice.id, salesInvoiceId: invoice.id } });
       }
-      await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "PHARMACY_SALES", sourceEntityType: "PharmacySale", sourceEntityId: current.id, targetModule: "FINANCE_RECEIVABLES", targetEntityType: "EnterpriseSalesInvoice", targetEntityId: invoice.id, linkType: "SECTOR_CONVERGENCE", createdById: actorUserId } }).catch((error) => { if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error; });
+      const entityLink = await tx.enterpriseEntityLink.findFirst({ where: { organizationId, sourceModule: "PHARMACY_SALES", sourceEntityType: "PharmacySale", sourceEntityId: current.id, targetModule: "FINANCE_RECEIVABLES", targetEntityType: "EnterpriseSalesInvoice", targetEntityId: invoice.id, linkType: "SECTOR_CONVERGENCE" } });
+      if (!entityLink) {
+        await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "PHARMACY_SALES", sourceEntityType: "PharmacySale", sourceEntityId: current.id, targetModule: "FINANCE_RECEIVABLES", targetEntityType: "EnterpriseSalesInvoice", targetEntityId: invoice.id, linkType: "SECTOR_CONVERGENCE", createdById: actorUserId } });
+      }
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSalesInvoice", entityId: invoice.id, eventType: "PHARMACY_SALE_INVOICE_CREATED", summary: `Common invoice ${invoice.number} created from Pharmacy sale`, actorUserId, toStatus: "DRAFT", metadataJson: { pharmacySaleId: current.id } });
       await completeSectorSync(tx, sync.id, { targetEntityType: "EnterpriseSalesInvoice", targetEntityId: invoice.id });
       return { extension, invoice };
