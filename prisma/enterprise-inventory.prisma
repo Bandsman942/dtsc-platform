@@ -1,0 +1,253 @@
+model EnterpriseInventoryItem {
+  id                 String                          @id @default(cuid())
+  organizationId     String
+  catalogItemId      String
+  status             String                          @default("ACTIVE")
+  minimumQuantity    Decimal?                        @db.Decimal(18, 3)
+  reorderQuantity    Decimal?                        @db.Decimal(18, 3)
+  allowNegativeStock Boolean                         @default(false)
+  lotTracking        Boolean                         @default(false)
+  expiryTracking     Boolean                         @default(false)
+  createdByUserId    String
+  updatedByUserId    String?
+  revision           Int                             @default(1)
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+  archivedAt         DateTime?
+  catalogItem        EnterpriseCatalogItem           @relation(fields: [organizationId, catalogItemId], references: [organizationId, id], onDelete: Restrict)
+  balances           EnterpriseInventoryBalance[]
+  stockLots          EnterpriseStockLot[]
+  stockMovements     EnterpriseStockMovement[]
+  inventoryCountLines EnterpriseInventoryCountLine[]
+  transferLines      EnterpriseStockTransferLine[]
+  adjustments        EnterpriseStockAdjustment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, catalogItemId])
+  @@index([organizationId, status])
+  @@index([organizationId, minimumQuantity])
+  @@index([archivedAt])
+}
+
+model EnterpriseStockLot {
+  id                String                       @id @default(cuid())
+  organizationId    String
+  inventoryItemId   String
+  lotNumber         String
+  productionDate    DateTime?
+  expiryDate        DateTime?
+  supplierId        String?
+  warehouseId       String
+  storageLocationId String?
+  status            String                       @default("AVAILABLE")
+  notes             String?
+  createdByUserId   String
+  revision          Int                          @default(1)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  archivedAt        DateTime?
+  inventoryItem     EnterpriseInventoryItem      @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  storageLocation   EnterpriseStorageLocation?   @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
+  balances          EnterpriseInventoryBalance[]
+  movements         EnterpriseStockMovement[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, inventoryItemId, lotNumber])
+  @@index([organizationId, warehouseId, status])
+  @@index([organizationId, storageLocationId, status])
+  @@index([organizationId, expiryDate, status])
+  @@index([organizationId, supplierId])
+  @@index([archivedAt])
+}
+
+model EnterpriseInventoryBalance {
+  id                String                     @id @default(cuid())
+  organizationId    String
+  inventoryItemId   String
+  warehouseId       String
+  storageLocationId String?
+  stockLotId        String?
+  quantityOnHand    Decimal                    @default(0) @db.Decimal(18, 3)
+  quantityReserved  Decimal                    @default(0) @db.Decimal(18, 3)
+  revision          Int                        @default(1)
+  updatedAt         DateTime                   @updatedAt
+  inventoryItem     EnterpriseInventoryItem    @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  warehouse         EnterpriseWarehouse        @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  storageLocation   EnterpriseStorageLocation? @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
+  stockLot          EnterpriseStockLot?        @relation(fields: [organizationId, stockLotId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, inventoryItemId, warehouseId, storageLocationId, stockLotId])
+  @@index([organizationId, warehouseId, inventoryItemId])
+  @@index([organizationId, storageLocationId, inventoryItemId])
+  @@index([organizationId, stockLotId])
+}
+
+model EnterpriseStockMovement {
+  id                  String                     @id @default(cuid())
+  organizationId      String
+  inventoryItemId     String
+  warehouseId         String
+  storageLocationId   String?
+  stockLotId          String?
+  movementType        String
+  direction           String
+  quantity            Decimal                    @db.Decimal(18, 3)
+  balanceAfter         Decimal?                   @db.Decimal(18, 3)
+  occurredAt           DateTime                   @default(now())
+  sourceEntityType     String?
+  sourceEntityId       String?
+  sourceLineId         String?
+  idempotencyKey       String
+  reason               String?
+  createdByUserId      String
+  createdAt            DateTime                   @default(now())
+  inventoryItem        EnterpriseInventoryItem    @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  warehouse            EnterpriseWarehouse        @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  storageLocation      EnterpriseStorageLocation? @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
+  stockLot             EnterpriseStockLot?        @relation(fields: [organizationId, stockLotId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, inventoryItemId, occurredAt])
+  @@index([organizationId, warehouseId, occurredAt])
+  @@index([organizationId, storageLocationId, occurredAt])
+  @@index([organizationId, stockLotId, occurredAt])
+  @@index([organizationId, movementType, occurredAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+}
+
+model EnterpriseInventoryCount {
+  id                String                         @id @default(cuid())
+  organizationId    String
+  reference         String
+  warehouseId       String
+  storageLocationId String?
+  status            String                         @default("DRAFT")
+  countType         String                         @default("FULL")
+  plannedAt         DateTime?
+  startedAt         DateTime?
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  completedAt       DateTime?
+  requestedByUserId String
+  approvedByUserId  String?
+  notes             String?
+  revision          Int                            @default(1)
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  archivedAt        DateTime?
+  lines             EnterpriseInventoryCountLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, warehouseId, status])
+  @@index([organizationId, storageLocationId, status])
+  @@index([organizationId, plannedAt, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseInventoryCountLine {
+  id                 String                   @id @default(cuid())
+  organizationId     String
+  inventoryCountId   String
+  inventoryItemId    String
+  stockLotId         String?
+  expectedQuantity   Decimal                  @db.Decimal(18, 3)
+  countedQuantity    Decimal?                 @db.Decimal(18, 3)
+  varianceQuantity   Decimal?                 @db.Decimal(18, 3)
+  countedByUserId    String?
+  countedAt          DateTime?
+  notes              String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  inventoryCount     EnterpriseInventoryCount @relation(fields: [organizationId, inventoryCountId], references: [organizationId, id], onDelete: Cascade)
+  inventoryItem      EnterpriseInventoryItem  @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, inventoryCountId, inventoryItemId, stockLotId])
+  @@index([organizationId, inventoryItemId])
+  @@index([organizationId, stockLotId])
+}
+
+model EnterpriseStockTransfer {
+  id                     String                        @id @default(cuid())
+  organizationId         String
+  reference              String
+  sourceWarehouseId      String
+  destinationWarehouseId String
+  status                 String                        @default("DRAFT")
+  requestedByUserId      String
+  approvedByUserId       String?
+  dispatchedByUserId     String?
+  receivedByUserId       String?
+  requestedAt            DateTime                      @default(now())
+  approvedAt             DateTime?
+  dispatchedAt           DateTime?
+  receivedAt             DateTime?
+  cancelledAt            DateTime?
+  notes                  String?
+  revision               Int                           @default(1)
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  archivedAt             DateTime?
+  sourceWarehouse        EnterpriseWarehouse           @relation("EnterpriseStockTransferSource", fields: [organizationId, sourceWarehouseId], references: [organizationId, id], onDelete: Restrict)
+  destinationWarehouse   EnterpriseWarehouse           @relation("EnterpriseStockTransferDestination", fields: [organizationId, destinationWarehouseId], references: [organizationId, id], onDelete: Restrict)
+  lines                  EnterpriseStockTransferLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, sourceWarehouseId, status])
+  @@index([organizationId, destinationWarehouseId, status])
+  @@index([organizationId, requestedAt, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseStockTransferLine {
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  stockTransferId      String
+  inventoryItemId      String
+  stockLotId           String?
+  sourceLocationId     String?
+  destinationLocationId String?
+  quantity             Decimal                   @db.Decimal(18, 3)
+  createdAt            DateTime                  @default(now())
+  stockTransfer        EnterpriseStockTransfer   @relation(fields: [organizationId, stockTransferId], references: [organizationId, id], onDelete: Cascade)
+  inventoryItem        EnterpriseInventoryItem   @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, stockTransferId])
+  @@index([organizationId, inventoryItemId])
+  @@index([organizationId, stockLotId])
+}
+
+model EnterpriseStockAdjustment {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  reference         String
+  inventoryItemId   String
+  warehouseId       String
+  storageLocationId String?
+  stockLotId        String?
+  adjustmentType    String
+  quantity          Decimal                 @db.Decimal(18, 3)
+  reason             String
+  status             String                  @default("DRAFT")
+  requestedByUserId String
+  approvedByUserId  String?
+  idempotencyKey    String?
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  appliedAt         DateTime?
+  revision          Int                     @default(1)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  inventoryItem     EnterpriseInventoryItem @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, inventoryItemId, status])
+  @@index([organizationId, warehouseId, status])
+  @@index([organizationId, requestedByUserId, status])
+}
