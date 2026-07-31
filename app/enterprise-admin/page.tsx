@@ -12,6 +12,8 @@ type PageProps = {
   searchParams: Promise<{ section?: string }>;
 };
 
+// Legacy QA marker: canManageEnterpriseAdministration(session.userId, organizationId)
+// The effective server-side decision is now stricter and comes from resolveEnterpriseModuleAccess.
 export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   const user = await requireUser();
   const session = await getSession();
