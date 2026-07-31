@@ -1,7 +1,7 @@
 # Inventaire canonique des modules ERP DTSC
 
-Version initiale : consolidation ERP, itération 1/5  
-Source de vérité exécutable : `lib/enterprise/module-registry-data.json`  
+Version initiale : consolidation ERP, itération 1/5
+Source de vérité exécutable : `lib/enterprise/module-registry-data.json`
 Contrôles reproductibles : `pnpm audit:enterprise-modules` et `pnpm qa:enterprise-module-registry`
 
 ## Principes de lecture
