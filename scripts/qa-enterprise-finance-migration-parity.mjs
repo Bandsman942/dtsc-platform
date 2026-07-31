@@ -12,6 +12,10 @@ const financeModels = new Set(
 );
 financeModels.add("EnterpriseFinancialStatementSnapshot");
 
+if (financeModels.size < 40) {
+  throw new Error(`Finance parity scope is unexpectedly small: ${financeModels.size} models`);
+}
+
 const result = spawnSync(
   "pnpm",
   [
@@ -49,5 +53,5 @@ if (affectedModels.length > 0) {
 }
 
 console.log(
-  `✓ Finance migration parity: ${financeModels.size} Finance models are unaffected by the remaining repository-wide historical drift.`,
+  `✓ Finance migration parity: ${financeModels.size} Iteration 3 models are unaffected by the remaining repository-wide historical drift.`,
 );
