@@ -103,3 +103,10 @@ jobs:
 
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
+
+      - name: Verify migration schema parity
+        run: >-
+          pnpm exec prisma migrate diff
+          --from-url "$DATABASE_URL"
+          --to-schema-datamodel prisma
+          --exit-code
