@@ -16,7 +16,7 @@ export async function calculateFinancialCloseChecklist(organizationId: string, f
     prisma.enterpriseSalesInvoice.count({ where: { organizationId, invoiceDate: { gte: period.startDate, lte: period.endDate }, status: { in: ["DRAFT", "PENDING_APPROVAL", "APPROVED"] } } }),
     prisma.enterpriseSupplierInvoice.count({ where: { organizationId, invoiceDate: { gte: period.startDate, lte: period.endDate }, status: { in: ["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED"] } } }),
     prisma.enterpriseTreasuryTransaction.count({ where: { organizationId, transactionDate: { gte: period.startDate, lte: period.endDate }, status: "CONFIRMED", reconciliationStatus: "UNRECONCILED" } }),
-    prisma.enterprisePayrollRun.count({ where: { organizationId, status: "APPROVED", period: { startDate: { lte: period.endDate }, endDate: { gte: period.startDate } } } }),
+    prisma.enterprisePayrollRun.count({ where: { organizationId, status: "APPROVED", payrollPeriod: { periodStart: { lte: period.endDate }, periodEnd: { gte: period.startDate } } } }),
     prisma.$queryRaw<Array<{ accountId: string; balance: Prisma.Decimal }>>(Prisma.sql`
       SELECT a.id AS "accountId", COALESCE(SUM(l.debit - l.credit), 0) AS balance
       FROM "EnterpriseLedgerAccount" a
