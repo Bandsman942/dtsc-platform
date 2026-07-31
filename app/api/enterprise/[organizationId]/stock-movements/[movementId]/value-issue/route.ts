@@ -1,0 +1,8 @@
+import { NextResponse } from "next/server";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { valueInventoryIssue } from "@/lib/enterprise/accounting/inventory-accounting-service";
+import { inventoryIssueValuationSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+
+type Params = { params: Promise<{ organizationId: string; movementId: string }> };
+export async function POST(req: Request, { params }: Params) { const startedAt = Date.now(); const { organizationId, movementId } = await params; const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_INVENTORY", "post", { mutation: true, limit: 100 }); if (!auth.ok) return auth.response; const parsed = inventoryIssueValuationSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 }); try { const result = await valueInventoryIssue(organizationId, movementId, auth.session.userId, parsed.data); await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_INVENTORY_ISSUE_VALUED", entity: "EnterpriseStockMovement", entityId: movementId, request: req, metadata: { organizationId, eventId: result.event.id, journalEntryId: result.posting.entry.id, currency: parsed.data.currencyCode } }); await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "inventory-accounting", action: "issue" } }); return NextResponse.json({ ok: true, ...result }); } catch (error) { return financeErrorResponse(error, "INVENTORY_ISSUE_VALUATION_FAILED"); } }
