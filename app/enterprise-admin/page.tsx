@@ -5,7 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getEnterpriseAdministrationDataset } from "@/lib/enterprise/enterprise-admin-loader";
-import { canManageEnterpriseAdministration, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
 type PageProps = {
   searchParams: Promise<{ section?: string }>;
@@ -20,7 +21,15 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
     redirect("/dashboard");
   }
   const membership = await requireEnterpriseMembership(session, organizationId);
-  if (!membership || !(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  const adminAccess = membership
+    ? await resolveEnterpriseModuleAccess({
+        userId: session.userId,
+        organizationId,
+        moduleCode: "ADMIN_DASHBOARD",
+        action: "manage",
+      })
+    : null;
+  if (!membership || !adminAccess?.allowed) {
     redirect("/dashboard");
   }
   const featureAccess = await canUseFeature(organizationId, "enterprise-admin");
