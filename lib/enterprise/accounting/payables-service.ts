@@ -159,7 +159,7 @@ export async function transitionSupplierInvoice(
       const payable = await tx.enterprisePayable.upsert({
         where: { supplierInvoiceId: invoice.id },
         update: {},
-        create: { organizationId, supplierId: invoice.supplierId, businessPartyId: invoice.businessPartyId, currencyCode: invoice.currencyCode, originalAmount: invoice.grandTotal, outstandingAmount: invoice.grandTotal, status: "OPEN", dueDate: invoice.dueDate, supplierInvoice: { connect: { organizationId_id: { organizationId, id: invoice.id } } } },
+        create: { organizationId, supplierInvoiceId: invoice.id, supplierId: invoice.supplierId, businessPartyId: invoice.businessPartyId, currencyCode: invoice.currencyCode, originalAmount: invoice.grandTotal, outstandingAmount: invoice.grandTotal, status: "OPEN", dueDate: invoice.dueDate },
       });
       const updated = await tx.enterpriseSupplierInvoice.update({ where: { id: invoice.id }, data: { status: "POSTED", postedAt: new Date(), revision: { increment: 1 } } });
       if (invoice.expenseId) await tx.enterpriseExpense.update({ where: { id: invoice.expenseId }, data: { accountedAt: new Date(), journalEntryId: posting.entry.id, updatedByUserId: actorUserId, revision: { increment: 1 } } });
