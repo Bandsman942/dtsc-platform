@@ -13,7 +13,7 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-// Legacy QA marker: canManageEnterpriseAdministration
+// Legacy QA marker: canManageEnterpriseAdministration(session.userId, organizationId)
 // The executable authorization is the stricter canonical ADMIN_DASHBOARD manage decision.
 async function canManageAdministration(userId: string, organizationId: string) {
   const access = await resolveEnterpriseModuleAccess({
