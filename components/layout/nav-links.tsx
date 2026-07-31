@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ElementType } from "react";
-import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, LayoutDashboard, Megaphone, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
+import type { ElementType, ReactNode } from "react";
+import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, Layers3, LayoutDashboard, Megaphone, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { getConsoleUrl, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
 import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
+import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
 
-type NavItem = {
+ type NavItem = {
   href: string;
   path?: string;
   label: string;
@@ -53,7 +54,12 @@ export function NavLinks({
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
-  enterpriseContext?: { organizationName: string; showAdmin: boolean; showActivities: boolean; modules: Array<{ code: string; label: string; description: string; category: string; isCore: boolean; icon: string | null }> } | null;
+  enterpriseContext?: {
+    organizationName: string;
+    showAdmin: boolean;
+    showActivities: boolean;
+    modules: EnterpriseNavigationModule[];
+  } | null;
   locale?: string | null;
 }) {
   const pathname = usePathname();
@@ -75,23 +81,7 @@ export function NavLinks({
   const navItems: NavItem[] = showInternalModules && canAccessAdministration(role)
     ? [...visibleBaseItems, ...invitationItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
     : [...visibleBaseItems, ...invitationItems, ...employeeItems];
-  const enterpriseItems: NavItem[] = enterpriseContext
-      ? [
-        ...(enterpriseContext.showActivities
-          ? [{ href: "/enterprise-activities", label: `Activités ${enterpriseContext.organizationName}`, icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." }]
-          : []),
-        ...enterpriseContext.modules.map((enterpriseModule) => ({
-          href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`,
-          label: enterpriseModule.label,
-          icon: resolveEnterpriseModuleIcon(enterpriseModule),
-          help: enterpriseModule.description,
-        })),
-        ...(enterpriseContext.showAdmin
-          ? [{ href: "/enterprise-admin", label: `Administration ${enterpriseContext.organizationName}`, icon: Shield, help: "Administrer les modules, postes et workflows de votre entreprise." }]
-          : []),
-      ]
-    : [];
-  const finalNavItems: NavItem[] = [...navItems, ...enterpriseItems];
+
   const translationByHref: Record<string, string> = {
     "/dashboard": "navigation.dashboard",
     "/chat": "navigation.chat",
@@ -107,59 +97,110 @@ export function NavLinks({
     "/settings": "navigation.settings",
     "/activities": "navigation.activities",
     "/admin": "navigation.admin",
-    "/enterprise-activities": "navigation.enterpriseActivities",
-    "/enterprise-admin": "navigation.enterpriseAdmin",
   };
+
+  const groupedEnterpriseModules = new Map<string, EnterpriseNavigationModule[]>();
+  for (const enterpriseModule of enterpriseContext?.modules || []) {
+    const groupModules = groupedEnterpriseModules.get(enterpriseModule.navigationGroup) || [];
+    groupModules.push(enterpriseModule);
+    groupedEnterpriseModules.set(enterpriseModule.navigationGroup, groupModules);
+  }
+
+  function renderItem(item: NavItem, labelOverride?: string) {
+    const itemPath = item.path || item.href;
+    const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+    const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
+    const showCollaborationSignal = itemPath === "/collaborators" && unreadCollaboratorMessages > 0;
+    const showInvitationSignal = itemPath === "/enterprise-invitations" && pendingEnterpriseInvitations > 0;
+    const signalCount = showInvitationSignal ? pendingEnterpriseInvitations : showNotificationSignal ? unreadNotifications : showCollaborationSignal ? unreadCollaboratorMessages : 0;
+    return (
+      <Link
+        key={itemPath}
+        href={item.href}
+        title={item.help}
+        className={cn(
+          "relative flex items-center gap-3 rounded-xl font-semibold transition",
+          mobile ? "shrink-0 px-3 py-2 text-xs" : "px-3 py-2.5 text-sm",
+          active
+            ? "bg-cyan-400/15 text-cyan-300 shadow-[inset_3px_0_0_rgb(34,211,238)]"
+            : "text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink",
+        )}
+        aria-current={active ? "page" : undefined}
+      >
+        <span className="relative inline-flex">
+          <item.icon className={mobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
+          {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300 opacity-70" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-dtsc-surface bg-cyan-400" />
+            </span>
+          )}
+        </span>
+        {labelOverride || (mobile && itemPath === "/admin" ? "Admin" : translate(locale, translationByHref[itemPath] || item.label))}
+        {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
+          <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
+            {signalCount > 99 ? "99+" : signalCount}
+          </span>
+        )}
+      </Link>
+    );
+  }
+
+  const enterpriseHeader = enterpriseContext ? (
+    <div className="mt-5 border-t border-dtsc-border pt-4">
+      <p className="px-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-600">
+        {enterpriseContext.organizationName}
+      </p>
+    </div>
+  ) : null;
+
+  const enterpriseNavigation: ReactNode = enterpriseContext ? (
+    <div className="space-y-1">
+      {enterpriseContext.showActivities
+        ? renderItem(
+            { href: "/enterprise-activities", label: "Activités entreprise", icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
+            translate(locale, "navigation.enterpriseActivitiesNamed").replace("{organization}", enterpriseContext.organizationName),
+          )
+        : null}
+      {renderItem({ href: "/enterprise-modules", label: "Modules ERP", icon: Layers3, help: "Ouvrir le hub groupé des modules ERP autorisés." }, locale === "en" ? "ERP modules" : "Modules ERP")}
+      {!mobile
+        ? Array.from(groupedEnterpriseModules.entries()).map(([group, groupModules]) => {
+            const groupLabel = groupModules[0]?.navigationGroupLabel || group;
+            const hasActiveModule = groupModules.some((enterpriseModule) => pathname === enterpriseModule.href || pathname.startsWith(`${enterpriseModule.href}/`));
+            return (
+              <details key={group} open={hasActiveModule || group === "OPERATIONS"} className="group rounded-xl">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-xl px-3 text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink">
+                  <span>{groupLabel}</span>
+                  <span className="rounded-full bg-dtsc-page px-2 py-0.5 text-[0.62rem]">{groupModules.length}</span>
+                </summary>
+                <div className="ml-2 border-l border-dtsc-border pl-2">
+                  {groupModules
+                    .sort((left, right) => left.navigationOrder - right.navigationOrder)
+                    .map((enterpriseModule) => renderItem({
+                      href: enterpriseModule.href,
+                      label: enterpriseModule.label,
+                      icon: resolveEnterpriseModuleIcon(enterpriseModule),
+                      help: enterpriseModule.description,
+                    }, enterpriseModule.label))}
+                </div>
+              </details>
+            );
+          })
+        : null}
+      {enterpriseContext.showAdmin
+        ? renderItem(
+            { href: "/enterprise-admin", label: "Administration entreprise", icon: Shield, help: "Administrer les collaborateurs, postes, départements, modules, abonnement, paramètres et audit." },
+            translate(locale, "navigation.enterpriseAdminNamed").replace("{organization}", enterpriseContext.organizationName),
+          )
+        : null}
+    </div>
+  ) : null;
 
   return (
     <>
-      {finalNavItems.map((item) => {
-        const itemPath = item.path || item.href;
-        const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
-        const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
-        const showCollaborationSignal = itemPath === "/collaborators" && unreadCollaboratorMessages > 0;
-        const showInvitationSignal = itemPath === "/enterprise-invitations" && pendingEnterpriseInvitations > 0;
-        const signalCount = showInvitationSignal ? pendingEnterpriseInvitations : showNotificationSignal ? unreadNotifications : showCollaborationSignal ? unreadCollaboratorMessages : 0;
-        return (
-          <Link
-            key={itemPath}
-            href={item.href}
-            title={item.help}
-            className={cn(
-              "relative flex items-center gap-3 rounded-xl font-semibold transition",
-              mobile ? "shrink-0 px-3 py-2 text-xs" : "px-3 py-2.5 text-sm",
-              active
-                ? "bg-cyan-400/15 text-cyan-300 shadow-[inset_3px_0_0_rgb(34,211,238)]"
-                : "text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"
-            )}
-            aria-current={active ? "page" : undefined}
-          >
-            <span className="relative inline-flex">
-              <item.icon className={mobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
-              {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300 opacity-70" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-dtsc-surface bg-cyan-400" />
-                </span>
-              )}
-            </span>
-            {mobile && itemPath === "/admin"
-              ? "Admin"
-              : itemPath === "/enterprise-activities"
-                ? translate(locale, "navigation.enterpriseActivitiesNamed").replace("{organization}", enterpriseContext?.organizationName || "")
-                : itemPath === "/enterprise-admin"
-                  ? translate(locale, "navigation.enterpriseAdminNamed").replace("{organization}", enterpriseContext?.organizationName || "")
-                  : itemPath.startsWith("/enterprise-modules/")
-                    ? item.label
-                    : translate(locale, translationByHref[itemPath] || item.label)}
-            {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
-              <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
-                {signalCount > 99 ? "99+" : signalCount}
-              </span>
-            )}
-          </Link>
-        );
-      })}
+      {navItems.map((item) => renderItem(item))}
+      {enterpriseHeader}
+      {enterpriseNavigation}
     </>
   );
 }
