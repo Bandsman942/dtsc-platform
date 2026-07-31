@@ -143,7 +143,7 @@ export async function transitionSalesInvoice(
       const receivable = await tx.enterpriseReceivable.upsert({
         where: { salesInvoiceId: invoice.id },
         update: {},
-        create: { organizationId, businessPartyId: invoice.businessPartyId, currencyCode: invoice.currencyCode, originalAmount: invoice.grandTotal, outstandingAmount: invoice.grandTotal, status: "OPEN", dueDate: invoice.dueDate, salesInvoice: { connect: { organizationId_id: { organizationId, id: invoice.id } } } },
+        create: { organizationId, salesInvoiceId: invoice.id, businessPartyId: invoice.businessPartyId, currencyCode: invoice.currencyCode, originalAmount: invoice.grandTotal, outstandingAmount: invoice.grandTotal, status: "OPEN", dueDate: invoice.dueDate },
       });
       const updated = await tx.enterpriseSalesInvoice.update({ where: { id: invoice.id }, data: { status: "ISSUED", issuedAt: invoice.issuedAt || new Date(), postedAt: invoice.postedAt || new Date(), revision: { increment: 1 } } });
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSalesInvoice", entityId: invoice.id, eventType: "SALES_INVOICE_ISSUED", summary: `Customer invoice ${invoice.number} issued`, actorUserId, fromStatus: invoice.status, toStatus: "ISSUED", metadataJson: { receivableId: receivable.id, journalEntryId: posting.entry.id } });
