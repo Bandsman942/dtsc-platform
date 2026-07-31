@@ -1,0 +1,39 @@
+model PharmacyReceiptExtension {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  pharmacyReceiptId   String
+  purchaseExtensionId String
+  enterpriseReceiptId String
+  mappingVersion      Int      @default(1)
+  syncStatus          String   @default("SYNCED")
+  cutoverAt           DateTime?
+  createdByUserId     String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyReceiptId])
+  @@unique([organizationId, enterpriseReceiptId])
+  @@index([organizationId, purchaseExtensionId])
+  @@index([organizationId, syncStatus])
+}
+
+model HealthInsuranceProviderExtension {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  healthInsuranceProviderId  String
+  businessPartyId            String
+  migrationKey               String?
+  mappingVersion             Int      @default(1)
+  syncStatus                 String   @default("SYNCED")
+  cutoverAt                  DateTime?
+  createdByUserId            String
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, healthInsuranceProviderId])
+  @@unique([organizationId, businessPartyId])
+  @@unique([organizationId, migrationKey])
+  @@index([organizationId, syncStatus])
+}

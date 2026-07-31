@@ -1,0 +1,378 @@
+model EnterpriseSectorSyncState {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  sector               String
+  sourceEntityType     String
+  sourceEntityId       String
+  targetEntityType     String?
+  targetEntityId       String?
+  eventType            String   @default("ENTITY_MAPPING")
+  eventVersion         Int      @default(1)
+  idempotencyKey       String
+  status               String   @default("PENDING")
+  lastSyncedVersion    Int?
+  errorCode            String?
+  errorMessage         String?
+  requiresManualAction Boolean  @default(false)
+  cutoverComplete      Boolean  @default(false)
+  metadataJson         Json?
+  lastAttemptAt        DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, sector, sourceEntityType, sourceEntityId, eventType, eventVersion])
+  @@index([organizationId, sector, status, updatedAt])
+  @@index([organizationId, requiresManualAction, status])
+  @@index([organizationId, targetEntityType, targetEntityId])
+}
+
+model EnterpriseSectorCutoverState {
+  id              String   @id @default(cuid())
+  organizationId  String
+  sector          String
+  domainCode      String
+  status          String   @default("DISABLED")
+  featureFlag     String
+  enabledByUserId String?
+  enabledAt       DateTime?
+  disabledByUserId String?
+  disabledAt      DateTime?
+  verifiedAt      DateTime?
+  rollbackReason  String?
+  notes           String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, sector, domainCode])
+  @@index([organizationId, status, updatedAt])
+}
+
+model PharmacyProductExtension {
+  id                String   @id @default(cuid())
+  organizationId    String
+  pharmacyProductId String
+  catalogItemId     String
+  historicalKey     String?
+  mappingVersion    Int      @default(1)
+  syncStatus        String   @default("SYNCED")
+  cutoverAt         DateTime?
+  createdByUserId   String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyProductId])
+  @@unique([organizationId, catalogItemId])
+  @@unique([organizationId, historicalKey])
+  @@index([organizationId, syncStatus])
+}
+
+model PharmacySupplierExtension {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  pharmacySupplierId   String
+  businessPartyId      String
+  enterpriseSupplierId String?
+  historicalKey        String?
+  mappingVersion       Int      @default(1)
+  syncStatus           String   @default("SYNCED")
+  cutoverAt            DateTime?
+  createdByUserId      String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacySupplierId])
+  @@unique([organizationId, businessPartyId])
+  @@unique([organizationId, enterpriseSupplierId])
+  @@unique([organizationId, historicalKey])
+  @@index([organizationId, syncStatus])
+}
+
+model PharmacyPurchaseExtension {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  pharmacyPurchaseOrderId String
+  enterprisePurchaseId    String
+  pharmacyReceiptId       String?
+  enterpriseReceiptId     String?
+  mappingVersion          Int      @default(1)
+  syncStatus              String   @default("SYNCED")
+  cutoverAt               DateTime?
+  createdByUserId         String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyPurchaseOrderId])
+  @@unique([organizationId, enterprisePurchaseId])
+  @@unique([organizationId, pharmacyReceiptId])
+  @@unique([organizationId, enterpriseReceiptId])
+  @@index([organizationId, syncStatus])
+}
+
+model PharmacySalesExtension {
+  id                String   @id @default(cuid())
+  organizationId    String
+  pharmacySaleId    String
+  salesInvoiceId    String
+  businessPartyId   String
+  mappingVersion    Int      @default(1)
+  syncStatus        String   @default("SYNCED")
+  cutoverAt         DateTime?
+  createdByUserId   String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacySaleId])
+  @@unique([organizationId, salesInvoiceId])
+  @@index([organizationId, businessPartyId])
+  @@index([organizationId, syncStatus])
+}
+
+model PharmacyInvoiceExtension {
+  id                String   @id @default(cuid())
+  organizationId    String
+  pharmacyInvoiceId String
+  salesInvoiceId    String
+  mappingVersion    Int      @default(1)
+  syncStatus        String   @default("SYNCED")
+  cutoverAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyInvoiceId])
+  @@unique([organizationId, salesInvoiceId])
+  @@index([organizationId, syncStatus])
+}
+
+model PharmacyPaymentExtension {
+  id                String   @id @default(cuid())
+  organizationId    String
+  pharmacyPaymentId String
+  paymentId          String
+  pharmacySaleId    String?
+  pharmacyInvoiceId String?
+  mappingVersion    Int      @default(1)
+  syncStatus        String   @default("SYNCED")
+  cutoverAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyPaymentId])
+  @@unique([organizationId, paymentId])
+  @@index([organizationId, syncStatus])
+}
+
+model PharmacyCashExtension {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  pharmacyCashSessionId String
+  cashSessionId         String
+  mappingVersion        Int      @default(1)
+  syncStatus            String   @default("SYNCED")
+  cutoverAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, pharmacyCashSessionId])
+  @@unique([organizationId, cashSessionId])
+  @@index([organizationId, syncStatus])
+}
+
+model EnterpriseSectorInventoryEvent {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  sector                 String
+  sourceMovementId       String
+  sourceBatchId          String?
+  sourceProductId        String
+  catalogItemId          String
+  inventoryItemId        String?
+  eventType              String
+  eventVersion           Int      @default(1)
+  direction              String
+  quantity               Decimal  @db.Decimal(20, 6)
+  unitCost                Decimal? @db.Decimal(20, 6)
+  totalValue              Decimal? @db.Decimal(20, 6)
+  currencyCode            String?
+  valuationId             String?
+  journalEntryId          String?
+  idempotencyKey          String
+  status                  String   @default("PENDING")
+  errorCode               String?
+  errorMessage            String?
+  createdByUserId         String
+  completedAt             DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, sector, sourceMovementId, eventType, eventVersion])
+  @@index([organizationId, sector, status, createdAt])
+  @@index([organizationId, catalogItemId])
+  @@index([organizationId, journalEntryId])
+}
+
+model HealthPatientFinancialProfile {
+  id                          String   @id @default(cuid())
+  organizationId              String
+  healthPatientId             String
+  businessPartyId             String
+  billingDisplayLabel         String
+  financialResponsiblePartyId String?
+  migrationKey                String?
+  confidentialityLevel        String   @default("MEDICAL_CONFIDENTIAL")
+  mappingVersion              Int      @default(1)
+  syncStatus                  String   @default("SYNCED")
+  cutoverAt                   DateTime?
+  createdByUserId             String
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, healthPatientId])
+  @@unique([organizationId, businessPartyId])
+  @@unique([organizationId, migrationKey])
+  @@index([organizationId, syncStatus])
+}
+
+model HealthServiceCatalogExtension {
+  id                            String   @id @default(cuid())
+  organizationId                String
+  healthBillingServiceCatalogId String
+  catalogItemId                 String
+  confidentialityLevel          String   @default("MEDICAL_CONFIDENTIAL")
+  mappingVersion                Int      @default(1)
+  syncStatus                    String   @default("SYNCED")
+  cutoverAt                     DateTime?
+  createdByUserId               String
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, healthBillingServiceCatalogId])
+  @@unique([organizationId, catalogItemId])
+  @@index([organizationId, syncStatus])
+}
+
+model HealthBillingExtension {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  healthMedicalInvoiceId   String
+  salesInvoiceId           String
+  patientFinancialProfileId String
+  consultationId           String?
+  labRequestId             String?
+  pharmacyDispensationId   String?
+  confidentialityLevel     String   @default("MEDICAL_CONFIDENTIAL")
+  mappingVersion           Int      @default(1)
+  syncStatus               String   @default("SYNCED")
+  cutoverAt                DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, healthMedicalInvoiceId])
+  @@unique([organizationId, salesInvoiceId])
+  @@index([organizationId, patientFinancialProfileId])
+  @@index([organizationId, syncStatus])
+}
+
+model HealthInvoicePayerComponent {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  healthMedicalInvoiceId String
+  salesInvoiceId        String
+  payerType             String
+  businessPartyId       String
+  receivableId          String?
+  currencyCode          String
+  requestedAmount       Decimal  @db.Decimal(20, 6)
+  approvedAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  settledAmount         Decimal  @default(0) @db.Decimal(20, 6)
+  writtenOffAmount      Decimal  @default(0) @db.Decimal(20, 6)
+  outstandingAmount     Decimal  @db.Decimal(20, 6)
+  status                String   @default("OPEN")
+  revision              Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, healthMedicalInvoiceId, payerType, businessPartyId])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, salesInvoiceId])
+  @@index([organizationId, receivableId])
+}
+
+model HealthInsuranceReceivableExtension {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  coverageRequestId     String
+  payerComponentId      String
+  insurerBusinessPartyId String
+  claimStatus           String   @default("DRAFT")
+  requestedAmount       Decimal  @db.Decimal(20, 6)
+  approvedAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  settledAmount         Decimal  @default(0) @db.Decimal(20, 6)
+  rejectedAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  disputedAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  currencyCode          String
+  mappingVersion        Int      @default(1)
+  syncStatus            String   @default("SYNCED")
+  cutoverAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, coverageRequestId])
+  @@unique([organizationId, payerComponentId])
+  @@index([organizationId, insurerBusinessPartyId, claimStatus])
+  @@index([organizationId, syncStatus])
+}
+
+model HealthPaymentExtension {
+  id                            String   @id @default(cuid())
+  organizationId                String
+  healthMedicalInvoicePaymentId String
+  paymentId                     String
+  payerType                     String
+  payerBusinessPartyId          String
+  mappingVersion                Int      @default(1)
+  syncStatus                    String   @default("SYNCED")
+  cutoverAt                     DateTime?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, healthMedicalInvoicePaymentId])
+  @@unique([organizationId, paymentId])
+  @@index([organizationId, payerBusinessPartyId])
+  @@index([organizationId, syncStatus])
+}
+
+model HealthPayerAllocation {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  payerComponentId    String
+  paymentAllocationId String
+  amount              Decimal  @db.Decimal(20, 6)
+  status              String   @default("CONFIRMED")
+  createdAt           DateTime @default(now())
+  reversedAt          DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, payerComponentId, paymentAllocationId])
+  @@index([organizationId, payerComponentId, status])
+  @@index([organizationId, paymentAllocationId])
+}
