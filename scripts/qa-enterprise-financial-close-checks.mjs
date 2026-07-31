@@ -16,8 +16,10 @@ requireTokens("lib/enterprise/accounting/close-service.ts", [
   "status: \"CLOSED\"",
 ]);
 requireTokens("lib/enterprise/accounting/periods.ts", [
-  "FISCAL_PERIOD_CLOSED",
+  "FINANCE_PERIOD_CLOSED",
+  "FINANCE_PERIOD_BLOCKS_DRAFT_MUTATION",
   "SOFT_CLOSED",
+  "CLOSED",
   "LOCKED",
 ]);
 requireTokens("app/api/enterprise/[organizationId]/financial-close/[closeId]/transition/route.ts", [
