@@ -7,9 +7,14 @@ import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitl
 import { getEnterpriseAdministrationDataset } from "@/lib/enterprise/enterprise-admin-loader";
 import { canManageEnterpriseAdministration, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
-export default async function EnterpriseAdminPage() {
+type PageProps = {
+  searchParams: Promise<{ section?: string }>;
+};
+
+export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   const user = await requireUser();
   const session = await getSession();
+  const { section } = await searchParams;
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
   if (!session || !organizationId) {
     redirect("/dashboard");
@@ -54,6 +59,8 @@ export default async function EnterpriseAdminPage() {
         calendarEvents={dataset.calendarEvents}
         sectorRecords={dataset.sectorRecords}
         entitlements={dataset.entitlements}
+        configurationIssues={dataset.configurationIssues}
+        initialSection={section}
       />
     </AppShell>
   );
