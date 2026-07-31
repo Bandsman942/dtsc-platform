@@ -1,6 +1,7 @@
 import registryData from "@/lib/enterprise/module-registry-data.json";
 import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-domains.json";
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
+import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
 import type { SaasPlanCode } from "@/lib/billing/plans";
 
 export type EnterpriseModuleImplementationStatus =
@@ -80,12 +81,28 @@ export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   registryData.version,
   commonDomainRegistryData.version,
   financeRegistryData.version,
+  sectorConvergenceRegistryData.version,
 );
+
+const sectorOverrides = new Map(
+  sectorConvergenceRegistryData.overrides.map((override) => [override.code, override]),
+);
+
+function applySectorConvergenceOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
+  const override = sectorOverrides.get(definition.code);
+  if (!override) return definition;
+  return {
+    ...definition,
+    dependencies: [...new Set(override.dependencies)],
+    permissionPrefixes: [...new Set(override.permissionPrefixes)],
+  };
+}
+
 export const ENTERPRISE_MODULE_REGISTRY = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
   ...financeRegistryData.modules,
-] as EnterpriseModuleDefinition[];
+].map((definition) => applySectorConvergenceOverride(definition as EnterpriseModuleDefinition));
 
 const definitionByCode = new Map<string, EnterpriseModuleDefinition>();
 const canonicalCodeByAlias = new Map<string, string>();
