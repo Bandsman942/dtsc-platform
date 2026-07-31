@@ -21,6 +21,8 @@ import {
   buildPayrollPosting,
   buildSupplierCreditNotePosting,
 } from "@/lib/enterprise/accounting/domain-posting-builders";
+import { buildHealthWriteOffPosting } from "@/lib/enterprise/accounting/sector-adapters/health";
+import { buildPharmacySectorInventoryPosting } from "@/lib/enterprise/accounting/sector-adapters/pharmacy";
 
 export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> = {
   SALES_INVOICE_POSTED: buildSalesInvoicePosting,
@@ -40,6 +42,13 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   CASH_VARIANCE_POSTED: buildCashVariancePosting,
   BANK_CHARGE_POSTED: buildBankChargePosting,
   OPENING_BALANCE_POSTED: buildOpeningBalancePosting,
+  PHARMACY_CUSTOMER_RETURN: buildPharmacySectorInventoryPosting,
+  PHARMACY_SUPPLIER_RETURN: buildPharmacySectorInventoryPosting,
+  PHARMACY_LOSS: buildPharmacySectorInventoryPosting,
+  PHARMACY_EXPIRY_WRITE_OFF: buildPharmacySectorInventoryPosting,
+  PHARMACY_ADJUSTMENT: buildPharmacySectorInventoryPosting,
+  PHARMACY_RECALL_WRITE_OFF: buildPharmacySectorInventoryPosting,
+  HEALTH_WRITE_OFF_APPROVED: buildHealthWriteOffPosting,
 };
 
 export function getPostingBuilder(event: PostingEvent) {
