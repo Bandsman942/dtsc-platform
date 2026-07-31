@@ -1,4 +1,7 @@
-import { applySectorTemplateToOrganization } from "@/lib/enterprise-sector-templates";
+import {
+  applySectorTemplateToOrganization,
+  type ApplySectorTemplateMode,
+} from "@/lib/enterprise-sector-templates";
 import {
   getEnterpriseModuleDefinition,
   isEnterpriseModuleImplemented,
@@ -7,12 +10,18 @@ import {
 } from "@/lib/enterprise/module-registry";
 import { prisma } from "@/lib/prisma";
 
-export async function applyCanonicalSectorTemplateToOrganization(
-  organizationId: string,
-  sectorCode: string,
-  options?: { preserveCustomization?: boolean },
-) {
-  const result = await applySectorTemplateToOrganization(organizationId, sectorCode, options);
+export async function applyCanonicalSectorTemplateToOrganization({
+  organizationId,
+  sectorId,
+  actorUserId,
+  mode = "merge",
+}: {
+  organizationId: string;
+  sectorId: string;
+  actorUserId: string;
+  mode?: ApplySectorTemplateMode;
+}) {
+  const result = await applySectorTemplateToOrganization({ organizationId, sectorId, actorUserId, mode });
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, deletedAt: null },
     select: {
