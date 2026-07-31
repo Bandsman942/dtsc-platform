@@ -74,7 +74,6 @@ model EnterpriseDocumentAccess {
 model EnterpriseSupplier {
   id              String                      @id @default(cuid())
   organizationId  String
-  businessPartyId String?
   legalName       String
   displayName     String?
   normalizedName  String
@@ -89,9 +88,6 @@ model EnterpriseSupplier {
   country         String?
   taxIdentifier   String?
   registrationId  String?
-  paymentTerms    String?
-  complianceStatus String?                    @default("NOT_REVIEWED")
-  averageLeadTimeDays Int?
   notes           String?
   createdByUserId String
   updatedByUserId String?
@@ -105,13 +101,11 @@ model EnterpriseSupplier {
 
   @@unique([organizationId, id])
   @@unique([organizationId, normalizedName])
-  @@unique([organizationId, businessPartyId])
   @@index([organizationId, status, legalName])
   @@index([organizationId, category, status])
   @@index([organizationId, country, status])
   @@index([organizationId, taxIdentifier])
   @@index([organizationId, registrationId])
-  @@index([organizationId, complianceStatus, status])
   @@index([archivedAt])
 }
 
@@ -132,47 +126,41 @@ model EnterpriseSupplierContact {
 }
 
 model EnterprisePurchase {
-  id                     String                      @id @default(cuid())
-  organizationId         String
-  reference              String
-  title                  String
-  description            String?
-  status                 String                      @default("DRAFT")
-  priority               String                      @default("NORMAL")
-  supplierId             String?
-  requestedByUserId      String
-  buyerUserId            String?
-  departmentId           String?
-  requestId              String?
-  budgetLineId           String?
-  siteId                 String?
-  destinationWarehouseId String?
-  supplierContractId     String?
-  projectId              String?
-  assetId                String?
-  expectedReceiptType    String                      @default("GOODS")
-  currency               String                      @default("USD")
-  subtotalAmount         Decimal                     @default(0) @db.Decimal(18, 2)
-  taxAmount              Decimal                     @default(0) @db.Decimal(18, 2)
-  totalAmount            Decimal                     @default(0) @db.Decimal(18, 2)
-  expectedAt             DateTime?
-  orderedAt              DateTime?
-  receivedAt             DateTime?
-  closedAt               DateTime?
-  sourceModule           String?
-  sourceEntityType       String?
-  sourceEntityId         String?
-  revision               Int                         @default(1)
-  createdByUserId        String
-  updatedByUserId        String?
-  createdAt              DateTime                    @default(now())
-  updatedAt              DateTime                    @updatedAt
-  archivedAt             DateTime?
-  supplier               EnterpriseSupplier?         @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  budgetLine             EnterpriseBudgetLine?       @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Restrict)
-  items                  EnterprisePurchaseItem[]
-  receipts               EnterprisePurchaseReceipt[]
-  expenses               EnterpriseExpense[]
+  id                String                      @id @default(cuid())
+  organizationId    String
+  reference         String
+  title             String
+  description       String?
+  status            String                      @default("DRAFT")
+  priority          String                      @default("NORMAL")
+  supplierId        String?
+  requestedByUserId String
+  buyerUserId       String?
+  departmentId      String?
+  requestId         String?
+  budgetLineId      String?
+  currency          String                      @default("USD")
+  subtotalAmount    Decimal                     @default(0) @db.Decimal(18, 2)
+  taxAmount         Decimal                     @default(0) @db.Decimal(18, 2)
+  totalAmount       Decimal                     @default(0) @db.Decimal(18, 2)
+  expectedAt        DateTime?
+  orderedAt         DateTime?
+  receivedAt        DateTime?
+  closedAt          DateTime?
+  sourceModule      String?
+  sourceEntityType  String?
+  sourceEntityId    String?
+  revision          Int                         @default(1)
+  createdByUserId   String
+  updatedByUserId   String?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  archivedAt        DateTime?
+  supplier          EnterpriseSupplier?         @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  budgetLine        EnterpriseBudgetLine?       @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Restrict)
+  items             EnterprisePurchaseItem[]
+  receipts          EnterprisePurchaseReceipt[]
+  expenses          EnterpriseExpense[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -183,45 +171,33 @@ model EnterprisePurchase {
   @@index([organizationId, buyerUserId, status])
   @@index([organizationId, requestId])
   @@index([organizationId, budgetLineId, status])
-  @@index([organizationId, siteId, status])
-  @@index([organizationId, destinationWarehouseId, status])
-  @@index([organizationId, supplierContractId])
-  @@index([organizationId, projectId])
-  @@index([organizationId, assetId])
   @@index([organizationId, expectedAt])
   @@index([organizationId, sourceEntityType, sourceEntityId])
   @@index([archivedAt])
 }
 
 model EnterprisePurchaseItem {
-  id               String                       @id @default(cuid())
+  id               String             @id @default(cuid())
   organizationId   String
   purchaseId       String
-  catalogItemId    String?
   description      String
-  quantity         Decimal                      @db.Decimal(18, 3)
+  quantity         Decimal            @db.Decimal(18, 3)
   unit             String
-  unitOfMeasureId  String?
-  unitPrice        Decimal                      @db.Decimal(18, 2)
-  taxRate          Decimal                      @default(0) @db.Decimal(8, 4)
-  lineSubtotal     Decimal                      @db.Decimal(18, 2)
-  taxAmount        Decimal                      @db.Decimal(18, 2)
-  lineTotal        Decimal                      @db.Decimal(18, 2)
-  expectedItemType String                       @default("GOODS")
+  unitPrice        Decimal            @db.Decimal(18, 2)
+  taxRate          Decimal            @default(0) @db.Decimal(8, 4)
+  lineSubtotal     Decimal            @db.Decimal(18, 2)
+  taxAmount        Decimal            @db.Decimal(18, 2)
+  lineTotal        Decimal            @db.Decimal(18, 2)
   sourceEntityType String?
   sourceEntityId   String?
-  sortOrder        Int                          @default(0)
-  createdAt        DateTime                     @default(now())
-  updatedAt        DateTime                     @updatedAt
-  purchase         EnterprisePurchase           @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Cascade)
-  catalogItem      EnterpriseCatalogItem?        @relation(fields: [organizationId, catalogItemId], references: [organizationId, id], onDelete: Restrict)
-  unitOfMeasure    EnterpriseUnitOfMeasure?      @relation(fields: [organizationId, unitOfMeasureId], references: [organizationId, id], onDelete: Restrict)
+  sortOrder        Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  purchase         EnterprisePurchase @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Cascade)
   receiptItems     EnterprisePurchaseReceiptItem[]
 
   @@unique([organizationId, id])
   @@index([organizationId, purchaseId, sortOrder])
-  @@index([organizationId, catalogItemId])
-  @@index([organizationId, unitOfMeasureId])
   @@index([organizationId, sourceEntityType, sourceEntityId])
 }
 
@@ -230,25 +206,17 @@ model EnterprisePurchaseReceipt {
   organizationId   String
   purchaseId       String
   reference        String
-  status           String                          @default("POSTED")
-  idempotencyKey   String?
   receivedAt       DateTime
   receivedByUserId String
-  warehouseId      String?
-  storageLocationId String?
-  serviceAccepted  Boolean                         @default(false)
   notes            String?
-  revision         Int                             @default(1)
   createdAt        DateTime                        @default(now())
   purchase         EnterprisePurchase              @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Restrict)
   items            EnterprisePurchaseReceiptItem[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
-  @@unique([organizationId, idempotencyKey])
   @@index([organizationId, purchaseId, receivedAt])
   @@index([organizationId, receivedByUserId, receivedAt])
-  @@index([organizationId, warehouseId, receivedAt])
 }
 
 model EnterprisePurchaseReceiptItem {
@@ -257,13 +225,10 @@ model EnterprisePurchaseReceiptItem {
   receiptId        String
   purchaseItemId   String
   quantityReceived Decimal                   @db.Decimal(18, 3)
-  stockMovementId  String?
-  serviceAccepted  Boolean                   @default(false)
   createdAt        DateTime                  @default(now())
   receipt          EnterprisePurchaseReceipt @relation(fields: [organizationId, receiptId], references: [organizationId, id], onDelete: Cascade)
   purchaseItem     EnterprisePurchaseItem    @relation(fields: [organizationId, purchaseItemId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, receiptId, purchaseItemId])
-  @@unique([organizationId, stockMovementId])
   @@index([organizationId, purchaseItemId])
 }
