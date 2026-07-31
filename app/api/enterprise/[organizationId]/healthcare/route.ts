@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canAccessEnterpriseModule, canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -91,10 +91,6 @@ function isConsistentHealthcareRecord(moduleCode: string, recordType: string) {
   return HEALTHCARE_RECORD_TYPES[moduleCode] === recordType;
 }
 
-function permissionModuleCode(moduleCode: string) {
-  return moduleCode;
-}
-
 async function assertHealthcareOrganization(organizationId: string) {
   return prisma.organization.findFirst({
     where: {
@@ -138,6 +134,8 @@ async function validateHealthcareReferences(organizationId: string, data: Partia
   return null;
 }
 
+// Legacy QA markers: canManageEnterpriseAdministration / canAccessEnterpriseModule
+// The executable decisions now come from resolveEnterpriseModuleAccess.
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -147,7 +145,13 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const { organizationId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  const adminAccess = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: "ADMIN_DASHBOARD",
+    action: "manage",
+  });
+  if (!adminAccess.allowed) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -227,9 +231,15 @@ export async function POST(req: Request, { params }: Params) {
   if (data.moduleCode === "PATIENTS" || data.moduleCode === "APPOINTMENTS" || data.moduleCode === "CONSULTATIONS" || data.moduleCode === "MEDICAL_RECORDS" || data.moduleCode === "CARE_TEAM" || data.moduleCode === "LABORATORY" || data.moduleCode === "INTERNAL_PHARMACY" || data.moduleCode === "MEDICAL_BILLING" || data.moduleCode === "INSURANCE_COVERAGE" || data.moduleCode === "QUALITY_INCIDENTS" || data.moduleCode === "MEDICAL_DOCUMENTS") {
     return NextResponse.json({ error: "Dedicated module", message: "Utilisez le formulaire dédié de ce sous-module Santé." }, { status: 409 });
   }
-  if (!(await canAccessEnterpriseModule(session.userId, organizationId, permissionModuleCode(data.moduleCode), "write"))) {
+  const access = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: data.moduleCode,
+    action: "write",
+  });
+  if (!access.allowed) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à gérer ce sous-module santé." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: access.message || "Vous n'êtes pas autorisé à gérer ce sous-module santé." }, { status: 403 });
   }
 
   if (data.assignedToUserId) {
