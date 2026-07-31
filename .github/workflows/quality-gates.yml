@@ -80,6 +80,7 @@ jobs:
           --health-retries=5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_migration_test?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_migration_test?schema=shadow
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -107,6 +108,7 @@ jobs:
       - name: Verify migration schema parity
         run: >-
           pnpm exec prisma migrate diff
-          --from-url "$DATABASE_URL"
+          --from-migrations prisma/migrations
           --to-schema-datamodel prisma
+          --shadow-database-url "$SHADOW_DATABASE_URL"
           --exit-code
