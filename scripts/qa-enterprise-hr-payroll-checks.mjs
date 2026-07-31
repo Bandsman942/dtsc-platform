@@ -12,7 +12,7 @@ requirePaths([
 requireTokens("lib/enterprise/hr-payroll/payroll.ts", [
   "ACTIVE_EMPLOYMENT_CONTRACT_REQUIRED",
   "SELF_APPROVAL_FORBIDDEN",
-  "EnterprisePayslip",
+  "enterprisePayslip",
   "paymentCreated: false",
   "PAYROLL_RUN_ALREADY_EXISTS",
   "CANCELLED",
