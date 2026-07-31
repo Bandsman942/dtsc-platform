@@ -9,6 +9,7 @@ import type { journalEntryCreateSchema } from "@/lib/enterprise/accounting/schem
 import type { z } from "zod";
 
 type JournalEntryCreateInput = z.infer<typeof journalEntryCreateSchema>;
+type JournalTransitionAction = "SUBMIT" | "APPROVE" | "REJECT" | "CANCEL";
 
 function validateBalancedLines(lines: Array<{ debit: Prisma.Decimal.Value; credit: Prisma.Decimal.Value }>, tolerance = new Prisma.Decimal("0.000001")) {
   const debit = sumDecimals(lines.map((line) => line.debit));
@@ -144,27 +145,27 @@ export async function transitionJournalEntry(
   input: { action: "SUBMIT" | "APPROVE" | "REJECT" | "POST" | "CANCEL"; reason?: string; revision: number },
 ) {
   if (input.action === "POST") return postJournalEntry(organizationId, entryId, actorUserId, input.revision);
+  const action = input.action as JournalTransitionAction;
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseJournalEntry" WHERE id = ${entryId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const entry = await tx.enterpriseJournalEntry.findFirst({ where: { id: entryId, organizationId }, include: { journal: true } });
     if (!entry) throw new EnterpriseAccountingError("JOURNAL_ENTRY_NOT_FOUND", 404);
     if (entry.revision !== input.revision) throw new EnterpriseAccountingError("JOURNAL_ENTRY_REVISION_CONFLICT", 409, { currentRevision: entry.revision });
     if (["POSTED", "REVERSED"].includes(entry.status)) throw new EnterpriseAccountingError("POSTED_ENTRY_IMMUTABLE", 409);
-    const transitions: Record<typeof input.action, { from: string[]; to: string }> = {
+    const transitions: Record<JournalTransitionAction, { from: string[]; to: string }> = {
       SUBMIT: { from: ["DRAFT"], to: "PENDING_APPROVAL" },
       APPROVE: { from: ["PENDING_APPROVAL"], to: "APPROVED" },
       REJECT: { from: ["PENDING_APPROVAL"], to: "REJECTED" },
       CANCEL: { from: ["DRAFT", "REJECTED"], to: "CANCELLED" },
-      POST: { from: [], to: "POSTED" },
     };
-    const transition = transitions[input.action];
+    const transition = transitions[action];
     if (!transition.from.includes(entry.status)) throw new EnterpriseAccountingError("JOURNAL_ENTRY_TRANSITION_INVALID", 409);
-    if (input.action === "APPROVE") assertIndependentActor({ actorUserId, relatedUserIds: [entry.preparedByUserId], errorCode: "JOURNAL_ENTRY_SELF_APPROVAL_FORBIDDEN" });
+    if (action === "APPROVE") assertIndependentActor({ actorUserId, relatedUserIds: [entry.preparedByUserId], errorCode: "JOURNAL_ENTRY_SELF_APPROVAL_FORBIDDEN" });
     const updated = await tx.enterpriseJournalEntry.update({
       where: { id: entry.id },
       data: {
         status: transition.to,
-        approvedByUserId: input.action === "APPROVE" ? actorUserId : entry.approvedByUserId,
+        approvedByUserId: action === "APPROVE" ? actorUserId : entry.approvedByUserId,
         revision: { increment: 1 },
       },
     });
@@ -172,8 +173,8 @@ export async function transitionJournalEntry(
       organizationId,
       entityType: "EnterpriseJournalEntry",
       entityId: entry.id,
-      eventType: `JOURNAL_ENTRY_${input.action}`,
-      summary: `Journal entry ${entry.number}: ${input.action}`,
+      eventType: `JOURNAL_ENTRY_${action}`,
+      summary: `Journal entry ${entry.number}: ${action}`,
       actorUserId,
       fromStatus: entry.status,
       toStatus: transition.to,
