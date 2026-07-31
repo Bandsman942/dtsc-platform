@@ -1,0 +1,42 @@
+name: Generate enterprise accounting migration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "prisma/enterprise-accounting.prisma"
+      - "prisma/enterprise-finance-reporting.prisma"
+      - ".github/workflows/generate-enterprise-accounting-migration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-diff:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: base-main
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm prisma:generate
+      - name: Generate additive SQL from main to branch
+        run: >-
+          pnpm exec prisma migrate diff
+          --from-schema-datamodel base-main/prisma
+          --to-schema-datamodel prisma
+          --script > enterprise-accounting-migration.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enterprise-accounting-migration
+          path: enterprise-accounting-migration.sql
+          if-no-files-found: error

@@ -1,0 +1,90 @@
+export const ENTERPRISE_FINANCE_MODULE_CODES = [
+  "FINANCE_OVERVIEW",
+  "FINANCE_RECEIVABLES",
+  "FINANCE_PAYABLES",
+  "FINANCE_PAYMENTS",
+  "FINANCE_TREASURY",
+  "FINANCE_CASH",
+  "FINANCE_BANK",
+  "FINANCE_RECONCILIATION",
+  "FINANCE_ACCOUNTING",
+  "FINANCE_TAX",
+  "FINANCE_CLOSE",
+  "FINANCE_STATEMENTS",
+  "FINANCE_ASSETS",
+  "FINANCE_INVENTORY",
+] as const;
+
+export type EnterpriseFinanceModuleCode = (typeof ENTERPRISE_FINANCE_MODULE_CODES)[number];
+
+export const ENTERPRISE_FINANCE_ACTIONS = [
+  "view",
+  "create",
+  "update",
+  "submit",
+  "review",
+  "approve",
+  "post",
+  "reverse",
+  "pay",
+  "reconcile",
+  "close",
+  "reopen",
+  "export",
+  "manage",
+  "view_sensitive",
+] as const;
+
+export type EnterpriseFinanceAction = (typeof ENTERPRISE_FINANCE_ACTIONS)[number];
+export const ACCOUNT_TYPES = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"] as const;
+export const ACCOUNT_SUBTYPES = ["CASH", "BANK", "MOBILE_MONEY", "ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "INVENTORY", "FIXED_ASSET", "ACCUMULATED_DEPRECIATION", "TAX_RECEIVABLE", "TAX_PAYABLE", "PAYROLL_PAYABLE", "REVENUE", "COST_OF_SALES", "OPERATING_EXPENSE", "RETAINED_EARNINGS", "CLEARING"] as const;
+export const JOURNAL_TYPES = ["GENERAL", "SALES", "PURCHASES", "CASH", "BANK", "MOBILE_MONEY", "PAYROLL", "INVENTORY", "ASSETS", "TAX", "OPENING", "ADJUSTMENT"] as const;
+export const JOURNAL_ENTRY_STATUSES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "POSTED", "REVERSED", "REJECTED", "CANCELLED"] as const;
+export const FISCAL_YEAR_STATUSES = ["DRAFT", "OPEN", "CLOSING", "CLOSED", "ARCHIVED"] as const;
+export const FISCAL_PERIOD_STATUSES = ["OPEN", "SOFT_CLOSED", "CLOSED", "LOCKED"] as const;
+export const SALES_INVOICE_STATUSES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED", "VOIDED", "CREDIT_NOTE"] as const;
+export const SUPPLIER_INVOICE_STATUSES = ["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "POSTED", "PARTIALLY_PAID", "PAID", "CANCELLED", "REJECTED"] as const;
+export const PAYMENT_STATUSES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"] as const;
+export const PAYMENT_DIRECTIONS = ["INBOUND", "OUTBOUND"] as const;
+export const PAYMENT_TYPES = ["CUSTOMER_PAYMENT", "SUPPLIER_PAYMENT", "PAYROLL_PAYMENT", "EXPENSE_REIMBURSEMENT", "TAX_PAYMENT", "REFUND", "TRANSFER", "OTHER"] as const;
+export const PAYMENT_METHOD_TYPES = ["CASH", "BANK_TRANSFER", "CARD", "MOBILE_MONEY", "CHEQUE", "CREDIT", "OTHER"] as const;
+export const FINANCIAL_ACCOUNT_TYPES = ["CASH", "BANK", "MOBILE_MONEY", "CLEARING"] as const;
+export const TAX_CATEGORIES = ["SALES_TAX", "VAT", "WITHHOLDING", "EXEMPT", "ZERO_RATED", "OTHER"] as const;
+export const POSTING_EVENTS = [
+  "SALES_INVOICE_POSTED",
+  "SALES_CREDIT_NOTE_POSTED",
+  "CUSTOMER_PAYMENT_CONFIRMED",
+  "SUPPLIER_INVOICE_POSTED",
+  "SUPPLIER_CREDIT_NOTE_POSTED",
+  "SUPPLIER_PAYMENT_CONFIRMED",
+  "PAYMENT_ALLOCATION_CONFIRMED",
+  "EXPENSE_APPROVED",
+  "PAYROLL_APPROVED",
+  "PAYROLL_PAYMENT_CONFIRMED",
+  "INVENTORY_RECEIPT_VALUED",
+  "INVENTORY_ISSUE_VALUED",
+  "ASSET_CAPITALIZED",
+  "ASSET_DEPRECIATION_POSTED",
+  "CASH_VARIANCE_POSTED",
+  "BANK_CHARGE_POSTED",
+  "OPENING_BALANCE_POSTED",
+] as const;
+
+export type PostingEvent = (typeof POSTING_EVENTS)[number];
+
+export const FINANCE_PERMISSION_PREFIX_BY_MODULE: Record<EnterpriseFinanceModuleCode, string> = {
+  FINANCE_OVERVIEW: "enterprise.finance.configuration.",
+  FINANCE_RECEIVABLES: "enterprise.finance.receivables.",
+  FINANCE_PAYABLES: "enterprise.finance.payables.",
+  FINANCE_PAYMENTS: "enterprise.finance.payments.",
+  FINANCE_TREASURY: "enterprise.finance.treasury.",
+  FINANCE_CASH: "enterprise.finance.cash.",
+  FINANCE_BANK: "enterprise.finance.bank.",
+  FINANCE_RECONCILIATION: "enterprise.finance.reconciliation.",
+  FINANCE_ACCOUNTING: "enterprise.finance.journals.",
+  FINANCE_TAX: "enterprise.finance.tax.",
+  FINANCE_CLOSE: "enterprise.finance.close.",
+  FINANCE_STATEMENTS: "enterprise.finance.statements.",
+  FINANCE_ASSETS: "enterprise.finance.assets.",
+  FINANCE_INVENTORY: "enterprise.finance.inventory.",
+};

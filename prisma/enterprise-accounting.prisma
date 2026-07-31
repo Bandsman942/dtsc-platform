@@ -1,0 +1,1437 @@
+model EnterpriseFinanceConfiguration {
+  id                            String   @id @default(cuid())
+  organizationId                String   @unique
+  functionalCurrencyCode        String
+  presentationCurrencyCode      String?
+  inventoryValuationMethod      String   @default("WEIGHTED_AVERAGE")
+  numberingPolicyJson           Json?
+  taxPolicyJson                 Json?
+  reconciliationTolerance       Decimal  @default(0.01) @db.Decimal(20, 6)
+  defaultAccountsJson           Json?
+  closePolicyJson               Json?
+  approvalThresholdsJson        Json?
+  readinessStatus               String   @default("DRAFT")
+  automaticPostingEnabled       Boolean  @default(false)
+  createdByUserId               String
+  updatedByUserId               String?
+  lockedFunctionalCurrencyAt    DateTime?
+  revision                      Int      @default(1)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@index([organizationId, readinessStatus])
+}
+
+model EnterpriseFiscalYear {
+  id              String                   @id @default(cuid())
+  organizationId  String
+  code            String
+  startDate       DateTime
+  endDate         DateTime
+  status          String                   @default("DRAFT")
+  createdByUserId String
+  openedAt        DateTime?
+  closedAt        DateTime?
+  revision        Int                      @default(1)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  periods         EnterpriseFiscalPeriod[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([organizationId, startDate, endDate])
+}
+
+model EnterpriseFiscalPeriod {
+  id              String                     @id @default(cuid())
+  organizationId  String
+  fiscalYearId    String
+  code            String
+  startDate       DateTime
+  endDate         DateTime
+  status          String                     @default("OPEN")
+  softClosedAt    DateTime?
+  closedAt        DateTime?
+  lockedAt        DateTime?
+  reopenedAt      DateTime?
+  reopenedReason  String?
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int                        @default(1)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  fiscalYear      EnterpriseFiscalYear       @relation(fields: [organizationId, fiscalYearId], references: [organizationId, id], onDelete: Restrict)
+  journalEntries         EnterpriseJournalEntry[]
+  closes                 EnterpriseFinancialClose[]
+  openingBalanceImports EnterpriseOpeningBalanceImport[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([organizationId, startDate, endDate])
+}
+
+model EnterpriseFinancialClose {
+  id                String                 @id @default(cuid())
+  organizationId    String
+  fiscalPeriodId    String
+  status            String                 @default("DRAFT")
+  checklistJson     Json
+  blockersJson      Json?
+  requestedByUserId String
+  approvedByUserId  String?
+  closedByUserId    String?
+  requestedAt       DateTime?
+  approvedAt        DateTime?
+  closedAt          DateTime?
+  reopenedAt        DateTime?
+  reopenReason      String?
+  revision          Int                    @default(1)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  fiscalPeriod      EnterpriseFiscalPeriod @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, fiscalPeriodId, status])
+}
+
+model EnterpriseChartOfAccounts {
+  id              String                   @id @default(cuid())
+  organizationId  String
+  code            String
+  nameFr          String
+  nameEn          String
+  status          String                   @default("DRAFT")
+  templateCode    String?
+  createdByUserId String
+  revision        Int                      @default(1)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  groups          EnterpriseAccountGroup[]
+  accounts        EnterpriseLedgerAccount[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+}
+
+model EnterpriseAccountGroup {
+  id             String                    @id @default(cuid())
+  organizationId String
+  chartId        String
+  code           String
+  nameFr         String
+  nameEn         String
+  accountType    String
+  parentGroupId  String?
+  sortOrder      Int                       @default(0)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  chart          EnterpriseChartOfAccounts @relation(fields: [organizationId, chartId], references: [organizationId, id], onDelete: Restrict)
+  parent         EnterpriseAccountGroup?   @relation("EnterpriseAccountGroupHierarchy", fields: [organizationId, parentGroupId], references: [organizationId, id], onDelete: Restrict)
+  children       EnterpriseAccountGroup[]  @relation("EnterpriseAccountGroupHierarchy")
+  accounts       EnterpriseLedgerAccount[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, chartId, code])
+  @@index([organizationId, chartId, accountType])
+}
+
+model EnterpriseLedgerAccount {
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  chartId                String
+  accountGroupId         String?
+  code                   String
+  nameFr                 String
+  nameEn                 String
+  accountType            String
+  accountSubtype         String?
+  parentId               String?
+  level                  Int                       @default(1)
+  currencyCode           String?
+  isControlAccount       Boolean                   @default(false)
+  isSystemAccount        Boolean                   @default(false)
+  allowDirectPosting     Boolean                   @default(true)
+  isActive               Boolean                   @default(true)
+  archivedAt             DateTime?
+  revision               Int                       @default(1)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  chart                  EnterpriseChartOfAccounts @relation(fields: [organizationId, chartId], references: [organizationId, id], onDelete: Restrict)
+  group                  EnterpriseAccountGroup?   @relation(fields: [organizationId, accountGroupId], references: [organizationId, id], onDelete: Restrict)
+  parent                 EnterpriseLedgerAccount?  @relation("EnterpriseLedgerAccountHierarchy", fields: [organizationId, parentId], references: [organizationId, id], onDelete: Restrict)
+  children               EnterpriseLedgerAccount[] @relation("EnterpriseLedgerAccountHierarchy")
+  journalLines           EnterpriseJournalLine[]
+  financialAccounts      EnterpriseFinancialAccount[]
+  accountMappings        EnterpriseAccountMapping[]
+  openingBalanceLines    EnterpriseOpeningBalanceLine[]
+  taxCodesPayable        EnterpriseTaxCode[] @relation("EnterpriseTaxCodePayableAccount")
+  taxCodesRecoverable    EnterpriseTaxCode[] @relation("EnterpriseTaxCodeRecoverableAccount")
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, chartId, accountType])
+  @@index([organizationId, accountSubtype, isActive])
+  @@index([organizationId, parentId])
+}
+
+model EnterpriseAccountMapping {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  mappingKey          String
+  ledgerAccountId     String
+  sourceModule        String?
+  sourceEntityType    String?
+  effectiveFrom       DateTime?
+  effectiveTo         DateTime?
+  isActive             Boolean  @default(true)
+  createdByUserId     String
+  revision            Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  ledgerAccount       EnterpriseLedgerAccount @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, mappingKey, effectiveFrom])
+  @@index([organizationId, ledgerAccountId, isActive])
+}
+
+model EnterpriseJournal {
+  id              String                   @id @default(cuid())
+  organizationId  String
+  code            String
+  nameFr          String
+  nameEn          String
+  journalType     String
+  sequencePrefix  String?
+  isActive        Boolean                  @default(true)
+  requiresApproval Boolean                 @default(false)
+  createdByUserId String
+  revision        Int                      @default(1)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  entries         EnterpriseJournalEntry[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, journalType, isActive])
+}
+
+model EnterprisePostingBatch {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  reference           String
+  postingEvent        String
+  sourceEntityType    String
+  sourceEntityId      String
+  postingVersion      Int      @default(1)
+  idempotencyKey      String
+  status              String   @default("PENDING")
+  errorCode           String?
+  errorMessage        String?
+  createdByUserId     String
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, sourceEntityType, sourceEntityId, postingEvent, postingVersion])
+  @@index([organizationId, status, createdAt])
+}
+
+model EnterpriseJournalEntry {
+  id                       String                   @id @default(cuid())
+  organizationId           String
+  number                   String
+  journalId                String
+  fiscalPeriodId           String
+  accountingDate           DateTime
+  documentDate             DateTime?
+  reference                String?
+  description              String
+  sourceModule             String?
+  sourceEntityType         String?
+  sourceEntityId           String?
+  postingEvent             String?
+  postingVersion           Int                      @default(1)
+  idempotencyKey           String?
+  status                   String                   @default("DRAFT")
+  totalDebit               Decimal                  @default(0) @db.Decimal(20, 6)
+  totalCredit              Decimal                  @default(0) @db.Decimal(20, 6)
+  functionalCurrencyCode   String
+  preparedByUserId         String
+  approvedByUserId         String?
+  postedByUserId           String?
+  postedAt                 DateTime?
+  reversedAt               DateTime?
+  reversalOfEntryId        String?
+  revision                 Int                      @default(1)
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  journal                  EnterpriseJournal        @relation(fields: [organizationId, journalId], references: [organizationId, id], onDelete: Restrict)
+  fiscalPeriod             EnterpriseFiscalPeriod   @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)
+  reversalOf               EnterpriseJournalEntry?  @relation("EnterpriseJournalEntryReversal", fields: [organizationId, reversalOfEntryId], references: [organizationId, id], onDelete: Restrict)
+  reversals                EnterpriseJournalEntry[] @relation("EnterpriseJournalEntryReversal")
+  reversalRecordsAsOriginal EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalOriginal")
+  reversalRecordsAsResult  EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalResult")
+  lines                    EnterpriseJournalLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, accountingDate])
+  @@index([organizationId, journalId, accountingDate])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+}
+
+model EnterpriseJournalLine {
+  id                       String                  @id @default(cuid())
+  organizationId           String
+  journalEntryId           String
+  ledgerAccountId          String
+  businessPartyId          String?
+  projectId                String?
+  departmentId             String?
+  siteId                   String?
+  assetId                  String?
+  inventoryItemId          String?
+  description              String?
+  debit                    Decimal                 @default(0) @db.Decimal(20, 6)
+  credit                   Decimal                 @default(0) @db.Decimal(20, 6)
+  transactionCurrencyCode  String?
+  transactionAmount        Decimal?                @db.Decimal(20, 6)
+  exchangeRate             Decimal?                @db.Decimal(24, 12)
+  functionalAmount         Decimal                 @db.Decimal(20, 6)
+  analyticReference        String?
+  createdAt                DateTime                @default(now())
+  journalEntry             EnterpriseJournalEntry  @relation(fields: [organizationId, journalEntryId], references: [organizationId, id], onDelete: Cascade)
+  ledgerAccount            EnterpriseLedgerAccount @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, journalEntryId])
+  @@index([organizationId, ledgerAccountId])
+  @@index([organizationId, businessPartyId])
+  @@index([organizationId, projectId])
+}
+
+model EnterpriseJournalReversal {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  originalEntryId       String
+  reversalEntryId       String
+  reason                String
+  requestedByUserId     String
+  approvedByUserId      String?
+  createdAt             DateTime @default(now())
+  originalEntry         EnterpriseJournalEntry @relation("EnterpriseJournalReversalOriginal", fields: [organizationId, originalEntryId], references: [organizationId, id], onDelete: Restrict)
+  reversalEntry         EnterpriseJournalEntry @relation("EnterpriseJournalReversalResult", fields: [organizationId, reversalEntryId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, originalEntryId])
+  @@unique([organizationId, reversalEntryId])
+}
+
+model EnterpriseCurrency {
+  id             String   @id @default(cuid())
+  organizationId String?
+  code           String
+  name           String
+  symbol         String?
+  precision      Int      @default(2)
+  roundingMode   String   @default("HALF_UP")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([code, isActive])
+}
+
+model EnterpriseExchangeRate {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  sourceCurrencyCode String
+  targetCurrencyCode String
+  rateDate           DateTime
+  source             String
+  rate               Decimal  @db.Decimal(24, 12)
+  precision          Int      @default(12)
+  status             String   @default("ACTIVE")
+  createdByUserId    String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, sourceCurrencyCode, targetCurrencyCode, rateDate, source])
+  @@index([organizationId, rateDate, status])
+}
+
+model EnterpriseExchangeRateSnapshot {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  sourceEntityType   String
+  sourceEntityId     String
+  sourceCurrencyCode String
+  targetCurrencyCode String
+  rate               Decimal  @db.Decimal(24, 12)
+  rateDate           DateTime
+  source             String
+  createdAt          DateTime @default(now())
+
+  @@unique([organizationId, sourceEntityType, sourceEntityId, sourceCurrencyCode, targetCurrencyCode])
+  @@index([organizationId, rateDate])
+}
+
+model EnterpriseSalesInvoice {
+  id                    String                       @id @default(cuid())
+  organizationId        String
+  number                String
+  businessPartyId       String
+  salesOrderId          String?
+  fulfillmentId         String?
+  contractId            String?
+  projectId             String?
+  status                String                       @default("DRAFT")
+  invoiceDate           DateTime
+  dueDate               DateTime?
+  currencyCode          String
+  subtotal              Decimal                      @db.Decimal(20, 6)
+  discountTotal         Decimal                      @default(0) @db.Decimal(20, 6)
+  taxTotal              Decimal                      @default(0) @db.Decimal(20, 6)
+  grandTotal            Decimal                      @db.Decimal(20, 6)
+  amountPaid            Decimal                      @default(0) @db.Decimal(20, 6)
+  amountCredited        Decimal                      @default(0) @db.Decimal(20, 6)
+  outstandingAmount     Decimal                      @db.Decimal(20, 6)
+  paymentTerms          String?
+  notes                 String?
+  issuedAt              DateTime?
+  approvedAt            DateTime?
+  postedAt              DateTime?
+  createdByUserId       String
+  approvedByUserId      String?
+  revision              Int                          @default(1)
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  archivedAt            DateTime?
+  items                 EnterpriseSalesInvoiceItem[]
+  creditNotes           EnterpriseSalesCreditNote[]
+  receivable            EnterpriseReceivable?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, dueDate, status])
+  @@index([organizationId, salesOrderId])
+}
+
+model EnterpriseSalesInvoiceItem {
+  id                 String                 @id @default(cuid())
+  organizationId     String
+  salesInvoiceId     String
+  catalogItemId      String?
+  description        String
+  quantity           Decimal                @db.Decimal(20, 6)
+  unitPrice          Decimal                @db.Decimal(20, 6)
+  discountAmount     Decimal                @default(0) @db.Decimal(20, 6)
+  netAmount          Decimal                @db.Decimal(20, 6)
+  taxCodeId          String?
+  taxAmount          Decimal                @default(0) @db.Decimal(20, 6)
+  totalAmount        Decimal                @db.Decimal(20, 6)
+  revenueAccountId   String?
+  projectId          String?
+  createdAt          DateTime               @default(now())
+  salesInvoice       EnterpriseSalesInvoice @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, salesInvoiceId])
+  @@index([organizationId, catalogItemId])
+}
+
+model EnterpriseSalesCreditNote {
+  id                  String                          @id @default(cuid())
+  organizationId      String
+  number              String
+  salesInvoiceId      String
+  reason              String
+  status              String                          @default("DRAFT")
+  creditDate          DateTime
+  currencyCode        String
+  subtotal            Decimal                         @db.Decimal(20, 6)
+  taxTotal            Decimal                         @default(0) @db.Decimal(20, 6)
+  grandTotal          Decimal                         @db.Decimal(20, 6)
+  approvedAt          DateTime?
+  postedAt            DateTime?
+  createdByUserId     String
+  approvedByUserId    String?
+  revision            Int                             @default(1)
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+  salesInvoice        EnterpriseSalesInvoice          @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  items               EnterpriseSalesCreditNoteItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, salesInvoiceId, status])
+}
+
+model EnterpriseSalesCreditNoteItem {
+  id                 String                    @id @default(cuid())
+  organizationId     String
+  salesCreditNoteId  String
+  description        String
+  quantity           Decimal                   @db.Decimal(20, 6)
+  unitPrice          Decimal                   @db.Decimal(20, 6)
+  netAmount          Decimal                   @db.Decimal(20, 6)
+  taxAmount          Decimal                   @default(0) @db.Decimal(20, 6)
+  totalAmount        Decimal                   @db.Decimal(20, 6)
+  createdAt          DateTime                  @default(now())
+  salesCreditNote    EnterpriseSalesCreditNote @relation(fields: [organizationId, salesCreditNoteId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, salesCreditNoteId])
+}
+
+model EnterpriseReceivable {
+  id                  String                           @id @default(cuid())
+  organizationId      String
+  salesInvoiceId      String                           @unique
+  businessPartyId     String
+  currencyCode        String
+  originalAmount      Decimal                          @db.Decimal(20, 6)
+  allocatedAmount     Decimal                          @default(0) @db.Decimal(20, 6)
+  creditedAmount      Decimal                          @default(0) @db.Decimal(20, 6)
+  writtenOffAmount    Decimal                          @default(0) @db.Decimal(20, 6)
+  outstandingAmount   Decimal                          @db.Decimal(20, 6)
+  status              String                           @default("OPEN")
+  dueDate             DateTime?
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
+  salesInvoice        EnterpriseSalesInvoice           @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  allocations         EnterpriseReceivableAllocation[]
+  paymentAllocations  EnterprisePaymentAllocation[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, salesInvoiceId])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, dueDate, status])
+}
+
+model EnterpriseReceivableAllocation {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  receivableId       String
+  sourceType         String
+  sourceId           String
+  amount             Decimal               @db.Decimal(20, 6)
+  allocationDate     DateTime
+  status             String                @default("CONFIRMED")
+  createdByUserId    String
+  reversedAt         DateTime?
+  createdAt          DateTime              @default(now())
+  receivable         EnterpriseReceivable  @relation(fields: [organizationId, receivableId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, receivableId, sourceType, sourceId])
+  @@index([organizationId, receivableId, status])
+}
+
+model EnterpriseSupplierInvoice {
+  id                    String                         @id @default(cuid())
+  organizationId        String
+  number                String
+  supplierId            String
+  businessPartyId       String?
+  purchaseId            String?
+  purchaseReceiptId     String?
+  expenseId             String?
+  projectId             String?
+  assetId               String?
+  status                String                         @default("DRAFT")
+  invoiceDate           DateTime
+  dueDate               DateTime?
+  currencyCode          String
+  subtotal              Decimal                        @db.Decimal(20, 6)
+  taxTotal              Decimal                        @default(0) @db.Decimal(20, 6)
+  grandTotal            Decimal                        @db.Decimal(20, 6)
+  amountPaid            Decimal                        @default(0) @db.Decimal(20, 6)
+  amountCredited        Decimal                        @default(0) @db.Decimal(20, 6)
+  outstandingAmount     Decimal                        @db.Decimal(20, 6)
+  varianceReason        String?
+  approvedAt            DateTime?
+  postedAt              DateTime?
+  createdByUserId       String
+  reviewedByUserId      String?
+  approvedByUserId      String?
+  revision              Int                            @default(1)
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  archivedAt            DateTime?
+  items                 EnterpriseSupplierInvoiceItem[]
+  creditNotes           EnterpriseSupplierCreditNote[]
+  payable               EnterprisePayable?
+  threeWayMatch         EnterpriseThreeWayMatch?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, supplierId, status])
+  @@index([organizationId, dueDate, status])
+  @@index([organizationId, purchaseId])
+  @@index([organizationId, purchaseReceiptId])
+}
+
+model EnterpriseSupplierInvoiceItem {
+  id                      String                    @id @default(cuid())
+  organizationId          String
+  supplierInvoiceId       String
+  catalogItemId           String?
+  description             String
+  quantity                Decimal                   @db.Decimal(20, 6)
+  unitPrice               Decimal                   @db.Decimal(20, 6)
+  netAmount               Decimal                   @db.Decimal(20, 6)
+  taxCodeId               String?
+  taxAmount               Decimal                   @default(0) @db.Decimal(20, 6)
+  totalAmount             Decimal                   @db.Decimal(20, 6)
+  expenseAccountId        String?
+  inventoryAccountId      String?
+  assetAccountId          String?
+  clearingAccountId       String?
+  projectId               String?
+  createdAt               DateTime                  @default(now())
+  supplierInvoice         EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, supplierInvoiceId])
+  @@index([organizationId, catalogItemId])
+}
+
+model EnterpriseSupplierCreditNote {
+  id                  String                    @id @default(cuid())
+  organizationId      String
+  number              String
+  supplierInvoiceId   String
+  reason              String
+  status              String                    @default("DRAFT")
+  creditDate          DateTime
+  currencyCode        String
+  subtotal            Decimal                   @db.Decimal(20, 6)
+  taxTotal            Decimal                   @default(0) @db.Decimal(20, 6)
+  grandTotal          Decimal                   @db.Decimal(20, 6)
+  approvedAt          DateTime?
+  postedAt            DateTime?
+  createdByUserId     String
+  approvedByUserId    String?
+  revision            Int                       @default(1)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  supplierInvoice     EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, supplierInvoiceId, status])
+}
+
+model EnterprisePayable {
+  id                  String                        @id @default(cuid())
+  organizationId      String
+  supplierInvoiceId   String                        @unique
+  supplierId          String
+  businessPartyId     String?
+  currencyCode        String
+  originalAmount      Decimal                       @db.Decimal(20, 6)
+  allocatedAmount     Decimal                       @default(0) @db.Decimal(20, 6)
+  creditedAmount      Decimal                       @default(0) @db.Decimal(20, 6)
+  outstandingAmount   Decimal                       @db.Decimal(20, 6)
+  status              String                        @default("OPEN")
+  dueDate             DateTime?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  supplierInvoice     EnterpriseSupplierInvoice     @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  allocations         EnterprisePayableAllocation[]
+  paymentAllocations  EnterprisePaymentAllocation[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, supplierInvoiceId])
+  @@index([organizationId, supplierId, status])
+  @@index([organizationId, dueDate, status])
+}
+
+model EnterprisePayableAllocation {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  payableId          String
+  sourceType         String
+  sourceId           String
+  amount             Decimal            @db.Decimal(20, 6)
+  allocationDate     DateTime
+  status             String             @default("CONFIRMED")
+  createdByUserId    String
+  reversedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  payable            EnterprisePayable  @relation(fields: [organizationId, payableId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, payableId, sourceType, sourceId])
+  @@index([organizationId, payableId, status])
+}
+
+model EnterpriseThreeWayMatch {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  supplierInvoiceId     String   @unique
+  purchaseId            String?
+  purchaseReceiptId     String?
+  quantityVariance      Decimal  @default(0) @db.Decimal(20, 6)
+  priceVariance         Decimal  @default(0) @db.Decimal(20, 6)
+  taxVariance           Decimal  @default(0) @db.Decimal(20, 6)
+  currencyMatches       Boolean  @default(true)
+  supplierMatches       Boolean  @default(true)
+  withinTolerance       Boolean  @default(true)
+  overrideReason        String?
+  overriddenByUserId    String?
+  status                String   @default("PENDING")
+  checkedAt             DateTime?
+  revision              Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  supplierInvoice       EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, supplierInvoiceId])
+  @@index([organizationId, status])
+}
+
+model EnterprisePaymentMethod {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  code                  String
+  nameFr                String
+  nameEn                String
+  methodType            String
+  financialAccountId    String?
+  isActive              Boolean  @default(true)
+  requiresReference     Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, methodType, isActive])
+}
+
+model EnterprisePayment {
+  id                       String                        @id @default(cuid())
+  organizationId           String
+  number                   String
+  direction                String
+  paymentType              String
+  methodType               String
+  paymentMethodId          String?
+  financialAccountId       String?
+  businessPartyId          String?
+  employeeId               String?
+  payrollRunId             String?
+  currencyCode             String
+  amount                   Decimal                       @db.Decimal(20, 6)
+  unallocatedAmount        Decimal                       @db.Decimal(20, 6)
+  paymentDate              DateTime
+  reference                String?
+  maskedExternalReference  String?
+  status                   String                        @default("DRAFT")
+  initiatedByUserId        String
+  approvedByUserId         String?
+  confirmedByUserId        String?
+  confirmedAt              DateTime?
+  reconciledAt             DateTime?
+  reversedAt               DateTime?
+  reversalReason           String?
+  idempotencyKey           String?
+  revision                 Int                           @default(1)
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+  allocations              EnterprisePaymentAllocation[]
+  events                   EnterprisePaymentEvent[]
+  treasuryTransactions     EnterpriseTreasuryTransaction[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, paymentDate])
+  @@index([organizationId, businessPartyId, status])
+  @@index([organizationId, financialAccountId])
+}
+
+model EnterprisePaymentAllocation {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  paymentId          String
+  receivableId       String?
+  payableId          String?
+  amount             Decimal               @db.Decimal(20, 6)
+  status             String                @default("CONFIRMED")
+  allocatedByUserId  String
+  allocatedAt        DateTime              @default(now())
+  reversedAt         DateTime?
+  payment            EnterprisePayment     @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
+  receivable         EnterpriseReceivable? @relation(fields: [organizationId, receivableId], references: [organizationId, id], onDelete: Restrict)
+  payable            EnterprisePayable?    @relation(fields: [organizationId, payableId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, paymentId, receivableId, payableId])
+  @@index([organizationId, paymentId, status])
+  @@index([organizationId, receivableId])
+  @@index([organizationId, payableId])
+}
+
+model EnterprisePaymentEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  paymentId      String
+  eventType      String
+  summary        String
+  metadataJson   Json?
+  actorUserId    String
+  createdAt      DateTime          @default(now())
+  payment        EnterprisePayment @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, paymentId, createdAt])
+}
+
+model EnterpriseFinancialAccount {
+  id                    String                       @id @default(cuid())
+  organizationId        String
+  code                  String
+  name                  String
+  accountType           String
+  currencyCode          String
+  maskedReference       String?
+  openingBalance        Decimal                      @default(0) @db.Decimal(20, 6)
+  operationalBalance    Decimal                      @default(0) @db.Decimal(20, 6)
+  reconciledBalance     Decimal                      @default(0) @db.Decimal(20, 6)
+  availableBalance      Decimal?                     @db.Decimal(20, 6)
+  ledgerAccountId       String
+  responsibleUserId     String?
+  siteId                String?
+  status                String                       @default("ACTIVE")
+  settingsJson          Json?
+  archivedAt            DateTime?
+  revision              Int                          @default(1)
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  ledgerAccount         EnterpriseLedgerAccount      @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
+  treasuryTransactions  EnterpriseTreasuryTransaction[]
+  cashSessions          EnterpriseCashSession[]
+  bankStatements        EnterpriseBankStatement[]
+  reconciliationSessions EnterpriseReconciliationSession[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, accountType, status])
+  @@index([organizationId, ledgerAccountId])
+}
+
+model EnterpriseTreasuryTransaction {
+  id                    String                     @id @default(cuid())
+  organizationId        String
+  financialAccountId    String
+  paymentId             String?
+  transferId            String?
+  transactionType       String
+  direction             String
+  currencyCode          String
+  amount                Decimal                    @db.Decimal(20, 6)
+  transactionDate       DateTime
+  reference             String?
+  status                String                     @default("CONFIRMED")
+  reconciliationStatus  String                     @default("UNRECONCILED")
+  createdByUserId       String
+  reversedAt            DateTime?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  financialAccount      EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+  payment               EnterprisePayment?          @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, financialAccountId, transactionDate])
+  @@index([organizationId, paymentId])
+  @@index([organizationId, reconciliationStatus])
+}
+
+model EnterpriseAccountTransfer {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  number                     String
+  sourceFinancialAccountId   String
+  targetFinancialAccountId   String
+  sourceCurrencyCode         String
+  targetCurrencyCode         String
+  sourceAmount               Decimal  @db.Decimal(20, 6)
+  targetAmount               Decimal  @db.Decimal(20, 6)
+  exchangeRate               Decimal? @db.Decimal(24, 12)
+  transferDate               DateTime
+  status                     String   @default("DRAFT")
+  initiatedByUserId          String
+  approvedByUserId           String?
+  confirmedAt                DateTime?
+  revision                   Int      @default(1)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, status, transferDate])
+}
+
+model EnterpriseCashSession {
+  id                    String                     @id @default(cuid())
+  organizationId        String
+  number                String
+  financialAccountId    String
+  cashierUserId         String
+  siteId                String?
+  status                String                     @default("OPEN")
+  openedAt              DateTime                   @default(now())
+  openingAmount         Decimal                    @db.Decimal(20, 6)
+  expectedClosingAmount Decimal?                   @db.Decimal(20, 6)
+  countedClosingAmount  Decimal?                   @db.Decimal(20, 6)
+  discrepancyAmount     Decimal?                   @db.Decimal(20, 6)
+  closingReason         String?
+  submittedAt           DateTime?
+  validatedByUserId     String?
+  validatedAt           DateTime?
+  rejectedAt            DateTime?
+  revision              Int                        @default(1)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  financialAccount      EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+  movements             EnterpriseCashMovement[]
+  counts                EnterpriseCashCount[]
+  discrepancies         EnterpriseCashDiscrepancy[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, cashierUserId, status])
+  @@index([organizationId, financialAccountId, status])
+}
+
+model EnterpriseCashMovement {
+  id             String                @id @default(cuid())
+  organizationId String
+  cashSessionId  String
+  paymentId      String?
+  movementType   String
+  direction      String
+  amount         Decimal               @db.Decimal(20, 6)
+  currencyCode   String
+  reference      String?
+  reason         String?
+  createdByUserId String
+  createdAt      DateTime              @default(now())
+  cashSession    EnterpriseCashSession @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, cashSessionId, createdAt])
+  @@index([organizationId, paymentId])
+}
+
+model EnterpriseCashCount {
+  id             String                @id @default(cuid())
+  organizationId String
+  cashSessionId  String
+  denomination   Decimal               @db.Decimal(20, 6)
+  quantity       Int
+  amount         Decimal               @db.Decimal(20, 6)
+  countedByUserId String
+  createdAt      DateTime              @default(now())
+  cashSession    EnterpriseCashSession @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, cashSessionId])
+}
+
+model EnterpriseCashDiscrepancy {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  cashSessionId      String
+  amount             Decimal               @db.Decimal(20, 6)
+  reason             String
+  status             String                @default("PENDING")
+  createdByUserId    String
+  approvedByUserId   String?
+  journalEntryId     String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  cashSession        EnterpriseCashSession @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, cashSessionId, status])
+}
+
+model EnterpriseBankStatement {
+  id                  String                      @id @default(cuid())
+  organizationId      String
+  financialAccountId  String
+  reference           String
+  statementDate       DateTime
+  periodStart         DateTime
+  periodEnd           DateTime
+  currencyCode        String
+  openingBalance      Decimal                     @db.Decimal(20, 6)
+  closingBalance      Decimal                     @db.Decimal(20, 6)
+  status              String                      @default("IMPORTED")
+  privateDocumentId   String?
+  importedByUserId    String
+  revision            Int                         @default(1)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  financialAccount    EnterpriseFinancialAccount  @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+  lines               EnterpriseBankStatementLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, financialAccountId, statementDate])
+}
+
+model EnterpriseBankStatementLine {
+  id                  String                   @id @default(cuid())
+  organizationId      String
+  bankStatementId     String
+  lineNumber          Int
+  transactionDate     DateTime
+  valueDate           DateTime?
+  description         String
+  reference           String?
+  counterparty        String?
+  debit               Decimal                  @default(0) @db.Decimal(20, 6)
+  credit              Decimal                  @default(0) @db.Decimal(20, 6)
+  currencyCode        String
+  runningBalance      Decimal?                 @db.Decimal(20, 6)
+  reconciliationStatus String                  @default("UNMATCHED")
+  createdAt           DateTime                 @default(now())
+  bankStatement       EnterpriseBankStatement  @relation(fields: [organizationId, bankStatementId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, bankStatementId, lineNumber])
+  @@index([organizationId, reconciliationStatus, transactionDate])
+}
+
+model EnterpriseReconciliationSession {
+  id                  String                         @id @default(cuid())
+  organizationId      String
+  number              String
+  financialAccountId  String
+  bankStatementId     String?
+  status              String                         @default("DRAFT")
+  periodStart         DateTime
+  periodEnd           DateTime
+  bookBalance         Decimal                        @db.Decimal(20, 6)
+  statementBalance    Decimal                        @db.Decimal(20, 6)
+  reconciledDifference Decimal                       @db.Decimal(20, 6)
+  preparedByUserId    String
+  approvedByUserId    String?
+  completedAt         DateTime?
+  revision            Int                            @default(1)
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+  financialAccount    EnterpriseFinancialAccount     @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+  matches             EnterpriseReconciliationMatch[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, financialAccountId, status])
+}
+
+model EnterpriseReconciliationMatch {
+  id                    String                          @id @default(cuid())
+  organizationId        String
+  reconciliationSessionId String
+  bankStatementLineId   String?
+  paymentId             String?
+  treasuryTransactionId String?
+  journalEntryId        String?
+  matchedAmount         Decimal                         @db.Decimal(20, 6)
+  confidenceScore       Decimal?                        @db.Decimal(5, 4)
+  status                String                          @default("SUGGESTED")
+  matchedByUserId       String?
+  confirmedAt           DateTime?
+  createdAt             DateTime                        @default(now())
+  session               EnterpriseReconciliationSession @relation(fields: [organizationId, reconciliationSessionId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, reconciliationSessionId, status])
+  @@index([organizationId, bankStatementLineId])
+}
+
+model EnterpriseReconciliationRule {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  name               String
+  ruleType           String
+  criteriaJson       Json
+  actionType         String
+  actionConfigJson   Json?
+  autoConfirmAllowed Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  createdByUserId    String
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+}
+
+model EnterpriseTaxCode {
+  id                       String                @id @default(cuid())
+  organizationId           String
+  code                     String
+  nameFr                   String
+  nameEn                   String
+  category                 String
+  jurisdiction             String?
+  payableAccountId         String?
+  recoverableAccountId     String?
+  roundingRule             String               @default("HALF_UP")
+  isActive                 Boolean              @default(true)
+  revision                 Int                  @default(1)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  rates                    EnterpriseTaxRate[]
+  rules                    EnterpriseTaxRule[]
+  payableAccount           EnterpriseLedgerAccount? @relation("EnterpriseTaxCodePayableAccount", fields: [organizationId, payableAccountId], references: [organizationId, id], onDelete: Restrict)
+  recoverableAccount       EnterpriseLedgerAccount? @relation("EnterpriseTaxCodeRecoverableAccount", fields: [organizationId, recoverableAccountId], references: [organizationId, id], onDelete: Restrict)
+  taxLines                 EnterpriseTaxLine[]
+  summaries                EnterpriseTaxSummary[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, category, isActive])
+}
+
+model EnterpriseTaxRate {
+  id             String            @id @default(cuid())
+  organizationId String
+  taxCodeId      String
+  rate           Decimal           @db.Decimal(12, 8)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  status         String            @default("ACTIVE")
+  createdByUserId String
+  createdAt      DateTime          @default(now())
+  taxCode        EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, taxCodeId, effectiveFrom])
+  @@index([organizationId, effectiveFrom, status])
+}
+
+model EnterpriseTaxRule {
+  id             String            @id @default(cuid())
+  organizationId String
+  taxCodeId      String
+  sourceType     String
+  criteriaJson   Json?
+  priority       Int               @default(0)
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  taxCode        EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, sourceType, isActive])
+}
+
+model EnterpriseTaxLine {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  sourceEntityType   String
+  sourceEntityId     String
+  taxCodeId          String
+  taxableAmount      Decimal  @db.Decimal(20, 6)
+  taxRate            Decimal  @db.Decimal(12, 8)
+  taxAmount          Decimal  @db.Decimal(20, 6)
+  currencyCode       String
+  direction          String
+  createdAt          DateTime @default(now())
+  taxCode            EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, sourceEntityType, sourceEntityId, taxCodeId])
+  @@index([organizationId, taxCodeId, createdAt])
+}
+
+model EnterpriseTaxPeriod {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  startDate       DateTime
+  endDate         DateTime
+  status          String   @default("OPEN")
+  closedAt        DateTime?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  summaries       EnterpriseTaxSummary[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, startDate])
+}
+
+model EnterpriseTaxSummary {
+  id                String   @id @default(cuid())
+  organizationId    String
+  taxPeriodId       String
+  taxCodeId         String
+  currencyCode      String
+  taxableAmount     Decimal  @db.Decimal(20, 6)
+  outputTaxAmount   Decimal  @default(0) @db.Decimal(20, 6)
+  inputTaxAmount    Decimal  @default(0) @db.Decimal(20, 6)
+  netTaxAmount      Decimal  @db.Decimal(20, 6)
+  snapshotJson      Json
+  generatedByUserId String
+  generatedAt       DateTime @default(now())
+  taxPeriod         EnterpriseTaxPeriod @relation(fields: [organizationId, taxPeriodId], references: [organizationId, id], onDelete: Restrict)
+  taxCode           EnterpriseTaxCode   @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, taxPeriodId, taxCodeId, currencyCode])
+  @@index([organizationId, taxPeriodId])
+}
+
+model EnterpriseInventoryCostLayer {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  inventoryItemId       String
+  warehouseId           String?
+  sourceMovementId      String
+  valuationMethod       String
+  quantity              Decimal  @db.Decimal(20, 6)
+  remainingQuantity     Decimal  @db.Decimal(20, 6)
+  unitCost              Decimal  @db.Decimal(20, 6)
+  totalCost             Decimal  @db.Decimal(20, 6)
+  currencyCode          String
+  effectiveAt           DateTime
+  createdAt             DateTime @default(now())
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, sourceMovementId])
+  @@index([organizationId, inventoryItemId, effectiveAt])
+}
+
+model EnterpriseInventoryAccountingEvent {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  inventoryItemId     String
+  stockMovementId     String
+  eventType           String
+  quantity            Decimal  @db.Decimal(20, 6)
+  unitCost            Decimal  @db.Decimal(20, 6)
+  totalCost           Decimal  @db.Decimal(20, 6)
+  currencyCode        String
+  journalEntryId      String?
+  idempotencyKey      String
+  status              String   @default("PENDING")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, stockMovementId, eventType])
+  @@index([organizationId, inventoryItemId, status])
+}
+
+model EnterpriseAssetAccountingProfile {
+  id                              String   @id @default(cuid())
+  organizationId                  String
+  assetId                         String
+  capitalizationSourceType        String
+  capitalizationSourceId          String?
+  originalCost                    Decimal  @db.Decimal(20, 6)
+  residualValue                   Decimal  @default(0) @db.Decimal(20, 6)
+  usefulLifeMonths                Int
+  inServiceDate                   DateTime
+  depreciationMethod              String   @default("STRAIGHT_LINE")
+  depreciationFrequency           String   @default("MONTHLY")
+  assetAccountId                  String
+  accumulatedDepreciationAccountId String
+  depreciationExpenseAccountId    String
+  currencyCode                    String
+  status                          String   @default("ACTIVE")
+  revision                        Int      @default(1)
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+  schedules                       EnterpriseAssetDepreciationSchedule[]
+  disposals                       EnterpriseAssetDisposal[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, assetId])
+  @@index([organizationId, status, inServiceDate])
+}
+
+model EnterpriseAssetDepreciationSchedule {
+  id                    String                             @id @default(cuid())
+  organizationId        String
+  assetAccountingProfileId String
+  periodCode            String
+  scheduledDate         DateTime
+  openingNetBookValue   Decimal                            @db.Decimal(20, 6)
+  depreciationAmount    Decimal                            @db.Decimal(20, 6)
+  closingNetBookValue   Decimal                            @db.Decimal(20, 6)
+  status                String                             @default("PLANNED")
+  idempotencyKey        String
+  postedAt              DateTime?
+  journalEntryId        String?
+  createdAt             DateTime                           @default(now())
+  updatedAt             DateTime                           @updatedAt
+  profile               EnterpriseAssetAccountingProfile   @relation(fields: [organizationId, assetAccountingProfileId], references: [organizationId, id], onDelete: Restrict)
+  entries               EnterpriseAssetDepreciationEntry[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, assetAccountingProfileId, periodCode])
+  @@index([organizationId, scheduledDate, status])
+}
+
+model EnterpriseAssetDepreciationEntry {
+  id                    String                               @id @default(cuid())
+  organizationId        String
+  depreciationScheduleId String
+  amount                Decimal                              @db.Decimal(20, 6)
+  journalEntryId        String
+  postedByUserId        String
+  postedAt              DateTime                             @default(now())
+  schedule              EnterpriseAssetDepreciationSchedule @relation(fields: [organizationId, depreciationScheduleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, depreciationScheduleId])
+  @@index([organizationId, journalEntryId])
+}
+
+model EnterpriseAssetDisposal {
+  id                        String                           @id @default(cuid())
+  organizationId            String
+  assetAccountingProfileId  String
+  disposalDate              DateTime
+  grossValue                Decimal                          @db.Decimal(20, 6)
+  accumulatedDepreciation   Decimal                          @db.Decimal(20, 6)
+  netBookValue              Decimal                          @db.Decimal(20, 6)
+  proceeds                  Decimal                          @default(0) @db.Decimal(20, 6)
+  gainLoss                  Decimal                          @db.Decimal(20, 6)
+  currencyCode              String
+  status                    String                           @default("DRAFT")
+  journalEntryId            String?
+  createdByUserId           String
+  approvedByUserId          String?
+  revision                  Int                              @default(1)
+  createdAt                 DateTime                         @default(now())
+  updatedAt                 DateTime                         @updatedAt
+  profile                   EnterpriseAssetAccountingProfile @relation(fields: [organizationId, assetAccountingProfileId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, assetAccountingProfileId, status])
+}
+
+model EnterpriseAccountingDimension {
+  id             String                               @id @default(cuid())
+  organizationId String
+  code           String
+  nameFr         String
+  nameEn         String
+  dimensionType  String
+  isRequired     Boolean                              @default(false)
+  isActive       Boolean                              @default(true)
+  createdAt      DateTime                             @default(now())
+  updatedAt      DateTime                             @updatedAt
+  values         EnterpriseAccountingDimensionValue[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, dimensionType, isActive])
+}
+
+model EnterpriseAccountingDimensionValue {
+  id                  String                        @id @default(cuid())
+  organizationId      String
+  accountingDimensionId String
+  code                String
+  label               String
+  sourceEntityType    String?
+  sourceEntityId      String?
+  isActive            Boolean                       @default(true)
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  dimension           EnterpriseAccountingDimension @relation(fields: [organizationId, accountingDimensionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, accountingDimensionId, code])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+}
+
+model EnterpriseFinancialStatementSnapshot {
+  id                String   @id @default(cuid())
+  organizationId    String
+  statementType     String
+  fiscalPeriodId    String?
+  periodStart       DateTime
+  periodEnd         DateTime
+  currencyCode      String
+  filtersJson       Json?
+  snapshotJson      Json
+  checksum          String
+  status            String   @default("GENERATED")
+  generatedByUserId String
+  publishedByUserId String?
+  generatedAt       DateTime @default(now())
+  publishedAt       DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, statementType, periodStart, periodEnd, currencyCode, checksum])
+  @@index([organizationId, statementType, generatedAt])
+}
+
+model EnterpriseOpeningBalanceImport {
+  id                String                         @id @default(cuid())
+  organizationId    String
+  reference         String
+  fiscalPeriodId    String
+  status            String                         @default("DRAFT")
+  currencyCode      String
+  description       String?
+  privateDocumentId String?
+  preparedByUserId  String
+  approvedByUserId  String?
+  postedAt          DateTime?
+  journalEntryId    String?
+  revision          Int                            @default(1)
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  fiscalPeriod      EnterpriseFiscalPeriod           @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)
+  lines             EnterpriseOpeningBalanceLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+}
+
+model EnterpriseOpeningBalanceLine {
+  id                     String                         @id @default(cuid())
+  organizationId         String
+  openingBalanceImportId String
+  ledgerAccountId        String
+  businessPartyId        String?
+  debit                  Decimal                        @default(0) @db.Decimal(20, 6)
+  credit                 Decimal                        @default(0) @db.Decimal(20, 6)
+  currencyCode           String
+  reference              String?
+  createdAt              DateTime                       @default(now())
+  openingBalanceImport   EnterpriseOpeningBalanceImport @relation(fields: [organizationId, openingBalanceImportId], references: [organizationId, id], onDelete: Cascade)
+  ledgerAccount          EnterpriseLedgerAccount         @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, openingBalanceImportId])
+  @@index([organizationId, ledgerAccountId])
+}

@@ -1,0 +1,8 @@
+import { NextResponse } from "next/server";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { reverseJournalEntry } from "@/lib/enterprise/accounting/reversal-service";
+import { reversalSchema } from "@/lib/enterprise/accounting/schemas";
+
+type Params = { params: Promise<{ organizationId: string; entryId: string }> };
+export async function POST(req: Request, { params }: Params) { const startedAt = Date.now(); const { organizationId, entryId } = await params; const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ACCOUNTING", "reverse", { mutation: true, limit: 40 }); if (!auth.ok) return auth.response; const parsed = reversalSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 }); try { const reversal = await reverseJournalEntry(organizationId, entryId, auth.session.userId, parsed.data); await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_JOURNAL_ENTRY_REVERSED", entity: "EnterpriseJournalEntry", entityId: entryId, request: req, metadata: { organizationId, reversalEntryId: reversal.id, reason: parsed.data.reason } }); await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "journal-entries", action: "reverse" } }); return NextResponse.json({ ok: true, reversal }); } catch (error) { return financeErrorResponse(error, "JOURNAL_ENTRY_REVERSAL_FAILED"); } }

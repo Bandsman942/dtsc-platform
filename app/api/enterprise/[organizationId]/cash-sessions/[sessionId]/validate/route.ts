@@ -1,0 +1,8 @@
+import { NextResponse } from "next/server";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+import { validateCashSession } from "@/lib/enterprise/accounting/treasury-service";
+import { cashValidateSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+
+type Params = { params: Promise<{ organizationId: string; sessionId: string }> };
+export async function POST(req: Request, { params }: Params) { const startedAt = Date.now(); const { organizationId, sessionId } = await params; const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_CASH", "approve", { mutation: true, limit: 30 }); if (!auth.ok) return auth.response; const parsed = cashValidateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 }); try { const session = await validateCashSession(organizationId, sessionId, auth.session.userId, parsed.data); await writeAuditLog({ userId: auth.session.userId, action: parsed.data.approve ? "ENTERPRISE_CASH_SESSION_VALIDATED" : "ENTERPRISE_CASH_SESSION_REJECTED", entity: "EnterpriseCashSession", entityId: sessionId, request: req, metadata: { organizationId, reason: parsed.data.reason } }); await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "cash-sessions", action: parsed.data.approve ? "validate" : "reject" } }); return NextResponse.json({ ok: true, session }); } catch (error) { return financeErrorResponse(error, "CASH_SESSION_VALIDATE_FAILED"); } }

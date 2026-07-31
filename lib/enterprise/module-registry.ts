@@ -1,5 +1,6 @@
 import registryData from "@/lib/enterprise/module-registry-data.json";
 import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-domains.json";
+import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
 import type { SaasPlanCode } from "@/lib/billing/plans";
 
 export type EnterpriseModuleImplementationStatus =
@@ -75,10 +76,15 @@ export type EnterpriseModuleDefinition = {
   qaContract?: string;
 };
 
-export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(registryData.version, commonDomainRegistryData.version);
+export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
+  registryData.version,
+  commonDomainRegistryData.version,
+  financeRegistryData.version,
+);
 export const ENTERPRISE_MODULE_REGISTRY = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
+  ...financeRegistryData.modules,
 ] as EnterpriseModuleDefinition[];
 
 const definitionByCode = new Map<string, EnterpriseModuleDefinition>();
