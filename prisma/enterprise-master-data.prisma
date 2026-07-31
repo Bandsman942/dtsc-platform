@@ -119,7 +119,6 @@ model EnterpriseUnitOfMeasure {
   updatedAt       DateTime                @updatedAt
   archivedAt      DateTime?
   catalogItems    EnterpriseCatalogItem[]
-  purchaseItems   EnterprisePurchaseItem[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -153,7 +152,7 @@ model EnterpriseCatalogCategory {
 }
 
 model EnterpriseCatalogItem {
-  id                    String                    @id @default(cuid())
+  id                    String                     @id @default(cuid())
   organizationId        String
   code                  String
   sku                   String?
@@ -163,26 +162,25 @@ model EnterpriseCatalogItem {
   itemType              String
   categoryId            String?
   unitOfMeasureId       String
-  indicativeSalePrice   Decimal?                  @db.Decimal(18, 2)
-  indicativeCost        Decimal?                  @db.Decimal(18, 2)
+  indicativeSalePrice   Decimal?                   @db.Decimal(18, 2)
+  indicativeCost        Decimal?                   @db.Decimal(18, 2)
   currency              String?
-  status                String                    @default("ACTIVE")
-  taxable               Boolean                   @default(false)
+  status                String                     @default("ACTIVE")
+  taxable               Boolean                    @default(false)
   taxCode               String?
-  trackInventory        Boolean                   @default(false)
+  trackInventory        Boolean                    @default(false)
   notes                 String?
   createdByUserId       String
   updatedByUserId       String?
-  revision              Int                       @default(1)
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  revision              Int                        @default(1)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
   archivedAt            DateTime?
   category              EnterpriseCatalogCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
-  unitOfMeasure         EnterpriseUnitOfMeasure   @relation(fields: [organizationId, unitOfMeasureId], references: [organizationId, id], onDelete: Restrict)
+  unitOfMeasure         EnterpriseUnitOfMeasure    @relation(fields: [organizationId, unitOfMeasureId], references: [organizationId, id], onDelete: Restrict)
   inventoryItems        EnterpriseInventoryItem[]
   quoteItems            EnterpriseQuoteItem[]
   salesOrderItems       EnterpriseSalesOrderItem[]
-  purchaseItems         EnterprisePurchaseItem[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -227,25 +225,25 @@ model EnterpriseSite {
 }
 
 model EnterpriseWarehouse {
-  id                String                      @id @default(cuid())
-  organizationId    String
-  siteId            String
-  code              String
-  name              String
-  warehouseType     String                      @default("GENERAL")
-  managerUserId     String?
-  status            String                      @default("ACTIVE")
-  settingsJson      Json?
-  createdByUserId   String
-  revision          Int                         @default(1)
-  createdAt         DateTime                    @default(now())
-  updatedAt         DateTime                    @updatedAt
-  archivedAt        DateTime?
-  site              EnterpriseSite              @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
-  storageLocations  EnterpriseStorageLocation[]
-  inventoryBalances EnterpriseInventoryBalance[]
-  stockMovements    EnterpriseStockMovement[]
-  sourceTransfers   EnterpriseStockTransfer[]   @relation("EnterpriseStockTransferSource")
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  siteId               String
+  code                 String
+  name                 String
+  warehouseType        String                    @default("GENERAL")
+  managerUserId        String?
+  status               String                    @default("ACTIVE")
+  settingsJson         Json?
+  createdByUserId      String
+  revision             Int                       @default(1)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  archivedAt           DateTime?
+  site                 EnterpriseSite            @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  storageLocations     EnterpriseStorageLocation[]
+  inventoryBalances    EnterpriseInventoryBalance[]
+  stockMovements       EnterpriseStockMovement[]
+  sourceTransfers      EnterpriseStockTransfer[] @relation("EnterpriseStockTransferSource")
   destinationTransfers EnterpriseStockTransfer[] @relation("EnterpriseStockTransferDestination")
 
   @@unique([organizationId, id])
@@ -256,27 +254,27 @@ model EnterpriseWarehouse {
 }
 
 model EnterpriseStorageLocation {
-  id                String                       @id @default(cuid())
-  organizationId    String
-  warehouseId       String
-  parentLocationId  String?
-  code              String
-  name              String
-  locationType      String                       @default("GENERAL")
-  status            String                       @default("ACTIVE")
-  restrictedAccess  Boolean                      @default(false)
-  createdByUserId   String
-  revision          Int                          @default(1)
-  createdAt         DateTime                     @default(now())
-  updatedAt         DateTime                     @updatedAt
-  archivedAt        DateTime?
-  warehouse         EnterpriseWarehouse          @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
-  parentLocation    EnterpriseStorageLocation?   @relation("EnterpriseStorageLocationTree", fields: [organizationId, parentLocationId], references: [organizationId, id], onDelete: Restrict)
-  childLocations    EnterpriseStorageLocation[]  @relation("EnterpriseStorageLocationTree")
-  inventoryBalances EnterpriseInventoryBalance[]
-  stockLots         EnterpriseStockLot[]
-  stockMovements    EnterpriseStockMovement[]
-  assets            EnterpriseAsset[]
+  id                 String                       @id @default(cuid())
+  organizationId     String
+  warehouseId        String
+  parentLocationId   String?
+  code               String
+  name               String
+  locationType       String                       @default("GENERAL")
+  status             String                       @default("ACTIVE")
+  restrictedAccess   Boolean                      @default(false)
+  createdByUserId    String
+  revision           Int                          @default(1)
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  archivedAt         DateTime?
+  warehouse          EnterpriseWarehouse          @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  parentLocation     EnterpriseStorageLocation?   @relation("EnterpriseStorageLocationTree", fields: [organizationId, parentLocationId], references: [organizationId, id], onDelete: Restrict)
+  childLocations     EnterpriseStorageLocation[]  @relation("EnterpriseStorageLocationTree")
+  inventoryBalances  EnterpriseInventoryBalance[]
+  stockLots          EnterpriseStockLot[]
+  stockMovements     EnterpriseStockMovement[]
+  assets             EnterpriseAsset[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, warehouseId, code])
