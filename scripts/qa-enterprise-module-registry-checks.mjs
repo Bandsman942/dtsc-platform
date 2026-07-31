@@ -12,6 +12,14 @@ function fail(condition, message) {
   if (condition) errors.push(message);
 }
 
+function withoutComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
+}
+
 const canonicalCodes = new Set();
 const aliasOwners = new Map();
 for (const moduleDefinition of modules) {
@@ -89,14 +97,16 @@ const navigationSource = fs.readFileSync(path.join(root, "lib/enterprise/enterpr
 const accessSource = fs.readFileSync(path.join(root, "lib/enterprise/module-access.ts"), "utf8");
 const registrySource = fs.readFileSync(path.join(root, "lib/enterprise/module-registry.ts"), "utf8");
 const templateSource = fs.readFileSync(path.join(root, "lib/enterprise/sector-template-application.ts"), "utf8");
+const routeExecutableSource = withoutComments(routeSource);
+const navigationExecutableSource = withoutComments(navigationSource);
 
-fail(routeSource.includes("!enterpriseModule.isCore"), "La route générique rejette encore les modules sectoriels sur isCore=false");
-fail(navigationSource.includes(".filter((enterpriseModule) => enterpriseModule.isCore"), "La navigation filtre encore uniquement isCore");
-fail(!routeSource.includes("resolveEnterpriseModuleAccess"), "La route n'utilise pas le résolveur canonique");
-fail(!routeSource.includes("EnterpriseSectorModuleWorkspace"), "Aucun renderer sectoriel allow-listé n'est monté");
+fail(routeExecutableSource.includes("!enterpriseModule.isCore"), "La route générique rejette encore les modules sectoriels sur isCore=false");
+fail(navigationExecutableSource.includes(".filter((enterpriseModule) => enterpriseModule.isCore"), "La navigation filtre encore uniquement isCore");
+fail(!routeExecutableSource.includes("resolveEnterpriseModuleAccess"), "La route n'utilise pas le résolveur canonique");
+fail(!routeExecutableSource.includes("EnterpriseSectorModuleWorkspace"), "Aucun renderer sectoriel allow-listé n'est monté");
 fail(!accessSource.includes("organizationId"), "Le résolveur ne démontre pas l'isolation organizationId");
 fail(accessSource.includes("prisma[moduleCode]") || registrySource.includes("prisma[moduleCode]"), "Import ou accès Prisma dynamique arbitraire détecté");
-fail(/import\([^)]*moduleCode/.test(routeSource + registrySource), "Import dynamique piloté par moduleCode détecté");
+fail(/import\([^)]*moduleCode/.test(routeExecutableSource + registrySource), "Import dynamique piloté par moduleCode détecté");
 fail(!templateSource.includes("isEnterpriseModuleImplemented"), "L'application des templates ne valide pas le statut d'implémentation");
 fail(!templateSource.includes("isEnterpriseModuleSectorCompatible"), "L'application des templates ne valide pas le secteur");
 
