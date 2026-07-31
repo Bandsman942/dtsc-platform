@@ -44,7 +44,7 @@ jobs:
         run: >-
           pnpm exec prisma migrate diff
           --from-migrations prisma/migrations
-          --to-schema prisma
+          --to-schema-datamodel prisma
           --shadow-database-url postgresql://postgres:postgres@localhost:5432/dtsc_shadow?schema=shadow
           --script > enterprise-accounting-migration.sql
       - uses: actions/upload-artifact@v4
