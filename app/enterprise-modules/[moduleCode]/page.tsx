@@ -207,8 +207,14 @@ export default async function EnterpriseModulePage({ params }: Params) {
           label: getEnterpriseModuleLabel(definition, user.locale),
           description: getEnterpriseModuleDescription(definition, user.locale),
           category: definition.domain,
+          domain: definition.domain,
+          implementationStatus: definition.implementationStatus,
+          navigationGroup: definition.navigationGroup,
+          navigationGroupLabel: definition.navigationGroup,
+          navigationOrder: definition.navigationOrder,
           isCore: true,
           icon: definition.iconKey,
+          href: definition.routePath || `/enterprise-modules/${definition.code}`,
         }}
         activityBlocks={activityBlocks}
         records={records}
