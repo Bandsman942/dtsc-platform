@@ -19,7 +19,7 @@ requireTokens("lib/enterprise/accounting/statements-service.ts", [
 ]);
 requireTokens("app/api/enterprise/[organizationId]/financial-statements/route.ts", [
   "authorizeFinanceRequest",
-  "statementQuerySchema.safeParse",
+  "statementGenerateSchema.safeParse",
   "writeApiLog",
 ]);
 requireTokens("components/enterprise/enterprise-finance-workspace.tsx", [
