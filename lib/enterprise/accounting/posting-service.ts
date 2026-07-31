@@ -6,7 +6,8 @@ import { assertFinanceReady } from "@/lib/enterprise/accounting/configuration-se
 import { resolveExchangeRate, snapshotExchangeRate } from "@/lib/enterprise/accounting/currency";
 import { financeReference, idempotencyKey, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
-import { getPostingBuilder, type PostingLineDraft } from "@/lib/enterprise/accounting/posting-registry";
+import { getPostingBuilderV2 } from "@/lib/enterprise/accounting/posting-registry-v2";
+import type { PostingLineDraft } from "@/lib/enterprise/accounting/posting-types";
 
 async function resolvePostingAccount(
   tx: Prisma.TransactionClient,
@@ -146,7 +147,7 @@ export async function postBusinessEvent(
               createdByUserId: actorUserId,
             },
           });
-      const builder = getPostingBuilder(input.postingEvent);
+      const builder = getPostingBuilderV2(input.postingEvent);
       const document = await builder(tx, { organizationId, sourceEntityType: input.sourceEntityType, sourceEntityId: input.sourceEntityId });
       if (document.organizationId !== organizationId || document.sourceEntityId !== input.sourceEntityId) {
         throw new EnterpriseAccountingError("POSTING_SOURCE_SCOPE_MISMATCH", 409);
