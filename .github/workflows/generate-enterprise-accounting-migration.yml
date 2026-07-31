@@ -1,0 +1,54 @@
+name: Generate enterprise accounting migration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "prisma/enterprise-accounting.prisma"
+      - ".github/workflows/generate-enterprise-accounting-migration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-diff:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_shadow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm prisma:generate
+      - name: Generate additive SQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_shadow?schema=public
+        run: >-
+          pnpm exec prisma migrate diff
+          --from-migrations prisma/migrations
+          --to-schema prisma
+          --shadow-database-url postgresql://postgres:postgres@localhost:5432/dtsc_shadow?schema=shadow
+          --script > enterprise-accounting-migration.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enterprise-accounting-migration
+          path: enterprise-accounting-migration.sql
+          if-no-files-found: error
