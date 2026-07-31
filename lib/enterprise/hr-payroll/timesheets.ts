@@ -107,7 +107,7 @@ export async function decideEnterpriseTimesheet(organizationId: string, timeshee
       },
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishHrEvent(tx, { organizationId, entityType: "EnterpriseTimesheet", entityId: timesheet.id, eventType: `TIMESHEET_${targetStatus}`, summary: `Timesheet ${timesheet.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus, metadataJson: { totalApprovedMinutes } });
     return tx.enterpriseTimesheet.findUniqueOrThrow({ where: { id: timesheet.id }, include: { entries: true } });
   });
