@@ -4,7 +4,7 @@ requirePaths([
   "lib/enterprise/accounting/statements-service.ts",
   "app/api/enterprise/[organizationId]/financial-statements/route.ts",
   "components/enterprise/enterprise-finance-workspace.tsx",
-  "prisma/enterprise-finance-reporting.prisma",
+  "prisma/enterprise-accounting.prisma",
 ]);
 requireTokens("lib/enterprise/accounting/statements-service.ts", [
   "e.status = 'POSTED'",
@@ -29,9 +29,9 @@ requireTokens("components/enterprise/enterprise-finance-workspace.tsx", [
   'value="JOURNALS"',
   'value="TREASURY"',
 ]);
-requireTokens("prisma/enterprise-finance-reporting.prisma", [
+requireTokens("prisma/enterprise-accounting.prisma", [
   "EnterpriseFinancialStatementSnapshot",
-  "payloadJson",
+  "snapshotJson",
   "publishedAt",
 ]);
 success("enterprise financial statements and snapshots");
