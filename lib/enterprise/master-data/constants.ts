@@ -1,0 +1,15 @@
+export const BUSINESS_PARTY_TYPES = ["PERSON", "ORGANIZATION"] as const;
+export const BUSINESS_PARTY_ROLES = [
+  "CUSTOMER",
+  "PROSPECT",
+  "SUPPLIER",
+  "PARTNER",
+  "INSURER",
+  "DONOR",
+  "BENEFICIARY",
+  "SERVICE_PROVIDER",
+  "OTHER",
+] as const;
+export const CATALOG_ITEM_TYPES = ["PRODUCT", "SERVICE", "FEE", "SUBSCRIPTION", "OTHER"] as const;
+export const DEFAULT_UNIT_CODES = ["UNIT", "HOUR", "DAY", "KG", "LITER", "BOX", "PACK", "SERVICE"] as const;
+export const SITE_TYPES = ["HEADQUARTERS", "BRANCH", "ESTABLISHMENT", "STORE", "CENTER", "DEPOT", "OFFICE", "FIELD_SITE"] as const;

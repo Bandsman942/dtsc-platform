@@ -1,0 +1,135 @@
+-- DTSC ERP consolidation iteration 02: timesheets and payroll operations.
+-- Approval never represents accounting payment.
+
+CREATE TABLE "EnterpriseTimesheet" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "reference" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "periodStart" TIMESTAMP(3) NOT NULL,
+  "periodEnd" TIMESTAMP(3) NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "totalDeclaredMinutes" INTEGER NOT NULL DEFAULT 0,
+  "totalApprovedMinutes" INTEGER NOT NULL DEFAULT 0,
+  "submittedAt" TIMESTAMP(3),
+  "approvedAt" TIMESTAMP(3),
+  "approverUserId" TEXT,
+  "correctionComment" TEXT,
+  "rejectedAt" TIMESTAMP(3),
+  "rejectionComment" TEXT,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "archivedAt" TIMESTAMP(3),
+  CONSTRAINT "EnterpriseTimesheet_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterpriseTimesheetEntry" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "timesheetId" TEXT NOT NULL,
+  "workDate" TIMESTAMP(3) NOT NULL,
+  "startAt" TIMESTAMP(3),
+  "endAt" TIMESTAMP(3),
+  "breakMinutes" INTEGER NOT NULL DEFAULT 0,
+  "declaredMinutes" INTEGER NOT NULL,
+  "approvedMinutes" INTEGER,
+  "projectId" TEXT,
+  "milestoneId" TEXT,
+  "deliverableId" TEXT,
+  "taskId" TEXT,
+  "contractId" TEXT,
+  "businessPartyId" TEXT,
+  "catalogItemId" TEXT,
+  "serviceDescription" TEXT,
+  "billable" BOOLEAN NOT NULL DEFAULT false,
+  "notes" TEXT,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "EnterpriseTimesheetEntry_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterprisePayrollPeriod" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "code" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "periodStart" TIMESTAMP(3) NOT NULL,
+  "periodEnd" TIMESTAMP(3) NOT NULL,
+  "payDate" TIMESTAMP(3),
+  "status" TEXT NOT NULL DEFAULT 'OPEN',
+  "createdByUserId" TEXT NOT NULL,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "EnterprisePayrollPeriod_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterprisePayrollRun" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "payrollPeriodId" TEXT NOT NULL,
+  "reference" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "currency" TEXT NOT NULL,
+  "employeeCount" INTEGER NOT NULL DEFAULT 0,
+  "grossAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "bonusAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "deductionAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "netAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "preparedByUserId" TEXT NOT NULL,
+  "submittedByUserId" TEXT,
+  "approverUserId" TEXT,
+  "preparedAt" TIMESTAMP(3),
+  "submittedAt" TIMESTAMP(3),
+  "approvedAt" TIMESTAMP(3),
+  "rejectedAt" TIMESTAMP(3),
+  "rejectionReason" TEXT,
+  "cancelledAt" TIMESTAMP(3),
+  "cancellationReason" TEXT,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "archivedAt" TIMESTAMP(3),
+  CONSTRAINT "EnterprisePayrollRun_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterprisePayrollItem" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "payrollRunId" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "employmentContractId" TEXT NOT NULL,
+  "baseGrossAmount" DECIMAL(18,2) NOT NULL,
+  "approvedTimeMinutes" INTEGER,
+  "bonusAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "bonusReason" TEXT,
+  "deductionAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "deductionReason" TEXT,
+  "grossAmount" DECIMAL(18,2) NOT NULL,
+  "netAmount" DECIMAL(18,2) NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PREPARED',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "EnterprisePayrollItem_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterprisePayslip" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "payrollItemId" TEXT NOT NULL,
+  "payslipNumber" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "generatedAt" TIMESTAMP(3),
+  "documentId" TEXT,
+  "grossAmount" DECIMAL(18,2) NOT NULL,
+  "deductionAmount" DECIMAL(18,2) NOT NULL,
+  "netAmount" DECIMAL(18,2) NOT NULL,
+  "currency" TEXT NOT NULL,
+  "createdByUserId" TEXT NOT NULL,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "EnterprisePayslip_pkey" PRIMARY KEY ("id")
+);

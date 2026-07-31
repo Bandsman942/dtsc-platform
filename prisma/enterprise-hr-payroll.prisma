@@ -1,0 +1,381 @@
+model EnterpriseEmployee {
+  id                    String                         @id @default(cuid())
+  organizationId        String
+  employeeNumber        String
+  organizationMemberId  String?
+  businessPartyId       String?
+  firstName             String
+  lastName              String
+  displayName           String
+  workEmail             String?
+  workPhone             String?
+  positionId            String?
+  positionCode          String?
+  departmentId          String?
+  managerEmployeeId     String?
+  siteId                String?
+  hireDate              DateTime
+  terminationDate       DateTime?
+  employmentStatus      String                         @default("ACTIVE")
+  employmentType        String?
+  baseCompensation      Decimal?                       @db.Decimal(18, 2)
+  compensationCurrency  String?
+  professionalInfoJson  Json?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int                            @default(1)
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  archivedAt            DateTime?
+  manager               EnterpriseEmployee?            @relation("EnterpriseEmployeeManager", fields: [organizationId, managerEmployeeId], references: [organizationId, id], onDelete: Restrict)
+  directReports         EnterpriseEmployee[]           @relation("EnterpriseEmployeeManager")
+  site                  EnterpriseSite?                @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  contracts             EnterpriseEmploymentContract[]
+  assignments           EnterpriseEmployeeAssignment[]
+  workSchedules         EnterpriseWorkSchedule[]
+  attendanceRecords     EnterpriseAttendance[]
+  leaveRequests         EnterpriseLeaveRequest[]
+  timesheets            EnterpriseTimesheet[]
+  payrollItems          EnterprisePayrollItem[]
+  projectMemberships    EnterpriseProjectMember[]
+  assetAssignments      EnterpriseAssetAssignment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, employeeNumber])
+  @@unique([organizationId, organizationMemberId])
+  @@index([organizationId, employmentStatus, displayName])
+  @@index([organizationId, departmentId, employmentStatus])
+  @@index([organizationId, positionId, employmentStatus])
+  @@index([organizationId, managerEmployeeId, employmentStatus])
+  @@index([organizationId, siteId, employmentStatus])
+  @@index([organizationId, businessPartyId])
+  @@index([archivedAt])
+}
+
+model EnterpriseEmploymentContract {
+  id                    String                     @id @default(cuid())
+  organizationId        String
+  employeeId            String
+  reference             String
+  contractType          String
+  status                String                     @default("DRAFT")
+  versionNumber         Int                        @default(1)
+  supersedesContractId  String?
+  startDate             DateTime
+  endDate               DateTime?
+  probationEndDate      DateTime?
+  jobTitle              String?
+  departmentId          String?
+  siteId                String?
+  baseCompensation      Decimal                    @db.Decimal(18, 2)
+  compensationCurrency  String
+  payFrequency          String                     @default("MONTHLY")
+  standardHoursPerWeek  Decimal?                   @db.Decimal(8, 2)
+  terms                 String?
+  approvedAt            DateTime?
+  activatedAt           DateTime?
+  suspendedAt           DateTime?
+  endedAt               DateTime?
+  endReason             String?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int                        @default(1)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  archivedAt            DateTime?
+  employee              EnterpriseEmployee         @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  supersedesContract    EnterpriseEmploymentContract? @relation("EnterpriseEmploymentContractHistory", fields: [organizationId, supersedesContractId], references: [organizationId, id], onDelete: Restrict)
+  supersededBy          EnterpriseEmploymentContract[] @relation("EnterpriseEmploymentContractHistory")
+  payrollItems          EnterprisePayrollItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@unique([organizationId, employeeId, versionNumber])
+  @@index([organizationId, employeeId, status, startDate])
+  @@index([organizationId, endDate, status])
+  @@index([organizationId, supersedesContractId])
+  @@index([archivedAt])
+}
+
+model EnterpriseEmployeeAssignment {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  employeeId          String
+  assignmentType      String             @default("PRIMARY")
+  positionId          String?
+  positionCode        String?
+  departmentId        String?
+  siteId              String?
+  managerEmployeeId   String?
+  startsAt            DateTime
+  endsAt              DateTime?
+  status              String             @default("ACTIVE")
+  createdByUserId     String
+  revision            Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  employee            EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, employeeId, status, startsAt])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, siteId, status])
+}
+
+model EnterpriseWorkSchedule {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  employeeId          String
+  scheduleType        String             @default("WEEKLY")
+  dayOfWeek           Int?
+  scheduleDate        DateTime?
+  startMinute         Int
+  endMinute           Int
+  breakMinutes        Int                @default(0)
+  timezone            String
+  status              String             @default("ACTIVE")
+  effectiveFrom       DateTime
+  effectiveUntil      DateTime?
+  createdByUserId     String
+  revision            Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  archivedAt          DateTime?
+  employee            EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, employeeId, status, effectiveFrom])
+  @@index([organizationId, scheduleDate, status])
+  @@index([organizationId, dayOfWeek, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseAttendance {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  employeeId          String
+  attendanceDate      DateTime
+  observedStartAt     DateTime?
+  observedEndAt       DateTime?
+  status              String             @default("PRESENT")
+  source              String             @default("MANUAL")
+  siteId              String?
+  notes               String?
+  recordedByUserId    String
+  revision            Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  employee            EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, employeeId, attendanceDate])
+  @@index([organizationId, attendanceDate, status])
+  @@index([organizationId, siteId, attendanceDate])
+}
+
+model EnterpriseLeaveRequest {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  reference           String
+  employeeId          String
+  leaveType           String
+  startDate           DateTime
+  endDate             DateTime
+  partialDay          Boolean            @default(false)
+  startMinute         Int?
+  endMinute           Int?
+  status              String             @default("DRAFT")
+  reason              String?
+  requestedByUserId   String
+  approverUserId      String?
+  submittedAt         DateTime?
+  decidedAt           DateTime?
+  decisionComment     String?
+  cancelledAt         DateTime?
+  revision            Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  archivedAt          DateTime?
+  employee            EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, employeeId, status, startDate])
+  @@index([organizationId, approverUserId, status])
+  @@index([organizationId, startDate, endDate])
+  @@index([archivedAt])
+}
+
+model EnterpriseTimesheet {
+  id                  String                    @id @default(cuid())
+  organizationId      String
+  reference           String
+  employeeId          String
+  periodStart         DateTime
+  periodEnd           DateTime
+  status              String                    @default("DRAFT")
+  totalDeclaredMinutes Int                       @default(0)
+  totalApprovedMinutes Int                       @default(0)
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  approverUserId      String?
+  correctionComment   String?
+  rejectedAt          DateTime?
+  rejectionComment    String?
+  revision            Int                       @default(1)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  archivedAt          DateTime?
+  employee            EnterpriseEmployee        @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  entries             EnterpriseTimesheetEntry[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@unique([organizationId, employeeId, periodStart, periodEnd])
+  @@index([organizationId, employeeId, status])
+  @@index([organizationId, approverUserId, status])
+  @@index([organizationId, periodStart, periodEnd])
+  @@index([archivedAt])
+}
+
+model EnterpriseTimesheetEntry {
+  id                  String              @id @default(cuid())
+  organizationId      String
+  timesheetId         String
+  workDate            DateTime
+  startAt             DateTime?
+  endAt               DateTime?
+  breakMinutes        Int                 @default(0)
+  declaredMinutes     Int
+  approvedMinutes     Int?
+  projectId           String?
+  milestoneId         String?
+  deliverableId       String?
+  taskId              String?
+  contractId          String?
+  businessPartyId     String?
+  catalogItemId       String?
+  serviceDescription  String?
+  billable            Boolean             @default(false)
+  notes               String?
+  revision            Int                 @default(1)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  timesheet           EnterpriseTimesheet @relation(fields: [organizationId, timesheetId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, timesheetId, workDate])
+  @@index([organizationId, projectId, workDate])
+  @@index([organizationId, taskId, workDate])
+  @@index([organizationId, contractId, workDate])
+  @@index([organizationId, businessPartyId, workDate])
+}
+
+model EnterprisePayrollPeriod {
+  id              String                 @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  periodStart     DateTime
+  periodEnd       DateTime
+  payDate         DateTime?
+  status          String                 @default("OPEN")
+  createdByUserId String
+  revision        Int                    @default(1)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  payrollRuns     EnterprisePayrollRun[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@unique([organizationId, periodStart, periodEnd])
+  @@index([organizationId, status, periodStart])
+}
+
+model EnterprisePayrollRun {
+  id                    String                  @id @default(cuid())
+  organizationId        String
+  payrollPeriodId       String
+  reference             String
+  status                String                  @default("DRAFT")
+  currency              String
+  employeeCount         Int                     @default(0)
+  grossAmount           Decimal                 @default(0) @db.Decimal(18, 2)
+  bonusAmount           Decimal                 @default(0) @db.Decimal(18, 2)
+  deductionAmount       Decimal                 @default(0) @db.Decimal(18, 2)
+  netAmount             Decimal                 @default(0) @db.Decimal(18, 2)
+  preparedByUserId      String
+  submittedByUserId     String?
+  approverUserId        String?
+  preparedAt            DateTime?
+  submittedAt           DateTime?
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  rejectionReason       String?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+  revision              Int                     @default(1)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  archivedAt            DateTime?
+  payrollPeriod         EnterprisePayrollPeriod @relation(fields: [organizationId, payrollPeriodId], references: [organizationId, id], onDelete: Restrict)
+  items                 EnterprisePayrollItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@index([organizationId, payrollPeriodId, status])
+  @@index([organizationId, approverUserId, status])
+  @@index([organizationId, preparedByUserId, status])
+  @@index([archivedAt])
+}
+
+model EnterprisePayrollItem {
+  id                    String                       @id @default(cuid())
+  organizationId        String
+  payrollRunId          String
+  employeeId            String
+  employmentContractId  String
+  baseGrossAmount       Decimal                      @db.Decimal(18, 2)
+  approvedTimeMinutes   Int?
+  bonusAmount           Decimal                      @default(0) @db.Decimal(18, 2)
+  bonusReason           String?
+  deductionAmount       Decimal                      @default(0) @db.Decimal(18, 2)
+  deductionReason       String?
+  grossAmount           Decimal                      @db.Decimal(18, 2)
+  netAmount             Decimal                      @db.Decimal(18, 2)
+  status                String                       @default("PREPARED")
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  payrollRun            EnterprisePayrollRun         @relation(fields: [organizationId, payrollRunId], references: [organizationId, id], onDelete: Cascade)
+  employee              EnterpriseEmployee           @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  employmentContract    EnterpriseEmploymentContract @relation(fields: [organizationId, employmentContractId], references: [organizationId, id], onDelete: Restrict)
+  payslip               EnterprisePayslip?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, payrollRunId, employeeId])
+  @@index([organizationId, employeeId, createdAt])
+  @@index([organizationId, employmentContractId])
+}
+
+model EnterprisePayslip {
+  id               String                @id @default(cuid())
+  organizationId   String
+  payrollItemId    String
+  payslipNumber    String
+  status           String                @default("DRAFT")
+  generatedAt      DateTime?
+  documentId       String?
+  grossAmount      Decimal               @db.Decimal(18, 2)
+  deductionAmount  Decimal               @db.Decimal(18, 2)
+  netAmount        Decimal               @db.Decimal(18, 2)
+  currency         String
+  createdByUserId  String
+  revision         Int                   @default(1)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  payrollItem      EnterprisePayrollItem @relation(fields: [organizationId, payrollItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, payrollItemId])
+  @@unique([organizationId, payslipNumber])
+  @@index([organizationId, status, generatedAt])
+}

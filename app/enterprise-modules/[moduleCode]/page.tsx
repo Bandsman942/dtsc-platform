@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
 import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
+import { EnterpriseCommonDomainWorkspace } from "@/components/enterprise/enterprise-common-domain-workspace";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
 import { EnterpriseSectorModuleWorkspace } from "@/components/enterprise/enterprise-sector-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
@@ -21,6 +22,21 @@ type Params = { params: Promise<{ moduleCode: string }> };
 
 const ENTERPRISE_ADMIN_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
 const ENTERPRISE_OVERSIGHT_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
+const COMMON_DOMAIN_CODES = new Set([
+  "CRM_CUSTOMERS",
+  "CATALOG",
+  "SITES_WAREHOUSES",
+  "CRM_PIPELINE",
+  "SALES_QUOTES_ORDERS",
+  "CONTRACTS",
+  "INVENTORY_LOGISTICS",
+  "HUMAN_RESOURCES",
+  "TIME_ATTENDANCE",
+  "PAYROLL_OPERATIONS",
+  "PROJECTS_SERVICES",
+  "TIME_DELIVERABLES",
+  "ASSETS_MAINTENANCE",
+]);
 
 // Legacy QA markers retained during migration to the canonical registry:
 // canAccessEnterpriseModule / organizationId_moduleCode / !enterpriseModule.isCore
@@ -47,9 +63,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
 
   const adminRedirect = getEnterpriseAdminLegacyRedirect(requestedModuleCode);
   if (adminRedirect) redirect(adminRedirect);
-  if (requestedModuleCode.toUpperCase() !== canonicalModuleCode) {
-    redirect(routeResolution.path);
-  }
+  if (requestedModuleCode.toUpperCase() !== canonicalModuleCode) redirect(routeResolution.path);
 
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) notFound();
@@ -81,24 +95,13 @@ export default async function EnterpriseModulePage({ params }: Params) {
 
   if (definition.routeKind === "SECTOR_HEALTH" || definition.routeKind === "SECTOR_PHARMACY") {
     const [enabledModules, betaRecords] = await Promise.all([
-      prisma.enterpriseModule.findMany({
-        where: { organizationId, isEnabled: true },
-        select: { moduleCode: true },
-      }),
+      prisma.enterpriseModule.findMany({ where: { organizationId, isEnabled: true }, select: { moduleCode: true } }),
       definition.implementationStatus === "BETA"
         ? prisma.enterpriseSectorRecord.findMany({
-            where: {
-              organizationId,
-              moduleCode: definition.code,
-              sectorCode: organization.sectorCode || undefined,
-              deletedAt: null,
-            },
+            where: { organizationId, moduleCode: definition.code, sectorCode: organization.sectorCode || undefined, deletedAt: null },
             orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
             take: 100,
-            include: {
-              createdBy: { select: { name: true, email: true } },
-              assignedTo: { select: { id: true, name: true, email: true } },
-            },
+            include: { createdBy: { select: { name: true, email: true } }, assignedTo: { select: { id: true, name: true, email: true } } },
           })
         : Promise.resolve([]),
     ]);
@@ -115,6 +118,18 @@ export default async function EnterpriseModulePage({ params }: Params) {
   }
 
   if (definition.routeKind !== "DEDICATED_CORE") notFound();
+
+  if (COMMON_DOMAIN_CODES.has(definition.code)) {
+    return (
+      <AppShell user={user}>
+        <EnterpriseCommonDomainWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={definition}
+        />
+      </AppShell>
+    );
+  }
 
   const canSeeAll = ENTERPRISE_OVERSIGHT_ROLES.has(membership.role);
   const [activityBlocks, records, members, departments, positions, workflows, requests, calendarEvents, audits, coreRecords] = await Promise.all([

@@ -1,0 +1,284 @@
+model EnterpriseBusinessParty {
+  id                 String                           @id @default(cuid())
+  organizationId     String
+  partyType          String
+  legalName          String
+  displayName        String?
+  normalizedName     String
+  code               String
+  migrationKey       String?
+  taxIdentifier      String?
+  registrationId     String?
+  primaryEmail       String?
+  primaryPhone       String?
+  status             String                           @default("ACTIVE")
+  notes              String?
+  createdByUserId    String
+  updatedByUserId    String?
+  revision           Int                              @default(1)
+  createdAt          DateTime                         @default(now())
+  updatedAt          DateTime                         @updatedAt
+  archivedAt         DateTime?
+  roles              EnterpriseBusinessPartyRole[]
+  contacts           EnterpriseBusinessPartyContact[]
+  addresses          EnterpriseBusinessPartyAddress[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@unique([organizationId, migrationKey])
+  @@index([organizationId, partyType, status])
+  @@index([organizationId, normalizedName, status])
+  @@index([organizationId, taxIdentifier])
+  @@index([organizationId, registrationId])
+  @@index([organizationId, primaryEmail])
+  @@index([archivedAt])
+}
+
+model EnterpriseBusinessPartyRole {
+  id              String                  @id @default(cuid())
+  organizationId  String
+  businessPartyId String
+  roleCode        String
+  status          String                  @default("ACTIVE")
+  validFrom       DateTime?
+  validUntil      DateTime?
+  createdByUserId String
+  createdAt       DateTime                @default(now())
+  archivedAt      DateTime?
+  businessParty   EnterpriseBusinessParty @relation(fields: [organizationId, businessPartyId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, businessPartyId, roleCode])
+  @@index([organizationId, roleCode, status])
+  @@index([organizationId, businessPartyId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseBusinessPartyContact {
+  id              String                  @id @default(cuid())
+  organizationId  String
+  businessPartyId String
+  contactType     String
+  label           String?
+  value           String
+  normalizedValue String
+  isPrimary       Boolean                 @default(false)
+  isVerified      Boolean                 @default(false)
+  status          String                  @default("ACTIVE")
+  createdByUserId String
+  revision        Int                     @default(1)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  archivedAt      DateTime?
+  businessParty   EnterpriseBusinessParty @relation(fields: [organizationId, businessPartyId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, businessPartyId, contactType, normalizedValue])
+  @@index([organizationId, businessPartyId, isPrimary])
+  @@index([organizationId, normalizedValue])
+  @@index([archivedAt])
+}
+
+model EnterpriseBusinessPartyAddress {
+  id              String                  @id @default(cuid())
+  organizationId  String
+  businessPartyId String
+  addressType     String                  @default("PRIMARY")
+  label           String?
+  line1           String
+  line2           String?
+  city            String?
+  stateProvince   String?
+  postalCode      String?
+  countryCode     String?
+  isPrimary       Boolean                 @default(false)
+  status          String                  @default("ACTIVE")
+  createdByUserId String
+  revision        Int                     @default(1)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  archivedAt      DateTime?
+  businessParty   EnterpriseBusinessParty @relation(fields: [organizationId, businessPartyId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, businessPartyId, isPrimary])
+  @@index([organizationId, countryCode, city])
+  @@index([archivedAt])
+}
+
+model EnterpriseUnitOfMeasure {
+  id              String                  @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  symbol          String?
+  category        String                  @default("GENERAL")
+  decimalScale    Int                     @default(3)
+  status          String                  @default("ACTIVE")
+  isSystem        Boolean                 @default(false)
+  createdByUserId String?
+  revision        Int                     @default(1)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  archivedAt      DateTime?
+  catalogItems    EnterpriseCatalogItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, category, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseCatalogCategory {
+  id              String                      @id @default(cuid())
+  organizationId  String
+  parentCategoryId String?
+  code            String
+  name            String
+  description     String?
+  status          String                      @default("ACTIVE")
+  sortOrder       Int                         @default(0)
+  createdByUserId String
+  revision        Int                         @default(1)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  archivedAt      DateTime?
+  parentCategory  EnterpriseCatalogCategory?  @relation("EnterpriseCatalogCategoryTree", fields: [organizationId, parentCategoryId], references: [organizationId, id], onDelete: Restrict)
+  childCategories EnterpriseCatalogCategory[] @relation("EnterpriseCatalogCategoryTree")
+  catalogItems    EnterpriseCatalogItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, parentCategoryId, status])
+  @@index([organizationId, name, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseCatalogItem {
+  id                    String                     @id @default(cuid())
+  organizationId        String
+  code                  String
+  sku                   String?
+  name                  String
+  normalizedName        String
+  description           String?
+  itemType              String
+  categoryId            String?
+  unitOfMeasureId       String
+  indicativeSalePrice   Decimal?                   @db.Decimal(18, 2)
+  indicativeCost        Decimal?                   @db.Decimal(18, 2)
+  currency              String?
+  status                String                     @default("ACTIVE")
+  taxable               Boolean                    @default(false)
+  taxCode               String?
+  trackInventory        Boolean                    @default(false)
+  notes                 String?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int                        @default(1)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  archivedAt            DateTime?
+  category              EnterpriseCatalogCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
+  unitOfMeasure         EnterpriseUnitOfMeasure    @relation(fields: [organizationId, unitOfMeasureId], references: [organizationId, id], onDelete: Restrict)
+  inventoryItems        EnterpriseInventoryItem[]
+  quoteItems            EnterpriseQuoteItem[]
+  salesOrderItems       EnterpriseSalesOrderItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@unique([organizationId, sku])
+  @@index([organizationId, itemType, status])
+  @@index([organizationId, categoryId, status])
+  @@index([organizationId, normalizedName, status])
+  @@index([organizationId, trackInventory, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseSite {
+  id              String                @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  siteType        String
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  stateProvince   String?
+  postalCode      String?
+  countryCode     String?
+  timezone        String?
+  managerUserId   String?
+  status          String                @default("ACTIVE")
+  settingsJson    Json?
+  createdByUserId String
+  revision        Int                   @default(1)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  archivedAt      DateTime?
+  warehouses      EnterpriseWarehouse[]
+  employees       EnterpriseEmployee[]
+  assets          EnterpriseAsset[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, siteType, status])
+  @@index([organizationId, managerUserId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseWarehouse {
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  siteId               String
+  code                 String
+  name                 String
+  warehouseType        String                    @default("GENERAL")
+  managerUserId        String?
+  status               String                    @default("ACTIVE")
+  settingsJson         Json?
+  createdByUserId      String
+  revision             Int                       @default(1)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  archivedAt           DateTime?
+  site                 EnterpriseSite            @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  storageLocations     EnterpriseStorageLocation[]
+  inventoryBalances    EnterpriseInventoryBalance[]
+  stockMovements       EnterpriseStockMovement[]
+  sourceTransfers      EnterpriseStockTransfer[] @relation("EnterpriseStockTransferSource")
+  destinationTransfers EnterpriseStockTransfer[] @relation("EnterpriseStockTransferDestination")
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, siteId, status])
+  @@index([organizationId, managerUserId, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseStorageLocation {
+  id                 String                       @id @default(cuid())
+  organizationId     String
+  warehouseId        String
+  parentLocationId   String?
+  code               String
+  name               String
+  locationType       String                       @default("GENERAL")
+  status             String                       @default("ACTIVE")
+  restrictedAccess   Boolean                      @default(false)
+  createdByUserId    String
+  revision           Int                          @default(1)
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  archivedAt         DateTime?
+  warehouse          EnterpriseWarehouse          @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  parentLocation     EnterpriseStorageLocation?   @relation("EnterpriseStorageLocationTree", fields: [organizationId, parentLocationId], references: [organizationId, id], onDelete: Restrict)
+  childLocations     EnterpriseStorageLocation[]  @relation("EnterpriseStorageLocationTree")
+  inventoryBalances  EnterpriseInventoryBalance[]
+  stockLots          EnterpriseStockLot[]
+  stockMovements     EnterpriseStockMovement[]
+  assets             EnterpriseAsset[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, warehouseId, code])
+  @@index([organizationId, warehouseId, status])
+  @@index([organizationId, parentLocationId, status])
+  @@index([archivedAt])
+}

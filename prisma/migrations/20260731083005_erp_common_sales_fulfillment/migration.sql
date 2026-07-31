@@ -1,0 +1,90 @@
+-- DTSC ERP consolidation iteration 02: operational sales orders and fulfillment.
+
+CREATE TABLE "EnterpriseSalesOrder" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "reference" TEXT NOT NULL,
+  "businessPartyId" TEXT NOT NULL,
+  "opportunityId" TEXT,
+  "quoteId" TEXT,
+  "contractId" TEXT,
+  "projectId" TEXT,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "currency" TEXT NOT NULL,
+  "subtotalAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "discountAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "taxAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "totalAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "ownerUserId" TEXT,
+  "departmentId" TEXT,
+  "expectedFulfillmentAt" TIMESTAMP(3),
+  "confirmedAt" TIMESTAMP(3),
+  "fulfilledAt" TIMESTAMP(3),
+  "closedAt" TIMESTAMP(3),
+  "cancelledAt" TIMESTAMP(3),
+  "cancellationReason" TEXT,
+  "createdByUserId" TEXT NOT NULL,
+  "updatedByUserId" TEXT,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "archivedAt" TIMESTAMP(3),
+  CONSTRAINT "EnterpriseSalesOrder_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterpriseSalesOrderItem" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "salesOrderId" TEXT NOT NULL,
+  "catalogItemId" TEXT,
+  "description" TEXT NOT NULL,
+  "quantityOrdered" DECIMAL(18,3) NOT NULL,
+  "quantityFulfilled" DECIMAL(18,3) NOT NULL DEFAULT 0,
+  "unitOfMeasureId" TEXT,
+  "unitPrice" DECIMAL(18,2) NOT NULL,
+  "discountRate" DECIMAL(8,4) NOT NULL DEFAULT 0,
+  "discountAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "taxRate" DECIMAL(8,4) NOT NULL DEFAULT 0,
+  "taxAmount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "lineSubtotal" DECIMAL(18,2) NOT NULL,
+  "lineTotal" DECIMAL(18,2) NOT NULL,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "EnterpriseSalesOrderItem_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterpriseFulfillment" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "salesOrderId" TEXT NOT NULL,
+  "reference" TEXT NOT NULL,
+  "fulfillmentType" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "warehouseId" TEXT,
+  "fulfilledByUserId" TEXT,
+  "fulfilledAt" TIMESTAMP(3),
+  "acceptedByCustomerAt" TIMESTAMP(3),
+  "acceptanceNotes" TEXT,
+  "proofDocumentId" TEXT,
+  "idempotencyKey" TEXT,
+  "notes" TEXT,
+  "revision" INTEGER NOT NULL DEFAULT 1,
+  "createdByUserId" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "EnterpriseFulfillment_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "EnterpriseFulfillmentItem" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "fulfillmentId" TEXT NOT NULL,
+  "salesOrderItemId" TEXT NOT NULL,
+  "quantityFulfilled" DECIMAL(18,3) NOT NULL,
+  "notes" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "EnterpriseFulfillmentItem_pkey" PRIMARY KEY ("id")
+);
