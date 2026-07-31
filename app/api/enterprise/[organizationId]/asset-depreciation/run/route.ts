@@ -1,0 +1,8 @@
+import { NextResponse } from "next/server";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { runDueAssetDepreciation } from "@/lib/enterprise/accounting/asset-accounting-service";
+import { assetDepreciationRunSchema } from "@/lib/enterprise/accounting/finance-domain-schemas";
+import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
+
+type Params = { params: Promise<{ organizationId: string }> };
+export async function POST(req: Request, { params }: Params) { const startedAt = Date.now(); const { organizationId } = await params; const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_ASSETS", "post", { mutation: true, limit: 10 }); if (!auth.ok) return auth.response; const parsed = assetDepreciationRunSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message }, { status: 400 }); try { const results = await runDueAssetDepreciation(organizationId, auth.session.userId, parsed.data.throughDate); await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_ASSET_DEPRECIATION_RUN", entity: "EnterpriseAssetDepreciationSchedule", entityId: organizationId, request: req, metadata: { organizationId, throughDate: parsed.data.throughDate.toISOString(), postedCount: results.length } }); await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "asset-depreciation", postedCount: results.length } }); return NextResponse.json({ ok: true, items: results, postedCount: results.length }); } catch (error) { return financeErrorResponse(error, "ASSET_DEPRECIATION_RUN_FAILED"); } }
