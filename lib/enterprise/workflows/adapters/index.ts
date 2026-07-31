@@ -10,6 +10,7 @@ import { transitionEnterprisePurchase } from "@/lib/enterprise/procurement/purch
 import type { WorkflowAssignmentStrategy, WorkflowEntityType } from "@/lib/enterprise/workflows/constants";
 import { EnterpriseWorkflowError } from "@/lib/enterprise/workflows/errors";
 import type { WorkflowDomainActionInput, WorkflowDomainActionResult, WorkflowEntityAdapter, WorkflowEntitySnapshot } from "@/lib/enterprise/workflows/adapters/types";
+import { FINANCE_WORKFLOW_ADAPTERS } from "@/lib/enterprise/workflows/adapters/finance";
 import { prisma } from "@/lib/prisma";
 
 const COMMON_PLACEHOLDERS = ["entity.id", "entity.reference", "entity.title", "entity.status", "entity.requesterName", "entity.departmentName", "workflow.name"] as const;
@@ -199,7 +200,7 @@ const reportAdapter: WorkflowEntityAdapter = {
   },
 };
 
-const ADAPTERS: Record<WorkflowEntityType, WorkflowEntityAdapter> = {
+const ADAPTERS: Partial<Record<WorkflowEntityType, WorkflowEntityAdapter>> = {
   EnterpriseTask: taskAdapter,
   EnterpriseRequest: requestAdapter,
   EnterpriseMeeting: meetingAdapter,
@@ -207,6 +208,7 @@ const ADAPTERS: Record<WorkflowEntityType, WorkflowEntityAdapter> = {
   EnterpriseBudget: budgetAdapter,
   EnterpriseExpense: expenseAdapter,
   EnterpriseReport: reportAdapter,
+  ...FINANCE_WORKFLOW_ADAPTERS,
 };
 
 export function getWorkflowEntityAdapter(entityType: string) {
@@ -256,8 +258,18 @@ function inferEntityType(entity: WorkflowEntitySnapshot): WorkflowEntityType {
   if ("locationMode" in entity) return "EnterpriseMeeting";
   if ("totalAmount" in entity) return "EnterprisePurchase";
   if ("amount" in entity && "expenseDate" in entity) return "EnterpriseExpense";
-  if ("periodStart" in entity && "createdByUserId" in entity && !("reportType" in entity)) return "EnterpriseBudget";
   if ("reportType" in entity) return "EnterpriseReport";
+  if ("paymentType" in entity) return "EnterprisePayment";
+  if ("cashierUserId" in entity) return "EnterpriseCashSession";
+  if ("assetAccountingProfileId" in entity) return "EnterpriseAssetDepreciationSchedule";
+  if ("statementBalance" in entity && "preparedByUserId" in entity) return "EnterpriseReconciliationSession";
+  if ("journalId" in entity && "fiscalPeriodId" in entity) return "EnterpriseJournalEntry";
+  if ("fiscalYearId" in entity && "startDate" in entity && "endDate" in entity) return "EnterpriseFiscalPeriod";
+  if ("salesInvoiceId" in entity && "creditDate" in entity) return "EnterpriseSalesCreditNote";
+  if ("supplierInvoiceId" in entity && "creditDate" in entity) return "EnterpriseSupplierCreditNote";
+  if ("supplierId" in entity && "grandTotal" in entity) return "EnterpriseSupplierInvoice";
+  if ("businessPartyId" in entity && "grandTotal" in entity) return "EnterpriseSalesInvoice";
+  if ("periodStart" in entity && "createdByUserId" in entity) return "EnterpriseBudget";
   throw new EnterpriseWorkflowError("Impossible de résoudre l’adapter de l’objet.", 400, "WORKFLOW_ADAPTER_RESOLUTION_FAILED", "CONFIGURATION");
 }
 
