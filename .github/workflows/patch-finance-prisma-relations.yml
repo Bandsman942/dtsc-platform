@@ -1,0 +1,96 @@
+name: Patch Finance Prisma relations
+
+on:
+  push:
+    branches:
+      - feat/erp-consolidation-iteration-03-finance-accounting
+    paths:
+      - .github/workflows/patch-finance-prisma-relations.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/erp-consolidation-iteration-03-finance-accounting
+          fetch-depth: 0
+
+      - name: Align Prisma relations with Finance migrations
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          schema_path = Path('prisma/enterprise-accounting.prisma')
+          content = schema_path.read_text()
+          replacements = [
+              (
+                  '  journalEntries  EnterpriseJournalEntry[]\n  closes          EnterpriseFinancialClose[]',
+                  '  journalEntries         EnterpriseJournalEntry[]\n  closes                 EnterpriseFinancialClose[]\n  openingBalanceImports EnterpriseOpeningBalanceImport[]',
+              ),
+              (
+                  '  chart          EnterpriseChartOfAccounts @relation(fields: [organizationId, chartId], references: [organizationId, id], onDelete: Restrict)\n  accounts       EnterpriseLedgerAccount[]',
+                  '  chart          EnterpriseChartOfAccounts @relation(fields: [organizationId, chartId], references: [organizationId, id], onDelete: Restrict)\n  parent         EnterpriseAccountGroup?   @relation("EnterpriseAccountGroupHierarchy", fields: [organizationId, parentGroupId], references: [organizationId, id], onDelete: Restrict)\n  children       EnterpriseAccountGroup[]  @relation("EnterpriseAccountGroupHierarchy")\n  accounts       EnterpriseLedgerAccount[]',
+              ),
+              (
+                  '  journalLines           EnterpriseJournalLine[]\n  financialAccounts      EnterpriseFinancialAccount[]',
+                  '  journalLines           EnterpriseJournalLine[]\n  financialAccounts      EnterpriseFinancialAccount[]\n  accountMappings        EnterpriseAccountMapping[]\n  openingBalanceLines    EnterpriseOpeningBalanceLine[]\n  taxCodesPayable        EnterpriseTaxCode[] @relation("EnterpriseTaxCodePayableAccount")\n  taxCodesRecoverable    EnterpriseTaxCode[] @relation("EnterpriseTaxCodeRecoverableAccount")',
+              ),
+              (
+                  '  updatedAt           DateTime @updatedAt\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, mappingKey, effectiveFrom])',
+                  '  updatedAt           DateTime @updatedAt\n  ledgerAccount       EnterpriseLedgerAccount @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, mappingKey, effectiveFrom])',
+              ),
+              (
+                  '  fiscalPeriod             EnterpriseFiscalPeriod   @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)\n  lines                    EnterpriseJournalLine[]',
+                  '  fiscalPeriod             EnterpriseFiscalPeriod   @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)\n  reversalOf               EnterpriseJournalEntry?  @relation("EnterpriseJournalEntryReversal", fields: [organizationId, reversalOfEntryId], references: [organizationId, id], onDelete: Restrict)\n  reversals                EnterpriseJournalEntry[] @relation("EnterpriseJournalEntryReversal")\n  reversalRecordsAsOriginal EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalOriginal")\n  reversalRecordsAsResult  EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalResult")\n  lines                    EnterpriseJournalLine[]',
+              ),
+              (
+                  '  approvedByUserId      String?\n  createdAt             DateTime @default(now())\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, originalEntryId])',
+                  '  approvedByUserId      String?\n  createdAt             DateTime @default(now())\n  originalEntry         EnterpriseJournalEntry @relation("EnterpriseJournalReversalOriginal", fields: [organizationId, originalEntryId], references: [organizationId, id], onDelete: Restrict)\n  reversalEntry         EnterpriseJournalEntry @relation("EnterpriseJournalReversalResult", fields: [organizationId, reversalEntryId], references: [organizationId, id], onDelete: Restrict)\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, originalEntryId])',
+              ),
+              (
+                  '  rates                    EnterpriseTaxRate[]\n  rules                    EnterpriseTaxRule[]',
+                  '  rates                    EnterpriseTaxRate[]\n  rules                    EnterpriseTaxRule[]\n  payableAccount           EnterpriseLedgerAccount? @relation("EnterpriseTaxCodePayableAccount", fields: [organizationId, payableAccountId], references: [organizationId, id], onDelete: Restrict)\n  recoverableAccount       EnterpriseLedgerAccount? @relation("EnterpriseTaxCodeRecoverableAccount", fields: [organizationId, recoverableAccountId], references: [organizationId, id], onDelete: Restrict)\n  taxLines                 EnterpriseTaxLine[]\n  summaries                EnterpriseTaxSummary[]',
+              ),
+              (
+                  '  direction          String\n  createdAt          DateTime @default(now())\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, sourceEntityType, sourceEntityId, taxCodeId])',
+                  '  direction          String\n  createdAt          DateTime @default(now())\n  taxCode            EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, sourceEntityType, sourceEntityId, taxCodeId])',
+              ),
+              (
+                  '  createdByUserId String\n  createdAt       DateTime @default(now())\n  updatedAt       DateTime @updatedAt\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, code])\n  @@index([organizationId, status, startDate])',
+                  '  createdByUserId String\n  createdAt       DateTime @default(now())\n  updatedAt       DateTime @updatedAt\n  summaries       EnterpriseTaxSummary[]\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, code])\n  @@index([organizationId, status, startDate])',
+              ),
+              (
+                  '  generatedByUserId String\n  generatedAt       DateTime @default(now())\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, taxPeriodId, taxCodeId, currencyCode])',
+                  '  generatedByUserId String\n  generatedAt       DateTime @default(now())\n  taxPeriod         EnterpriseTaxPeriod @relation(fields: [organizationId, taxPeriodId], references: [organizationId, id], onDelete: Restrict)\n  taxCode           EnterpriseTaxCode   @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)\n\n  @@unique([organizationId, id])\n  @@unique([organizationId, taxPeriodId, taxCodeId, currencyCode])',
+              ),
+              (
+                  '  updatedAt         DateTime                       @updatedAt\n  lines             EnterpriseOpeningBalanceLine[]',
+                  '  updatedAt         DateTime                       @updatedAt\n  fiscalPeriod      EnterpriseFiscalPeriod           @relation(fields: [organizationId, fiscalPeriodId], references: [organizationId, id], onDelete: Restrict)\n  lines             EnterpriseOpeningBalanceLine[]',
+              ),
+              (
+                  '  openingBalanceImport   EnterpriseOpeningBalanceImport @relation(fields: [organizationId, openingBalanceImportId], references: [organizationId, id], onDelete: Cascade)\n\n  @@unique([organizationId, id])',
+                  '  openingBalanceImport   EnterpriseOpeningBalanceImport @relation(fields: [organizationId, openingBalanceImportId], references: [organizationId, id], onDelete: Cascade)\n  ledgerAccount          EnterpriseLedgerAccount         @relation(fields: [organizationId, ledgerAccountId], references: [organizationId, id], onDelete: Restrict)\n\n  @@unique([organizationId, id])',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = content.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one match, found {count}: {old[:80]!r}')
+              content = content.replace(old, new)
+
+          schema_path.write_text(content)
+          Path('.github/workflows/patch-finance-prisma-relations.yml').unlink()
+          PY
+
+      - name: Commit relation alignment
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/enterprise-accounting.prisma .github/workflows/patch-finance-prisma-relations.yml
+          git commit -m "fix: align Finance Prisma relations with migrations"
+          git push origin HEAD:feat/erp-consolidation-iteration-03-finance-accounting
