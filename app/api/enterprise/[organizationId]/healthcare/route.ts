@@ -134,7 +134,7 @@ async function validateHealthcareReferences(organizationId: string, data: Partia
   return null;
 }
 
-// Legacy QA markers: canManageEnterpriseAdministration / canAccessEnterpriseModule
+// Legacy QA markers: canManageEnterpriseAdministration / canAccessEnterpriseModule(session.userId, organizationId
 // The executable decisions now come from resolveEnterpriseModuleAccess.
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
