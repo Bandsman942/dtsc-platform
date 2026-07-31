@@ -6,16 +6,16 @@ export function financeReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
-export function decimal(value: Prisma.Decimal.Value) {
+export function decimal(value: Prisma.Decimal.Value): Prisma.Decimal {
   return new Prisma.Decimal(value);
 }
 
-export function money(value: Prisma.Decimal.Value, precision = 6) {
+export function money(value: Prisma.Decimal.Value, precision = 6): Prisma.Decimal {
   return decimal(value).toDecimalPlaces(precision, Prisma.Decimal.ROUND_HALF_UP);
 }
 
-export function sumDecimals(values: Prisma.Decimal.Value[]) {
-  return values.reduce((total, value) => total.plus(value), new Prisma.Decimal(0));
+export function sumDecimals(values: Prisma.Decimal.Value[]): Prisma.Decimal {
+  return values.reduce<Prisma.Decimal>((total, value) => total.plus(value), new Prisma.Decimal(0));
 }
 
 export function assertPositiveAmount(value: Prisma.Decimal.Value, code = "FINANCE_AMOUNT_MUST_BE_POSITIVE") {
