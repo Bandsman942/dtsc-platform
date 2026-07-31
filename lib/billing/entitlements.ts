@@ -1,5 +1,5 @@
 import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
-import { FEATURE_ENTITLEMENTS, moduleRequiresActiveSubscription, requiredPlanForModule, type SaasFeatureCode } from "@/lib/billing/module-entitlements";
+import { FEATURE_ENTITLEMENTS, moduleRequiresActiveSubscription, type SaasFeatureCode } from "@/lib/billing/module-entitlements";
 import { getPlanUsageLimits, type OrganizationUsageLimits } from "@/lib/billing/plan-limits";
 import { normalizePlanRequirement, planMeetsRequirement, resolveSaasPlanCode, SAAS_PLANS, type SaasPlanCode } from "@/lib/billing/plans";
 import {
