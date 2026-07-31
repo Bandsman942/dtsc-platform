@@ -67,7 +67,7 @@ export async function decideEnterpriseLeaveRequest(organizationId: string, reque
     const targetStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const updated = await tx.enterpriseLeaveRequest.updateMany({ where: { id: request.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
-    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decisionAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
+    await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: targetStatus, decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishHrEvent(tx, { organizationId, entityType: "EnterpriseLeaveRequest", entityId: request.id, eventType: `LEAVE_${targetStatus}`, summary: `Congé ${request.reference} ${targetStatus.toLowerCase()}`, actorUserId, fromStatus: "SUBMITTED", toStatus: targetStatus });
     return tx.enterpriseLeaveRequest.findUniqueOrThrow({ where: { id: request.id } });
   });
