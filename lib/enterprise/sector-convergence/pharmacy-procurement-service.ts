@@ -69,7 +69,10 @@ export async function convergePharmacyPurchaseOrder(
         });
       }
       const created = await tx.pharmacyPurchaseExtension.create({ data: { organizationId, pharmacyPurchaseOrderId: source.id, enterprisePurchaseId: purchase!.id, createdByUserId: actorUserId } });
-      await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "PHARMACY_PURCHASES", sourceEntityType: "PharmacyPurchaseOrder", sourceEntityId: source.id, targetModule: "SUPPLIERS_PURCHASES", targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id, linkType: "SECTOR_CONVERGENCE", createdById: actorUserId } }).catch((error) => { if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error; });
+      const link = await tx.enterpriseEntityLink.findFirst({ where: { organizationId, sourceModule: "PHARMACY_PURCHASES", sourceEntityType: "PharmacyPurchaseOrder", sourceEntityId: source.id, targetModule: "SUPPLIERS_PURCHASES", targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id, linkType: "SECTOR_CONVERGENCE" } });
+      if (!link) {
+        await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "PHARMACY_PURCHASES", sourceEntityType: "PharmacyPurchaseOrder", sourceEntityId: source.id, targetModule: "SUPPLIERS_PURCHASES", targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id, linkType: "SECTOR_CONVERGENCE", createdById: actorUserId } });
+      }
       await completeSectorSync(tx, sync.id, { targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id });
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
