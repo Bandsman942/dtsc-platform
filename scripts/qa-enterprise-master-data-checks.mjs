@@ -14,6 +14,6 @@ requireTokens("prisma/enterprise-master-data.prisma", [
   "model EnterpriseCatalogItem",
   "model EnterpriseWarehouse",
 ]);
-requireTokens("lib/enterprise/master-data/service.ts", ["organizationId", "$transaction", "EnterpriseDomainError"]);
+requireTokens("lib/enterprise/master-data/service.ts", ["organizationId", "$transaction", "normalizedName"]);
 requireTokens("components/enterprise/enterprise-common-domain-workspace.tsx", ["CRM_CUSTOMERS", "CATALOG", "SITES_WAREHOUSES"]);
 success("enterprise master data contracts");
