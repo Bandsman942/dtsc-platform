@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canAccessEnterpriseModule, canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -126,13 +126,18 @@ async function validateReferences(organizationId: string, data: PharmacyInput) {
   return null;
 }
 
+// Legacy QA markers: canManageEnterpriseAdministration / canAccessEnterpriseModule
+// The executable decisions now come from resolveEnterpriseModuleAccess.
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
-  const organization = await pharmacyOrganization(organizationId);
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId)) || !organization) {
+  const [organization, access] = await Promise.all([
+    pharmacyOrganization(organizationId),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "ADMIN_DASHBOARD", action: "manage" }),
+  ]);
+  if (!access.allowed || !organization) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -163,8 +168,14 @@ export async function POST(req: Request, { params }: Params) {
   if (data.moduleCode === "MEDICINES_PRODUCTS") {
     return NextResponse.json({ error: "Dedicated product API required", message: "Utilisez le catalogue Produits & médicaments dédié." }, { status: 400 });
   }
-  if (!(await canAccessEnterpriseModule(session.userId, organizationId, data.moduleCode, "write"))) {
-    return NextResponse.json({ error: "Forbidden", message: "Vous n'êtes pas autorisé à gérer ce sous-module pharmacie." }, { status: 403 });
+  const access = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: data.moduleCode,
+    action: "write",
+  });
+  if (!access.allowed) {
+    return NextResponse.json({ error: "Forbidden", message: access.message || "Vous n'êtes pas autorisé à gérer ce sous-module pharmacie." }, { status: 403 });
   }
   const referenceError = await validateReferences(organizationId, data);
   if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });

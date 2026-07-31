@@ -1,12 +1,27 @@
 import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
-import { FEATURE_ENTITLEMENTS, moduleRequiresActiveSubscription, requiredPlanForModule, type SaasFeatureCode } from "@/lib/billing/module-entitlements";
+import { FEATURE_ENTITLEMENTS, moduleRequiresActiveSubscription, type SaasFeatureCode } from "@/lib/billing/module-entitlements";
 import { getPlanUsageLimits, type OrganizationUsageLimits } from "@/lib/billing/plan-limits";
 import { normalizePlanRequirement, planMeetsRequirement, resolveSaasPlanCode, SAAS_PLANS, type SaasPlanCode } from "@/lib/billing/plans";
+import {
+  getEnterpriseModuleDefinition,
+  isEnterpriseModuleImplemented,
+  isEnterpriseModuleSectorCompatible,
+  normalizeEnterpriseModuleCode,
+} from "@/lib/enterprise/module-registry";
 import { prisma } from "@/lib/prisma";
 
 export type EntitlementDecision = {
   allowed: boolean;
-  code: "OK" | "ORGANIZATION_INACTIVE" | "SUBSCRIPTION_REQUIRED" | "PLAN_REQUIRED" | "MODULE_DISABLED" | "MODULE_NOT_FOUND";
+  code:
+    | "OK"
+    | "ORGANIZATION_INACTIVE"
+    | "SUBSCRIPTION_REQUIRED"
+    | "PLAN_REQUIRED"
+    | "MODULE_DISABLED"
+    | "MODULE_NOT_FOUND"
+    | "MODULE_NOT_IMPLEMENTED"
+    | "SECTOR_INCOMPATIBLE"
+    | "ADMIN_SECTION_ONLY";
   message: string;
   requiredPlan?: SaasPlanCode;
 };
@@ -15,6 +30,7 @@ export type OrganizationEntitlements = {
   organizationId: string;
   organizationStatus: string;
   organizationType: string;
+  sectorCode: string | null;
   isDtscInternal: boolean;
   planCode: SaasPlanCode;
   planLabel: string;
@@ -28,6 +44,8 @@ export type OrganizationEntitlements = {
   modules: Array<{
     id: string;
     moduleCode: string;
+    canonicalCode: string | null;
+    implementationStatus: string | null;
     isEnabled: boolean;
     isCore: boolean;
     requiredPlan: SaasPlanCode;
@@ -87,6 +105,63 @@ export function isSubscriptionActive(subscription?: { status?: string | null; ex
   return subscriptionDateValid({ status: subscription.status, expiresAt, trialEndsAt });
 }
 
+function registryDecision({
+  moduleCode,
+  sectorCode,
+  fallbackRequiredPlan,
+}: {
+  moduleCode: string;
+  sectorCode: string | null;
+  fallbackRequiredPlan?: SaasPlanCode | null;
+}): {
+  canonicalCode: string | null;
+  implementationStatus: string | null;
+  requiredPlan: SaasPlanCode;
+  denial: EntitlementDecision | null;
+} {
+  const canonicalCode = normalizeEnterpriseModuleCode(moduleCode);
+  const definition = getEnterpriseModuleDefinition(canonicalCode);
+  const requiredPlan = definition?.minimumPlan || fallbackRequiredPlan || "BUSINESS";
+  if (!definition) {
+    return {
+      canonicalCode: null,
+      implementationStatus: null,
+      requiredPlan,
+      denial: { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce code module est absent du registre canonique.", requiredPlan },
+    };
+  }
+  if (!isEnterpriseModuleImplemented(definition.code) || definition.routeKind === "HIDDEN") {
+    return {
+      canonicalCode: definition.code,
+      implementationStatus: definition.implementationStatus,
+      requiredPlan,
+      denial: { allowed: false, code: "MODULE_NOT_IMPLEMENTED", message: "Ce module n'est pas encore disponible dans DTSC Platform.", requiredPlan },
+    };
+  }
+  if (definition.routeKind === "ADMIN_SECTION") {
+    return {
+      canonicalCode: definition.code,
+      implementationStatus: definition.implementationStatus,
+      requiredPlan,
+      denial: { allowed: false, code: "ADMIN_SECTION_ONLY", message: "Cette fonction est une section de l'administration entreprise, pas un module ERP autonome.", requiredPlan },
+    };
+  }
+  if (!isEnterpriseModuleSectorCompatible(definition, sectorCode)) {
+    return {
+      canonicalCode: definition.code,
+      implementationStatus: definition.implementationStatus,
+      requiredPlan,
+      denial: { allowed: false, code: "SECTOR_INCOMPATIBLE", message: "Ce module n'est pas compatible avec le secteur de l'entreprise active.", requiredPlan },
+    };
+  }
+  return {
+    canonicalCode: definition.code,
+    implementationStatus: definition.implementationStatus,
+    requiredPlan,
+    denial: null,
+  };
+}
+
 export async function getOrganizationEntitlements(organizationId: string | null | undefined): Promise<OrganizationEntitlements | null> {
   if (!organizationId) {
     return null;
@@ -97,6 +172,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
       organizationId,
       organizationStatus: "ACTIVE",
       organizationType: "INTERNAL",
+      sectorCode: null,
       isDtscInternal: true,
       planCode: "ENTERPRISE",
       planLabel: SAAS_PLANS.ENTERPRISE.label,
@@ -117,6 +193,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
       id: true,
       status: true,
       organizationType: true,
+      sectorCode: true,
       subscriptions: {
         orderBy: [{ createdAt: "desc" }],
         take: 1,
@@ -137,11 +214,17 @@ export async function getOrganizationEntitlements(organizationId: string | null 
   const subscriptionActive = organization.status === "ACTIVE" && subscriptionDateValid(subscription);
   const limits = getPlanUsageLimits(planCode);
   const modules = organization.enterpriseModules.map((enterpriseModule) => {
-    const requiredPlan = requiredPlanForModule(enterpriseModule.moduleCode, normalizePlanRequirement(enterpriseModule.requiresPlanLevel));
+    const configuredPlan = normalizePlanRequirement(enterpriseModule.requiresPlanLevel);
+    const registry = registryDecision({
+      moduleCode: enterpriseModule.moduleCode,
+      sectorCode: organization.sectorCode,
+      fallbackRequiredPlan: configuredPlan,
+    });
+    const requiredPlan = registry.requiredPlan;
     const includedInPlan = planMeetsRequirement(planCode, requiredPlan);
     const requiresActiveSubscription = moduleRequiresActiveSubscription(enterpriseModule.moduleCode, requiredPlan);
-    const decision = decideAccess({
-      label: enterpriseModule.moduleCode,
+    const decision = registry.denial || decideAccess({
+      label: registry.canonicalCode || enterpriseModule.moduleCode,
       organizationStatus: organization.status,
       planCode,
       subscriptionActive,
@@ -152,6 +235,8 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     return {
       id: enterpriseModule.id,
       moduleCode: enterpriseModule.moduleCode,
+      canonicalCode: registry.canonicalCode,
+      implementationStatus: registry.implementationStatus,
       isEnabled: enterpriseModule.isEnabled,
       isCore: enterpriseModule.isCore,
       requiredPlan,
@@ -166,6 +251,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     organizationId: organization.id,
     organizationStatus: organization.status,
     organizationType: organization.organizationType,
+    sectorCode: organization.sectorCode,
     isDtscInternal: false,
     planCode,
     planLabel: SAAS_PLANS[planCode].label,
@@ -232,14 +318,31 @@ export async function canUseFeature(organizationId: string | null | undefined, f
 }
 
 export async function canUseModule(organizationId: string | null | undefined, moduleCode: string): Promise<EntitlementDecision> {
+  const canonicalCode = normalizeEnterpriseModuleCode(moduleCode);
+  const definition = getEnterpriseModuleDefinition(canonicalCode);
+  if (!definition) {
+    return { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce code module est absent du registre canonique." };
+  }
+  if (!isEnterpriseModuleImplemented(definition.code) || definition.routeKind === "HIDDEN") {
+    return { allowed: false, code: "MODULE_NOT_IMPLEMENTED", message: "Ce module n'est pas encore disponible dans DTSC Platform.", requiredPlan: definition.minimumPlan };
+  }
+  if (definition.routeKind === "ADMIN_SECTION") {
+    return { allowed: false, code: "ADMIN_SECTION_ONLY", message: "Cette fonction appartient à l'administration entreprise.", requiredPlan: definition.minimumPlan };
+  }
+
   const entitlements = await getOrganizationEntitlements(organizationId);
   if (!entitlements) {
     return { allowed: false, code: "ORGANIZATION_INACTIVE", message: "Aucun espace organisation actif." };
   }
+  if (!isEnterpriseModuleSectorCompatible(definition, entitlements.sectorCode)) {
+    return { allowed: false, code: "SECTOR_INCOMPATIBLE", message: "Ce module n'est pas compatible avec le secteur de l'entreprise active.", requiredPlan: definition.minimumPlan };
+  }
   if (entitlements.isDtscInternal) {
     return { allowed: true, code: "OK", message: "Accès autorisé.", requiredPlan: "ENTERPRISE" };
   }
-  const enterpriseModule = entitlements.modules.find((item) => item.moduleCode === moduleCode);
+
+  const candidates = entitlements.modules.filter((item) => normalizeEnterpriseModuleCode(item.moduleCode) === canonicalCode);
+  const enterpriseModule = candidates.find((item) => item.moduleCode === canonicalCode) || candidates[0];
   if (!enterpriseModule) {
     return { allowed: false, code: "MODULE_NOT_FOUND", message: "Ce module n'est pas configuré pour cette organisation." };
   }

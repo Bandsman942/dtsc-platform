@@ -27,8 +27,8 @@ import { formatEnumLabel } from "@/lib/labels";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
 import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activity-blocks-loader";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
-import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
 import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
 import { prisma } from "@/lib/prisma";
 import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
@@ -59,7 +59,7 @@ export async function AppShell({
   const notificationWhere = session
     ? await getVisibleNotificationWhereForSession(session)
     : { userId: user.id, organizationId: null };
-  const [unreadNotifications, latestUnreadNotifications, unreadCollaboratorMessages, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules, enterpriseActivityBlocks, canManageEnterpriseAdmin, promotionalBanners] = await Promise.all([
+  const [unreadNotifications, latestUnreadNotifications, unreadCollaboratorMessages, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules, enterpriseActivityBlocks, enterpriseAdminDecision, promotionalBanners] = await Promise.all([
     prisma.notification.count({
       where: {
         ...notificationWhere,
@@ -101,15 +101,20 @@ export async function AppShell({
       ? getEnterpriseActivityBlocks(activeOrganizationId, user.id)
       : Promise.resolve([]),
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
-      ? canManageEnterpriseAdministration(user.id, activeOrganizationId)
-      : Promise.resolve(false),
+      ? resolveEnterpriseModuleAccess({
+          userId: user.id,
+          organizationId: activeOrganizationId,
+          moduleCode: "ADMIN_DASHBOARD",
+          action: "manage",
+        })
+      : Promise.resolve(null),
     getVisiblePromotionalBannersForUser(user.id, user.role),
   ]);
   const enterpriseContext =
     session?.activeContext === "ORGANIZATION" && activeOrganizationId
       ? {
           organizationName: session.activeOrganizationName || "Entreprise",
-          showAdmin: canManageEnterpriseAdmin,
+          showAdmin: enterpriseAdminDecision?.allowed === true,
           showActivities: enterpriseActivityBlocks.length > 0,
           modules: enterpriseModules,
         }

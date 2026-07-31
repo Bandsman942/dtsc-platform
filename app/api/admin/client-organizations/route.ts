@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { applySectorTemplateToOrganization } from "@/lib/enterprise-sector-templates";
+import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
   });
 
   if (sector && data.applySectorTemplate) {
-    await applySectorTemplateToOrganization({
+    await applyCanonicalSectorTemplateToOrganization({
       organizationId: organization.id,
       sectorId: sector.id,
       actorUserId: session.userId,

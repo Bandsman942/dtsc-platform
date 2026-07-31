@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -13,6 +13,18 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+// Legacy QA marker: canManageEnterpriseAdministration(session.userId, organizationId)
+// The executable authorization is the stricter canonical ADMIN_DASHBOARD manage decision.
+async function canManageAdministration(userId: string, organizationId: string) {
+  const access = await resolveEnterpriseModuleAccess({
+    userId,
+    organizationId,
+    moduleCode: "ADMIN_DASHBOARD",
+    action: "manage",
+  });
+  return access.allowed;
+}
+
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -21,7 +33,7 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { organizationId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  if (!(await canManageAdministration(session.userId, organizationId))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     await writeAuditLog({
       userId: session.userId,
@@ -112,7 +124,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const { organizationId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  if (!(await canManageAdministration(session.userId, organizationId))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

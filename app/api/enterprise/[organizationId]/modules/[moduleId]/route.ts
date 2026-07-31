@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseModule } from "@/lib/billing/entitlements";
-import { canManageEnterpriseAdministration } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -30,7 +30,13 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const { organizationId, moduleId } = await params;
-  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  const adminAccess = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: "ADMIN_DASHBOARD",
+    action: "manage",
+  });
+  if (!adminAccess.allowed) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -53,8 +59,9 @@ export async function PATCH(req: Request, { params }: Params) {
   if (parsed.data.isEnabled && !enterpriseModule.isEnabled) {
     const moduleAccess = await canUseModule(organizationId, enterpriseModule.moduleCode);
     if (!moduleAccess.allowed && moduleAccess.code !== "MODULE_DISABLED") {
-      await writeApiLog({ request: req, statusCode: moduleAccess.code === "PLAN_REQUIRED" || moduleAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
-      return NextResponse.json({ error: moduleAccess.code, message: moduleAccess.message }, { status: moduleAccess.code === "PLAN_REQUIRED" || moduleAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+      const status = moduleAccess.code === "PLAN_REQUIRED" || moduleAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403;
+      await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt });
+      return NextResponse.json({ error: moduleAccess.code, message: moduleAccess.message }, { status });
     }
   }
 

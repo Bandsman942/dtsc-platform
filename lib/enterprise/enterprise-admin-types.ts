@@ -19,6 +19,8 @@ export type EnterpriseAdminDashboard = {
   membersCount: number;
   activeModulesCount: number;
   modulesCount: number;
+  hiddenIncompatibleModulesCount: number;
+  configurationIssuesCount: number;
   openRequestsCount: number;
   recentRequestsCount: number;
   submittedRequestsCount: number;
@@ -67,7 +69,20 @@ export type EnterpriseModuleItem = {
   includedInPlan?: boolean;
   accessAllowed?: boolean;
   accessMessage?: string | null;
+  canonicalCode?: string | null;
+  implementationStatus?: string | null;
+  navigationGroup?: string | null;
+  routeKind?: string | null;
+  sectorCompatible?: boolean;
+  registryKnown?: boolean;
   createdAt?: string;
+};
+
+export type EnterpriseModuleConfigurationIssue = {
+  code: string;
+  severity: "WARNING" | "ERROR";
+  moduleCode?: string;
+  message: string;
 };
 
 export type EnterpriseDepartmentItem = {
@@ -175,4 +190,5 @@ export type EnterpriseAdminDataset = {
   calendarEvents: EnterpriseCalendarEventItem[];
   sectorRecords: EnterpriseSectorRecordItem[];
   entitlements: EnterpriseSaasEntitlements;
+  configurationIssues: EnterpriseModuleConfigurationIssue[];
 };

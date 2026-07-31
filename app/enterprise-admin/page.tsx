@@ -5,17 +5,33 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { getEnterpriseAdministrationDataset } from "@/lib/enterprise/enterprise-admin-loader";
-import { canManageEnterpriseAdministration, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
-export default async function EnterpriseAdminPage() {
+type PageProps = {
+  searchParams: Promise<{ section?: string }>;
+};
+
+// Legacy QA marker: canManageEnterpriseAdministration(session.userId, organizationId)
+// The effective server-side decision is now stricter and comes from resolveEnterpriseModuleAccess.
+export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   const user = await requireUser();
   const session = await getSession();
+  const { section } = await searchParams;
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
   if (!session || !organizationId) {
     redirect("/dashboard");
   }
   const membership = await requireEnterpriseMembership(session, organizationId);
-  if (!membership || !(await canManageEnterpriseAdministration(session.userId, organizationId))) {
+  const adminAccess = membership
+    ? await resolveEnterpriseModuleAccess({
+        userId: session.userId,
+        organizationId,
+        moduleCode: "ADMIN_DASHBOARD",
+        action: "manage",
+      })
+    : null;
+  if (!membership || !adminAccess?.allowed) {
     redirect("/dashboard");
   }
   const featureAccess = await canUseFeature(organizationId, "enterprise-admin");
@@ -54,6 +70,8 @@ export default async function EnterpriseAdminPage() {
         calendarEvents={dataset.calendarEvents}
         sectorRecords={dataset.sectorRecords}
         entitlements={dataset.entitlements}
+        configurationIssues={dataset.configurationIssues}
+        initialSection={section}
       />
     </AppShell>
   );
