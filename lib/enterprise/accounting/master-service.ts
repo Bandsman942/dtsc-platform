@@ -10,9 +10,7 @@ export async function createFiscalYear(
 ) {
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
-    const overlap = await tx.enterpriseFiscalYear.findFirst({
-      where: { organizationId, OR: [{ startDate: { lte: input.endDate }, endDate: { gte: input.startDate } }] },
-    });
+    const overlap = await tx.enterpriseFiscalYear.findFirst({ where: { organizationId, startDate: { lte: input.endDate }, endDate: { gte: input.startDate } } });
     if (overlap) throw new EnterpriseAccountingError("FISCAL_YEAR_OVERLAP", 409, { fiscalYearId: overlap.id });
     const year = await tx.enterpriseFiscalYear.create({ data: { organizationId, code: input.code, startDate: input.startDate, endDate: input.endDate, createdByUserId: actorUserId } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseFiscalYear", entityId: year.id, eventType: "FISCAL_YEAR_CREATED", summary: `Fiscal year ${year.code} created`, actorUserId, toStatus: "DRAFT" });
@@ -134,7 +132,20 @@ export async function createTaxCode(
       const account = await tx.enterpriseLedgerAccount.findFirst({ where: { id: accountId, organizationId, isActive: true, archivedAt: null } });
       if (!account) throw new EnterpriseAccountingError("TAX_LEDGER_ACCOUNT_INVALID", 409);
     }
-    const taxCode = await tx.enterpriseTaxCode.create({ data: { organizationId, code: input.code, nameFr: input.nameFr, nameEn: input.nameEn, category: input.category, jurisdiction: input.jurisdiction || null, payableAccountId: input.payableAccountId || null, recoverableAccountId: input.recoverableAccountId || null, roundingRule: input.roundingRule, rates: { create: { organizationId, rate: new Prisma.Decimal(input.rate), effectiveFrom: input.effectiveFrom, createdByUserId: actorUserId } } } });
+    const taxCode = await tx.enterpriseTaxCode.create({
+      data: {
+        organizationId,
+        code: input.code,
+        nameFr: input.nameFr,
+        nameEn: input.nameEn,
+        category: input.category,
+        jurisdiction: input.jurisdiction || null,
+        payableAccountId: input.payableAccountId || null,
+        recoverableAccountId: input.recoverableAccountId || null,
+        roundingRule: input.roundingRule,
+        rates: { create: { rate: new Prisma.Decimal(input.rate), effectiveFrom: input.effectiveFrom, createdByUserId: actorUserId } },
+      },
+    });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseTaxCode", entityId: taxCode.id, eventType: "TAX_CODE_CREATED", summary: `Tax code ${taxCode.code} created`, actorUserId, toStatus: "ACTIVE", metadataJson: { category: taxCode.category, jurisdiction: taxCode.jurisdiction } });
     return taxCode;
   });
