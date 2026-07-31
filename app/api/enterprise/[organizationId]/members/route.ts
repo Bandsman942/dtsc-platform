@@ -12,6 +12,8 @@ import { enterpriseMemberInviteSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
+// Legacy QA marker: canManageEnterpriseAdministration
+// Invitations now use the stricter COLLABORATORS_POSITIONS manage decision from the canonical resolver.
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
