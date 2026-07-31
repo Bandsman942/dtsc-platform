@@ -1,1 +1,96 @@
-// Additive procurement link models.
+model EnterpriseSupplierPartyLink {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  supplierId          String
+  businessPartyId     String
+  paymentTerms        String?
+  complianceStatus    String   @default("NOT_REVIEWED")
+  averageLeadTimeDays Int?
+  migrationKey        String?
+  createdByUserId     String
+  revision            Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  archivedAt          DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, supplierId])
+  @@unique([organizationId, businessPartyId])
+  @@unique([organizationId, migrationKey])
+  @@index([organizationId, complianceStatus])
+  @@index([archivedAt])
+}
+
+model EnterprisePurchaseOperationalLink {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  purchaseId             String
+  siteId                 String?
+  destinationWarehouseId String?
+  supplierContractId     String?
+  projectId              String?
+  assetId                String?
+  expectedReceiptType    String   @default("GOODS")
+  createdByUserId        String
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, purchaseId])
+  @@index([organizationId, siteId])
+  @@index([organizationId, destinationWarehouseId])
+  @@index([organizationId, supplierContractId])
+  @@index([organizationId, projectId])
+  @@index([organizationId, assetId])
+}
+
+model EnterprisePurchaseItemCatalogLink {
+  id               String   @id @default(cuid())
+  organizationId   String
+  purchaseItemId   String
+  catalogItemId    String?
+  unitOfMeasureId  String?
+  expectedItemType String   @default("GOODS")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, purchaseItemId])
+  @@index([organizationId, catalogItemId])
+  @@index([organizationId, unitOfMeasureId])
+}
+
+model EnterprisePurchaseReceiptOperationalLink {
+  id                String   @id @default(cuid())
+  organizationId    String
+  purchaseReceiptId String
+  status            String   @default("POSTED")
+  idempotencyKey    String?
+  warehouseId       String?
+  storageLocationId String?
+  serviceAccepted   Boolean  @default(false)
+  createdByUserId   String
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, purchaseReceiptId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, warehouseId, status])
+  @@index([organizationId, storageLocationId, status])
+}
+
+model EnterprisePurchaseReceiptItemStockLink {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  purchaseReceiptItemId String
+  stockMovementId       String?
+  serviceAccepted       Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, purchaseReceiptItemId])
+  @@unique([organizationId, stockMovementId])
+}
