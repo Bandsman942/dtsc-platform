@@ -85,6 +85,14 @@ export const timesheetCreateSchema = z.object({
   entries: z.array(timesheetEntrySchema).min(1).max(500),
 });
 
+export const payrollPeriodCreateSchema = z.object({
+  code: z.string().trim().min(2).max(80).transform((value) => value.toUpperCase()),
+  name: z.string().trim().min(2).max(240),
+  periodStart: z.coerce.date(),
+  periodEnd: z.coerce.date(),
+  payDate: z.coerce.date().optional().nullable(),
+});
+
 export const payrollRunPrepareSchema = z.object({
   payrollPeriodId: z.string().trim().min(1),
   currency: z.string().trim().toUpperCase().length(3),
@@ -107,4 +115,9 @@ export const payrollRunDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   revision: z.coerce.number().int().positive(),
   comment: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const payrollRunCancelSchema = z.object({
+  revision: z.coerce.number().int().positive(),
+  reason: z.string().trim().min(3).max(2000),
 });
