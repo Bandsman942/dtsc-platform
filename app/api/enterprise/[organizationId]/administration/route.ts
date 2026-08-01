@@ -13,7 +13,7 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-async function canManageAdministration(userId: string, organizationId: string) {
+async function canManageEnterpriseAdministration(userId: string, organizationId: string) {
   const access = await resolveEnterpriseModuleAccess({
     userId,
     organizationId,
@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { organizationId } = await params;
-  if (!(await canManageAdministration(session.userId, organizationId))) {
+  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     await writeAuditLog({
       userId: session.userId,
@@ -120,7 +120,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Too many requests", message: "Trop d'actions d'administration sur une courte période." }, { status: 429 });
   }
   const { organizationId } = await params;
-  if (!(await canManageAdministration(session.userId, organizationId))) {
+  if (!(await canManageEnterpriseAdministration(session.userId, organizationId))) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
