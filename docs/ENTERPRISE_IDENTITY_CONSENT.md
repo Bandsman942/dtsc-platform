@@ -1,6 +1,6 @@
 # Identité entreprise et consentement DTSC
 
-Version : 1.0  
+Version : 1.0
 Date : 1 août 2026
 
 ## 1. Principe
