@@ -1,16 +1,17 @@
 name: Apply ERP commercial promotion
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/erp-iteration-02-commercial-ready
+      - main
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'chore: stage ERP commercial promotion'
+    if: github.head_ref == 'agent/erp-iteration-02-commercial-ready'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout promotion branch
