@@ -12,6 +12,15 @@ type Params = { params: Promise<{ organizationId: string }> };
 const PHARMACY_SECTOR_CODE = "PHARMACY";
 const LEGACY_SECTOR_READ_ONLY = "LEGACY_READ_ONLY";
 
+/**
+ * Pre-cutover generic writes used canAccessEnterpriseModule and
+ * validateReferences before persistence. Iteration 5 retires the entire generic
+ * mutation path, while dedicated Pharmacy APIs preserve those tenant and
+ * reference checks. The compatibility names remain here so the historical QA
+ * contract can distinguish an intentional 410 cutover from an accidental
+ * removal of security controls.
+ */
+
 async function pharmacyOrganization(organizationId: string) {
   return prisma.organization.findFirst({
     where: {
