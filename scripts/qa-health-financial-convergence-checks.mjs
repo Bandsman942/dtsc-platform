@@ -17,14 +17,14 @@ requireTokens("prisma/enterprise-sector-convergence.prisma", [
 requireTokens("lib/enterprise/sector-convergence/health-billing-service.ts", [
   "HEALTH_PAYER_COMPONENT_TOTAL_MISMATCH",
   "HEALTH_INSURER_ROLE_REQUIRED",
-  "HealthInvoicePayerComponent",
-  "EnterpriseSalesInvoice",
+  "healthInvoicePayerComponent",
+  "enterpriseSalesInvoice",
   "MEDICAL_CONFIDENTIAL",
 ]);
 requireTokens("lib/enterprise/sector-convergence/health-payment-service.ts", [
   "HEALTH_PAYMENT_ALLOCATION_EXCEEDS_BALANCE",
-  "HealthPayerAllocation",
-  "EnterprisePaymentAllocation",
+  "healthPayerAllocation",
+  "enterprisePaymentAllocation",
   "TransactionIsolationLevel.Serializable",
   "PAYMENT_ALLOCATION_CONFIRMED",
 ]);
