@@ -4,6 +4,7 @@ import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export const ENTERPRISE_INVITATION_NOTIFICATION_TYPES = ["ENTERPRISE_INVITATION", "ORGANIZATION_INVITATION"] as const;
+export const GLOBAL_ACCOUNT_NOTIFICATION_TYPES = ["ENTERPRISE_IDENTITY"] as const;
 
 async function getNotificationMembershipOrganizationIds(userId: string) {
   const memberships = await prisma.organizationMember.findMany({
@@ -26,7 +27,10 @@ export async function getVisibleNotificationWhereForSession(session: SessionPayl
   const activeOrganizationId = getActiveOrganizationId(session);
   const { activeOrganizationIds, invitedOrganizationIds } = await getNotificationMembershipOrganizationIds(session.userId);
   const allowedInvitationOrganizationIds = Array.from(new Set([...activeOrganizationIds, ...invitedOrganizationIds]));
-  const contextClauses: Prisma.NotificationWhereInput[] = [{ organizationId: null }];
+  const contextClauses: Prisma.NotificationWhereInput[] = [
+    { organizationId: null },
+    { type: { in: [...GLOBAL_ACCOUNT_NOTIFICATION_TYPES] } },
+  ];
 
   if (activeOrganizationId) {
     contextClauses.push({ organizationId: activeOrganizationId });

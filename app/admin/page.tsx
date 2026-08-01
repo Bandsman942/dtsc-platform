@@ -43,10 +43,11 @@ import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
-type AdminSectionId = AdminBlockId | "access";
+type AdminSectionId = AdminBlockId | "access" | "erpReadiness";
 
 const adminSections: Array<{ id: AdminSectionId; label: string; description: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Vue générale", description: "KPIs et synthèse plateforme", icon: BarChart3 },
+  { id: "erpReadiness", label: "Maturité ERP", description: "Statuts et preuves de commercialisation", icon: BarChart3 },
   { id: "access", label: "Accès RBAC", description: "Droits des rôles non-client", icon: ShieldCheck },
   { id: "settings", label: "Paramètres plateforme", description: "Limites, OTP, diffusions", icon: Settings },
   { id: "promotions", label: "Bannières promo", description: "Messages ciblés", icon: BadgePercent },
@@ -101,17 +102,22 @@ export default async function AdminPage({
   const allowedAdminBlocks = new Set(
     (await Promise.all(
       adminSections
-        .filter((item): item is { id: AdminBlockId; label: string; description: string; icon: typeof BarChart3 } => item.id !== "access")
+        .filter((item): item is { id: AdminBlockId; label: string; description: string; icon: typeof BarChart3 } => item.id !== "access" && item.id !== "erpReadiness")
         .map(async (item) => (await canAccessAdminSection(user, item.id, adminRoleAccess)) ? item.id : null)
     )).filter((item): item is AdminBlockId => Boolean(item))
   );
   const canView = (blockId: AdminBlockId) => allowedAdminBlocks.has(blockId);
-  const canViewSection = (sectionId: AdminSectionId) => sectionId === "access" ? user.role === UserRole.ADMIN : canView(sectionId);
+  const canViewSection = (sectionId: AdminSectionId) => sectionId === "access"
+    ? user.role === UserRole.ADMIN
+    : sectionId === "erpReadiness"
+      ? canView("overview")
+      : canView(sectionId);
   const visibleSections = adminSections.filter((item) => canViewSection(item.id));
   const activeSection = visibleSections.some((item) => item.id === section)
     ? (section as AdminSectionId)
     : visibleSections[0]?.id || "overview";
   const sectionHref = (sectionId: AdminSectionId) => {
+    if (sectionId === "erpReadiness") return "/admin/erp-readiness";
     const params = new URLSearchParams();
     params.set("section", sectionId);
     if (roleFilter) {
