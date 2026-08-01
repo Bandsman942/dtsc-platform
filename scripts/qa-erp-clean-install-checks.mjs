@@ -10,5 +10,5 @@ requirePaths([
 ]);
 requireTokens(".github/workflows/quality-gates.yml", ["postgres", "pnpm prisma:deploy", "pnpm prisma:generate", "pnpm build"]);
 requireTokens("package.json", ["\"prisma:generate\": \"prisma generate\"", "\"prisma:deploy\": \"prisma migrate deploy\""]);
-requireTokens("docs/ERP_FINAL_MIGRATION_REPORT.md", ["base vide", "base existante", "migrations historiques", "aucune suppression physique"]);
+requireTokens("docs/ERP_FINAL_MIGRATION_REPORT.md", ["Base vide", "Base existante", "migrations historiques", "aucune suppression physique"]);
 success("ERP clean install contract");
