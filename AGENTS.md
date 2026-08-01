@@ -58,6 +58,14 @@ session
 - Les permissions internes DTSC utilisent les postes officiels reliés au dossier RH, jamais un texte libre.
 - `CEO`, `COO`, `HR_CFO`, `CTO`, `MPO`, `SCO` et `LA` conservent leurs responsabilités documentées ; aucun rôle ne sert de bypass universel.
 
+### Disponibilités, absences et temps travaillé DTSC
+
+- Chaque collaborateur est seul autorisé à créer, modifier ou supprimer ses propres disponibilités hebdomadaires et exceptions ; les responsables disposent uniquement d’une lecture d’équipe autorisée.
+- Les disponibilités décrivent un temps planifiable, jamais une prestation réalisée, un timesheet, une présence pointée ou un montant de paie.
+- Les absences et exceptions datées restent distinctes du planning hebdomadaire et sont résolues dans le fuseau horaire applicable.
+- L’historique passé est immuable ; toute modification future d’une disponibilité récurrente crée une version temporelle traçable.
+- Le temps travaillé, sa validation indépendante et son intégration à la paie utilisent leurs domaines dédiés et ne sont jamais déduits automatiquement d’une simple disponibilité.
+
 ## 4. Registre canonique et navigation ERP
 
 1. Le registre canonique est l’unique catalogue actif de modules.
