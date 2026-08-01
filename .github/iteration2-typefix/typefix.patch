@@ -1,0 +1,74 @@
+diff --git a/app/api/enterprise/[organizationId]/employees/route.ts b/app/api/enterprise/[organizationId]/employees/route.ts
+index 61b8b93..297ac12 100644
+--- a/app/api/enterprise/[organizationId]/employees/route.ts
++++ b/app/api/enterprise/[organizationId]/employees/route.ts
+@@ -55,9 +55,16 @@ export async function GET(req: Request, { params }: Params) {
+   ]);
+   const references = rawItems.length ? await prisma.enterprisePersonBusinessReference.findMany({
+     where: { organizationId, employeeId: { in: rawItems.map((item) => item.id) } },
+-    include: { identityLinks: { orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true } } },
++    select: { employeeId: true, personIdentityId: true },
+   }) : [];
+-  const linkByEmployee = new Map(references.filter((reference) => reference.employeeId).map((reference) => [reference.employeeId as string, reference.identityLinks[0] || null]));
++  const identityLinks = references.length ? await prisma.enterpriseIdentityLink.findMany({
++    where: { organizationId, personIdentityId: { in: [...new Set(references.map((reference) => reference.personIdentityId))] } },
++    orderBy: { updatedAt: "desc" },
++    select: { id: true, personIdentityId: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true },
++  }) : [];
++  const linkByPerson = new Map<string, (typeof identityLinks)[number]>();
++  for (const link of identityLinks) if (!linkByPerson.has(link.personIdentityId)) linkByPerson.set(link.personIdentityId, link);
++  const linkByEmployee = new Map(references.filter((reference) => reference.employeeId).map((reference) => [reference.employeeId as string, linkByPerson.get(reference.personIdentityId) || null]));
+   const items = rawItems.map((item) => ({ ...item, identityLink: linkByEmployee.get(item.id) || null }));
+   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employees", page } });
+   return NextResponse.json({
+diff --git a/app/api/enterprise/[organizationId]/suppliers/route.ts b/app/api/enterprise/[organizationId]/suppliers/route.ts
+index 878d0c5..ebb953b 100644
+--- a/app/api/enterprise/[organizationId]/suppliers/route.ts
++++ b/app/api/enterprise/[organizationId]/suppliers/route.ts
+@@ -48,10 +48,17 @@ export async function GET(req: Request, { params }: Params) {
+       ...(supplierIds.length ? [{ supplierId: { in: supplierIds } }] : []),
+       ...(contactIds.length ? [{ supplierContactId: { in: contactIds } }] : []),
+     ] },
+-    include: { identityLinks: { orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true } } },
++    select: { supplierId: true, supplierContactId: true, personIdentityId: true },
+   }) : [];
+-  const supplierLink = new Map(references.filter((reference) => reference.supplierId).map((reference) => [reference.supplierId as string, reference.identityLinks[0] || null]));
+-  const contactLink = new Map(references.filter((reference) => reference.supplierContactId).map((reference) => [reference.supplierContactId as string, reference.identityLinks[0] || null]));
++  const identityLinks = references.length ? await prisma.enterpriseIdentityLink.findMany({
++    where: { organizationId, personIdentityId: { in: [...new Set(references.map((reference) => reference.personIdentityId))] } },
++    orderBy: { updatedAt: "desc" },
++    select: { id: true, personIdentityId: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true },
++  }) : [];
++  const linkByPerson = new Map<string, (typeof identityLinks)[number]>();
++  for (const link of identityLinks) if (!linkByPerson.has(link.personIdentityId)) linkByPerson.set(link.personIdentityId, link);
++  const supplierLink = new Map(references.filter((reference) => reference.supplierId).map((reference) => [reference.supplierId as string, linkByPerson.get(reference.personIdentityId) || null]));
++  const contactLink = new Map(references.filter((reference) => reference.supplierContactId).map((reference) => [reference.supplierContactId as string, linkByPerson.get(reference.personIdentityId) || null]));
+   const items = rawItems.map((item) => ({ ...item, identityLink: supplierLink.get(item.id) || null, contacts: item.contacts.map((contact) => ({ ...contact, identityLink: contactLink.get(contact.id) || null })) }));
+   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", page } });
+   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, suspended, recent }, canManage: access.canManage });
+diff --git a/components/enterprise/professional/enterprise-employees-identity-workspace.tsx b/components/enterprise/professional/enterprise-employees-identity-workspace.tsx
+index bf21bc3..ead5eb1 100644
+--- a/components/enterprise/professional/enterprise-employees-identity-workspace.tsx
++++ b/components/enterprise/professional/enterprise-employees-identity-workspace.tsx
+@@ -81,6 +81,8 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
+     event.preventDefault();
+     setMessage("");
+     const form = new FormData(event.currentTarget);
++    const selectedPositionId = String(form.get("positionId") || "") || null;
++    const selectedPosition = selectedPositionId ? lookups.positions.find((position) => position.id === selectedPositionId) : undefined;
+     try {
+       const result = await professionalMutation(`/api/enterprise/${organizationId}/employees`, {
+         organizationMemberId: String(form.get("organizationMemberId") || "") || null,
+diff --git a/components/enterprise/professional/enterprise-sites-workspace.tsx b/components/enterprise/professional/enterprise-sites-workspace.tsx
+index 243fdfa..9b9c5a0 100644
+--- a/components/enterprise/professional/enterprise-sites-workspace.tsx
++++ b/components/enterprise/professional/enterprise-sites-workspace.tsx
+@@ -23,7 +23,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
+ import { StatusBadge } from "@/components/workspace/status-badge";
+ import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+ 
+-type Location = { id: string; warehouseId: string; parentLocationId: string | null; code: string; name: string; locationType: string; status: string; barcode: string | null; capacityValue: string | number | null; capacityUnit: string | null; warehouse: { id: string; code: string; name: string; site: { id: string; code: string; name: string } } };
++type Location = { id: string; warehouseId: string; parentLocationId: string | null; code: string; name: string; locationType: string; status: string; revision: number; barcode: string | null; capacityValue: string | number | null; capacityUnit: string | null; warehouse: { id: string; code: string; name: string; site: { id: string; code: string; name: string } } };
+ type WarehouseItem = { id: string; siteId: string; code: string; name: string; warehouseType: string; status: string; revision: number; site: { id: string; code: string; name: string; city: string | null }; storageLocations: Location[] };
+ type Site = { id: string; code: string; name: string; siteType: string; city: string | null; countryCode: string | null; addressLine1: string | null; timezone: string | null; managerUserId: string | null; status: string; revision: number; warehouses: WarehouseItem[] };
+ 
