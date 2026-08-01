@@ -20,27 +20,30 @@ model EnterprisePersonIdentity {
 }
 
 model EnterprisePersonBusinessReference {
-  id               String   @id @default(cuid())
-  organizationId   String
-  personIdentityId String
-  businessPartyId  String?
-  employeeId       String?
-  relationType     String
-  roleCode         String?
-  status           String   @default("ACTIVE")
-  createdByUserId  String
-  updatedByUserId  String?
-  revision         Int      @default(1)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  archivedAt       DateTime?
+  id                     String   @id @default(cuid())
+  organizationId         String
+  personIdentityId       String
+  businessPartyId        String?
+  businessPartyContactId String?
+  employeeId             String?
+  relationType           String
+  roleCode               String?
+  status                 String   @default("ACTIVE")
+  createdByUserId        String
+  updatedByUserId        String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  archivedAt             DateTime?
 
   @@unique([organizationId, id])
   @@unique([organizationId, businessPartyId, relationType])
+  @@unique([organizationId, businessPartyContactId, relationType])
   @@unique([organizationId, employeeId, relationType])
   @@index([organizationId, personIdentityId, status])
   @@index([organizationId, relationType, status])
   @@index([organizationId, businessPartyId])
+  @@index([organizationId, businessPartyContactId])
   @@index([organizationId, employeeId])
   @@index([archivedAt])
 }
