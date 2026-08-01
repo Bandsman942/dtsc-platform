@@ -1,7 +1,7 @@
 # Standard DTSC d’un module ERP professionnel
 
-Version : 1.0  
-Date d’entrée en vigueur : 1 août 2026  
+Version : 1.0
+Date d’entrée en vigueur : 1 août 2026
 Contrat machine : `ERP_PROFESSIONAL_MODULE_STANDARD_V1`
 
 ## 1. Objet
