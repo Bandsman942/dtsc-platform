@@ -43,8 +43,8 @@ async function ensurePharmacyCustomerParty(
       primaryPhone: sale.customerPhone,
       status: "ACTIVE",
       createdByUserId: actorUserId,
-      roles: { create: { organizationId, roleCode: "CUSTOMER", createdByUserId: actorUserId } },
-      contacts: sale.customerPhone ? { create: { organizationId, contactType: "PHONE", label: "Paiement", value: sale.customerPhone, normalizedValue: sale.customerPhone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId } } : undefined,
+      roles: { create: { roleCode: "CUSTOMER", createdByUserId: actorUserId } },
+      contacts: sale.customerPhone ? { create: { contactType: "PHONE", label: "Paiement", value: sale.customerPhone, normalizedValue: sale.customerPhone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId } } : undefined,
     },
   });
 }
