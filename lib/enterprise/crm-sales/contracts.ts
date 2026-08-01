@@ -4,6 +4,7 @@ import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/ente
 import {
   assertActiveClientOrganization,
   enterpriseReference,
+  normalizeEnterpriseName,
   publishEnterpriseEvent,
 } from "@/lib/enterprise/crm-sales/helpers";
 import type { contractCreateSchema, contractTransitionSchema, contractUpdateSchema } from "@/lib/enterprise/crm-sales/schemas";
@@ -13,14 +14,260 @@ type ContractCreateInput = z.infer<typeof contractCreateSchema>;
 type ContractTransitionInput = z.infer<typeof contractTransitionSchema>;
 type ContractUpdateInput = z.infer<typeof contractUpdateSchema>;
 
+const CONTRACT_COUNTERPARTY_PREFIXES = {
+  employee: "employee:",
+  member: "member:",
+  supplier: "supplier:",
+} as const;
+
+async function ensureContractPartyRole(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  businessPartyId: string,
+  roleCode: string,
+  actorUserId: string,
+) {
+  await tx.enterpriseBusinessPartyRole.upsert({
+    where: {
+      organizationId_businessPartyId_roleCode: {
+        organizationId,
+        businessPartyId,
+        roleCode,
+      },
+    },
+    update: { status: "ACTIVE", archivedAt: null },
+    create: {
+      organizationId,
+      businessPartyId,
+      roleCode,
+      createdByUserId: actorUserId,
+    },
+  });
+}
+
+async function findMatchingContractParty(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  input: { legalName: string; primaryEmail?: string | null; partyType: string },
+) {
+  const normalizedName = normalizeEnterpriseName(input.legalName);
+  return tx.enterpriseBusinessParty.findFirst({
+    where: {
+      organizationId,
+      status: "ACTIVE",
+      archivedAt: null,
+      OR: [
+        ...(input.primaryEmail
+          ? [{ primaryEmail: { equals: input.primaryEmail, mode: "insensitive" as const } }]
+          : []),
+        { normalizedName, partyType: input.partyType },
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+}
+
+async function createContractParty(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: {
+    legalName: string;
+    displayName?: string | null;
+    partyType: string;
+    primaryEmail?: string | null;
+    primaryPhone?: string | null;
+    roleCode: string;
+  },
+) {
+  const party = await tx.enterpriseBusinessParty.create({
+    data: {
+      organizationId,
+      partyType: input.partyType,
+      legalName: input.legalName,
+      displayName: input.displayName || null,
+      normalizedName: normalizeEnterpriseName(input.legalName),
+      code: enterpriseReference(input.partyType === "PERSON" ? "PER" : "ORG"),
+      primaryEmail: input.primaryEmail?.trim().toLowerCase() || null,
+      primaryPhone: input.primaryPhone || null,
+      createdByUserId: actorUserId,
+    },
+    select: { id: true },
+  });
+  await ensureContractPartyRole(tx, organizationId, party.id, input.roleCode, actorUserId);
+  return party.id;
+}
+
+async function resolveContractBusinessParty(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  selectionId: string,
+) {
+  if (selectionId.startsWith(CONTRACT_COUNTERPARTY_PREFIXES.employee)) {
+    const employeeId = selectionId.slice(CONTRACT_COUNTERPARTY_PREFIXES.employee.length);
+    const employee = await tx.enterpriseEmployee.findFirst({
+      where: { id: employeeId, organizationId, employmentStatus: "ACTIVE", archivedAt: null },
+      select: {
+        id: true,
+        businessPartyId: true,
+        displayName: true,
+        workEmail: true,
+        workPhone: true,
+      },
+    });
+    if (!employee) throw new EnterpriseDomainError("CONTRACT_EMPLOYEE_NOT_FOUND", 404);
+
+    if (employee.businessPartyId) {
+      const existing = await tx.enterpriseBusinessParty.findFirst({
+        where: { id: employee.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
+      if (existing) {
+        await ensureContractPartyRole(tx, organizationId, existing.id, "EMPLOYEE", actorUserId);
+        return existing.id;
+      }
+    }
+
+    const matched = await findMatchingContractParty(tx, organizationId, {
+      legalName: employee.displayName,
+      primaryEmail: employee.workEmail,
+      partyType: "PERSON",
+    });
+    const businessPartyId = matched?.id || await createContractParty(tx, organizationId, actorUserId, {
+      legalName: employee.displayName,
+      displayName: employee.displayName,
+      partyType: "PERSON",
+      primaryEmail: employee.workEmail,
+      primaryPhone: employee.workPhone,
+      roleCode: "EMPLOYEE",
+    });
+    await ensureContractPartyRole(tx, organizationId, businessPartyId, "EMPLOYEE", actorUserId);
+    await tx.enterpriseEmployee.updateMany({
+      where: { id: employee.id, organizationId, archivedAt: null },
+      data: { businessPartyId, updatedByUserId: actorUserId, revision: { increment: 1 } },
+    });
+    return businessPartyId;
+  }
+
+  if (selectionId.startsWith(CONTRACT_COUNTERPARTY_PREFIXES.supplier)) {
+    const supplierId = selectionId.slice(CONTRACT_COUNTERPARTY_PREFIXES.supplier.length);
+    const supplier = await tx.enterpriseSupplier.findFirst({
+      where: { id: supplierId, organizationId, archivedAt: null },
+      select: {
+        id: true,
+        legalName: true,
+        displayName: true,
+        supplierType: true,
+        email: true,
+        phone: true,
+      },
+    });
+    if (!supplier) throw new EnterpriseDomainError("CONTRACT_SUPPLIER_NOT_FOUND", 404);
+
+    const existingLink = await tx.enterpriseSupplierPartyLink.findFirst({
+      where: { organizationId, supplierId: supplier.id, archivedAt: null },
+      select: { businessPartyId: true },
+    });
+    if (existingLink) {
+      const existing = await tx.enterpriseBusinessParty.findFirst({
+        where: { id: existingLink.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
+      if (existing) {
+        await ensureContractPartyRole(tx, organizationId, existing.id, "SUPPLIER", actorUserId);
+        return existing.id;
+      }
+    }
+
+    const partyType = supplier.supplierType === "PERSON" ? "PERSON" : "ORGANIZATION";
+    const matched = await findMatchingContractParty(tx, organizationId, {
+      legalName: supplier.legalName,
+      primaryEmail: supplier.email,
+      partyType,
+    });
+    const businessPartyId = matched?.id || await createContractParty(tx, organizationId, actorUserId, {
+      legalName: supplier.legalName,
+      displayName: supplier.displayName,
+      partyType,
+      primaryEmail: supplier.email,
+      primaryPhone: supplier.phone,
+      roleCode: "SUPPLIER",
+    });
+    await ensureContractPartyRole(tx, organizationId, businessPartyId, "SUPPLIER", actorUserId);
+    await tx.enterpriseSupplierPartyLink.upsert({
+      where: { organizationId_supplierId: { organizationId, supplierId: supplier.id } },
+      update: { businessPartyId, archivedAt: null, revision: { increment: 1 } },
+      create: {
+        organizationId,
+        supplierId: supplier.id,
+        businessPartyId,
+        createdByUserId: actorUserId,
+      },
+    });
+    return businessPartyId;
+  }
+
+  if (selectionId.startsWith(CONTRACT_COUNTERPARTY_PREFIXES.member)) {
+    const userId = selectionId.slice(CONTRACT_COUNTERPARTY_PREFIXES.member.length);
+    const membership = await tx.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null },
+      select: {
+        id: true,
+        userId: true,
+        user: { select: { name: true, email: true } },
+      },
+    });
+    if (!membership) throw new EnterpriseDomainError("CONTRACT_COLLABORATOR_NOT_FOUND", 404);
+
+    const employee = await tx.enterpriseEmployee.findFirst({
+      where: {
+        organizationId,
+        organizationMemberId: membership.id,
+        employmentStatus: "ACTIVE",
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    if (employee) {
+      return resolveContractBusinessParty(
+        tx,
+        organizationId,
+        actorUserId,
+        `${CONTRACT_COUNTERPARTY_PREFIXES.employee}${employee.id}`,
+      );
+    }
+
+    const legalName = membership.user.name || membership.user.email;
+    const matched = await findMatchingContractParty(tx, organizationId, {
+      legalName,
+      primaryEmail: membership.user.email,
+      partyType: "PERSON",
+    });
+    const businessPartyId = matched?.id || await createContractParty(tx, organizationId, actorUserId, {
+      legalName,
+      displayName: membership.user.name,
+      partyType: "PERSON",
+      primaryEmail: membership.user.email,
+      roleCode: "COLLABORATOR",
+    });
+    await ensureContractPartyRole(tx, organizationId, businessPartyId, "COLLABORATOR", actorUserId);
+    return businessPartyId;
+  }
+
+  const party = await tx.enterpriseBusinessParty.findFirst({
+    where: { id: selectionId, organizationId, status: "ACTIVE", archivedAt: null },
+    select: { id: true },
+  });
+  if (!party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
+  return party.id;
+}
+
 export async function createEnterpriseContract(organizationId: string, actorUserId: string, input: ContractCreateInput) {
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
-    const party = await tx.enterpriseBusinessParty.findFirst({
-      where: { id: input.businessPartyId, organizationId, archivedAt: null },
-      select: { id: true },
-    });
-    if (!party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
+    const businessPartyId = await resolveContractBusinessParty(tx, organizationId, actorUserId, input.businessPartyId);
     if (input.approverUserId === actorUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
 
     const status = input.approverUserId ? "PENDING_APPROVAL" : "DRAFT";
@@ -28,7 +275,7 @@ export async function createEnterpriseContract(organizationId: string, actorUser
       data: {
         organizationId,
         reference: enterpriseReference("CTR"),
-        businessPartyId: input.businessPartyId,
+        businessPartyId,
         opportunityId: input.opportunityId || null,
         quoteId: input.quoteId || null,
         contractType: input.contractType,
@@ -83,14 +330,13 @@ export async function updateEnterpriseContract(
     if (!contract) throw new EnterpriseDomainError("CONTRACT_NOT_FOUND", 404);
     if (contract.revision !== input.revision) throw new EnterpriseDomainConflictError();
     if (contract.status !== "DRAFT") throw new EnterpriseDomainError("CONTRACT_EDIT_STATUS_INVALID", 409);
-    if (input.businessPartyId) {
-      const party = await tx.enterpriseBusinessParty.findFirst({ where: { id: input.businessPartyId, organizationId, archivedAt: null }, select: { id: true } });
-      if (!party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
-    }
+    const businessPartyId = input.businessPartyId
+      ? await resolveContractBusinessParty(tx, organizationId, actorUserId, input.businessPartyId)
+      : undefined;
     const updated = await tx.enterpriseContract.updateMany({
       where: { id: contractId, organizationId, revision: input.revision, status: "DRAFT", archivedAt: null },
       data: {
-        ...(input.businessPartyId !== undefined ? { businessPartyId: input.businessPartyId } : {}),
+        ...(businessPartyId !== undefined ? { businessPartyId } : {}),
         ...(input.opportunityId !== undefined ? { opportunityId: input.opportunityId || null } : {}),
         ...(input.quoteId !== undefined ? { quoteId: input.quoteId || null } : {}),
         ...(input.contractType !== undefined ? { contractType: input.contractType } : {}),

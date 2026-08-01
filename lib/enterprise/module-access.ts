@@ -5,6 +5,7 @@ import {
   isEnterpriseModuleImplemented,
   isEnterpriseModuleNavigable,
   isEnterpriseModuleSectorCompatible,
+  listEnterpriseModuleDefinitions,
   normalizeEnterpriseModuleCode,
   type EnterpriseModuleDefinition,
 } from "@/lib/enterprise/module-registry";
@@ -184,7 +185,7 @@ function resolveFromSnapshot(snapshot: EnterpriseAccessSnapshot, moduleCode: str
   if (!isEnterpriseModuleSectorCompatible(definition, snapshot.sectorCode)) return denied("SECTOR_INCOMPATIBLE", "Ce service ne correspond pas au secteur de l’entreprise.", definition);
   if (definition.accessPolicy === "EXPLICIT_DENY") return denied("MODULE_NOT_IMPLEMENTED", "Ce service n’est pas proposé dans cet espace.", definition);
 
-  if (definition.routeKind === "ADMIN_SECTION") {
+  if (definition.routeKind === "ADMIN_SECTION" || definition.accessPolicy === "ADMIN_ONLY") {
     const adminAllowed = ENTERPRISE_ADMIN_ROLES.has(snapshot.role) || snapshot.permissions.includes("enterprise.admin.manage") || snapshot.permissions.includes("enterprise.admin.members.manage");
     if (!adminAllowed) return denied("PERMISSION_DENIED", "Une autorisation d’administration est nécessaire.", definition);
     return { allowed: true, code: "OK", message: "Accès autorisé.", canonicalCode: definition.code, definition, tenantModuleId: null, tenantModuleCode: null };
@@ -232,7 +233,13 @@ export async function resolveEnterpriseModuleAccess({ userId, organizationId, mo
 export async function listNavigableEnterpriseModules({ userId, organizationId, action = "read" }: { userId: string; organizationId: string; action?: EnterpriseModuleAction }) {
   const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
   if (!snapshot) return [];
-  return Array.from(snapshot.tenantModuleByCanonicalCode.keys())
+  const candidateCodes = new Set([
+    ...snapshot.tenantModuleByCanonicalCode.keys(),
+    ...listEnterpriseModuleDefinitions({ statuses: ["ACTIVE", "BETA"] })
+      .filter((definition) => definition.accessPolicy === "ADMIN_ONLY" && isEnterpriseModuleNavigable(definition))
+      .map((definition) => definition.code),
+  ]);
+  return Array.from(candidateCodes)
     .map((canonicalCode) => resolveFromSnapshot(snapshot, canonicalCode, action))
     .filter((decision) => decision.allowed && decision.definition && isEnterpriseModuleNavigable(decision.definition))
     .sort((left, right) => compareEnterpriseModuleDefinitions(left.definition as EnterpriseModuleDefinition, right.definition as EnterpriseModuleDefinition));

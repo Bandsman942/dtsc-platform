@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "modules": [
     {
       "code": "CRM_CUSTOMERS",
@@ -15,13 +15,19 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/CRM_CUSTOMERS",
       "workspaceKey": "ENTERPRISE_BUSINESS_PARTIES",
-      "permissionPrefixes": ["enterprise.crm.", "enterprise.parties."],
+      "permissionPrefixes": [
+        "enterprise.crm.",
+        "enterprise.parties."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "STARTER",
       "requiresActiveSubscription": false,
       "applicableSectors": "ALL",
       "dependencies": [],
-      "aliases": ["BUSINESS_PARTIES", "CUSTOMERS"],
+      "aliases": [
+        "BUSINESS_PARTIES",
+        "CUSTOMERS"
+      ],
       "qaContract": "enterprise-master-data"
     },
     {
@@ -38,13 +44,18 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/CATALOG",
       "workspaceKey": "ENTERPRISE_CATALOG",
-      "permissionPrefixes": ["enterprise.catalog."],
+      "permissionPrefixes": [
+        "enterprise.catalog."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "STARTER",
       "requiresActiveSubscription": false,
       "applicableSectors": "ALL",
       "dependencies": [],
-      "aliases": ["PRODUCTS_SERVICES", "CATALOG_PRODUCTS_SERVICES"],
+      "aliases": [
+        "PRODUCTS_SERVICES",
+        "CATALOG_PRODUCTS_SERVICES"
+      ],
       "qaContract": "enterprise-master-data"
     },
     {
@@ -61,7 +72,10 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/SITES_WAREHOUSES",
       "workspaceKey": "ENTERPRISE_SITES_WAREHOUSES",
-      "permissionPrefixes": ["enterprise.inventory.", "enterprise.sites."],
+      "permissionPrefixes": [
+        "enterprise.inventory.",
+        "enterprise.sites."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -83,12 +97,16 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/CRM_PIPELINE",
       "workspaceKey": "ENTERPRISE_CRM_PIPELINE",
-      "permissionPrefixes": ["enterprise.crm."],
+      "permissionPrefixes": [
+        "enterprise.crm."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["CRM_CUSTOMERS"],
+      "dependencies": [
+        "CRM_CUSTOMERS"
+      ],
       "qaContract": "enterprise-crm-sales"
     },
     {
@@ -105,12 +123,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/SALES_QUOTES_ORDERS",
       "workspaceKey": "ENTERPRISE_SALES",
-      "permissionPrefixes": ["enterprise.sales."],
+      "permissionPrefixes": [
+        "enterprise.sales."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["CRM_CUSTOMERS", "CATALOG"],
+      "dependencies": [
+        "CRM_CUSTOMERS",
+        "CATALOG"
+      ],
       "qaContract": "enterprise-crm-sales"
     },
     {
@@ -127,13 +150,47 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/CONTRACTS",
       "workspaceKey": "ENTERPRISE_CONTRACTS",
-      "permissionPrefixes": ["enterprise.sales.", "enterprise.contracts."],
+      "permissionPrefixes": [
+        "enterprise.sales.",
+        "enterprise.contracts."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["CRM_CUSTOMERS"],
+      "dependencies": [
+        "CRM_CUSTOMERS"
+      ],
       "qaContract": "enterprise-crm-sales"
+    },
+    {
+      "code": "IDENTITY_CONSENTS",
+      "labelFr": "Identités & consentements",
+      "labelEn": "Identities & consents",
+      "descriptionFr": "Invitations, consentements, approbations, révocations et relations DTSC de l’entreprise.",
+      "descriptionEn": "Invitations, consents, approvals, revocations and DTSC enterprise relationships.",
+      "domain": "ADMINISTRATION",
+      "implementationStatus": "ACTIVE",
+      "navigationGroup": "ADMINISTRATION",
+      "navigationOrder": 70,
+      "iconKey": "shield-check",
+      "routeKind": "DEDICATED_CORE",
+      "routePath": "/enterprise-identity-admin",
+      "workspaceKey": "ENTERPRISE_IDENTITY_CONSENTS",
+      "permissionPrefixes": [
+        "enterprise.admin.",
+        "enterprise.identity."
+      ],
+      "accessPolicy": "ADMIN_ONLY",
+      "minimumPlan": "STARTER",
+      "requiresActiveSubscription": false,
+      "applicableSectors": "ALL",
+      "dependencies": [],
+      "aliases": [
+        "IDENTITIES_CONSENTS",
+        "IDENTITY_LINKS"
+      ],
+      "qaContract": "enterprise-identity-consent"
     },
     {
       "code": "INVENTORY_LOGISTICS",
@@ -149,12 +206,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/INVENTORY_LOGISTICS",
       "workspaceKey": "ENTERPRISE_INVENTORY",
-      "permissionPrefixes": ["enterprise.inventory."],
+      "permissionPrefixes": [
+        "enterprise.inventory."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["CATALOG", "SITES_WAREHOUSES"],
+      "dependencies": [
+        "CATALOG",
+        "SITES_WAREHOUSES"
+      ],
       "qaContract": "enterprise-inventory"
     },
     {
@@ -171,7 +233,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/HUMAN_RESOURCES",
       "workspaceKey": "ENTERPRISE_HR",
-      "permissionPrefixes": ["enterprise.hr."],
+      "permissionPrefixes": [
+        "enterprise.hr."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
@@ -193,12 +257,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/TIME_ATTENDANCE",
       "workspaceKey": "ENTERPRISE_TIME_ATTENDANCE",
-      "permissionPrefixes": ["enterprise.hr.", "enterprise.time."],
+      "permissionPrefixes": [
+        "enterprise.hr.",
+        "enterprise.time."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["HUMAN_RESOURCES"],
+      "dependencies": [
+        "HUMAN_RESOURCES"
+      ],
       "qaContract": "enterprise-hr-payroll"
     },
     {
@@ -215,12 +284,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/PAYROLL_OPERATIONS",
       "workspaceKey": "ENTERPRISE_PAYROLL",
-      "permissionPrefixes": ["enterprise.payroll."],
+      "permissionPrefixes": [
+        "enterprise.payroll."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "ENTERPRISE",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["HUMAN_RESOURCES", "TIME_ATTENDANCE"],
+      "dependencies": [
+        "HUMAN_RESOURCES",
+        "TIME_ATTENDANCE"
+      ],
       "qaContract": "enterprise-hr-payroll"
     },
     {
@@ -237,7 +311,9 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/PROJECTS_SERVICES",
       "workspaceKey": "ENTERPRISE_PROJECTS",
-      "permissionPrefixes": ["enterprise.projects."],
+      "permissionPrefixes": [
+        "enterprise.projects."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "STARTER",
       "requiresActiveSubscription": false,
@@ -259,12 +335,18 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/TIME_DELIVERABLES",
       "workspaceKey": "ENTERPRISE_TIME_DELIVERABLES",
-      "permissionPrefixes": ["enterprise.projects.", "enterprise.time."],
+      "permissionPrefixes": [
+        "enterprise.projects.",
+        "enterprise.time."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["PROJECTS_SERVICES", "TIME_ATTENDANCE"],
+      "dependencies": [
+        "PROJECTS_SERVICES",
+        "TIME_ATTENDANCE"
+      ],
       "qaContract": "enterprise-projects-assets"
     },
     {
@@ -281,12 +363,17 @@
       "routeKind": "DEDICATED_CORE",
       "routePath": "/enterprise-modules/ASSETS_MAINTENANCE",
       "workspaceKey": "ENTERPRISE_ASSETS",
-      "permissionPrefixes": ["enterprise.assets."],
+      "permissionPrefixes": [
+        "enterprise.assets."
+      ],
       "accessPolicy": "POSITION_PERMISSION",
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": "ALL",
-      "dependencies": ["SITES_WAREHOUSES", "SUPPLIERS_PURCHASES"],
+      "dependencies": [
+        "SITES_WAREHOUSES",
+        "SUPPLIERS_PURCHASES"
+      ],
       "qaContract": "enterprise-projects-assets"
     }
   ]
