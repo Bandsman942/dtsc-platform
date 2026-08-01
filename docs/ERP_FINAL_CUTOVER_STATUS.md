@@ -16,7 +16,7 @@
 | Finance commune | READY | audit d’intégrité avant et après Production |
 | Pharmacy | READY sous preuve organisationnelle | aucun état PENDING/FAILED/AMBIGUOUS avant cutover local |
 | Health | READY sous preuve organisationnelle | aucun état PENDING/FAILED/AMBIGUOUS avant cutover local |
-| CRUD sectoriel générique | RETIRED | lecture historique seulement |
+| CRUD sectoriel générique | RETIRED | `EnterpriseSectorRecord` historique conservé en lecture seule |
 | Modules Health génériques | HIDDEN | future implémentation dédiée uniquement |
 
 ## Release A
