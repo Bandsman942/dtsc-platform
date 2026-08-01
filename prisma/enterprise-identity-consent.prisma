@@ -1,0 +1,116 @@
+model EnterprisePersonIdentity {
+  id              String   @id @default(cuid())
+  organizationId  String
+  displayName     String
+  primaryEmail    String?
+  primaryPhone    String?
+  status          String   @default("ACTIVE")
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, displayName])
+  @@index([organizationId, primaryEmail])
+  @@index([organizationId, primaryPhone])
+  @@index([archivedAt])
+}
+
+model EnterprisePersonBusinessReference {
+  id               String   @id @default(cuid())
+  organizationId   String
+  personIdentityId String
+  businessPartyId  String?
+  employeeId       String?
+  relationType     String
+  roleCode         String?
+  status           String   @default("ACTIVE")
+  createdByUserId  String
+  updatedByUserId  String?
+  revision         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  archivedAt       DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, businessPartyId, relationType])
+  @@unique([organizationId, employeeId, relationType])
+  @@index([organizationId, personIdentityId, status])
+  @@index([organizationId, relationType, status])
+  @@index([organizationId, businessPartyId])
+  @@index([organizationId, employeeId])
+  @@index([archivedAt])
+}
+
+model EnterpriseIdentityLink {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  personIdentityId      String
+  userId                 String?
+  origin                 String
+  status                 String   @default("DRAFT")
+  initiatedByUserId      String
+  reviewedByUserId       String?
+  purpose                String
+  consentTextVersion     String
+  invitationEmailDigest String?
+  invitationTokenDigest String?  @unique
+  invitationSentAt       DateTime?
+  expiresAt              DateTime?
+  userDecisionAt         DateTime?
+  organizationDecisionAt DateTime?
+  activatedAt            DateTime?
+  refusedAt              DateTime?
+  revokedAt              DateTime?
+  cancelledAt            DateTime?
+  refusalReason          String?
+  revocationReason       String?
+  cancellationReason     String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, personIdentityId, status])
+  @@index([userId, status, createdAt])
+  @@index([expiresAt, status])
+  @@index([initiatedByUserId, createdAt])
+}
+
+model EnterpriseIdentityConsentRecord {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  identityLinkId     String
+  userId             String
+  action             String
+  purpose            String
+  consentTextVersion String
+  statementDigest    String
+  recordedAt         DateTime @default(now())
+  metadataJson       Json?
+
+  @@unique([identityLinkId, action, recordedAt])
+  @@index([organizationId, userId, recordedAt])
+  @@index([identityLinkId, recordedAt])
+}
+
+model EnterpriseIdentityLinkEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  identityLinkId String
+  eventType      String
+  fromStatus     String?
+  toStatus       String?
+  actorUserId    String?
+  reason         String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, identityLinkId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([eventType, createdAt])
+}
