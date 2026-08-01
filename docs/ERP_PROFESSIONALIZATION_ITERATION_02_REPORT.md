@@ -71,13 +71,13 @@ Migration additive : prix catalogue historisés, capacités d’emplacement, pro
 - génération Prisma CI ;
 - déploiement de toutes les migrations sur une base PostgreSQL vide ;
 - audits ERP et vérification de parité Finance sur la base neuve ;
-- correction des premiers écarts TypeScript détectés par la CI.
+- `pnpm type-check` vert dans la CI ;
+- `pnpm qa:regression` vert dans la CI ;
+- suppression des derniers éléments de code inutilisés signalés par ESLint.
 
 ## Validation restante avant clôture
 
-- nouvelle exécution verte de `pnpm type-check` ;
-- `pnpm qa:regression` dans la CI complète ;
-- `pnpm lint` ;
+- nouvelle exécution verte de `pnpm lint` après correction ;
 - `pnpm build` ;
 - scénarios Playwright authentifiés si secrets disponibles ;
 - revue PR, merge, déploiement Production unique et smoke tests documentés.
