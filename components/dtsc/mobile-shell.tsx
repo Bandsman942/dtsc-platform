@@ -9,6 +9,7 @@ import {
   Bell,
   Bot,
   BriefcaseBusiness,
+  Building2,
   CalendarCheck,
   CalendarDays,
   CreditCard,
@@ -29,6 +30,7 @@ import { MobileAvatar } from "@/components/dtsc/ui-components";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { getConsoleUrl, getDashboardUrl, getSignInUrl, getSupportUrl } from "@/lib/domains";
 import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
+import { COMPANY_RELATIONSHIPS_NAVIGATION, getCompanyRelationshipsLabel } from "@/lib/navigation/company-relationships";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { translate } from "@/lib/i18n";
@@ -47,6 +49,7 @@ type MobileSecondaryItem = {
   labelKey: string;
   fallback: string;
   icon: ElementType;
+  badge?: number;
 };
 
 const primaryItems = [
@@ -66,6 +69,7 @@ export function MobilePwaHeader({
   unreadNotifications,
   unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
+  pendingCompanyRelationships = 0,
   currentOrganizationId,
   organizationOptions = [],
   showInternalModules = false,
@@ -75,6 +79,7 @@ export function MobilePwaHeader({
   unreadNotifications: number;
   unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
+  pendingCompanyRelationships?: number;
   currentOrganizationId?: string | null;
   organizationOptions?: Array<{ id: string; label: string; role?: string | null }>;
   showInternalModules?: boolean;
@@ -171,6 +176,12 @@ export function MobilePwaHeader({
 
       <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {organizationOptions.length > 0 && <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />}
+        <QuickChip
+          href={COMPANY_RELATIONSHIPS_NAVIGATION.href}
+          active={navigationItemIsActive(pathname, COMPANY_RELATIONSHIPS_NAVIGATION.href)}
+          icon={Building2}
+          label={`${getCompanyRelationshipsLabel(locale, true)}${pendingCompanyRelationships > 0 ? ` (${pendingCompanyRelationships > 99 ? "99+" : pendingCompanyRelationships})` : ""}`}
+        />
         {pendingEnterpriseInvitations > 0 && <QuickChip href="/enterprise-invitations" active={pathname.startsWith("/enterprise-invitations")} icon={UserPlus} label={`${translate(locale, "navigation.invitations")} (${pendingEnterpriseInvitations})`} />}
         {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={pathname.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
         <QuickChip href="/settings" active={pathname.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
@@ -189,6 +200,7 @@ export function MobileBottomNavigation({
   unreadNotifications,
   unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
+  pendingCompanyRelationships = 0,
   showEmployeeActivities,
   showInternalModules = false,
   showCollaborationModule = true,
@@ -198,6 +210,7 @@ export function MobileBottomNavigation({
   unreadNotifications: number;
   unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
+  pendingCompanyRelationships?: number;
   showEmployeeActivities: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
@@ -225,9 +238,17 @@ export function MobileBottomNavigation({
   const primaryNavigationItems = enterpriseContext
     ? [...visibleItems.filter((item) => item.href !== "/activities"), ...pendingInvitationItems, ...enterprisePrimaryItems].slice(0, 5)
     : [...visibleItems, ...pendingInvitationItems].slice(0, 5);
+  const companyRelationshipsItem: MobileSecondaryItem = {
+    href: COMPANY_RELATIONSHIPS_NAVIGATION.href,
+    labelKey: "",
+    fallback: getCompanyRelationshipsLabel(locale, true),
+    icon: Building2,
+    badge: pendingCompanyRelationships,
+  };
 
   const overflowItems: MobileSecondaryItem[] = enterpriseContext
     ? [
+        companyRelationshipsItem,
         { href: "/enterprise-modules", labelKey: "", fallback: "Modules ERP", icon: Layers3 },
         { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier", icon: CalendarDays },
         { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces", icon: Megaphone },
@@ -243,6 +264,7 @@ export function MobileBottomNavigation({
         ...(enterpriseContext.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Administration", icon: Shield }] : []),
       ]
     : [
+        companyRelationshipsItem,
         { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces", icon: Megaphone },
         { href: "/company", labelKey: "navigation.company", fallback: "Entreprise", icon: BriefcaseBusiness },
         ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier", icon: CalendarDays }] : []),
@@ -307,7 +329,10 @@ export function MobileBottomNavigation({
                   : "border-transparent bg-dtsc-page/74 text-dtsc-muted",
               )}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <span className="relative">
+                <Icon className="h-3.5 w-3.5" />
+                {(item.badge || 0) > 0 ? <span className="absolute -right-2.5 -top-2.5 rounded-full bg-cyan-400 px-1 text-[0.54rem] text-[#001736]">{(item.badge || 0) > 99 ? "99+" : item.badge}</span> : null}
+              </span>
               <span>{translate(locale, item.labelKey) || item.fallback}</span>
             </Link>
           );
@@ -334,6 +359,7 @@ function QuickChip({ href, active, icon: Icon, label }: { href: string; active?:
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex shrink-0 items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-black transition",
         active ? "border-cyan-300/45 bg-cyan-400/14 text-cyan-500" : "border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted",
