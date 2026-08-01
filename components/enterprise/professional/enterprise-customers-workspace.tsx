@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { Building2, Eye, Link2, Plus, UserRound } from "lucide-react";
+import { Building2, Link2, Plus, UserRound } from "lucide-react";
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { Button } from "@/components/ui/button";

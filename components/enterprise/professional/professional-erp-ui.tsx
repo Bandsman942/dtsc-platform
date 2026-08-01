@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { BookOpen, CircleHelp, LifeBuoy, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,9 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
       setPagination(body.pagination);
       setMetrics(body.metrics || {});
       setCanManage(Boolean(body.canManage));
-      const { items: _items, pagination: _pagination, metrics: _metrics, canManage: _canManage, ...rest } = body;
+      const rest = Object.fromEntries(
+        Object.entries(body).filter(([key]) => !["items", "pagination", "metrics", "canManage"].includes(key)),
+      );
       setExtra(rest as TExtra);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Chargement impossible.");
