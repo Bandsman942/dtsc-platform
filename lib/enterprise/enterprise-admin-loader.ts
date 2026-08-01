@@ -1,7 +1,5 @@
 import type { EnterpriseAdminDataset } from "@/lib/enterprise/enterprise-admin-types";
 import { getEnterpriseCalendarDataset } from "@/lib/enterprise/enterprise-calendar-loader";
-import { getEnterpriseHealthcareDataset } from "@/lib/enterprise/enterprise-healthcare-loader";
-import { getEnterprisePharmacyDataset } from "@/lib/enterprise/enterprise-pharmacy-loader";
 import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members-loader";
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
@@ -56,7 +54,6 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     positions,
     workflowDataset,
     calendarEvents,
-    sectorRecords,
     tasks,
     requests,
     pendingValidationsCount,
@@ -74,11 +71,6 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     prisma.enterprisePosition.findMany({ where: { organizationId }, orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }], include: { department: { select: { labelFr: true, labelEn: true } } } }),
     getEnterpriseWorkflowsDataset(organizationId),
     getEnterpriseCalendarDataset(organizationId),
-    organization.sectorCode === "PHARMACY"
-      ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode)
-      : organization.sectorCode === "HEALTH_CARE"
-        ? getEnterpriseHealthcareDataset(organizationId, organization.sectorCode)
-        : Promise.resolve([]),
     prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, dueAt: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, createdAt: true } }),
     prisma.enterpriseApproval.count({ where: { organizationId, archivedAt: null, status: "PENDING" } }),
@@ -128,7 +120,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     workflows: workflowDataset.workflows,
     recentRequests: workflowDataset.recentRequests,
     calendarEvents,
-    sectorRecords,
+    sectorRecords: [],
     entitlements: {
       planCode: entitlements.planCode,
       planLabel: entitlements.planLabel,
