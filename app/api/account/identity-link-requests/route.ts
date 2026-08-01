@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { ENTERPRISE_IDENTITY_RELATION_TYPES } from "@/lib/enterprise/identity-links/contracts";
+import {
+  ENTERPRISE_IDENTITY_CONSENT_VERSION,
+  ENTERPRISE_IDENTITY_RELATION_TYPES,
+} from "@/lib/enterprise/identity-links/contracts";
 import {
   identityLinkErrorResponse,
   requireIdentityLinkSession,
@@ -10,12 +13,12 @@ import { createUserInitiatedIdentityRequest } from "@/lib/enterprise/identity-li
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 
-the const requestSchema = z.object({
+const requestSchema = z.object({
   organizationCode: z.string().trim().min(2).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i),
   relationType: z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES),
   roleCode: z.string().trim().max(80).optional(),
   purpose: z.string().trim().min(10).max(500),
-  consentTextVersion: z.string().trim().min(1).max(80).optional(),
+  consentTextVersion: z.string().trim().min(1).max(80).default(ENTERPRISE_IDENTITY_CONSENT_VERSION),
 });
 
 export async function POST(req: Request) {
