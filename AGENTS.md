@@ -139,11 +139,11 @@ session
 - Les clés d’objets partagés ne sont jamais dupliquées.
 - Ne pas passer `title` directement aux icônes Lucide ; utiliser un élément HTML englobant.
 
-## 10. UI/UX, mobile et accessibilité
+## 10. UI/UX métier DTSC, mobile et accessibilité
 
-- Réutiliser `ModuleWorkspace`, `ModuleHeader`, `ModuleMetrics`, `ModuleContent`, `ModuleSection`, `BusinessList`, `BusinessListItem`, `BusinessDetail`, `ContextActions`, `StatusBadge` et `EmptyState` avant de créer des primitives parallèles.
+- Réutiliser les primitives de `components/workspace/*`, notamment `ModuleWorkspace`, `ModuleHeader`, `ModuleMetrics`, `ModuleContent`, `ModuleSection`, `BusinessList`, `BusinessListItem`, `BusinessDetail`, `ContextActions`, `StatusBadge` et `EmptyState`, avant de créer des primitives parallèles.
 - Éviter les cartes dans des cartes ; préférer header métier → contrôles → contenu → actions contextuelles.
-- Les actions contextuelles passent par un menu `...`, sont réellement implémentées et respectent les permissions.
+- Les actions contextuelles passent par un menu `...`, sont réellement implémentées et respectent la permission serveur résolue pour l’objet et le module.
 - Les actions destructives exigent confirmation et soft delete/archivage métier lorsque nécessaire.
 - Les listes volumineuses sont paginées côté serveur ; ne jamais charger toutes les écritures, patients, produits, messages ou mouvements en mémoire.
 - Mobile-first : `min-w-0`, safe areas, aucun débordement global, rail KPI horizontal local, dialogs/sheets scrollables, clavier iPhone et selects tactiles.
