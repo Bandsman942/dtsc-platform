@@ -66,6 +66,20 @@ session
 - L’historique passé est immuable ; toute modification future d’une disponibilité récurrente crée une version temporelle traçable.
 - Le temps travaillé, sa validation indépendante et son intégration à la paie utilisent leurs domaines dédiés et ne sont jamais déduits automatiquement d’une simple disponibilité.
 
+### SPRINT_04_WORK_PRESTATIONS_RULES
+
+- Les prestations réelles sont déclarées par leur collaborateur, calculées côté serveur, soumises par semaine et deviennent immuables après soumission sauf demande de correction explicite.
+- No employee may approve their own work submission; le COO valide les collaborateurs et le CEO valide le COO selon les postes officiels.
+- Les minutes approuvées constituent une preuve de travail pour le workflow suivant, mais ne calculent jamais automatiquement une rémunération.
+- Les routes mutantes restent same-origin, validées, limitées, auditées et le déploiement reste production-only depuis `main`.
+
+### SPRINT_05_PAYROLL_WORKFLOW_RULES
+
+- Only approved DTSC work peut alimenter la preuve de couverture d’une paie préparée ; une couverture incomplète exige une justification explicite.
+- Les minutes approuvées ne proratisent ni ne calculent automatiquement le salaire mensuel ; la rémunération de base vient du dossier RH et toute dérogation est justifiée.
+- No employee may approve their own payroll; la paie du CEO est approuvée par le COO et les autres paies par le CEO selon le workflow officiel.
+- La préparation et la soumission ne créent aucun impact financier ; la transaction financière idempotente n’est créée qu’à l’approbation, puis réutilisée lors du paiement.
+
 ## 4. Registre canonique et navigation ERP
 
 1. Le registre canonique est l’unique catalogue actif de modules.
