@@ -82,6 +82,8 @@ export type EnterpriseModuleConfigurationIssue = {
   code: string;
   severity: "WARNING" | "ERROR";
   moduleCode?: string;
+  moduleLabel?: string;
+  dependencyCodes?: string[];
   message: string;
 };
 
