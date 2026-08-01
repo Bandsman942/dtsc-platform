@@ -7,7 +7,7 @@
 | `POST /api/enterprise/:organizationId/healthcare` | RETIRED | APIs Health dédiées | `410 Gone`, aucune donnée clinique journalisée |
 | `POST /api/enterprise/:organizationId/pharmacy` | RETIRED | APIs Pharmacy dédiées | `410 Gone` |
 | mutation workflow via `/administration` | RETIRED | Workflow Engine v2 | `410 Gone` |
-| `GET` Core/Sector historique | READ_ONLY | archive | lecture paginée, permissions et tenant obligatoires |
+| `GET` Core/Sector historique | READ_ONLY | archive | Lecture historique paginée, permissions et tenant obligatoires |
 | anciens liens de modules | REDIRECT/ALIAS | registre canonique | Redirection uniquement si destination autorisée |
 | `/documents` | REDIRECT | `/company` | compatibilité historique documentée |
 
