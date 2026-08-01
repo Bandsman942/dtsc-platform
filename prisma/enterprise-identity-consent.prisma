@@ -1,0 +1,122 @@
+model EnterprisePersonIdentity {
+  id              String   @id @default(cuid())
+  organizationId  String
+  displayName     String
+  primaryEmail    String?
+  primaryPhone    String?
+  status          String   @default("ACTIVE")
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+
+  @@unique([organizationId, id], map: "EnterprisePersonIdentity_organizationId_id_key")
+  @@index([organizationId, status, displayName], map: "EnterprisePersonIdentity_organizationId_status_displayName_idx")
+  @@index([organizationId, primaryEmail], map: "EnterprisePersonIdentity_organizationId_primaryEmail_idx")
+  @@index([organizationId, primaryPhone], map: "EnterprisePersonIdentity_organizationId_primaryPhone_idx")
+  @@index([archivedAt], map: "EnterprisePersonIdentity_archivedAt_idx")
+}
+
+model EnterprisePersonBusinessReference {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  personIdentityId       String
+  businessPartyId        String?
+  businessPartyContactId String?
+  employeeId             String?
+  relationType           String
+  roleCode               String?
+  status                 String   @default("ACTIVE")
+  createdByUserId        String
+  updatedByUserId        String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  archivedAt             DateTime?
+
+  @@unique([organizationId, id], map: "EnterprisePersonBusinessReference_organizationId_id_key")
+  @@unique([organizationId, businessPartyId, relationType], map: "EnterprisePersonBusinessReference_org_party_relation_key")
+  @@unique([organizationId, businessPartyContactId, relationType], map: "EnterprisePersonBusinessReference_org_contact_relation_key")
+  @@unique([organizationId, employeeId, relationType], map: "EnterprisePersonBusinessReference_org_employee_relation_key")
+  @@index([organizationId, personIdentityId, status], map: "EnterprisePersonBusinessReference_org_person_status_idx")
+  @@index([organizationId, relationType, status], map: "EnterprisePersonBusinessReference_org_type_status_idx")
+  @@index([organizationId, businessPartyId], map: "EnterprisePersonBusinessReference_org_party_idx")
+  @@index([organizationId, businessPartyContactId], map: "EnterprisePersonBusinessReference_org_contact_idx")
+  @@index([organizationId, employeeId], map: "EnterprisePersonBusinessReference_org_employee_idx")
+  @@index([archivedAt], map: "EnterprisePersonBusinessReference_archivedAt_idx")
+}
+
+model EnterpriseIdentityLink {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  personIdentityId      String
+  userId                 String?
+  origin                 String
+  requestedRelationType String
+  requestedRoleCode     String?
+  status                 String   @default("DRAFT")
+  initiatedByUserId      String
+  reviewedByUserId       String?
+  purpose                String
+  consentTextVersion     String
+  invitationEmailDigest String?
+  invitationTokenDigest String?  @unique(map: "EnterpriseIdentityLink_invitationTokenDigest_key")
+  invitationSentAt       DateTime?
+  expiresAt              DateTime?
+  userDecisionAt         DateTime?
+  organizationDecisionAt DateTime?
+  activatedAt            DateTime?
+  refusedAt              DateTime?
+  revokedAt              DateTime?
+  cancelledAt            DateTime?
+  refusalReason          String?
+  revocationReason       String?
+  cancellationReason     String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([organizationId, id], map: "EnterpriseIdentityLink_organizationId_id_key")
+  @@index([organizationId, status, createdAt], map: "EnterpriseIdentityLink_org_status_created_idx")
+  @@index([organizationId, requestedRelationType, status], map: "EnterpriseIdentityLink_org_relation_status_idx")
+  @@index([organizationId, personIdentityId, status], map: "EnterpriseIdentityLink_org_person_status_idx")
+  @@index([userId, status, createdAt], map: "EnterpriseIdentityLink_user_status_created_idx")
+  @@index([expiresAt, status], map: "EnterpriseIdentityLink_expiry_status_idx")
+  @@index([initiatedByUserId, createdAt], map: "EnterpriseIdentityLink_initiator_created_idx")
+}
+
+model EnterpriseIdentityConsentRecord {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  identityLinkId     String
+  userId             String
+  action             String
+  purpose            String
+  consentTextVersion String
+  statementDigest    String
+  recordedAt         DateTime @default(now())
+  metadataJson       Json?
+
+  @@unique([identityLinkId, action, recordedAt], map: "EnterpriseIdentityConsentRecord_link_action_recorded_key")
+  @@index([organizationId, userId, recordedAt], map: "EnterpriseIdentityConsentRecord_org_user_recorded_idx")
+  @@index([identityLinkId, recordedAt], map: "EnterpriseIdentityConsentRecord_link_recorded_idx")
+}
+
+model EnterpriseIdentityLinkEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  identityLinkId String
+  eventType      String
+  fromStatus     String?
+  toStatus       String?
+  actorUserId    String?
+  reason         String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, identityLinkId, createdAt], map: "EnterpriseIdentityLinkEvent_org_link_created_idx")
+  @@index([actorUserId, createdAt], map: "EnterpriseIdentityLinkEvent_actor_created_idx")
+  @@index([eventType, createdAt], map: "EnterpriseIdentityLinkEvent_type_created_idx")
+}

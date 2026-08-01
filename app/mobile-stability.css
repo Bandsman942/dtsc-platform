@@ -55,6 +55,8 @@
   max-width: 100%;
 }
 
+/* Ordinary business copy keeps normal word boundaries. Long phrases can wrap
+ * at spaces, but French and English words are not split arbitrarily. */
 [data-dtsc-responsive-root] :where(
     h1,
     h2,
@@ -71,7 +73,27 @@
     a,
     [data-responsive-text]
   ) {
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: manual;
+}
+
+/* Aggressive wrapping is opt-in for values that can genuinely be unbroken:
+ * URLs, emails, file names, technical identifiers and externally supplied tokens. */
+[data-dtsc-responsive-root] :where(
+    code,
+    pre,
+    kbd,
+    samp,
+    [data-responsive-long-token],
+    [data-technical-identifier],
+    [data-file-name],
+    [data-email-value],
+    [data-url-value]
+  ) {
+  max-width: 100%;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 [data-dtsc-responsive-root] :where(input, textarea, select, button) {
