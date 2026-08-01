@@ -4,16 +4,9 @@ import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
 import { listEnterpriseModuleConfigurationIssues } from "@/lib/enterprise/module-access";
+import { reconcileOrganizationModulesWithSubscription } from "@/lib/enterprise/module-subscription-reconciliation";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
-
-// Iteration 5 compatibility note: the former calls
-// getEnterpriseHealthcareDataset(organizationId, organization.sectorCode) and
-// getEnterprisePharmacyDataset(organizationId, organization.sectorCode) under
-// organization.sectorCode === "PHARMACY" were intentionally removed from the
-// normal admin render. Dedicated workspaces now load their own tenant-scoped
-// data; historical sector records remain available only through protected,
-// paginated legacy reads.
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -45,6 +38,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
   const organization = await getEnterpriseOrganizationForAdmin(organizationId);
   if (!organization) return null;
 
+  await reconcileOrganizationModulesWithSubscription(organizationId);
   const entitlements = await getOrganizationEntitlements(organizationId);
   if (!entitlements) return null;
 
