@@ -10,16 +10,21 @@ import {
 } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
-export default async function EnterpriseIdentityAdminPage() {
+export default async function EnterpriseIdentityAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ link?: string }>;
+}) {
   const user = await requireUser();
   const session = await getSession();
+  const { link: focusedLinkId } = await searchParams;
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
   if (!session || !organizationId) redirect(getDashboardUrl());
 
   const membership = await requireActiveOrganizationMembership(session, organizationId);
   if (!membership || !canAccessOrganizationAdministration(membership.role)) redirect(getDashboardUrl());
 
-  const [links, parties, contacts, employees] = await Promise.all([
+  const [links, parties, contacts, employees, suppliers, supplierContacts] = await Promise.all([
     listOrganizationIdentityLinks(organizationId),
     prisma.enterpriseBusinessParty.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
@@ -51,6 +56,18 @@ export default async function EnterpriseIdentityAdminPage() {
       orderBy: { displayName: "asc" },
       take: 100,
     }),
+    prisma.enterpriseSupplier.findMany({
+      where: { organizationId, archivedAt: null, supplierType: "PERSON" },
+      select: { id: true, legalName: true, displayName: true, email: true },
+      orderBy: { legalName: "asc" },
+      take: 100,
+    }),
+    prisma.enterpriseSupplierContact.findMany({
+      where: { organizationId },
+      select: { id: true, name: true, email: true, supplier: { select: { legalName: true, displayName: true } } },
+      orderBy: { name: "asc" },
+      take: 100,
+    }),
   ]);
 
   const targets = [
@@ -68,6 +85,20 @@ export default async function EnterpriseIdentityAdminPage() {
       suggestedName: contact.label || contact.businessParty.displayName || contact.businessParty.legalName,
       suggestedEmail: contact.contactType === "EMAIL" ? contact.value : "",
     })),
+    ...suppliers.map((supplier) => ({
+      value: supplier.id,
+      kind: "supplierId" as const,
+      label: `${supplier.displayName || supplier.legalName} · Fournisseur personne`,
+      suggestedName: supplier.displayName || supplier.legalName,
+      suggestedEmail: supplier.email || "",
+    })),
+    ...supplierContacts.map((contact) => ({
+      value: contact.id,
+      kind: "supplierContactId" as const,
+      label: `${contact.name} · Contact de ${contact.supplier.displayName || contact.supplier.legalName}`,
+      suggestedName: contact.name,
+      suggestedEmail: contact.email || "",
+    })),
     ...employees.map((employee) => ({
       value: employee.id,
       kind: "employeeId" as const,
@@ -83,6 +114,7 @@ export default async function EnterpriseIdentityAdminPage() {
         organizationId={organizationId}
         organizationName={membership.organization.name}
         targets={targets}
+        focusedLinkId={focusedLinkId}
         links={links.map((link) => ({
           id: link.id,
           requestedRelationType: link.requestedRelationType,

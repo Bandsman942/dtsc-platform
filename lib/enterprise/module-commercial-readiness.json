@@ -306,6 +306,186 @@
       "commercializable": false,
       "commentFr": "Expérience professionnelle et isolée par entreprise ; la qualification commerciale reste distincte.",
       "commentEn": "Professional, tenant-isolated experience; commercial qualification remains separate."
+    },
+    "CRM_CUSTOMERS": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION",
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "AUTHENTICATED_BROWSER_ACCEPTANCE",
+        "PRODUCTION_SMOKE_EVIDENCE"
+      ],
+      "qaContract": "erp-professional-master-data",
+      "evidence": [
+        "components/enterprise/professional/enterprise-customers-workspace.tsx",
+        "app/api/enterprise/[organizationId]/business-parties/route.ts",
+        "scripts/qa-erp-professional-master-data-checks.mjs",
+        "docs/ERP_COMMERCIAL_PACKAGING_STANDARD.md",
+        "docs/ERP_ITERATION_02_USER_GUIDE.md"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Les tiers et clients disposent d’un workspace 360°, de formulaires, de prévention manuelle des doublons et d’une liaison DTSC consentie. La promotion commerciale attend la recette navigateur authentifiée et les smoke tests Production.",
+      "commentEn": "The module meets the professional product standard. Commercial promotion awaits authenticated browser acceptance and Production smoke evidence."
+    },
+    "CATALOG": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION",
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "AUTHENTICATED_BROWSER_ACCEPTANCE",
+        "PRODUCTION_SMOKE_EVIDENCE"
+      ],
+      "qaContract": "erp-professional-master-data",
+      "evidence": [
+        "components/enterprise/professional/enterprise-catalog-workspace.tsx",
+        "app/api/enterprise/[organizationId]/catalog/route.ts",
+        "scripts/qa-erp-professional-master-data-checks.mjs",
+        "docs/ERP_COMMERCIAL_PACKAGING_STANDARD.md",
+        "docs/ERP_ITERATION_02_USER_GUIDE.md"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Le catalogue possède catégories, unités, tarification historisée, formulaires, détails et actions de modification contrôlées. La promotion commerciale attend la recette navigateur authentifiée et les smoke tests Production.",
+      "commentEn": "The module meets the professional product standard. Commercial promotion awaits authenticated browser acceptance and Production smoke evidence."
+    },
+    "SITES_WAREHOUSES": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION",
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "AUTHENTICATED_BROWSER_ACCEPTANCE",
+        "PRODUCTION_SMOKE_EVIDENCE"
+      ],
+      "qaContract": "erp-professional-master-data",
+      "evidence": [
+        "components/enterprise/professional/enterprise-sites-workspace.tsx",
+        "app/api/enterprise/[organizationId]/sites/route.ts",
+        "scripts/qa-erp-professional-master-data-checks.mjs",
+        "docs/ERP_COMMERCIAL_PACKAGING_STANDARD.md",
+        "docs/ERP_ITERATION_02_USER_GUIDE.md"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Les sites, entrepôts et emplacements disposent d’une hiérarchie professionnelle responsive et de contrôles tenant-aware. La promotion commerciale attend la recette navigateur authentifiée et les smoke tests Production.",
+      "commentEn": "The module meets the professional product standard. Commercial promotion awaits authenticated browser acceptance and Production smoke evidence."
+    },
+    "CRM_PIPELINE": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION",
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "AUTHENTICATED_BROWSER_ACCEPTANCE",
+        "PRODUCTION_SMOKE_EVIDENCE"
+      ],
+      "qaContract": "erp-professional-crm",
+      "evidence": [
+        "components/enterprise/professional/enterprise-crm-workspace.tsx",
+        "app/api/enterprise/[organizationId]/leads/route.ts",
+        "scripts/qa-erp-professional-crm-checks.mjs",
+        "docs/ERP_COMMERCIAL_PACKAGING_STANDARD.md",
+        "docs/ERP_ITERATION_02_USER_GUIDE.md"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Le CRM dispose des vues pipeline et liste, de prochaines actions, de transitions serveur et d’une conversion sans doublon silencieux. La promotion commerciale attend la recette navigateur authentifiée et les smoke tests Production.",
+      "commentEn": "The module meets the professional product standard. Commercial promotion awaits authenticated browser acceptance and Production smoke evidence."
+    },
+    "CONTRACTS": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION",
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "AUTHENTICATED_BROWSER_ACCEPTANCE",
+        "PRODUCTION_SMOKE_EVIDENCE"
+      ],
+      "qaContract": "erp-professional-contracts",
+      "evidence": [
+        "components/enterprise/professional/enterprise-contracts-workspace.tsx",
+        "app/api/enterprise/[organizationId]/contracts/route.ts",
+        "scripts/qa-erp-professional-contracts-checks.mjs",
+        "docs/ERP_COMMERCIAL_PACKAGING_STANDARD.md",
+        "docs/ERP_ITERATION_02_USER_GUIDE.md"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Les contrats disposent d’un formulaire, d’une fiche, d’un cycle d’approbation et de transitions serveur auditées. La promotion commerciale attend la recette navigateur authentifiée et les smoke tests Production.",
+      "commentEn": "The module meets the professional product standard. Commercial promotion awaits authenticated browser acceptance and Production smoke evidence."
     }
   }
 }

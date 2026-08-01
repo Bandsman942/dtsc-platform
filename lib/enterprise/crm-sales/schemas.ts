@@ -10,9 +10,12 @@ export const leadCreateSchema = z.object({
   source: z.string().trim().max(120).optional().nullable(),
   ownerUserId: z.string().trim().min(1).optional().nullable(),
   departmentId: z.string().trim().min(1).optional().nullable(),
+  businessPartyId: z.string().trim().min(1).optional().nullable(),
   expectedValue: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
   currency: z.string().trim().toUpperCase().length(3).optional().nullable(),
   notes: z.string().trim().max(4000).optional().nullable(),
+  nextAction: z.string().trim().max(500).optional().nullable(),
+  nextActionAt: z.coerce.date().optional().nullable(),
 });
 
 export const leadTransitionSchema = z.object({
@@ -22,6 +25,8 @@ export const leadTransitionSchema = z.object({
 });
 
 export const leadConvertSchema = z.object({
+  businessPartyId: z.string().trim().min(1).optional().nullable(),
+  createNewParty: z.boolean().default(false),
   createOpportunity: z.boolean().default(true),
   opportunityName: z.string().trim().max(240).optional().nullable(),
   estimatedValue: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
@@ -42,6 +47,17 @@ export const opportunityCreateSchema = z.object({
   expectedCloseDate: z.coerce.date().optional().nullable(),
   source: z.string().trim().max(120).optional().nullable(),
   notes: z.string().trim().max(4000).optional().nullable(),
+  nextAction: z.string().trim().max(500).optional().nullable(),
+  nextActionAt: z.coerce.date().optional().nullable(),
+});
+
+export const opportunityTransitionSchema = z.object({
+  targetStatus: z.enum(["QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST", "CLOSED"]),
+  probabilityPercent: z.coerce.number().int().min(0).max(100).optional(),
+  nextAction: z.string().trim().max(500).optional().nullable(),
+  nextActionAt: z.coerce.date().optional().nullable(),
+  lostReason: z.string().trim().min(2).max(1000).optional().nullable(),
+  revision: z.coerce.number().int().positive(),
 });
 
 export const quoteItemSchema = z.object({
@@ -92,6 +108,10 @@ export const contractCreateSchema = z.object({
   approverUserId: z.string().trim().min(1).optional().nullable(),
 });
 
+export const contractUpdateSchema = contractCreateSchema.partial().extend({
+  revision: z.coerce.number().int().positive(),
+});
+
 export const fulfillmentItemSchema = z.object({
   salesOrderItemId: z.string().trim().min(1),
   quantityFulfilled: z.coerce.number().positive().max(1_000_000),
@@ -108,4 +128,13 @@ export const fulfillmentCreateSchema = z.object({
   notes: z.string().trim().max(4000).optional().nullable(),
   revision: z.coerce.number().int().positive(),
   items: z.array(fulfillmentItemSchema).min(1).max(200),
+});
+
+
+export const contractTransitionSchema = z.object({
+  action: z.enum(["SUBMIT", "APPROVE", "REJECT", "ACTIVATE", "SUSPEND", "RENEW", "TERMINATE", "ARCHIVE"]),
+  approverUserId: z.string().trim().min(1).optional().nullable(),
+  reason: z.string().trim().min(2).max(2000).optional().nullable(),
+  renewedEndDate: z.coerce.date().optional().nullable(),
+  revision: z.coerce.number().int().positive(),
 });

@@ -4,11 +4,28 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { leadConvertSchema } from "@/lib/enterprise/crm-sales/schemas";
-import { convertEnterpriseLead } from "@/lib/enterprise/crm-sales/service";
+import { convertEnterpriseLead, listEnterpriseLeadDuplicateCandidates } from "@/lib/enterprise/crm-sales/service";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string; leadId: string }> };
+
+
+export async function GET(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { organizationId, leadId } = await params;
+  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CRM_PIPELINE", action: "read" });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const preview = await listEnterpriseLeadDuplicateCandidates(organizationId, leadId);
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads", action: "conversion-preview" } });
+    return NextResponse.json(preview);
+  } catch (error) {
+    return enterpriseDomainErrorResponse(error, "LEAD_CONVERSION_PREVIEW_FAILED");
+  }
+}
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();

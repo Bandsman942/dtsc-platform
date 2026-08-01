@@ -13,9 +13,12 @@ model EnterpriseLead {
   status                String                  @default("NEW")
   ownerUserId           String?
   departmentId          String?
+  businessPartyId       String?
   expectedValue         Decimal?                @db.Decimal(18, 2)
   currency              String?
   notes                 String?
+  nextAction            String?
+  nextActionAt          DateTime?
   convertedPartyId      String?
   convertedOpportunityId String?
   lostReason            String?
@@ -30,6 +33,7 @@ model EnterpriseLead {
   lostAt                DateTime?
   archivedAt            DateTime?
   convertedOpportunity  EnterpriseOpportunity?  @relation("EnterpriseLeadConvertedOpportunity", fields: [organizationId, convertedOpportunityId], references: [organizationId, id], onDelete: SetNull)
+  businessParty         EnterpriseBusinessParty?  @relation(fields: [organizationId, businessPartyId], references: [organizationId, id], onDelete: SetNull)
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -38,6 +42,7 @@ model EnterpriseLead {
   @@index([organizationId, ownerUserId, status])
   @@index([organizationId, normalizedName, status])
   @@index([organizationId, convertedPartyId])
+  @@index([organizationId, businessPartyId, status])
   @@index([archivedAt])
 }
 
@@ -57,6 +62,8 @@ model EnterpriseOpportunity {
   probabilityPercent    Int                  @default(0)
   expectedCloseDate     DateTime?
   source                String?
+  nextAction            String?
+  nextActionAt          DateTime?
   wonAt                 DateTime?
   lostAt                DateTime?
   lostReason            String?

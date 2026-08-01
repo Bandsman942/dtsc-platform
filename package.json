@@ -2,7 +2,9 @@
   "name": "dtsc-platform",
   "version": "1.0.0",
   "private": true,
-  "prisma": { "schema": "./prisma" },
+  "prisma": {
+    "schema": "./prisma"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -55,7 +57,7 @@
     "qa:erp-final-security": "node scripts/qa-erp-final-security-checks.mjs",
     "qa:erp-clean-install": "node scripts/qa-erp-clean-install-checks.mjs",
     "qa:erp-production-readiness": "node scripts/qa-erp-production-readiness-checks.mjs",
-    "qa:regression": "node scripts/qa-enterprise-module-registry-checks.mjs && node scripts/qa-erp-module-experience-checks.mjs && node scripts/qa-enterprise-master-data-checks.mjs && node scripts/qa-enterprise-crm-sales-checks.mjs && node scripts/qa-enterprise-inventory-checks.mjs && node scripts/qa-enterprise-hr-payroll-checks.mjs && node scripts/qa-enterprise-projects-assets-checks.mjs && node scripts/qa-erp-commercial-readiness-checks.mjs && node scripts/qa-enterprise-identity-consent-checks.mjs && node scripts/qa-erp-i18n-checks.mjs && node scripts/qa-enterprise-accounting-checks.mjs && node scripts/qa-enterprise-receivables-checks.mjs && node scripts/qa-enterprise-payables-checks.mjs && node scripts/qa-enterprise-treasury-checks.mjs && node scripts/qa-enterprise-financial-close-checks.mjs && node scripts/qa-enterprise-financial-statements-checks.mjs && node scripts/qa-pharmacy-core-convergence-checks.mjs && node scripts/qa-pharmacy-financial-convergence-checks.mjs && node scripts/qa-health-core-convergence-checks.mjs && node scripts/qa-health-financial-convergence-checks.mjs && node scripts/qa-sector-data-confidentiality-checks.mjs && node scripts/qa-sector-cutover-checks.mjs && node scripts/qa-erp-final-cutover-checks.mjs && node scripts/qa-erp-legacy-readonly-checks.mjs && node scripts/qa-erp-deprecated-routes-checks.mjs && node scripts/qa-erp-single-source-of-truth-checks.mjs && node scripts/qa-erp-final-security-checks.mjs && node scripts/qa-erp-clean-install-checks.mjs && node scripts/qa-erp-production-readiness-checks.mjs && node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs && node scripts/qa-responsive-ui-contract-checks.mjs && node scripts/qa-standard-experience-checks.mjs && node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs && node scripts/qa-mobile-ios-checks.mjs && node scripts/qa-work-schedule-checks.mjs && node scripts/qa-work-prestations-checks.mjs && node scripts/qa-payroll-work-integration-checks.mjs && node scripts/qa-payroll-hotfix-checks.mjs && node scripts/qa-enterprise-core-v2-checks.mjs && node scripts/qa-enterprise-core-v2-sprint7-checks.mjs && node scripts/qa-enterprise-finance-reports-checks.mjs && node scripts/qa-enterprise-workflow-engine-checks.mjs && node scripts/qa-collaboration-experience-checks.mjs && node scripts/qa-assistant-ux-checks.mjs",
+    "qa:regression": "node scripts/qa-enterprise-module-registry-checks.mjs && node scripts/qa-erp-module-experience-checks.mjs && node scripts/qa-enterprise-master-data-checks.mjs && node scripts/qa-enterprise-crm-sales-checks.mjs && node scripts/qa-enterprise-inventory-checks.mjs && node scripts/qa-enterprise-hr-payroll-checks.mjs && node scripts/qa-enterprise-projects-assets-checks.mjs && node scripts/qa-erp-commercial-readiness-checks.mjs && node scripts/qa-enterprise-identity-consent-checks.mjs && node scripts/qa-erp-i18n-checks.mjs && node scripts/qa-enterprise-accounting-checks.mjs && node scripts/qa-enterprise-receivables-checks.mjs && node scripts/qa-enterprise-payables-checks.mjs && node scripts/qa-enterprise-treasury-checks.mjs && node scripts/qa-enterprise-financial-close-checks.mjs && node scripts/qa-enterprise-financial-statements-checks.mjs && node scripts/qa-pharmacy-core-convergence-checks.mjs && node scripts/qa-pharmacy-financial-convergence-checks.mjs && node scripts/qa-health-core-convergence-checks.mjs && node scripts/qa-health-financial-convergence-checks.mjs && node scripts/qa-sector-data-confidentiality-checks.mjs && node scripts/qa-sector-cutover-checks.mjs && node scripts/qa-erp-final-cutover-checks.mjs && node scripts/qa-erp-legacy-readonly-checks.mjs && node scripts/qa-erp-deprecated-routes-checks.mjs && node scripts/qa-erp-single-source-of-truth-checks.mjs && node scripts/qa-erp-final-security-checks.mjs && node scripts/qa-erp-clean-install-checks.mjs && node scripts/qa-erp-production-readiness-checks.mjs && node scripts/qa-regression-checks.mjs && node scripts/qa-workspace-ui-checks.mjs && node scripts/qa-workspace-generalization-checks.mjs && node scripts/qa-responsive-ui-contract-checks.mjs && node scripts/qa-standard-experience-checks.mjs && node scripts/qa-session-background-push-checks.mjs && node scripts/qa-session-idle-renewal-checks.mjs && node scripts/qa-mobile-ios-checks.mjs && node scripts/qa-work-schedule-checks.mjs && node scripts/qa-work-prestations-checks.mjs && node scripts/qa-payroll-work-integration-checks.mjs && node scripts/qa-payroll-hotfix-checks.mjs && node scripts/qa-enterprise-core-v2-checks.mjs && node scripts/qa-enterprise-core-v2-sprint7-checks.mjs && node scripts/qa-enterprise-finance-reports-checks.mjs && node scripts/qa-enterprise-workflow-engine-checks.mjs && node scripts/qa-collaboration-experience-checks.mjs && node scripts/qa-assistant-ux-checks.mjs && node scripts/qa-erp-professional-master-data-checks.mjs && node scripts/qa-erp-professional-crm-checks.mjs && node scripts/qa-erp-professional-contracts-checks.mjs && node scripts/qa-enterprise-identity-form-integration-checks.mjs && node scripts/qa-enterprise-identity-access-checks.mjs && node scripts/qa-enterprise-identity-expiration-checks.mjs && node scripts/qa-erp-commercial-packaging-checks.mjs && node scripts/qa-erp-french-language-checks.mjs && node scripts/qa-erp-professional-mobile-checks.mjs && node scripts/qa-erp-deep-links-checks.mjs && node scripts/qa-erp-authenticated-browser-checks.mjs",
     "qa:workspace": "node scripts/qa-workspace-ui-checks.mjs",
     "qa:workspace:generalization": "node scripts/qa-workspace-generalization-checks.mjs",
     "qa:responsive-ui": "node scripts/qa-responsive-ui-contract-checks.mjs",
@@ -71,7 +73,19 @@
     "qa:enterprise-finance-reports": "node scripts/qa-enterprise-finance-reports-checks.mjs",
     "qa:enterprise-workflows": "node scripts/qa-enterprise-workflow-engine-checks.mjs",
     "qa:collaboration-experience": "node scripts/qa-collaboration-experience-checks.mjs",
-    "qa:assistant-ux": "node scripts/qa-assistant-ux-checks.mjs"
+    "qa:assistant-ux": "node scripts/qa-assistant-ux-checks.mjs",
+    "qa:erp-professional-master-data": "node scripts/qa-erp-professional-master-data-checks.mjs",
+    "qa:erp-professional-crm": "node scripts/qa-erp-professional-crm-checks.mjs",
+    "qa:erp-professional-contracts": "node scripts/qa-erp-professional-contracts-checks.mjs",
+    "qa:enterprise-identity-form-integration": "node scripts/qa-enterprise-identity-form-integration-checks.mjs",
+    "qa:enterprise-identity-access": "node scripts/qa-enterprise-identity-access-checks.mjs",
+    "qa:enterprise-identity-expiration": "node scripts/qa-enterprise-identity-expiration-checks.mjs",
+    "qa:erp-commercial-packaging": "node scripts/qa-erp-commercial-packaging-checks.mjs",
+    "qa:erp-french-language": "node scripts/qa-erp-french-language-checks.mjs",
+    "qa:erp-professional-mobile": "node scripts/qa-erp-professional-mobile-checks.mjs",
+    "qa:erp-deep-links": "node scripts/qa-erp-deep-links-checks.mjs",
+    "e2e:erp-professional": "playwright test tests/e2e/erp-identity-professional.spec.mjs",
+    "qa:erp-authenticated-browser": "node scripts/qa-erp-authenticated-browser-checks.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
@@ -107,7 +121,8 @@
     "eslint-config-next": "15.3.6",
     "prisma": "^6.16.2",
     "tailwindcss": "^4.1.5",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@playwright/test": "^1.54.2"
   },
   "packageManager": "pnpm@10.6.2+sha512.47870716bea1572b53df34ad8647b42962bc790ce2bf4560ba0f643237d7302a3d6a8ecef9e4bdfc01d23af1969aa90485d4cebb0b9638fa5ef1daef656f6c1b"
 }

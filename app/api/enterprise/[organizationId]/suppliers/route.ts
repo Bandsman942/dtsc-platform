@@ -34,13 +34,25 @@ export async function GET(req: Request, { params }: Params) {
     ...(country ? { country: { contains: country, mode: "insensitive" } } : {}),
   };
   const recentSince = new Date(Date.now() - 30 * 86400000);
-  const [items, total, active, suspended, recent] = await Promise.all([
+  const [rawItems, total, active, suspended, recent] = await Promise.all([
     prisma.enterpriseSupplier.findMany({ where, orderBy: { legalName: "asc" }, skip: (page - 1) * pageSize, take: pageSize, include: { contacts: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }], take: 3 }, _count: { select: { purchases: true } } } }),
     prisma.enterpriseSupplier.count({ where }),
     prisma.enterpriseSupplier.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
     prisma.enterpriseSupplier.count({ where: { organizationId, archivedAt: null, status: "SUSPENDED" } }),
     prisma.enterpriseSupplier.count({ where: { organizationId, archivedAt: null, createdAt: { gte: recentSince } } }),
   ]);
+  const supplierIds = rawItems.map((item) => item.id);
+  const contactIds = rawItems.flatMap((item) => item.contacts.map((contact) => contact.id));
+  const references = supplierIds.length || contactIds.length ? await prisma.enterprisePersonBusinessReference.findMany({
+    where: { organizationId, OR: [
+      ...(supplierIds.length ? [{ supplierId: { in: supplierIds } }] : []),
+      ...(contactIds.length ? [{ supplierContactId: { in: contactIds } }] : []),
+    ] },
+    include: { identityLinks: { orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true } } },
+  }) : [];
+  const supplierLink = new Map(references.filter((reference) => reference.supplierId).map((reference) => [reference.supplierId as string, reference.identityLinks[0] || null]));
+  const contactLink = new Map(references.filter((reference) => reference.supplierContactId).map((reference) => [reference.supplierContactId as string, reference.identityLinks[0] || null]));
+  const items = rawItems.map((item) => ({ ...item, identityLink: supplierLink.get(item.id) || null, contacts: item.contacts.map((contact) => ({ ...contact, identityLink: contactLink.get(contact.id) || null })) }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "suppliers", page } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, suspended, recent }, canManage: access.canManage });
 }

@@ -6,6 +6,7 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { opportunityCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { createEnterpriseOpportunity } from "@/lib/enterprise/crm-sales/service";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -32,7 +33,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
     ...(ownerUserId ? { ownerUserId } : {}),
   };
-  const [items, total, open, proposal, won, lost] = await Promise.all([
+  const [rawItems, total, open, proposal, won, lost] = await Promise.all([
     prisma.enterpriseOpportunity.findMany({ where, orderBy: [{ expectedCloseDate: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { quotes: { select: { id: true, reference: true, status: true, totalAmount: true, currency: true }, orderBy: { createdAt: "desc" }, take: 3 } } }),
     prisma.enterpriseOpportunity.count({ where }),
     prisma.enterpriseOpportunity.count({ where: { organizationId, archivedAt: null, status: { in: ["OPEN", "QUALIFIED", "PROPOSAL", "NEGOTIATION"] } } }),
@@ -40,6 +41,9 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseOpportunity.count({ where: { organizationId, archivedAt: null, status: "WON" } }),
     prisma.enterpriseOpportunity.count({ where: { organizationId, archivedAt: null, status: "LOST" } }),
   ]);
+  const parties = await prisma.enterpriseBusinessParty.findMany({ where: { organizationId, id: { in: [...new Set(rawItems.map((item) => item.businessPartyId))] } }, select: { id: true, code: true, legalName: true, displayName: true } });
+  const partyById = new Map(parties.map((party) => [party.id, party]));
+  const items = rawItems.map((item) => ({ ...item, businessParty: partyById.get(item.businessPartyId) || null }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "opportunities", page } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { open, proposal, won, lost }, canManage: access.canManage });
 }
@@ -58,6 +62,9 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Opportunité invalide." }, { status: 400 });
   try {
     const opportunity = await createEnterpriseOpportunity(organizationId, session.userId, parsed.data);
+    if (parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId) {
+      await notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouvelle opportunité affectée", body: opportunity.name, targetUrl: `/enterprise-modules/CRM_PIPELINE?opportunity=${encodeURIComponent(opportunity.id)}&section=next-action`, idempotencyKey: `opportunity-assigned:${opportunity.id}` });
+    }
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_OPPORTUNITY_CREATED", entity: "EnterpriseOpportunity", entityId: opportunity.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "opportunities" } });
     return NextResponse.json({ ok: true, opportunity }, { status: 201 });

@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { catalogItemCreateSchema } from "@/lib/enterprise/master-data/schemas";
-import { createEnterpriseCatalogItem } from "@/lib/enterprise/master-data/service";
+import { catalogItemCreateSchema, catalogItemUpdateSchema } from "@/lib/enterprise/master-data/schemas";
+import { createEnterpriseCatalogItem, updateEnterpriseCatalogItem } from "@/lib/enterprise/master-data/service";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
   };
   const [items, total, products, services, tracked, units, categories] = await Promise.all([
-    prisma.enterpriseCatalogItem.findMany({ where, orderBy: [{ name: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: { select: { id: true, code: true, name: true } }, unitOfMeasure: { select: { id: true, code: true, name: true, symbol: true } } } }),
+    prisma.enterpriseCatalogItem.findMany({ where, orderBy: [{ name: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: { select: { id: true, code: true, name: true } }, unitOfMeasure: { select: { id: true, code: true, name: true, symbol: true } }, prices: { where: { archivedAt: null }, orderBy: { effectiveFrom: "desc" }, take: 8 } } }),
     prisma.enterpriseCatalogItem.count({ where }),
     prisma.enterpriseCatalogItem.count({ where: { organizationId, archivedAt: null, itemType: "PRODUCT", status: "ACTIVE" } }),
     prisma.enterpriseCatalogItem.count({ where: { organizationId, archivedAt: null, itemType: "SERVICE", status: "ACTIVE" } }),
@@ -66,5 +66,30 @@ export async function POST(req: Request, { params }: Params) {
   } catch (error) {
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
     return NextResponse.json({ error: duplicate ? "CATALOG_ITEM_DUPLICATE" : "CATALOG_ITEM_CREATE_FAILED", message: duplicate ? "Un article possédant ce code ou ce SKU existe déjà." : "Création de l’article impossible." }, { status: duplicate ? 409 : 400 });
+  }
+}
+
+
+export async function PATCH(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { organizationId } = await params;
+  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "CATALOG", action: "write" });
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const raw = await req.json().catch(() => null) as (Record<string, unknown> & { itemId?: string }) | null;
+  const entityId = typeof raw?.itemId === "string" ? raw.itemId : "";
+  const parsed = catalogItemUpdateSchema.safeParse(raw);
+  if (!entityId || !parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.success ? "Référence manquante." : parsed.error.issues[0]?.message || "Article invalide." }, { status: 400 });
+  try {
+    const entity = await updateEnterpriseCatalogItem(organizationId, entityId, session.userId, parsed.data);
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_CATALOG_ITEM_UPDATED", entity: "EnterpriseCatalogItem", entityId, request: req, metadata: { organizationId } });
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
+    return NextResponse.json({ ok: true, entity });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "UPDATE_FAILED";
+    const conflict = message === "REVISION_CONFLICT";
+    return NextResponse.json({ error: message, message: conflict ? "L’élément a été modifié par un autre utilisateur. Actualisez avant de réessayer." : "Modification impossible." }, { status: conflict ? 409 : 400 });
   }
 }

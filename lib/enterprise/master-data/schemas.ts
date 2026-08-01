@@ -71,3 +71,59 @@ export const warehouseCreateSchema = z.object({
   warehouseType: z.string().trim().min(2).max(80).default("GENERAL"),
   managerUserId: z.string().trim().min(1).optional().nullable(),
 });
+
+export const catalogCategoryCreateSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  code: z.string().trim().toUpperCase().min(2).max(40).regex(/^[A-Z0-9_-]+$/).optional(),
+  parentCategoryId: z.string().trim().min(1).optional().nullable(),
+  description: z.string().trim().max(1000).optional().nullable(),
+  sortOrder: z.coerce.number().int().min(0).max(10000).default(0),
+});
+
+export const unitOfMeasureCreateSchema = z.object({
+  code: z.string().trim().toUpperCase().min(1).max(30).regex(/^[A-Z0-9_-]+$/),
+  name: z.string().trim().min(2).max(120),
+  symbol: z.string().trim().max(20).optional().nullable(),
+  category: z.string().trim().toUpperCase().min(2).max(50).default("GENERAL"),
+  decimalScale: z.coerce.number().int().min(0).max(6).default(3),
+});
+
+export const storageLocationCreateSchema = z.object({
+  warehouseId: z.string().trim().min(1),
+  parentLocationId: z.string().trim().min(1).optional().nullable(),
+  name: z.string().trim().min(2).max(160),
+  code: z.string().trim().toUpperCase().min(1).max(60).regex(/^[A-Z0-9_-]+$/).optional(),
+  locationType: z.string().trim().toUpperCase().min(2).max(60).default("STORAGE"),
+  barcode: z.string().trim().max(120).optional().nullable(),
+  capacityValue: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
+  capacityUnit: z.string().trim().max(40).optional().nullable(),
+});
+
+export const businessPartyUpdateSchema = z.object({
+  displayName: z.string().trim().max(240).optional().nullable(),
+  primaryEmail: z.string().trim().email().max(200).optional().nullable(),
+  primaryPhone: z.string().trim().max(80).optional().nullable(),
+  notes: optionalText,
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  revision: z.coerce.number().int().positive(),
+});
+
+export const catalogItemUpdateSchema = catalogItemCreateSchema.partial().extend({
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  revision: z.coerce.number().int().positive(),
+});
+
+export const siteUpdateSchema = siteCreateSchema.partial().extend({
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  revision: z.coerce.number().int().positive(),
+});
+
+export const warehouseUpdateSchema = warehouseCreateSchema.omit({ siteId: true }).partial().extend({
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  revision: z.coerce.number().int().positive(),
+});
+
+export const storageLocationUpdateSchema = storageLocationCreateSchema.omit({ warehouseId: true }).partial().extend({
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  revision: z.coerce.number().int().positive(),
+});

@@ -29,7 +29,7 @@ type DatabaseClient = Prisma.TransactionClient | typeof prisma;
 
 type BusinessTarget = Pick<
   EnterpriseIdentityInvitationInput,
-  "businessPartyId" | "businessPartyContactId" | "employeeId" | "displayName" | "relationType" | "roleCode"
+  "businessPartyId" | "businessPartyContactId" | "employeeId" | "supplierId" | "supplierContactId" | "displayName" | "relationType" | "roleCode"
 >;
 
 export class EnterpriseIdentityLinkError extends Error {
@@ -85,6 +85,49 @@ async function validateBusinessTarget(
   organizationId: string,
   target: BusinessTarget,
 ) {
+  if (target.supplierContactId) {
+    const contact = await db.enterpriseSupplierContact.findFirst({
+      where: { id: target.supplierContactId, organizationId },
+      select: { id: true, name: true, email: true, phone: true, supplier: { select: { id: true, legalName: true, displayName: true } } },
+    });
+    if (!contact) {
+      throw new EnterpriseIdentityLinkError("BUSINESS_TARGET_NOT_FOUND", "Le contact fournisseur sélectionné est introuvable dans cette entreprise.", 404);
+    }
+    return {
+      displayName: target.displayName || contact.name,
+      primaryEmail: contact.email,
+      primaryPhone: contact.phone,
+      businessPartyId: null,
+      businessPartyContactId: null,
+      employeeId: null,
+      supplierId: null,
+      supplierContactId: contact.id,
+    };
+  }
+
+  if (target.supplierId) {
+    const supplier = await db.enterpriseSupplier.findFirst({
+      where: { id: target.supplierId, organizationId, archivedAt: null },
+      select: { id: true, legalName: true, displayName: true, email: true, phone: true, supplierType: true },
+    });
+    if (!supplier) {
+      throw new EnterpriseIdentityLinkError("BUSINESS_TARGET_NOT_FOUND", "La fiche fournisseur sélectionnée est introuvable dans cette entreprise.", 404);
+    }
+    if (target.relationType === "SUPPLIER_REPRESENTATIVE" && supplier.supplierType !== "PERSON") {
+      throw new EnterpriseIdentityLinkError("SUPPLIER_REPRESENTATIVE_REQUIRES_PERSON", "Sélectionnez un contact du fournisseur personne morale, et non l’organisation elle-même.", 400);
+    }
+    return {
+      displayName: target.displayName || supplier.displayName || supplier.legalName,
+      primaryEmail: supplier.email,
+      primaryPhone: supplier.phone,
+      businessPartyId: null,
+      businessPartyContactId: null,
+      employeeId: null,
+      supplierId: supplier.id,
+      supplierContactId: null,
+    };
+  }
+
   if (target.employeeId) {
     const employee = await db.enterpriseEmployee.findFirst({
       where: { id: target.employeeId, organizationId, archivedAt: null },
@@ -104,6 +147,8 @@ async function validateBusinessTarget(
       businessPartyId: null,
       businessPartyContactId: null,
       employeeId: employee.id,
+      supplierId: null,
+      supplierContactId: null,
     };
   }
 
@@ -136,6 +181,8 @@ async function validateBusinessTarget(
       businessPartyId: null,
       businessPartyContactId: contact.id,
       employeeId: null,
+      supplierId: null,
+      supplierContactId: null,
     };
   }
 
@@ -172,6 +219,8 @@ async function validateBusinessTarget(
       businessPartyId: businessParty.id,
       businessPartyContactId: null,
       employeeId: null,
+      supplierId: null,
+      supplierContactId: null,
     };
   }
 
@@ -197,6 +246,8 @@ async function findBusinessReference(
         ...(target.businessPartyId ? [{ businessPartyId: target.businessPartyId }] : []),
         ...(target.businessPartyContactId ? [{ businessPartyContactId: target.businessPartyContactId }] : []),
         ...(target.employeeId ? [{ employeeId: target.employeeId }] : []),
+        ...(target.supplierId ? [{ supplierId: target.supplierId }] : []),
+        ...(target.supplierContactId ? [{ supplierContactId: target.supplierContactId }] : []),
       ],
     },
   });
@@ -240,6 +291,8 @@ async function ensurePersonIdentityForTarget(
       businessPartyId: validated.businessPartyId,
       businessPartyContactId: validated.businessPartyContactId,
       employeeId: validated.employeeId,
+      supplierId: validated.supplierId,
+      supplierContactId: validated.supplierContactId,
       relationType: target.relationType,
       roleCode: target.roleCode,
       createdByUserId: actorUserId,
@@ -272,6 +325,8 @@ async function attachBusinessReferenceToIdentity(
         businessPartyId: validated.businessPartyId,
         businessPartyContactId: validated.businessPartyContactId,
         employeeId: validated.employeeId,
+        supplierId: validated.supplierId,
+        supplierContactId: validated.supplierContactId,
         relationType: target.relationType,
         roleCode: target.roleCode,
         createdByUserId: actorUserId,
@@ -950,6 +1005,8 @@ export async function listOrganizationIdentityLinks(organizationId: string) {
         businessPartyId: true,
         businessPartyContactId: true,
         employeeId: true,
+        supplierId: true,
+        supplierContactId: true,
       },
     }),
   ]);

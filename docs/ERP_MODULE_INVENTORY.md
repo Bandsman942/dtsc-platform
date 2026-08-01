@@ -56,3 +56,7 @@ Pharmacy conserve lots, FEFO, péremption, rappels, qualité, pharmacovigilance 
 - `EnterpriseWorkflow` : `LEGACY_READ_ONLY` ; Workflow Engine v2 actif.
 - Modules fantômes : aucun code sans modèle/service, route, workspace, permission, entitlement et QA ne peut rester `ACTIVE`.
 - Secteurs futurs : `PLANNED` ou `HIDDEN`, jamais carte ou route active.
+
+## Mise à jour — Itération 2/6 (2026-08-01)
+
+`CRM_CUSTOMERS`, `CATALOG`, `SITES_WAREHOUSES`, `CRM_PIPELINE` et `CONTRACTS` ne dépendent plus du workspace générique comme expérience principale. `HUMAN_RESOURCES` et `SUPPLIERS_PURCHASES` reçoivent uniquement l’intégration d’identité transversale ; leur maturité commerciale globale n’est pas automatiquement promue.

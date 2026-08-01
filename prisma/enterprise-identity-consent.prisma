@@ -26,6 +26,8 @@ model EnterprisePersonBusinessReference {
   businessPartyId        String?
   businessPartyContactId String?
   employeeId             String?
+  supplierId             String?
+  supplierContactId      String?
   relationType           String
   roleCode               String?
   status                 String   @default("ACTIVE")
@@ -40,11 +42,15 @@ model EnterprisePersonBusinessReference {
   @@unique([organizationId, businessPartyId, relationType], map: "EnterprisePersonBusinessReference_org_party_relation_key")
   @@unique([organizationId, businessPartyContactId, relationType], map: "EnterprisePersonBusinessReference_org_contact_relation_key")
   @@unique([organizationId, employeeId, relationType], map: "EnterprisePersonBusinessReference_org_employee_relation_key")
+  @@unique([organizationId, supplierId, relationType], map: "EnterprisePersonBusinessReference_org_supplier_relation_key")
+  @@unique([organizationId, supplierContactId, relationType], map: "EnterprisePersonBusinessReference_org_supplier_contact_relation_key")
   @@index([organizationId, personIdentityId, status], map: "EnterprisePersonBusinessReference_org_person_status_idx")
   @@index([organizationId, relationType, status], map: "EnterprisePersonBusinessReference_org_type_status_idx")
   @@index([organizationId, businessPartyId], map: "EnterprisePersonBusinessReference_org_party_idx")
   @@index([organizationId, businessPartyContactId], map: "EnterprisePersonBusinessReference_org_contact_idx")
   @@index([organizationId, employeeId], map: "EnterprisePersonBusinessReference_org_employee_idx")
+  @@index([organizationId, supplierId], map: "EnterprisePersonBusinessReference_org_supplier_idx")
+  @@index([organizationId, supplierContactId], map: "EnterprisePersonBusinessReference_org_supplier_contact_idx")
   @@index([archivedAt], map: "EnterprisePersonBusinessReference_archivedAt_idx")
 }
 

@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: Params) {
       ],
     } : {}),
   };
-  const [items, total, active, withoutContract] = await Promise.all([
+  const [rawItems, total, active, withoutContract] = await Promise.all([
     prisma.enterpriseEmployee.findMany({
       where,
       orderBy: [{ employmentStatus: "asc" }, { displayName: "asc" }],
@@ -53,6 +53,12 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseEmployee.count({ where: { organizationId, archivedAt: null, employmentStatus: "ACTIVE" } }),
     prisma.enterpriseEmployee.count({ where: { organizationId, archivedAt: null, employmentStatus: "ACTIVE", contracts: { none: { status: "ACTIVE", archivedAt: null } } } }),
   ]);
+  const references = rawItems.length ? await prisma.enterprisePersonBusinessReference.findMany({
+    where: { organizationId, employeeId: { in: rawItems.map((item) => item.id) } },
+    include: { identityLinks: { orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true } } },
+  }) : [];
+  const linkByEmployee = new Map(references.filter((reference) => reference.employeeId).map((reference) => [reference.employeeId as string, reference.identityLinks[0] || null]));
+  const items = rawItems.map((item) => ({ ...item, identityLink: linkByEmployee.get(item.id) || null }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employees", page } });
   return NextResponse.json({
     items,

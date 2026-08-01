@@ -6,6 +6,7 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { leadCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { createEnterpriseLead } from "@/lib/enterprise/crm-sales/service";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -33,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(ownerUserId ? { ownerUserId } : {}),
   };
   const [items, total, fresh, qualified, converted, lost] = await Promise.all([
-    prisma.enterpriseLead.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.enterpriseLead.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { businessParty: { select: { id: true, code: true, legalName: true, displayName: true, partyType: true } } } }),
     prisma.enterpriseLead.count({ where }),
     prisma.enterpriseLead.count({ where: { organizationId, archivedAt: null, status: "NEW" } }),
     prisma.enterpriseLead.count({ where: { organizationId, archivedAt: null, status: "QUALIFIED" } }),
@@ -58,6 +59,9 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Lead invalide." }, { status: 400 });
   try {
     const lead = await createEnterpriseLead(organizationId, session.userId, parsed.data);
+    if (parsed.data.ownerUserId && parsed.data.ownerUserId !== session.userId) {
+      await notifyUser({ userId: parsed.data.ownerUserId, organizationId, type: "ENTERPRISE_CRM", title: "Nouveau prospect affecté", body: lead.displayName || lead.legalName, targetUrl: `/enterprise-modules/CRM_PIPELINE?lead=${encodeURIComponent(lead.id)}&section=next-action`, idempotencyKey: `lead-assigned:${lead.id}` });
+    }
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_LEAD_CREATED", entity: "EnterpriseLead", entityId: lead.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "leads" } });
     return NextResponse.json({ ok: true, lead }, { status: 201 });
