@@ -2,473 +2,198 @@
 
 ## Projet
 
-Application Next.js App Router pour DTSC Platform, déployée sur Vercel avec Neon PostgreSQL, Prisma, TypeScript et OpenAI côté serveur.
+DTSC Platform est une application Next.js App Router, React, TypeScript, Prisma et PostgreSQL, déployée sur Vercel. Elle combine un tenant interne DTSC, des organisations clientes multi-tenant, un ERP commun, des extensions sectorielles Health/Pharmacy et des services collaboratifs.
 
-## Garde-fous obligatoires
+Ce fichier contient uniquement les règles durables automatiquement applicables. Les contrats détaillés vivent dans `docs/TECHNICAL_DOCUMENTATION.md`, `docs/ERP_FINAL_ARCHITECTURE.md`, `docs/ERP_FINAL_OPERATIONAL_RUNBOOK.md`, les documents de domaine et les checklists QA.
 
-- Avant tout commit ou push, vérifier le script de non-régression avec `pnpm qa:regression` quand `pnpm` est disponible. Si `pnpm` est absent, lancer directement `node scripts/qa-regression-checks.mjs` avec le Node disponible et signaler tout blocage.
-- Avant tout push, vérifier au minimum `git diff --check` et `git diff --cached --check`.
-- Sur Windows PowerShell, lire les routes dynamiques Next.js avec `-LiteralPath`, par exemple:
-  `Get-Content -LiteralPath app\api\support\tickets\[id]\route.ts`.
-- Ne pas utiliser `Array.includes(session.role)` avec un tableau typé étroit comme `[UserRole.ADMIN, UserRole.SUPPORT]`.
-  TypeScript infère alors `"ADMIN" | "SUPPORT"` et Vercel peut échouer si `session.role` est `UserRole`.
-  Préférer une fonction explicite:
-  `role === UserRole.ADMIN || role === UserRole.SUPPORT`.
-- Ne pas appeler `.partial()`, `.pick()`, `.omit()` ou `.extend()` sur un schéma Zod déjà raffiné avec `.refine()`/`.superRefine()` quand ce schéma est importé par les routes Next.js: Vercel peut échouer au build avec `.partial() cannot be used on object schemas containing refinements`.
-  Créer d'abord un schéma objet de base non raffiné, dériver les variantes create/update depuis cette base, puis appliquer les raffinements sur chaque variante finale.
-- Ne pas nommer une variable, un paramètre de callback ou une constante locale `module` dans les routes Next.js, helpers partagés ou composants TSX: `@next/next/no-assign-module-variable` fait échouer le build Vercel. Utiliser des noms explicites comme `enterpriseModule`, `templateModule` ou `moduleItem`.
-- Après modification de `prisma/schema.prisma`, ajouter une migration SQL dans `prisma/migrations/.../migration.sql`.
-- Les migrations Vercel sont exécutées par `pnpm prisma migrate deploy && pnpm build`.
-- Ne jamais exposer `OPENAI_API_KEY`, `AUTH_SECRET`, `DATABASE_URL` ou mots de passe dans du code client.
-- Toute route API mutante publique ou sensible doit avoir une protection d'origine, une validation Zod et, si elle peut être abusée, un rate limiting.
-- `rateLimit()` dans `lib/rate-limit.ts` est asynchrone: toujours l'appeler avec `await`.
-- Si `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` ne sont pas configurés, le rate limit retombe sur un fallback mémoire non suffisant pour forte charge.
-- Ne pas réactiver le bootstrap admin en production après création du compte initial: `DEFAULT_ADMIN_BOOTSTRAP_ENABLED` doit rester `false`.
-- Les headers de sécurité sont centralisés dans `next.config.ts`; toute nouvelle intégration externe nécessitant `connect-src` doit y être ajoutée explicitement.
-- Ne jamais commiter une URL de webhook contenant une clé secrète: utiliser une variable d'environnement comme `ZOHO_MAIL_WEBHOOK_URL`.
-- Les diffusions email doivent protéger les adresses: `to` doit cibler `DTSC_CONTACT_EMAIL`, les vrais destinataires doivent passer en `bcc`, et le contenu ne doit jamais afficher la liste des emails.
-- Les routes de diffusion admin ne doivent jamais renvoyer la liste complète des emails au client; renvoyer `recipientCount` et journaliser les causes dans `ApiLog`.
-- Les erreurs de diffusion admin doivent remonter un `message` exploitable côté UI au lieu d'un simple message générique.
-- Si un modèle de diffusion contient `{user}`, envoyer des mails personnalisés individuellement avec un seul destinataire en CCI par envoi; un mail groupé ne peut pas personnaliser le nom par destinataire.
-- Le payload Zoho Flow doit fournir des champs string compatibles Send Mail: `fromAddress`, `replyTo`, `toText`, `ccText`, `bccText`, `subject`, `bodyHtml`.
-- Quand les variables `ZOHO_MAIL_*` API sont configurées, privilégier l'API Zoho Mail directe avant les fallbacks Zoho Flow/webhook.
-- Les emails riches collés par l'admin doivent être nettoyés côté serveur avant envoi: retirer scripts, iframes, handlers `on*` et URLs `javascript:`.
-- Les modules Administration visibles par `MANAGER` et `SUPPORT` doivent passer par `AppSetting.adminRoleAccess`; `ADMIN` garde toujours tous les blocs.
-- Les permissions métier internes doivent utiliser le poste officiel `DtscPosition` relié au dossier `HrcfoEmployee`, pas un texte libre. Les codes `CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO` et `LA` sont centralisés dans `lib/business-roles.ts`.
-- `SCO` signifie Supply Chain Officer: achats, fournisseurs, stocks, inventaires, matériels, actifs et logistique. Ne pas l'assimiler au commercial; les droits SCO doivent dépendre du poste officiel `SCO` ou d'une implication explicite dans l'objet.
-- `MPO` signifie Management & Projects Officer: portefeuille projets, cadrage, cahiers de charges, livrables, risques et coordination numérique. Ne pas l'assimiler au marketing.
-- `LA` signifie Legal Advisor: dossiers juridiques, contrats, conventions, modèles, conformité, litiges, demandes juridiques et archivage confidentiel. Les documents `CEO_ONLY` ou `LA_CEO_ONLY` ne doivent être exposés qu'au poste LA, au CEO ou à un admin autorisé.
-- La section Administration `CEO` et ses routes doivent passer par `requireAdminBlockAccess("ceo")`, valider avec `ceoSchemas`, journaliser `ApiLog`/`AuditLog` et consommer les données HR & CFO, COO et SCO sans les dupliquer inutilement.
-- La Vue CEO consolidée doit conserver ses filtres `ceoStart`/`ceoEnd` dans l'URL et filtrer les métriques finance, RH, COO et SCO sans modifier les données source.
-- Les objectifs et supervisions CEO assignés doivent apparaître dans `/activities` pour les collaborateurs concernés. Les commentaires utilisent `CooComment` avec `CEO_OBJECTIVE` ou `CEO_SUPERVISION` et doivent vérifier l'accès côté serveur.
-- Les routes des sous-modules Administration HR & CFO et SCO doivent utiliser `requireAdminBlockAccess("hrCfo")` ou `requireAdminBlockAccess("sco")`, valider avec Zod, journaliser `ApiLog`/`AuditLog` et rester strictement internes.
-- Les routes Administration MPO et CTO doivent utiliser `requireAdminBlockAccess("mpo")` ou `requireAdminBlockAccess("cto")`, valider avec `mpoSchemas`/`ctoSchemas`, journaliser `ApiLog`/`AuditLog`, et notifier uniquement les collaborateurs impliqués ou postes critiques concernés.
-- Les routes Administration LA doivent utiliser `requireAdminBlockAccess("la")`, valider avec `laSchemas`, journaliser `ApiLog`/`AuditLog`, enrichir les collaborateurs/départements depuis les référentiels HR & CFO et notifier uniquement les postes LA/CEO ou collaborateurs impliqués.
-- Les règles financières HR & CFO critiques doivent rester côté serveur dans `lib/hr-cfo-finance.ts`: création de budget avec solde disponible, transaction d'entrée/sortie, consommation budgétaire, génération de facture, paie et transaction d'abonnement. Ne jamais se contenter d'une validation frontend pour les soldes, budgets, comptes ou paies.
-- Les statuts financiers impactants doivent rester centralisés dans `lib/hr-cfo-finance.ts`; `Brouillon` n'impacte jamais les comptes/budgets/KPIs, `Annulé` retire l'impact, et le libellé exact `capital de départ` augmente le compte sans entrer dans le chiffre d'affaires.
-- Les paiements d'abonnement confirmés doivent créer une transaction d'entrée idempotente sur le compte financier `Banque`, jamais sur un compte arbitraire côté client.
-- Le montant brut de paie doit provenir du dossier RH du collaborateur; le compte consommé vient du budget sélectionné. Le collaborateur ne doit voir dans `/activities` que ses propres paies et bulletins.
-- Les commentaires opérationnels transversaux (`CooComment`) et partages de workflows (`CooWorkflowShare`) doivent vérifier l'appartenance ou le rôle côté API avant lecture/écriture.
-- Les demandes collaboratives de `/activities` doivent utiliser `CollaboratorRequest`, rester visibles uniquement par le demandeur, le destinataire ou un admin autorisé, notifier le destinataire et rattacher les échanges à `CooComment` avec `entityType = COLLAB_REQUEST`.
-- Dans les demandes collaboratives, la demande initiale et la réponse doivent rester visuellement séparées; seul le collaborateur destinataire peut saisir une réponse ou faire avancer le statut métier côté UI et API, tandis que le demandeur peut annuler selon les règles existantes.
-- Les filtres de dates HR & CFO, SCO, COO et Activités DTSC doivent filtrer les listes et KPIs visibles sans modifier les données source.
-- Les collaborateurs HR & CFO doivent référencer des `User` non-`CLIENT`; ne jamais créer, modifier ou supprimer un compte utilisateur depuis le dossier collaborateur. Les départements et comptes financiers doivent passer par leurs référentiels dédiés.
-- Le modèle `HrcfoEmployee` utilise le champ texte `department` et la relation `departmentRef`; ne pas sélectionner un champ inexistant `departmentName` sur ce modèle. Avant d'ajouter un `select` Prisma sur HR & CFO, vérifier le nom exact dans `prisma/schema.prisma` ou réutiliser une projection existante.
-- Les champs opérationnels visibles comme `Responsable`, `Demandeur` ou `Assigné à` dans HR & CFO/SCO doivent être des combobox alimentées par les collaborateurs enregistrés, pas des champs texte libres.
-- Les lots pharmacie doivent utiliser `PharmacyBatch` et `PharmacyStockMovement`, rester isolés par `organizationId`, et toute future sortie/vente doit sélectionner uniquement les lots vendables via la logique FEFO sans contourner les statuts rappelé, quarantaine, bloqué ou expiré.
-- Les Activités pharmacie sont un espace collaborateur distinct de l'administration: filtrer par `organizationId`, demandeur, assignation et permissions; masquer les données financières ou sensibles sans autorisation et ne jamais donner un accès global par simple affichage UI.
-- Toute demande créée depuis les Activités pharmacie doit persister une `PharmacyActivityItem`, un événement traçable et, lorsqu'elle vise un module métier, l'objet PHARMACY réel associé. Une demande d'ajustement, de réapprovisionnement, d'incident ou un rapport caisse ne doit jamais contourner son workflow de validation serveur.
-- Les commentaires et documents associés aux Activités pharmacie doivent vérifier l'implication ou la permission côté API; les documents doivent provenir du référentiel autorisé de la même organisation et respecter leur confidentialité.
-- Les rapports pharmacie doivent agréger uniquement les tables métier réelles avec filtre `organizationId`; les montants financiers, ordonnances, incidents qualité et exports sensibles restent protégés côté API. Aucun graphique, KPI ou export visible ne doit utiliser de données fictives.
-- Les vues sauvegardées, exports et snapshots pharmacie utilisent `PharmacySavedReportView`, `PharmacyReportExport` et `PharmacyReportSnapshot`; aucun générateur de rapport ne doit accepter du SQL libre.
-- La caisse pharmacie doit utiliser `PharmacyCashSession`, `PharmacyPayment`, `PharmacyInvoice`, `PharmacyCashReceipt`, `PharmacyRefund` et `PharmacyCashDiscrepancy`, toujours filtrés par `organizationId`. Un paiement comptoir exige une session ouverte, une clôture recalcule ses totaux côté serveur, le caissier ne valide pas sa propre clôture et toute annulation/remboursement reste historisé.
-- Les demandes d'achat SCO doivent sélectionner le fournisseur retenu depuis les fournisseurs enregistrés; ne pas réintroduire un champ fournisseur libre pour cette décision.
-- Les stocks, inventaires, actifs et équipements SCO doivent pouvoir se rattacher au référentiel `MaterialItem` pour garder une traçabilité cohérente des biens matériels DTSC.
-- Les éléments SCO doivent conserver la traçabilité transversale (`sourceSection`, `sourceItemId`, `relatedBudgetId`, `relatedProjectId`, `relatedTechnicalProjectId`, `relatedTaskId`, `relatedMissionId`) sans dupliquer les budgets HR & CFO ni les tâches COO.
-- Les commentaires transversaux SCO/MPO/CTO/LA doivent utiliser `CooComment` avec contrôle d'accès côté serveur; les collaborateurs ne voient que les objets qui les concernent, sauf poste de supervision autorisé. Les commentaires LA doivent respecter le niveau de confidentialité du document ou dossier concerné.
-- Les routes et écrans COO doivent passer par `requireAdminBlockAccess("coo")`, `cooSchemas`, `AuditLog` et `ApiLog`; les tâches, opérations, réunions, workflows, blocages et rapports doivent rester reliés aux départements et collaborateurs référencés.
-- Les utilisateurs liés à `HrcfoEmployee.userId` doivent voir leurs activités internes dans `/activities`; ce module ne doit pas apparaître pour un utilisateur sans dossier collaborateur actif.
-- Les pièces justificatives opérationnelles HR & CFO/SCO/COO ne doivent pas être saisies en texte libre: utiliser un input fichier, valider taille/type/RBAC côté serveur, stocker dans Supabase Storage via service role et servir via une route privée.
-- Les formulaires Activités DTSC, Administration, LA, COO, SCO, MPO, CTO et RH & CFO ne doivent jamais demander un `Document joint`, `Justificatif`, `Pièce jointe`, `Fichier` ou `lien interne` via champ texte libre: utiliser un input fichier, téléverser via une route serveur privée, stocker uniquement l'URL interne contrôlée, puis proposer aperçu et téléchargement selon permissions.
-- Les factures et bulletins de paie doivent avoir des boutons UI explicites de téléchargement/impression; les données interpolées dans HTML/PDF doivent rester échappées.
-- Une transaction validée ne doit pas être supprimée ou modifiée par un raccourci CRUD générique sans logique de contrepassation documentée; préférer une annulation métier journalisée.
-- Le module Entreprise remplace la navigation Documents. `/documents` doit rester une redirection vers `/company` tant que des anciens liens existent.
-- Le contexte Entreprise du chatbot doit rester strictement isolé par `userId` et ne jamais mélanger les profils, activités ou documents de deux utilisateurs.
-- Toute création de champ Entreprise doit être reflétée dans `lib/company-context.ts`, les validateurs Zod, Prisma, la migration SQL, le dashboard et la documentation.
-- Les paiements MaishaPay doivent rester côté serveur: ne jamais exposer `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY` ni `MAISHAPAY_CALLBACK_SECRET` au client.
-- Le checkout MaishaPay payant doit exiger un `walletId`, mais le plan gratuit ne doit pas bloquer sur cette valeur.
-- Les callbacks paiement doivent être idempotents autant que possible et journalisés dans `WebhookEvent`, `ApiLog` et/ou `AuditLog`.
-- Les factures HTML/PDF doivent échapper les données utilisateur avant interpolation.
-- Les routes d'upload documentaire doivent vérifier la session, la limite du plan actif, la taille, le type MIME et ne jamais envoyer de fichier brut à un composant client.
-- Si les clés MaishaPay sont absentes, les plans payants doivent rester en maintenance explicite sans casser le plan gratuit.
-- Supabase Storage doit rester strictement serveur: ne jamais exposer `SUPABASE_STORAGE_SERVICE_ROLE_KEY` côté client.
-- L'extraction PDF doit rester côté serveur et respecter les limites de taille/type avant parsing.
-- Le RAG documentaire doit rester isolé par `userId`: un utilisateur ne doit jamais récupérer les chunks d'un autre utilisateur.
-- Si `pgvector` est utilisé, ajouter la migration `CREATE EXTENSION IF NOT EXISTS vector` et documenter le modèle d'embedding/dimension retenu.
-- Les actions admin doivent toujours vérifier la session côté serveur et le rôle `ADMIN`.
-- Les actions support de résolution de tickets doivent autoriser uniquement `ADMIN` et `SUPPORT`.
-- Les nouveaux modules privés doivent être ajoutés dans `middleware.ts` pour éviter l'accès sans session.
-- Pour les enums Prisma (`UserRole`, `UserStatus`), utiliser les valeurs importées depuis `@prisma/client` dans les requêtes Prisma plutôt que des chaînes libres.
-- Les graphiques admin doivent rester bornés dans leur conteneur: utiliser `overflow-hidden`/`overflow-x-auto`, une hauteur fixe et calculer les barres sur un maximum relatif.
-- Les composants serveur qui passent des données Prisma à un composant client doivent transmettre des objets JSON simples, pas des objets `Date` bruts.
-- Les props passées aux composants doivent être utilisées ou supprimées: `pnpm build` échoue sur `@typescript-eslint/no-unused-vars`.
-- Les handlers React ne doivent pas garder de paramètres inutilisés (`event`, `_`, etc.): ESLint Vercel échoue sur `@typescript-eslint/no-unused-vars`.
-- Les effets React doivent avoir des dépendances complètes ou des callbacks stabilisés avec `useCallback`; ne pas ignorer `react-hooks/exhaustive-deps` dans les composants client sensibles.
-- Dans les composants client, ne pas passer directement `body?.record` ou une propriété JSON optionnelle à une fonction typée dans un callback d'état React: TypeScript peut perdre le narrowing pendant `pnpm build`. Stocker d'abord la valeur dans une constante locale (`const savedRecord = body?.record`) puis tester cette constante.
-- Dans les routes et services Prisma, ne pas réutiliser directement une propriété Zod optionnelle après son contrôle dans un callback asynchrone ou `prisma.$transaction`: TypeScript peut perdre le narrowing pendant `pnpm build`. Stocker d'abord la valeur dans une constante locale (`const refundAmount = data.refundAmount`), vérifier cette constante, puis l'utiliser dans le callback.
-- Après parsing Zod d'un schéma contenant `z.union([z.literal(""), z.coerce.number()])`, ne jamais utiliser directement la valeur dans un calcul arithmétique ou une comparaison numérique: normaliser explicitement avec `Number(...)` après avoir écarté la chaîne vide. Pour les dates transformées par `z.coerce.date()`, ne pas les comparer à `""`.
-- Dans les callbacks UI (`onSelect`, `onClick`, menus `ActionMenu`, `window.open`, téléchargement), ne jamais réutiliser directement un champ nullable testé inline comme `record.href ? ... record.href ...`. Normaliser d'abord la valeur dans une constante locale strictement typée (`const attachmentHref = typeof record.href === "string" ? record.href : undefined`) puis utiliser cette constante dans le JSX et le callback.
-- Les objets de labels/enums partagés comme `lib/labels.ts` ne doivent jamais contenir deux fois la même clé: TypeScript échoue sur Vercel avec "An object literal cannot have multiple properties with the same name". Avant commit, inspecter les ajouts de labels pour fusionner les clés existantes au lieu de les répéter.
-- Les icônes Lucide n'acceptent pas la prop `title` dans leur type React. Pour une info-bulle native, placer l'icône dans un élément HTML portant `title` et `aria-label`, sans passer `title` directement à `CircleHelp` ou une autre icône Lucide.
-- Les limites d'usage chat doivent être validées côté API, pas uniquement côté UI.
-- Les réponses `429 DAILY_LIMIT_REACHED` de `/api/chat` doivent inclure un `usage.resetAt` ISO pour afficher l'heure exacte de réinitialisation côté UI.
-- Ne pas importer un module `"use client"` dans un composant serveur uniquement pour partager des constantes: extraire les constantes dans un fichier sans directive client.
-- Les confirmations, erreurs et messages importants doivent passer par une boîte de dialogue applicative, pas par `alert`, `confirm` ou `prompt`.
-- Les menus d'actions `...` des cartes de contenu, annonces, publications, commentaires, messages et listes doivent être positionnés en haut à droite quand le contenu peut grandir, avec un menu aligné à droite pour éviter qu'il soit coupé sur mobile.
-- RBAC annonces/notifications: seul `ADMIN` modifie ou supprime les annonces; `ADMIN` modifie ou supprime tous les commentaires; un utilisateur peut seulement modifier son propre commentaire dans la fenêtre configurée; chaque utilisateur peut supprimer ou vider ses propres notifications.
-- Les blocs de données qui peuvent grandir doivent utiliser la barre réutilisable `ListControls` avec `useSmartList` pour recherche accent-insensible et pagination côté UI.
-- Les layouts publics mobiles doivent rester `overflow-x-hidden` avec des conteneurs `min-w-0`; vérifier en particulier le header public, le logo et les CTA pour éviter un rendu en deux largeurs sur navigateurs mobiles.
-- L'historique du chatbot doit rester scrollable et peut être classé par `Conversation.projectName`; toute évolution du champ doit rester propriétaire `userId`.
-- Les dossiers de conversations sont représentés par `ConversationProject`; supprimer un dossier ne doit pas supprimer les conversations, seulement retirer leur classement.
-- Sur mobile/PWA, le chat doit garder la conversation active en plein espace principal et afficher l'historique via un panneau menu, pas par empilement qui écrase le fil.
-- Toute fonctionnalité de partage doit utiliser l'API `navigator.share` si disponible et copier le lien en fallback, sans exposer de données privées au-delà de l'URL demandée.
-- Dans les composants client, ne pas utiliser directement `navigator` après un test `"share" in navigator`: TypeScript peut le réduire à `never` pendant `pnpm build`. Préférer `const browserNavigator = typeof window === "undefined" ? undefined : window.navigator`, puis tester `browserNavigator?.share` et `browserNavigator?.clipboard`.
-- Les notifications utilisateur doivent respecter `notifySupportEnabled`, `notifyUsageEnabled`, `notifyBroadcastEnabled` et `pushNotificationsEnabled`.
-- Les notifications navigateur/PWA ne doivent pas contourner l'authentification et ne doivent afficher que des extraits non sensibles.
-- Sur mobile/PWA, ne pas appeler `new Notification()` sans garde-fou: privilégier `serviceWorker.ready.showNotification()`, encapsuler les erreurs navigateur et ne jamais laisser une notification casser le rendu client.
-- Les filtres de notifications doivent correspondre à des catégories réellement déterminées par `Notification.type`, `targetUrl` ou une règle ciblée documentée; éviter les filtres trop larges basés sur tout le texte qui mélangent des notifications sans relation.
-- Les helpers de filtrage client ne doivent pas s'appeler eux-mêmes dans une expression de retour sans annotation explicite; extraire les sous-règles (`isCallNotification`, etc.) pour éviter l'erreur Vercel TypeScript "implicitly has return type any".
-- Les notifications PWA doivent utiliser une grande icône DTSC lisible et un badge monochrome dédié compatible Android; mettre à jour le cache du service worker lorsqu'une icône offline/PWA change.
-- Toute évolution fonctionnelle importante doit être reflétée dans `DTSC_SYSTEM_PROMPT` dans `lib/openai.ts`, en distinguant clairement les fonctionnalités actives de la roadmap.
-- Toute évolution publique, commerciale, FAQ, service DTSC, workflow client, agent IA public ou capacité chatbot doit aussi mettre à jour le contexte de l'assistant concerné et la FAQ de la landing page lorsque cela aide les visiteurs ou clients à comprendre la fonctionnalité.
-- Toute évolution fonctionnelle, API, schéma Prisma, variable d'environnement, intégration externe, règle de sécurité, workflow CI/CD ou comportement admin/client doit être documentée dans le même travail.
-- Mettre à jour en priorité `docs/TECHNICAL_DOCUMENTATION.md` pour les détails techniques, puis `README.md` pour les changements utiles à l'installation, au déploiement ou à l'utilisation.
-- Mettre à jour `docs/CHANGELOG.md` avant chaque commit avec un résumé professionnel en français des ajouts, modifications, corrections, suppressions ou améliorations livrés.
-- Avant chaque push, relire et actualiser `docs/QA_REGRESSION_CHECKLIST.md` dès qu'un parcours critique, une règle de sécurité, une route API, un module privé, un script QA ou une procédure de validation change.
-- Mettre aussi à jour `app/conditions-utilisation/page.tsx`, `app/politique-confidentialite/page.tsx` et `app/politique-cookies/page.tsx` quand une modification impacte les conditions d'utilisation, les données personnelles, les cookies, le suivi, les emails, les paiements, les notifications, les documents ou les intégrations externes.
-- Si une modification ajoute ou change une API, documenter la route, la méthode HTTP, le niveau d'accès, le payload attendu, la réponse et les variables d'environnement nécessaires.
-- Si une modification ajoute ou change une intégration externe, documenter les secrets requis, le flux d'authentification, les endpoints appelés, les fallbacks et les règles de sécurité.
-- Les constantes partagées avec le client doivent rester dans un fichier neutre sans logique serveur, par exemple `lib/session-config.ts`.
-- Les pages publiques importantes doivent rester dans `app/sitemap.ts`, `app/robots.ts` et avoir des métadonnées SEO cohérentes.
-- Le service worker PWA ne doit jamais mettre en cache les réponses `/api/*`, les pages privées HTML, les routes d'authentification ou des données utilisateur; limiter le cache aux assets statiques et au fallback autonome `public/offline.html`.
-- Les pages offline (`/offline` et `public/offline.html`) doivent rester alignées avec le design mobile/PWA premium courant, sans dépendre de données privées ni de scripts nécessaires à l'affichage hors ligne.
-- Les contenus publics administrables doivent passer par `PublicPublication`, des routes API `ADMIN` uniquement, une validation Zod et une journalisation `AuditLog`.
-- Les contenus publics riches doivent être nettoyés avec `sanitizeRichHtml` avant stockage ou rendu; ne jamais rendre un HTML admin sans nettoyage serveur.
-- Les onglets de la landing page doivent correspondre à des routes publiques dédiées; l'état actif doit se baser sur le `pathname`, pas sur un scroll de sections.
-- Le contexte client du chatbot ne doit pas divulguer les détails internes de l'application (frameworks, schéma DB, routes API, variables, middleware, secrets). Il doit rester orienté services DTSC et fonctionnalités utiles aux clients.
-- Les textes JSX avec apostrophes doivent utiliser `&apos;` si ce sont des noeuds texte directs. Avant commit, scanner les nouveaux textes TSX visibles pour éviter `react/no-unescaped-entities`, surtout après ajout de phrases françaises comme `d'information`, `l'utilisateur`, `n'est`.
-- Les contenus publics sourcés doivent garder des liens vérifiables.
+## 1. Workflow Git et CI/CD
 
-## UX & Interaction Standards
+- Toujours partir du véritable dernier `origin/main` vérifié.
+- Utiliser une branche feature dédiée ; ne jamais développer directement sur `main`.
+- Avant push : `git diff --check`, `git diff --cached --check`, `pnpm prisma generate`, `pnpm type-check`, `pnpm lint`, tests ciblés, `pnpm qa:regression`, puis `pnpm build` lorsque les outils sont disponibles.
+- Ne jamais retirer, neutraliser ou contourner un test pour faire passer la branche.
+- La Production provient uniquement de `main` : branche → contrôles → commits → push → PR → Quality Gates → revue → merge → unique déploiement Vercel Production.
+- Ne jamais exécuter `vercel`, `vercel deploy` ou `vercel --prod` depuis une branche feature.
+- Les previews Vercel désactivées sont attendues et ne constituent ni une erreur ni une validation.
+- Ne jamais réécrire l’historique de `main` ni modifier une migration déjà appliquée.
 
-- Utiliser un menu d'actions à trois points `...` pour les actions CRUD ou contextuelles dans les cartes, listes et fils de messages; éviter les boutons nus `Modifier`/`Supprimer` lorsque plusieurs actions existent.
-- Les actions affichées dans un menu contextuel doivent dépendre des permissions, être fonctionnelles, persistées en base et ne jamais être des placeholders. Les actions destructives doivent demander confirmation ou utiliser un soft delete/archivage métier.
-- Toute nouvelle interface visible doit passer par le système i18n ou ajouter des clés dans `locales/fr.json` et `locales/en.json`; le français reste la langue par défaut et l'anglais doit retomber sur le français si une clé manque.
-- Les préférences privées `locale`, `timezone` et `dateFormat` doivent être persistées sur `User` et utilisées pour afficher messages, commentaires, notifications, historiques et dates métier via des helpers partagés comme `lib/user-format.ts`.
-- Les commentaires collaboratifs doivent supporter les mentions `@collaborateur` avec persistance dans `CooCommentMention` ou une table de mentions dédiée; ne notifier que des utilisateurs autorisés à voir l'objet concerné.
-- Les groupes et messages de `Mes collaborateurs` doivent vérifier l'appartenance au groupe côté API avant lecture/écriture. Les invitations peuvent être envoyées en lot à plusieurs utilisateurs/emails, doivent ignorer les membres déjà présents ou invitations actives, et ne doivent notifier que les destinataires réellement invités. Les messages, suppressions, partages chatbot et demandes support doivent être journalisés.
-- Les mentions `@collaborateur` dans les commentaires et messages doivent être interactives côté UI, créer une notification ciblée, pointer vers le contexte accessible et ne jamais notifier des utilisateurs non autorisés; dans les groupes, une mention non lue doit être visible par badge dans la liste et être marquée lue à l'ouverture du groupe.
-- Dans `Mes collaborateurs`, l'en-tête d'un groupe actif doit rester exploitable: un clic ouvre une modale de détails du groupe avec description, type, statut, propriétaire, rôle courant, membres actifs, invitations en attente et métriques principales.
-- L'en-tête d'un groupe doit rester sobre sur desktop et mobile: nom, initiales/avatar, statut court, nombre de membres et menu `...`; ne jamais y afficher la description complète ni la liste complète des membres.
-- Les messages collaboratifs et chatbot doivent afficher date/heure selon les préférences utilisateur et utiliser le menu `...` pour modifier, supprimer, archiver ou partager.
-- Les messages de groupe doivent supporter `replyToId`: action `Répondre` dans le menu `...`, aperçu du message cité dans le composer et rendu de l'extrait cité dans le fil, avec vérification d'appartenance côté API.
-- Les aperçus de messages cités dans les groupes et de commentaires répondus doivent être cliquables: l'UI doit faire défiler vers le message/commentaire source et appliquer une animation de focus lisible. Si l'élément n'est pas encore chargé, tenter un chargement progressif avant d'abandonner sans casser le fil.
-- Sur mobile, `Mes collaborateurs` doit fonctionner comme le chatbot: liste des groupes accessible via un menu/bouton, conversation sélectionnée en plein écran, fil scrollable et paginé, zone de saisie accessible en bas, badges de mentions non lues visibles.
-- Dans `Activités DTSC`, le formulaire `Formuler une demande à un collaborateur` doit rester centralisé dans le bloc `Demandes collaboratives`; les autres blocs peuvent seulement préremplir ou pointer vers ce formulaire central, sans le dupliquer.
-- Tout menu, modale et formulaire ajouté doit rester mobile-first: conteneurs `min-w-0`, hauteur bornée, scroll interne si nécessaire, interactions tactiles et fermeture claire.
-- Masquer un bouton côté interface ne suffit jamais: chaque route sensible doit réappliquer RBAC, propriété ou appartenance côté serveur.
-- Les suivis transversaux des entreprises clientes doivent utiliser `EnterpriseCoreRecord`, `EnterpriseCoreEvent`, `EnterpriseCoreComment` et `EnterpriseEntityLink`, toujours filtrés par `organizationId`. Un module sectoriel conserve sa table métier comme source et crée un lien vers le socle commun sans dupliquer ni modifier directement sa donnée spécialisée.
-- Les patients HEALTH_CARE doivent utiliser `HealthPatient` et `HealthPatientEvent`, rester filtrés par `organizationId` et conserver `legacyRecordId` tant que les rendez-vous, consultations et autres modules Santé utilisent encore `EnterpriseSectorRecord.patientRecordId`. Les routes génériques Santé ne doivent pas créer, modifier ou archiver un patient en contournant les routes dédiées.
-- Les rendez-vous HEALTH_CARE doivent utiliser `HealthAppointment` et `HealthAppointmentEvent`, obligatoirement référencer un `HealthPatient` du même `organizationId`, conserver un miroir `legacyRecordId` pour les consultations génériques et appliquer les transitions de statut dans le service serveur dédié. Une conversion en consultation doit rester idempotente.
-- Les consultations HEALTH_CARE doivent utiliser `HealthConsultation` et `HealthConsultationEvent`, obligatoirement référencer un patient et un professionnel actifs du même `organizationId`, verrouiller les consultations clôturées ou annulées et appliquer clôture, réouverture et annulation dans le service serveur dédié. Les données cliniques sensibles doivent être masquées côté API sans permission.
+## 2. Sécurité serveur
 
-## UI/UX métier DTSC — architecture workspace
+Toute route mutante sensible applique, selon son domaine :
 
-- Pour tout nouveau module métier ou refactor significatif, privilégier la hiérarchie `Page → header métier → contrôles → contenu métier → actions contextuelles`; éviter `container → card → nested card` sauf séparation sémantique réelle.
-- Réutiliser en priorité les primitives existantes, notamment `components/workspace/*` et `components/ui/*`, avant de créer un composant parallèle ou une seconde bibliothèque UI.
-- Préférer la composition de petites primitives à un God Component piloté par des dizaines de flags ou props métier.
-- Garder les primitives `components/workspace/*` sans logique métier spécifique; les transformations, statuts, permissions et actions propres à un domaine restent dans le dossier du domaine.
-- Concevoir mobile-first avec `min-w-0`, safe areas, targets tactiles, dialogues scrollables et aucun scroll horizontal de page. Un scroll horizontal local est acceptable uniquement lorsqu'il est intentionnel et borné, par exemple pour des KPI compacts.
-- Sur desktop, augmenter la densité utile et exploiter l'espace horizontal sans simplement étirer l'interface mobile; éviter les cartes géantes et les lignes inutilement hautes.
-- Les KPI doivent rester compacts et provenir de données réelles; ne pas transformer chaque indicateur en grande carte décorative.
-- Les listes métier doivent prioriser titre, statut et quelques métadonnées utiles, puis utiliser séparateurs, typographie et whitespace avant d'ajouter borders/shadows supplémentaires.
-- Les actions contextuelles doivent rester cohérentes, accessibles par un libellé explicite, et n'être affichées que lorsqu'elles sont réellement implémentées. Une permission UI ne remplace jamais la permission serveur, l'appartenance ou la propriété.
-- Ne jamais ajouter une action fictive `Dupliquer`, `Historique`, `Archiver`, `Partager` ou `Supprimer` uniquement pour enrichir un menu; implémenter d'abord le backend et les règles d'autorisation correspondants.
-- Préserver les durcissements mobile/PWA du Sprint 1: `visualViewport`, z-index des overlays, safe areas, champs iOS, scroll interne des dialogues, dropdowns tactiles et service worker sans cache privé.
-- Documenter les règles détaillées et les nouveaux patterns dans `docs/UI_UX_ARCHITECTURE.md`; `AGENTS.md` doit rester la liste courte des contraintes automatiquement applicables aux futurs sprints.
-
-## Conversation, comments and content UX standards
-
-- Tous les fils de commentaires doivent avoir une hauteur bornée, un scroll vertical et une pagination/cursor ou un bouton `Charger les précédents`; ne jamais laisser les commentaires étirer indéfiniment une page ou une modale.
-- La pagination des commentaires doit préserver les permissions, la confidentialité LA et les mentions `@`; l'API ne doit retourner que les commentaires visibles par l'utilisateur courant.
-- Les conversations de groupe et chatbot doivent être scrollables, afficher date/heure selon les préférences utilisateur et regrouper les actions contextuelles dans un menu `...`.
-- Les anciens messages de groupe doivent être chargés progressivement côté API (`limit` + cursor) et l'utilisateur doit rester membre du groupe pour lire ou écrire.
-- Les noms/intervenants dans les conversations et copies partagées doivent utiliser une couleur stable et lisible dérivée d'un identifiant déterministe (`userId`, email ou rôle système), pas un random recalculé à chaque rendu.
-- Les listes de groupes doivent afficher les messages non lus et un badge `@` vert quand l'utilisateur courant a une mention non lue. Ces badges doivent être calculés côté serveur à partir des lectures/mentions réelles et remis à zéro seulement après lecture autorisée.
-- Le partage d'une conversation chatbot vers un groupe ne doit jamais exposer directement la conversation privée originale: créer une copie/snapshot persistant et limiter sa lecture aux membres du groupe.
-- Les cartes et modales de copies/snapshots chatbot partagées doivent définir des contrastes explicites `dark:` et clair; ne pas dépendre uniquement de `text-dtsc-ink` ou `bg-dtsc-page` si le contenu long devient peu lisible dans le thème sombre.
-- La suppression ou l'archivage d'un message de partage chatbot doit supprimer ou archiver l'accès à la copie partagée associée.
-- Les annonces doivent garder leurs actions dans le menu `...`; le transfert doit proposer une recherche intelligente par nom, email, poste et département, accepter plusieurs destinataires et créer une notification persistée.
-- Les modales d'édition d'annonces internes et de publications publiques doivent travailler sur un brouillon local côté client; ne synchroniser avec le serveur qu'au clic explicite `Enregistrer`/confirmation afin d'éviter les mises à jour pendant la saisie.
-- Les éditeurs riches `contentEditable` utilisés dans les annonces/publications ne doivent pas réappliquer `innerHTML` à chaque frappe depuis un état parent contrôlé: initialiser le contenu de façon non destructive, préserver la sélection/curseur et synchroniser les images supprimées uniquement dans le brouillon local jusqu'à l'enregistrement.
-- Les éditeurs de publications publiques et annonces doivent supporter une palette de couleurs contrôlée et des types de listes avancés, tout en conservant le nettoyage serveur contre XSS.
-- Les annonces internes qui acceptent des images doivent téléverser via route serveur protégée (`/api/announcements/images` ou équivalent), valider MIME/taille, stocker côté Supabase Storage serveur, afficher un aperçu mobile/desktop avant publication et ne jamais exposer de secret Storage côté client.
-- Les demandes collaboratives peuvent avoir des pièces jointes uniquement via upload fichier contrôlé; stocker les métadonnées dans `CollaboratorRequest.attachments`, servir les fichiers par route privée et autoriser explicitement demandeur, destinataire, auteur, ADMIN ou rôle métier habilité.
-- La route `/offline` doit rester une page PWA publique, informative et consultable en ligne, mais le fallback réellement utilisé hors connexion doit être `public/offline.html`, autonome, sans dépendance aux chunks Next.js. Le service worker doit versionner son cache, précacher `/offline.html`, et exclure strictement `/api/*` ainsi que les pages privées comme `/activities`, `/collaborators`, `/chat`, `/admin`, `/company`, `/notifications` et `/settings`.
-- Les applications DTSC Platform installées en PWA doivent rechercher une mise à jour du service worker au retour en ligne, au focus, au retour de visibilité et périodiquement. Si une nouvelle version est installée, activer le worker en attente via `SKIP_WAITING` puis recharger une seule fois le client contrôlé pour fournir automatiquement la dernière version après reconnexion.
-- Toute nouvelle interface visible doit être entièrement compatible i18n: ajouter les clés FR/EN pour labels, boutons, statuts, erreurs, modales, menus, notifications, filtres, contenus de modules et états vides.
-- Les fils de commentaires, conversations, menus et modales doivent être vérifiés mobile-first avec `min-w-0`, scroll interne et zone de saisie accessible.
-
-## Validation locale
-
-Dans cet environnement Codex Windows, `pnpm` peut être absent. Si `pnpm build` ne peut pas être lancé localement, le signal bloquant devient:
-
-- `git diff --check`
-- `git diff --cached --check`
-- `node scripts/qa-regression-checks.mjs` avec le Node disponible si `pnpm qa:regression` ne peut pas être lancé
-- inspection des imports inutilisés et des erreurs TypeScript évidentes
-- lecture des logs Vercel après push
-
-Quand `pnpm` est disponible, lancer:
-
-```bash
-pnpm qa:regression
-pnpm build
+```text
+session
+→ activeOrganizationId
+→ membre actif
+→ type d’organisation attendu
+→ module actif
+→ entitlement
+→ permission
+→ visibilité/propriété de l’objet
+→ same-origin
+→ validation Zod
+→ await rateLimit
+→ transaction
+→ ApiLog
+→ AuditLog
 ```
 
-## UI chatbot
+- Masquer un bouton ne remplace jamais un contrôle serveur.
+- `rateLimit()` est asynchrone : toujours utiliser `await`.
+- Les actions admin globales exigent le contexte `DTSC_INTERNAL` et les permissions appropriées.
+- Un rôle global `ADMIN`, `MANAGER` ou `SUPPORT` n’accorde aucun accès implicite aux données privées d’une entreprise cliente.
+- `MANAGER` n’est jamais administrateur entreprise automatiquement.
+- Toute référence fournie par le client doit être revalidée dans le même `organizationId`.
+- Les erreurs utilisateur restent humaines ; les détails techniques sensibles restent dans des logs protégés.
+- Aucun secret, token, mot de passe, URL de webhook secrète ou clé de stockage ne doit apparaître côté client, dans les migrations, fixtures, captures, rapports ou logs.
 
-Les réponses assistant sont rendues avec `Streamdown` et stylées via `.dtsc-assistant-markdown` dans `app/globals.css`.
-Conserver une hiérarchie visible pour:
+## 3. Multi-tenant et rôles métier
 
-- `h1`, `h2`, `h3`
-- listes ordonnées et non ordonnées
-- citations
-- tableaux
-- code inline et blocs de code
+- Toute donnée interne d’entreprise porte `organizationId` ou une relation tenant-scoped équivalente.
+- Toute lecture/écriture vérifie le membership actif et le contexte de session.
+- Le tenant interne stable est `dtsc-internal`; ses modules privés ne sont accessibles qu’en contexte `DTSC_INTERNAL` avec membership actif.
+- Les entreprises clientes n’accèdent jamais aux données DTSC ou d’une autre organisation, même en modifiant une URL ou un identifiant.
+- Les tickets support ne donnent accès qu’aux informations volontairement partagées dans le ticket.
+- Les groupes internes restent limités à leur organisation ; les groupes transversaux exigent une invitation acceptée.
+- Les permissions internes DTSC utilisent les postes officiels reliés au dossier RH, jamais un texte libre.
+- `CEO`, `COO`, `HR_CFO`, `CTO`, `MPO`, `SCO` et `LA` conservent leurs responsabilités documentées ; aucun rôle ne sert de bypass universel.
 
-## Règles DTSC — UI mobile/PWA premium compacte
+## 4. Registre canonique et navigation ERP
 
-- Les blocs importants des modules privés doivent privilégier les accordéons sur mobile/PWA afin d'éviter les pages verticales interminables.
-- Les formulaires longs ouverts depuis Administration, Activités, Support, Annonces ou modules métier doivent utiliser une modale/sheet haute avec scroll interne fiable; ne pas les enfermer dans un conteneur `overflow-hidden` qui empêche d'atteindre le bas du formulaire sur desktop ou mobile.
-- Les accordéons, listes premium, menus flottants et overlays mobiles doivent utiliser les variables DTSC (`--dtsc-surface`, `--dtsc-page`, `--dtsc-ink`, `--dtsc-muted`) ou les classes glass partagées; éviter les fonds fixes `bg-white/*` qui cassent le mode sombre.
-- Les sections Administration doivent rester accessibles par une navigation mobile flottante, avec affichage strictement limité aux sections autorisées par RBAC et poste RH officiel.
-- Les formulaires longs ou fréquents doivent être pliables, en modale, sheet ou accordéon; ne pas afficher plusieurs formulaires ouverts par défaut sur mobile.
-- Les commentaires d'annonces, publications publiques et discussions longues doivent être repliables par défaut, scrollables, paginés et ne jamais étendre indéfiniment la page.
-- Les conversations chatbot, groupes, appels et tickets support sont prioritaires visuellement: leur fil doit garder un conteneur scrollable avec saisie accessible.
-- Les dropdowns/combobox doivent utiliser le style premium partagé, rester tactiles, lisibles, scrollables et compatibles recherche quand les listes peuvent grandir.
-- Les historiques d'activité affichés côté profil doivent être bornés et respecter une stratégie de rétention; la rétention des notifications reste pilotée par `AppSetting.notificationRetentionDays`.
-- Les réactions chatbot Like/Dislike doivent être persistées côté serveur sur le message assistant propriétaire de la conversation; une action UI visible ne doit jamais être seulement locale.
-- Les notifications doivent supporter des filtres avancés côté UI à partir des vrais types/statuts existants, sans remplacer les données backend par des mocks.
-- Toute modification UI mobile/PWA doit préserver i18n, accessibilité clavier, safe-area, PWA standalone, RBAC et permissions côté API.
+1. Le registre canonique est l’unique catalogue actif de modules.
+2. Une ligne `EnterpriseModule` en base configure un tenant mais ne peut pas rendre ouvrable un code absent ou masqué du registre.
+3. Chaque module a un statut explicite : `ACTIVE`, `BETA`, `PLANNED`, `DEPRECATED`, `HIDDEN` ou `RETIRED`.
+4. Un module sans modèle/service réel, route, workspace, permission, entitlement et QA ne peut pas être `ACTIVE`.
+5. Les modules planifiés ou masqués n’ont ni carte active, ni route métier, ni entrée de navigation.
+6. Les codes administratifs historiques restent seulement des aliases/redirections vers l’administration consolidée.
+7. Les workspaces sont allow-listés dans le code ; aucun import dynamique ou accès Prisma arbitraire piloté par `moduleCode` n’est autorisé.
+8. Les dépendances, secteurs, plans et permissions sont résolus côté serveur avant navigation ou ouverture.
 
-## Règles DTSC — SaaS hybride multi-entreprises
+## 5. Source unique de vérité et legacy
 
-- DTSC Platform évolue vers un modèle SaaS hybride: un tenant interne DTSC, des espaces clients `Organization` et un contexte actif de session (`GLOBAL_CLIENT`, `COMMUNITY`, `DTSC_INTERNAL`, `ORGANIZATION`).
-- Le tenant interne DTSC doit exister comme `Organization` stable (`id = dtsc-internal`, nom `DTSC`, `organizationType = DTSC_INTERNAL`). Un utilisateur n'accède au contexte DTSC interne que s'il possède un `OrganizationMember` actif sur cette organisation.
-- Les collaborateurs DTSC sont rattachés au tenant `DTSC` uniquement lorsqu'ils ont déjà un dossier `HrcfoEmployee.userId` actif. Un rôle global `ADMIN`, `MANAGER` ou `SUPPORT` sans ce membership reste en espace client/global et ne voit pas les données DTSC.
-- La connexion peut accepter une entreprise optionnelle. Sans entreprise sélectionnée, l'utilisateur accède à son espace client standard; avec entreprise sélectionnée, le backend doit vérifier que `Organization.status = ACTIVE` et que `OrganizationMember.status = ACTIVE`.
-- La liste des entreprises au login ne doit jamais exposer tout l'annuaire client: elle est chargée uniquement à partir de l'email saisi et retourne seulement les organisations où cet email est membre actif.
-- Même `ADMIN` global DTSC, CEO DTSC ou support technique ne reçoit aucun droit automatique sur les modules internes privés d'une entreprise cliente. L'accès entreprise exige un membership actif explicite.
-- DTSC peut créer, modifier, suspendre ou archiver une entreprise cliente, accorder ou retirer `ADMIN_ENTREPRISE`, gérer plans/abonnements/facturation et traiter les tickets support volontairement soumis.
-- DTSC ne doit pas ouvrir `Administration [Entreprise]`, `Activités [Entreprise]`, calendrier, tâches, réunions, fichiers, conversations, appels, données RH/finance/juridique ou workflows internes d'une entreprise cliente sans membership actif dans cette entreprise.
-- Un `ADMIN_ENTREPRISE` ou `MANAGER` actif peut ajouter des utilisateurs existants comme collaborateurs de sa propre entreprise depuis `Administration [Entreprise]`; cette action ne peut pas accorder `ADMIN_ENTREPRISE`, doit notifier le collaborateur ajouté et doit rester vérifiée côté API par membership actif.
-- Toute nouvelle donnée interne d'entreprise doit porter `organization_id` ou un équivalent Prisma `organizationId`, et toute route entreprise doit vérifier session, rôle global si action plateforme, membership actif, rôle organisationnel et visibilité de l'objet.
-- Les modules historiques internes DTSC (`/admin`, `/activities`, `/calendar` et leurs routes `/api/*`) doivent refuser toute session qui n'est pas `DTSC_INTERNAL` avec `activeOrganizationId = dtsc-internal`, même si le rôle global semble élevé.
-- En contexte `ORGANIZATION`, `Abonnement`, `Annonces` et `Profil` restent communs à l'utilisateur. Les modules `Dashboard`, `Chatbot`, `Entreprise`, `Documents`, `Paramètres`, `Notifications`, `Support` et `Mes collaborateurs` doivent rester visibles lorsqu'ils sont disponibles, mais leurs lectures/écritures doivent être propres au contexte actif via `organizationId` ou un contrôle équivalent; ne jamais les faire retomber sur les données DTSC/globales.
-- `Mes collaborateurs` est un module transversal contrôlé: les groupes internes restent limités à leur `organizationId`, les groupes `CROSS_ORGANIZATION`/`PRIVATE_NETWORK` peuvent inviter des utilisateurs de toute l'application par recherche sécurisée, et l'accès à un groupe exige toujours une invitation acceptée ou un membership actif du groupe.
-- Les tickets support doivent rester rattachés au contexte courant (`organizationId` quand l'utilisateur agit dans une entreprise, `null` en espace client standard) et ne jamais exposer des tickets d'un autre contexte.
-- Les fonctionnalités internes d'une entreprise cliente peuvent être masquées ou bloquées si l'organisation n'a pas d'abonnement actif; l'absence de plan ne doit jamais faire retomber l'utilisateur sur les données DTSC.
-- Les abonnements d'organisation restent contrôlés par DTSC: le client peut voir plan, statut, limites et factures, mais ne peut pas modifier prix, plan ou validation de paiement.
-- Les tickets support partagent uniquement les informations volontairement envoyées au support DTSC; un ticket ne donne pas accès au reste des données internes de l'entreprise.
-- Le module Annonces peut rester global/communautaire avec `scope`, `organizationId` et `moderationStatus`; `ORGANIZATION_ONLY` doit être visible uniquement aux membres actifs de l'organisation concernée.
-- Les groupes peuvent devenir transversaux (`CROSS_ORGANIZATION`, `PRIVATE_NETWORK`) uniquement par invitation acceptée. Les groupes internes d'organisation restent invisibles aux non-membres, y compris aux rôles DTSC globaux non invités.
-- Toute attribution/retrait d'admin entreprise, tentative d'accès refusée, changement de contexte, création/suspension d'organisation, changement d'abonnement et action support critique doit être auditée.
-- Les métriques DTSC sur les entreprises clientes doivent rester administratives, agrégées ou anonymisées lorsqu'elles touchent à l'activité interne.
-- Les entreprises clientes peuvent avoir un secteur d'activité normalisé via `BusinessSector`; ne pas réintroduire de champ secteur libre dans les formulaires de création/édition d'organisation cliente.
-- Les modèles sectoriels (`SectorTemplate*`) sont des gabarits inspirés de standards institutionnels; leur application doit générer des enregistrements réels `EnterpriseModule`, `EnterpriseDepartment`, `EnterprisePosition`, `EnterpriseActivityBlock` et `EnterpriseWorkflow` isolés par `organizationId`.
-- `Administration [Entreprise]` et `Activités [Entreprise]` sont des modules dynamiques propres au contexte `ORGANIZATION`; ils ne doivent jamais rediriger vers `/admin` ou `/activities`, qui restent strictement DTSC internes.
-- Toute action visible dans un module entreprise doit vérifier le membership actif, le module activé, la permission organisationnelle et, si applicable, le plan d'abonnement de l'organisation côté API.
-- Les changements de secteur doivent fusionner ou remplacer uniquement les éléments sectoriels générés; ne jamais écraser silencieusement les personnalisations entreprise sans action explicite.
-- Les futures extensions sectorielles doivent documenter les modules, postes, blocs d'activités, workflows et permissions dans `docs/enterprise-sector-modules.md`.
-- Les itérations sectorielles doivent être livrées secteur par secteur: commencer par des sous-modules réellement persistés, avec liste, recherche, filtres, formulaire complet, détail, actions `...`, audit et isolation `organizationId`.
-- Le secteur `HEALTH_CARE` conserve `EnterpriseSectorRecord` uniquement pour les sous-modules qui n’ont pas encore de modèle dédié (`MEDICAL_CONFIDENTIALITY`, `HEALTH_SETTINGS`, `HEALTH_REPORTS`). Patients, Rendez-vous, Consultations, Dossiers médicaux, Équipe médicale, Laboratoire, Pharmacie interne, Facturation médicale, Assurances, Incidents qualité et Documents médicaux utilisent leurs tables dédiées; toute route doit vérifier `sectorCode = HEALTH_CARE`, membership actif, module activé et permissions métier avant lecture/écriture.
-- Les actions santé visibles (confirmer/annuler rendez-vous, convertir en consultation, clôturer/rouvrir, valider labo, gérer prise en charge, mouvement de stock, résoudre incident, archiver) doivent rester persistées, journalisées et isolées par `organizationId`.
-- Les formulaires `HEALTH_CARE` doivent privilégier des combobox reliées aux données de l'entreprise (`EnterpriseSectorRecord` patient/rendez-vous/consultation, `OrganizationMember`, `EnterpriseDepartment`, `EnterprisePosition`) et les routes doivent refuser toute référence hors `organizationId`.
-- Dans `Administration [Entreprise]`, ne pas exposer `EnterpriseActivityBlock` comme bloc client principal: les blocs d'activités restent dans `Activités [Entreprise]`; l'administration doit séparer modules, invitations collaborateurs, postes/permissions, départements, workflows/procédures et paramètres persistés.
-- Les données métier sectorielles génériques doivent être stockées dans `EnterpriseSectorRecord` ou dans une table dédiée documentée; ne jamais afficher une carte sectorielle avancée sans route API persistante associée.
+1. Une seule source de vérité est autorisée par domaine.
+2. Aucun dual-write permanent n’est autorisé.
+3. Aucun CRUD générique ne peut écrire dans un domaine disposant d’un modèle dédié.
+4. `EnterpriseCoreRecord`, `EnterpriseSectorRecord` et `EnterpriseWorkflow` sont des archives `LEGACY_READ_ONLY` ; leurs mutations sont interdites.
+5. Les anciennes routes mutantes répondent explicitement `410 Gone` après contrôle d’accès et audit ; jamais de succès silencieux.
+6. Les lectures historiques restent tenant-scoped, paginées, bornées et soumises aux permissions.
+7. Les anciens objets non migrables sont archivés sans invention de champs ni fusion par similarité textuelle.
+8. Toute projection reste reconstruisible et ne devient jamais une seconde autorité.
+9. Les scripts de backfill conservés sont idempotents, bornés, documentés, supportent `--dry-run` et exigent une confirmation explicite avant écriture.
+10. Les flags temporaires de cutover sont retirés seulement après preuve Production et indépendance du rollback.
 
-## Advanced Mobile UX, Activities, Groups, Files and Audit Standards
+## 6. Finance, comptabilité et trésorerie
 
-- Tous les blocs Administration qui listent des données doivent rester utilisables sur mobile avec une logique liste -> détail: recherche intelligente, pagination, conteneurs scrollables, détails en modale ou plein écran et actions dans menus `...`.
-- Les formulaires Administration longs ne doivent pas être empilés directement dans les cartes mobiles; les ouvrir via bouton clair, modale, panneau ou vue dédiée. Le desktop peut garder une vue split-panel ou table confortable.
-- Tous les blocs Activités DTSC doivent suivre la même logique mobile: liste filtrable et paginée, puis détail plein écran/mobile avec commentaires, fichiers, statuts et actions autorisées.
-- Le formulaire `Formuler une demande à un collaborateur` reste centralisé dans les demandes collaboratives; les autres blocs peuvent seulement l'ouvrir avec contexte prérempli.
-- Les conversations de groupe doivent être bornées en hauteur, scrollables, chargées par pagination et positionnées sur les derniers messages à l'ouverture sans casser le chargement des anciens messages.
-- Les entrées/sorties de membres, retraits, suppressions de groupe et changements de rôle admin doivent créer des messages système persistés et des audit logs.
-- Les détails de groupe doivent afficher une présence légère en ligne/hors ligne quand `User.lastSeenAt` est disponible. Le seuil recommandé est `ONLINE_THRESHOLD_MINUTES = 5`.
-- Les indicateurs de présence mobile doivent être au premier plan, animés et synchronisés par un mécanisme léger `online/offline` ou polling court; une fermeture/masquage d'onglet doit signaler l'état hors ligne quand le navigateur le permet.
-- Seul le propriétaire peut supprimer un groupe, et seulement après révocation ou départ des autres membres actifs. Les suppressions doivent rester logiques ou archivées selon la stratégie du projet et être journalisées.
-- Les propriétaires gèrent les admins et retraits de membres via routes API protégées. Un admin ne doit jamais retirer ou rétrograder le propriétaire.
-- Les messages de groupe doivent supporter les accusés de lecture via `CollaborationGroupMessageRead`; l'auteur, le propriétaire ou un admin peuvent consulter `Lu` / `Non lu` selon permissions. Dans le fil, les messages envoyés par l'utilisateur courant doivent afficher un accusé visuel compact: une coche pour `envoyé`, deux coches vertes uniquement quand tous les autres membres actifs ont confirmé la lecture.
-- Tout fichier joint affiché dans une interface doit proposer téléchargement et aperçu quand le type le permet: image, PDF, texte/CSV si supporté. Les fichiers non prévisualisables doivent garder un téléchargement clair.
-- Les fichiers sensibles doivent être servis par route privée avec contrôle RBAC; ne jamais exposer d'URL privée sans vérification. Les téléchargements sensibles doivent être journalisés.
-- La section Administration `Audits` doit rester recherchable, filtrable, paginée et utiliser des badges de sévérité `INFO`, `SUCCESS`, `WARNING`, `ERROR`, `CRITICAL`. Ne jamais exposer secrets, tokens, mots de passe ou stack traces à des rôles non techniques.
-- Les paramètres privés doivent utiliser une UX accordéon sur mobile; tous les changements visibles doivent être persistés et respecter les préférences utilisateur/i18n.
+- Toute écriture commune respecte la partie double : `Σ débits = Σ crédits` avec `Prisma.Decimal`.
+- Toute comptabilisation issue d’un événement métier possède une clé d’idempotence stable et une version de posting.
+- Une écriture `POSTED` est immuable ; toute correction utilise une contrepassation liée, puis une nouvelle écriture si nécessaire.
+- Une période `CLOSED` ou `LOCKED` ne reçoit aucune nouvelle écriture.
+- Un paiement est un objet autonome avec approbation, confirmation, trésorerie et allocations ; ne jamais le réduire à un simple statut de facture.
+- Les allocations confirmées déterminent les soldes ouverts ; ne jamais maintenir un second solde concurrent.
+- Une réception de stock n’est pas une facture fournisseur ; une commande n’est pas une facture client.
+- Les devises différentes ne sont jamais additionnées directement ; le taux réellement utilisé est conservé dans un snapshot historique.
+- Les rapports financiers utilisent uniquement les écritures communes `POSTED`, filtrées par organisation, période, devise et dimensions autorisées.
+- Toute facture sectorielle possède une facture commune unique ; tout paiement sectoriel utilise le paiement commun.
+- Les budgets/dépenses, dettes fournisseurs, paie interne DTSC et paie client conservent des responsabilités distinctes.
 
-## Règles DTSC — Appels, réunions COO et groupes de réunion
+## 7. Frontières Pharmacy et Health
 
-- Les appels audio/vidéo de DTSC Platform doivent utiliser une architecture sécurisée liée aux groupes `CollaborationGroup`; aucun appel ne doit exister sans groupe propriétaire et tout appel lié à une réunion COO doit garder `meetingId`.
-- LiveKit est le fournisseur recommandé pour les rooms audio/vidéo. Les variables `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` et `LIVEKIT_URL` restent strictement serveur; ne jamais les exposer dans un composant client, une réponse API non nécessaire ou une variable `NEXT_PUBLIC_*`.
-- Les tokens LiveKit doivent être générés uniquement côté backend via un service serveur dédié comme `lib/livekit-service.ts`. Une route client peut recevoir un token participant temporaire, mais jamais le secret API.
-- Les routes sensibles d'appels (`start`, `join`, `leave`, `end`) doivent vérifier la session, l'appartenance active au groupe, le statut du groupe, le statut de l'appel et les droits de gestion pour terminer un appel. Masquer un bouton côté UI ne suffit jamais.
-- Une réunion COO peut être tenue en `COMMENTS_ONLY`, `AUDIO` ou `VIDEO`. Le mode commentaires/messages uniquement reste le comportement stable sans groupe automatique ni appel.
-- Une réunion COO audio ou vidéo doit créer automatiquement un groupe de réunion dédié si aucun groupe existant n'est choisi. Le groupe doit être `groupType = MEETING`, `autoCreated = true`, lié à `CooMeeting.collaborationGroupId` et synchronisé avec les participants COO disposant d'un `User`.
-- L'utilisation d'un groupe existant pour une réunion COO doit lier le groupe à la réunion, synchroniser les membres autorisés et ajouter un message système discret. Ne jamais ajouter des utilisateurs non concernés.
-- Les participants d'une réunion COO doivent rester synchronisés avec les membres du groupe de réunion autant que possible: organisateur, responsable CR, collaborateurs sélectionnés et responsables explicitement impliqués.
-- Seuls les participants autorisés, membres actifs du groupe, CEO/ADMIN/COO autorisés ou postes métiers explicitement impliqués peuvent voir la réunion, rejoindre le groupe ou entrer dans l'appel.
-- Les messages système liés aux appels (`CALL_STARTED`, `USER_JOINED`, `USER_LEFT`, `CALL_ENDED`) doivent être persistés, discrets, non intrusifs et journalisés dans les audit logs de groupe.
-- Les appels doivent conserver un historique persistant dans `CollaborationGroupCall`, `CollaborationGroupCallParticipant` et `CollaborationGroupCallEvent`: type audio/vidéo, provider, room, statut, démarrage, fin, participants et événements.
-- Les réunions COO doivent pouvoir produire des comptes rendus (`CooMeetingMinutes`), décisions (`CooMeetingDecision`) et tâches de suivi COO liées (`CooTask.sourceMeetingId` / `sourceDecisionId`). Toute création de tâche depuis une décision doit être journalisée et notifier le responsable si disponible.
-- L'UX mobile des appels et détails de réunion doit être plein écran ou en modale haute, avec actions principales accessibles, participant list visible, état d'appel clair et bouton quitter/terminer sans surcharger le fil.
-- Ne pas importer directement une feuille CSS globale tierce LiveKit dans `app/globals.css` si elle peut casser le rendu global; préférer des styles DTSC scopés sur une classe locale comme `.dtsc-livekit-room`.
-- Aucun bouton d'appel, de réunion, de décision ou de tâche ne doit être un placeholder: toute action affichée doit appeler une route réelle, persister l'effet, notifier si nécessaire et gérer les erreurs de configuration comme LiveKit absent.
-- Toute évolution future des appels/réunions doit mettre à jour Prisma, migration SQL, validateurs Zod, documentation technique, `AGENTS.md`, et exécuter au minimum `git diff --check`, `git diff --cached --check` et `pnpm build` si disponible.
+### Pharmacy
 
-## Règles DTSC — UX avancée des appels
+- Pharmacy conserve produits réglementés, lots, FEFO, péremption, rappels, blocages, qualité, pharmacovigilance et quantités réglementées.
+- Les fournisseurs, catalogues communs, achats, factures, paiements, caisses et écritures sont reliés aux domaines communs par extensions/mappings.
+- Une vente, réception, retour, ajustement, perte, remboursement ou clôture caisse doit rester transactionnel, idempotent et auditable.
+- Une annulation de mouvement validé crée un mouvement inverse ; elle ne réécrit jamais silencieusement l’historique.
 
-- L'interface finale ne doit jamais afficher de termes techniques comme `LiveKit`, `room`, `token`, `provider`, `server` ou des états de connexion bruts. Les erreurs techniques doivent être traduites en messages humains: `Appel connecté`, `Connexion instable`, `Impossible de rejoindre l'appel`, etc.
-- Le bouton micro doit agir sur la piste audio locale réelle du fournisseur d'appel, pas seulement sur l'icône. Si le navigateur refuse le micro, afficher un message humain et garder l'état visuel cohérent.
-- `Quitter` et `Terminer` sont deux actions distinctes: `Quitter` sort seulement l'utilisateur courant, `Terminer` clôt l'appel pour tout le groupe et reste réservé au lanceur, propriétaire/admin du groupe ou rôle explicitement autorisé.
-- Les appels actifs doivent se propager aux membres autorisés sans rechargement manuel. Si aucune infrastructure temps réel dédiée n'existe, utiliser un polling léger et documenté en fallback en conservant les vérifications backend.
-- Les événements d'appel peuvent déclencher une animation flottante globale uniquement pour les membres autorisés du groupe. Les alertes ne doivent pas afficher de détails privés à un non-membre et doivent respecter les préférences utilisateur.
-- Les paramètres d'appel sont persistés par utilisateur: sons, notifications, alertes flottantes, événements participants, démarrage micro/caméra et durée d'affichage des alertes.
-- Les sons d'appel doivent rester courts, professionnels, non agressifs et respecter les permissions navigateur; si l'autoplay est bloqué, l'appel doit continuer sans erreur bloquante.
-- La durée d'appel doit être calculée depuis `startedAt`, affichée pendant l'appel, et persistée à la fin via `durationSeconds` pour l'historique.
-- Les appels liés aux réunions COO doivent suivre les mêmes règles UX: pas de jargon technique, durée, boutons `Quitter`/`Terminer`, préférences utilisateur, propagation d'état et historique persistant.
-- Toute route d'appel doit continuer à vérifier auth, RBAC, appartenance active au groupe/réunion et droit de gestion côté serveur; un événement temps réel reçu côté frontend ne donne jamais accès à l'appel sans vérification API.
+### Health
 
-## Règles DTSC — Design mobile/PWA premium
+- Health conserve patients, rendez-vous, consultations, dossiers médicaux, laboratoire, prescriptions, documents et données cliniques.
+- Finance ne reçoit aucune donnée clinique inutile : ni diagnostic, symptôme, prescription, résultat de laboratoire, note médicale ou historique clinique.
+- Les factures, créances patient/assurance, paiements et allocations utilisent les objets financiers communs.
+- Les rôles administratifs/Finance n’accèdent pas aux détails cliniques sans permission médicale explicite.
+- Les documents médicaux restent privés, versionnés et téléchargés via une route serveur auditée.
 
-- Le design mobile/PWA premium intégré depuis `dtsc-platform-redesign.zip` devient la référence visuelle des espaces privés: header compact, navigation bottom, cartes glass/premium, safe-area mobile, ombres douces et animations sobres.
-- Toute nouvelle interface mobile doit suivre la logique liste -> recherche/filtres -> pagination -> détail plein écran -> commentaires/fichiers/actions; ne jamais empiler liste, détail, formulaire et commentaires dans une longue page mobile.
-- Les modales mobiles doivent exploiter davantage la hauteur réelle de l'écran (`90-95dvh` quand pertinent), avec header/footer fixes, contenu scrollable interne, safe-area respectée et sans double scroll du body.
-- Les conversations, commentaires et messages sont prioritaires sur mobile: réduire les composants secondaires, historiques systèmes, cartes de contexte et éléments décoratifs pour donner plus d'espace utile au fil principal.
-- Les cartes de réunion liée, historiques d'appels et résumés opérationnels affichés au-dessus d'un fil doivent rester compacts ou collapsibles par défaut; le détail complet doit aller en modale, drawer ou panneau secondaire.
-- Les messages systèmes d'appels doivent rester discrets, courts et peu hauts, sur le modèle WhatsApp/Discord, tout en restant persistés et lisibles.
-- Pendant un appel audio/vidéo, les participants doivent pouvoir écrire dans un chat léger relié au groupe; ces messages doivent utiliser la route de messagerie de groupe, rester persistés, supporter les mentions et respecter l'appartenance/RBAC côté API.
-- Le chat pendant appel doit rester une boîte autonome: scroll vertical interne borné, champ de saisie fixe, déplacement et redimensionnement possibles sans dépendre du scroll général de l'appel.
-- Les contrôles d'appel visibles doivent être ceux de DTSC, pas les barres techniques du fournisseur: micro, caméra, partage d'écran, plein écran, chat, quitter et terminer doivent appeler les APIs réelles du fournisseur ou afficher un fallback humain si le navigateur ne supporte pas l'action.
-- Les appels vidéo/audio doivent afficher les photos de profil disponibles à la place des avatars techniques du fournisseur, garder des tuiles vidéo arrondies et lisibles sur mobile, et basculer le libellé `Plein écran` vers `Réduire l'écran` quand l'appel est déjà en plein écran.
-- En plein écran vidéo, l'utilisateur doit pouvoir revenir à une vue automatique ou focaliser un partage d'écran ou un participant précis, sur desktop comme sur mobile. La scène plein écran doit rester responsive, compatible portrait/paysage PWA et utiliser un arrière-plan uniforme derrière les tuiles arrondies pour éviter les ruptures de couleur.
-- Le focus plein écran d'appel ne doit jamais masquer toutes les tuiles si la cible DOM du fournisseur n'est pas trouvée: appliquer le mode focus uniquement après sélection effective d'une tuile et retomber visuellement sur la grille normale en cas de doute.
-- Ne jamais piloter le focus plein écran LiveKit avec un `MutationObserver` qui observe les attributs/classes que l'UI modifie elle-même: cela peut créer une boucle de mutations et bloquer la page en production. Utiliser une application bornée, déclenchée par changement de focus/plein écran, avec quelques retries limités puis fallback sur la grille normale.
-- Sur mobile/PWA, le plein écran d'appel doit donner la priorité au flux vidéo sur toute la hauteur utile; les listes secondaires et panneaux de participants ne doivent pas réduire la scène. Les contrôles de choix de focus doivent se masquer après sélection et réapparaître au toucher de la scène.
-- Les zones messages des conversations de groupe et du chatbot doivent rester scrollables avec la saisie accessible en bas, et maximiser la largeur utile des bulles/cartes sur petits écrans sans casser tablette/desktop.
-- Les composants issus d'un prototype ou d'un ZIP de design ne doivent jamais remplacer aveuglément les modules existants. Les écrans mockés sont interdits dans les modules connectés au backend; ils doivent être remplacés par les données réelles, routes API, hooks et services existants.
-- Les formulaires longs doivent être encapsulés dans une modale, sheet, accordion ou vue dédiée mobile; les menus `...` restent le standard des actions contextuelles et destructives.
-- Les formulaires Administration dans des accordéons ne doivent pas être prisonniers d'un conteneur scrollable trop court sur desktop: garder le scroll interne mobile si nécessaire, mais laisser le contenu complet visible ou ouvrir une modale haute sur `lg+`.
-- La navigation mobile principale doit privilégier `Accueil`, `IA`, `Activités`, `Collaborateurs` et `Notifications`; les autres modules restent accessibles via actions rapides, menu secondaire, profil, paramètres ou administration selon permissions.
-- Le design ne doit jamais contourner RBAC, poste RH officiel, appartenance aux groupes, confidentialité LA/CEO, protections fichier, notifications ou audit logs. Masquer ou afficher un élément côté UI n'est jamais une règle de sécurité suffisante.
-- La PWA doit conserver le fallback offline public, ne pas cacher de données privées et respecter les safe areas Android/iOS. Toute nouvelle couche visuelle mobile doit rester compatible avec le service worker existant.
-- La PWA privée doit autoriser portrait et paysage quand l'expérience métier le justifie, notamment pour les appels vidéo; ne pas verrouiller `orientation` sur portrait si cela dégrade les appels.
-- Toute nouvelle copie visible du design doit respecter i18n FR/EN et éviter les textes hardcodés lorsque l'interface est réutilisable.
-- Quand un module privé reçoit de nouveaux libellés visibles, ajouter les clés dans `locales/fr.json` et `locales/en.json`, puis utiliser `translate(locale, key)` avec la préférence utilisateur quand elle est disponible.
-- Les formulaires et fiches détail ne doivent jamais afficher directement des noms de champs techniques, identifiants de code, clés JSON, noms camelCase ou libellés ambigus. Chaque champ visible doit avoir un libellé métier facilement interprétable par l'utilisateur, traduit selon la langue de l'interface, et une info-bulle ou aide contextuelle courte expliquant la valeur attendue ou l'effet de l'option.
-- Les options visibles des listes, filtres, dropdowns et combobox doivent toujours passer par un dictionnaire de libellés métier traduit; ne jamais afficher directement une valeur d'enum, un code interne, une clé camelCase ou une valeur anglaise quand l'interface est en français.
-- Les ordonnances PHARMACY dédiées doivent rester isolées par `organizationId`; une vente générée depuis une ordonnance validée reste un brouillon sans impact stock, et toute substitution conserve une trace du produit prescrit, du produit servi et du motif.
-- Les fournisseurs, demandes de réapprovisionnement et commandes PHARMACY dédiés doivent rester isolés par `organizationId`; une réception générée depuis une commande reste un brouillon sans impact stock, et seules validation/annulation du module Réceptions synchronisent stock et quantités reçues/restantes.
-- Les retours, ajustements et pertes PHARMACY doivent utiliser `PharmacyReturnLossEvent`, rester isolés par `organizationId` et valider toutes leurs références dans la même pharmacie. L'impact stock doit rester transactionnel et idempotent; toute annulation d'un impact validé doit créer un mouvement inverse auditable au lieu de modifier silencieusement l'historique.
-- Les alertes PHARMACY doivent être persistées dans `PharmacyAlert`, détectées côté serveur depuis des données réelles et dédupliquées par organisation/type/source/produit/lot. Une condition réapparue peut rouvrir l'alerte; résolution, ignorance, annulation, assignation et commentaires doivent rester historisés dans `PharmacyAlertEvent`.
-- Les incidents qualité et de pharmacovigilance PHARMACY doivent utiliser les modèles `PharmacyQuality*`, rester isolés par `organizationId` et valider chaque référence liée dans la même pharmacie. Une suspicion de contrefaçon ou un produit rappelé est critique; un effet indésirable grave, un mauvais produit servi ou un produit périmé servi est au minimum élevé.
-- Un incident qualité critique exige une action immédiate documentée avant signalement et un résumé de résolution avant clôture. Un incident élevé ou critique exige une investigation terminée; toute CAPA obligatoire doit être validée avant clôture.
-- La création d'un incident qualité ne doit jamais modifier silencieusement un lot. Quarantaine, blocage et création d'alerte restent des actions explicites, motivées, protégées par permission et auditées.
-- Le référentiel Documents & conformité PHARMACY doit utiliser `PharmacyDocument`, `PharmacyDocumentLink`, `PharmacyDocumentVersion`, `PharmacyDocumentAccessLog`, `PharmacyDocumentComplianceRule` et `PharmacyMissingDocument`, toujours filtrés par `organizationId`; ne pas dupliquer les documents spécialisés existants sans raison.
-- Les fichiers documentaires PHARMACY doivent rester privés dans Supabase Storage sous un chemin isolé par organisation et document. Le client ne reçoit jamais la clé Storage; les téléchargements passent par une route serveur avec RBAC, confidentialité et audit sensible.
-- Si le stockage privé n'est pas configuré, autoriser uniquement les métadonnées et ne jamais afficher de faux téléversement. Un document validé ou critique ne doit jamais être écrasé silencieusement: renouvellement ou remplacement crée une nouvelle version ou un nouveau document lié.
-- Les alertes et documents manquants PHARMACY doivent provenir de règles actives et d'objets réels de la même organisation. Les expirations créent des alertes dédupliquées; aucun manque documentaire fictif ne doit être affiché.
-- Les paramètres métier PHARMACY doivent utiliser `PharmacySetting`, `PharmacyNumberingSequence`, `PharmacySettingsAuditLog` et `PharmacySettingsProfile`, rester isolés par `organizationId` et être appliqués côté serveur dans les modules concernés; ne jamais livrer un paramètre décoratif uniquement frontend.
-- Toute modification d'un paramètre PHARMACY critique doit exiger un motif, vérifier la permission dédiée et créer une entrée `PharmacySettingsAuditLog`. Les numéros de ventes, réceptions, caisse, paiements, factures, reçus, remboursements et incidents doivent être générés côté serveur par `PharmacyNumberingSequence`.
-- Dans le contexte d'une entreprise cliente, la navigation latérale doit afficher uniquement les modules du socle commun. Les modules sectoriels Santé, Pharmacie ou futurs secteurs restent regroupés dans leurs sous-modules dédiés de `Administration [entreprise]` afin d'éviter toute répétition.
-- Les dossiers médicaux Santé doivent utiliser `HealthMedicalRecord` et ses tables structurées, rester uniques par patient et strictement isolés par `organizationId`. Les notes confidentielles ne doivent jamais être incluses dans une réponse administrative non sensible; une allergie grave ou potentiellement mortelle doit créer une alerte médicale visible et auditée.
-- Les professionnels HEALTH_CARE doivent utiliser `HealthStaffAssignment`, être liés à un `OrganizationMember` actif, un `User`, un `EnterprisePosition` Santé et un `EnterpriseDepartment` du même `organizationId`. Rendez-vous et Consultations ne doivent proposer ou accepter que des affectations Santé actives et disponibles; l’accès médical sensible dépend des permissions Santé persistées, pas du seul rôle administratif entreprise.
-- Le laboratoire HEALTH_CARE doit utiliser `HealthLabRequest`, `HealthLabRequestItem`, `HealthLabTestCatalog` et `HealthLabEvent`, rester strictement isolé par `organizationId` et valider patient, consultation, dossier médical, demandeur, préleveur et examens côté serveur. Un résultat validé ou transmis ne peut jamais être modifié librement; correction, validation, transmission, annulation et reprise de prélèvement exigent les permissions dédiées et un historique.
-- La pharmacie interne HEALTH_CARE doit utiliser `HealthPharmacyProduct`, `HealthPharmacyBatch`, `HealthPharmacyStockMovement` et `HealthPharmacyDispensation`, toujours filtrés par `organizationId`. Toute sortie vérifie stock, statut et lot FEFO; un produit sensible exige `health.pharmacy.authorize_sensitive_exit` explicitement, sans passe-droit automatique du rôle administrateur entreprise.
-- La facturation médicale HEALTH_CARE doit utiliser `HealthMedicalInvoice`, `HealthMedicalInvoiceItem`, `HealthMedicalInvoicePayment`, `HealthMedicalInvoiceEvent` et `HealthBillingServiceCatalog`, toujours filtrés par `organizationId`. Totaux, remises, paiements et soldes sont recalculés côté serveur; une facture payée ou annulée ne doit jamais être modifiée librement et une relation Consultation/Laboratoire/Pharmacie ne peut être facturée deux fois.
-- Les assurances HEALTH_CARE doivent utiliser `HealthInsuranceProvider`, `HealthPatientInsuranceCoverage`, `HealthCoverageRequest` et `HealthCoverageRequestEvent`, toujours filtrés par `organizationId`. Patient, organisme, couverture, contexte médical et facture sont validés côté serveur; approbation et application facture sont historisées, recalculées et idempotentes.
-- Les incidents qualité HEALTH_CARE doivent utiliser `HealthQualityIncident`, `HealthQualityCorrectiveAction` et `HealthQualityIncidentEvent`, rester strictement isolés par `organizationId` et valider chaque référence métier côté serveur. Les incidents confidentiels exigent une permission explicite, les collaborateurs restent limités à leurs signalements/assignations/actions, et clôture, réouverture, archivage, qualification, investigation et actions correctives doivent être historisés.
-- Les documents médicaux HEALTH_CARE doivent utiliser `HealthDocument`, `HealthDocumentVersion` et `HealthDocumentAccessLog`, rester isolés par `organizationId` et stocker les fichiers uniquement dans le stockage privé serveur sous `health/{organizationId}/{documentId}`. Les téléchargements exigent une permission dédiée et sont journalisés; un document validé ou archivé ne se modifie pas librement et le remplacement de fichier crée une nouvelle version.
+## 8. Prisma et migrations
 
-## Règles DTSC — Calendrier interne
+- Toute modification du schéma Prisma possède une migration SQL correspondante.
+- Les migrations historiques ne sont jamais modifiées.
+- Privilégier les migrations additives : statuts, index, contraintes, relations et champs de cutover.
+- Une suppression physique exige deux releases :
+  - Release A : code n’utilisant plus l’objet, anciennes écritures bloquées, lecture/observabilité conservées ;
+  - observation Production ;
+  - Release B : suppression éventuelle après sauvegarde, export, restauration testée et validation explicite.
+- Ne jamais supprimer dans la même release la dernière utilisation applicative et la colonne/table correspondante.
+- Une installation depuis une base vide doit rester fonctionnelle avec `prisma migrate deploy`, génération Prisma et build, sans ancien backfill manuel caché.
+- Les relations tenant-aware doivent empêcher les références croisées entre organisations.
+- Ajouter des index uniquement lorsqu’ils correspondent aux filtres et parcours réels : `organizationId`, statut, date, référence, période, compte, tiers, module, source et clé d’idempotence.
 
-- Le calendrier interne DTSC doit rester une fonctionnalité privée, protégée par session, middleware, RBAC, poste RH officiel et appartenance aux événements; ne jamais dépendre d'une API externe pour connaître les disponibilités.
-- Le calendrier interne ne doit jamais être visible ni accessible aux utilisateurs `CLIENT`: masquer les liens UI, rediriger `/calendar` côté middleware/page et bloquer les routes `/api/calendar*` côté serveur.
-- Les disponibilités des collaborateurs sont persistées dans `CollaboratorAvailability`; les événements sont persistés dans `InternalCalendarEvent`, avec participants dans `InternalCalendarEventParticipant` et conflits dans `InternalCalendarConflict`.
-- Toute création ou modification d'événement doit vérifier les conflits de créneau, absences, congés, missions, indisponibilités et plages hors horaires disponibles avant persistance. Les conflits bloquants ne peuvent être ignorés que par un rôle autorisé.
-- Un collaborateur peut voir son propre planning; CEO/COO/HR & CFO/ADMIN ou rôle autorisé peuvent voir et gérer des vues plus larges selon les règles métier.
-- La visibilité d'un événement doit être appliquée côté backend: `Privé` ne doit jamais être exposé aux simples participants, `Participants` ne doit viser que les participants actifs, `Département` reste limité au département et `Public interne` seul peut être visible largement.
-- Les événements créés depuis COO, réunions, tâches, missions ou appels doivent renseigner `sourceModule`, `sourceEntityType` et `sourceEntityId` pour garder la traçabilité sans dupliquer inutilement les données source.
-- Un événement calendrier de type `Tâche`, `Réunion`, `Blocage`, `Mission`, `Appel audio` ou `Appel vidéo` doit créer ou lier l'objet métier correspondant quand l'action est visible dans l'UI. Les appels planifiés créent un groupe préparatoire, pas une room active tant que l'appel n'est pas démarré par un membre autorisé.
-- Les conflits calendrier doivent afficher le collaborateur concerné et la raison métier lisible issue de son planning ou d'un événement chevauchant, pas seulement un message générique.
-- Toute action calendrier critique doit journaliser `AuditLog` et notifier les participants autorisés quand l'action les concerne.
-- L'UX mobile du calendrier suit le standard premium: filtres horizontaux, liste scrollable, détail plein écran ou panneau, actions dans menu `...`, formulaires en modale et aucune page mobile infinie.
-- Les KPI du calendrier qui ouvrent des listes secondaires (`Collaborateurs`, `Conflits`, `Disponibilités`) doivent afficher des dialogues scrollables mobile-first. `Collaborateurs` doit fournir un menu `...` par collaborateur avec des actions réelles de création d'événement préremplies; `Conflits` et `Disponibilités` doivent montrer les détails complets en plein écran mobile.
+## 9. TypeScript, Next.js et Zod
 
-<!-- SPRINT_03_WORK_SCHEDULE_RULES -->
-## Règles DTSC — planning de travail et disponibilités
+- Ne pas nommer une variable locale `module` dans les routes/helpers/composants Next.js.
+- Ne pas utiliser `Array.includes(session.role)` avec un tableau étroit ; préférer des comparaisons explicites ou un `Set<UserRole>` correctement typé.
+- Ne pas appeler `.partial()`, `.pick()`, `.omit()` ou `.extend()` sur un schéma Zod déjà raffiné ; dériver depuis un objet de base puis appliquer les raffinements finaux.
+- Normaliser les valeurs optionnelles avant un callback asynchrone ou une transaction Prisma pour préserver le narrowing TypeScript.
+- Les composants serveur transmettent aux composants clients uniquement des objets JSON simples.
+- Supprimer toute prop, variable, import ou paramètre de handler inutilisé avant build.
+- Les effets React gardent des dépendances complètes ou des callbacks stabilisés.
+- Les clés d’objets partagés ne sont jamais dupliquées.
+- Ne pas passer `title` directement aux icônes Lucide ; utiliser un élément HTML englobant.
 
-- Les collaborateurs `DTSC_INTERNAL` gèrent uniquement leurs propres disponibilités récurrentes, exceptions de planning et absences. La cible d'écriture doit être dérivée de la session et du `HrcfoEmployee` actif, jamais d'un `collaboratorId` navigateur arbitraire.
-- Les managers peuvent disposer d'une visibilité de lecture adaptée sans obtenir la propriété d'écriture sur le planning personnel d'autrui. Ne jamais réutiliser une permission générique comme `canManagePeople` pour autoriser l'édition des disponibilités DTSC.
-- La disponibilité est une donnée de planification, jamais du temps travaillé, une prestation réelle ou une donnée de paie.
-- Les absences et exceptions datées doivent rester distinctes des disponibilités hebdomadaires habituelles dans les validateurs, services, API et UX, même lorsqu'une table physique de compatibilité est conservée.
-- Les contrôles de conflit calendrier DTSC doivent utiliser la disponibilité effective après application des exceptions/absences et respecter la timezone utilisateur.
-- Les données historiques de planning ne doivent pas être réécrites silencieusement ; privilégier périodes d'effet, versionnement raisonnable et soft delete.
-- Les motifs privés d'absence ne doivent pas être exposés dans les vues opérationnelles collectives ou dans les notifications Web Push.
-- Un chantier ciblé `DTSC_INTERNAL` ne doit pas réinterpréter arbitrairement les règles calendrier des entreprises clientes `ORGANIZATION`.
-- Ne pas introduire de timesheet, pointage, prestation réelle, validation COO des prestations ou calcul paie dans le Sprint 3.
-<!-- /SPRINT_03_WORK_SCHEDULE_RULES -->
+## 10. UI/UX, mobile et accessibilité
 
-<!-- SPRINT_04_WORK_PRESTATIONS_RULES -->
-## Règles permanentes — prestations réelles DTSC
+- Réutiliser `ModuleWorkspace`, `ModuleHeader`, `ModuleMetrics`, `ModuleContent`, `ModuleSection`, `BusinessList`, `BusinessListItem`, `BusinessDetail`, `ContextActions`, `StatusBadge` et `EmptyState` avant de créer des primitives parallèles.
+- Éviter les cartes dans des cartes ; préférer header métier → contrôles → contenu → actions contextuelles.
+- Les actions contextuelles passent par un menu `...`, sont réellement implémentées et respectent les permissions.
+- Les actions destructives exigent confirmation et soft delete/archivage métier lorsque nécessaire.
+- Les listes volumineuses sont paginées côté serveur ; ne jamais charger toutes les écritures, patients, produits, messages ou mouvements en mémoire.
+- Mobile-first : `min-w-0`, safe areas, aucun débordement global, rail KPI horizontal local, dialogs/sheets scrollables, clavier iPhone et selects tactiles.
+- Sur mobile, privilégier liste → détail plein écran → formulaire plein écran → retour.
+- Les conversations/commentaires sont bornés, scrollables et paginés ; la zone de saisie reste accessible.
+- Les champs visibles utilisent des libellés métier traduits, jamais des codes techniques, enums bruts ou clés camelCase.
+- Toute interface réutilisable respecte i18n FR/EN, mode sombre, accessibilité clavier et cibles tactiles.
+- Aucun bouton ou bloc décoratif ne peut être un placeholder.
 
-- DTSC work availability is planning data and must never be treated as worked time.
-- Worked time must come from explicit work entries submitted by the employee.
-- No employee, including CEO, COO or ADMIN, may approve their own work submission.
-- Regular DTSC work submissions are reviewed by COO; COO submissions are reviewed by CEO; CEO submissions are reviewed by COO.
-- HR & CFO work submissions are reviewed by COO.
-- Approved work submissions are immutable in normal workflows; corrections require a reviewer-driven correction cycle before resubmission.
-- Payroll must consume approved work only; it must never derive directly from availability or unapproved work entries.
-- Vercel deployments are production-only from main; feature branches must never enable or trigger preview deployments.
-- A work-entry duration is server-calculated in integer minutes from start/end minus break; client-provided worked totals are never authoritative.
-- Work-entry source references must be access-checked server-side and may not accept arbitrary cross-user objects.
+## 11. Documents, fichiers, notifications et PWA
 
-<!-- SPRINT_05_PAYROLL_WORKFLOW_RULES -->
-## Règles permanentes — paie DTSC à partir du travail approuvé
+- Les fichiers passent par une route serveur privée avec validation MIME/taille, stockage privé et contrôle RBAC ; aucun champ texte libre ne remplace un upload.
+- Les téléchargements sensibles sont audités.
+- Les notifications et Web Push restent génériques lorsqu’une donnée est verrouillée et ne contournent jamais l’authentification.
+- Un deep link ouvre le module, l’objet précis et la section pertinente après contrôle d’accès.
+- Le service worker ne met jamais en cache `/api/*`, les pages privées HTML, l’authentification ou les données utilisateur.
+- Le fallback offline reste public, autonome et sans donnée privée.
 
-- Payroll may consume only approved DTSC work submissions/entries.
-- Availability and unapproved work must never feed payroll.
-- Approved minutes are operational evidence and must not automatically determine salary without an explicit compensation policy.
-- The standard gross salary source remains the employee HR compensation record for a normal full-month payroll.
-- Bonuses and deductions require explicit audited reasons.
-- HR & CFO prepares payroll but does not financially approve its own preparation.
-- CEO approves standard DTSC payrolls; COO approves the CEO payroll.
-- No employee may approve their own payroll, including CEO, COO, HR_CFO or ADMIN.
-- Draft and pending payrolls must not create financial transactions.
-- Financially validated payrolls must create at most one idempotent PAYROLL_WORKFLOW transaction; marking paid must reuse that transaction.
-- A work entry may not be consumed by multiple active payrolls.
-- Validated and paid payroll evidence and financial amounts are immutable in the normal workflow.
-- Legacy payrolls remain readable without fabricated Sprint 4 evidence.
-- Vercel remains production-only from main; feature branches must never enable or trigger preview deployments.
-- Cancelled or rejected payroll history must not permanently reserve an employee+period; active-period uniqueness must remain DB-enforced while terminal retryable records stay auditable.
-- Payroll submission blockers must be returned by the server and displayed explicitly as errors/readiness items; financial-action UX must never infer success or failure only from message wording.
-<!-- /SPRINT_05_PAYROLL_WORKFLOW_RULES -->
+## 12. Documentation et validation finale
 
+- Toute évolution fonctionnelle, API, schéma, sécurité, intégration, workflow CI/CD ou comportement admin/client est documentée dans le même travail.
+- Mettre à jour en priorité `docs/TECHNICAL_DOCUMENTATION.md`, les documents de domaine concernés, le changelog et la checklist QA.
+- Une API documente méthode, accès, validation, réponse, erreurs et variables d’environnement éventuelles.
+- Les aides utilisateur n’exposent aucun secret, nom de table, route interne sensible ou détail clinique/financier inutile.
+- Le programme ERP n’est déclaré terminé qu’après : PR revue, checks verts, merge, migrations Production réussies, SHA Production égal à `main`, smoke tests Core/Finance/Pharmacy/Health/legacy/mobile concluants et audit d’intégrité comptable sans anomalie critique.
 
-## Règles DTSC — Finance, comptabilité et trésorerie communes
+## Règles ERP finales — résumé normatif
 
-<!-- ERP_FINANCE_RULES_V1 -->
-
-- Toute écriture comptable commune utilise la partie double et doit satisfaire `Σ débits = Σ crédits` côté serveur avec `Prisma.Decimal`.
-- Toute écriture `POSTED` est immuable; aucune route, composant ou workflow ne peut modifier directement ses lignes, comptes, dates ou montants.
-- Toute correction d’une écriture comptabilisée utilise une contrepassation liée à l’écriture originale, puis une nouvelle écriture si nécessaire.
-- Aucune comptabilisation n’est autorisée dans une période `CLOSED` ou `LOCKED`; `SOFT_CLOSED` exige une permission renforcée et documentée.
-- Tous les montants, taux, taxes, coûts, soldes et arrondis financiers utilisent `Prisma.Decimal`; un flottant JavaScript ne fait jamais autorité.
-- Toute comptabilisation issue d’un événement métier possède une clé d’idempotence stable, un verrou transactionnel et une version de posting.
-- Un paiement est un objet financier autonome avec approbation, confirmation, trésorerie, allocations et audit; il ne se réduit jamais à une modification de statut de facture.
-- Une dépense budgétaire n’est pas une dette fournisseur. `EnterpriseExpense`, `EnterpriseSupplierInvoice` et `EnterprisePayment` conservent des responsabilités distinctes.
-- Une réception de stock n’est pas une facture fournisseur. La réception valorisée utilise un clearing jusqu’à la facture ou résolution comptable.
-- Une commande client n’est pas une facture. La facturation crée son propre document, sa créance et son écriture selon le workflow autorisé.
-- Les allocations confirmées déterminent les soldes ouverts des créances et dettes; ne jamais maintenir une seconde source de solde concurrente.
-- Tout paiement en espèces exige une `EnterpriseCashSession` ouverte du même compte financier et de la même organisation.
-- Le caissier ne valide jamais sa propre clôture; tout écart de caisse exige justification, validation indépendante et écriture dédiée si nécessaire.
-- Les comptes bancaires, références de paiement, salaires, données fiscales, justificatifs et états non publiés restent protégés par permissions et `view_sensitive`.
-- Aucun mot de passe bancaire, token, clé API, numéro complet ou secret de fournisseur financier ne doit être stocké ou exposé côté client.
-- Aucune règle libre de comptabilisation, formule JavaScript, SQL, nom de modèle Prisma ou compte arbitraire fourni par le navigateur n’est autorisé.
-- Les montants de devises différentes ne sont jamais additionnés directement; les états utilisent la devise fonctionnelle ou séparent explicitement les devises.
-- Le taux de change réellement utilisé par une transaction comptabilisée est conservé dans un snapshot historique et n’est jamais recalculé avec le taux courant.
-- La paie interne DTSC reste séparée de la paie opérationnelle des entreprises clientes; aucun adapter ne doit les fusionner.
-- Les finances Pharmacy et Health restent sectorielles jusqu’à leur convergence explicite en itération 4; aucune migration ou dual-write implicite n’est autorisé.
-- Les états financiers utilisent uniquement les écritures `POSTED`, filtrées par `organizationId`, période, devise et dimensions validées.
-- Toute mutation financière significative produit `ApiLog`, `AuditLog` et `EnterpriseOperationalEvent` avec métadonnées bornées et non sensibles.
-- Les modules Finance restent déclarés dans le registre canonique, soumis au plan, au module actif, au membership et aux permissions côté serveur.
-- Tous les workspaces Finance doivent rester responsive: rail KPI horizontal mobile, listes compactes, formulaires adaptés iPhone, mode sombre, FR/EN et aucun tableau large imposé sur mobile.
+1. registre canonique unique ;
+2. une source de vérité par domaine ;
+3. aucun dual-write permanent ;
+4. aucun CRUD générique pour un domaine dédié ;
+5. legacy read-only ou supprimé ;
+6. routes legacy mutantes interdites ;
+7. facture sectorielle → facture commune unique ;
+8. paiement sectoriel → paiement commun ;
+9. toute écriture métier/comptable idempotente ;
+10. écriture comptabilisée immuable ;
+11. correction comptable par contrepassation ;
+12. aucune donnée clinique dans le Core financier ;
+13. données réglementaires Pharmacy conservées ;
+14. données cliniques Health conservées ;
+15. rapports financiers fondés sur les écritures communes ;
+16. aucun double comptage d’une projection sectorielle ;
+17. modules planifiés masqués ;
+18. permissions côté serveur ;
+19. route mutante : same-origin, Zod, rate limit et audit ;
+20. suppression Prisma destructive en deux releases ;
+21. migrations historiques immuables ;
+22. installation base vide fonctionnelle ;
+23. listes volumineuses paginées côté serveur ;
+24. contrat responsive global obligatoire ;
+25. Production uniquement depuis `main`.
