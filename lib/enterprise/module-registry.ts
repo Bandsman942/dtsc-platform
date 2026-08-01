@@ -3,6 +3,7 @@ import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-do
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
 import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
 import finalCleanupRegistryData from "@/lib/enterprise/module-registry-final-cleanup.json";
+import commercialRegistryData from "@/lib/enterprise/module-registry-commercial-overrides.json";
 import type { SaasPlanCode } from "@/lib/billing/plans";
 
 export type EnterpriseModuleImplementationStatus =
@@ -84,6 +85,7 @@ export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   financeRegistryData.version,
   sectorConvergenceRegistryData.version,
   finalCleanupRegistryData.version,
+  commercialRegistryData.version,
 );
 
 const sectorOverrides = new Map(
@@ -91,6 +93,9 @@ const sectorOverrides = new Map(
 );
 const finalCleanupOverrides = new Map(
   finalCleanupRegistryData.overrides.map((override) => [override.code, override]),
+);
+const commercialOverrides = new Map(
+  commercialRegistryData.overrides.map((override) => [override.code, override]),
 );
 
 function applySectorConvergenceOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
@@ -117,11 +122,26 @@ function applyFinalCleanupOverride(definition: EnterpriseModuleDefinition): Ente
   };
 }
 
+function applyCommercialOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
+  const override = commercialOverrides.get(definition.code);
+  if (!override) return definition;
+  return {
+    ...definition,
+    minimumPlan: override.minimumPlan as SaasPlanCode,
+  };
+}
+
 export const ENTERPRISE_MODULE_REGISTRY = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
   ...financeRegistryData.modules,
-].map((definition) => applyFinalCleanupOverride(applySectorConvergenceOverride(definition as EnterpriseModuleDefinition)));
+].map((definition) =>
+  applyCommercialOverride(
+    applyFinalCleanupOverride(
+      applySectorConvergenceOverride(definition as EnterpriseModuleDefinition),
+    ),
+  ),
+);
 
 const definitionByCode = new Map<string, EnterpriseModuleDefinition>();
 const canonicalCodeByAlias = new Map<string, string>();
@@ -214,10 +234,10 @@ export function getEnterpriseModuleGroupLabel(group: EnterpriseModuleNavigationG
     PROCUREMENT_RESOURCES: { fr: "Achats & ressources", en: "Procurement & resources" },
     FINANCE: { fr: "Finances", en: "Finance" },
     INTELLIGENCE: { fr: "Intelligence", en: "Intelligence" },
-    SECTOR_HEALTH: { fr: "Secteur Health", en: "Health sector" },
-    SECTOR_PHARMACY: { fr: "Secteur Pharmacy", en: "Pharmacy sector" },
+    SECTOR_HEALTH: { fr: "Santé", en: "Health sector" },
+    SECTOR_PHARMACY: { fr: "Pharmacie", en: "Pharmacy sector" },
     ADMINISTRATION: { fr: "Administration", en: "Administration" },
-    COMMERCIAL: { fr: "Commercial", en: "Commercial" },
+    COMMERCIAL: { fr: "Ventes & relation client", en: "Sales & customer relations" },
     HUMAN_RESOURCES: { fr: "Ressources humaines", en: "Human resources" },
     PROJECTS_ASSETS: { fr: "Projets & actifs", en: "Projects & assets" },
   };
