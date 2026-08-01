@@ -9,6 +9,8 @@ import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
+// The former enterpriseCoreUpdateSchema.safeParse contract is superseded by a
+// bounded compatibility payload because every legacy Core update is refused.
 const legacyMutationSchema = z.object({ action: z.string().trim().min(1).max(80).optional() }).passthrough();
 const LEGACY_CORE_READ_ONLY = "LEGACY_READ_ONLY";
 
