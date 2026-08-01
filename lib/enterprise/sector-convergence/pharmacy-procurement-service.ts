@@ -35,8 +35,8 @@ export async function convergePharmacyPurchaseOrder(
     if (!purchase) {
       purchase = await createEnterprisePurchase(organizationId, actorUserId, {
         title: `Commande Pharmacy ${source.orderNumber}`,
-        description: null,
-        priority: source.priority === "URGENT" ? "URGENT" : source.priority === "HIGH" ? "HIGH" : "NORMAL",
+        description: undefined,
+        priority: source.priority === "URGENT" ? "CRITICAL" : source.priority === "HIGH" ? "HIGH" : "NORMAL",
         supplierId: supplier.enterpriseSupplierId,
         buyerUserId: source.requestedById,
         departmentId: source.departmentId || undefined,
