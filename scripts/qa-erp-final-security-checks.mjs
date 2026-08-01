@@ -13,5 +13,5 @@ for (const route of mutatingRoutes.slice(0, 4)) requireTokens(route, ["writeAudi
 requireTokens("app/api/enterprise/[organizationId]/healthcare/route.ts", ["resolveEnterpriseModuleAccess", "enterpriseHealthcareRecordSchema"]);
 requireTokens("app/api/enterprise/[organizationId]/pharmacy/route.ts", ["resolveEnterpriseModuleAccess", "enterprisePharmacyRecordSchema"]);
 forbidTokens("lib/enterprise/sector-convergence/health-billing-service.ts", ["diagnosis", "symptoms", "prescription", "labResult", "medicalNote"]);
-requireTokens("docs/ERP_FINAL_SECURITY_REVIEW.md", ["IDOR", "inter-tenant", "données cliniques", "same-origin", "rate limit"]);
+requireTokens("docs/ERP_FINAL_SECURITY_REVIEW.md", ["IDOR", "inter-tenant", "Données cliniques", "same-origin", "Rate limit"]);
 success("ERP final security contract");
