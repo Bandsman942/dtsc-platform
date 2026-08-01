@@ -1,6 +1,6 @@
 # Contrat UX des formulaires ERP DTSC
 
-Version : 1.0  
+Version : 1.0
 Date : 1 août 2026
 
 ## 1. Structure
