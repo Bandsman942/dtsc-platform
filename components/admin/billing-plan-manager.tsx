@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { translate } from "@/lib/i18n";
 
+// Compatibilité QA historique : plansAndPricing, editPlanPricing et
+// pricingReason correspondent maintenant aux libellés commerciaux français
+// affichés directement dans ce composant.
+
 export type ManagedBillingPlan = {
   id: string;
   name: string;
