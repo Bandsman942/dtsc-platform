@@ -1,0 +1,32 @@
+{
+  "version": 5,
+  "overrides": [
+    {
+      "code": "MEDICAL_CONFIDENTIALITY",
+      "implementationStatus": "HIDDEN",
+      "routeKind": "HIDDEN",
+      "workspaceKey": null,
+      "permissionPrefixes": [],
+      "accessPolicy": "EXPLICIT_DENY",
+      "dependencies": []
+    },
+    {
+      "code": "HEALTH_SETTINGS",
+      "implementationStatus": "HIDDEN",
+      "routeKind": "HIDDEN",
+      "workspaceKey": null,
+      "permissionPrefixes": [],
+      "accessPolicy": "EXPLICIT_DENY",
+      "dependencies": []
+    },
+    {
+      "code": "HEALTH_REPORTS",
+      "implementationStatus": "HIDDEN",
+      "routeKind": "HIDDEN",
+      "workspaceKey": null,
+      "permissionPrefixes": [],
+      "accessPolicy": "EXPLICIT_DENY",
+      "dependencies": []
+    }
+  ]
+}
