@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, Clock3, History, Send, ShieldCheck } from "lucide-react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
-import { ModuleContent, ModuleHeader, ModuleMetrics, ModuleMetric, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import {
@@ -295,7 +296,7 @@ export function EnterpriseIdentityUserPanel({
   );
 }
 
-function RelationshipListItem({ link, focused, descriptionSuffix, actions }: { link: UserIdentityLink; focused?: boolean; descriptionSuffix?: string; actions?: React.ReactNode }) {
+function RelationshipListItem({ link, focused, descriptionSuffix, actions }: { link: UserIdentityLink; focused?: boolean; descriptionSuffix?: string; actions?: ReactNode }) {
   const status = link.status as EnterpriseIdentityLinkStatus;
   return (
     <div id={`company-relationship-${link.id}`} className={focused ? "rounded-xl bg-cyan-400/10 px-2" : undefined}>
