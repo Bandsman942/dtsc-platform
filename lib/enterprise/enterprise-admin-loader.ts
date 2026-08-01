@@ -65,7 +65,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     activeSuppliersCount,
     generatedReportsCount,
     publishedReportsCount,
-    configurationIssues,
+    rawConfigurationIssues,
   ] = await Promise.all([
     getEnterpriseMembersDataset(organizationId),
     getEnterpriseModulesDataset(organizationId, entitlements),
@@ -85,6 +85,10 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     listEnterpriseModuleConfigurationIssues(organizationId),
   ]);
 
+  const configurationIssues = rawConfigurationIssues.map((issue) => ({
+    ...issue,
+    moduleCode: issue.moduleLabel || (issue.code === "ORGANIZATION_NOT_FOUND" ? "Entreprise" : "Configuration à vérifier"),
+  }));
   const openTaskStatuses = new Set(["TODO", "IN_PROGRESS", "BLOCKED"]);
   const openRequestStatuses = new Set(["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED"]);
   const registryModules = moduleDataset.modules.filter((enterpriseModule) => enterpriseModule.registryKnown && enterpriseModule.implementationStatus !== "PLANNED" && enterpriseModule.implementationStatus !== "HIDDEN" && enterpriseModule.routeKind !== "ADMIN_SECTION");
