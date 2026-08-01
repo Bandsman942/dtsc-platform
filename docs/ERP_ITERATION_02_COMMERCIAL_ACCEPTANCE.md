@@ -1,9 +1,9 @@
 # Acceptation commerciale — ERP, itération 02/06
 
-Date d’acceptation : 1 août 2026  
-Validateur produit : Product owner DTSC  
-Version Production initialement testée : `f0fde79a2ca92fb445230f23db54e29a184ac008`  
-Pull Request de promotion : `#40`
+- Date d’acceptation : 1 août 2026
+- Validateur produit : Product owner DTSC
+- Version Production initialement testée : `f0fde79a2ca92fb445230f23db54e29a184ac008`
+- Pull Request de promotion : `#40`
 
 ## Décision
 
