@@ -2,6 +2,7 @@ import registryData from "@/lib/enterprise/module-registry-data.json";
 import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-domains.json";
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
 import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
+import finalCleanupRegistryData from "@/lib/enterprise/module-registry-final-cleanup.json";
 import type { SaasPlanCode } from "@/lib/billing/plans";
 
 export type EnterpriseModuleImplementationStatus =
@@ -82,10 +83,14 @@ export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   commonDomainRegistryData.version,
   financeRegistryData.version,
   sectorConvergenceRegistryData.version,
+  finalCleanupRegistryData.version,
 );
 
 const sectorOverrides = new Map(
   sectorConvergenceRegistryData.overrides.map((override) => [override.code, override]),
+);
+const finalCleanupOverrides = new Map(
+  finalCleanupRegistryData.overrides.map((override) => [override.code, override]),
 );
 
 function applySectorConvergenceOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
@@ -98,35 +103,40 @@ function applySectorConvergenceOverride(definition: EnterpriseModuleDefinition):
   };
 }
 
+function applyFinalCleanupOverride(definition: EnterpriseModuleDefinition): EnterpriseModuleDefinition {
+  const override = finalCleanupOverrides.get(definition.code);
+  if (!override) return definition;
+  return {
+    ...definition,
+    implementationStatus: override.implementationStatus as EnterpriseModuleImplementationStatus,
+    routeKind: override.routeKind as EnterpriseModuleRouteKind,
+    workspaceKey: override.workspaceKey,
+    permissionPrefixes: [...override.permissionPrefixes],
+    accessPolicy: override.accessPolicy as EnterpriseModuleAccessPolicy,
+    dependencies: [...override.dependencies],
+  };
+}
+
 export const ENTERPRISE_MODULE_REGISTRY = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
   ...financeRegistryData.modules,
-].map((definition) => applySectorConvergenceOverride(definition as EnterpriseModuleDefinition));
+].map((definition) => applyFinalCleanupOverride(applySectorConvergenceOverride(definition as EnterpriseModuleDefinition)));
 
 const definitionByCode = new Map<string, EnterpriseModuleDefinition>();
 const canonicalCodeByAlias = new Map<string, string>();
 
 for (const definition of ENTERPRISE_MODULE_REGISTRY) {
   definitionByCode.set(definition.code, definition);
-  for (const alias of definition.aliases || []) {
-    canonicalCodeByAlias.set(alias, definition.code);
-  }
-  for (const legacyCode of definition.legacyCodes || []) {
-    canonicalCodeByAlias.set(legacyCode, definition.code);
-  }
+  for (const alias of definition.aliases || []) canonicalCodeByAlias.set(alias, definition.code);
+  for (const legacyCode of definition.legacyCodes || []) canonicalCodeByAlias.set(legacyCode, definition.code);
 }
 
 export const ENTERPRISE_ADMIN_SECTION_CODES = new Set(
-  ENTERPRISE_MODULE_REGISTRY
-    .filter((definition) => definition.routeKind === "ADMIN_SECTION")
-    .map((definition) => definition.code),
+  ENTERPRISE_MODULE_REGISTRY.filter((definition) => definition.routeKind === "ADMIN_SECTION").map((definition) => definition.code),
 );
 
-export const ENTERPRISE_IMPLEMENTED_STATUSES = new Set<EnterpriseModuleImplementationStatus>([
-  "ACTIVE",
-  "BETA",
-]);
+export const ENTERPRISE_IMPLEMENTED_STATUSES = new Set<EnterpriseModuleImplementationStatus>(["ACTIVE", "BETA"]);
 
 export function normalizeEnterpriseModuleCode(moduleCode: string) {
   const normalized = moduleCode.trim().toUpperCase();
@@ -138,8 +148,7 @@ export function getEnterpriseModuleDefinition(moduleCode: string) {
 }
 
 export function getCanonicalEnterpriseModuleCode(moduleCode: string) {
-  const definition = getEnterpriseModuleDefinition(moduleCode);
-  return definition?.code || null;
+  return getEnterpriseModuleDefinition(moduleCode)?.code || null;
 }
 
 export function isEnterpriseModuleKnown(moduleCode: string) {
@@ -151,13 +160,8 @@ export function isEnterpriseModuleImplemented(moduleCode: string) {
   return Boolean(definition && ENTERPRISE_IMPLEMENTED_STATUSES.has(definition.implementationStatus));
 }
 
-export function isEnterpriseModuleSectorCompatible(
-  definition: EnterpriseModuleDefinition,
-  sectorCode: string | null | undefined,
-) {
-  if (definition.applicableSectors === "ALL") {
-    return true;
-  }
+export function isEnterpriseModuleSectorCompatible(definition: EnterpriseModuleDefinition, sectorCode: string | null | undefined) {
+  if (definition.applicableSectors === "ALL") return true;
   return Boolean(sectorCode && definition.applicableSectors.includes(sectorCode));
 }
 
@@ -172,9 +176,7 @@ export function isEnterpriseModuleNavigable(definition: EnterpriseModuleDefiniti
 
 export function resolveEnterpriseModuleRoute(moduleCode: string) {
   const definition = getEnterpriseModuleDefinition(moduleCode);
-  if (!definition || !definition.routePath) {
-    return null;
-  }
+  if (!definition || !definition.routePath) return null;
   return {
     canonicalCode: definition.code,
     definition,
@@ -198,15 +200,9 @@ export function listEnterpriseModuleDefinitions(options?: {
   routeKinds?: EnterpriseModuleRouteKind[];
 }) {
   return ENTERPRISE_MODULE_REGISTRY.filter((definition) => {
-    if (options?.statuses && !options.statuses.includes(definition.implementationStatus)) {
-      return false;
-    }
-    if (options?.routeKinds && !options.routeKinds.includes(definition.routeKind)) {
-      return false;
-    }
-    if (options && "sectorCode" in options && !isEnterpriseModuleSectorCompatible(definition, options.sectorCode)) {
-      return false;
-    }
+    if (options?.statuses && !options.statuses.includes(definition.implementationStatus)) return false;
+    if (options?.routeKinds && !options.routeKinds.includes(definition.routeKind)) return false;
+    if (options && "sectorCode" in options && !isEnterpriseModuleSectorCompatible(definition, options.sectorCode)) return false;
     return true;
   });
 }

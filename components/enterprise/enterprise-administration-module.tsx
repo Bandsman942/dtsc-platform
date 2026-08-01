@@ -5,8 +5,6 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { EnterpriseAdminSectionActivator } from "@/components/enterprise/enterprise-admin-section-activator";
 import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
-import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
-import { PharmacyAdminWorkspace } from "@/components/enterprise/pharmacy-admin-workspace";
 import {
   EnterpriseBrandingSettingsPanel,
   EnterpriseCalendarPanel,
@@ -15,17 +13,14 @@ import {
   EnterpriseModulesPanel,
   EnterprisePositionsPanel,
   EnterpriseRecentRequestsPanel,
-  EnterpriseWorkflowsPanel,
 } from "@/components/enterprise/enterprise-admin-panels";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
-import { SectorWorkspaceFrame } from "@/components/workspace/sector-workspace-frame";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
-import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
 
 const ADMIN_SECTIONS = [
   ["overview", "Vue d’ensemble"],
@@ -50,10 +45,8 @@ export function EnterpriseAdministrationModule(
     members,
     departments,
     positions,
-    workflows,
     recentRequests,
     calendarEvents,
-    sectorRecords,
     entitlements,
     configurationIssues,
     locale,
@@ -74,14 +67,6 @@ export function EnterpriseAdministrationModule(
       enterpriseModule.sectorCompatible !== false,
     ),
     [modules],
-  );
-  const activeModuleCodes = useMemo(
-    () => new Set(
-      visibleModules
-        .filter((enterpriseModule) => enterpriseModule.isEnabled && enterpriseModule.accessAllowed !== false)
-        .map((enterpriseModule) => normalizeEnterpriseModuleCode(enterpriseModule.moduleCode)),
-    ),
-    [visibleModules],
   );
 
   async function submitAdminMutation(event: FormEvent<HTMLFormElement>, successMessage: string) {
@@ -169,36 +154,21 @@ export function EnterpriseAdministrationModule(
   return (
     <ModuleWorkspace>
       <EnterpriseAdminSectionActivator section={initialSection} />
-
       <nav aria-label="Sections administration entreprise" className="flex snap-x gap-2 overflow-x-auto pb-2">
         {ADMIN_SECTIONS.map(([code, label]) => (
-          <Link
-            key={code}
-            href={`/enterprise-admin?section=${code}`}
-            className="min-h-11 shrink-0 snap-start rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2.5 text-xs font-black text-dtsc-muted hover:border-cyan-400/40 hover:text-dtsc-blue"
-          >
+          <Link key={code} href={`/enterprise-admin?section=${code}`} className="min-h-11 shrink-0 snap-start rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2.5 text-xs font-black text-dtsc-muted hover:border-cyan-400/40 hover:text-dtsc-blue">
             {label}
           </Link>
         ))}
       </nav>
 
       <div id="enterprise-admin-overview" className="scroll-mt-24 outline-none">
-        <EnterpriseAdministrationSummary
-          organization={organization}
-          dashboard={dashboard}
-          entitlements={entitlements}
-          activeMembers={activeMembers}
-          pendingMembers={pendingMembers}
-          visibleModules={visibleModules}
-        />
+        <EnterpriseAdministrationSummary organization={organization} dashboard={dashboard} entitlements={entitlements} activeMembers={activeMembers} pendingMembers={pendingMembers} visibleModules={visibleModules} />
       </div>
 
       <ModuleContent>
         <div id="enterprise-admin-subscription" className="scroll-mt-24 outline-none">
-          <ModuleSection
-            title="Abonnement & limites"
-            description="Limites réellement résolues depuis le plan et l’abonnement actifs. Aucun module ne peut se débloquer depuis le frontend."
-          >
+          <ModuleSection title="Abonnement & limites" description="Limites réellement résolues depuis le plan et l’abonnement actifs. Aucun module ne peut se débloquer depuis le frontend.">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <AdminMetric label="Plan" value={entitlements.planLabel} />
               <AdminMetric label="Statut" value={entitlements.subscriptionStatus} />
@@ -212,8 +182,12 @@ export function EnterpriseAdministrationModule(
           <ModuleSection title="Modules" description="Modules Core et sectoriels connus du registre, compatibles avec le secteur et réellement implémentés.">
             <Accordion>
               <EnterpriseModulesPanel organization={organization} visibleModules={visibleModules} toggleModule={toggleModule} />
-              <EnterpriseWorkflowsPanel sectorCode={organization.sectorCode} workflows={workflows} departments={departments} activeMembers={activeMembers} submitAdminMutation={submitAdminMutation} />
             </Accordion>
+            <div className="mt-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+              <p className="font-black text-dtsc-ink">Workflow Engine v2</p>
+              <p className="mt-1 text-sm text-dtsc-muted">La création et l’exécution des workflows se font désormais dans le moteur versionné. Les anciennes définitions restent archivées en lecture seule.</p>
+              <Link href="/enterprise-modules/WORKFLOWS" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-blue">Ouvrir les workflows</Link>
+            </div>
           </ModuleSection>
         </div>
 
@@ -221,15 +195,7 @@ export function EnterpriseAdministrationModule(
           <ModuleSection title="Collaborateurs" description="Invitations, memberships actifs et retraits non destructifs.">
             <Accordion>
               <AccordionItem title="Collaborateurs" defaultOpen>
-                <EnterpriseMembersPanel
-                  members={members}
-                  pendingMembers={pendingMembers}
-                  activeMembers={activeMembers}
-                  positions={positions}
-                  inviteMember={inviteMember}
-                  updateMember={updateMember}
-                  removeMember={removeMember}
-                />
+                <EnterpriseMembersPanel members={members} pendingMembers={pendingMembers} activeMembers={activeMembers} positions={positions} inviteMember={inviteMember} updateMember={updateMember} removeMember={removeMember} />
               </AccordionItem>
             </Accordion>
           </ModuleSection>
@@ -240,12 +206,7 @@ export function EnterpriseAdministrationModule(
           <ModuleSection title="Postes, rôles & permissions" description="Les permissions de poste restent l’autorité métier sans élargissement automatique du rôle Manager.">
             <Accordion>
               <AccordionItem title="Postes et permissions" defaultOpen>
-                <EnterprisePositionsPanel
-                  sectorCode={organization.sectorCode}
-                  departments={departments}
-                  positions={positions}
-                  submitAdminMutation={submitAdminMutation}
-                />
+                <EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} />
               </AccordionItem>
             </Accordion>
           </ModuleSection>
@@ -269,20 +230,11 @@ export function EnterpriseAdministrationModule(
         </div>
 
         <div id="enterprise-admin-audit" className="scroll-mt-24 outline-none">
-          <ModuleSection
-            title="Audit & cohérence des modules"
-            count={`${configurationIssues.length}`}
-            description="Incohérences compréhensibles pour les responsables autorisés, sans bruit de log sur les rendus normaux."
-          >
+          <ModuleSection title="Audit & cohérence des modules" count={`${configurationIssues.length}`} description="Incohérences compréhensibles pour les responsables autorisés, sans bruit de log sur les rendus normaux.">
             {configurationIssues.length ? (
               <BusinessList ariaLabel="Incohérences des modules">
                 {configurationIssues.map((issue, index) => (
-                  <BusinessListItem
-                    key={`${issue.code}-${issue.moduleCode || "global"}-${index}`}
-                    title={issue.moduleCode || issue.code}
-                    description={issue.message}
-                    status={<StatusBadge tone={issue.severity === "ERROR" ? "danger" : "warning"}>{issue.severity}</StatusBadge>}
-                  />
+                  <BusinessListItem key={`${issue.code}-${issue.moduleCode || "global"}-${index}`} title={issue.moduleCode || issue.code} description={issue.message} status={<StatusBadge tone={issue.severity === "ERROR" ? "danger" : "warning"}>{issue.severity}</StatusBadge>} />
                 ))}
               </BusinessList>
             ) : (
@@ -292,39 +244,10 @@ export function EnterpriseAdministrationModule(
         </div>
 
         <div id="enterprise-admin-templates" className="scroll-mt-24 outline-none">
-          {organization.sectorCode === "HEALTH_CARE" ? (
-            <ModuleSection title="Templates sectoriels Health" description="Workspace Health existant conservé, avec données et permissions inchangées.">
-              <SectorWorkspaceFrame variant="health">
-                <HealthcareAdminWorkspace
-                  organizationId={organization.id}
-                  records={sectorRecords}
-                  members={activeMembers}
-                  departments={departments}
-                  positions={positions}
-                  activeModuleCodes={activeModuleCodes}
-                  locale={locale}
-                />
-              </SectorWorkspaceFrame>
-            </ModuleSection>
-          ) : null}
-
-          {organization.sectorCode === "PHARMACY" ? (
-            <ModuleSection title="Templates sectoriels Pharmacy" description="Workspace Pharmacy existant conservé, sans migration de ses sources métier.">
-              <PharmacyAdminWorkspace
-                organizationId={organization.id}
-                records={sectorRecords}
-                members={activeMembers}
-                departments={departments}
-                activeModuleCodes={activeModuleCodes}
-              />
-            </ModuleSection>
-          ) : null}
-
-          {!['HEALTH_CARE', 'PHARMACY'].includes(organization.sectorCode || "") ? (
-            <ModuleSection title="Templates sectoriels" description="Les secteurs futurs restent planifiés et ne sont pas provisionnés comme modules disponibles.">
-              <EmptyState compact title="Aucun template fonctionnel actif" description="Le socle commun reste disponible. Les modules sectoriels futurs seront livrés dans des itérations dédiées." />
-            </ModuleSection>
-          ) : null}
+          <ModuleSection title="Modules sectoriels" description="Les domaines Health et Pharmacy utilisent exclusivement leurs workspaces dédiés. Les anciens formulaires génériques restent archivés et non modifiables.">
+            <EmptyState compact title="Aucun CRUD générique actif" description="Ouvrez le catalogue des modules pour accéder aux sous-modules sectoriels réellement implémentés." />
+            <Link href="/enterprise-modules" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-blue">Ouvrir les modules ERP</Link>
+          </ModuleSection>
         </div>
 
         <ModuleSection title="Demandes récentes" description="Suivi des demandes administratives visibles dans l’organisation active.">

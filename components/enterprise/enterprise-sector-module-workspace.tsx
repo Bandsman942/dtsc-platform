@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Settings2 } from "lucide-react";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
 import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
@@ -29,59 +27,31 @@ import { PharmacyReturnLossWorkspace } from "@/components/enterprise/pharmacy-re
 import { PharmacySalesWorkspace } from "@/components/enterprise/pharmacy-sales-workspace";
 import { PharmacySettingsWorkspace } from "@/components/enterprise/pharmacy-settings-workspace";
 import { PharmacyStockWorkspace } from "@/components/enterprise/pharmacy-stock-workspace";
-import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
-import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseSectorRecordItem } from "@/lib/enterprise/enterprise-admin-types";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
-export function EnterpriseSectorModuleWorkspace({
-  organizationId,
-  definition,
-  enabledModuleCodes,
-  records,
-}: {
+export function EnterpriseSectorModuleWorkspace(props: {
   organizationId: string;
   definition: EnterpriseModuleDefinition;
   enabledModuleCodes: string[];
   records: EnterpriseSectorRecordItem[];
 }) {
+  const { organizationId, definition, enabledModuleCodes } = props;
   const router = useRouter();
   const activeModuleCodes = useMemo(() => new Set(enabledModuleCodes), [enabledModuleCodes]);
 
   if (definition.routeKind === "SECTOR_HEALTH") {
     if (definition.code === "PATIENTS") {
-      return (
-        <HealthPatientsWorkspace
-          organizationId={organizationId}
-          activeModuleCodes={activeModuleCodes}
-          onOpenRelated={(moduleCode) => router.push(`/enterprise-modules/${encodeURIComponent(moduleCode)}`)}
-        />
-      );
+      return <HealthPatientsWorkspace organizationId={organizationId} activeModuleCodes={activeModuleCodes} onOpenRelated={(moduleCode) => router.push(`/enterprise-modules/${encodeURIComponent(moduleCode)}`)} />;
     }
     if (definition.code === "APPOINTMENTS") {
-      return (
-        <HealthAppointmentsWorkspace
-          organizationId={organizationId}
-          initialPatientLegacyRecordId=""
-          activeModuleCodes={activeModuleCodes}
-          onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")}
-        />
-      );
+      return <HealthAppointmentsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" activeModuleCodes={activeModuleCodes} onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")} />;
     }
     if (definition.code === "CONSULTATIONS") {
-      return (
-        <HealthConsultationsWorkspace
-          organizationId={organizationId}
-          initialPatientLegacyRecordId=""
-          onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")}
-        />
-      );
+      return <HealthConsultationsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")} />;
     }
-    if (definition.code === "MEDICAL_RECORDS") {
-      return <HealthMedicalRecordsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" />;
-    }
+    if (definition.code === "MEDICAL_RECORDS") return <HealthMedicalRecordsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" />;
     if (definition.code === "CARE_TEAM") return <HealthStaffWorkspace organizationId={organizationId} />;
     if (definition.code === "LABORATORY") return <HealthLaboratoryWorkspace organizationId={organizationId} />;
     if (definition.code === "INTERNAL_PHARMACY") return <HealthPharmacyWorkspace organizationId={organizationId} />;
@@ -89,7 +59,6 @@ export function EnterpriseSectorModuleWorkspace({
     if (definition.code === "INSURANCE_COVERAGE") return <HealthInsuranceWorkspace organizationId={organizationId} />;
     if (definition.code === "QUALITY_INCIDENTS") return <HealthQualityWorkspace organizationId={organizationId} />;
     if (definition.code === "MEDICAL_DOCUMENTS") return <HealthDocumentsWorkspace organizationId={organizationId} />;
-    return <LegacySectorRecords definition={definition} records={records} />;
   }
 
   if (definition.routeKind === "SECTOR_PHARMACY") {
@@ -112,54 +81,8 @@ export function EnterpriseSectorModuleWorkspace({
   return (
     <EmptyState
       compact
-      title="Workspace sectoriel non résolu"
-      description="Le registre connaît ce module mais aucun renderer allow-listé ne correspond à son workspaceKey."
+      title="Module indisponible"
+      description="Ce module ne possède pas encore de contrat métier dédié. Il reste masqué jusqu’à son implémentation complète."
     />
-  );
-}
-
-function LegacySectorRecords({
-  definition,
-  records,
-}: {
-  definition: EnterpriseModuleDefinition;
-  records: EnterpriseSectorRecordItem[];
-}) {
-  const visibleRecords = records.filter((record) => record.moduleCode === definition.code);
-  return (
-    <ModuleWorkspace>
-      <ModuleHeader
-        eyebrow="Module sectoriel beta"
-        title={definition.labelFr}
-        count={`${visibleRecords.length}`}
-        description={`${definition.descriptionFr} Les mutations restent dans l’administration sectorielle existante jusqu’à la création d’un modèle métier dédié.`}
-        primaryAction={(
-          <Link href="/enterprise-admin" className="inline-flex h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-black text-dtsc-blue">
-            <Settings2 className="h-4 w-4" /> Administration
-          </Link>
-        )}
-      />
-      <ModuleContent>
-        <ModuleSection title="Éléments autorisés" description="Lecture directe des données beta existantes, sans réintroduire un CRUD générique pour les domaines dédiés.">
-          {visibleRecords.length ? (
-            <BusinessList ariaLabel={definition.labelFr}>
-              {visibleRecords.map((record) => (
-                <BusinessListItem
-                  key={record.id}
-                  title={record.title}
-                  description={record.summary || "Aucun résumé renseigné."}
-                  status={<StatusBadge>{record.status}</StatusBadge>}
-                />
-              ))}
-            </BusinessList>
-          ) : (
-            <EmptyState compact title="Aucun élément" description="Aucune donnée beta n’est actuellement visible dans ce module." />
-          )}
-        </ModuleSection>
-        <Link href="/enterprise-modules" className="inline-flex items-center gap-2 text-sm font-black text-dtsc-blue">
-          <ArrowLeft className="h-4 w-4" /> Retour aux modules ERP
-        </Link>
-      </ModuleContent>
-    </ModuleWorkspace>
   );
 }

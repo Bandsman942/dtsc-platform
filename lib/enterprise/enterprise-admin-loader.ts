@@ -1,13 +1,19 @@
 import type { EnterpriseAdminDataset } from "@/lib/enterprise/enterprise-admin-types";
 import { getEnterpriseCalendarDataset } from "@/lib/enterprise/enterprise-calendar-loader";
-import { getEnterpriseHealthcareDataset } from "@/lib/enterprise/enterprise-healthcare-loader";
-import { getEnterprisePharmacyDataset } from "@/lib/enterprise/enterprise-pharmacy-loader";
 import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members-loader";
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
 import { listEnterpriseModuleConfigurationIssues } from "@/lib/enterprise/module-access";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
+
+// Iteration 5 compatibility note: the former calls
+// getEnterpriseHealthcareDataset(organizationId, organization.sectorCode) and
+// getEnterprisePharmacyDataset(organizationId, organization.sectorCode) under
+// organization.sectorCode === "PHARMACY" were intentionally removed from the
+// normal admin render. Dedicated workspaces now load their own tenant-scoped
+// data; historical sector records remain available only through protected,
+// paginated legacy reads.
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -56,7 +62,6 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     positions,
     workflowDataset,
     calendarEvents,
-    sectorRecords,
     tasks,
     requests,
     pendingValidationsCount,
@@ -74,11 +79,6 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     prisma.enterprisePosition.findMany({ where: { organizationId }, orderBy: [{ hierarchyLevel: "asc" }, { labelFr: "asc" }], include: { department: { select: { labelFr: true, labelEn: true } } } }),
     getEnterpriseWorkflowsDataset(organizationId),
     getEnterpriseCalendarDataset(organizationId),
-    organization.sectorCode === "PHARMACY"
-      ? getEnterprisePharmacyDataset(organizationId, organization.sectorCode)
-      : organization.sectorCode === "HEALTH_CARE"
-        ? getEnterpriseHealthcareDataset(organizationId, organization.sectorCode)
-        : Promise.resolve([]),
     prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, dueAt: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null }, select: { status: true, createdAt: true } }),
     prisma.enterpriseApproval.count({ where: { organizationId, archivedAt: null, status: "PENDING" } }),
@@ -128,7 +128,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     workflows: workflowDataset.workflows,
     recentRequests: workflowDataset.recentRequests,
     calendarEvents,
-    sectorRecords,
+    sectorRecords: [],
     entitlements: {
       planCode: entitlements.planCode,
       planLabel: entitlements.planLabel,

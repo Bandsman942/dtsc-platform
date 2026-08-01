@@ -1,124 +1,58 @@
 # Inventaire canonique des modules ERP DTSC
 
-Version initiale : consolidation ERP, itération 1/5
-Source de vérité exécutable : `lib/enterprise/module-registry-data.json`
-Contrôles reproductibles : `pnpm audit:enterprise-modules` et `pnpm qa:enterprise-module-registry`
+Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry` et `pnpm qa:erp-final-cutover`.
 
-## Principes de lecture
+## Statuts
 
-- **ACTIVE** : route, workspace, service métier, API, permissions, entitlement et QA existants.
-- **BETA** : implémentation ouvrable et contrôlée, mais encore appuyée partiellement sur une source legacy explicitement documentée.
-- **PLANNED** : code historique ou futur sans implémentation complète; jamais navigable ni provisionné automatiquement.
-- **HIDDEN** : code connu conservé pour compatibilité ou audit, volontairement non ouvrable.
-- `EnterpriseModule` reste la configuration du tenant. Le registre TypeScript décide si un code peut réellement exister dans le produit.
+- `ACTIVE` : modèle/service, route, workspace, permission, entitlement et QA réels.
+- `BETA` : implémentation réelle encore sous observation, jamais simple CRUD générique.
+- `PLANNED` : futur, non navigable.
+- `HIDDEN` : connu pour compatibilité/audit, non ouvrable.
+- `DEPRECATED` : visible uniquement pendant une transition documentée.
+- `RETIRED` : retiré du produit actif.
 
-## Socle ERP commun actif
+## Socle commun
 
-| Code | Libellé FR / EN | Domaine | Statut | Secteurs | Source métier | Route / workspace | APIs principales | Permissions | Entitlement | Dépendances | Legacy | Navigation / QA | Décision |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `TASKS_OPERATIONS` | Tâches & opérations / Tasks & operations | Opérations | ACTIVE | Tous | `EnterpriseTask` et services Core v2 | `/enterprise-modules/TASKS_OPERATIONS` / `EnterpriseTasksWorkspace` | `/api/enterprise/[organizationId]/core-v2/tasks/*` | `enterprise.tasks.*` | BUSINESS actif | — | `EnterpriseCoreRecord` conservé hors source dédiée | Opérations 10 / `enterprise-core-v2` | Conserver |
-| `INTERNAL_REQUESTS` | Demandes internes / Internal requests | Opérations | ACTIVE | Tous | `EnterpriseRequest` | `/enterprise-modules/INTERNAL_REQUESTS` / `EnterpriseRequestsWorkspace` | `/api/enterprise/[organizationId]/core-v2/requests/*` | `enterprise.requests.*` | STARTER | — | Anciennes demandes Core lisibles selon compatibilité | Opérations 20 / `enterprise-core-v2` | Conserver |
-| `VALIDATIONS` | Validations / Approvals | Opérations | ACTIVE | Tous | `EnterpriseApproval` | `/enterprise-modules/VALIDATIONS` / `EnterpriseApprovalsWorkspace` | `/api/enterprise/[organizationId]/core-v2/approvals/*` | `enterprise.approvals.*` | BUSINESS actif | — | `EnterpriseCoreRecord` non supprimé | Opérations 30 / `enterprise-core-v2` | Conserver |
-| `MEETINGS` | Réunions / Meetings | Opérations | ACTIVE | Tous | `EnterpriseMeeting` | `/enterprise-modules/MEETINGS` / `EnterpriseMeetingsWorkspace` | `/api/enterprise/[organizationId]/core-v2/meetings/*` | `enterprise.meetings.*` | BUSINESS actif | — | Calendrier interne relié, non remplacé | Opérations 40 / `enterprise-core-v2` | Conserver |
-| `WORKFLOWS` | Workflows / Workflows | Opérations | ACTIVE | Tous | Workflow Engine v2 | `/enterprise-modules/WORKFLOWS` / `EnterpriseWorkflowsWorkspace` | `/api/enterprise/[organizationId]/workflow-engine/*` | `enterprise.workflows.*` | BUSINESS actif | — | `EnterpriseWorkflow` legacy conservé | Opérations 50 / `enterprise-workflows` | Conserver |
-| `SUPPLIERS_PURCHASES` | Fournisseurs & achats / Suppliers & purchases | Achats & inventaire | ACTIVE | Tous | `EnterpriseSupplier`, `EnterprisePurchase*` | `/enterprise-modules/SUPPLIERS_PURCHASES` / workspaces fournisseurs et achats dédiés | `/api/enterprise/[organizationId]/suppliers/*`, `/purchases/*` | `enterprise.suppliers.*`, `enterprise.purchases.*` | BUSINESS actif | — | Anciens records non supprimés | Achats & ressources 10 / `enterprise-documents-procurement` | Conserver |
-| `DOCUMENTS` | Documents / Documents | Documents | ACTIVE | Tous | `EnterpriseDocument` | `/enterprise-modules/DOCUMENTS` / `EnterpriseDocumentsWorkspace` | `/api/enterprise/[organizationId]/documents/*` | `enterprise.documents.*` | STARTER | — | Documents sectoriels restent séparés | Achats & ressources 20 / `enterprise-documents-procurement` | Conserver |
-| `FINANCE_BUDGETS` | Finances & budgets / Finance & budgets | Finance | ACTIVE | Tous | `EnterpriseBudget`, `EnterpriseExpense` | `/enterprise-modules/FINANCE_BUDGETS` / `EnterpriseFinanceWorkspace` | `/api/enterprise/[organizationId]/finance/*` | `enterprise.finance.*`, `enterprise.budgets.*` | BUSINESS actif | — | Aucune convergence Pharmacy/Health dans cette itération | Finances 10 / `enterprise-finance-reports` | Conserver |
-| `REPORTS` | Rapports / Reports | Analytics | ACTIVE | Tous | `EnterpriseReport` et agrégats dédiés | `/enterprise-modules/REPORTS` / `EnterpriseReportsWorkspace` | `/api/enterprise/[organizationId]/reports/*` | `enterprise.reports.*` | STARTER | — | Rapports sectoriels restent distincts | Finances 20 / `enterprise-finance-reports` | Conserver |
-| `AI_ASSISTANT` | IA Assistant Entreprise / Enterprise AI assistant | Intelligence | ACTIVE | Tous | RAG/CAG et conversations IA entreprise | `/enterprise-modules/AI_ASSISTANT` / `EnterpriseAiWorkspaceV2` | `/api/enterprise/[organizationId]/ai/*` | `enterprise.ai.*` | BUSINESS actif | — | Aucun alias | Intelligence 10 / `assistant-ux` | Conserver comme service transversal |
+| Groupe | Modules canoniques actifs |
+|---|---|
+| Opérations | `TASKS_OPERATIONS`, `INTERNAL_REQUESTS`, `VALIDATIONS`, `MEETINGS`, `WORKFLOWS` |
+| Commercial | tiers, CRM, devis, contrats, commandes, livraisons et ventes dédiées |
+| Achats & ressources | `SUPPLIERS_PURCHASES`, catalogue, sites, entrepôts, stock commun, `DOCUMENTS` |
+| RH client | collaborateurs, absences, timesheets et paie opérationnelle dédiés |
+| Projets & actifs | projets, livrables, actifs et maintenances dédiés |
+| Intelligence | `AI_ASSISTANT` |
+| Analytics | `REPORTS` et rapports dédiés |
 
-## Modules Health actifs
+## Finance commune
 
-Tous les modules ci-dessous sont limités à `HEALTH_CARE`, au plan ENTERPRISE actif et aux permissions de poste correspondantes. Les données restent isolées par `organizationId`.
+`FINANCE_OVERVIEW`, `FINANCE_RECEIVABLES`, `FINANCE_PAYABLES`, `FINANCE_PAYMENTS`, `FINANCE_TREASURY`, `FINANCE_CASH`, `FINANCE_BANK`, `FINANCE_RECONCILIATION`, `FINANCE_ACCOUNTING`, `FINANCE_TAX`, `FINANCE_CLOSE`, `FINANCE_STATEMENTS`, `FINANCE_ASSETS` et `FINANCE_INVENTORY` sont soumis au registre, au membership, au plan, aux dépendances et aux permissions côté serveur.
 
-| Code | Libellé | Statut | Source / workspace réellement monté | Permissions | Dépendances | Décision |
-|---|---|---|---|---|---|---|
-| `PATIENTS` | Patients | ACTIVE | `HealthPatient` / `HealthPatientsWorkspace` | `health.patients.*` | — | Conserver |
-| `APPOINTMENTS` | Rendez-vous | ACTIVE | `HealthAppointment` / `HealthAppointmentsWorkspace` | `health.appointments.*` | `PATIENTS` | Conserver |
-| `CONSULTATIONS` | Consultations | ACTIVE | `HealthConsultation` / `HealthConsultationsWorkspace` | `health.consultations.*` | `PATIENTS` | Conserver |
-| `MEDICAL_RECORDS` | Dossiers médicaux | ACTIVE | dossiers médicaux dédiés / `HealthMedicalRecordsWorkspace` | `health.medical_records.*` | `PATIENTS` | Conserver avec confidentialité renforcée |
-| `CARE_TEAM` | Équipe médicale | ACTIVE | memberships/postes santé / `HealthStaffWorkspace` | `health.staff.*`, administration membres | — | Conserver |
-| `LABORATORY` | Laboratoire | ACTIVE | demandes/résultats laboratoire / `HealthLaboratoryWorkspace` | `health.lab.*` | `PATIENTS` | Conserver |
-| `INTERNAL_PHARMACY` | Pharmacie interne | ACTIVE | produits/mouvements Health / `HealthPharmacyWorkspace` | `health.pharmacy.*` | — | Conserver distinct de Pharmacy sectoriel |
-| `MEDICAL_BILLING` | Facturation médicale | ACTIVE | facturation Health / `HealthMedicalBillingWorkspace` | `health.billing.*` | `PATIENTS` | Conserver sans migration finance commune |
-| `INSURANCE_COVERAGE` | Assurances & prises en charge | ACTIVE | prises en charge / `HealthInsuranceWorkspace` | `health.insurance.*` | `PATIENTS`, `MEDICAL_BILLING` | Conserver |
-| `QUALITY_INCIDENTS` | Incidents qualité | ACTIVE | incidents qualité / `HealthQualityWorkspace` | `health.incidents.*` | — | Conserver |
-| `MEDICAL_DOCUMENTS` | Documents médicaux | ACTIVE | documents médicaux / `HealthDocumentsWorkspace` | `health.documents.*` | `PATIENTS` | Conserver avec confidentialité |
+## Health
 
-### Health beta
+Modules dédiés actifs : `PATIENTS`, `APPOINTMENTS`, `CONSULTATIONS`, `MEDICAL_RECORDS`, `CARE_TEAM`, `LABORATORY`, `INTERNAL_PHARMACY`, `MEDICAL_BILLING`, `INSURANCE_COVERAGE`, `QUALITY_INCIDENTS`, `MEDICAL_DOCUMENTS`.
 
-| Code | Statut | Source actuelle | Limite et décision |
-|---|---|---|---|
-| `MEDICAL_CONFIDENTIALITY` | BETA | Paramétrage et records sectoriels contrôlés | Lecture directe et administration existante; aucune nouvelle source métier créée ici |
-| `HEALTH_SETTINGS` | BETA | Paramètres Health persistés dans l’organisation | Maintenir beta jusqu’au contrat de paramètres dédié |
-| `HEALTH_REPORTS` | BETA | Agrégats Health existants | Aucune projection financière nouvelle; convergence différée |
+Décisions finales :
 
-## Modules Pharmacy actifs
+| Code | Statut final | Motif |
+|---|---|---|
+| `MEDICAL_CONFIDENTIALITY` | `HIDDEN` | aucun workspace métier dédié indépendant ; confidentialité appliquée dans les modules réels |
+| `HEALTH_SETTINGS` | `HIDDEN` | paramètres gérés dans l’administration sans CRUD sectoriel générique |
+| `HEALTH_REPORTS` | `HIDDEN` | rapports canoniques à construire sur les sources dédiées, sans double comptage |
 
-Tous les modules ci-dessous sont limités à `PHARMACY`, au plan ENTERPRISE actif et aux permissions de poste correspondantes.
+## Pharmacy
 
-| Code canonique | Libellé | Source / workspace | Permissions | Dépendances | Alias legacy | Décision |
-|---|---|---|---|---|---|---|
-| `MEDICINES_PRODUCTS` | Produits & médicaments | `PharmacyProduct` / `PharmacyProductsWorkspace` | `pharmacy.products.*` | — | — | Conserver |
-| `BATCH_EXPIRY` | Lots & péremptions | `PharmacyBatch` / `PharmacyBatchesWorkspace` | `pharmacy.batches.*` | Produits | — | Conserver |
-| `STOCK_INVENTORY` | Stock & inventaire | mouvements/inventaires / `PharmacyStockWorkspace` | `pharmacy.stock.*` | Produits | — | Conserver |
-| `STOCK_RECEIPTS` | Entrées stock / réceptions | réceptions / `PharmacyReceiptsWorkspace` | `pharmacy.receipts.*` | Produits, lots | — | Conserver |
-| `SALES_DISPENSATION` | Sorties, ventes & dispensation | ventes/dispensation / `PharmacySalesWorkspace` | `pharmacy.sales.*` | Produits, lots | `SALES_CASHIER` | Canonique; alias non dupliqué au menu |
-| `PRESCRIPTIONS` | Ordonnances / prescriptions | prescriptions / `PharmacyPrescriptionsWorkspace` | `pharmacy.prescriptions.*` | — | — | Conserver |
-| `SUPPLIERS_ORDERS` | Fournisseurs & commandes | achats pharmacie / `PharmacyPurchasesWorkspace` | `pharmacy.suppliers.*`, `pharmacy.purchase_orders.*` | Produits | `PURCHASE_REQUESTS` | Canonique; alias non dupliqué au menu |
-| `CASH_INVOICES_PAYMENTS` | Caisse, factures & paiements | caisse/factures/paiements / `PharmacyCashWorkspace` | `pharmacy.cash.*` | Ventes | — | Conserver |
-| `RETURNS_ADJUSTMENTS_LOSSES` | Retours, ajustements & pertes | ajustements / `PharmacyReturnLossWorkspace` | `pharmacy.adjustments.*` | Produits, lots | — | Conserver |
-| `ALERTS_EXPIRY_LOW_STOCK` | Alertes stock/péremption/rappel | alertes / `PharmacyAlertsWorkspace` | `pharmacy.alerts.*` | Produits, lots | — | Conserver |
-| `QUALITY_PHARMACOVIGILANCE` | Qualité & pharmacovigilance | incidents / `PharmacyQualityWorkspace` | `pharmacy.quality.*` | — | — | Conserver |
-| `PHARMACY_DOCUMENTS` | Documents & conformité | documents / `PharmacyDocumentsWorkspace` | `pharmacy.documents.*` | — | — | Conserver |
-| `PHARMACY_REPORTS` | Rapports pharmacie | tables métier Pharmacy / `PharmacyReportsWorkspace` | `pharmacy.reports.*` | — | — | Conserver |
-| `PHARMACY_SETTINGS` | Paramètres pharmacie | paramètres FEFO/stock / `PharmacySettingsWorkspace` | `pharmacy.settings.*` | — | — | Conserver |
+Modules dédiés actifs : `MEDICINES_PRODUCTS`, `BATCH_EXPIRY`, `STOCK_INVENTORY`, `STOCK_RECEIPTS`, `SALES_DISPENSATION`, `PRESCRIPTIONS`, `SUPPLIERS_ORDERS`, `CASH_INVOICES_PAYMENTS`, `RETURNS_ADJUSTMENTS_LOSSES`, `ALERTS_EXPIRY_LOW_STOCK`, `QUALITY_PHARMACOVIGILANCE`, `PHARMACY_DOCUMENTS`, `PHARMACY_REPORTS`, `PHARMACY_SETTINGS`.
+
+Pharmacy conserve lots, FEFO, péremption, rappels, qualité, pharmacovigilance et quantités réglementées. Les fournisseurs, achats, factures, paiements, caisses et écritures communs sont reliés par extensions et mappings.
 
 ## Administration consolidée
 
-Ces codes restent connus uniquement pour préserver les anciens liens. Ils ne sont plus des domaines ERP autonomes.
+`ADMIN_DASHBOARD`, `COLLABORATORS_POSITIONS`, `DEPARTMENTS`, `PERMISSIONS`, `SETTINGS` et `AUDIT_LOGS` restent uniquement des aliases/redirections vers `/enterprise-admin`. Ils ne sont pas des modules métier autonomes.
 
-| Ancien code | Redirection canonique | Politique |
-|---|---|---|
-| `ADMIN_DASHBOARD` | `/enterprise-admin?section=overview` | Administration explicite uniquement |
-| `COLLABORATORS_POSITIONS` | `/enterprise-admin?section=members` | Administration explicite uniquement |
-| `DEPARTMENTS` | `/enterprise-admin?section=departments` | Administration explicite uniquement |
-| `PERMISSIONS` | `/enterprise-admin?section=permissions` | Administration explicite uniquement |
-| `SETTINGS` | `/enterprise-admin?section=settings` | Administration explicite uniquement |
-| `AUDIT_LOGS` | `/enterprise-admin?section=audit` | Administration explicite uniquement |
+## Legacy
 
-## Codes masqués et secteurs futurs
-
-- `INTERNAL_CALENDAR` est **HIDDEN** : le calendrier demeure un service transversal et une relation opérationnelle, pas un module ERP générique autonome.
-- Les catalogues historiques `INSURANCE`, `EDUCATION`, `COMMERCE_RETAIL`, `PROFESSIONAL_SERVICES` et `NGO_ASBL` contiennent des codes **PLANNED** ou **HIDDEN**.
-- Exemples classés : `CLIENTS_POLICYHOLDERS`, `POLICIES`, `CLAIMS`, `STUDENTS`, `TEACHERS`, `CLASSES`, `PRODUCTS`, `SALES`, `CASH_REGISTER`, `CLIENTS`, `MISSIONS`, `CONTRACTS`, `PROGRAMS_PROJECTS`, `BENEFICIARIES`, `FIELD_ACTIVITIES`.
-- Ces codes peuvent rester dans les migrations immuables ou l’historique des templates, mais ils sont désactivés lors d’une nouvelle application de template et ne sont ni navigables ni ouvrables.
-- Tout autre code détecté par `audit:enterprise-modules` est classé `HISTORICAL_UNKNOWN` s’il existe uniquement dans une migration immuable, ou `UNKNOWN` s’il reste référencé dans du code actif. Un code `UNKNOWN` actif fait échouer l’audit.
-
-## Services transversaux hors taxonomie ERP métier
-
-Les services suivants ne sont pas supprimés et ne doivent pas être confondus avec les domaines ERP : Chatbot, Mes collaborateurs, Notifications, Annonces, Support, Abonnement, Profil et Paramètres personnels. `AI_ASSISTANT` reste enregistré parce qu’il possède un workspace et un entitlement entreprise propres, mais il est classé dans le domaine **Intelligence**.
-
-
-## Modules Finance communs — Itération 3
-
-<!-- ERP_MODULE_INVENTORY_FINANCE_V1 -->
-
-| Code | Domaine | Plan minimum | Workspace |
-|---|---|---|---|
-| FINANCE_OVERVIEW | Configuration et préparation | BUSINESS | ENTERPRISE_FINANCE_OVERVIEW |
-| FINANCE_RECEIVABLES | Factures clients et créances | BUSINESS | ENTERPRISE_RECEIVABLES |
-| FINANCE_PAYABLES | Factures fournisseurs et dettes | BUSINESS | ENTERPRISE_PAYABLES |
-| FINANCE_PAYMENTS | Paiements et allocations | BUSINESS | ENTERPRISE_PAYMENTS |
-| FINANCE_TREASURY | Comptes financiers et transferts | BUSINESS | ENTERPRISE_TREASURY |
-| FINANCE_CASH | Sessions et écarts de caisse | BUSINESS | ENTERPRISE_CASH |
-| FINANCE_BANK | Relevés bancaires | ENTERPRISE | ENTERPRISE_BANK |
-| FINANCE_RECONCILIATION | Rapprochements | ENTERPRISE | ENTERPRISE_RECONCILIATION |
-| FINANCE_ACCOUNTING | Périodes, comptes et journaux | ENTERPRISE | ENTERPRISE_ACCOUNTING |
-| FINANCE_TAX | Fiscalité opérationnelle | ENTERPRISE | ENTERPRISE_TAX |
-| FINANCE_CLOSE | Clôture financière | ENTERPRISE | ENTERPRISE_FINANCIAL_CLOSE |
-| FINANCE_STATEMENTS | États financiers | ENTERPRISE | ENTERPRISE_FINANCIAL_STATEMENTS |
-| FINANCE_ASSETS | Comptabilité des actifs | ENTERPRISE | ENTERPRISE_ASSET_ACCOUNTING |
-| FINANCE_INVENTORY | Valorisation du stock commun | ENTERPRISE | ENTERPRISE_INVENTORY_ACCOUNTING |
-
-Tous ces modules sont `ACTIVE`, soumis au registre, à l’abonnement, au membership et aux permissions. Les modules Finance sectoriels Pharmacy/Health restent hors de cet inventaire commun jusqu’à l’itération 4.
+- `EnterpriseCoreRecord` : `LEGACY_READ_ONLY`.
+- `EnterpriseSectorRecord` : `LEGACY_READ_ONLY`.
+- `EnterpriseWorkflow` : `LEGACY_READ_ONLY` ; Workflow Engine v2 actif.
+- Modules fantômes : aucun code sans modèle/service, route, workspace, permission, entitlement et QA ne peut rester `ACTIVE`.
+- Secteurs futurs : `PLANNED` ou `HIDDEN`, jamais carte ou route active.

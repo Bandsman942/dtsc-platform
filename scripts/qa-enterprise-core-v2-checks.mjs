@@ -46,8 +46,9 @@ ok(errors.includes('error.code === "P2002"') && errors.includes("status: 409"), 
 const approvalRoute = read("app/api/enterprise/[organizationId]/approvals/route.ts");
 ok(approvalRoute.includes("pendingForTarget"), "Approval API must reject a second pending approval before insert when detectable.");
 
-const core = includes("lib/enterprise/enterprise-core.ts", ["LEGACY_CORE_WRITE_DENIED", "isDedicatedCoreDomain"]);
+const core = includes("lib/enterprise/enterprise-core.ts", ["LEGACY_CORE_WRITE_DENIED", "EnterpriseCoreRecord est en lecture seule"]);
 ok(core.includes("EnterpriseCoreRecord"), "Legacy core implementation was unexpectedly removed.");
+ok(!core.includes("prisma.enterpriseCoreRecord.create"), "Legacy Core must not expose a generic write path after final cutover.");
 
 const activities = read("app/api/enterprise/[organizationId]/activities/route.ts");
 ok(activities.includes("createEnterpriseRequestInTransaction"), "Enterprise Activities must create a dedicated EnterpriseRequest.");
@@ -87,4 +88,4 @@ if (failures.length) {
   console.error("ERP Core v2 QA failed:\n- " + failures.join("\n- "));
   process.exit(1);
 }
-console.log("ERP Core v2 QA passed: dedicated domains, tenant guards, transitions, approval race safety, legacy safety and production-only Vercel policy verified.");
+console.log("ERP Core v2 QA passed: dedicated domains, tenant guards, transitions, approval race safety, global legacy read-only policy and production-only Vercel policy verified.");

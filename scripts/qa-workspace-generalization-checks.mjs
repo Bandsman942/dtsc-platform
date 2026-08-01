@@ -16,9 +16,8 @@ const enterpriseModule = read("components/enterprise/enterprise-module-workspace
 const enterpriseCore = read("components/enterprise/enterprise-core-workspace.tsx");
 const enterpriseAdmin = read("components/enterprise/enterprise-administration-module.tsx");
 const enterpriseSummary = read("components/enterprise/enterprise-administration-summary.tsx");
+const healthPatients = read("components/enterprise/health-patients-workspace.tsx");
 const pharmacy = read("components/enterprise/pharmacy-admin-workspace.tsx");
-const sectorFrame = read("components/workspace/sector-workspace-frame.tsx");
-const sectorFrameCss = read("components/workspace/sector-workspace-frame.module.css");
 const actionMenu = read("components/ui/action-menu.tsx");
 
 expect("internal operations use workspace primitives", operations.includes("ModuleWorkspace") && operations.includes("ModuleHeader") && operations.includes("ModuleToolbar") && operations.includes("ModuleMetrics") && operations.includes("BusinessList") && operations.includes("ContextActions"));
@@ -35,7 +34,15 @@ expect("enterprise module shell uses workspace primitives", enterpriseModule.inc
 expect("enterprise core uses row-based workspace lists", enterpriseCore.includes("ModuleSection") && enterpriseCore.includes("BusinessList") && enterpriseCore.includes("ContextActions") && enterpriseCore.includes("ListControls") && enterpriseCore.includes("useSmartList"));
 expect("enterprise core preserves real APIs", enterpriseCore.includes(`/api/enterprise/${"${organizationId}"}/core`) && enterpriseCore.includes("REQUEST_VALIDATION") && enterpriseCore.includes("APPROVE") && enterpriseCore.includes("REJECT"));
 expect("enterprise administration uses flat summary and workspace", enterpriseAdmin.includes("ModuleWorkspace") && enterpriseAdmin.includes("EnterpriseAdministrationSummary") && enterpriseSummary.includes("ModuleHeader") && enterpriseSummary.includes("ModuleMetrics") && enterpriseSummary.includes("translateWorkspaceGeneralization"));
-expect("health is surfaced outside the legacy sector accordion", enterpriseAdmin.includes("HealthcareAdminWorkspace") && enterpriseAdmin.includes("SectorWorkspaceFrame") && sectorFrame.includes('variant: "health"') && sectorFrameCss.includes(".healthFrame > section"));
+expect(
+  "health uses dedicated workspaces outside the retired generic sector CRUD",
+  !enterpriseAdmin.includes("HealthcareAdminWorkspace") &&
+    enterpriseAdmin.includes("Les domaines Health et Pharmacy utilisent exclusivement leurs workspaces dédiés") &&
+    enterpriseAdmin.includes('href="/enterprise-modules"') &&
+    healthPatients.includes("HealthPatientsWorkspace") &&
+    healthPatients.includes(`/api/enterprise/${"${organizationId}"}/healthcare/patients`) &&
+    !healthPatients.includes("EnterpriseSectorRecordItem"),
+);
 expect("pharmacy uses reusable workspace shell", pharmacy.includes("ModuleWorkspace") && pharmacy.includes("ModuleHeader") && pharmacy.includes("ModuleSection") && pharmacy.includes("ModuleMetrics") && pharmacy.includes("BusinessList") && pharmacy.includes("ContextActions"));
 expect("pharmacy preserves real sector APIs", pharmacy.includes(`/api/enterprise/${"${organizationId}"}/pharmacy`) && pharmacy.includes("method: \"DELETE\"") && pharmacy.includes("method: editing ? \"PATCH\" : \"POST\""));
 expect("Sprint 1 action menu hardening remains intact", actionMenu.includes("window.visualViewport") && actionMenu.includes("zIndex: 1200") && actionMenu.includes('className="fixed z-[1000]'));

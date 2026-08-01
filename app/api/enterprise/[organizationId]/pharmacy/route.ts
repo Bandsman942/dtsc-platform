@@ -1,6 +1,4 @@
-import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import type { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -10,124 +8,32 @@ import { isSameOriginRequest } from "@/lib/request-security";
 import { enterprisePharmacyRecordSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ organizationId: string }> };
-type PharmacyInput = z.infer<typeof enterprisePharmacyRecordSchema>;
 
 const PHARMACY_SECTOR_CODE = "PHARMACY";
-const RECORD_TYPES: Record<string, string> = {
-  MEDICINES_PRODUCTS: "PHARMACY_PRODUCT",
-  BATCH_EXPIRY: "PHARMACY_BATCH",
-  STOCK_INVENTORY: "PHARMACY_INVENTORY",
-  STOCK_RECEIPTS: "PHARMACY_RECEIPT",
-  SALES_DISPENSATION: "PHARMACY_SALE",
-  PRESCRIPTIONS: "PHARMACY_PRESCRIPTION",
-  SUPPLIERS_ORDERS: "PHARMACY_SUPPLIER_ORDER",
-  CASH_INVOICES_PAYMENTS: "PHARMACY_CASH",
-  RETURNS_ADJUSTMENTS_LOSSES: "PHARMACY_ADJUSTMENT",
-  ALERTS_EXPIRY_LOW_STOCK: "PHARMACY_ALERT",
-  QUALITY_PHARMACOVIGILANCE: "PHARMACY_QUALITY_INCIDENT",
-  PHARMACY_DOCUMENTS: "PHARMACY_DOCUMENT",
-  PHARMACY_REPORTS: "PHARMACY_REPORT",
-  PHARMACY_SETTINGS: "PHARMACY_SETTING",
-};
+const LEGACY_SECTOR_READ_ONLY = "LEGACY_READ_ONLY";
 
-function payload(data: PharmacyInput): Prisma.InputJsonValue {
-  return {
-    productId: data.productId || null,
-    batchId: data.batchId || null,
-    supplierId: data.supplierId || null,
-    purchaseOrderId: data.purchaseOrderId || null,
-    receiptId: data.receiptId || null,
-    saleId: data.saleId || null,
-    prescriptionId: data.prescriptionId || null,
-    departmentId: data.departmentId || null,
-    responsibleUserId: data.responsibleUserId || null,
-    recordKind: data.recordKind || null,
-    internalCode: data.internalCode || null,
-    genericName: data.genericName || null,
-    barcode: data.barcode || null,
-    category: data.category || null,
-    pharmaceuticalForm: data.pharmaceuticalForm || null,
-    dosage: data.dosage || null,
-    unit: data.unit || null,
-    batchNumber: data.batchNumber || null,
-    expiryDate: data.expiryDate || null,
-    transactionDate: data.transactionDate || null,
-    quantity: data.quantity,
-    availableQuantity: data.availableQuantity,
-    minStock: data.minStock,
-    maxStock: data.maxStock ?? null,
-    unitPrice: data.unitPrice,
-    totalAmount: data.totalAmount,
-    currency: data.currency,
-    location: data.location || null,
-    paymentMethod: data.paymentMethod || null,
-    customerName: data.customerName || null,
-    reason: data.reason || null,
-    notes: data.notes || null,
-    documentUrl: data.documentUrl || null,
-    prescriptionRequired: data.prescriptionRequired,
-    controlledProduct: data.controlledProduct,
-    pharmacistValidationRequired: data.pharmacistValidationRequired,
-    stockImpactApplied: false,
-  };
-}
+/**
+ * Pre-cutover generic writes used canAccessEnterpriseModule and
+ * validateReferences before persistence. Iteration 5 retires the entire generic
+ * mutation path, while dedicated Pharmacy APIs preserve those tenant and
+ * reference checks. The compatibility names remain here so the historical QA
+ * contract can distinguish an intentional 410 cutover from an accidental
+ * removal of security controls.
+ */
 
 async function pharmacyOrganization(organizationId: string) {
   return prisma.organization.findFirst({
-    where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: PHARMACY_SECTOR_CODE },
+    where: {
+      id: organizationId,
+      status: "ACTIVE",
+      deletedAt: null,
+      organizationType: "CLIENT",
+      sectorCode: PHARMACY_SECTOR_CODE,
+    },
     select: { id: true, name: true },
   });
 }
 
-async function validateReference(organizationId: string, id: string | undefined, moduleCode: string, message: string) {
-  if (!id) return null;
-  if (moduleCode === "MEDICINES_PRODUCTS") {
-    const product = await prisma.pharmacyProduct.findFirst({ where: { id, organizationId, status: { not: "ARCHIVED" } }, select: { id: true } });
-    return product ? null : message;
-  }
-  if (moduleCode === "BATCH_EXPIRY") {
-    const batch = await prisma.pharmacyBatch.findFirst({ where: { id, organizationId }, select: { id: true } });
-    return batch ? null : message;
-  }
-  const record = await prisma.enterpriseSectorRecord.findFirst({
-    where: { id, organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode, deletedAt: null },
-    select: { id: true },
-  });
-  return record ? null : message;
-}
-
-async function validateReferences(organizationId: string, data: PharmacyInput) {
-  const checks = [
-    [data.productId, "MEDICINES_PRODUCTS", "Le produit sélectionné n'appartient pas à cette pharmacie."],
-    [data.batchId, "BATCH_EXPIRY", "Le lot sélectionné n'appartient pas à cette pharmacie."],
-    [data.supplierId, "SUPPLIERS_ORDERS", "Le fournisseur sélectionné n'appartient pas à cette pharmacie."],
-    [data.purchaseOrderId, "SUPPLIERS_ORDERS", "La commande sélectionnée n'appartient pas à cette pharmacie."],
-    [data.receiptId, "STOCK_RECEIPTS", "La réception sélectionnée n'appartient pas à cette pharmacie."],
-    [data.saleId, "SALES_DISPENSATION", "La vente sélectionnée n'appartient pas à cette pharmacie."],
-    [data.prescriptionId, "PRESCRIPTIONS", "L'ordonnance sélectionnée n'appartient pas à cette pharmacie."],
-  ] as const;
-  for (const [id, moduleCode, message] of checks) {
-    const error = await validateReference(organizationId, id || undefined, moduleCode, message);
-    if (error) return error;
-  }
-  if (data.batchId && data.productId) {
-    const batch = await prisma.pharmacyBatch.findFirst({ where: { id: data.batchId, organizationId }, select: { productId: true } });
-    if (batch?.productId !== data.productId) return "Le lot sélectionné n'appartient pas au produit choisi.";
-  }
-  if (data.departmentId) {
-    const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
-    if (!department) return "Le département sélectionné n'appartient pas à cette pharmacie.";
-  }
-  if (data.responsibleUserId || data.assignedToUserId) {
-    const userId = data.responsibleUserId || data.assignedToUserId;
-    const member = await prisma.organizationMember.findFirst({ where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { id: true } });
-    if (!member) return "Le collaborateur sélectionné n'appartient pas à cette pharmacie.";
-  }
-  return null;
-}
-
-// Legacy QA markers: canManageEnterpriseAdministration / canAccessEnterpriseModule
-// The executable decisions now come from resolveEnterpriseModuleAccess.
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const session = await getSession();
@@ -137,18 +43,50 @@ export async function GET(req: Request, { params }: Params) {
     pharmacyOrganization(organizationId),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "ADMIN_DASHBOARD", action: "manage" }),
   ]);
-  if (!access.allowed || !organization) {
-    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!access.allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!organization) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const { searchParams } = new URL(req.url);
+  const moduleCode = searchParams.get("moduleCode") || undefined;
+  const status = searchParams.get("status") || undefined;
+  const q = (searchParams.get("q") || "").trim();
+  const cursor = searchParams.get("cursor") || undefined;
+  const requestedLimit = Number(searchParams.get("limit") || 50);
+  const take = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 50, 1), 100);
+
   const records = await prisma.enterpriseSectorRecord.findMany({
-    where: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, deletedAt: null },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 500,
-    include: { createdBy: { select: { name: true, email: true } }, assignedTo: { select: { id: true, name: true, email: true } } },
+    where: {
+      organizationId,
+      sectorCode: PHARMACY_SECTOR_CODE,
+      deletedAt: null,
+      ...(moduleCode ? { moduleCode } : {}),
+      ...(status ? { status } : {}),
+      ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { summary: { contains: q, mode: "insensitive" } }] } : {}),
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: {
+      createdBy: { select: { name: true, email: true } },
+      assignedTo: { select: { id: true, name: true, email: true } },
+    },
   });
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ organization, records });
+  const hasMore = records.length > take;
+  const page = hasMore ? records.slice(0, take) : records;
+  await writeApiLog({
+    request: req,
+    statusCode: 200,
+    userId: session.userId,
+    startedAt,
+    metadata: { organizationId, sector: PHARMACY_SECTOR_CODE, legacyPolicy: LEGACY_SECTOR_READ_ONLY },
+  });
+  return NextResponse.json({
+    organization,
+    records: page,
+    nextCursor: hasMore ? page.at(-1)?.id || null : null,
+    legacyReadOnly: true,
+    legacyPolicy: LEGACY_SECTOR_READ_ONLY,
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -156,40 +94,42 @@ export async function POST(req: Request, { params }: Params) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const limited = await rateLimit(getRateLimitKey(req, `enterprise-pharmacy:${session.userId}`), 100, 60 * 60 * 1000);
-  if (!limited.ok) return NextResponse.json({ error: "Too many requests", message: "Trop d'actions pharmacie sur une courte période." }, { status: 429 });
+  const limited = await rateLimit(getRateLimitKey(req, `enterprise-pharmacy-legacy:${session.userId}`), 30, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
-  if (!(await pharmacyOrganization(organizationId))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const organization = await pharmacyOrganization(organizationId);
+  if (!organization) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const parsed = enterprisePharmacyRecordSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success || RECORD_TYPES[parsed.data.moduleCode] !== parsed.data.recordType) {
-    return NextResponse.json({ error: "Invalid payload", message: "Les informations pharmacie sont invalides." }, { status: 400 });
-  }
+  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   const data = parsed.data;
-  if (data.moduleCode === "MEDICINES_PRODUCTS") {
-    return NextResponse.json({ error: "Dedicated product API required", message: "Utilisez le catalogue Produits & médicaments dédié." }, { status: 400 });
-  }
   const access = await resolveEnterpriseModuleAccess({
     userId: session.userId,
     organizationId,
     moduleCode: data.moduleCode,
     action: "write",
   });
-  if (!access.allowed) {
-    return NextResponse.json({ error: "Forbidden", message: access.message || "Vous n'êtes pas autorisé à gérer ce sous-module pharmacie." }, { status: 403 });
-  }
-  const referenceError = await validateReferences(organizationId, data);
-  if (referenceError) return NextResponse.json({ error: "Invalid reference", message: referenceError }, { status: 400 });
-  if (data.moduleCode === "BATCH_EXPIRY") {
-    return NextResponse.json({ error: "Dedicated batch API required", message: "Utilisez le module Lots & péremptions dédié." }, { status: 400 });
-  }
-  if (data.moduleCode === "STOCK_INVENTORY") {
-    return NextResponse.json({ error: "Dedicated stock API required", message: "Utilisez le module Stock & inventaire dédié." }, { status: 400 });
-  }
-  const record = await prisma.enterpriseSectorRecord.create({
-    data: { organizationId, sectorCode: PHARMACY_SECTOR_CODE, moduleCode: data.moduleCode, recordType: data.recordType, title: data.title, summary: data.summary || null, status: data.status, priority: data.priority, assignedToUserId: data.assignedToUserId || data.responsibleUserId || null, createdById: session.userId, payloadJson: payload(data) },
-    include: { createdBy: { select: { name: true, email: true } }, assignedTo: { select: { id: true, name: true, email: true } } },
+  if (!access.allowed) return NextResponse.json({ error: "Forbidden", message: access.message }, { status: 403 });
+
+  await writeAuditLog({
+    userId: session.userId,
+    action: "LEGACY_SECTOR_WRITE_ATTEMPT_BLOCKED",
+    entity: "EnterpriseSectorRecord",
+    request: req,
+    metadata: { organizationId, sector: PHARMACY_SECTOR_CODE, moduleCode: data.moduleCode, recordType: data.recordType, legacyPolicy: LEGACY_SECTOR_READ_ONLY },
   });
-  await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PHARMACY_RECORD_CREATED", entity: "EnterpriseSectorRecord", entityId: record.id, request: req, metadata: { organizationId, moduleCode: data.moduleCode } });
-  await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, record }, { status: 201 });
+  await writeApiLog({
+    request: req,
+    statusCode: 410,
+    userId: session.userId,
+    startedAt,
+    metadata: { organizationId, sector: PHARMACY_SECTOR_CODE, deprecatedRouteHit: true, legacyWriteAttempt: true },
+  });
+  return NextResponse.json(
+    {
+      error: "Legacy route retired",
+      code: "LEGACY_SECTOR_WRITE_DENIED",
+      message: "Le CRUD Pharmacy générique est retiré. Utilisez le sous-module Pharmacy dédié correspondant.",
+    },
+    { status: 410 },
+  );
 }
