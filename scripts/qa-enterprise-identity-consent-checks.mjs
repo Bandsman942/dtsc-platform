@@ -24,6 +24,7 @@ const service = requireFile("lib/enterprise/identity-links/service.ts");
 const schemas = requireFile("lib/enterprise/identity-links/schemas.ts");
 const invitationRoute = requireFile("app/api/enterprise/[organizationId]/identity-link-invitations/route.ts");
 const requestRoute = requireFile("app/api/enterprise/[organizationId]/identity-link-requests/route.ts");
+const accountRequestRoute = requireFile("app/api/account/identity-link-requests/route.ts");
 const adminDecisionRoute = requireFile("app/api/enterprise/[organizationId]/identity-links/[linkId]/decision/route.ts");
 const userDecisionRoute = requireFile("app/api/account/identity-links/decision/route.ts");
 const adminUi = requireFile("components/enterprise/identity-links/enterprise-identity-admin-panel.tsx");
@@ -115,6 +116,10 @@ requireMarker(schemas, "requireExactlyOneBusinessTarget", "Validation d’une se
 requireMarker(invitationRoute, "rateLimit", "Rate limiting invitation");
 requireMarker(invitationRoute, "requireIdentityLinkOrganizationAdmin", "Permission invitation");
 requireMarker(requestRoute, "requireIdentityLinkSession", "Session demande utilisateur");
+requireMarker(accountRequestRoute, "organizationCode", "Résolution exacte de l’entreprise");
+requireMarker(accountRequestRoute, "organizationType: \"CLIENT\"", "Restriction aux entreprises clientes");
+requireMarker(accountRequestRoute, "createUserInitiatedIdentityRequest", "Demande utilisateur centralisée");
+if (accountRequestRoute.includes("organization.findMany")) failures.push("La route utilisateur ne doit pas exposer un annuaire d’entreprises.");
 requireMarker(adminDecisionRoute, "APPROVE", "Approbation entreprise");
 requireMarker(adminDecisionRoute, "REFUSE", "Refus entreprise");
 requireMarker(adminDecisionRoute, "CANCEL", "Annulation entreprise");
@@ -123,6 +128,9 @@ requireMarker(userDecisionRoute, "REFUSE", "Refus utilisateur");
 requireMarker(userDecisionRoute, "REVOKE", "Révocation utilisateur");
 requireMarker(adminUi, "La base globale des utilisateurs DTSC n’est jamais exposée", "Message de confidentialité administration");
 requireMarker(userUi, "Vous gardez le contrôle de votre consentement", "Message de consentement utilisateur");
+requireMarker(userUi, "Demander une relation", "Formulaire de demande utilisateur");
+requireMarker(userUi, "/api/account/identity-link-requests", "Persistance de la demande utilisateur");
+requireMarker(userUi, "DTSC ne propose pas d’annuaire public", "Message de confidentialité utilisateur");
 
 for (const document of [
   "docs/ENTERPRISE_IDENTITY_CONSENT.md",
