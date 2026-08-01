@@ -11,7 +11,7 @@ import { convergePharmacyPurchaseOrder, convergePharmacyReceipt } from "@/lib/en
 import { pharmacyInventoryEventSchema } from "@/lib/enterprise/sector-convergence/schemas";
 import { prisma } from "@/lib/prisma";
 
-const pharmacyActionSchema = z.discriminatedUnion("action", [
+const pharmacyActionSchema = z.union([
   z.object({ action: z.literal("MAP_SUPPLIER"), pharmacySupplierId: z.string().min(1) }),
   z.object({ action: z.literal("MAP_PRODUCT"), pharmacyProductId: z.string().min(1) }),
   z.object({ action: z.literal("MAP_PURCHASE"), pharmacyPurchaseOrderId: z.string().min(1) }),
@@ -19,7 +19,13 @@ const pharmacyActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("MAP_SALE_INVOICE"), pharmacySaleId: z.string().min(1) }),
   z.object({ action: z.literal("MAP_PAYMENT"), pharmacyPaymentId: z.string().min(1), financialAccountId: z.string().min(1) }),
   z.object({ action: z.literal("MAP_CASH_SESSION"), pharmacyCashSessionId: z.string().min(1) }),
-  z.object({ action: z.literal("POST_INVENTORY_EVENT"), warehouseId: z.string().min(1), storageLocationId: z.string().min(1).optional(), currencyCode: z.string().trim().min(3).max(3).optional(), unitCost: z.string().optional() }).and(pharmacyInventoryEventSchema),
+  z.object({
+    action: z.literal("POST_INVENTORY_EVENT"),
+    warehouseId: z.string().min(1),
+    storageLocationId: z.string().min(1).optional(),
+    currencyCode: z.string().trim().min(3).max(3).optional(),
+    unitCost: z.string().optional(),
+  }).and(pharmacyInventoryEventSchema),
 ]);
 
 type Params = { params: Promise<{ organizationId: string }> };
