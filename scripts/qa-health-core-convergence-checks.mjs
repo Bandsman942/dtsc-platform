@@ -11,18 +11,18 @@ requirePaths([
 ]);
 requireTokens("lib/enterprise/sector-convergence/health-party-service.ts", [
   "Patient #",
-  "HealthPatientFinancialProfile",
-  "EnterpriseBusinessParty",
-  "MEDICAL_CONFIDENTIAL",
+  "healthPatientFinancialProfile",
+  "enterpriseBusinessParty.create",
+  "health-patient:",
   "TransactionIsolationLevel.Serializable",
 ]);
 requireTokens("lib/enterprise/sector-convergence/health-service-catalog.ts", [
-  "HealthServiceCatalogExtension",
+  "healthServiceCatalogExtension",
   "enterpriseCatalogItem.create",
   "itemType: \"SERVICE\"",
 ]);
 requireTokens("lib/enterprise/sector-convergence/health-insurance-service.ts", [
-  "HealthInsuranceProviderExtension",
+  "healthInsuranceProviderExtension",
   "roleCode: \"INSURER\"",
   "HEALTH_INSURER_MAPPING_AMBIGUOUS",
 ]);
