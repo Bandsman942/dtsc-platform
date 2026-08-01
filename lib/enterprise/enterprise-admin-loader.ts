@@ -9,10 +9,11 @@ import { prisma } from "@/lib/prisma";
 
 // Iteration 5 compatibility note: the former calls
 // getEnterpriseHealthcareDataset(organizationId, organization.sectorCode) and
-// getEnterprisePharmacyDataset(organizationId, organization.sectorCode) were
-// intentionally removed from the normal admin render. Dedicated workspaces now
-// load their own tenant-scoped data; historical sector records remain available
-// only through protected, paginated legacy reads.
+// getEnterprisePharmacyDataset(organizationId, organization.sectorCode) under
+// organization.sectorCode === "PHARMACY" were intentionally removed from the
+// normal admin render. Dedicated workspaces now load their own tenant-scoped
+// data; historical sector records remain available only through protected,
+// paginated legacy reads.
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
