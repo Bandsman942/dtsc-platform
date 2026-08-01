@@ -80,15 +80,15 @@ export async function convergePharmacySupplier(
           primaryPhone: current.phone,
           status: current.status === "ACTIVE" ? "ACTIVE" : "INACTIVE",
           createdByUserId: actorUserId,
-          roles: { create: { organizationId, roleCode: "SUPPLIER", createdByUserId: actorUserId } },
+          roles: { create: { roleCode: "SUPPLIER", createdByUserId: actorUserId } },
           contacts: current.phone || current.email ? {
             create: [
-              ...(current.phone ? [{ organizationId, contactType: "PHONE", label: "Principal", value: current.phone, normalizedValue: current.phone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId }] : []),
-              ...(current.email ? [{ organizationId, contactType: "EMAIL", label: "Principal", value: current.email, normalizedValue: current.email.trim().toLowerCase(), isPrimary: !current.phone, createdByUserId: actorUserId }] : []),
+              ...(current.phone ? [{ contactType: "PHONE", label: "Principal", value: current.phone, normalizedValue: current.phone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId }] : []),
+              ...(current.email ? [{ contactType: "EMAIL", label: "Principal", value: current.email, normalizedValue: current.email.trim().toLowerCase(), isPrimary: !current.phone, createdByUserId: actorUserId }] : []),
             ],
           } : undefined,
           addresses: current.address ? {
-            create: { organizationId, addressType: "PRIMARY", line1: current.address, city: current.city, countryCode: current.country, isPrimary: true, createdByUserId: actorUserId },
+            create: { addressType: "PRIMARY", line1: current.address, city: current.city, countryCode: current.country, isPrimary: true, createdByUserId: actorUserId },
           } : undefined,
         },
       });
