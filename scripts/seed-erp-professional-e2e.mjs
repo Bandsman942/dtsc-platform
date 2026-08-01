@@ -119,7 +119,7 @@ async function main() {
       primaryEmail: user.email,
       status: "ACTIVE",
       createdByUserId: admin.id,
-      roles: { create: { organizationId, roleCode: "CUSTOMER", status: "ACTIVE", createdByUserId: admin.id } },
+      roles: { create: { roleCode: "CUSTOMER", status: "ACTIVE", createdByUserId: admin.id } },
     },
   });
 
