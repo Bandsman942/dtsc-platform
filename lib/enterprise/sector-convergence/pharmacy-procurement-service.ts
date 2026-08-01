@@ -5,6 +5,8 @@ import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-conver
 import { isSectorConvergenceEnabled, SECTOR_CONVERGENCE_FLAGS } from "@/lib/enterprise/sector-convergence/flags";
 import { beginSectorSync, completeSectorSync, failSectorSync } from "@/lib/enterprise/sector-convergence/sync-service";
 
+// Convergence contract: PharmacyReceiptExtension links the sector receipt to the canonical EnterprisePurchase receipt chain.
+
 export async function convergePharmacyPurchaseOrder(
   organizationId: string,
   pharmacyPurchaseOrderId: string,
