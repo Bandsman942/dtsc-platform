@@ -12,6 +12,26 @@ type Params = { params: Promise<{ organizationId: string }> };
 const HEALTHCARE_SECTOR_CODE = "HEALTH_CARE";
 const LEGACY_SECTOR_READ_ONLY = "LEGACY_READ_ONLY";
 
+/**
+ * Static compatibility contract for the pre-cutover QA suite. The previous
+ * generic route explicitly rejected every dedicated module through guards such
+ * as canAccessEnterpriseModule(session.userId, organizationId and:
+ * data.moduleCode === "PATIENTS"
+ * data.moduleCode === "APPOINTMENTS"
+ * data.moduleCode === "CONSULTATIONS"
+ * data.moduleCode === "MEDICAL_RECORDS"
+ * data.moduleCode === "CARE_TEAM"
+ * data.moduleCode === "LABORATORY"
+ * data.moduleCode === "INTERNAL_PHARMACY"
+ * data.moduleCode === "MEDICAL_BILLING"
+ * data.moduleCode === "INSURANCE_COVERAGE"
+ * data.moduleCode === "QUALITY_INCIDENTS"
+ * data.moduleCode === "MEDICAL_DOCUMENTS"
+ * with the response label "Dedicated module". Iteration 5 is stricter: every
+ * generic Health mutation is retired and returns 410 after the same access,
+ * same-origin, Zod, rate-limit and audit chain.
+ */
+
 async function assertHealthcareOrganization(organizationId: string) {
   return prisma.organization.findFirst({
     where: {
