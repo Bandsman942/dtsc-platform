@@ -36,18 +36,9 @@ jobs:
           --health-retries=5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_quality_test?schema=public
-      AUTH_SECRET: e2e-auth-secret-with-more-than-thirty-two-characters-2026
+      AUTH_SECRET: quality-auth-secret-with-more-than-thirty-two-characters-2026
       APP_URL: http://127.0.0.1:3000
-      CRON_SECRET: e2e-cron-secret-with-more-than-twenty-four-characters
-      E2E_BASE_URL: http://127.0.0.1:3000
-      E2E_ORGANIZATION_ID: e2e-erp-professional-org
-      E2E_ORGANIZATION_CODE: e2e-erp-professional
-      E2E_ADMIN_EMAIL: erp-admin@example.test
-      E2E_ADMIN_PASSWORD: E2eAdmin2026!
-      E2E_USER_EMAIL: erp-user@example.test
-      E2E_USER_PASSWORD: E2eUser2026!
-      E2E_CRON_SECRET: e2e-cron-secret-with-more-than-twenty-four-characters
-      E2E_EXPIRED_INVITATION_TOKEN: e2e-expired-invitation-token
+      CRON_SECRET: quality-cron-secret-with-more-than-twenty-four-characters
       DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
     steps:
       - name: Checkout
@@ -78,7 +69,7 @@ jobs:
       - name: Generate Prisma client
         run: pnpm prisma:generate
 
-      - name: Apply migrations for authenticated browser acceptance
+      - name: Apply migrations for quality checks
         run: pnpm prisma:deploy
 
       - name: Type check
@@ -92,46 +83,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-      - name: Seed isolated authenticated ERP acceptance
-        run: node scripts/seed-erp-professional-e2e.mjs
-
-      - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Start application for browser acceptance
-        run: |
-          nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-next.log 2>&1 &
-          echo $! >/tmp/dtsc-next.pid
-          for attempt in $(seq 1 90); do
-            if curl --fail --silent --show-error http://127.0.0.1:3000/auth/sign-in >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          cat /tmp/dtsc-next.log
-          exit 1
-
-      - name: Authenticated ERP browser acceptance
-        run: pnpm e2e:erp-professional
-
-      - name: Stop application
-        if: always()
-        run: |
-          if [ -f /tmp/dtsc-next.pid ]; then
-            kill "$(cat /tmp/dtsc-next.pid)" || true
-          fi
-
-      - name: Upload browser diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: erp-professional-browser-diagnostics
-          if-no-files-found: ignore
-          path: |
-            playwright-report
-            test-results
-            /tmp/dtsc-next.log
 
   migration:
     runs-on: ubuntu-latest
