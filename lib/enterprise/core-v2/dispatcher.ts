@@ -53,5 +53,5 @@ export async function createEnterpriseOperationalObject({ organizationId, actorU
     return { kind: "PURCHASE" as const, record: await createEnterprisePurchase(organizationId, actorUserId, parsed.data) };
   }
   if (isDedicatedCoreDomain(data.moduleCode, data.recordType)) throw dedicatedPayloadError(data.recordType);
-  return { kind: "LEGACY" as const, record: await createEnterpriseCoreRecord({ organizationId, actorUserId, data }) };
+  return { kind: "LEGACY" as const, record: await createEnterpriseCoreRecord() };
 }
