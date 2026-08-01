@@ -12,5 +12,5 @@ requireTokens("lib/enterprise/sector-convergence/health-payment-service.ts", ["e
 forbidTokens("app/api/enterprise/[organizationId]/healthcare/route.ts", ["enterpriseSectorRecord.create("]);
 forbidTokens("app/api/enterprise/[organizationId]/pharmacy/route.ts", ["enterpriseSectorRecord.create("]);
 forbidTokens("app/api/enterprise/[organizationId]/core/route.ts", ["enterpriseCoreRecord.create("]);
-requireTokens("docs/ERP_FINAL_DATA_OWNERSHIP.md", ["une seule source de vérité", "Journal Entry", "Enterprise Payment", "HealthPatient", "Pharmacy"]);
+requireTokens("docs/ERP_FINAL_DATA_OWNERSHIP.md", ["une seule source de vérité", "EnterpriseJournalEntry", "EnterprisePayment", "HealthPatient", "Pharmacy"]);
 success("ERP single source of truth contract");
