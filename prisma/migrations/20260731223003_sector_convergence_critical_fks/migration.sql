@@ -1,5 +1,23 @@
 -- Iteration 4: additive critical referential constraints.
 -- Nullable legacy bridge columns remain nullable and no data is deleted.
+-- Composite tenant-aware foreign keys require matching unique indexes on the
+-- referenced organization/id pairs. The primary ids remain globally unique;
+-- these additive indexes only make the tenant boundary enforceable by Postgres.
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseInventoryItem_organizationId_id_key"
+  ON "EnterpriseInventoryItem"("organizationId", "id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseInventoryAccountingEvent_organizationId_id_key"
+  ON "EnterpriseInventoryAccountingEvent"("organizationId", "id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseJournalEntry_organizationId_id_key"
+  ON "EnterpriseJournalEntry"("organizationId", "id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseReceivable_organizationId_id_key"
+  ON "EnterpriseReceivable"("organizationId", "id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterprisePaymentAllocation_organizationId_id_key"
+  ON "EnterprisePaymentAllocation"("organizationId", "id");
 
 ALTER TABLE "PharmacyPurchaseExtension"
   ADD CONSTRAINT "PharmacyPurchaseExtension_pharmacyReceiptId_fkey"
