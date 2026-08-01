@@ -54,6 +54,8 @@ model EnterpriseIdentityLink {
   personIdentityId      String
   userId                 String?
   origin                 String
+  requestedRelationType String
+  requestedRoleCode     String?
   status                 String   @default("DRAFT")
   initiatedByUserId      String
   reviewedByUserId       String?
@@ -78,6 +80,7 @@ model EnterpriseIdentityLink {
 
   @@unique([organizationId, id])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, requestedRelationType, status])
   @@index([organizationId, personIdentityId, status])
   @@index([userId, status, createdAt])
   @@index([expiresAt, status])
