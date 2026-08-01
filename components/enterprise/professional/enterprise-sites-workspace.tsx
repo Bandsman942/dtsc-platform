@@ -23,7 +23,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
-type Location = { id: string; warehouseId: string; parentLocationId: string | null; code: string; name: string; locationType: string; status: string; barcode: string | null; capacityValue: string | number | null; capacityUnit: string | null; warehouse: { id: string; code: string; name: string; site: { id: string; code: string; name: string } } };
+type Location = { id: string; warehouseId: string; parentLocationId: string | null; code: string; name: string; locationType: string; status: string; revision: number; barcode: string | null; capacityValue: string | number | null; capacityUnit: string | null; warehouse: { id: string; code: string; name: string; site: { id: string; code: string; name: string } } };
 type WarehouseItem = { id: string; siteId: string; code: string; name: string; warehouseType: string; status: string; revision: number; site: { id: string; code: string; name: string; city: string | null }; storageLocations: Location[] };
 type Site = { id: string; code: string; name: string; siteType: string; city: string | null; countryCode: string | null; addressLine1: string | null; timezone: string | null; managerUserId: string | null; status: string; revision: number; warehouses: WarehouseItem[] };
 

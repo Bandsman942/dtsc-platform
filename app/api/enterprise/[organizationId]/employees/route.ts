@@ -55,9 +55,16 @@ export async function GET(req: Request, { params }: Params) {
   ]);
   const references = rawItems.length ? await prisma.enterprisePersonBusinessReference.findMany({
     where: { organizationId, employeeId: { in: rawItems.map((item) => item.id) } },
-    include: { identityLinks: { orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true } } },
+    select: { employeeId: true, personIdentityId: true },
   }) : [];
-  const linkByEmployee = new Map(references.filter((reference) => reference.employeeId).map((reference) => [reference.employeeId as string, reference.identityLinks[0] || null]));
+  const identityLinks = references.length ? await prisma.enterpriseIdentityLink.findMany({
+    where: { organizationId, personIdentityId: { in: [...new Set(references.map((reference) => reference.personIdentityId))] } },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, personIdentityId: true, status: true, requestedRelationType: true, activatedAt: true, expiresAt: true },
+  }) : [];
+  const linkByPerson = new Map<string, (typeof identityLinks)[number]>();
+  for (const link of identityLinks) if (!linkByPerson.has(link.personIdentityId)) linkByPerson.set(link.personIdentityId, link);
+  const linkByEmployee = new Map(references.filter((reference) => reference.employeeId).map((reference) => [reference.employeeId as string, linkByPerson.get(reference.personIdentityId) || null]));
   const items = rawItems.map((item) => ({ ...item, identityLink: linkByEmployee.get(item.id) || null }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employees", page } });
   return NextResponse.json({

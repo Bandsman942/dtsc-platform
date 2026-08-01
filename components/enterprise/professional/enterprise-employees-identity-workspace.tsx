@@ -81,6 +81,8 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
     event.preventDefault();
     setMessage("");
     const form = new FormData(event.currentTarget);
+    const selectedPositionId = String(form.get("positionId") || "") || null;
+    const selectedPosition = selectedPositionId ? lookups.positions.find((position) => position.id === selectedPositionId) : undefined;
     try {
       const result = await professionalMutation(`/api/enterprise/${organizationId}/employees`, {
         organizationMemberId: String(form.get("organizationMemberId") || "") || null,
