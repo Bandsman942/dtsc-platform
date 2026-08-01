@@ -8,9 +8,9 @@ requirePaths([
   "scripts/backfill-pharmacy-financial-links.mjs",
 ]);
 requireTokens("lib/enterprise/sector-convergence/pharmacy-finance-service.ts", [
-  "PharmacyInvoiceExtension",
-  "PharmacyPaymentExtension",
-  "PharmacyCashExtension",
+  "pharmacyInvoiceExtension",
+  "pharmacyPaymentExtension",
+  "pharmacyCashExtension",
   "createEnterprisePayment",
   "pharmacy-sale-customer:",
   "PHARMACY_CASH_FINANCIAL_ACCOUNT_REQUIRED",
