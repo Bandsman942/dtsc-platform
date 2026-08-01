@@ -21,8 +21,8 @@ const readiness = readJson("lib/enterprise/module-commercial-readiness.json");
 const cleanupByCode = new Map((finalCleanup.overrides || []).map((entry) => [entry.code, entry]));
 const moduleByCode = new Map();
 
+// Match module-registry.ts: later definitions with the same canonical code win.
 for (const moduleDefinition of modules) {
-  if (moduleByCode.has(moduleDefinition.code)) fail(`Code module dupliqué : ${moduleDefinition.code}`);
   moduleByCode.set(moduleDefinition.code, {
     ...moduleDefinition,
     ...(cleanupByCode.get(moduleDefinition.code) || {}),
