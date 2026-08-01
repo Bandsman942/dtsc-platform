@@ -10,7 +10,10 @@ async function signIn(page, email, password, next = "/dashboard") {
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="email"]').blur();
   const organization = page.locator('select[name="organizationId"]');
-  if (await organization.count()) await organization.selectOption(organizationId).catch(() => undefined);
+  if (email === process.env.E2E_ADMIN_EMAIL) {
+    await organization.waitFor({ state: "visible", timeout: 10_000 });
+    await organization.selectOption(organizationId);
+  }
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: /connexion|se connecter/i }).click();
   await page.waitForLoadState("networkidle");
