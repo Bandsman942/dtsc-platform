@@ -12,11 +12,11 @@ model EnterprisePersonIdentity {
   updatedAt       DateTime @updatedAt
   archivedAt      DateTime?
 
-  @@unique([organizationId, id])
-  @@index([organizationId, status, displayName])
-  @@index([organizationId, primaryEmail])
-  @@index([organizationId, primaryPhone])
-  @@index([archivedAt])
+  @@unique([organizationId, id], map: "EnterprisePersonIdentity_organizationId_id_key")
+  @@index([organizationId, status, displayName], map: "EnterprisePersonIdentity_organizationId_status_displayName_idx")
+  @@index([organizationId, primaryEmail], map: "EnterprisePersonIdentity_organizationId_primaryEmail_idx")
+  @@index([organizationId, primaryPhone], map: "EnterprisePersonIdentity_organizationId_primaryPhone_idx")
+  @@index([archivedAt], map: "EnterprisePersonIdentity_archivedAt_idx")
 }
 
 model EnterprisePersonBusinessReference {
@@ -36,16 +36,16 @@ model EnterprisePersonBusinessReference {
   updatedAt              DateTime @updatedAt
   archivedAt             DateTime?
 
-  @@unique([organizationId, id])
-  @@unique([organizationId, businessPartyId, relationType])
-  @@unique([organizationId, businessPartyContactId, relationType])
-  @@unique([organizationId, employeeId, relationType])
-  @@index([organizationId, personIdentityId, status])
-  @@index([organizationId, relationType, status])
-  @@index([organizationId, businessPartyId])
-  @@index([organizationId, businessPartyContactId])
-  @@index([organizationId, employeeId])
-  @@index([archivedAt])
+  @@unique([organizationId, id], map: "EnterprisePersonBusinessReference_organizationId_id_key")
+  @@unique([organizationId, businessPartyId, relationType], map: "EnterprisePersonBusinessReference_org_party_relation_key")
+  @@unique([organizationId, businessPartyContactId, relationType], map: "EnterprisePersonBusinessReference_org_contact_relation_key")
+  @@unique([organizationId, employeeId, relationType], map: "EnterprisePersonBusinessReference_org_employee_relation_key")
+  @@index([organizationId, personIdentityId, status], map: "EnterprisePersonBusinessReference_org_person_status_idx")
+  @@index([organizationId, relationType, status], map: "EnterprisePersonBusinessReference_org_type_status_idx")
+  @@index([organizationId, businessPartyId], map: "EnterprisePersonBusinessReference_org_party_idx")
+  @@index([organizationId, businessPartyContactId], map: "EnterprisePersonBusinessReference_org_contact_idx")
+  @@index([organizationId, employeeId], map: "EnterprisePersonBusinessReference_org_employee_idx")
+  @@index([archivedAt], map: "EnterprisePersonBusinessReference_archivedAt_idx")
 }
 
 model EnterpriseIdentityLink {
@@ -62,7 +62,7 @@ model EnterpriseIdentityLink {
   purpose                String
   consentTextVersion     String
   invitationEmailDigest String?
-  invitationTokenDigest String?  @unique
+  invitationTokenDigest String?  @unique(map: "EnterpriseIdentityLink_invitationTokenDigest_key")
   invitationSentAt       DateTime?
   expiresAt              DateTime?
   userDecisionAt         DateTime?
@@ -78,13 +78,13 @@ model EnterpriseIdentityLink {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  @@unique([organizationId, id])
-  @@index([organizationId, status, createdAt])
-  @@index([organizationId, requestedRelationType, status])
-  @@index([organizationId, personIdentityId, status])
-  @@index([userId, status, createdAt])
-  @@index([expiresAt, status])
-  @@index([initiatedByUserId, createdAt])
+  @@unique([organizationId, id], map: "EnterpriseIdentityLink_organizationId_id_key")
+  @@index([organizationId, status, createdAt], map: "EnterpriseIdentityLink_org_status_created_idx")
+  @@index([organizationId, requestedRelationType, status], map: "EnterpriseIdentityLink_org_relation_status_idx")
+  @@index([organizationId, personIdentityId, status], map: "EnterpriseIdentityLink_org_person_status_idx")
+  @@index([userId, status, createdAt], map: "EnterpriseIdentityLink_user_status_created_idx")
+  @@index([expiresAt, status], map: "EnterpriseIdentityLink_expiry_status_idx")
+  @@index([initiatedByUserId, createdAt], map: "EnterpriseIdentityLink_initiator_created_idx")
 }
 
 model EnterpriseIdentityConsentRecord {
@@ -99,9 +99,9 @@ model EnterpriseIdentityConsentRecord {
   recordedAt         DateTime @default(now())
   metadataJson       Json?
 
-  @@unique([identityLinkId, action, recordedAt])
-  @@index([organizationId, userId, recordedAt])
-  @@index([identityLinkId, recordedAt])
+  @@unique([identityLinkId, action, recordedAt], map: "EnterpriseIdentityConsentRecord_link_action_recorded_key")
+  @@index([organizationId, userId, recordedAt], map: "EnterpriseIdentityConsentRecord_org_user_recorded_idx")
+  @@index([identityLinkId, recordedAt], map: "EnterpriseIdentityConsentRecord_link_recorded_idx")
 }
 
 model EnterpriseIdentityLinkEvent {
@@ -116,7 +116,7 @@ model EnterpriseIdentityLinkEvent {
   metadataJson   Json?
   createdAt      DateTime @default(now())
 
-  @@index([organizationId, identityLinkId, createdAt])
-  @@index([actorUserId, createdAt])
-  @@index([eventType, createdAt])
+  @@index([organizationId, identityLinkId, createdAt], map: "EnterpriseIdentityLinkEvent_org_link_created_idx")
+  @@index([actorUserId, createdAt], map: "EnterpriseIdentityLinkEvent_actor_created_idx")
+  @@index([eventType, createdAt], map: "EnterpriseIdentityLinkEvent_type_created_idx")
 }
