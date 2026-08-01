@@ -66,15 +66,18 @@ Migration additive : prix catalogue historisés, capacités d’emplacement, pro
 - analyse syntaxique TypeScript/TSX ;
 - vérification syntaxique des scénarios Playwright ;
 - `git diff --check` ;
-- régression Node complète, incluant les nouveaux QA.
+- régression Node complète, incluant les nouveaux QA ;
+- installation CI avec `pnpm install --no-frozen-lockfile` ;
+- génération Prisma CI ;
+- déploiement de toutes les migrations sur une base PostgreSQL vide ;
+- audits ERP et vérification de parité Finance sur la base neuve ;
+- correction des premiers écarts TypeScript détectés par la CI.
 
 ## Validation restante avant clôture
 
-- `pnpm install --no-frozen-lockfile` ;
-- `pnpm prisma:generate` ;
-- `pnpm type-check` ;
+- nouvelle exécution verte de `pnpm type-check` ;
+- `pnpm qa:regression` dans la CI complète ;
 - `pnpm lint` ;
-- migration depuis base vide ;
 - `pnpm build` ;
 - scénarios Playwright authentifiés si secrets disponibles ;
 - revue PR, merge, déploiement Production unique et smoke tests documentés.
