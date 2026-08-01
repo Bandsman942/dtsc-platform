@@ -45,12 +45,12 @@ export async function convergeHealthInsuranceProvider(
           status: current.status === "ACTIVE" ? "ACTIVE" : "INACTIVE",
           notes: current.financialNotes,
           createdByUserId: actorUserId,
-          roles: { create: { organizationId, roleCode: "INSURER", createdByUserId: actorUserId } },
+          roles: { create: { roleCode: "INSURER", createdByUserId: actorUserId } },
           contacts: current.phone || current.email ? { create: [
-            ...(current.phone ? [{ organizationId, contactType: "PHONE", label: "Principal", value: current.phone, normalizedValue: current.phone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId }] : []),
-            ...(current.email ? [{ organizationId, contactType: "EMAIL", label: "Facturation", value: current.email, normalizedValue: current.email.trim().toLowerCase(), isPrimary: !current.phone, createdByUserId: actorUserId }] : []),
+            ...(current.phone ? [{ contactType: "PHONE", label: "Principal", value: current.phone, normalizedValue: current.phone.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId }] : []),
+            ...(current.email ? [{ contactType: "EMAIL", label: "Facturation", value: current.email, normalizedValue: current.email.trim().toLowerCase(), isPrimary: !current.phone, createdByUserId: actorUserId }] : []),
           ] } : undefined,
-          addresses: current.address ? { create: { organizationId, addressType: "BILLING", line1: current.address, isPrimary: true, createdByUserId: actorUserId } } : undefined,
+          addresses: current.address ? { create: { addressType: "BILLING", line1: current.address, isPrimary: true, createdByUserId: actorUserId } } : undefined,
         },
       });
       const created = await tx.healthInsuranceProviderExtension.create({ data: { organizationId, healthInsuranceProviderId: current.id, businessPartyId: party.id, migrationKey, createdByUserId: actorUserId } });
