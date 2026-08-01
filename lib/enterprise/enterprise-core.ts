@@ -1,7 +1,5 @@
-import { Prisma } from "@prisma/client";
-import { isDedicatedCoreDomain } from "@/lib/enterprise/core-v2/constants";
+import type { Prisma } from "@prisma/client";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
-import { prisma } from "@/lib/prisma";
 
 export const ENTERPRISE_CORE_MODULES = {
   TASKS_OPERATIONS: {
@@ -56,6 +54,7 @@ export type EnterpriseCoreModuleCode = keyof typeof ENTERPRISE_CORE_MODULES;
 export function isEnterpriseCoreModuleCode(value: string): value is EnterpriseCoreModuleCode {
   return value in ENTERPRISE_CORE_MODULES;
 }
+
 export function canUseRecordType(moduleCode: EnterpriseCoreModuleCode, recordType: string) {
   return (ENTERPRISE_CORE_MODULES[moduleCode].recordTypes as readonly string[]).includes(recordType);
 }
@@ -88,90 +87,15 @@ export function enterpriseCoreVisibilityWhere({
   };
 }
 
-export async function createEnterpriseCoreRecord({
-  organizationId,
-  actorUserId,
-  data,
-}: {
-  organizationId: string;
-  actorUserId: string;
-  data: {
-    moduleCode: EnterpriseCoreModuleCode;
-    recordType: string;
-    title: string;
-    description?: string;
-    priority: string;
-    assignedToUserId?: string;
-    validatorUserId?: string;
-    departmentId?: string;
-    dueAt?: Date;
-    amount?: number;
-    currency?: string;
-    sourceModule?: string;
-    sourceEntityType?: string;
-    sourceEntityId?: string;
-    sectorCode?: string;
-    metadata?: Record<string, unknown>;
-  };
-}) {
-  if (isDedicatedCoreDomain(data.moduleCode, data.recordType)) {
-    throw new EnterpriseCoreV2Error(
-      "Les nouvelles tâches, demandes, validations et réunions utilisent les modèles ERP Core v2 dédiés.",
-      409,
-      "LEGACY_CORE_WRITE_DENIED"
-    );
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const record = await tx.enterpriseCoreRecord.create({
-      data: {
-        organizationId,
-        moduleCode: data.moduleCode,
-        recordType: data.recordType,
-        title: data.title,
-        description: data.description || null,
-        status: data.moduleCode === "INTERNAL_REQUESTS" ? "SUBMITTED" : "OPEN",
-        priority: data.priority,
-        assignedToUserId: data.assignedToUserId || null,
-        validatorUserId: data.validatorUserId || null,
-        departmentId: data.departmentId || null,
-        requestedById: actorUserId,
-        createdById: actorUserId,
-        dueAt: data.dueAt,
-        amount: typeof data.amount === "number" ? new Prisma.Decimal(data.amount) : undefined,
-        currency: data.currency || null,
-        sourceModule: data.sourceModule || null,
-        sourceEntityType: data.sourceEntityType || null,
-        sourceEntityId: data.sourceEntityId || null,
-        sectorCode: data.sectorCode || null,
-        metadataJson: data.metadata as Prisma.InputJsonValue | undefined,
-      },
-    });
-    await tx.enterpriseCoreEvent.create({
-      data: {
-        organizationId,
-        recordId: record.id,
-        eventType: "CREATED",
-        summary: "Élément créé dans le socle commun ERP legacy.",
-        toStatus: record.status,
-        actorUserId,
-      },
-    });
-    if (data.sourceModule && data.sourceEntityType && data.sourceEntityId) {
-      await tx.enterpriseEntityLink.create({
-        data: {
-          organizationId,
-          sourceModule: data.sourceModule,
-          sourceEntityType: data.sourceEntityType,
-          sourceEntityId: data.sourceEntityId,
-          targetModule: data.moduleCode,
-          targetEntityType: "EnterpriseCoreRecord",
-          targetEntityId: record.id,
-          linkType: "GENERATED",
-          createdById: actorUserId,
-        },
-      });
-    }
-    return record;
-  });
+/**
+ * Release A compatibility guard.
+ * EnterpriseCoreRecord remains queryable for historical evidence, but every
+ * new business mutation must use a dedicated Core v2 domain model.
+ */
+export async function createEnterpriseCoreRecord(): Promise<never> {
+  throw new EnterpriseCoreV2Error(
+    "EnterpriseCoreRecord est en lecture seule. Utilisez le module ERP dédié.",
+    410,
+    "LEGACY_CORE_WRITE_DENIED",
+  );
 }
