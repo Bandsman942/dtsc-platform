@@ -5,12 +5,30 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useEffect, type ElementType } from "react";
-import { Bell, Bot, CalendarCheck, ChevronRight, Home, LogOut, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
+import {
+  Bell,
+  Bot,
+  BriefcaseBusiness,
+  CalendarCheck,
+  CalendarDays,
+  CreditCard,
+  Headphones,
+  Home,
+  Layers3,
+  LogOut,
+  Megaphone,
+  Settings,
+  Shield,
+  User,
+  UserPlus,
+  UsersRound,
+} from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileAvatar } from "@/components/dtsc/ui-components";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { getConsoleUrl, getDashboardUrl, getSignInUrl, getSupportUrl } from "@/lib/domains";
+import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { translate } from "@/lib/i18n";
@@ -24,13 +42,24 @@ type MobileShellUser = {
   locale?: string | null;
 };
 
+type MobileSecondaryItem = {
+  href: string;
+  labelKey: string;
+  fallback: string;
+  icon: ElementType;
+};
+
 const primaryItems = [
   { href: "/dashboard", labelKey: "navigation.dashboard", fallback: "Accueil", icon: Home },
-  { href: "/chat", labelKey: "navigation.chat", fallback: "IA", icon: Bot },
+  { href: "/chat", labelKey: "navigation.chat", fallback: "Assistant IA", icon: Bot },
   { href: "/activities", labelKey: "navigation.activities", fallback: "Activités", icon: CalendarCheck, employeeOnly: true },
   { href: "/collaborators", labelKey: "navigation.collaborators", fallback: "Équipe", icon: UsersRound },
-  { href: "/notifications", labelKey: "navigation.notifications", fallback: "Alertes", icon: Bell },
+  { href: "/notifications", labelKey: "navigation.notifications", fallback: "Notifications", icon: Bell },
 ];
+
+function navigationItemIsActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function MobilePwaHeader({
   user,
@@ -58,9 +87,7 @@ export function MobilePwaHeader({
   useEffect(() => {
     let stopped = false;
     const markOnline = () => {
-      if (stopped) {
-        return;
-      }
+      if (stopped) return;
       void fetch("/api/collaborators/presence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,13 +106,7 @@ export function MobilePwaHeader({
         }).catch(() => null);
       }
     };
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        markOnline();
-      } else {
-        markOffline();
-      }
-    };
+    const handleVisibility = () => document.visibilityState === "visible" ? markOnline() : markOffline();
     markOnline();
     const interval = window.setInterval(markOnline, 15000);
     window.addEventListener("focus", markOnline);
@@ -149,18 +170,12 @@ export function MobilePwaHeader({
       </div>
 
       <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {organizationOptions.length > 0 && (
-          <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />
-        )}
-        {pendingEnterpriseInvitations > 0 && <QuickChip href="/enterprise-invitations" active={pathname?.startsWith("/enterprise-invitations")} icon={UserPlus} label={`${translate(locale, "navigation.invitations")} (${pendingEnterpriseInvitations})`} />}
-        {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={pathname?.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
-        <QuickChip href="/settings" active={pathname?.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
-        <QuickChip href="/profile" active={pathname?.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="flex shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 px-3 py-2 text-xs font-black text-dtsc-muted"
-        >
+        {organizationOptions.length > 0 && <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} />}
+        {pendingEnterpriseInvitations > 0 && <QuickChip href="/enterprise-invitations" active={pathname.startsWith("/enterprise-invitations")} icon={UserPlus} label={`${translate(locale, "navigation.invitations")} (${pendingEnterpriseInvitations})`} />}
+        {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={pathname.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
+        <QuickChip href="/settings" active={pathname.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
+        <QuickChip href="/profile" active={pathname.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />
+        <button type="button" onClick={() => void signOut()} className="flex shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 px-3 py-2 text-xs font-black text-dtsc-muted">
           <LogOut className="h-3.5 w-3.5" />
           {translate(locale, "common.signOut")}
         </button>
@@ -190,46 +205,49 @@ export function MobileBottomNavigation({
 }) {
   const pathname = usePathname();
   const locale = user.locale || "fr";
+
+  useEffect(() => {
+    const activeItem = document.querySelector<HTMLElement>("[data-mobile-secondary-nav] [aria-current='page']");
+    activeItem?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [pathname]);
+
   const visibleItems = primaryItems.filter((item) => {
-    if (item.employeeOnly && !showEmployeeActivities) {
-      return false;
-    }
-    if (item.href === "/collaborators") {
-      return showCollaborationModule;
-    }
+    if (item.employeeOnly && !showEmployeeActivities) return false;
+    if (item.href === "/collaborators") return showCollaborationModule;
     return true;
   });
   const enterprisePrimaryItems = enterpriseContext?.showActivities
-    ? [
-        { href: "/enterprise-activities", labelKey: "navigation.enterpriseActivities", fallback: "Activités", icon: CalendarCheck },
-      ]
+    ? [{ href: "/enterprise-activities", labelKey: "navigation.enterpriseActivities", fallback: "Activités", icon: CalendarCheck }]
     : [];
   const pendingInvitationItems = pendingEnterpriseInvitations > 0
     ? [{ href: "/enterprise-invitations", labelKey: "navigation.invitations", fallback: "Invitations", icon: UserPlus }]
     : [];
   const primaryNavigationItems = enterpriseContext
-    ? [
-        ...visibleItems.filter((item) => item.href !== "/activities"),
-        ...pendingInvitationItems,
-        ...enterprisePrimaryItems,
-      ].slice(0, 5)
+    ? [...visibleItems.filter((item) => item.href !== "/activities"), ...pendingInvitationItems, ...enterprisePrimaryItems].slice(0, 5)
     : [...visibleItems, ...pendingInvitationItems].slice(0, 5);
-  const overflowItems = enterpriseContext
+
+  const overflowItems: MobileSecondaryItem[] = enterpriseContext
     ? [
-        { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" },
-        { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
-        { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
-        { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
-        { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support" },
-        ...enterpriseContext.modules.map((enterpriseModule) => ({ href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`, labelKey: "", fallback: enterpriseModule.label })),
-        ...(enterpriseContext.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Admin entreprise" }] : []),
+        { href: "/enterprise-modules", labelKey: "", fallback: "Modules ERP", icon: Layers3 },
+        { href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier", icon: CalendarDays },
+        { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces", icon: Megaphone },
+        { href: "/company", labelKey: "navigation.company", fallback: "Entreprise", icon: BriefcaseBusiness },
+        { href: "/billing", labelKey: "navigation.billing", fallback: "Abonnement", icon: CreditCard },
+        { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support", icon: Headphones },
+        ...enterpriseContext.modules.map((enterpriseModule) => ({
+          href: `/enterprise-modules/${encodeURIComponent(enterpriseModule.code)}`,
+          labelKey: "",
+          fallback: enterpriseModule.label,
+          icon: resolveEnterpriseModuleIcon({ icon: enterpriseModule.icon, code: enterpriseModule.code, category: enterpriseModule.category }),
+        })),
+        ...(enterpriseContext.showAdmin ? [{ href: "/enterprise-admin", labelKey: "navigation.enterpriseAdmin", fallback: "Administration", icon: Shield }] : []),
       ]
     : [
-        { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces" },
-        { href: "/company", labelKey: "navigation.company", fallback: "Entreprise" },
-        ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier" }] : []),
-        { href: "/billing", labelKey: "navigation.billing", fallback: "Plans" },
-        { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support" },
+        { href: "/announcements", labelKey: "navigation.announcements", fallback: "Annonces", icon: Megaphone },
+        { href: "/company", labelKey: "navigation.company", fallback: "Entreprise", icon: BriefcaseBusiness },
+        ...(showInternalModules ? [{ href: "/calendar", labelKey: "navigation.calendar", fallback: "Calendrier", icon: CalendarDays }] : []),
+        { href: "/billing", labelKey: "navigation.billing", fallback: "Abonnement", icon: CreditCard },
+        { href: getSupportUrl("/support"), labelKey: "navigation.support", fallback: "Support", icon: Headphones },
       ];
 
   return (
@@ -241,7 +259,7 @@ export function MobileBottomNavigation({
     >
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(primaryNavigationItems.length, 5)}, minmax(0, 1fr))` }}>
         {primaryNavigationItems.slice(0, 5).map((item) => {
-          const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+          const active = navigationItemIsActive(pathname, item.href);
           const Icon = item.icon;
           const isNotifications = item.href === "/notifications";
           const isCollaborators = item.href === "/collaborators";
@@ -253,7 +271,7 @@ export function MobileBottomNavigation({
               href={item.href}
               className={cn(
                 "relative flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-[0.64rem] font-black transition",
-                active ? "bg-cyan-400/14 text-cyan-500" : "text-dtsc-muted"
+                active ? "bg-cyan-400/14 text-cyan-500" : "text-dtsc-muted",
               )}
               aria-current={active ? "page" : undefined}
             >
@@ -271,17 +289,40 @@ export function MobileBottomNavigation({
           );
         })}
       </div>
-      <div className="mt-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide">
-        {overflowItems.map((item) => (
-          <Link key={item.href} href={item.href} className="flex shrink-0 items-center gap-1 rounded-full bg-dtsc-page/74 px-3 py-1.5 text-[0.68rem] font-black text-dtsc-muted">
-            {translate(locale, item.labelKey) || item.fallback}
-            <ChevronRight className="h-3 w-3" />
-          </Link>
-        ))}
+
+      <div data-mobile-secondary-nav className="mt-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide">
+        {overflowItems.map((item) => {
+          const active = navigationItemIsActive(pathname, item.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              data-mobile-module-active={active ? "true" : undefined}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex min-h-9 shrink-0 snap-center items-center gap-2 rounded-full border px-3 py-1.5 text-[0.68rem] font-black transition",
+                active
+                  ? "border-cyan-300/50 bg-cyan-400/16 text-cyan-500 shadow-[0_8px_24px_rgba(34,211,238,0.16)]"
+                  : "border-transparent bg-dtsc-page/74 text-dtsc-muted",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              <span>{translate(locale, item.labelKey) || item.fallback}</span>
+            </Link>
+          );
+        })}
         {showInternalModules && canAccessAdministration(user.role) && (
-          <Link href={getConsoleUrl("/admin")} className="flex shrink-0 items-center gap-1 rounded-full bg-cyan-400/14 px-3 py-1.5 text-[0.68rem] font-black text-cyan-500">
-            Admin
-            <ChevronRight className="h-3 w-3" />
+          <Link
+            href={getConsoleUrl("/admin")}
+            aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+            className={cn(
+              "flex min-h-9 shrink-0 snap-center items-center gap-2 rounded-full border px-3 py-1.5 text-[0.68rem] font-black",
+              pathname.startsWith("/admin") ? "border-cyan-300/50 bg-cyan-400/16 text-cyan-500" : "border-transparent bg-dtsc-page/74 text-dtsc-muted",
+            )}
+          >
+            <Shield className="h-3.5 w-3.5" />
+            Administration DTSC
           </Link>
         )}
       </div>
@@ -289,23 +330,13 @@ export function MobileBottomNavigation({
   );
 }
 
-function QuickChip({
-  href,
-  active,
-  icon: Icon,
-  label,
-}: {
-  href: string;
-  active?: boolean;
-  icon: ElementType;
-  label: string;
-}) {
+function QuickChip({ href, active, icon: Icon, label }: { href: string; active?: boolean; icon: ElementType; label: string }) {
   return (
     <Link
       href={href}
       className={cn(
         "flex shrink-0 items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-black transition",
-        active ? "border-cyan-300/45 bg-cyan-400/14 text-cyan-500" : "border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted"
+        active ? "border-cyan-300/45 bg-cyan-400/14 text-cyan-500" : "border-dtsc-border/70 bg-dtsc-page/72 text-dtsc-muted",
       )}
     >
       <Icon className="h-3.5 w-3.5" />
