@@ -16,7 +16,7 @@ const payslip = read("app/api/admin/payrolls/[id]/pdf/route.ts");
 const operationFileRoute = read("app/api/admin/operation-files/route.ts");
 const activities = read("app/activities/page.tsx");
 const docs = read("docs/DTSC_PAYROLL_WORKFLOW.md");
-const technicalDocs = read("docs/TECHNICAL_DOCUMENTATION.md");
+const technicalDocs = read("docs/SPRINT_05_PAYROLL_TECHNICAL.md");
 const changelog = read("docs/CHANGELOG.md");
 const agents = read("AGENTS.md");
 const packageJson = read("package.json");
@@ -75,7 +75,7 @@ expect("Adjustment evidence must come from controlled private upload", workflow.
 expect("Collaborator payroll view does not expose budget or account", !activities.includes("payroll.budget?.name") && !activities.includes("payroll.account?.name"));
 expect("Collaborator payslip is limited to validated or paid payroll", activities.includes('["VALIDATED", "PAID"].includes(payroll.status)'));
 expect("Sprint 5 documentation keeps Sprint 6 out of scope", docs.includes("getApprovedWorkForPayroll") && docs.includes("Aucun Preview Deployment") && docs.includes("Frontière Sprint 6"));
-expect("Technical documentation includes Sprint 5 payroll architecture", technicalDocs.includes("SPRINT_05_PAYROLL_TECHNICAL") && technicalDocs.includes("PAYROLL_WORKFLOW"));
+expect("Dedicated technical documentation includes Sprint 5 payroll architecture", technicalDocs.includes("SPRINT_05_PAYROLL_TECHNICAL") && technicalDocs.includes("PAYROLL_WORKFLOW"));
 expect("Changelog records Sprint 5 payroll workflow", changelog.includes("SPRINT_05_PAYROLL_CHANGELOG") && changelog.includes("prestations Sprint 4 approuvées"));
 expect("Sprint 5 QA is wired into regression", packageJson.includes('"qa:payroll-workflow"') && packageJson.includes("qa-payroll-work-integration-checks.mjs"));
 expect("Permanent Sprint 5 rules are documented", agents.includes("SPRINT_05_PAYROLL_WORKFLOW_RULES") && agents.includes("approved DTSC work") && agents.includes("No employee may approve their own payroll"));
