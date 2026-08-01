@@ -22,6 +22,7 @@ const consoleBilling = read("lib/console/console-billing.ts");
 const planManager = read("components/admin/billing-plan-manager.tsx");
 const planLimits = read("lib/billing/plan-limits.ts");
 const planCatalog = read("lib/billing/plan-catalog.ts");
+const moduleRegistry = read("lib/enterprise/module-registry.ts");
 
 check(
   "L’activation de module gère explicitement les prérequis",
@@ -63,17 +64,23 @@ check(
   "La navigation mobile ne présente plus les anciens libellés techniques",
   !mobileShell.includes("Admin entreprise") && !mobileShell.includes("fallback: \"Plans\"") && !mobileShell.includes("ChevronRight"),
 );
+check(
+  "Les niveaux commerciaux sont appliqués par le registre canonique",
+  includesAll(moduleRegistry, ["module-registry-commercial-overrides.json", "applyCommercialOverride"]),
+);
 
 const registryData = readJson("lib/enterprise/module-registry-data.json");
 const commonData = readJson("lib/enterprise/module-registry-common-domains.json");
 const financeData = readJson("lib/enterprise/module-registry-finance.json");
 const sectorOverrides = new Map(readJson("lib/enterprise/module-registry-sector-convergence.json").overrides.map((item) => [item.code, item]));
 const cleanupOverrides = new Map(readJson("lib/enterprise/module-registry-final-cleanup.json").overrides.map((item) => [item.code, item]));
+const commercialOverrides = new Map(readJson("lib/enterprise/module-registry-commercial-overrides.json").overrides.map((item) => [item.code, item]));
 const levels = { STARTER: 1, BUSINESS: 2, ENTERPRISE: 3 };
 
 const modules = [...registryData.modules, ...commonData.modules, ...financeData.modules].map((definition) => {
   const sector = sectorOverrides.get(definition.code);
   const cleanup = cleanupOverrides.get(definition.code);
+  const commercial = commercialOverrides.get(definition.code);
   return {
     ...definition,
     ...(sector ? { dependencies: sector.dependencies } : {}),
@@ -82,6 +89,7 @@ const modules = [...registryData.modules, ...commonData.modules, ...financeData.
       routeKind: cleanup.routeKind,
       dependencies: cleanup.dependencies,
     } : {}),
+    ...(commercial ? { minimumPlan: commercial.minimumPlan } : {}),
   };
 });
 const byCode = new Map(modules.map((definition) => [definition.code, definition]));
