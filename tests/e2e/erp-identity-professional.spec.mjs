@@ -7,13 +7,24 @@ let invitedPartyName = "";
 
 async function signIn(page, email, password, next = "/dashboard") {
   await page.goto(`/auth/sign-in?next=${encodeURIComponent(next)}`);
-  await page.locator('input[name="email"]').fill(email);
-  await page.locator('input[name="email"]').blur();
+  const emailInput = page.locator('input[name="email"]');
+  await emailInput.fill(email);
   const organization = page.locator('select[name="organizationId"]');
+
   if (email === process.env.E2E_ADMIN_EMAIL) {
-    await organization.waitFor({ state: "visible", timeout: 10_000 });
+    const lookupPromise = page.waitForResponse((response) => response.url().endsWith("/api/auth/organizations") && response.request().method() === "POST");
+    await emailInput.blur();
+    const lookupResponse = await lookupPromise;
+    expect(lookupResponse.ok(), `Organisation lookup failed with ${lookupResponse.status()}`).toBeTruthy();
+    const lookupBody = await lookupResponse.json().catch(() => ({ organizations: [] }));
+    expect(Array.isArray(lookupBody.organizations)).toBeTruthy();
+    expect(lookupBody.organizations.some((item) => item.id === organizationId), `Organisation ${organizationId} is missing from authenticated login choices`).toBeTruthy();
+    await expect(organization.locator(`option[value="${organizationId}"]`)).toHaveCount(1);
     await organization.selectOption(organizationId);
+  } else {
+    await emailInput.blur();
   }
+
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: /connexion|se connecter/i }).click();
   await page.waitForLoadState("networkidle");
