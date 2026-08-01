@@ -5,6 +5,8 @@ import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-conver
 import { isSectorConvergenceEnabled, SECTOR_CONVERGENCE_FLAGS } from "@/lib/enterprise/sector-convergence/flags";
 import { beginSectorSync, completeSectorSync, failSectorSync } from "@/lib/enterprise/sector-convergence/sync-service";
 
+// Convergence contract: PharmacyReceiptExtension links the sector receipt to the canonical EnterprisePurchase receipt chain.
+
 export async function convergePharmacyPurchaseOrder(
   organizationId: string,
   pharmacyPurchaseOrderId: string,
@@ -35,8 +37,8 @@ export async function convergePharmacyPurchaseOrder(
     if (!purchase) {
       purchase = await createEnterprisePurchase(organizationId, actorUserId, {
         title: `Commande Pharmacy ${source.orderNumber}`,
-        description: null,
-        priority: source.priority === "URGENT" ? "URGENT" : source.priority === "HIGH" ? "HIGH" : "NORMAL",
+        description: undefined,
+        priority: source.priority === "URGENT" ? "CRITICAL" : source.priority === "HIGH" ? "HIGH" : "NORMAL",
         supplierId: supplier.enterpriseSupplierId,
         buyerUserId: source.requestedById,
         departmentId: source.departmentId || undefined,
@@ -69,7 +71,10 @@ export async function convergePharmacyPurchaseOrder(
         });
       }
       const created = await tx.pharmacyPurchaseExtension.create({ data: { organizationId, pharmacyPurchaseOrderId: source.id, enterprisePurchaseId: purchase!.id, createdByUserId: actorUserId } });
-      await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "PHARMACY_PURCHASES", sourceEntityType: "PharmacyPurchaseOrder", sourceEntityId: source.id, targetModule: "SUPPLIERS_PURCHASES", targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id, linkType: "SECTOR_CONVERGENCE", createdById: actorUserId } }).catch((error) => { if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error; });
+      const link = await tx.enterpriseEntityLink.findFirst({ where: { organizationId, sourceModule: "PHARMACY_PURCHASES", sourceEntityType: "PharmacyPurchaseOrder", sourceEntityId: source.id, targetModule: "SUPPLIERS_PURCHASES", targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id, linkType: "SECTOR_CONVERGENCE" } });
+      if (!link) {
+        await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "PHARMACY_PURCHASES", sourceEntityType: "PharmacyPurchaseOrder", sourceEntityId: source.id, targetModule: "SUPPLIERS_PURCHASES", targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id, linkType: "SECTOR_CONVERGENCE", createdById: actorUserId } });
+      }
       await completeSectorSync(tx, sync.id, { targetEntityType: "EnterprisePurchase", targetEntityId: purchase!.id });
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

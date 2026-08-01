@@ -52,15 +52,15 @@ export async function convergeHealthPatientFinancialProfile(
           primaryPhone: current.phonePrimary,
           status: current.status === "ACTIVE" ? "ACTIVE" : "INACTIVE",
           createdByUserId: actorUserId,
-          roles: { create: { organizationId, roleCode: "CUSTOMER", createdByUserId: actorUserId } },
+          roles: { create: { roleCode: "CUSTOMER", createdByUserId: actorUserId } },
           contacts: {
             create: [
-              { organizationId, contactType: "PHONE", label: "Paiement", value: current.phonePrimary, normalizedValue: current.phonePrimary.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId },
-              ...(current.email ? [{ organizationId, contactType: "EMAIL", label: "Facturation", value: current.email, normalizedValue: current.email.trim().toLowerCase(), isPrimary: false, createdByUserId: actorUserId }] : []),
+              { contactType: "PHONE", label: "Paiement", value: current.phonePrimary, normalizedValue: current.phonePrimary.trim().toLowerCase(), isPrimary: true, createdByUserId: actorUserId },
+              ...(current.email ? [{ contactType: "EMAIL", label: "Facturation", value: current.email, normalizedValue: current.email.trim().toLowerCase(), isPrimary: false, createdByUserId: actorUserId }] : []),
             ],
           },
           addresses: current.address ? {
-            create: { organizationId, addressType: "BILLING", line1: current.address, city: current.city, countryCode: current.country, isPrimary: true, createdByUserId: actorUserId },
+            create: { addressType: "BILLING", line1: current.address, city: current.city, countryCode: current.country, isPrimary: true, createdByUserId: actorUserId },
           } : undefined,
         },
       });

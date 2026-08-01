@@ -1,0 +1,70 @@
+{
+  "version": 4,
+  "overrides": [
+    {
+      "code": "MEDICINES_PRODUCTS",
+      "dependencies": ["CATALOG"],
+      "permissionPrefixes": ["pharmacy.products.", "enterprise.pharmacy.products."]
+    },
+    {
+      "code": "STOCK_INVENTORY",
+      "dependencies": ["MEDICINES_PRODUCTS", "CATALOG", "INVENTORY_LOGISTICS"],
+      "permissionPrefixes": ["pharmacy.stock.", "enterprise.pharmacy.inventory."]
+    },
+    {
+      "code": "STOCK_RECEIPTS",
+      "dependencies": ["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "SUPPLIERS_PURCHASES", "INVENTORY_LOGISTICS", "FINANCE_PAYABLES"],
+      "permissionPrefixes": ["pharmacy.receipts.", "enterprise.pharmacy.purchases.", "enterprise.pharmacy.inventory."]
+    },
+    {
+      "code": "SALES_DISPENSATION",
+      "dependencies": ["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "CATALOG", "INVENTORY_LOGISTICS", "FINANCE_RECEIVABLES"],
+      "permissionPrefixes": ["pharmacy.sales.", "enterprise.pharmacy.sales.", "enterprise.pharmacy.finance."]
+    },
+    {
+      "code": "SUPPLIERS_ORDERS",
+      "dependencies": ["MEDICINES_PRODUCTS", "SUPPLIERS_PURCHASES", "INVENTORY_LOGISTICS", "FINANCE_PAYABLES"],
+      "permissionPrefixes": ["pharmacy.suppliers.", "pharmacy.purchase_orders.", "enterprise.pharmacy.purchases."]
+    },
+    {
+      "code": "CASH_INVOICES_PAYMENTS",
+      "dependencies": ["SALES_DISPENSATION", "FINANCE_RECEIVABLES", "FINANCE_PAYMENTS", "FINANCE_CASH"],
+      "permissionPrefixes": ["pharmacy.cash.", "enterprise.pharmacy.cash.", "enterprise.pharmacy.finance."]
+    },
+    {
+      "code": "RETURNS_ADJUSTMENTS_LOSSES",
+      "dependencies": ["MEDICINES_PRODUCTS", "BATCH_EXPIRY", "INVENTORY_LOGISTICS", "FINANCE_INVENTORY"],
+      "permissionPrefixes": ["pharmacy.adjustments.", "enterprise.pharmacy.inventory.", "enterprise.pharmacy.finance."]
+    },
+    {
+      "code": "QUALITY_PHARMACOVIGILANCE",
+      "dependencies": ["MEDICINES_PRODUCTS"],
+      "permissionPrefixes": ["pharmacy.quality.", "enterprise.pharmacy.quality."]
+    },
+    {
+      "code": "MEDICAL_BILLING",
+      "dependencies": ["PATIENTS", "CATALOG", "FINANCE_RECEIVABLES"],
+      "permissionPrefixes": ["health.billing.", "enterprise.health.billing.", "enterprise.health.finance."]
+    },
+    {
+      "code": "INSURANCE_COVERAGE",
+      "dependencies": ["PATIENTS", "MEDICAL_BILLING", "CRM_CUSTOMERS", "FINANCE_RECEIVABLES"],
+      "permissionPrefixes": ["health.insurance.", "enterprise.health.insurance.", "enterprise.health.finance."]
+    },
+    {
+      "code": "INTERNAL_PHARMACY",
+      "dependencies": ["CATALOG", "INVENTORY_LOGISTICS", "MEDICAL_BILLING"],
+      "permissionPrefixes": ["health.pharmacy.", "enterprise.health.billing."]
+    },
+    {
+      "code": "MEDICAL_DOCUMENTS",
+      "dependencies": ["PATIENTS"],
+      "permissionPrefixes": ["health.documents.", "enterprise.health.documents."]
+    },
+    {
+      "code": "QUALITY_INCIDENTS",
+      "dependencies": ["PATIENTS"],
+      "permissionPrefixes": ["health.incidents.", "enterprise.health.quality."]
+    }
+  ]
+}
