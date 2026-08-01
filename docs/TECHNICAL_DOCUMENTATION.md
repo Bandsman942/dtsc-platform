@@ -1,7 +1,7 @@
 # DTSC Platform — Documentation technique
 
-**Version :** ERP Consolidation 5/5 — Release A  
-**Repository :** `Bandsman942/dtsc-platform`  
+**Version :** ERP Consolidation 5/5 — Release A
+**Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
 ## 1. Objet
