@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { reconcileOrganizationModulesWithSubscription } from "@/lib/enterprise/module-subscription-reconciliation";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -10,9 +11,7 @@ import { organizationSubscriptionUpdateSchema } from "@/lib/validators";
 type Params = { params: Promise<{ id: string }> };
 
 function parseOptionalDate(value: string | undefined) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -31,19 +30,19 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   if (!isDtscInternalSession(session) || !canManageClientOrganizations(session.role)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Seul DTSC peut gérer les abonnements clients." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Seule l’administration DTSC peut gérer les abonnements clients." }, { status: 403 });
   }
 
   const limited = await rateLimit(getRateLimitKey(req, `organization-subscription-update:${session.userId}`), 80, 60 * 60 * 1000);
   if (!limited.ok) {
     await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations d'abonnement sur une courte période." }, { status: 429 });
+    return NextResponse.json({ error: "Too many requests", message: "Trop de modifications d’abonnement ont été demandées. Réessayez dans quelques minutes." }, { status: 429 });
   }
 
   const parsed = organizationSubscriptionUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les informations de l'abonnement sont invalides." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid payload", message: "Les informations de l’abonnement sont incomplètes ou invalides." }, { status: 400 });
   }
 
   const { id } = await params;
@@ -53,7 +52,7 @@ export async function PATCH(req: Request, { params }: Params) {
   });
   if (!current) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Not found", message: "Abonnement introuvable." }, { status: 404 });
+    return NextResponse.json({ error: "Not found", message: "L’abonnement demandé est introuvable." }, { status: 404 });
   }
   const latestSubscription = await prisma.organizationSubscription.findFirst({
     where: { organizationId: current.organizationId },
@@ -62,19 +61,19 @@ export async function PATCH(req: Request, { params }: Params) {
   });
   if (latestSubscription?.id !== current.id) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Historical subscription", message: "Une période historique est immuable. Gérez uniquement l'abonnement courant." }, { status: 409 });
+    return NextResponse.json({ error: "Historical subscription", message: "Cette période appartient à l’historique. Seul l’abonnement courant peut être modifié." }, { status: 409 });
   }
 
   const data = parsed.data;
   if (data.action === "start_trial" && !parseOptionalDate(data.trialEndsAt)) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Missing trial end", message: "Une date de fin d'essai valide est obligatoire." }, { status: 400 });
+    return NextResponse.json({ error: "Missing trial end", message: "Indiquez une date de fin d’essai valide." }, { status: 400 });
   }
   const planId = data.planId || current.planId;
   const plan = await prisma.billingPlan.findFirst({ where: { id: planId, isActive: true }, select: { id: true, name: true } });
   if (!plan) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid plan", message: "Le plan sélectionné est introuvable ou inactif." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid plan", message: "L’offre sélectionnée est introuvable ou n’est plus commercialisée." }, { status: 400 });
   }
 
   const now = new Date();
@@ -84,10 +83,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   if (data.action === "renew") {
     const renewed = await prisma.$transaction(async (tx) => {
-      await tx.organizationSubscription.update({
-        where: { id: current.id },
-        data: { status: "EXPIRED", expiresAt: now, ...commonData },
-      });
+      await tx.organizationSubscription.update({ where: { id: current.id }, data: { status: "EXPIRED", expiresAt: now, ...commonData } });
       return tx.organizationSubscription.create({
         data: {
           organizationId: current.organizationId,
@@ -127,6 +123,7 @@ export async function PATCH(req: Request, { params }: Params) {
     auditAction = `ORGANIZATION_SUBSCRIPTION_${data.action.toUpperCase()}`;
   }
 
+  const moduleReconciliation = await reconcileOrganizationModulesWithSubscription(current.organizationId);
   await writeAuditLog({
     userId: session.userId,
     action: auditAction,
@@ -143,8 +140,10 @@ export async function PATCH(req: Request, { params }: Params) {
       previousStatus: current.status,
       requestedStatus: data.status || null,
       reason: data.reason,
+      enabledModuleCount: moduleReconciliation.enabledModuleCodes.length,
+      disabledLegacyOrExcludedRows: moduleReconciliation.disabledLegacyOrExcludedRows,
     },
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: data.action, subscriptionId } });
-  return NextResponse.json({ ok: true, subscriptionId });
+  return NextResponse.json({ ok: true, subscriptionId, modulesAligned: moduleReconciliation.enabledModuleCodes.length });
 }

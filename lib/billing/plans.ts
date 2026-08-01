@@ -6,7 +6,9 @@ export type SaasPlanDefinition = {
   code: SaasPlanCode;
   slug: string;
   label: string;
+  labelEn: string;
   description: string;
+  descriptionEn: string;
   level: number;
 };
 
@@ -14,22 +16,28 @@ export const SAAS_PLANS: Record<SaasPlanCode, SaasPlanDefinition> = {
   STARTER: {
     code: "STARTER",
     slug: "starter",
-    label: "Starter",
-    description: "Socle SaaS pour une organisation active avec support, collaboration et suivi simple.",
+    label: "Essentiel",
+    labelEn: "Starter",
+    description: "Les fondamentaux pour structurer les clients, le catalogue, les documents, les demandes et les premiers projets.",
+    descriptionEn: "Core tools for customers, catalog, documents, requests and first projects.",
     level: 1,
   },
   BUSINESS: {
     code: "BUSINESS",
     slug: "business",
-    label: "Business",
-    description: "Modules d'administration, calendrier, workflows et activités internes pour équipes structurées.",
+    label: "Professionnel",
+    labelEn: "Business",
+    description: "Une gestion intégrée des ventes, achats, stocks, équipes, workflows et finances opérationnelles.",
+    descriptionEn: "Integrated sales, procurement, inventory, workforce, workflow and operational finance management.",
     level: 2,
   },
   ENTERPRISE: {
     code: "ENTERPRISE",
     slug: "enterprise",
-    label: "Enterprise",
-    description: "Couverture complète avec modules sectoriels avancés, santé, reporting et limites élevées.",
+    label: "Entreprise",
+    labelEn: "Enterprise",
+    description: "La couverture complète pour la comptabilité avancée, les organisations multisites et les secteurs Health et Pharmacy.",
+    descriptionEn: "Complete coverage for advanced accounting, multi-site organizations and Health and Pharmacy sectors.",
     level: 3,
   },
 };
@@ -65,6 +73,14 @@ export function resolveSaasPlanCode(plan?: { slug?: string | null; name?: string
     }
   }
   return "STARTER";
+}
+
+export function getSaasPlanLabel(planCode: SaasPlanCode, locale?: string | null) {
+  return locale === "en" ? SAAS_PLANS[planCode].labelEn : SAAS_PLANS[planCode].label;
+}
+
+export function getSaasPlanDescription(planCode: SaasPlanCode, locale?: string | null) {
+  return locale === "en" ? SAAS_PLANS[planCode].descriptionEn : SAAS_PLANS[planCode].description;
 }
 
 export function planMeetsRequirement(planCode: SaasPlanCode, requiredPlanCode: SaasPlanCode) {

@@ -5,6 +5,7 @@ import {
   isEnterpriseModuleSectorCompatible,
   normalizeEnterpriseModuleCode,
 } from "@/lib/enterprise/module-registry";
+import { compareEnterpriseModuleRows } from "@/lib/enterprise/module-order";
 import { prisma } from "@/lib/prisma";
 
 export async function getEnterpriseModulesDataset(organizationId: string, entitlements?: OrganizationEntitlements | null) {
@@ -15,7 +16,7 @@ export async function getEnterpriseModulesDataset(organizationId: string, entitl
     }),
     prisma.enterpriseModule.findMany({
       where: { organizationId },
-      orderBy: [{ moduleCategory: "asc" }, { sortOrder: "asc" }, { labelFr: "asc" }],
+      orderBy: [{ sortOrder: "asc" }, { labelFr: "asc" }],
     }),
     prisma.enterpriseActivityBlock.findMany({
       where: { organizationId },
@@ -45,14 +46,14 @@ export async function getEnterpriseModulesDataset(organizationId: string, entitl
       includedInPlan: moduleEntitlement?.includedInPlan ?? true,
       accessAllowed: registryAllowsAccess && (moduleEntitlement?.allowed ?? enterpriseModule.isEnabled),
       accessMessage: !definition
-        ? "Code module absent du registre canonique."
+        ? "Cette ancienne configuration n’appartient plus au catalogue DTSC."
         : !implemented
-          ? `Module ${definition.implementationStatus.toLowerCase()} et non ouvrable.`
+          ? "Ce service n’est pas encore proposé aux utilisateurs."
           : !sectorCompatible
-            ? "Module incompatible avec le secteur de l’entreprise."
+            ? "Ce service ne correspond pas au secteur de l’entreprise."
             : moduleEntitlement?.message || null,
     };
-  });
+  }).sort(compareEnterpriseModuleRows);
 
   const allowedModuleCodes = new Set(
     annotatedModules
@@ -60,9 +61,7 @@ export async function getEnterpriseModulesDataset(organizationId: string, entitl
       .flatMap((enterpriseModule) => [enterpriseModule.moduleCode, enterpriseModule.canonicalCode].filter((code): code is string => Boolean(code))),
   );
   const filteredActivityBlocks = activityBlocks.filter((block) => {
-    if (!block.targetModuleCode) {
-      return true;
-    }
+    if (!block.targetModuleCode) return true;
     return allowedModuleCodes.has(block.targetModuleCode) || allowedModuleCodes.has(normalizeEnterpriseModuleCode(block.targetModuleCode));
   });
 

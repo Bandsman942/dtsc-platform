@@ -1,4 +1,9 @@
 import { getPlanUsageLimits } from "@/lib/billing/plan-limits";
+import {
+  getPlanCommercialLabel,
+  getPlanModuleCatalog,
+  PLAN_COMMERCIAL_PROFILES,
+} from "@/lib/billing/plan-catalog";
 import { resolveSaasPlanCode } from "@/lib/billing/plans";
 import { prisma } from "@/lib/prisma";
 
@@ -45,31 +50,41 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
 
   return {
     payments,
-    billingPlans: plans.map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      slug: plan.slug,
-      description: plan.description,
-      priceUsd: Number(plan.priceUsd),
-      dailyMessageLimit: plan.dailyMessageLimit,
-      dailyTokenLimit: plan.dailyTokenLimit,
-      maxDocuments: plan.maxDocuments,
-      isActive: plan.isActive,
-      sortOrder: plan.sortOrder,
-      updatedAt: plan.updatedAt.toISOString(),
-      userSubscriptionCount: plan._count.subscriptions,
-      organizationSubscriptionCount: plan._count.organizationSubscriptions,
-      planCode: resolveSaasPlanCode(plan),
-      limits: getPlanUsageLimits(resolveSaasPlanCode(plan)),
-    })),
-    billingPlanOptions: plans.filter((plan) => plan.isActive).map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      slug: plan.slug,
-      priceUsd: Number(plan.priceUsd),
-      planCode: resolveSaasPlanCode(plan),
-      limits: getPlanUsageLimits(resolveSaasPlanCode(plan)),
-    })),
+    billingPlans: plans.map((plan) => {
+      const planCode = resolveSaasPlanCode(plan);
+      return {
+        id: plan.id,
+        name: getPlanCommercialLabel(planCode),
+        configuredName: plan.name,
+        slug: plan.slug,
+        description: PLAN_COMMERCIAL_PROFILES[planCode].promiseFr,
+        audience: PLAN_COMMERCIAL_PROFILES[planCode].audienceFr,
+        priceUsd: Number(plan.priceUsd),
+        dailyMessageLimit: plan.dailyMessageLimit,
+        dailyTokenLimit: plan.dailyTokenLimit,
+        maxDocuments: plan.maxDocuments,
+        isActive: plan.isActive,
+        sortOrder: plan.sortOrder,
+        updatedAt: plan.updatedAt.toISOString(),
+        userSubscriptionCount: plan._count.subscriptions,
+        organizationSubscriptionCount: plan._count.organizationSubscriptions,
+        planCode,
+        limits: getPlanUsageLimits(planCode),
+        moduleCatalog: getPlanModuleCatalog(planCode),
+      };
+    }),
+    billingPlanOptions: plans.filter((plan) => plan.isActive).map((plan) => {
+      const planCode = resolveSaasPlanCode(plan);
+      return {
+        id: plan.id,
+        name: getPlanCommercialLabel(planCode),
+        slug: plan.slug,
+        priceUsd: Number(plan.priceUsd),
+        planCode,
+        limits: getPlanUsageLimits(planCode),
+        moduleCatalog: getPlanModuleCatalog(planCode),
+      };
+    }),
     organizationSubscriptionItems: organizations.map((organization) => {
       const subscription = organization.subscriptions[0] || null;
       const planCode = subscription ? resolveSaasPlanCode(subscription.plan) : null;
@@ -86,7 +101,7 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
         subscription: subscription ? {
           id: subscription.id,
           planId: subscription.planId,
-          planName: subscription.plan.name,
+          planName: getPlanCommercialLabel(planCode || "STARTER"),
           planCode: planCode || "STARTER",
           priceUsd: Number(subscription.plan.priceUsd),
           status: subscription.status,
@@ -97,18 +112,21 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
           updatedAt: subscription.updatedAt.toISOString(),
           limits: limits || getPlanUsageLimits("STARTER"),
         } : null,
-        history: organization.subscriptions.map((historyItem) => ({
-          id: historyItem.id,
-          planName: historyItem.plan.name,
-          planCode: resolveSaasPlanCode(historyItem.plan),
-          priceUsd: Number(historyItem.plan.priceUsd),
-          status: historyItem.status,
-          startedAt: historyItem.startedAt?.toISOString() || null,
-          trialEndsAt: historyItem.trialEndsAt?.toISOString() || null,
-          expiresAt: historyItem.expiresAt?.toISOString() || null,
-          createdAt: historyItem.createdAt.toISOString(),
-          updatedAt: historyItem.updatedAt.toISOString(),
-        })),
+        history: organization.subscriptions.map((historyItem) => {
+          const historyPlanCode = resolveSaasPlanCode(historyItem.plan);
+          return {
+            id: historyItem.id,
+            planName: getPlanCommercialLabel(historyPlanCode),
+            planCode: historyPlanCode,
+            priceUsd: Number(historyItem.plan.priceUsd),
+            status: historyItem.status,
+            startedAt: historyItem.startedAt?.toISOString() || null,
+            trialEndsAt: historyItem.trialEndsAt?.toISOString() || null,
+            expiresAt: historyItem.expiresAt?.toISOString() || null,
+            createdAt: historyItem.createdAt.toISOString(),
+            updatedAt: historyItem.updatedAt.toISOString(),
+          };
+        }),
         latestBillingRecord: latestBillingRecord ? {
           id: latestBillingRecord.id,
           amount: Number(latestBillingRecord.amount),
@@ -140,7 +158,7 @@ export async function getConsoleBillingDataset({ loadBillingDetails }: { loadBil
       status: payment.status,
       amount: Number(payment.amount),
       currency: payment.currency,
-      planName: payment.subscription?.plan.name || null,
+      planName: payment.subscription ? getPlanCommercialLabel(resolveSaasPlanCode(payment.subscription.plan)) : null,
       createdAt: payment.createdAt.toISOString(),
     })),
   };

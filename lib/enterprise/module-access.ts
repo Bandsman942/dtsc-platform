@@ -8,6 +8,7 @@ import {
   normalizeEnterpriseModuleCode,
   type EnterpriseModuleDefinition,
 } from "@/lib/enterprise/module-registry";
+import { compareEnterpriseModuleDefinitions } from "@/lib/enterprise/module-order";
 import { prisma } from "@/lib/prisma";
 
 export type EnterpriseModuleAction = "read" | "submit" | "write" | "manage";
@@ -35,6 +36,15 @@ export type EnterpriseModuleAccessDecision = {
   tenantModuleId: string | null;
   tenantModuleCode: string | null;
   dependencyCode?: string;
+};
+
+export type EnterpriseModuleConfigurationIssue = {
+  code: string;
+  severity: "WARNING" | "ERROR";
+  moduleCode?: string;
+  moduleLabel?: string;
+  dependencyCodes?: string[];
+  message: string;
 };
 
 type EnterpriseAccessSnapshot = {
@@ -69,9 +79,7 @@ function denied(
 }
 
 function permissionList(value: Prisma.JsonValue | null | undefined) {
-  if (Array.isArray(value)) {
-    return value.filter((permission): permission is string => typeof permission === "string");
-  }
+  if (Array.isArray(value)) return value.filter((permission): permission is string => typeof permission === "string");
   if (value && typeof value === "object") {
     const possiblePermissions = (value as Record<string, unknown>).permissions;
     if (Array.isArray(possiblePermissions)) {
@@ -82,73 +90,37 @@ function permissionList(value: Prisma.JsonValue | null | undefined) {
 }
 
 function permissionMatchesAction(permission: string, action: EnterpriseModuleAction) {
-  if (action === "read") {
-    return permission.endsWith(".view") || permission.endsWith(".read") || permission.endsWith(".chat") || permission.includes(".view_");
-  }
-  if (action === "submit") {
-    return permission.endsWith(".create") || permission.endsWith(".submit") || permission.endsWith(".chat") || permission.endsWith(".dispense");
-  }
-  if (action === "write") {
-    return permission.endsWith(".create") || permission.endsWith(".update") || permission.endsWith(".validate") || permission.endsWith(".manage") || permission.endsWith(".dispense");
-  }
+  if (action === "read") return permission.endsWith(".view") || permission.endsWith(".read") || permission.endsWith(".chat") || permission.includes(".view_");
+  if (action === "submit") return permission.endsWith(".create") || permission.endsWith(".submit") || permission.endsWith(".chat") || permission.endsWith(".dispense");
+  if (action === "write") return permission.endsWith(".create") || permission.endsWith(".update") || permission.endsWith(".validate") || permission.endsWith(".manage") || permission.endsWith(".dispense");
   return permission.endsWith(".manage") || permission.endsWith(".update") || permission.endsWith(".validate");
 }
 
 function roleAllowsAction(role: string, action: EnterpriseModuleAction) {
-  if (ENTERPRISE_ADMIN_ROLES.has(role)) {
-    return true;
-  }
-  if (role === "MANAGER") {
-    return action !== "manage";
-  }
-  if (role === "MEMBER") {
-    return action === "read" || action === "submit";
-  }
-  if (role === "GUEST") {
-    return action === "read";
-  }
+  if (ENTERPRISE_ADMIN_ROLES.has(role)) return true;
+  if (role === "MANAGER") return action !== "manage";
+  if (role === "MEMBER") return action === "read" || action === "submit";
+  if (role === "GUEST") return action === "read";
   return action === "read" || action === "submit";
 }
 
-function permissionsAllowAction(
-  definition: EnterpriseModuleDefinition,
-  permissions: string[],
-  action: EnterpriseModuleAction,
-) {
-  if (permissions.includes("enterprise.admin.manage")) {
-    return true;
-  }
-  if (!definition.permissionPrefixes.length) {
-    return definition.accessPolicy === "MEMBERSHIP";
-  }
-  const relevantPermissions = permissions.filter((permission) =>
-    definition.permissionPrefixes.some((prefix) => permission.startsWith(prefix)),
-  );
-  return relevantPermissions.some((permission) => permissionMatchesAction(permission, action));
+function permissionsAllowAction(definition: EnterpriseModuleDefinition, permissions: string[], action: EnterpriseModuleAction) {
+  if (permissions.includes("enterprise.admin.manage")) return true;
+  if (!definition.permissionPrefixes.length) return definition.accessPolicy === "MEMBERSHIP";
+  return permissions
+    .filter((permission) => definition.permissionPrefixes.some((prefix) => permission.startsWith(prefix)))
+    .some((permission) => permissionMatchesAction(permission, action));
 }
 
 async function getEnterpriseAccessSnapshot(userId: string, organizationId: string): Promise<EnterpriseAccessSnapshot | null> {
   const [membership, tenantModules, entitlements] = await Promise.all([
     prisma.organizationMember.findFirst({
-      where: {
-        userId,
-        organizationId,
-        status: "ACTIVE",
-        removedAt: null,
-      },
+      where: { userId, organizationId, status: "ACTIVE", removedAt: null },
       select: {
         role: true,
         positionId: true,
         positionCode: true,
-        organization: {
-          select: {
-            id: true,
-            status: true,
-            deletedAt: true,
-            organizationType: true,
-            sectorCode: true,
-          },
-        },
+        organization: { select: { id: true, status: true, deletedAt: true, organizationType: true, sectorCode: true } },
       },
     }),
     prisma.enterpriseModule.findMany({
@@ -181,12 +153,8 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
   for (const tenantModule of tenantModules) {
     const canonicalCode = normalizeEnterpriseModuleCode(tenantModule.moduleCode);
     const current = tenantModuleByCanonicalCode.get(canonicalCode);
-    if (!current || tenantModule.moduleCode === canonicalCode) {
-      tenantModuleByCanonicalCode.set(canonicalCode, tenantModule);
-    }
-    if (tenantModule.isEnabled) {
-      enabledCanonicalCodes.add(canonicalCode);
-    }
+    if (!current || tenantModule.moduleCode === canonicalCode) tenantModuleByCanonicalCode.set(canonicalCode, tenantModule);
+    if (tenantModule.isEnabled) enabledCanonicalCodes.add(canonicalCode);
   }
 
   const entitlementByCanonicalCode = new Map<string, { allowed: boolean; message: string }>();
@@ -194,10 +162,7 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
     const canonicalCode = normalizeEnterpriseModuleCode(entitlement.moduleCode);
     const current = entitlementByCanonicalCode.get(canonicalCode);
     if (!current || entitlement.moduleCode === canonicalCode) {
-      entitlementByCanonicalCode.set(canonicalCode, {
-        allowed: entitlement.allowed,
-        message: entitlement.message,
-      });
+      entitlementByCanonicalCode.set(canonicalCode, { allowed: entitlement.allowed, message: entitlement.message });
     }
   }
 
@@ -212,206 +177,129 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
   };
 }
 
-function resolveFromSnapshot(
-  snapshot: EnterpriseAccessSnapshot,
-  moduleCode: string,
-  action: EnterpriseModuleAction,
-): EnterpriseModuleAccessDecision {
+function resolveFromSnapshot(snapshot: EnterpriseAccessSnapshot, moduleCode: string, action: EnterpriseModuleAction): EnterpriseModuleAccessDecision {
   const definition = getEnterpriseModuleDefinition(moduleCode);
-  if (!definition) {
-    return denied("UNKNOWN_MODULE", "Ce code module n’est pas enregistré dans le registre canonique.", null);
-  }
-  if (!isEnterpriseModuleImplemented(definition.code)) {
-    return denied("MODULE_NOT_IMPLEMENTED", "Ce module n’est pas encore disponible dans DTSC Platform.", definition);
-  }
-  if (!isEnterpriseModuleSectorCompatible(definition, snapshot.sectorCode)) {
-    return denied("SECTOR_INCOMPATIBLE", "Ce module n’est pas compatible avec le secteur de l’entreprise active.", definition);
-  }
-  if (definition.accessPolicy === "EXPLICIT_DENY") {
-    return denied("MODULE_NOT_IMPLEMENTED", "Ce module est volontairement masqué.", definition);
-  }
+  if (!definition) return denied("UNKNOWN_MODULE", "Ce service n’existe pas dans le catalogue DTSC.", null);
+  if (!isEnterpriseModuleImplemented(definition.code)) return denied("MODULE_NOT_IMPLEMENTED", "Ce service n’est pas encore disponible.", definition);
+  if (!isEnterpriseModuleSectorCompatible(definition, snapshot.sectorCode)) return denied("SECTOR_INCOMPATIBLE", "Ce service ne correspond pas au secteur de l’entreprise.", definition);
+  if (definition.accessPolicy === "EXPLICIT_DENY") return denied("MODULE_NOT_IMPLEMENTED", "Ce service n’est pas proposé dans cet espace.", definition);
 
   if (definition.routeKind === "ADMIN_SECTION") {
     const adminAllowed = ENTERPRISE_ADMIN_ROLES.has(snapshot.role) || snapshot.permissions.includes("enterprise.admin.manage") || snapshot.permissions.includes("enterprise.admin.members.manage");
-    if (!adminAllowed) {
-      return denied("PERMISSION_DENIED", "L’administration entreprise exige une autorisation explicite.", definition);
-    }
-    return {
-      allowed: true,
-      code: "OK",
-      message: "Accès autorisé.",
-      canonicalCode: definition.code,
-      definition,
-      tenantModuleId: null,
-      tenantModuleCode: null,
-    };
+    if (!adminAllowed) return denied("PERMISSION_DENIED", "Une autorisation d’administration est nécessaire.", definition);
+    return { allowed: true, code: "OK", message: "Accès autorisé.", canonicalCode: definition.code, definition, tenantModuleId: null, tenantModuleCode: null };
   }
 
   const tenantModule = snapshot.tenantModuleByCanonicalCode.get(definition.code) || null;
-  if (!tenantModule) {
-    return denied("TENANT_MODULE_MISSING", "Ce module n’est pas configuré pour l’entreprise active.", definition);
-  }
-  if (!tenantModule.isEnabled) {
-    return denied("TENANT_MODULE_DISABLED", "Ce module est désactivé pour l’entreprise active.", definition, tenantModule);
-  }
+  if (!tenantModule) return denied("TENANT_MODULE_MISSING", "Ce service n’est pas encore configuré pour l’entreprise.", definition);
+  if (!tenantModule.isEnabled) return denied("TENANT_MODULE_DISABLED", "Ce service n’est pas activé dans l’abonnement de l’entreprise.", definition, tenantModule);
 
   for (const dependencyCode of definition.dependencies) {
-    if (!snapshot.enabledCanonicalCodes.has(normalizeEnterpriseModuleCode(dependencyCode))) {
+    const canonicalDependency = normalizeEnterpriseModuleCode(dependencyCode);
+    if (!snapshot.enabledCanonicalCodes.has(canonicalDependency)) {
+      const dependency = getEnterpriseModuleDefinition(canonicalDependency);
       return denied(
         "DEPENDENCY_INACTIVE",
-        `La dépendance ${dependencyCode} doit être active avant d’ouvrir ce module.`,
+        `${dependency?.labelFr || "Un service préalable"} doit être activé avant d’ouvrir ${definition.labelFr}.`,
         definition,
         tenantModule,
-        dependencyCode,
+        canonicalDependency,
       );
     }
   }
 
   const entitlement = snapshot.entitlementByCanonicalCode.get(definition.code);
-  if (!entitlement?.allowed) {
-    return denied(
-      "ENTITLEMENT_DENIED",
-      entitlement?.message || "Le plan ou l’abonnement actif ne permet pas d’utiliser ce module.",
-      definition,
-      tenantModule,
-    );
-  }
+  if (!entitlement?.allowed) return denied("ENTITLEMENT_DENIED", entitlement?.message || "L’abonnement actuel ne comprend pas ce service.", definition, tenantModule);
 
   if (ENTERPRISE_ADMIN_ROLES.has(snapshot.role)) {
-    return {
-      allowed: true,
-      code: "OK",
-      message: "Accès autorisé.",
-      canonicalCode: definition.code,
-      definition,
-      tenantModuleId: tenantModule.id,
-      tenantModuleCode: tenantModule.moduleCode,
-    };
+    return { allowed: true, code: "OK", message: "Accès autorisé.", canonicalCode: definition.code, definition, tenantModuleId: tenantModule.id, tenantModuleCode: tenantModule.moduleCode };
   }
 
-  const allowed = snapshot.permissions.length
-    ? permissionsAllowAction(definition, snapshot.permissions, action)
-    : roleAllowsAction(snapshot.role, action);
-  if (!allowed) {
-    return denied("PERMISSION_DENIED", "Votre poste ou votre rôle ne permet pas cette action.", definition, tenantModule);
-  }
+  const allowed = snapshot.permissions.length ? permissionsAllowAction(definition, snapshot.permissions, action) : roleAllowsAction(snapshot.role, action);
+  if (!allowed) return denied("PERMISSION_DENIED", "Votre fonction ne vous autorise pas à réaliser cette action.", definition, tenantModule);
 
-  return {
-    allowed: true,
-    code: "OK",
-    message: "Accès autorisé.",
-    canonicalCode: definition.code,
-    definition,
-    tenantModuleId: tenantModule.id,
-    tenantModuleCode: tenantModule.moduleCode,
-  };
+  return { allowed: true, code: "OK", message: "Accès autorisé.", canonicalCode: definition.code, definition, tenantModuleId: tenantModule.id, tenantModuleCode: tenantModule.moduleCode };
 }
 
-export async function resolveEnterpriseModuleAccess({
-  userId,
-  organizationId,
-  moduleCode,
-  action = "read",
-}: {
-  userId: string;
-  organizationId: string;
-  moduleCode: string;
-  action?: EnterpriseModuleAction;
-}) {
+export async function resolveEnterpriseModuleAccess({ userId, organizationId, moduleCode, action = "read" }: { userId: string; organizationId: string; moduleCode: string; action?: EnterpriseModuleAction }) {
   const definition = getEnterpriseModuleDefinition(moduleCode);
-  if (!definition) {
-    return denied("UNKNOWN_MODULE", "Ce code module n’est pas enregistré dans le registre canonique.", null);
-  }
+  if (!definition) return denied("UNKNOWN_MODULE", "Ce service n’existe pas dans le catalogue DTSC.", null);
   const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
-  if (!snapshot) {
-    return denied("NO_ACTIVE_MEMBERSHIP", "Aucun membership actif n’autorise cet accès.", definition);
-  }
+  if (!snapshot) return denied("NO_ACTIVE_MEMBERSHIP", "Aucun accès actif à cette entreprise n’a été trouvé.", definition);
   return resolveFromSnapshot(snapshot, moduleCode, action);
 }
 
-export async function listNavigableEnterpriseModules({
-  userId,
-  organizationId,
-  action = "read",
-}: {
-  userId: string;
-  organizationId: string;
-  action?: EnterpriseModuleAction;
-}) {
+export async function listNavigableEnterpriseModules({ userId, organizationId, action = "read" }: { userId: string; organizationId: string; action?: EnterpriseModuleAction }) {
   const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
-  if (!snapshot) {
-    return [];
-  }
-
+  if (!snapshot) return [];
   return Array.from(snapshot.tenantModuleByCanonicalCode.keys())
     .map((canonicalCode) => resolveFromSnapshot(snapshot, canonicalCode, action))
     .filter((decision) => decision.allowed && decision.definition && isEnterpriseModuleNavigable(decision.definition))
-    .sort((left, right) => {
-      const leftDefinition = left.definition as EnterpriseModuleDefinition;
-      const rightDefinition = right.definition as EnterpriseModuleDefinition;
-      return leftDefinition.navigationGroup.localeCompare(rightDefinition.navigationGroup) || leftDefinition.navigationOrder - rightDefinition.navigationOrder;
-    });
+    .sort((left, right) => compareEnterpriseModuleDefinitions(left.definition as EnterpriseModuleDefinition, right.definition as EnterpriseModuleDefinition));
 }
 
-export async function listEnterpriseModuleConfigurationIssues(organizationId: string) {
+export async function listEnterpriseModuleConfigurationIssues(organizationId: string): Promise<EnterpriseModuleConfigurationIssue[]> {
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, deletedAt: null },
-    select: {
-      sectorCode: true,
-      enterpriseModules: {
-        select: { id: true, moduleCode: true, isEnabled: true },
-      },
-    },
+    select: { sectorCode: true, enterpriseModules: { select: { id: true, moduleCode: true, isEnabled: true } } },
   });
-  if (!organization) {
-    return [{ code: "ORGANIZATION_NOT_FOUND", severity: "ERROR", message: "Organisation introuvable." }];
-  }
+  if (!organization) return [{ code: "ORGANIZATION_NOT_FOUND", severity: "ERROR", message: "L’entreprise sélectionnée est introuvable." }];
 
   const enabledCanonicalCodes = new Set(
-    organization.enterpriseModules
-      .filter((tenantModule) => tenantModule.isEnabled)
-      .map((tenantModule) => normalizeEnterpriseModuleCode(tenantModule.moduleCode)),
+    organization.enterpriseModules.filter((tenantModule) => tenantModule.isEnabled).map((tenantModule) => normalizeEnterpriseModuleCode(tenantModule.moduleCode)),
   );
-  const issues: Array<{ code: string; severity: "WARNING" | "ERROR"; moduleCode?: string; message: string }> = [];
+  const canonicalRows = new Set(organization.enterpriseModules.map((tenantModule) => tenantModule.moduleCode));
+  const issues: EnterpriseModuleConfigurationIssue[] = [];
 
   for (const tenantModule of organization.enterpriseModules) {
-    const definition = getEnterpriseModuleDefinition(tenantModule.moduleCode);
+    const canonicalCode = normalizeEnterpriseModuleCode(tenantModule.moduleCode);
+    const definition = getEnterpriseModuleDefinition(canonicalCode);
     if (!definition) {
       issues.push({
         code: "UNKNOWN_TENANT_MODULE",
         severity: tenantModule.isEnabled ? "ERROR" : "WARNING",
         moduleCode: tenantModule.moduleCode,
-        message: `Le module tenant ${tenantModule.moduleCode} est absent du registre canonique.`,
+        moduleLabel: "Ancienne configuration de module",
+        message: tenantModule.isEnabled
+          ? "Une ancienne configuration est encore active et doit être archivée."
+          : "Une ancienne configuration est conservée uniquement pour l’historique.",
       });
       continue;
     }
-    if (tenantModule.isEnabled && !isEnterpriseModuleImplemented(definition.code)) {
+
+    if (tenantModule.moduleCode !== canonicalCode && canonicalRows.has(canonicalCode)) {
       issues.push({
-        code: "ACTIVE_NOT_IMPLEMENTED",
-        severity: "ERROR",
+        code: "DUPLICATE_ALIAS",
+        severity: tenantModule.isEnabled ? "ERROR" : "WARNING",
         moduleCode: tenantModule.moduleCode,
-        message: `${tenantModule.moduleCode} est actif en base mais ${definition.implementationStatus} dans le registre.`,
+        moduleLabel: definition.labelFr,
+        message: "Un ancien nom de module fait doublon avec le service actuel. Il doit rester désactivé.",
       });
+      continue;
+    }
+
+    if (tenantModule.isEnabled && !isEnterpriseModuleImplemented(definition.code)) {
+      issues.push({ code: "ACTIVE_NOT_IMPLEMENTED", severity: "ERROR", moduleCode: canonicalCode, moduleLabel: definition.labelFr, message: "Ce service est activé alors qu’il n’est pas encore proposé aux utilisateurs." });
     }
     if (tenantModule.isEnabled && !isEnterpriseModuleSectorCompatible(definition, organization.sectorCode)) {
-      issues.push({
-        code: "SECTOR_INCOMPATIBLE",
-        severity: "ERROR",
-        moduleCode: tenantModule.moduleCode,
-        message: `${tenantModule.moduleCode} est incompatible avec le secteur ${organization.sectorCode || "non renseigné"}.`,
-      });
+      issues.push({ code: "SECTOR_INCOMPATIBLE", severity: "ERROR", moduleCode: canonicalCode, moduleLabel: definition.labelFr, message: "Ce service ne correspond pas au secteur de l’entreprise sélectionnée." });
     }
-    for (const dependencyCode of definition.dependencies) {
-      if (tenantModule.isEnabled && !enabledCanonicalCodes.has(dependencyCode)) {
-        issues.push({
-          code: "DEPENDENCY_INACTIVE",
-          severity: "ERROR",
-          moduleCode: tenantModule.moduleCode,
-          message: `${tenantModule.moduleCode} dépend de ${dependencyCode}, actuellement inactif.`,
-        });
-      }
+
+    const inactiveDependencies = definition.dependencies
+      .map(normalizeEnterpriseModuleCode)
+      .filter((dependencyCode) => tenantModule.isEnabled && !enabledCanonicalCodes.has(dependencyCode));
+    if (inactiveDependencies.length) {
+      const dependencyLabels = inactiveDependencies.map((dependencyCode) => getEnterpriseModuleDefinition(dependencyCode)?.labelFr || "Service préalable");
+      issues.push({
+        code: "DEPENDENCY_INACTIVE",
+        severity: "ERROR",
+        moduleCode: canonicalCode,
+        moduleLabel: definition.labelFr,
+        dependencyCodes: inactiveDependencies,
+        message: `Services préalables à activer : ${dependencyLabels.join(", ")}.`,
+      });
     }
   }
 
-  return issues;
+  return issues.sort((left, right) => (left.moduleLabel || left.moduleCode || "").localeCompare(right.moduleLabel || right.moduleCode || "", "fr"));
 }

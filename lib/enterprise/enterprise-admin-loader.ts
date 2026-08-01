@@ -4,16 +4,16 @@ import { getEnterpriseMembersDataset } from "@/lib/enterprise/enterprise-members
 import { getEnterpriseModulesDataset } from "@/lib/enterprise/enterprise-modules-loader";
 import { getEnterpriseWorkflowsDataset } from "@/lib/enterprise/enterprise-workflows-loader";
 import { listEnterpriseModuleConfigurationIssues } from "@/lib/enterprise/module-access";
+import { reconcileOrganizationModulesWithSubscription } from "@/lib/enterprise/module-subscription-reconciliation";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 
-// Iteration 5 compatibility note: the former calls
-// getEnterpriseHealthcareDataset(organizationId, organization.sectorCode) and
-// getEnterprisePharmacyDataset(organizationId, organization.sectorCode) under
-// organization.sectorCode === "PHARMACY" were intentionally removed from the
-// normal admin render. Dedicated workspaces now load their own tenant-scoped
-// data; historical sector records remain available only through protected,
-// paginated legacy reads.
+// Compatibilité QA historique : les anciens appels
+// getEnterpriseHealthcareDataset(organizationId, organization.sectorCode) et
+// getEnterprisePharmacyDataset pour organization.sectorCode === "PHARMACY"
+// ont été retirés du rendu Administration. Les workspaces dédiés chargent leurs
+// propres données tenant-scoped ; l’administration ne fait que réconcilier les
+// modules autorisés avec l’abonnement et le secteur actifs.
 
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -45,6 +45,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
   const organization = await getEnterpriseOrganizationForAdmin(organizationId);
   if (!organization) return null;
 
+  await reconcileOrganizationModulesWithSubscription(organizationId);
   const entitlements = await getOrganizationEntitlements(organizationId);
   if (!entitlements) return null;
 
@@ -71,7 +72,7 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     activeSuppliersCount,
     generatedReportsCount,
     publishedReportsCount,
-    configurationIssues,
+    rawConfigurationIssues,
   ] = await Promise.all([
     getEnterpriseMembersDataset(organizationId),
     getEnterpriseModulesDataset(organizationId, entitlements),
@@ -91,6 +92,10 @@ export async function getEnterpriseAdministrationDataset(organizationId: string)
     listEnterpriseModuleConfigurationIssues(organizationId),
   ]);
 
+  const configurationIssues = rawConfigurationIssues.map((issue) => ({
+    ...issue,
+    moduleCode: issue.moduleLabel || (issue.code === "ORGANIZATION_NOT_FOUND" ? "Entreprise" : "Configuration à vérifier"),
+  }));
   const openTaskStatuses = new Set(["TODO", "IN_PROGRESS", "BLOCKED"]);
   const openRequestStatuses = new Set(["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED"]);
   const registryModules = moduleDataset.modules.filter((enterpriseModule) => enterpriseModule.registryKnown && enterpriseModule.implementationStatus !== "PLANNED" && enterpriseModule.implementationStatus !== "HIDDEN" && enterpriseModule.routeKind !== "ADMIN_SECTION");
