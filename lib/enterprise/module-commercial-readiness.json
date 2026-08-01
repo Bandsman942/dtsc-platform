@@ -1,0 +1,311 @@
+{
+  "version": 1,
+  "evaluatedAt": "2026-08-01",
+  "policyVersion": "ERP_PROFESSIONAL_MODULE_STANDARD_V1",
+  "defaultAssessment": {
+    "maturity": "READ_ONLY_UI",
+    "interfaceKind": "GENERIC_OR_UNVERIFIED",
+    "criteriaSatisfied": [
+      "CANONICAL_REGISTRY",
+      "ROUTE_DECLARED",
+      "ACCESS_POLICY_DECLARED"
+    ],
+    "criteriaMissing": [
+      "PROFESSIONAL_FORM",
+      "BUSINESS_DETAIL",
+      "LIFECYCLE_ACTIONS",
+      "CONTROLLED_I18N",
+      "RESPONSIVE_EVIDENCE",
+      "BUSINESS_QA_EVIDENCE"
+    ],
+    "commercializable": false,
+    "commentFr": "Évaluation prudente par défaut : le code est routable, mais les preuves produit complètes ne sont pas encore réunies.",
+    "commentEn": "Conservative default assessment: the code is routable, but complete product evidence is not available yet."
+  },
+  "profiles": {
+    "ADMIN_SECTION": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "CONSOLIDATED_ADMINISTRATION",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "ROUTE_DECLARED",
+        "ACCESS_POLICY_DECLARED",
+        "DEDICATED_ADMIN_SECTION",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT"
+      ],
+      "criteriaMissing": [
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "commercializable": false,
+      "commentFr": "Section d’administration consolidée : utile et professionnelle, mais non commercialisée comme module autonome.",
+      "commentEn": "Consolidated administration section: useful and professional, but not sold as a standalone module."
+    },
+    "HIDDEN": {
+      "maturity": "BACKEND_READY",
+      "interfaceKind": "HIDDEN_OR_RETIRED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY"
+      ],
+      "criteriaMissing": [
+        "USER_ROUTE",
+        "PROFESSIONAL_WORKSPACE",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_EVIDENCE",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "commercializable": false,
+      "commentFr": "Module masqué, planifié, retiré ou réservé à l’historique.",
+      "commentEn": "Hidden, planned, retired or history-only module."
+    }
+  },
+  "moduleOverrides": {
+    "TASKS_OPERATIONS": {
+      "maturity": "OPERATIONAL_UI",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "COMPLETE_COMMERCIAL_ACCEPTANCE",
+        "ROLE_BASED_DASHBOARD_EVIDENCE"
+      ],
+      "qaContract": "enterprise-core-v2",
+      "evidence": [
+        "components/enterprise/enterprise-common-domain-workspace.tsx",
+        "app/api/enterprise/[organizationId]/tasks/route.ts",
+        "scripts/qa-enterprise-core-v2-checks.mjs"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Flux principal opérationnel, mais la preuve de finition commerciale complète reste à établir.",
+      "commentEn": "Main workflow is operational, but full commercial completion evidence is still required."
+    },
+    "INTERNAL_REQUESTS": {
+      "maturity": "OPERATIONAL_UI",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "COMPLETE_COMMERCIAL_ACCEPTANCE"
+      ],
+      "qaContract": "enterprise-core-v2",
+      "evidence": [
+        "components/enterprise/enterprise-common-domain-workspace.tsx",
+        "app/api/enterprise/[organizationId]/requests/route.ts",
+        "scripts/qa-enterprise-core-v2-checks.mjs"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Le cycle de demande est exploitable, mais n’est pas encore promu commercialement.",
+      "commentEn": "The request lifecycle is usable, but it is not yet commercially promoted."
+    },
+    "VALIDATIONS": {
+      "maturity": "OPERATIONAL_UI",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "COMPLETE_COMMERCIAL_ACCEPTANCE"
+      ],
+      "qaContract": "enterprise-core-v2",
+      "evidence": [
+        "components/enterprise/enterprise-common-domain-workspace.tsx",
+        "app/api/enterprise/[organizationId]/approvals/route.ts",
+        "scripts/qa-enterprise-core-v2-checks.mjs"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "La file de validation est opérationnelle avec séparation des responsabilités.",
+      "commentEn": "The approval queue is operational with separation of duties."
+    },
+    "MEETINGS": {
+      "maturity": "OPERATIONAL_UI",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "DEEP_LINKS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "COMPLETE_COMMERCIAL_ACCEPTANCE"
+      ],
+      "qaContract": "enterprise-core-v2",
+      "evidence": [
+        "components/enterprise/enterprise-common-domain-workspace.tsx",
+        "app/api/enterprise/[organizationId]/meetings/route.ts",
+        "scripts/qa-enterprise-core-v2-checks.mjs"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Réunions, participants et décisions sont opérationnels ; la recette commerciale complète reste ouverte.",
+      "commentEn": "Meetings, participants and decisions are operational; full commercial acceptance remains open."
+    },
+    "WORKFLOWS": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "DEEP_LINKS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION"
+      ],
+      "criteriaMissing": [
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "qaContract": "enterprise-workflows",
+      "evidence": [
+        "components/enterprise/enterprise-workflows-workspace.tsx",
+        "lib/enterprise/workflows",
+        "scripts/qa-enterprise-workflow-engine-checks.mjs"
+      ],
+      "nextIteration": 2,
+      "commercializable": false,
+      "commentFr": "Le moteur et son interface satisfont le standard professionnel ; la promotion commerciale attend la validation produit finale.",
+      "commentEn": "The engine and interface meet the professional standard; commercial promotion awaits final product validation."
+    },
+    "FINANCE_BUDGETS": {
+      "maturity": "OPERATIONAL_UI",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "PROFESSIONAL_FORM",
+        "BUSINESS_DETAIL",
+        "LIFECYCLE_ACTIONS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "COMPLETE_CONTROLLED_I18N",
+        "COMPLETE_COMMERCIAL_ACCEPTANCE"
+      ],
+      "qaContract": "enterprise-finance-reports",
+      "evidence": [
+        "components/enterprise/enterprise-finance-workspace.tsx",
+        "scripts/qa-enterprise-finance-reports-checks.mjs"
+      ],
+      "nextIteration": 4,
+      "commercializable": false,
+      "commentFr": "Budgets et dépenses sont opérationnels, avec une dette de finition linguistique et commerciale.",
+      "commentEn": "Budgets and expenses are operational, with remaining language and commercial completion work."
+    },
+    "REPORTS": {
+      "maturity": "OPERATIONAL_UI",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "BUSINESS_DETAIL",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE"
+      ],
+      "criteriaMissing": [
+        "COMPLETE_CONTROLLED_I18N",
+        "ROLE_BASED_DASHBOARD_EVIDENCE",
+        "COMPLETE_COMMERCIAL_ACCEPTANCE"
+      ],
+      "qaContract": "enterprise-finance-reports",
+      "evidence": [
+        "components/enterprise/enterprise-reports-workspace.tsx",
+        "scripts/qa-enterprise-finance-reports-checks.mjs"
+      ],
+      "nextIteration": 4,
+      "commercializable": false,
+      "commentFr": "Les rapports utilisent les sources métier, mais la finition produit n’est pas complète.",
+      "commentEn": "Reports use business sources, but product completion is not finished."
+    },
+    "AI_ASSISTANT": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": [
+        "CANONICAL_REGISTRY",
+        "DEDICATED_WORKSPACE",
+        "READ_API",
+        "WRITE_API",
+        "BUSINESS_DETAIL",
+        "DEEP_LINKS",
+        "SERVER_PERMISSIONS",
+        "AUDIT",
+        "CONTROLLED_I18N",
+        "RESPONSIVE_CONTRACT",
+        "BUSINESS_QA_EVIDENCE",
+        "TECHNICAL_DOCUMENTATION"
+      ],
+      "criteriaMissing": [
+        "COMMERCIAL_PACKAGING_EVIDENCE"
+      ],
+      "qaContract": "assistant-ux",
+      "evidence": [
+        "components/enterprise/enterprise-ai-workspace-v2.tsx",
+        "scripts/qa-assistant-ux-checks.mjs"
+      ],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "Expérience professionnelle et isolée par entreprise ; la qualification commerciale reste distincte.",
+      "commentEn": "Professional, tenant-isolated experience; commercial qualification remains separate."
+    }
+  }
+}
