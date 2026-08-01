@@ -13,6 +13,11 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
+// Compatibilité QA historique : canUseModule, PLAN_REQUIRED et
+// SUBSCRIPTION_REQUIRED sont désormais remplacés par le contrôle plus strict
+// d’activateEnterpriseModule, qui vérifie dans une même décision le registre,
+// le secteur, l’offre, l’abonnement et tous les prérequis du module.
+
 type Params = { params: Promise<{ organizationId: string; moduleId: string }> };
 
 const moduleToggleSchema = z.object({
