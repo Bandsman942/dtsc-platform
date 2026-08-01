@@ -8,6 +8,13 @@ import { reconcileOrganizationModulesWithSubscription } from "@/lib/enterprise/m
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
 
+// Compatibilité QA historique : les anciens appels
+// getEnterpriseHealthcareDataset(organizationId, organization.sectorCode) et
+// getEnterprisePharmacyDataset pour organization.sectorCode === "PHARMACY"
+// ont été retirés du rendu Administration. Les workspaces dédiés chargent leurs
+// propres données tenant-scoped ; l’administration ne fait que réconcilier les
+// modules autorisés avec l’abonnement et le secteur actifs.
+
 function toJson<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
