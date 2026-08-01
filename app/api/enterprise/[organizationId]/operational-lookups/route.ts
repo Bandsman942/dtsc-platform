@@ -84,7 +84,7 @@ export async function GET(req: Request, { params }: Params) {
       select: { id: true, reference: true, name: true, status: true },
     }),
     prisma.enterprisePayrollPeriod.findMany({
-      where: { organizationId, archivedAt: null },
+      where: { organizationId },
       orderBy: { periodStart: "desc" },
       take: 200,
       select: { id: true, code: true, name: true, status: true, periodStart: true, periodEnd: true, payDate: true },
