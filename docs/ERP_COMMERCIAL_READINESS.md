@@ -1,6 +1,6 @@
 # Maturité commerciale ERP — DTSC Platform
 
-Version : 1  
+Version : 1
 Évaluation initiale : 1 août 2026
 
 ## Sources exécutables
