@@ -8,10 +8,10 @@ const relationTypeSchema = z.enum(ENTERPRISE_IDENTITY_RELATION_TYPES);
 const optionalIdentifier = z.string().trim().min(1).max(191).optional();
 
 function requireExactlyOneBusinessTarget(
-  value: { businessPartyId?: string; businessPartyContactId?: string; employeeId?: string },
+  value: { businessPartyId?: string; businessPartyContactId?: string; employeeId?: string; supplierId?: string; supplierContactId?: string },
   context: z.RefinementCtx,
 ) {
-  const targetCount = [value.businessPartyId, value.businessPartyContactId, value.employeeId].filter(Boolean).length;
+  const targetCount = [value.businessPartyId, value.businessPartyContactId, value.employeeId, value.supplierId, value.supplierContactId].filter(Boolean).length;
   if (targetCount !== 1) {
     context.addIssue({
       code: "custom",
@@ -27,6 +27,8 @@ export const enterpriseIdentityInvitationSchema = z.object({
   businessPartyId: optionalIdentifier,
   businessPartyContactId: optionalIdentifier,
   employeeId: optionalIdentifier,
+  supplierId: optionalIdentifier,
+  supplierContactId: optionalIdentifier,
   relationType: relationTypeSchema,
   roleCode: z.string().trim().max(80).optional(),
   purpose: z.string().trim().min(10).max(500),
@@ -45,6 +47,8 @@ export const enterpriseIdentityApprovalSchema = z.object({
   businessPartyId: optionalIdentifier,
   businessPartyContactId: optionalIdentifier,
   employeeId: optionalIdentifier,
+  supplierId: optionalIdentifier,
+  supplierContactId: optionalIdentifier,
   roleCode: z.string().trim().max(80).optional(),
   revision: z.number().int().positive(),
 }).superRefine(requireExactlyOneBusinessTarget);

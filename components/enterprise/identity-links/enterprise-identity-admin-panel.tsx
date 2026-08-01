@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -15,7 +16,7 @@ import {
 
 type IdentityTarget = {
   value: string;
-  kind: "businessPartyId" | "businessPartyContactId" | "employeeId";
+  kind: "businessPartyId" | "businessPartyContactId" | "employeeId" | "supplierId" | "supplierContactId";
   label: string;
   suggestedName: string;
   suggestedEmail: string;
@@ -37,6 +38,8 @@ type OrganizationIdentityLink = {
     businessPartyId: string | null;
     businessPartyContactId: string | null;
     employeeId: string | null;
+    supplierId?: string | null;
+    supplierContactId?: string | null;
   }>;
 };
 
@@ -57,24 +60,36 @@ export function EnterpriseIdentityAdminPanel({
   organizationName,
   links,
   targets,
+  focusedLinkId,
 }: {
   organizationId: string;
   organizationName: string;
   links: OrganizationIdentityLink[];
   targets: IdentityTarget[];
+  focusedLinkId?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [selectedTarget, setSelectedTarget] = useState(targets[0]?.value ? `${targets[0].kind}:${targets[0].value}` : "");
-  const [displayName, setDisplayName] = useState(targets[0]?.suggestedName || "");
-  const [email, setEmail] = useState(targets[0]?.suggestedEmail || "");
+  const [selectedTarget, setSelectedTarget] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [targetSearch, setTargetSearch] = useState("");
+  const [targetKind, setTargetKind] = useState("");
   const [relationType, setRelationType] = useState<EnterpriseIdentityRelationType>("CUSTOMER");
+  const filteredTargets = useMemo(() => targets.filter((target) => {
+    const searchMatch = !targetSearch.trim() || `${target.label} ${target.suggestedEmail}`.toLocaleLowerCase("fr").includes(targetSearch.trim().toLocaleLowerCase("fr"));
+    return searchMatch && (!targetKind || target.kind === targetKind);
+  }), [targetKind, targetSearch, targets]);
   const targetByComposite = useMemo(
     () => new Map(targets.map((target) => [`${target.kind}:${target.value}`, target])),
     [targets],
   );
+  const orderedLinks = useMemo(() => {
+    if (!focusedLinkId) return links;
+    return [...links].sort((left, right) => Number(right.id === focusedLinkId) - Number(left.id === focusedLinkId));
+  }, [focusedLinkId, links]);
 
   function applyTarget(composite: string) {
     setSelectedTarget(composite);
@@ -174,6 +189,16 @@ export function EnterpriseIdentityAdminPanel({
           description="La recherche est limitée à vos propres fiches métier. L’adresse exacte reçoit une réponse privée et neutre, qu’un compte DTSC existe déjà ou non."
         >
           <form onSubmit={submitInvitation} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
+            <div className="grid gap-3 lg:col-span-2 sm:grid-cols-2">
+              <label className="min-w-0 text-sm font-black text-dtsc-ink">Rechercher une fiche
+                <input value={targetSearch} onChange={(event) => setTargetSearch(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal" placeholder="Nom, référence ou contact" />
+              </label>
+              <label className="min-w-0 text-sm font-black text-dtsc-ink">Type de fiche
+                <select value={targetKind} onChange={(event) => setTargetKind(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal">
+                  <option value="">Tous les types</option><option value="businessPartyId">Tiers</option><option value="businessPartyContactId">Contact de tiers</option><option value="supplierId">Fournisseur personne</option><option value="supplierContactId">Contact fournisseur</option><option value="employeeId">Employé ou collaborateur</option>
+                </select>
+              </label>
+            </div>
             <label className="min-w-0 text-sm font-black text-dtsc-ink lg:col-span-2">
               Fiche métier
               <select
@@ -183,12 +208,13 @@ export function EnterpriseIdentityAdminPanel({
                 required
               >
                 <option value="">Sélectionner une fiche</option>
-                {targets.map((target) => (
+                {filteredTargets.map((target) => (
                   <option key={`${target.kind}:${target.value}`} value={`${target.kind}:${target.value}`}>
                     {target.label}
                   </option>
                 ))}
               </select>
+              {!filteredTargets.length ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs font-normal text-dtsc-muted">Aucune fiche correspondante. <Link className="font-black text-dtsc-blue underline" href={`/enterprise-modules/CRM_CUSTOMERS?action=create&returnTo=${encodeURIComponent("/enterprise-identity-admin")}`}>Créer une nouvelle fiche</Link></span> : null}
             </label>
             <label className="min-w-0 text-sm font-black text-dtsc-ink">
               Nom affiché
@@ -258,7 +284,7 @@ export function EnterpriseIdentityAdminPanel({
         >
           {links.length ? (
             <BusinessList ariaLabel="Gestion des consentements entreprise">
-              {links.map((link) => {
+              {orderedLinks.map((link) => {
                 const status = link.status as EnterpriseIdentityLinkStatus;
                 const canApprove = link.status === "ORGANIZATION_APPROVAL_REQUIRED";
                 const canCancel = ["INVITATION_PENDING", "REQUEST_PENDING", "USER_CONSENT_REQUIRED", "ORGANIZATION_APPROVAL_REQUIRED"].includes(link.status);

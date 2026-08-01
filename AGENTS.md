@@ -219,3 +219,13 @@ session
 23. listes volumineuses paginées côté serveur ;
 24. contrat responsive global obligatoire ;
 25. Production uniquement depuis `main`.
+
+## Professionnalisation des modules ERP
+
+- Un module ERP commercial doit disposer d’un workspace dédié, de formulaires professionnels, de détails, d’actions métier, d’un onboarding, d’une aide, d’un support, d’un contrat mobile et de QA probantes.
+- Une interface générique ou en simple lecture ne peut pas être déclarée commercialisable.
+- Les sélecteurs n’exposent jamais les UUID; ils affichent des noms, références et résumés autorisés.
+- Toute liaison compte DTSC ↔ fiche entreprise est consentie, révocable, auditée et distincte des autorités de données métier.
+- Les avantages liés à une relation sont décidés côté serveur et exigent une relation active.
+- Les notifications ouvrent l’objet précis et la section pertinente après authentification.
+- Les migrations de professionnalisation restent additives et la Production provient uniquement de `main`.

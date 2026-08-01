@@ -450,3 +450,9 @@ Une écriture comptable est corrigée par contrepassation ; une facture/paiement
 - `docs/CHANGELOG_ERP_CONSOLIDATION_ITERATION_05.md`
 
 La documentation historique reste accessible dans Git ; ce document représente l’architecture active après la consolidation ERP 5/5 Release A.
+
+## Addendum 2026-08-01 — ERP professionnel, itération 2
+
+Les modules `CRM_CUSTOMERS`, `CATALOG`, `SITES_WAREHOUSES`, `CRM_PIPELINE` et `CONTRACTS` utilisent désormais des workspaces dédiés. Les créations et modifications passent par des services métier transactionnels, une validation Zod, un contrôle de révision et des événements opérationnels.
+
+L’identité relationnelle dispose d’un résolveur serveur d’avantages, d’un worker d’expiration borné et de cibles fournisseur/RH supplémentaires. La migration `20260801170000_professionalize_erp_iteration_02` est additive.

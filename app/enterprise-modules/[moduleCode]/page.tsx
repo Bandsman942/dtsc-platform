@@ -2,6 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
 import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
 import { EnterpriseCommonDomainWorkspace } from "@/components/enterprise/enterprise-common-domain-workspace";
+import { EnterpriseCatalogWorkspace } from "@/components/enterprise/professional/enterprise-catalog-workspace";
+import { EnterpriseContractsWorkspace } from "@/components/enterprise/professional/enterprise-contracts-workspace";
+import { EnterpriseCrmWorkspace } from "@/components/enterprise/professional/enterprise-crm-workspace";
+import { EnterpriseCustomersWorkspace } from "@/components/enterprise/professional/enterprise-customers-workspace";
+import { EnterpriseEmployeesIdentityWorkspace } from "@/components/enterprise/professional/enterprise-employees-identity-workspace";
+import { EnterpriseSitesWorkspace } from "@/components/enterprise/professional/enterprise-sites-workspace";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
 import { EnterpriseSectorModuleWorkspace } from "@/components/enterprise/enterprise-sector-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
@@ -23,14 +29,8 @@ type Params = { params: Promise<{ moduleCode: string }> };
 const ENTERPRISE_ADMIN_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
 const ENTERPRISE_OVERSIGHT_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
 const COMMON_DOMAIN_CODES = new Set([
-  "CRM_CUSTOMERS",
-  "CATALOG",
-  "SITES_WAREHOUSES",
-  "CRM_PIPELINE",
   "SALES_QUOTES_ORDERS",
-  "CONTRACTS",
   "INVENTORY_LOGISTICS",
-  "HUMAN_RESOURCES",
   "TIME_ATTENDANCE",
   "PAYROLL_OPERATIONS",
   "PROJECTS_SERVICES",
@@ -118,6 +118,26 @@ export default async function EnterpriseModulePage({ params }: Params) {
   }
 
   if (definition.routeKind !== "DEDICATED_CORE") notFound();
+
+  if (definition.code === "CRM_CUSTOMERS") {
+    return <AppShell user={user}><EnterpriseCustomersWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "CATALOG") {
+    return <AppShell user={user}><EnterpriseCatalogWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "SITES_WAREHOUSES") {
+    return <AppShell user={user}><EnterpriseSitesWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "CRM_PIPELINE") {
+    return <AppShell user={user}><EnterpriseCrmWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "CONTRACTS") {
+    return <AppShell user={user}><EnterpriseContractsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+
+  if (definition.code === "HUMAN_RESOURCES") {
+    return <AppShell user={user}><EnterpriseEmployeesIdentityWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
 
   if (COMMON_DOMAIN_CODES.has(definition.code)) {
     return (

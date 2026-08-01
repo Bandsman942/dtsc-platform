@@ -15,22 +15,20 @@ type ApiPayload = {
   canManage?: boolean;
 };
 
+// Compatibility marker for legacy QA: these domains are intentionally routed to dedicated professional workspaces.
+const DEDICATED_PROFESSIONAL_MODULES = new Set([
+  "CRM_CUSTOMERS",
+  "CATALOG",
+  "SITES_WAREHOUSES",
+  "CRM_PIPELINE",
+  "CONTRACTS",
+]);
+
 const ENDPOINTS: Record<string, WorkspaceEndpoint[]> = {
-  CRM_CUSTOMERS: [{ key: "parties", label: "Tiers & clients", path: "business-parties" }],
-  CATALOG: [{ key: "catalog", label: "Produits & services", path: "catalog" }],
-  SITES_WAREHOUSES: [
-    { key: "sites", label: "Sites", path: "sites" },
-    { key: "warehouses", label: "Entrepôts", path: "warehouses" },
-  ],
-  CRM_PIPELINE: [
-    { key: "leads", label: "Leads", path: "leads" },
-    { key: "opportunities", label: "Opportunités", path: "opportunities" },
-  ],
   SALES_QUOTES_ORDERS: [
     { key: "quotes", label: "Devis", path: "quotes" },
     { key: "orders", label: "Commandes", path: "sales-orders" },
   ],
-  CONTRACTS: [{ key: "contracts", label: "Contrats", path: "contracts" }],
   INVENTORY_LOGISTICS: [
     { key: "inventory", label: "Stock", path: "inventory" },
     { key: "transfers", label: "Transferts", path: "stock-transfers" },
@@ -138,12 +136,17 @@ export function EnterpriseCommonDomainWorkspace({
   const pageCount = Math.max(1, payload.pagination?.pageCount || 1);
 
   if (!activeEndpoint) {
+    const dedicated = DEDICATED_PROFESSIONAL_MODULES.has(definition.code);
     return (
       <div className="mx-auto max-w-4xl p-4 sm:p-8">
         <div className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-6">
           <AlertCircle className="mb-3 h-6 w-6" />
-          <h1 className="text-xl font-semibold">Workspace non configuré</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Le module {definition.code} n’a pas de source opérationnelle déclarée.</p>
+          <h1 className="text-xl font-semibold">{dedicated ? "Workspace professionnel requis" : "Workspace non configuré"}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {dedicated
+              ? `Le module ${definition.code} doit être ouvert depuis son expérience professionnelle dédiée.`
+              : `Le module ${definition.code} n’a pas de source opérationnelle déclarée.`}
+          </p>
         </div>
       </div>
     );

@@ -42,3 +42,20 @@ Ces règles complètent le `AGENTS.md` racine pour tout travail dans `lib/enterp
 38. Les statuts, priorités, transitions, métriques et erreurs destinés à l’utilisateur passent par un dictionnaire contrôlé. Ne jamais produire un libellé en transformant automatiquement une enum ou une clé serveur.
 39. Les formulaires professionnels respectent `docs/ENTERPRISE_FORM_UX_CONTRACT.md`, empêchent la double soumission, rechargent les références dans le même tenant, gèrent la concurrence et utilisent le pattern partagé de liaison DTSC lorsqu’une personne est concernée.
 40. Exécuter `pnpm qa:erp-commercial-readiness`, `pnpm qa:enterprise-identity-consent` et `pnpm qa:erp-i18n` pour toute modification touchant ces fondations.
+
+## Règles durables — professionnalisation ERP et identité relationnelle
+
+26. Tout référentiel professionnel possède un formulaire, une fiche de détail et des actions métier réelles.
+27. Aucun sélecteur utilisateur n’expose ou ne demande un UUID, un identifiant Prisma ou un code technique pouvant être dérivé d’une fiche sélectionnée.
+28. Une fiche métier peut exister et rester opérationnelle sans compte global DTSC.
+29. Toute liaison entre compte global et fiche métier exige une finalité déclarée, un consentement explicite et, lorsque nécessaire, une approbation entreprise.
+30. Les avantages d’une relation sont résolus côté serveur. Seule une relation `ACTIVE`, consentie, approuvée et encore autorisée peut accorder des capacités.
+31. Les invitations de liaison expirent par un worker périodique borné, idempotent, protégé et sans données personnelles dans les logs.
+32. Aucun annuaire global d’utilisateurs DTSC ne peut être exposé par une recherche entreprise.
+33. Les workspaces génériques sont transitoires et restent `READ_ONLY_UI`; ils ne constituent jamais une preuve de commercialisabilité.
+34. Un module traité dans une itération doit atteindre le niveau produit annoncé avant clôture, sans promouvoir les modules voisins par simple effet de bord.
+35. `COMMERCIAL_READY` exige UX, onboarding, packaging, aide, support, sécurité, mobile, observabilité, documentation et QA prouvés module par module.
+36. Tous les libellés français proviennent de dictionnaires ou de mappings contrôlés; aucun enum, code ou erreur API brut ne doit être visible.
+37. Les notifications métier utilisent un lien profond vers le module, l’objet et la section attendue.
+38. Les migrations restent additives et non destructives; une révocation ou désactivation ne supprime jamais les historiques légitimes.
+39. La Production provient uniquement de `main`; aucun déploiement Vercel manuel depuis une branche n’est autorisé.

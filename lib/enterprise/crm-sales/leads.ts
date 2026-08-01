@@ -21,6 +21,13 @@ type LeadConvertInput = z.infer<typeof leadConvertSchema>;
 export async function createEnterpriseLead(organizationId: string, actorUserId: string, input: LeadCreateInput) {
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
+    if (input.businessPartyId) {
+      const party = await tx.enterpriseBusinessParty.findFirst({
+        where: { id: input.businessPartyId, organizationId, archivedAt: null },
+        select: { id: true },
+      });
+      if (!party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
+    }
     const lead = await tx.enterpriseLead.create({
       data: {
         organizationId,
@@ -35,9 +42,12 @@ export async function createEnterpriseLead(organizationId: string, actorUserId: 
         source: input.source || null,
         ownerUserId: input.ownerUserId || actorUserId,
         departmentId: input.departmentId || null,
+        businessPartyId: input.businessPartyId || null,
         expectedValue: input.expectedValue ?? null,
         currency: input.currency || null,
         notes: input.notes || null,
+        nextAction: input.nextAction || null,
+        nextActionAt: input.nextActionAt || null,
         createdByUserId: actorUserId,
       },
     });
@@ -49,6 +59,7 @@ export async function createEnterpriseLead(organizationId: string, actorUserId: 
       summary: `Lead ${lead.reference} créé`,
       actorUserId,
       toStatus: lead.status,
+      metadataJson: { businessPartyId: input.businessPartyId || null },
     });
     return lead;
   });
@@ -88,31 +99,85 @@ export async function transitionEnterpriseLead(organizationId: string, leadId: s
   });
 }
 
+export async function listEnterpriseLeadDuplicateCandidates(organizationId: string, leadId: string) {
+  const lead = await prisma.enterpriseLead.findFirst({ where: { id: leadId, organizationId, archivedAt: null } });
+  if (!lead) throw new EnterpriseDomainError("LEAD_NOT_FOUND", 404);
+  const exactSignals = [
+    { normalizedName: lead.normalizedName },
+    ...(lead.email ? [{ primaryEmail: { equals: lead.email, mode: "insensitive" as const } }] : []),
+    ...(lead.phone ? [{ primaryPhone: lead.phone }] : []),
+  ];
+  const candidates = lead.businessPartyId
+    ? await prisma.enterpriseBusinessParty.findMany({
+        where: { organizationId, id: lead.businessPartyId, archivedAt: null },
+        take: 1,
+        select: { id: true, code: true, partyType: true, legalName: true, displayName: true, primaryEmail: true, primaryPhone: true, status: true },
+      })
+    : await prisma.enterpriseBusinessParty.findMany({
+        where: { organizationId, archivedAt: null, OR: exactSignals },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        select: { id: true, code: true, partyType: true, legalName: true, displayName: true, primaryEmail: true, primaryPhone: true, status: true },
+      });
+  return { lead, candidates };
+}
+
 export async function convertEnterpriseLead(organizationId: string, leadId: string, actorUserId: string, input: LeadConvertInput) {
   return prisma.$transaction(async (tx) => {
     const lead = await tx.enterpriseLead.findFirst({ where: { id: leadId, organizationId, archivedAt: null } });
     if (!lead) throw new EnterpriseDomainError("LEAD_NOT_FOUND", 404);
     if (lead.status === "CONVERTED" && lead.convertedPartyId) {
-      return { partyId: lead.convertedPartyId, opportunityId: lead.convertedOpportunityId, idempotent: true };
+      return { partyId: lead.convertedPartyId, opportunityId: lead.convertedOpportunityId, idempotent: true, reusedParty: true };
     }
     if (lead.status !== "QUALIFIED") throw new EnterpriseDomainError("LEAD_MUST_BE_QUALIFIED", 409);
     if (lead.revision !== input.revision) throw new EnterpriseDomainConflictError();
 
-    const party = await tx.enterpriseBusinessParty.create({
-      data: {
-        organizationId,
-        partyType: lead.partyType,
-        legalName: lead.legalName,
-        displayName: lead.displayName,
-        normalizedName: lead.normalizedName,
-        code: enterpriseReference(lead.partyType === "PERSON" ? "PER" : "ORG"),
-        primaryEmail: lead.email,
-        primaryPhone: lead.phone,
-        notes: lead.notes,
-        createdByUserId: actorUserId,
-        roles: { create: [{ roleCode: "CUSTOMER", createdByUserId: actorUserId }] },
-      },
-    });
+    const selectedPartyId = input.businessPartyId || lead.businessPartyId;
+    let party = selectedPartyId
+      ? await tx.enterpriseBusinessParty.findFirst({ where: { id: selectedPartyId, organizationId, archivedAt: null } })
+      : null;
+    if (selectedPartyId && !party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
+
+    if (!party) {
+      const exactCandidates = await tx.enterpriseBusinessParty.findMany({
+        where: {
+          organizationId,
+          archivedAt: null,
+          OR: [
+            { normalizedName: lead.normalizedName },
+            ...(lead.email ? [{ primaryEmail: { equals: lead.email, mode: "insensitive" as const } }] : []),
+            ...(lead.phone ? [{ primaryPhone: lead.phone }] : []),
+          ],
+        },
+        select: { id: true },
+        take: 2,
+      });
+      if (exactCandidates.length && !input.createNewParty) {
+        throw new EnterpriseDomainError("LEAD_DUPLICATE_PARTY_REQUIRES_SELECTION", 409);
+      }
+      if (!input.createNewParty) throw new EnterpriseDomainError("LEAD_PARTY_DECISION_REQUIRED", 409);
+      party = await tx.enterpriseBusinessParty.create({
+        data: {
+          organizationId,
+          partyType: lead.partyType,
+          legalName: lead.legalName,
+          displayName: lead.displayName,
+          normalizedName: lead.normalizedName,
+          code: enterpriseReference(lead.partyType === "PERSON" ? "PER" : "ORG"),
+          primaryEmail: lead.email,
+          primaryPhone: lead.phone,
+          notes: lead.notes,
+          createdByUserId: actorUserId,
+          roles: { create: [{ roleCode: "CUSTOMER", createdByUserId: actorUserId }] },
+        },
+      });
+    } else {
+      await tx.enterpriseBusinessPartyRole.upsert({
+        where: { organizationId_businessPartyId_roleCode: { organizationId, businessPartyId: party.id, roleCode: "CUSTOMER" } },
+        update: { status: "ACTIVE", archivedAt: null },
+        create: { organizationId, businessPartyId: party.id, roleCode: "CUSTOMER", createdByUserId: actorUserId },
+      });
+    }
 
     const opportunity = input.createOpportunity
       ? await tx.enterpriseOpportunity.create({
@@ -128,6 +193,8 @@ export async function convertEnterpriseLead(organizationId: string, leadId: stri
             currency: input.currency || lead.currency,
             expectedCloseDate: input.expectedCloseDate || null,
             source: lead.source,
+            nextAction: lead.nextAction,
+            nextActionAt: lead.nextActionAt,
             createdByUserId: actorUserId,
           },
         })
@@ -137,6 +204,7 @@ export async function convertEnterpriseLead(organizationId: string, leadId: stri
       where: { id: lead.id, organizationId, revision: input.revision, status: "QUALIFIED" },
       data: {
         status: "CONVERTED",
+        businessPartyId: party.id,
         convertedPartyId: party.id,
         convertedOpportunityId: opportunity?.id || null,
         convertedAt: new Date(),
@@ -155,8 +223,8 @@ export async function convertEnterpriseLead(organizationId: string, leadId: stri
       actorUserId,
       fromStatus: "QUALIFIED",
       toStatus: "CONVERTED",
-      metadataJson: { partyId: party.id, opportunityId: opportunity?.id || null },
+      metadataJson: { partyId: party.id, opportunityId: opportunity?.id || null, reusedParty: Boolean(selectedPartyId) },
     });
-    return { partyId: party.id, opportunityId: opportunity?.id || null, idempotent: false };
+    return { partyId: party.id, opportunityId: opportunity?.id || null, idempotent: false, reusedParty: Boolean(selectedPartyId) };
   });
 }

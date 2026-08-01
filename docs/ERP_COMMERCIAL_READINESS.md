@@ -78,3 +78,7 @@ Toute itération de professionnalisation doit :
 6. déclasser immédiatement un module lorsqu’une preuve majeure n’est plus vraie.
 
 Le statut `ACTIVE` demeure un statut technique. Il ne doit jamais être réutilisé comme argument commercial.
+
+## Réévaluation de l’itération 2
+
+Les cinq modules ciblés disposent de workspaces dédiés, formulaires, détails, actions, onboarding, aide, documentation, mobile et QA ciblée. Leur promotion finale reste individuelle et dépend des contrôles CI, des scénarios navigateur authentifiés et des smoke tests Production. Fournisseurs et RH ne sont pas promus par cette intégration transversale.

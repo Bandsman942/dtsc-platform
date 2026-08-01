@@ -22,6 +22,7 @@ model EnterpriseBusinessParty {
   roles              EnterpriseBusinessPartyRole[]
   contacts           EnterpriseBusinessPartyContact[]
   addresses          EnterpriseBusinessPartyAddress[]
+  leads              EnterpriseLead[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -181,6 +182,7 @@ model EnterpriseCatalogItem {
   inventoryItems        EnterpriseInventoryItem[]
   quoteItems            EnterpriseQuoteItem[]
   salesOrderItems       EnterpriseSalesOrderItem[]
+  prices                EnterpriseCatalogPrice[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -189,6 +191,29 @@ model EnterpriseCatalogItem {
   @@index([organizationId, categoryId, status])
   @@index([organizationId, normalizedName, status])
   @@index([organizationId, trackInventory, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseCatalogPrice {
+  id              String                @id @default(cuid())
+  organizationId  String
+  catalogItemId   String
+  priceType       String                @default("SALE")
+  amount          Decimal               @db.Decimal(18, 2)
+  currency        String
+  taxRate         Decimal?              @db.Decimal(8, 4)
+  taxIncluded     Boolean               @default(false)
+  effectiveFrom   DateTime
+  effectiveUntil  DateTime?
+  status          String                @default("ACTIVE")
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  archivedAt      DateTime?
+  catalogItem     EnterpriseCatalogItem @relation(fields: [organizationId, catalogItemId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, catalogItemId, priceType, status])
+  @@index([organizationId, effectiveFrom, effectiveUntil])
   @@index([archivedAt])
 }
 
@@ -263,6 +288,9 @@ model EnterpriseStorageLocation {
   locationType       String                       @default("GENERAL")
   status             String                       @default("ACTIVE")
   restrictedAccess   Boolean                      @default(false)
+  barcode            String?
+  capacityValue      Decimal?                     @db.Decimal(18, 3)
+  capacityUnit       String?
   createdByUserId    String
   revision           Int                          @default(1)
   createdAt          DateTime                     @default(now())
