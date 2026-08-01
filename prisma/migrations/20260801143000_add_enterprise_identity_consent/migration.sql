@@ -155,7 +155,7 @@ ALTER TABLE "EnterprisePersonBusinessReference"
   ADD CONSTRAINT "EnterprisePersonBusinessReference_org_person_fkey" FOREIGN KEY ("organizationId", "personIdentityId") REFERENCES "EnterprisePersonIdentity"("organizationId", "id") ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT "EnterprisePersonBusinessReference_org_party_fkey" FOREIGN KEY ("organizationId", "businessPartyId") REFERENCES "EnterpriseBusinessParty"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT "EnterprisePersonBusinessReference_contact_fkey" FOREIGN KEY ("businessPartyContactId") REFERENCES "EnterpriseBusinessPartyContact"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "EnterprisePersonBusinessReference_org_employee_fkey" FOREIGN KEY ("organizationId", "employeeId") REFERENCES "EnterpriseEmployee"("organizationId", "id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT "EnterprisePersonBusinessReference_employee_fkey" FOREIGN KEY ("employeeId") REFERENCES "EnterpriseEmployee"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT "EnterprisePersonBusinessReference_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT "EnterprisePersonBusinessReference_updatedByUserId_fkey" FOREIGN KEY ("updatedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
