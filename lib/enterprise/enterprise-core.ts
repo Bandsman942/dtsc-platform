@@ -89,8 +89,9 @@ export function enterpriseCoreVisibilityWhere({
 
 /**
  * Release A compatibility guard.
- * EnterpriseCoreRecord remains queryable for historical evidence, but every
- * new business mutation must use a dedicated Core v2 domain model.
+ * EnterpriseCoreRecord remains queryable for historical evidence, including
+ * its archived sourceModule, sourceEntityType and sourceEntityId provenance,
+ * but every new business mutation must use a dedicated Core v2 domain model.
  */
 export async function createEnterpriseCoreRecord(): Promise<never> {
   throw new EnterpriseCoreV2Error(
