@@ -67,6 +67,8 @@ CREATE TABLE "EnterpriseIdentityLink" (
     "personIdentityId" TEXT NOT NULL,
     "userId" TEXT,
     "origin" TEXT NOT NULL,
+    "requestedRelationType" TEXT NOT NULL,
+    "requestedRoleCode" TEXT,
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "initiatedByUserId" TEXT NOT NULL,
     "reviewedByUserId" TEXT,
@@ -90,6 +92,7 @@ CREATE TABLE "EnterpriseIdentityLink" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "EnterpriseIdentityLink_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "EnterpriseIdentityLink_origin_check" CHECK ("origin" IN ('ENTERPRISE', 'USER')),
+    CONSTRAINT "EnterpriseIdentityLink_relationType_check" CHECK ("requestedRelationType" IN ('PROSPECT', 'CUSTOMER', 'CUSTOMER_CONTACT', 'SUPPLIER_REPRESENTATIVE', 'EMPLOYEE', 'COLLABORATOR', 'CONTRACTOR', 'PARTNER', 'OTHER')),
     CONSTRAINT "EnterpriseIdentityLink_status_check" CHECK ("status" IN ('DRAFT', 'INVITATION_PENDING', 'REQUEST_PENDING', 'USER_CONSENT_REQUIRED', 'ORGANIZATION_APPROVAL_REQUIRED', 'ACTIVE', 'REFUSED', 'EXPIRED', 'REVOKED', 'CANCELLED')),
     CONSTRAINT "EnterpriseIdentityLink_revision_check" CHECK ("revision" >= 1),
     CONSTRAINT "EnterpriseIdentityLink_active_requires_user_check" CHECK ("status" <> 'ACTIVE' OR "userId" IS NOT NULL),
@@ -100,6 +103,7 @@ CREATE UNIQUE INDEX "EnterpriseIdentityLink_organizationId_id_key" ON "Enterpris
 CREATE UNIQUE INDEX "EnterpriseIdentityLink_invitationTokenDigest_key" ON "EnterpriseIdentityLink"("invitationTokenDigest");
 CREATE UNIQUE INDEX "EnterpriseIdentityLink_active_person_user_key" ON "EnterpriseIdentityLink"("organizationId", "personIdentityId", "userId") WHERE "status" = 'ACTIVE' AND "userId" IS NOT NULL;
 CREATE INDEX "EnterpriseIdentityLink_org_status_created_idx" ON "EnterpriseIdentityLink"("organizationId", "status", "createdAt");
+CREATE INDEX "EnterpriseIdentityLink_org_relation_status_idx" ON "EnterpriseIdentityLink"("organizationId", "requestedRelationType", "status");
 CREATE INDEX "EnterpriseIdentityLink_org_person_status_idx" ON "EnterpriseIdentityLink"("organizationId", "personIdentityId", "status");
 CREATE INDEX "EnterpriseIdentityLink_user_status_created_idx" ON "EnterpriseIdentityLink"("userId", "status", "createdAt");
 CREATE INDEX "EnterpriseIdentityLink_expiry_status_idx" ON "EnterpriseIdentityLink"("expiresAt", "status");
