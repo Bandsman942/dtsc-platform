@@ -5,6 +5,7 @@ function parseArgs(argv) {
   const result = { json: false };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
+    if (value === "--") continue;
     if (value === "--json") result.json = true;
     else if (value === "--organization-id") result.organizationId = argv[++index];
     else if (value === "--period-id") result.periodId = argv[++index];
