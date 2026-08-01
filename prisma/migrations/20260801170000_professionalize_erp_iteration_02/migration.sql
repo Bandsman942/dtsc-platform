@@ -22,7 +22,7 @@ ALTER TABLE "EnterprisePersonBusinessReference"
 
 CREATE UNIQUE INDEX IF NOT EXISTS "EnterprisePersonBusinessReference_org_supplier_relation_key"
   ON "EnterprisePersonBusinessReference"("organizationId", "supplierId", "relationType");
-CREATE UNIQUE INDEX IF NOT EXISTS "EnterprisePersonBusinessReference_org_supplier_contact_relation_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "EPBR_org_supplier_contact_relation_key"
   ON "EnterprisePersonBusinessReference"("organizationId", "supplierContactId", "relationType");
 CREATE INDEX IF NOT EXISTS "EnterprisePersonBusinessReference_org_supplier_idx"
   ON "EnterprisePersonBusinessReference"("organizationId", "supplierId");
