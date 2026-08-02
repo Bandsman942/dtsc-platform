@@ -9,6 +9,7 @@ const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
     DRAFT: "Brouillon",
     SUBMITTED: "Soumis",
     IN_REVIEW: "En revue",
+    PENDING_REVIEW: "En attente de revue",
     REVIEWED: "Revu",
     PENDING_APPROVAL: "En attente de validation",
     APPROVED: "Approuvé",
@@ -21,6 +22,8 @@ const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
     WRITTEN_OFF: "Passé en irrécouvrable",
     CANCELLED: "Annulé",
     VOID: "Invalidé",
+    VOIDED: "Invalidé",
+    CREDIT_NOTE: "Avoir",
     REJECTED: "Refusé",
     RETURNED: "Renvoyé pour correction",
     CONFIRMED: "Confirmé",
@@ -51,6 +54,7 @@ const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
     DRAFT: "Draft",
     SUBMITTED: "Submitted",
     IN_REVIEW: "In review",
+    PENDING_REVIEW: "Pending review",
     REVIEWED: "Reviewed",
     PENDING_APPROVAL: "Pending approval",
     APPROVED: "Approved",
@@ -63,6 +67,8 @@ const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
     WRITTEN_OFF: "Written off",
     CANCELLED: "Cancelled",
     VOID: "Voided",
+    VOIDED: "Voided",
+    CREDIT_NOTE: "Credit note",
     REJECTED: "Rejected",
     RETURNED: "Returned for correction",
     CONFIRMED: "Confirmed",
@@ -151,10 +157,14 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     CUSTOMER_REFUND: "Remboursement client",
     SUPPLIER_REFUND: "Remboursement fournisseur",
     PAYROLL_PAYMENT: "Paiement de paie",
+    EXPENSE_REIMBURSEMENT: "Remboursement de dépense",
+    TAX_PAYMENT: "Paiement fiscal",
+    REFUND: "Remboursement",
     OTHER: "Autre paiement",
     BANK_TRANSFER: "Virement bancaire",
     CARD: "Carte",
-    CHEQUE: "Chèque"
+    CHEQUE: "Chèque",
+    CREDIT: "Crédit"
   },
   en: {
     WEIGHTED_AVERAGE: "Weighted average",
@@ -170,12 +180,31 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     CUSTOMER_REFUND: "Customer refund",
     SUPPLIER_REFUND: "Supplier refund",
     PAYROLL_PAYMENT: "Payroll payment",
+    EXPENSE_REIMBURSEMENT: "Expense reimbursement",
+    TAX_PAYMENT: "Tax payment",
+    REFUND: "Refund",
     OTHER: "Other payment",
     BANK_TRANSFER: "Bank transfer",
     CARD: "Card",
-    CHEQUE: "Cheque"
+    CHEQUE: "Cheque",
+    CREDIT: "Credit"
   }
 };
+
+export const FINANCE_ERROR_MESSAGES = {
+  fr: {
+    PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "Le montant affecté dépasse la partie encore disponible de ce paiement.",
+    FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Aucune nouvelle opération ne peut y être enregistrée.",
+    SELF_APPROVAL_FORBIDDEN: "Une autre personne autorisée doit approuver cette opération.",
+    THREE_WAY_MATCH_VARIANCE_UNRESOLVED: "La facture présente encore des écarts avec la commande ou la réception."
+  },
+  en: {
+    PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "The allocated amount exceeds the remaining available payment amount.",
+    FINANCE_PERIOD_CLOSED: "This finance period is closed. No new operation can be recorded in it.",
+    SELF_APPROVAL_FORBIDDEN: "Another authorized person must approve this operation.",
+    THREE_WAY_MATCH_VARIANCE_UNRESOLVED: "The invoice still has variances against the purchase order or receipt."
+  }
+} as const;
 
 export function financeStatusLabel(status: string, locale: FinanceLocale = "fr") {
   return STATUS_LABELS[locale][status] || (locale === "fr" ? "Statut à vérifier" : "Status to review");
