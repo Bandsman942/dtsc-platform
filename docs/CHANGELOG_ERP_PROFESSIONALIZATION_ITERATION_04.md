@@ -1,6 +1,6 @@
 # Changelog — Professionnalisation ERP, itération 04
 
-Date initiale : 2 août 2026  
+Date initiale : 2 août 2026
 Promotion commerciale : 2 août 2026
 
 ## Portée
