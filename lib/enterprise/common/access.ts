@@ -19,13 +19,22 @@ export async function getEnterpriseCommonDomainAccess({
     action,
   });
   if (!decision.allowed) return null;
+
+  const [writeDecision, manageDecision] = await Promise.all([
+    action === "write" || action === "manage"
+      ? Promise.resolve(decision)
+      : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "write" }),
+    action === "manage"
+      ? Promise.resolve(decision)
+      : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "manage" }),
+  ]);
+
+  const canManage = action === "manage" || manageDecision.allowed;
+  const canWrite = action === "write" || action === "manage" || writeDecision.allowed || canManage;
+
   return {
     decision,
-    canManage: action === "manage" || (await resolveEnterpriseModuleAccess({
-      userId: session.userId,
-      organizationId,
-      moduleCode,
-      action: "manage",
-    })).allowed,
+    canWrite,
+    canManage,
   };
 }
