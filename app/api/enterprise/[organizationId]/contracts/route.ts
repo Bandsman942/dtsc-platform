@@ -48,9 +48,27 @@ export async function GET(req: Request, { params }: Params) {
   const approvals = await prisma.enterpriseApproval.findMany({ where: { organizationId, targetEntityType: "EnterpriseContract", targetEntityId: { in: rawItems.map((item) => item.id) }, archivedAt: null }, orderBy: { requestedAt: "desc" } });
   const approvalByContract = new Map<string, (typeof approvals)[number]>();
   for (const approval of approvals) if (!approvalByContract.has(approval.targetEntityId)) approvalByContract.set(approval.targetEntityId, approval);
-  const items = rawItems.map((item) => ({ ...item, businessParty: partyById.get(item.businessPartyId) || null, approval: approvalByContract.get(item.id) || null }));
+  const items = rawItems.map((item) => {
+    const approval = approvalByContract.get(item.id) || null;
+    const isRequester = [item.ownerUserId, item.createdByUserId, approval?.requestedByUserId].filter(Boolean).includes(session.userId);
+    const isApprover = approval?.status === "PENDING" && approval.approverUserId === session.userId;
+    return {
+      ...item,
+      businessParty: partyById.get(item.businessPartyId) || null,
+      approval,
+      capabilities: {
+        isRequester,
+        isApprover,
+        canEdit: access.canManage && item.status === "DRAFT",
+        canSubmit: access.canManage && item.status === "DRAFT",
+        canDecide: isApprover && item.status === "PENDING_APPROVAL",
+        canOperate: access.canManage,
+        canComment: access.canManage || isRequester || isApprover,
+      },
+    };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "contracts", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { draft, pendingApproval, approved, active, suspended, expiring, expired, terminated }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { draft, pendingApproval, approved, active, suspended, expiring, expired, terminated }, canManage: access.canManage, canWrite: access.canWrite });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -85,7 +103,6 @@ export async function POST(req: Request, { params }: Params) {
     return enterpriseDomainErrorResponse(error, "CONTRACT_CREATE_FAILED");
   }
 }
-
 
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();

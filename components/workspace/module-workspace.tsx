@@ -91,19 +91,19 @@ export function ModuleToolbar({
     <section
       data-workspace-toolbar
       className={cn(
-        "w-full min-w-0 max-w-full overflow-x-clip rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-3.5 sm:p-4",
+        "w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-dtsc-border bg-dtsc-page/70 p-3.5 sm:p-4",
         className,
       )}
       aria-label={ariaLabel}
     >
-      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <div className="min-w-0 max-w-full">{search}</div>
-        {controls ? <div data-responsive-actions className="lg:justify-end">{controls}</div> : null}
+      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,auto)] lg:items-end">
+        {search ? <div className="min-w-0 max-w-full">{search}</div> : null}
+        {controls ? <div data-workspace-toolbar-controls className="min-w-0 max-w-full">{controls}</div> : null}
       </div>
       {activeFilters || summary ? (
         <div className="mt-3 flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 border-t border-dtsc-border/80 pt-3 text-xs text-dtsc-muted">
           <div className="min-w-0 max-w-full">{activeFilters}</div>
-          <div className="max-w-full font-black text-dtsc-ink/80">{summary}</div>
+          <div className="max-w-full break-words font-black text-dtsc-ink/80">{summary}</div>
         </div>
       ) : null}
     </section>

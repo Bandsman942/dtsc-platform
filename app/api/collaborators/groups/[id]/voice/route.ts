@@ -55,15 +55,15 @@ export async function POST(req: Request, { params }: Params) {
     voiceSettings.rateLimitPerHour,
     60 * 60 * 1000
   );
-  if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests", message: "Trop de messages vocaux ont été envoyés. Réessayez plus tard." }, { status: 429 });
 
   const { id } = await params;
   const member = await assertGroupMemberForSession(id, session);
-  if (!member || member.group.status !== "ACTIVE") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!member || member.group.status !== "ACTIVE") return NextResponse.json({ error: "Forbidden", message: "Vous ne pouvez pas envoyer de message dans ce groupe." }, { status: 403 });
 
   const form = await req.formData();
   const file = form.get("file");
-  if (!(file instanceof File)) return NextResponse.json({ error: "Audio required" }, { status: 400 });
+  if (!(file instanceof File)) return NextResponse.json({ error: "Audio required", message: "Aucun fichier audio n’a été reçu." }, { status: 400 });
   const validation = validateCollaborationAudio(file, voiceSettings.maxFileSizeBytes);
   if (!validation.ok) return NextResponse.json({ error: "Invalid audio", message: validation.message }, { status: validation.status });
 
@@ -71,14 +71,14 @@ export async function POST(req: Request, { params }: Params) {
   try {
     waveform = JSON.parse(String(form.get("waveform") || "[]"));
   } catch {
-    return NextResponse.json({ error: "Invalid waveform" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid waveform", message: "Les métadonnées du message vocal sont invalides." }, { status: 400 });
   }
   const metadata = collaborationVoiceMetadataSchema.safeParse({
     durationMs: form.get("durationMs"),
     replyToId: String(form.get("replyToId") || ""),
     waveform,
   });
-  if (!metadata.success) return NextResponse.json({ error: "Invalid voice message" }, { status: 400 });
+  if (!metadata.success) return NextResponse.json({ error: "Invalid voice message", message: metadata.error.issues[0]?.message || "Le message vocal est invalide." }, { status: 400 });
   if (metadata.data.durationMs > voiceSettings.maxDurationSeconds * 1000) {
     return NextResponse.json({
       error: "VOICE_DURATION_EXCEEDED",
@@ -87,12 +87,26 @@ export async function POST(req: Request, { params }: Params) {
   }
   if (metadata.data.replyToId) {
     const reply = await prisma.collaborationGroupMessage.findFirst({ where: { id: metadata.data.replyToId, groupId: id, deletedAt: null }, select: { id: true } });
-    if (!reply) return NextResponse.json({ error: "Invalid reply target" }, { status: 400 });
+    if (!reply) return NextResponse.json({ error: "Invalid reply target", message: "Le message auquel vous répondez n’existe plus dans ce groupe." }, { status: 400 });
   }
 
   const messageId = randomUUID();
   const voiceId = randomUUID();
-  const uploaded = await uploadVoiceMessage(id, messageId, file);
+  let uploaded: Awaited<ReturnType<typeof uploadVoiceMessage>>;
+  try {
+    uploaded = await uploadVoiceMessage(id, messageId, file);
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : "unknown";
+    const storageNotConfigured = rawMessage.includes("SUPABASE_STORAGE_NOT_CONFIGURED");
+    await writeApiLog({ request: req, statusCode: 503, userId: session.userId, startedAt, metadata: { reason: storageNotConfigured ? "storage_not_configured" : "voice_upload_failed", rawMessage } });
+    return NextResponse.json({
+      error: storageNotConfigured ? "VOICE_STORAGE_NOT_CONFIGURED" : "VOICE_UPLOAD_FAILED",
+      message: storageNotConfigured
+        ? "Le stockage privé des messages vocaux n’est pas configuré côté serveur. Contactez le support DTSC."
+        : "Le fichier vocal n’a pas pu être téléversé. Vérifiez votre connexion puis réessayez.",
+    }, { status: 503 });
+  }
+
   try {
     const message = await prisma.$transaction(async (tx) => {
       const saved = await tx.collaborationGroupMessage.create({
@@ -148,7 +162,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, messageId }, { status: 201 });
   } catch (error) {
     await removeCollaborationMedia(id, uploaded.storageBucket, uploaded.storagePath);
-    await writeApiLog({ request: req, statusCode: 500, userId: session.userId, startedAt });
-    throw error;
+    await writeApiLog({ request: req, statusCode: 500, userId: session.userId, startedAt, metadata: { error: error instanceof Error ? error.message : "unknown" } });
+    return NextResponse.json({ error: "VOICE_MESSAGE_SAVE_FAILED", message: "Le fichier a été reçu, mais le message vocal n’a pas pu être enregistré. Réessayez." }, { status: 500 });
   }
 }

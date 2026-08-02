@@ -23,7 +23,32 @@ function formatDuration(ms: number) {
 
 function preferredAudioMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
-  return ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
+  return [
+    "audio/webm;codecs=opus",
+    "audio/ogg;codecs=opus",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
+    "audio/webm",
+    "audio/ogg",
+  ].find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function microphoneErrorMessage(error: unknown) {
+  const name = error instanceof DOMException ? error.name : error instanceof Error ? error.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
+    return "L’accès au microphone a été refusé. Autorisez le microphone pour app.dtsc-platform.com dans les paramètres du navigateur, puis réessayez.";
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "Aucun microphone utilisable n’a été détecté sur cet appareil.";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "Le microphone est déjà utilisé ou bloqué par une autre application. Fermez l’autre enregistrement ou appel, puis réessayez.";
+  }
+  if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+    return "Le microphone ne prend pas en charge les paramètres demandés. Rechargez la page et réessayez.";
+  }
+  if (name === "AbortError") return "L’ouverture du microphone a été interrompue. Réessayez.";
+  return "Le microphone n’a pas pu être ouvert. Vérifiez l’autorisation du navigateur et la disponibilité du microphone.";
 }
 
 export function VoiceConversationComposer({
@@ -59,6 +84,7 @@ export function VoiceConversationComposer({
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef(0);
   const cancelledRef = useRef(false);
+  const mountedRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -72,14 +98,19 @@ export function VoiceConversationComposer({
         if (!cancelled && body?.voice) setVoiceCapabilities(body.voice);
       })
       .catch(() => null);
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => () => {
-    recorderRef.current?.stop();
+    mountedRef.current = false;
+    cancelledRef.current = true;
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      try { recorder.stop(); } catch { /* already stopping */ }
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    recorderRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -100,6 +131,7 @@ export function VoiceConversationComposer({
         const recorder = recorderRef.current;
         if (recorder && recorder.state !== "inactive") {
           cancelledRef.current = false;
+          try { recorder.requestData(); } catch { /* optional flush */ }
           recorder.stop();
         }
       }
@@ -113,48 +145,94 @@ export function VoiceConversationComposer({
       onError?.("Les messages vocaux sont désactivés par l’administrateur.");
       return;
     }
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      onError?.("L’enregistrement vocal n’est pas disponible sur ce navigateur.");
+    if (typeof window === "undefined" || !window.isSecureContext) {
+      onError?.("Le microphone exige une connexion HTTPS sécurisée. Ouvrez l’application depuis app.dtsc-platform.com.");
       return;
     }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      onError?.("L’enregistrement vocal n’est pas pris en charge par ce navigateur. Mettez le navigateur à jour ou utilisez Chrome, Samsung Internet, Edge ou Safari récent.");
+      return;
+    }
+
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (navigator.permissions?.query) {
+        try {
+          const permission = await navigator.permissions.query({ name: "microphone" as PermissionName });
+          if (permission.state === "denied") {
+            onError?.("Le microphone est bloqué pour ce site. Réactivez-le dans Paramètres du navigateur > Autorisations du site > Microphone.");
+            return;
+          }
+        } catch {
+          // Some mobile browsers do not expose the microphone permission through Permissions API.
+        }
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+        video: false,
+      });
+      const audioTrack = stream.getAudioTracks()[0];
+      if (!audioTrack || audioTrack.readyState !== "live") throw new DOMException("Microphone unavailable", "NotReadableError");
+
       const mimeType = preferredAudioMimeType();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 64_000 }) : new MediaRecorder(stream);
       streamRef.current = stream;
       recorderRef.current = recorder;
       chunksRef.current = [];
       cancelledRef.current = false;
       startedAtRef.current = Date.now();
       setRecordingMs(0);
+
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       });
+      recorder.addEventListener("error", (event) => {
+        cancelledRef.current = true;
+        onError?.(`L’enregistrement vocal a été interrompu${event.error?.message ? ` : ${event.error.message}` : "."}`);
+      });
       recorder.addEventListener("stop", () => {
         const durationMs = Math.min(Date.now() - startedAtRef.current, voiceCapabilities.maxDurationSeconds * 1000);
-        const chunks = chunksRef.current;
-        const wasCancelled = cancelledRef.current;
-        stream.getTracks().forEach((track) => track.stop());
+        const chunks = [...chunksRef.current];
+        const wasCancelled = cancelledRef.current || !mountedRef.current;
+        stream?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
         recorderRef.current = null;
-        setRecording(false);
-        setRecordingMs(0);
+        chunksRef.current = [];
+        if (mountedRef.current) {
+          setRecording(false);
+          setRecordingMs(0);
+        }
         if (wasCancelled || !chunks.length) return;
         const blob = new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || "audio/webm" });
-        if (blob.size <= 0) return;
+        if (blob.size <= 0 || durationMs < 250) {
+          onError?.("Le message vocal est vide ou trop court. Maintenez l’enregistrement un peu plus longtemps.");
+          return;
+        }
         if (blob.size > voiceCapabilities.maxFileSizeBytes) {
           const maxMb = Math.max(1, Math.floor(voiceCapabilities.maxFileSizeBytes / (1024 * 1024)));
           onError?.(`Le message vocal dépasse la limite de ${maxMb} Mo.`);
           return;
         }
-        void onSendVoice({ blob, durationMs, waveform: [] });
-      });
+        void Promise.resolve(onSendVoice({ blob, durationMs, waveform: [] })).catch((error) => {
+          onError?.(error instanceof Error ? error.message : "Le message vocal n’a pas pu être envoyé.");
+        });
+      }, { once: true });
+
       recorder.start(250);
       setRecording(true);
-    } catch {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+    } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      onError?.("Autorisez le microphone pour envoyer un message vocal.");
+      recorderRef.current = null;
+      setRecording(false);
+      setRecordingMs(0);
+      onError?.(microphoneErrorMessage(error));
     }
   }
 
@@ -162,7 +240,17 @@ export function VoiceConversationComposer({
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
     cancelledRef.current = cancelled;
-    recorder.stop();
+    if (!cancelled) {
+      try { recorder.requestData(); } catch { /* optional flush */ }
+    }
+    try { recorder.stop(); } catch {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      recorderRef.current = null;
+      setRecording(false);
+      setRecordingMs(0);
+      if (!cancelled) onError?.("L’enregistrement n’a pas pu être finalisé. Réessayez.");
+    }
   }
 
   return (

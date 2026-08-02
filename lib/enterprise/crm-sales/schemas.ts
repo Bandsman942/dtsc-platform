@@ -130,11 +130,20 @@ export const fulfillmentCreateSchema = z.object({
   items: z.array(fulfillmentItemSchema).min(1).max(200),
 });
 
-
 export const contractTransitionSchema = z.object({
-  action: z.enum(["SUBMIT", "APPROVE", "REJECT", "ACTIVATE", "SUSPEND", "RENEW", "TERMINATE", "ARCHIVE"]),
+  action: z.enum(["SUBMIT", "APPROVE", "REQUEST_CORRECTION", "REJECT", "ACTIVATE", "SUSPEND", "RENEW", "TERMINATE", "ARCHIVE"]),
   approverUserId: z.string().trim().min(1).optional().nullable(),
   reason: z.string().trim().min(2).max(2000).optional().nullable(),
   renewedEndDate: z.coerce.date().optional().nullable(),
   revision: z.coerce.number().int().positive(),
+}).superRefine((value, context) => {
+  if (["REQUEST_CORRECTION", "REJECT", "SUSPEND", "TERMINATE"].includes(value.action) && !value.reason) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Un motif est obligatoire pour cette décision." });
+  }
+  if (value.action === "SUBMIT" && !value.approverUserId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["approverUserId"], message: "Sélectionnez un validateur." });
+  }
+  if (value.action === "RENEW" && !value.renewedEndDate) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["renewedEndDate"], message: "La nouvelle date de fin est obligatoire." });
+  }
 });

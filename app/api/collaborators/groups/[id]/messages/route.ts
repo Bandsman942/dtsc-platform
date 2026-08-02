@@ -40,19 +40,25 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 30), 1), 50);
   const cursor = url.searchParams.get("cursor") || undefined;
-  const records = await prisma.collaborationGroupMessage.findMany({
-    where: { groupId: id, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    include: {
-      author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
-      replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
-      mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
-      reads: { select: { userId: true, readAt: true } },
-      sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
-      sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
-    },
-  });
+  const [records, receiptMembers] = await Promise.all([
+    prisma.collaborationGroupMessage.findMany({
+      where: { groupId: id, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+      include: {
+        author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
+        replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
+        mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
+        reads: { select: { userId: true, readAt: true } },
+        sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
+        sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
+      },
+    }),
+    prisma.collaborationGroupMember.findMany({
+      where: { groupId: id, status: "ACTIVE" },
+      select: { userId: true, user: { select: { lastSeenAt: true } } },
+    }),
+  ]);
   const hasMore = records.length > limit;
   const baseMessages = records.slice(0, limit).reverse();
   const messageIds = baseMessages.map((message) => message.id);
@@ -90,8 +96,19 @@ export async function GET(req: Request, { params }: Params) {
     const publication = publicationByMessage.get(message.id);
     const linkedMeeting = publication ? meetingById.get(publication.meetingId) : null;
     const reportOwnerUserId = linkedMeeting?.reportOwnerEmployeeId ? reportOwnerUserByEmployee.get(linkedMeeting.reportOwnerEmployeeId) : null;
+    const recipients = receiptMembers.filter((receiptMember) => receiptMember.userId !== message.authorId);
+    const readIds = new Set(message.reads.filter((read) => read.userId !== message.authorId).map((read) => read.userId));
+    const deliveredCount = recipients.filter((recipient) => readIds.has(recipient.userId) || Boolean(recipient.user.lastSeenAt && recipient.user.lastSeenAt >= message.createdAt)).length;
+    const readCount = recipients.filter((recipient) => readIds.has(recipient.userId)).length;
     return {
       ...message,
+      receiptSummary: {
+        recipientCount: recipients.length,
+        deliveredCount,
+        readCount,
+        allDelivered: recipients.length > 0 && deliveredCount >= recipients.length,
+        allRead: recipients.length > 0 && readCount >= recipients.length,
+      },
       meetingLink: link
         ? {
             id: link.id,
@@ -223,13 +240,13 @@ export async function POST(req: Request, { params }: Params) {
     : memberUserIds.filter((userId) => userId !== session.userId);
   const preferences = candidates.length ? await prisma.collaborationGroupPreference.findMany({ where: { groupId: id, userId: { in: candidates } } }) : [];
   const preferenceByUser = new Map(preferences.map((item) => [item.userId, item]));
-  const now = Date.now();
+  const currentTime = Date.now();
   const recipients = [...new Set(candidates)].filter((userId) => {
     const preference = preferenceByUser.get(userId);
     if (!preference) return true;
     if (preference.notifications === "NONE") return false;
     if (!mentionedUserIds.length && preference.notifications === "MENTIONS") return false;
-    if (preference.mutedUntil && preference.mutedUntil.getTime() > now) return false;
+    if (preference.mutedUntil && preference.mutedUntil.getTime() > currentTime) return false;
     return true;
   });
   await notifyUsers({
