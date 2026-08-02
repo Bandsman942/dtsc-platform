@@ -1,4 +1,5 @@
 import readinessManifest from "@/lib/enterprise/module-commercial-readiness.json";
+import iteration03Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-03.json";
 import {
   ENTERPRISE_MODULE_REGISTRY,
   getEnterpriseModuleDefinition,
@@ -55,13 +56,32 @@ type AssessmentSource = {
   commentEn: string;
 };
 
-const manifest = readinessManifest as {
+type ReadinessManifest = {
   version: number;
   evaluatedAt: string;
   policyVersion: string;
   defaultAssessment: AssessmentSource;
   profiles: Record<string, AssessmentSource>;
   moduleOverrides: Record<string, AssessmentSource>;
+};
+
+const baseManifest = readinessManifest as ReadinessManifest;
+const iteration03 = iteration03Manifest as {
+  version: number;
+  evaluatedAt: string;
+  policyVersion: string;
+  moduleOverrides: Record<string, AssessmentSource>;
+};
+
+const manifest: ReadinessManifest = {
+  ...baseManifest,
+  version: Math.max(baseManifest.version, iteration03.version),
+  evaluatedAt: iteration03.evaluatedAt,
+  policyVersion: iteration03.policyVersion,
+  moduleOverrides: {
+    ...baseManifest.moduleOverrides,
+    ...iteration03.moduleOverrides,
+  },
 };
 
 export const ENTERPRISE_COMMERCIAL_READINESS_VERSION = manifest.version;
