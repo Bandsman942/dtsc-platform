@@ -1,6 +1,6 @@
 # Matrice finale de préparation commerciale ERP
 
-**Date :** 3 août 2026  
+**Date :** 3 août 2026
 **Principe :** la maturité technique, la maturité produit et la décision commerciale sont trois décisions distinctes.
 
 ## Règles de décision
