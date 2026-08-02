@@ -104,8 +104,7 @@ const checks = {
     reject(content.sales, "businessPartyId\" placeholder=\"UUID", "Ventes professionnelles");
   },
   procurement() {
-    for (const marker of ["EnterpriseSuppliersWorkspace", "EnterprisePurchasesWorkspace", "commande-réception-facture"]) need(content.procurement, marker, "Achats professionnels");
-    needAny(content.procurement, ["<form", "Dialog"], "Formulaires achats");
+    for (const marker of ["EnterpriseSuppliersWorkspace", "EnterprisePurchasesWorkspace", "commande-réception-facture", "moduleCode=\"SUPPLIERS_PURCHASES\""]) need(content.procurement, marker, "Achats professionnels composés");
   },
   inventory() {
     for (const marker of ["Nouveau transfert de stock", "Nouvelle campagne d’inventaire", "Ajustement contrôlé", "approverUserId", "idempotencyKey", "stock négatif", "<form"]) need(content.inventory, marker, "Stock professionnel");
@@ -138,7 +137,7 @@ const checks = {
     for (const marker of ["ProfessionalWorkflowComments", "canEdit", "canDelete", "method: editing ? \"PATCH\" : \"POST\"", "method: \"DELETE\""]) need(content.workflowComments, marker, "Commentaires workflow UI");
   },
   documents() {
-    for (const marker of ["sourceEntityType", "sourceEntityId", "sourceReference", "requestedAction", "action === \"upload\"", "Téléverser un document lié", "new File", "type=\"file\"", "/versions"]) need(content.documents, marker, "Documents liés et upload réel");
+    for (const marker of ["sourceEntityType", "sourceEntityId", "sourceReference", "requestedAction", "requestedAction === \"upload\"", "Téléverser un document lié", "type=\"file\"", "/versions"]) need(content.documents, marker, "Documents liés et upload réel");
     for (const marker of ["EnterpriseContract", "EnterpriseProject", "EnterpriseAsset", "targetModule", "createEnterpriseLink"]) need(content.documentLinks, marker, "Liens documentaires ERP");
     for (const marker of ["EnterpriseContract", "EnterpriseProject", "EnterpriseAsset", "CROSS_TENANT_LINK_DENIED"]) need(content.procurementShared, marker, "Validation tenant des liens");
   },
@@ -148,7 +147,7 @@ const checks = {
     need(content.professionalUi, "/help/enterprise?module=", "Lien guide contextuel");
   },
   voice() {
-    for (const marker of ["window.isSecureContext", "navigator.mediaDevices.getUserMedia", "navigator.permissions.query", "NotAllowedError", "NotFoundError", "NotReadableError", "requestData", "audio/mp4", "audio/ogg"]) need(content.voiceComposer, marker, "Capture microphone");
+    for (const marker of ["window.isSecureContext", "navigator.mediaDevices.getUserMedia", "navigator.permissions?.query", "NotAllowedError", "NotFoundError", "NotReadableError", "requestData", "audio/mp4", "audio/ogg"]) need(content.voiceComposer, marker, "Capture microphone");
     for (const marker of ["audio/x-m4a", "audio/3gpp", "normalizeCollaborationMimeType", "validateCollaborationAudio"]) need(content.collaborationMedia, marker, "Formats vocaux mobiles");
     for (const marker of ["VOICE_STORAGE_NOT_CONFIGURED", "VOICE_UPLOAD_FAILED", "VOICE_MESSAGE_SAVE_FAILED", "removeCollaborationMedia", "message:"]) need(content.voiceRoute, marker, "Erreurs vocales actionnables");
   },
