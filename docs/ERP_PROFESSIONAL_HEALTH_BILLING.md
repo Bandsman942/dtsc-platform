@@ -1,7 +1,7 @@
 # Module professionnel Health — Facturation médicale
 
-**Code canonique :** `MEDICAL_BILLING`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `MEDICAL_BILLING`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Source financière unique
@@ -30,5 +30,5 @@ Les clés d’idempotence et liens structurels empêchent double facture, double
 
 ## Validation
 
-QA automatisée : facture commune, ventilation, paiements et confidentialité.  
+QA automatisée : facture commune, ventilation, paiements et confidentialité.
 E2E propriétaire : scénario `I06-H-004`.
