@@ -28,3 +28,17 @@ Règles durables applicables à ce répertoire :
 24. Les tests E2E manuels post-correctif ne sont jamais déclarés réussis sans confirmation explicite du propriétaire.
 25. Les migrations restent additives et non destructives.
 26. La Production provient uniquement de `main` via le pipeline existant.
+
+## Finance opérationnelle
+
+27. Une facture émise possède une créance ou dette commune unique ; ne jamais calculer un second solde concurrent dans l’interface.
+28. Tout paiement et toute allocation utilisent le moteur commun ; une allocation reste bornée par le paiement disponible et le solde ouvert.
+29. Une opération comptabilisée est immuable ; l’interface propose uniquement annulation contrôlée, avoir, remboursement ou contrepassation selon le statut.
+30. Une période fermée ou verrouillée bloque les mutations et affiche une explication métier sans offrir de contournement.
+31. L’initiateur et l’approbateur restent distincts lorsque la politique l’exige ; il en va de même pour le caissier et le validateur de clôture.
+32. Une caisse ne possède qu’une session active compatible et sa clôture conserve comptage, théorique, écart, motif et décision indépendante.
+33. Les imports bancaires prévisualisent et bornent les fichiers, détectent les doublons et n’exposent aucune donnée sensible dans les logs.
+34. Une ligne bancaire ne peut pas être rapprochée plusieurs fois ; toute suggestion ambiguë exige une décision humaine explicable.
+35. Les workspaces Finance utilisent les primitives DTSC, des libellés métier FR/EN, des références masquées et des formulaires plein écran sur mobile.
+36. Les documents financiers restent privés, versionnés et liés structurellement ; les commentaires sont repliables, auditables et ne remplacent jamais un statut de workflow.
+37. Les huit modules Finance opérationnelle restent `PROFESSIONAL_READY` tant que le propriétaire n’a pas confirmé les tests E2E authentifiés.
