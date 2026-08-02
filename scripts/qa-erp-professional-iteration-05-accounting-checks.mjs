@@ -25,10 +25,12 @@ const files = {
   accountingApi: "app/api/enterprise/[organizationId]/accounting-professional/route.ts",
   chartApi: "app/api/enterprise/[organizationId]/charts-of-accounts/route.ts",
   assetApi: "app/api/enterprise/[organizationId]/asset-accounting/route.ts",
+  inventoryApi: "app/api/enterprise/[organizationId]/inventory-valuation/route.ts",
   reversal: "lib/enterprise/accounting/reversal-service.ts",
   access: "lib/enterprise/accounting/access.ts",
   inventory: "lib/enterprise/accounting/inventory-accounting-service.ts",
   statements: "app/api/enterprise/[organizationId]/financial-statements/route.ts",
+  audit: "scripts/audit-financial-integrity.mjs",
   readiness: "lib/enterprise/module-commercial-readiness-iteration-05.json",
   readinessResolver: "lib/enterprise/module-commercial-readiness.ts",
   manualE2e: "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_05.md",
@@ -56,14 +58,14 @@ const checks = {
     for (const marker of ["assertIndependentActor", "JOURNAL_ENTRY_SELF_REVERSAL_FORBIDDEN", "reversalOfEntryId", "idempotencyKey", "REVERSED"]) need(content.reversal, marker, "Contrepassation contrôlée");
     need(content.access, "EnterpriseAccountingError(errorCode, 409)", "Erreur métier de séparation des responsabilités");
     for (const marker of ["INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN", "idempotencyKey", "WEIGHTED_AVERAGE"]) need(content.inventory, marker, "Valorisation intègre");
+    for (const marker of ["--organization-id", "--period-id", "--from-date", "--to-date", "--journal-id", "--account-id", "--json", "--output", "entryHeaderLineMismatches", "trialBalanceMismatch", "supplierInvoicesWithoutPayable", "duplicateReversals"]) need(content.audit, marker, "Audit financier borné");
   },
   advanced() {
     for (const marker of ["Codes et taux fiscaux", "Clôtures financières", "Versions générées et publiées", "Registre des immobilisations", "Valorisation du stock"]) need(content.workspace, marker, "Modules Finance avancée");
-    for (const marker of ["createAssetAccountingProfile", "availableAssets", "same-origin", "FINANCE_ASSETS"]) {
-      if (marker === "same-origin") continue;
-      need(content.assetApi, marker, "Immobilisations professionnelles");
-    }
+    for (const marker of ["createAssetAccountingProfile", "availableAssets", "FINANCE_ASSETS"]) need(content.assetApi, marker, "Immobilisations professionnelles");
     for (const marker of ["publish", "EnterpriseFinancialStatementSnapshot", "authorizeFinanceRequest"]) need(content.statements, marker, "États financiers publiés");
+    for (const marker of ["EnterpriseInventoryCostLayer", "LIMIT ${pageSize}", "inventoryItemName", "warehouseName", "weightedAverageUnitCost", "pagination"]) need(content.inventoryApi, marker, "Valorisation professionnelle paginée");
+    reject(content.inventoryApi, "getInventoryValuation(", "Valorisation non paginée en mémoire");
   },
   languageMobile() {
     for (const marker of ["touch-pan-x", "overflow-x-auto", "inputMode=\"decimal\"", "text-base sm:text-sm", "Aucune donnée pour cette vue", "Période", "Écriture", "Amortissements"]) need(content.workspace, marker, "Français et responsive Finance avancée");
