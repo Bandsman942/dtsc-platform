@@ -69,7 +69,7 @@
     "qa:enterprise-relationships-navigation": "node scripts/qa-erp-professional-iteration-03-checks.mjs navigation",
     "qa:enterprise-relationship-derived-access": "node scripts/qa-erp-professional-iteration-03-checks.mjs access",
     "qa:erp-professional-french-language": "node scripts/qa-erp-professional-iteration-03-checks.mjs language",
-    "qa:erp-professional-mobile": "node scripts/qa-erp-professional-iteration-03-checks.mjs mobile",
+    "qa:erp-iteration-03-mobile": "node scripts/qa-erp-professional-iteration-03-checks.mjs mobile",
     "qa:erp-iteration-03-commercial-readiness": "node scripts/qa-erp-professional-iteration-03-checks.mjs readiness",
     "qa:erp-iteration-03-deep-links": "node scripts/qa-erp-professional-iteration-03-checks.mjs deeplinks",
     "qa:erp-iteration-03-security": "node scripts/qa-erp-professional-iteration-03-checks.mjs security",
