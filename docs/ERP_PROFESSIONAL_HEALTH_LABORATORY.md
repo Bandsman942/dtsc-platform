@@ -1,7 +1,7 @@
 # Module professionnel Health — Laboratoire
 
-**Code canonique :** `LABORATORY`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `LABORATORY`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Parcours
@@ -26,5 +26,5 @@ Une alerte critique notifie les acteurs autorisés avec un message générique. 
 
 ## Validation
 
-QA automatisée : modèles dédiés, workflow, valeur critique, validation, audit, confidentialité et responsive.  
+QA automatisée : modèles dédiés, workflow, valeur critique, validation, audit, confidentialité et responsive.
 E2E propriétaire : scénario `I06-H-003`.
