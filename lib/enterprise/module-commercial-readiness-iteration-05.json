@@ -1,0 +1,79 @@
+{
+  "version": 7,
+  "evaluatedAt": "2026-08-02T22:45:00.000Z",
+  "policyVersion": "erp-professionalization-iteration-05-professional-readiness",
+  "moduleOverrides": {
+    "FINANCE_ACCOUNTING": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": ["dedicated-workspace", "chart-of-accounts", "fiscal-years", "fiscal-periods", "journals", "balanced-journal-entry-form", "independent-approval", "immutable-posted-entries", "controlled-reversal", "general-ledger", "trial-balance", "posting-rules", "posting-anomalies", "server-pagination", "permissions", "audit", "french-business-labels", "responsive-kpis", "user-guide", "automated-quality-gates"],
+      "criteriaMissing": ["owner-authenticated-manual-e2e-validation", "production-validation", "commercial-packaging-acceptance"],
+      "qaContract": "qa:erp-professional-accounting",
+      "evidence": ["components/enterprise/professional/enterprise-advanced-finance-workspace.tsx", "app/api/enterprise/[organizationId]/accounting-professional/route.ts", "app/api/enterprise/[organizationId]/charts-of-accounts/route.ts", "lib/enterprise/accounting/reversal-service.ts", "docs/ERP_PROFESSIONAL_ACCOUNTING.md", "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_05.md"],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "Comptabilité prête professionnellement ; les tests E2E authentifiés du propriétaire et la validation Production restent obligatoires avant toute promotion commerciale.",
+      "commentEn": "Accounting is professionally ready; owner-authenticated E2E and Production validation remain mandatory before commercial promotion."
+    },
+    "FINANCE_TAX": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": ["dedicated-workspace", "tax-code-form", "effective-dated-rates", "historical-rate-preservation", "tax-account-mapping", "jurisdiction-disclaimer", "permissions", "audit", "french-business-labels", "responsive-kpis", "user-guide", "automated-quality-gates"],
+      "criteriaMissing": ["owner-authenticated-manual-e2e-validation", "production-validation", "jurisdiction-specific-legal-filing-validation"],
+      "qaContract": "qa:erp-professional-tax",
+      "evidence": ["components/enterprise/professional/enterprise-advanced-finance-workspace.tsx", "app/api/enterprise/[organizationId]/taxes/route.ts", "docs/ERP_PROFESSIONAL_TAX.md", "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_05.md"],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "Fiscalité opérationnelle prête professionnellement dans le périmètre configurable documenté ; aucune déclaration légale universelle n’est promise.",
+      "commentEn": "Operational tax is professionally ready within the documented configurable scope; no universal statutory filing is promised."
+    },
+    "FINANCE_CLOSE": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": ["dedicated-workspace", "clickable-close-checklist", "blockers", "soft-close", "independent-approval", "transactional-close", "controlled-reopening", "reason-required", "audit", "permissions", "french-business-labels", "responsive-kpis", "user-guide", "automated-quality-gates"],
+      "criteriaMissing": ["owner-authenticated-manual-e2e-validation", "production-validation", "recovery-drill-validation"],
+      "qaContract": "qa:erp-professional-financial-close",
+      "evidence": ["components/enterprise/professional/enterprise-advanced-finance-workspace.tsx", "lib/enterprise/accounting/close-service.ts", "app/api/enterprise/[organizationId]/financial-close/route.ts", "app/api/enterprise/[organizationId]/financial-close/[closeId]/transition/route.ts", "docs/ERP_PROFESSIONAL_FINANCIAL_CLOSE.md"],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "Clôture financière prête professionnellement avec blocages, approbation et réouverture contrôlée ; validation manuelle en attente.",
+      "commentEn": "Financial close is professionally ready with blockers, approval, and controlled reopening; manual validation is pending."
+    },
+    "FINANCE_STATEMENTS": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": ["dedicated-workspace", "trial-balance", "general-ledger", "income-statement", "balance-sheet", "cash-flow-when-supported", "dynamic-preview", "immutable-published-snapshot", "checksum", "server-pagination", "permissions", "audit", "french-business-labels", "responsive-kpis", "user-guide", "automated-quality-gates"],
+      "criteriaMissing": ["owner-authenticated-manual-e2e-validation", "production-validation", "export-format-manual-validation"],
+      "qaContract": "qa:erp-professional-financial-statements",
+      "evidence": ["components/enterprise/professional/enterprise-advanced-finance-workspace.tsx", "app/api/enterprise/[organizationId]/financial-statements/route.ts", "lib/enterprise/accounting/statements-service.ts", "docs/ERP_PROFESSIONAL_FINANCIAL_STATEMENTS.md"],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "États financiers prêts professionnellement avec distinction entre aperçu dynamique et version publiée immuable ; validation du propriétaire en attente.",
+      "commentEn": "Financial statements are professionally ready with a clear distinction between dynamic preview and immutable published version; owner validation is pending."
+    },
+    "FINANCE_ASSETS": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": ["dedicated-workspace", "operational-asset-separation", "controlled-capitalization", "asset-accounting-register", "straight-line-depreciation", "depreciation-schedule", "idempotent-depreciation-run", "disposal-traceability", "permissions", "audit", "french-business-labels", "responsive-kpis", "user-guide", "automated-quality-gates"],
+      "criteriaMissing": ["owner-authenticated-manual-e2e-validation", "production-validation", "asset-disposal-manual-validation"],
+      "qaContract": "qa:erp-professional-fixed-assets",
+      "evidence": ["components/enterprise/professional/enterprise-advanced-finance-workspace.tsx", "app/api/enterprise/[organizationId]/asset-accounting/route.ts", "app/api/enterprise/[organizationId]/asset-depreciation/run/route.ts", "lib/enterprise/accounting/asset-accounting-service.ts", "docs/ERP_PROFESSIONAL_FIXED_ASSETS.md"],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "Comptabilité des immobilisations prête professionnellement pour la capitalisation contrôlée et l’amortissement linéaire réellement supporté.",
+      "commentEn": "Fixed asset accounting is professionally ready for controlled capitalization and the genuinely supported straight-line depreciation method."
+    },
+    "FINANCE_INVENTORY": {
+      "maturity": "PROFESSIONAL_READY",
+      "interfaceKind": "DEDICATED",
+      "criteriaSatisfied": ["dedicated-workspace", "physical-stock-separation", "weighted-average-valuation", "cost-layers", "negative-stock-accounting-block", "idempotent-receipt-valuation", "idempotent-issue-valuation", "immutable-published-valuation", "permissions", "audit", "french-business-labels", "responsive-kpis", "user-guide", "automated-quality-gates"],
+      "criteriaMissing": ["owner-authenticated-manual-e2e-validation", "production-validation", "period-valuation-manual-validation"],
+      "qaContract": "qa:erp-professional-inventory-valuation",
+      "evidence": ["components/enterprise/professional/enterprise-advanced-finance-workspace.tsx", "app/api/enterprise/[organizationId]/inventory-valuation/route.ts", "lib/enterprise/accounting/inventory-accounting-service.ts", "docs/ERP_PROFESSIONAL_INVENTORY_VALUATION.md"],
+      "nextIteration": 6,
+      "commercializable": false,
+      "commentFr": "Valorisation comptable du stock prête professionnellement dans le périmètre coût moyen pondéré ; aucune méthode non implémentée n’est affichée comme disponible.",
+      "commentEn": "Inventory accounting valuation is professionally ready within the weighted-average scope; no unsupported method is presented as available."
+    }
+  }
+}
