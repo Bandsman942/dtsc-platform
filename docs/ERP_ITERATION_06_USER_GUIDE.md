@@ -1,7 +1,7 @@
 # Guide utilisateur — Professionnalisation ERP, itération 6
 
-**Version :** 1.0  
-**Date :** 3 août 2026  
+**Version :** 1.0
+**Date :** 3 août 2026
 **Périmètre :** extensions Health et Pharmacy de DTSC Platform
 
 ## 1. Principes communs
