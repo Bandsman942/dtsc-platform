@@ -5,6 +5,7 @@ import {
   Bell,
   BellOff,
   Check,
+  CheckCheck,
   Copy,
   Eye,
   Heart,
@@ -100,6 +101,7 @@ type GroupMessage = {
   replyTo?: { id: string; content: string; createdAt: string; deletedAt?: string | null; author: { id: string; name: string } } | null;
   mentions?: Array<{ mentionedUser: { id: string; name: string } }>;
   reads?: Array<{ userId: string; readAt: string }>;
+  receiptSummary?: { recipientCount: number; deliveredCount: number; readCount: number; allDelivered: boolean; allRead: boolean };
   meetingLink?: CollaborationMeetingLinkView | null;
   meetingFollowUp?: CollaborationMeetingFollowUpView | null;
 };
@@ -283,16 +285,23 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     if (!activeGroup || sending) return;
     setSending(true);
     const form = new FormData();
-    const extension = payload.blob.type.includes("mp4") ? "m4a" : payload.blob.type.includes("ogg") ? "ogg" : "webm";
+    const mime = payload.blob.type.toLowerCase();
+    const extension = mime.includes("mp4") || mime.includes("m4a") ? "m4a" : mime.includes("ogg") ? "ogg" : mime.includes("3gpp") ? "3gp" : mime.includes("wav") ? "wav" : "webm";
     form.append("file", new File([payload.blob], `voice.${extension}`, { type: payload.blob.type || "audio/webm" }));
     form.append("durationMs", String(payload.durationMs));
     form.append("waveform", JSON.stringify(payload.waveform));
     if (replyTo?.id) form.append("replyToId", replyTo.id);
-    const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/voice`, { method: "POST", body: form });
-    setSending(false);
-    if (!response.ok) return setFeedback(t("voiceError"));
-    setReplyTo(null);
-    await Promise.all([loadMessages(activeGroup.id), loadVoices(activeGroup.id), refreshGroups()]);
+    try {
+      const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/voice`, { method: "POST", body: form });
+      const body = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+      if (!response.ok) throw new Error(body?.message || body?.error || t("voiceError"));
+      setReplyTo(null);
+      await Promise.all([loadMessages(activeGroup.id), loadVoices(activeGroup.id), refreshGroups()]);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : t("voiceError"));
+    } finally {
+      setSending(false);
+    }
   }
 
   function insertMention(member: GroupMember) {
@@ -506,6 +515,12 @@ function OnlineBadge({ online, english }: { online: boolean; english: boolean })
   return <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.65rem] font-black", online ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-dtsc-soft text-dtsc-muted")}>{online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{online ? (english ? "Online" : "En ligne") : (english ? "Offline" : "Hors ligne")}</span>;
 }
 
+function MessageReceiptIndicator({ summary, english }: { summary?: GroupMessage["receiptSummary"]; english: boolean }) {
+  if (summary?.allRead) return <span className="inline-flex items-center text-emerald-300" title={english ? "Read by every active member" : "Lu par tous les membres actifs"} aria-label={english ? "Read by everyone" : "Lu par tous"}><CheckCheck className="h-3.5 w-3.5" /></span>;
+  if (summary?.allDelivered) return <span className="inline-flex items-center text-white/75" title={english ? "Delivered to every active member" : "Reçu par tous les membres actifs"} aria-label={english ? "Delivered to everyone" : "Reçu par tous"}><CheckCheck className="h-3.5 w-3.5" /></span>;
+  return <span className="inline-flex items-center text-white/65" title={english ? "Sent to the server" : "Envoyé au serveur"} aria-label={english ? "Sent" : "Envoyé"}><Check className="h-3.5 w-3.5" /></span>;
+}
+
 function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo, onMeetingChanged, onError }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void; onMeetingChanged: () => Promise<void> | void; onError: (message: string) => void }) {
   if (message.messageType === "SYSTEM") return <div className="flex justify-center py-1"><span className="max-w-[90%] rounded-full bg-dtsc-soft px-3 py-1 text-center text-[0.7rem] font-semibold text-dtsc-muted">{message.content}</span></div>;
   const mine = message.authorId === currentUserId;
@@ -517,7 +532,7 @@ function MessageBubble({ message, voice, currentUserId, userPreferences, canMana
     ...(mine && message.messageType === "TEXT" && !message.deletedAt ? [{ key: "edit", label: t("edit"), icon: Pencil, onSelect: () => onEdit(message) }] : []),
     ...((mine || canManage) && !message.deletedAt && !meetingMessage ? [{ key: "delete", label: t("deleteMessage"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => onDelete(message) }] : []),
   ];
-  return <div className={cn("flex", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}<p className={cn("mt-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · edit" : ""}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
+  return <div className={cn("flex", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}<p className={cn("mt-1 flex items-center justify-end gap-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}><span>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.status === "EDITED" ? " · edit" : ""}</span>{mine && !meetingMessage ? <MessageReceiptIndicator summary={message.receiptSummary} english={userPreferences.locale === "en"} /> : null}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
 }
 
 function buildGroupMenu({ activeGroup, activePreference, canManage, isOwner, t, onInfo, onFavorite, onPin, onArchive, onNotifications, onPresenceJournal, onPhoto, onStory, onInvite, onSettings, onCalls, onLeave }: { activeGroup: Group; activePreference: Preference; canManage: boolean; isOwner: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onInfo: () => void; onFavorite: () => void; onPin: () => void; onArchive: () => void; onNotifications: () => void; onPresenceJournal: () => void; onPhoto: () => void; onStory: () => void; onInvite: () => void; onSettings: () => void; onCalls: () => void; onLeave: () => void }): ActionMenuItem[] {
