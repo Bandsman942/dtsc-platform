@@ -1,7 +1,7 @@
 # Module professionnel Health — Incidents qualité
 
-**Code canonique :** `QUALITY_INCIDENTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `QUALITY_INCIDENTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Parcours
@@ -27,5 +27,5 @@ Chaque transition, affectation, action corrective, validation et clôture est hi
 
 ## Validation
 
-QA automatisée : modèles, workflow, actions, permissions, audit et responsive.  
+QA automatisée : modèles, workflow, actions, permissions, audit et responsive.
 E2E propriétaire : confidentialité `I06-H-005` et campagne finale.
