@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 function parseArgs(argv) {
@@ -11,6 +12,9 @@ function parseArgs(argv) {
     else if (value === "--period-id") result.periodId = argv[++index];
     else if (value === "--from-date") result.fromDate = argv[++index];
     else if (value === "--to-date") result.toDate = argv[++index];
+    else if (value === "--journal-id") result.journalId = argv[++index];
+    else if (value === "--account-id") result.accountId = argv[++index];
+    else if (value === "--output") result.output = argv[++index];
     else throw new Error(`Unknown argument: ${value}`);
   }
   return result;
@@ -21,6 +25,7 @@ function dateFilter(args) {
   if (args.fromDate) filter.gte = new Date(args.fromDate);
   if (args.toDate) filter.lte = new Date(args.toDate);
   if ((filter.gte && Number.isNaN(filter.gte.getTime())) || (filter.lte && Number.isNaN(filter.lte.getTime()))) throw new Error("Invalid date range");
+  if (filter.gte && filter.lte && filter.gte > filter.lte) throw new Error("Invalid date range order");
   return Object.keys(filter).length ? filter : null;
 }
 
@@ -48,23 +53,52 @@ function negative(value) {
   return new Prisma.Decimal(value).isNegative();
 }
 
+function sumLines(lines, field) {
+  return lines.reduce((sum, line) => sum.plus(line[field]), new Prisma.Decimal(0));
+}
+
 async function auditOrganization(prisma, organizationId, args, range) {
-  const journalWhere = {
+  const entryRelationFilter = {
     organizationId,
     status: "POSTED",
     ...(args.periodId ? { fiscalPeriodId: args.periodId } : {}),
+    ...(args.journalId ? { journalId: args.journalId } : {}),
     ...(range ? { accountingDate: range } : {}),
   };
+  const journalWhere = {
+    ...entryRelationFilter,
+    ...(args.accountId ? { lines: { some: { ledgerAccountId: args.accountId } } } : {}),
+  };
+  const lineWhere = {
+    organizationId,
+    journalEntry: entryRelationFilter,
+    ...(args.accountId ? { ledgerAccountId: args.accountId } : {}),
+  };
+
   const imbalancedEntries = await scan(
     prisma.enterpriseJournalEntry,
-    { where: journalWhere, select: { id: true, totalDebit: true, totalCredit: true, sourceEntityType: true, sourceEntityId: true } },
+    { where: journalWhere, select: { id: true, totalDebit: true, totalCredit: true } },
     (entry) => unequal(entry.totalDebit, entry.totalCredit),
   );
   const postedWithoutSource = await scan(
     prisma.enterpriseJournalEntry,
-    { where: journalWhere, select: { id: true, totalDebit: true, totalCredit: true, sourceEntityType: true, sourceEntityId: true } },
+    { where: journalWhere, select: { id: true, sourceEntityType: true, sourceEntityId: true } },
     (entry) => !entry.sourceEntityType || !entry.sourceEntityId,
   );
+  const entriesWithoutLines = await prisma.enterpriseJournalEntry.count({
+    where: { ...journalWhere, lines: { none: {} } },
+  });
+  const entryHeaderLineMismatches = await scan(
+    prisma.enterpriseJournalEntry,
+    { where: journalWhere, select: { id: true, totalDebit: true, totalCredit: true, lines: { select: { debit: true, credit: true } } } },
+    (entry) => unequal(entry.totalDebit, sumLines(entry.lines, "debit")) || unequal(entry.totalCredit, sumLines(entry.lines, "credit")),
+  );
+  const ledgerTotals = await prisma.enterpriseJournalLine.aggregate({
+    where: lineWhere,
+    _sum: { debit: true, credit: true },
+  });
+  const trialBalanceMismatch = unequal(ledgerTotals._sum.debit || 0, ledgerTotals._sum.credit || 0) ? 1 : 0;
+
   const invoicesWithoutReceivable = await scan(
     prisma.enterpriseSalesInvoice,
     {
@@ -73,11 +107,27 @@ async function auditOrganization(prisma, organizationId, args, range) {
     },
     (invoice) => !invoice.receivable,
   );
+  const supplierInvoicesWithoutPayable = await scan(
+    prisma.enterpriseSupplierInvoice,
+    {
+      where: { organizationId, archivedAt: null, status: { in: ["APPROVED", "POSTED", "PARTIALLY_PAID", "PAID"] }, ...(range ? { invoiceDate: range } : {}) },
+      select: { id: true, status: true, grandTotal: true, amountPaid: true, outstandingAmount: true, payable: { select: { id: true } } },
+    },
+    (invoice) => !invoice.payable,
+  );
   const paidInvoicesWithOutstanding = await scan(
     prisma.enterpriseSalesInvoice,
     {
       where: { organizationId, archivedAt: null, status: "PAID", ...(range ? { invoiceDate: range } : {}) },
-      select: { id: true, status: true, grandTotal: true, amountPaid: true, outstandingAmount: true, receivable: { select: { id: true } } },
+      select: { id: true, outstandingAmount: true },
+    },
+    (invoice) => !new Prisma.Decimal(invoice.outstandingAmount).isZero(),
+  );
+  const paidSupplierInvoicesWithOutstanding = await scan(
+    prisma.enterpriseSupplierInvoice,
+    {
+      where: { organizationId, archivedAt: null, status: "PAID", ...(range ? { invoiceDate: range } : {}) },
+      select: { id: true, outstandingAmount: true },
     },
     (invoice) => !new Prisma.Decimal(invoice.outstandingAmount).isZero(),
   );
@@ -106,6 +156,8 @@ async function auditOrganization(prisma, organizationId, args, range) {
       organizationId,
       status: { in: ["DRAFT", "PENDING_APPROVAL", "APPROVED"] },
       fiscalPeriod: { status: { in: ["CLOSED", "LOCKED"] } },
+      ...(args.journalId ? { journalId: args.journalId } : {}),
+      ...(args.accountId ? { lines: { some: { ledgerAccountId: args.accountId } } } : {}),
     },
   });
   const duplicateSectorPostings = await prisma.enterpriseJournalEntry.groupBy({
@@ -114,20 +166,32 @@ async function auditOrganization(prisma, organizationId, args, range) {
     _count: { _all: true },
     having: { id: { _count: { gt: 1 } } },
   }).then((rows) => rows.length);
+  const duplicateReversals = await prisma.enterpriseJournalReversal.groupBy({
+    by: ["originalEntryId"],
+    where: { organizationId },
+    _count: { _all: true },
+    having: { id: { _count: { gt: 1 } } },
+  }).then((rows) => rows.length);
 
   const findings = {
     imbalancedEntries,
     postedWithoutSource,
+    entriesWithoutLines,
+    entryHeaderLineMismatches,
+    trialBalanceMismatch,
     invoicesWithoutReceivable,
+    supplierInvoicesWithoutPayable,
     paidInvoicesWithOutstanding,
+    paidSupplierInvoicesWithOutstanding,
     negativeReceivables,
     overAllocatedReceivables,
     negativePayables,
     overAllocatedPayables,
     closedPeriodDraftEntries,
     duplicateSectorPostings,
+    duplicateReversals,
   };
-  const critical = imbalancedEntries + invoicesWithoutReceivable + paidInvoicesWithOutstanding + negativeReceivables + overAllocatedReceivables + negativePayables + overAllocatedPayables + closedPeriodDraftEntries + duplicateSectorPostings;
+  const critical = Object.values(findings).reduce((sum, value) => sum + value, 0);
   return { organizationId, status: critical === 0 ? "PASS" : "FAIL", findings };
 }
 
@@ -144,9 +208,23 @@ async function main() {
     if (args.organizationId && organizations.length === 0) throw new Error("Organization not found");
     const results = [];
     for (const organization of organizations) results.push(await auditOrganization(prisma, organization.id, args, range));
-    const report = { generatedAt: new Date().toISOString(), periodId: args.periodId || null, range: { from: args.fromDate || null, to: args.toDate || null }, results };
-    if (args.json) console.log(JSON.stringify(report, null, 2));
+    const report = {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        organizationId: args.organizationId || null,
+        periodId: args.periodId || null,
+        fromDate: args.fromDate || null,
+        toDate: args.toDate || null,
+        journalId: args.journalId || null,
+        accountId: args.accountId || null,
+      },
+      results,
+    };
+    const serialized = JSON.stringify(report, null, 2);
+    if (args.output) fs.writeFileSync(args.output, `${serialized}\n`, { encoding: "utf8", flag: "w", mode: 0o600 });
+    if (args.json) console.log(serialized);
     else for (const result of results) console.log(`${result.organizationId}: ${result.status} ${JSON.stringify(result.findings)}`);
+    if (args.output && !args.json) console.log(`Rapport agrégé écrit dans ${args.output}`);
     if (results.some((result) => result.status === "FAIL")) process.exitCode = 2;
   } finally {
     await prisma.$disconnect();
