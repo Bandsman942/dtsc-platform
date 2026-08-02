@@ -1,6 +1,6 @@
 # Inventaire canonique des modules ERP DTSC
 
-Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry`, `pnpm qa:erp-final-cutover`, `pnpm qa:erp-iteration-03` et `pnpm qa:erp-iteration-05`.
+Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry`, `pnpm qa:erp-final-cutover`, `pnpm qa:erp-iteration-03`, `pnpm qa:erp-iteration-05` et `pnpm qa:erp-iteration-06`.
 
 ## Statuts techniques
 
@@ -78,9 +78,17 @@ Ces modules sont évalués séparément selon leurs preuves et les validations r
 
 Les six modules sont `PROFESSIONAL_READY` et `commercializable: false`. Ils ne deviennent `COMMERCIAL_READY` qu’après validation E2E authentifiée du propriétaire, Production stable et décision commerciale explicite.
 
+### Itération 6/6 — Harmonisation Health et Pharmacy
+
+Les 25 modules sectoriels actifs sont évalués `PROFESSIONAL_READY` et `commercializable: false`. La preuve manquante commune est la validation E2E authentifiée du propriétaire en Production, puis une PR de promotion séparée.
+
+Health : `PATIENTS`, `APPOINTMENTS`, `CONSULTATIONS`, `MEDICAL_RECORDS`, `CARE_TEAM`, `LABORATORY`, `INTERNAL_PHARMACY`, `MEDICAL_BILLING`, `INSURANCE_COVERAGE`, `QUALITY_INCIDENTS`, `MEDICAL_DOCUMENTS`.
+
+Pharmacy : `MEDICINES_PRODUCTS`, `BATCH_EXPIRY`, `STOCK_INVENTORY`, `STOCK_RECEIPTS`, `SALES_DISPENSATION`, `PRESCRIPTIONS`, `SUPPLIERS_ORDERS`, `CASH_INVOICES_PAYMENTS`, `RETURNS_ADJUSTMENTS_LOSSES`, `ALERTS_EXPIRY_LOW_STOCK`, `QUALITY_PHARMACOVIGILANCE`, `PHARMACY_DOCUMENTS`, `PHARMACY_REPORTS`, `PHARMACY_SETTINGS`.
+
 ## Module global de relation utilisateur
 
-`COMPANY_RELATIONSHIPS` est un module global du compte DTSC, accessible à `/enterprise-links` sans organisation active. Il ne doit pas être confondu avec un module tenant ni recréé comme alias concurrent. Une relation active ne donne aucun accès automatique aux modules Finance.
+`COMPANY_RELATIONSHIPS` est un module global du compte DTSC, accessible à `/enterprise-links` sans organisation active. Il ne doit pas être confondu avec un module tenant ni recréé comme alias concurrent. Une relation active ne donne aucun accès automatique aux modules Finance ou aux données cliniques.
 
 ## Finance commune
 
@@ -111,11 +119,13 @@ Décisions finales :
 | `HEALTH_SETTINGS` | `HIDDEN` | paramètres gérés dans l’administration |
 | `HEALTH_REPORTS` | `HIDDEN` | rapports canoniques à construire sans double comptage |
 
+Health conserve les données cliniques et documents médicaux. Finance ne reçoit que les données strictement nécessaires à la facturation, aux créances, paiements et écritures.
+
 ## Pharmacy
 
 Modules dédiés actifs : `MEDICINES_PRODUCTS`, `BATCH_EXPIRY`, `STOCK_INVENTORY`, `STOCK_RECEIPTS`, `SALES_DISPENSATION`, `PRESCRIPTIONS`, `SUPPLIERS_ORDERS`, `CASH_INVOICES_PAYMENTS`, `RETURNS_ADJUSTMENTS_LOSSES`, `ALERTS_EXPIRY_LOW_STOCK`, `QUALITY_PHARMACOVIGILANCE`, `PHARMACY_DOCUMENTS`, `PHARMACY_REPORTS`, `PHARMACY_SETTINGS`.
 
-Pharmacy conserve lots, FEFO, péremption, rappels, qualité, pharmacovigilance et quantités réglementées. Les fournisseurs, achats, factures, paiements, caisses et écritures communs sont reliés par extensions et mappings.
+Pharmacy conserve lots, FEFO, péremption, rappels, qualité, pharmacovigilance et contraintes réglementaires. Les fournisseurs, achats, factures, paiements, caisses et écritures communs sont reliés par extensions et mappings.
 
 ## Administration consolidée
 
