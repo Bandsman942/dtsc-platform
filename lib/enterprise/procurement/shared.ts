@@ -25,6 +25,9 @@ export async function requireEnterpriseDepartment(tx: ProcurementTransaction, or
 }
 
 export async function enterpriseSourceEntityExists(tx: ProcurementTransaction, organizationId: string, entityType: string, entityId: string) {
+  if (entityType === "EnterpriseContract") return Boolean(await tx.enterpriseContract.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true } }));
+  if (entityType === "EnterpriseProject") return Boolean(await tx.enterpriseProject.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true } }));
+  if (entityType === "EnterpriseAsset") return Boolean(await tx.enterpriseAsset.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true } }));
   if (entityType === "EnterpriseTask") return Boolean(await tx.enterpriseTask.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterpriseRequest") return Boolean(await tx.enterpriseRequest.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
   if (entityType === "EnterpriseApproval") return Boolean(await tx.enterpriseApproval.findFirst({ where: { id: entityId, organizationId }, select: { id: true } }));
