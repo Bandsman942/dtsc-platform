@@ -1,7 +1,7 @@
 # Module professionnel Health — Assurances et prises en charge
 
-**Code canonique :** `INSURANCE_COVERAGE`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `INSURANCE_COVERAGE`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -29,5 +29,5 @@ Les réponses et documents exposent uniquement les informations nécessaires. Fi
 
 ## Validation
 
-QA automatisée : références tenant, facture/créance commune, allocations et permissions.  
+QA automatisée : références tenant, facture/créance commune, allocations et permissions.
 E2E propriétaire : scénario `I06-H-004`.
