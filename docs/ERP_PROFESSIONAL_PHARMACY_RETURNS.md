@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Retours, ajustements et pertes
 
-**Code canonique :** `RETURNS_ADJUSTMENTS_LOSSES`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `RETURNS_ADJUSTMENTS_LOSSES`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -22,5 +22,5 @@ Le stock commun enregistre le mouvement ; Finance reçoit uniquement l’impact 
 
 ## Validation
 
-QA automatisée : références lot/produit, mouvements inverses, permissions, audit et idempotence.  
+QA automatisée : références lot/produit, mouvements inverses, permissions, audit et idempotence.
 E2E propriétaire : scénario `I06-P-004` et campagne finale.
