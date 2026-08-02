@@ -29,12 +29,16 @@ export async function getEnterpriseCommonDomainAccess({
       : resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action: "manage" }),
   ]);
 
-  const canManage = action === "manage" || manageDecision.allowed;
-  const canWrite = action === "write" || action === "manage" || writeDecision.allowed || canManage;
+  const canAdminister = action === "manage" || manageDecision.allowed;
+  const canWrite = action === "write" || action === "manage" || writeDecision.allowed || canAdminister;
 
   return {
     decision,
     canWrite,
-    canManage,
+    canAdminister,
+    // Historical collection routes expose `canManage` to decide whether CRUD
+    // actions are visible. Preserve that contract as "can mutate"; sensitive
+    // administration still uses the explicit manage decision server-side.
+    canManage: canWrite,
   };
 }
