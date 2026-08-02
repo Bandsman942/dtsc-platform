@@ -2,6 +2,8 @@
 
 ## Statut général
 
+**Campagne E2E manuelle : RÉUSSIE**
+
 **Tests E2E manuels exécutés par le propriétaire — tous les scénarios ont réussi.**
 
 - Propriétaire des tests : propriétaire de DTSC Platform
