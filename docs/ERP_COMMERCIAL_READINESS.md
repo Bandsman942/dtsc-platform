@@ -1,15 +1,15 @@
 # Maturité commerciale ERP — DTSC Platform
 
-Version : 4
+Version : 5
 Évaluation courante : 2 août 2026
 
 ## Sources exécutables
 
 - Registre canonique : `lib/enterprise/module-registry*.json` et `module-registry.ts`.
 - Évaluation produit de base : `lib/enterprise/module-commercial-readiness.json`.
-- Complément itération 3 : `lib/enterprise/module-commercial-readiness-iteration-03.json`.
+- Compléments : `lib/enterprise/module-commercial-readiness-iteration-03.json`, `iteration-04.json` et `iteration-05.json`.
 - Résolution typée fusionnée : `lib/enterprise/module-commercial-readiness.ts`.
-- Contrôle CI : `scripts/qa-erp-commercial-readiness-checks.mjs` et `scripts/qa-erp-professional-iteration-03-checks.mjs`.
+- Contrôles CI : `scripts/qa-erp-commercial-readiness-checks.mjs`, `scripts/qa-erp-professional-iteration-03-checks.mjs`, `scripts/qa-erp-professional-iteration-04-finance-checks.mjs` et `scripts/qa-erp-professional-iteration-05-accounting-checks.mjs`.
 - Visualisation autorisée : `/admin/erp-readiness`.
 
 La matrice affichée dans l’administration est calculée à partir de ces sources. Ce document explique la politique ; il ne remplace pas le manifeste exécutable.
@@ -50,7 +50,8 @@ Les modules sans preuve produit dédiée reçoivent une évaluation conservatric
 - une documentation et un guide dédié ;
 - l’observabilité et des QA opposables ;
 - un packaging commercial ;
-- une décision explicite du propriétaire fondée sur sa validation fonctionnelle et la fermeture des défauts remontés.
+- une décision explicite du propriétaire fondée sur sa validation fonctionnelle et la fermeture des défauts remontés ;
+- une Production stable issue uniquement de `main`.
 
 Les tests automatisés verts ne remplacent jamais une campagne E2E authentifiée. Inversement, une campagne manuelle ne permet pas de masquer un Quality Gate en échec.
 
@@ -62,33 +63,36 @@ Les modules ciblés disposent de workspaces dédiés, formulaires, détails, act
 
 Le propriétaire a exécuté une campagne manuelle initiale en Production. Cette campagne a confirmé les chaînes métier principales, mais a également révélé des défauts transversaux : rails tactiles bloqués, filtres chevauchés, lignes mobiles trop étroites, formulaires difficiles à découvrir, workflow du validateur de contrat incomplet, documents contractuels sans téléversement guidé, guides non contextualisés, Support non surligné et messages vocaux insuffisamment robustes.
 
-La PR de durcissement commercial ferme ces défauts et ajoute des contrôles CI spécifiques. Sur décision explicite du propriétaire, les modules suivants sont désormais évalués `COMMERCIAL_READY` et `commercializable: true` :
-
-| Module | Preuves principales | Frontières conservées |
-|---|---|---|
-| Ventes, devis et commandes | Formulaire de devis, calcul serveur, conversion, reliquats, livraisons idempotentes, rail tactile et guide | Commande distincte de facture et paiement |
-| Fournisseurs, achats et réceptions | Fournisseurs, demandes, approbations, commandes, réceptions partielles, documents | Réception distincte de dette et paiement |
-| Stock, transferts et inventaires | Soldes, transferts, inventaires, ajustements, approbation et protection du stock négatif | Aucun mouvement silencieux ou destructif |
-| Ressources humaines | Dossier sans compte, consentement, contrats, organigramme, formulaires visibles | Fiche RH distincte du compte DTSC |
-| Temps et présences | Congés, chevauchements, feuilles de temps, approbation et correction | Disponibilité, absence, temps approuvé et paie distincts |
-| Paie opérationnelle | Périodes, population, calcul serveur, approbation, bulletins privés, recréation après annulation | Paie distincte du paiement financier |
-| Projets et services | Projet, équipe, jalons, risques, détail et permissions | Accès client uniquement explicite et révocable |
-| Temps projet et livrables | Temps lié au projet, soumission, correction, révision et validation assignée | Temps, facturation et paie distincts |
-| Actifs et maintenance | Registre, affectation, retour, incidents, maintenance et historique | Actif opérationnel distinct de l’immobilisation comptable |
-
-Les preuves transversales de cette promotion comprennent :
-
-- `components/enterprise/professional/professional-erp-ui.tsx` ;
-- `components/workspace/module-workspace.tsx` ;
-- `components/workspace/business-list.tsx` ;
-- `app/mobile-stability.css` ;
-- `app/help/enterprise/page.tsx` ;
-- le workflow contractuel assigné et ses commentaires CRUD ;
-- le téléversement réel des documents liés ;
-- la capture microphone robuste et les accusés de messagerie ;
-- `scripts/qa-erp-professional-iteration-03-checks.mjs`.
+La PR de durcissement commercial ferme ces défauts et ajoute des contrôles CI spécifiques. Sur décision explicite du propriétaire, les modules suivants sont évalués `COMMERCIAL_READY` et `commercializable: true` : ventes, achats, stock, RH, temps, paie, projets, livrables et actifs opérationnels.
 
 La promotion commerciale n’affirme pas qu’une nouvelle campagne manuelle post-correctif a déjà été exécutée. Le plan de smoke tests post-déploiement reste conservé dans `docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_03.md` et doit recevoir des résultats réels du propriétaire.
+
+## Réévaluation de l’itération 4
+
+La Finance opérationnelle est évaluée module par module à partir de ses workspaces dédiés, guides utilisateur, contrôles d’intégrité, permissions, documents et QA. Toute promotion commerciale repose sur la confirmation explicite du propriétaire et ne s’étend jamais automatiquement aux modules comptables avancés.
+
+## Réévaluation de l’itération 5
+
+Les six modules avancés suivants disposent désormais d’une expérience dédiée et sont évalués `PROFESSIONAL_READY` :
+
+| Module | Preuves principales | Limites honnêtes |
+|---|---|---|
+| `FINANCE_ACCOUNTING` | plan comptable, exercices, périodes, journaux, écritures équilibrées, grand livre, balance, règles, anomalies et contrepassations | validation E2E et Production en attente |
+| `FINANCE_TAX` | codes fiscaux, comptes et taux historisés par date d’effet | aucune promesse de déclaration légale universelle |
+| `FINANCE_CLOSE` | checklist, blocages, approbation, fermeture et réouverture motivée | récupération et smoke tests à confirmer |
+| `FINANCE_STATEMENTS` | aperçus, bilan, résultat, balance, grand livre et snapshots publiés immuables | formats d’export à valider manuellement |
+| `FINANCE_ASSETS` | capitalisation contrôlée, registre, plan linéaire et exécution idempotente | seules les méthodes réellement supportées sont exposées |
+| `FINANCE_INVENTORY` | coût moyen pondéré, couches de coût, blocage du stock négatif comptable et publication | aucune méthode FIFO ou standard fictive |
+
+Pour ces six modules :
+
+- `commercializable` reste `false` ;
+- le critère `owner-authenticated-manual-e2e-validation` reste manquant ;
+- le document `docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_05.md` conserve tous les scénarios à `NON_EXÉCUTÉ` ;
+- aucune promotion groupée n’est permise ;
+- une simple relation active avec l’entreprise ne donne aucun accès Finance.
+
+**Tests E2E manuels préparés — validation du propriétaire en attente.**
 
 ## Anomalies bloquantes
 
@@ -108,11 +112,14 @@ Le contrôle CI échoue notamment si :
 - un guide pointe vers un module différent ;
 - le microphone échoue sans message actionnable ;
 - les accusés de messagerie ne distinguent plus envoi, réception et lecture ;
-- des critères restent ouverts ;
-- une preuve déclarée est introuvable ;
-- un override cible un code absent du registre ;
-- un module de l’itération 3 repasse silencieusement par le workspace générique ;
-- un rapport déclare les tests E2E post-correctif réussis sans preuve du propriétaire.
+- une écriture comptabilisée devient modifiable ;
+- une contrepassation n’est plus reliée à l’original ;
+- une période fermée accepte une mutation interdite ;
+- une règle ou un taux réécrit l’historique ;
+- un amortissement ou une valorisation peut être dupliqué ;
+- un état publié devient modifiable ;
+- un UUID ou une enum brute réapparaît dans une interface Finance ;
+- un rapport déclare les tests E2E réussis sans preuve du propriétaire.
 
 ## Maintenance
 
