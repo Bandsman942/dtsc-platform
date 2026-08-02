@@ -11,12 +11,25 @@ import { isSameOriginRequest } from "@/lib/request-security";
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
 const targetSchema = z.object({
-  targetEntityType: z.enum(["EnterpriseTask", "EnterpriseRequest", "EnterpriseApproval", "EnterpriseMeeting", "EnterpriseSupplier", "EnterprisePurchase"]),
+  targetEntityType: z.enum([
+    "EnterpriseContract",
+    "EnterpriseProject",
+    "EnterpriseAsset",
+    "EnterpriseTask",
+    "EnterpriseRequest",
+    "EnterpriseApproval",
+    "EnterpriseMeeting",
+    "EnterpriseSupplier",
+    "EnterprisePurchase",
+  ]),
   targetEntityId: z.string().trim().min(1).max(180),
   label: z.string().trim().max(240).optional().or(z.literal("")),
 });
 
 function targetModule(type: z.infer<typeof targetSchema>["targetEntityType"]) {
+  if (type === "EnterpriseContract") return "CONTRACTS";
+  if (type === "EnterpriseProject") return "PROJECTS_SERVICES";
+  if (type === "EnterpriseAsset") return "ASSETS_MAINTENANCE";
   if (type === "EnterpriseTask") return "TASKS_OPERATIONS";
   if (type === "EnterpriseRequest") return "INTERNAL_REQUESTS";
   if (type === "EnterpriseApproval") return "VALIDATIONS";
