@@ -30,7 +30,7 @@ const files = {
   language: "components/enterprise/professional/finance-professional-ui.ts",
   comments: "app/api/enterprise/[organizationId]/finance-comments/[entityType]/[entityId]/route.ts",
   bankDetail: "app/api/enterprise/[organizationId]/bank-statements/[statementId]/route.ts",
-  reconciliationDetail: "app/api/enterprise/[organizationId]/reconciliations/[reconciliationId]/route.ts",
+  reconciliationDetail: "app/api/enterprise/[organizationId]/reconciliations/[sessionId]/route.ts",
   lookups: "app/api/enterprise/[organizationId]/operational-lookups/route.ts",
   schema: "prisma/enterprise-finance-professional.prisma",
   migration: "prisma/migrations/20260802123000_erp_professional_finance_comments/migration.sql",
@@ -73,7 +73,7 @@ const checks = {
     for (const marker of ["authorizeFinanceRequest", "organizationId", "lines", "maskedReference", "writeApiLog"]) need(content.bankDetail, marker, "Détail relevé sécurisé");
   },
   reconciliation() {
-    for (const marker of ["Créer un rapprochement", "Nouvelle correspondance", "matchedAmount", "Une ambiguïté", "completeReconciliation", "reconciliations"] ) need(content.cashBank, marker, "Rapprochement professionnel");
+    for (const marker of ["Créer un rapprochement", "Nouvelle correspondance", "matchedAmount", "Une ambiguïté", "completeReconciliation", "reconciliations"]) need(content.cashBank, marker, "Rapprochement professionnel");
     for (const marker of ["authorizeFinanceRequest", "organizationId", "statementLines", "matches", "writeApiLog"]) need(content.reconciliationDetail, marker, "Détail rapprochement sécurisé");
   },
   language() {
