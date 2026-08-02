@@ -88,7 +88,7 @@ const checks = {
     for (const marker of ["sourceEntityType", "sourceEntityId", "action=upload"]) need(content.shared, marker, "Liens documents Finance");
   },
   security() {
-    for (const marker of ["authorizeFinanceRequest", "financeEntityExists", "authorUserId !== context.auth.session.userId", "archivedAt", "writeAuditLog", "rateLimit"]) need(content.comments, marker, "Commentaires Finance sécurisés");
+    for (const marker of ["authorizeFinanceRequest", "financeEntityExists", "authorUserId !== context.auth.session.userId", "archivedAt", "writeAuditLog", "mutation: true"]) need(content.comments, marker, "Commentaires Finance sécurisés");
     for (const marker of ["FINANCE_RECEIVABLES", "FINANCE_PAYABLES", "FINANCE_PAYMENTS", "FINANCE_RECONCILIATION", "authorizeFinanceRequest", "organizationId"]) need(content.lookups, marker, "Sélecteurs Finance tenant-safe");
   },
   integrity() {
