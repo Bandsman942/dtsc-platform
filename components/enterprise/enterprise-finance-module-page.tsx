@@ -1,12 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseFinanceWorkspace } from "@/components/enterprise/enterprise-finance-workspace";
-import {
-  EnterpriseOperationalFinanceWorkspace,
-  OPERATIONAL_FINANCE_MODULE_CODES,
-} from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
+import { EnterpriseOperationalFinanceWorkspace } from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
-import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
+import {
+  OPERATIONAL_FINANCE_MODULE_CODES,
+  type EnterpriseFinanceModuleCode,
+} from "@/lib/enterprise/accounting/constants";
 import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -38,7 +38,9 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
 
   return (
     <AppShell user={user}>
-      {OPERATIONAL_FINANCE_MODULE_CODES.has(moduleCode) ? (
+      {OPERATIONAL_FINANCE_MODULE_CODES.includes(
+        moduleCode as (typeof OPERATIONAL_FINANCE_MODULE_CODES)[number],
+      ) ? (
         <EnterpriseOperationalFinanceWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
