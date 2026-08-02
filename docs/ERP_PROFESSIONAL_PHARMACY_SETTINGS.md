@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Paramètres
 
-**Code canonique :** `PHARMACY_SETTINGS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `PHARMACY_SETTINGS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Sections
@@ -22,5 +22,5 @@ Le workspace organise les paramètres par section, utilise des valeurs contrôl�
 
 ## Validation
 
-QA automatisée : permissions, date d’effet, audit, FEFO et règles critiques.  
+QA automatisée : permissions, date d’effet, audit, FEFO et règles critiques.
 E2E propriétaire : campagne Pharmacy finale.
