@@ -186,7 +186,7 @@ export function EnterpriseIdentityUserPanel({
       <ModuleHeader
         eyebrow="Vie privée, consentements et accès dérivés"
         title="Relations avec les entreprises"
-        description="Traitez les invitations reçues, suivez vos demandes et contrôlez les relations actives de votre compte DTSC, même sans entreprise active."
+        description="Traitez les invitations reçues, suivez vos demandes et contrôlez les relations actives de votre compte DTSC, même sans entreprise active. Vous gardez le contrôle de votre consentement."
         count={`${initialLinks.length} relation${initialLinks.length > 1 ? "s" : ""}`}
       />
 
@@ -196,7 +196,6 @@ export function EnterpriseIdentityUserPanel({
         <ModuleMetric label="Demandes en cours" value={requests.length} />
         <ModuleMetric label="Éléments historiques" value={history.length} />
       </ModuleMetrics>
-
       <ModuleToolbar
         controls={<ProfessionalTabs value={view} onChange={(value) => setView(value as RelationshipView)} items={tabs} label="Vues des relations avec les entreprises" />}
         summary="Les avantages ne sont accordés que par le résolveur serveur."
@@ -273,7 +272,7 @@ export function EnterpriseIdentityUserPanel({
                 </BusinessList>
               ) : <EmptyRelationship icon={Clock3} title="Aucune demande en cours" description="Vos demandes en attente d’examen apparaîtront ici." />}
             </ModuleSection>
-            <ModuleSection title="Demander une relation" description="Saisissez le code exact communiqué par l’entreprise. DTSC ne propose aucun annuaire public des entreprises ou utilisateurs.">
+            <ModuleSection title="Demander une relation" description="Saisissez le code exact communiqué par l’entreprise. DTSC ne propose pas d’annuaire public des entreprises ou utilisateurs.">
               <form onSubmit={submitUserRequest} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
                 <label className="min-w-0 text-sm font-black text-dtsc-ink">Code de l’entreprise<input name="organizationCode" autoComplete="off" pattern="[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*" placeholder="exemple-entreprise" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal" required /><span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">Demandez ce code directement à l’entreprise concernée.</span></label>
                 <label className="min-w-0 text-sm font-black text-dtsc-ink">Relation demandée<select name="relationType" defaultValue="CUSTOMER" className="mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-normal">{ENTERPRISE_IDENTITY_RELATION_TYPES.map((relationType) => <option key={relationType} value={relationType}>{getEnterpriseIdentityRelationLabel(relationType, "fr")}</option>)}</select></label>
