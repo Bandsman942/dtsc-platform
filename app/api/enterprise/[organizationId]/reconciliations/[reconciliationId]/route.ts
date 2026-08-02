@@ -60,5 +60,12 @@ export async function GET(req: Request, { params }: Params) {
     startedAt,
     metadata: { organizationId, domain: "reconciliation-detail", reconciliationId },
   });
-  return NextResponse.json({ reconciliation: { ...reconciliation, bankStatement, statementLines } });
+  return NextResponse.json({
+    reconciliation: {
+      ...reconciliation,
+      differenceAmount: reconciliation.reconciledDifference,
+      bankStatement,
+      statementLines,
+    },
+  });
 }
