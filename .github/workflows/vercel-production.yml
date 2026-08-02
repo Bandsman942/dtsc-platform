@@ -30,5 +30,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
       - name: Type check
         run: pnpm type-check
+
+      - name: Verify production migration gate
+        run: node -e "const script=require('./package.json').scripts?.['vercel-build']; if (script !== 'prisma migrate deploy && next build') throw new Error('vercel-build must apply Prisma migrations before Next.js build')"

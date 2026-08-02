@@ -519,10 +519,14 @@ Le pipeline exécute:
 ```bash
 pnpm install --no-frozen-lockfile
 pnpm type-check
+# Lors du build Vercel Production, le script vercel-build exécute obligatoirement :
 pnpm prisma migrate deploy
-vercel build --prod
-vercel deploy --prebuilt --prod
+pnpm build
 ```
+
+Le build Vercel doit conserver le script `vercel-build` de `package.json`. La migration utilise la
+`DATABASE_URL` de l'environnement Vercel ciblé et doit réussir avant que Next.js ne construise le déploiement ;
+un échec de migration bloque donc la mise en production au lieu de publier un code incompatible avec la base.
 
 ## Sécurité
 
