@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Documents et conformité
 
-**Code canonique :** `PHARMACY_DOCUMENTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `PHARMACY_DOCUMENTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Documents couverts
@@ -22,5 +22,5 @@ Les expirations sont notifiées à l’avance selon une configuration maîtrisé
 
 ## Validation
 
-QA automatisée : upload, version, téléchargement privé, expiration, audit et tenant isolation.  
+QA automatisée : upload, version, téléchargement privé, expiration, audit et tenant isolation.
 E2E propriétaire : campagne `F-009`.
