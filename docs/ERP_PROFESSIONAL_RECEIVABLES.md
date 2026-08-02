@@ -22,4 +22,6 @@ Les justificatifs sont téléversés dans le module documentaire privé et liés
 
 ## Maturité
 
-`PROFESSIONAL_READY`, non commercialisable avant validation E2E manuelle explicite du propriétaire.
+`COMMERCIAL_READY` — `commercializable: true`.
+
+Le propriétaire a confirmé le 2 août 2026 la réussite de la campagne E2E authentifiée couvrant facture client, approbation indépendante, émission, créance unique, paiements partiels, allocation, avoir et contrôles de sécurité. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.
