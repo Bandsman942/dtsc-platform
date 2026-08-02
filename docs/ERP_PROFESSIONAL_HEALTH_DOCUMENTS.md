@@ -1,7 +1,7 @@
 # Module professionnel Health — Documents médicaux
 
-**Code canonique :** `MEDICAL_DOCUMENTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `MEDICAL_DOCUMENTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -24,5 +24,5 @@ Une nouvelle version conserve l’ancienne. L’archivage ne détruit pas l’hi
 
 ## Validation
 
-QA automatisée : upload, versions, téléchargement privé, tenant isolation, audit et responsive.  
+QA automatisée : upload, versions, téléchargement privé, tenant isolation, audit et responsive.
 E2E propriétaire : scénario `I06-H-005` et transversal `F-009`.
