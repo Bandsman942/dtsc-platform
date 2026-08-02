@@ -9,11 +9,16 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const AUDIO_TYPES = new Set([
   "audio/webm",
   "audio/ogg",
+  "application/ogg",
   "audio/mpeg",
   "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
   "audio/aac",
   "audio/wav",
   "audio/x-wav",
+  "audio/3gpp",
+  "audio/3gpp2",
 ]);
 
 function storageClient() {
@@ -38,7 +43,8 @@ function safeExtension(file: File) {
   if (mimeType === "image/webp") return "webp";
   if (mimeType.includes("ogg")) return "ogg";
   if (mimeType.includes("mpeg")) return "mp3";
-  if (mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
+  if (mimeType.includes("3gpp")) return "3gp";
   if (mimeType.includes("wav")) return "wav";
   return "webm";
 }
@@ -60,7 +66,7 @@ export function validateCollaborationImage(file: File) {
 export function validateCollaborationAudio(file: File, maxBytes = DEFAULT_AUDIO_MAX_BYTES) {
   const mimeType = normalizeCollaborationMimeType(file.type);
   if (!AUDIO_TYPES.has(mimeType)) {
-    return { ok: false as const, status: 415, message: "Format audio non pris en charge." };
+    return { ok: false as const, status: 415, message: `Format audio non pris en charge (${mimeType}). Utilisez un enregistrement WEBM, OGG, M4A, MP4, MP3, AAC, WAV ou 3GP.` };
   }
   if (file.size <= 0 || file.size > maxBytes) {
     return { ok: false as const, status: 413, message: `Le message vocal doit peser au maximum ${Math.max(1, Math.floor(maxBytes / (1024 * 1024)))} Mo.` };
