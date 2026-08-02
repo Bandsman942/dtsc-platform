@@ -28,6 +28,25 @@ L’assistant n’affirme pas avoir exécuté lui-même ces tests. La preuve enr
 - `FINANCE_BANK` — Banque et relevés, dans le périmètre du format CSV officiellement supporté ;
 - `FINANCE_RECONCILIATION` — Rapprochement bancaire et financier.
 
+## Guides utilisateur livrés
+
+Chaque workspace Finance expose déjà l’action contextuelle **Guide utilisateur**. La promotion commerciale complète désormais cette action par un guide réellement publié pour chacun des huit codes `FINANCE_*`.
+
+Les guides sont fondés sur les fonctionnalités déployées et couvrent :
+
+- les prérequis et permissions ;
+- la procédure pas à pas ;
+- les statuts et workflows ;
+- les contrôles de séparation des responsabilités, d’intégrité et de confidentialité ;
+- le dépannage avec messages métier ;
+- les limites réelles, notamment le périmètre CSV du module Banque.
+
+Sources :
+
+- `app/help/enterprise/page.tsx` ;
+- `lib/enterprise/finance-user-guides.ts` ;
+- `components/enterprise/professional/professional-erp-ui.tsx`.
+
 ## Résultats E2E attestés
 
 | Scénario | Couverture | Résultat propriétaire |
@@ -51,6 +70,7 @@ L’assistant n’affirme pas avoir exécuté lui-même ces tests. La preuve enr
 - tous les scénarios critiques sont déclarés réussis ;
 - aucun défaut critique ouvert n’a été signalé par le propriétaire dans cette décision ;
 - la confirmation explicite du propriétaire est acquise ;
+- les huit guides contextuels sont publiés et couverts par la QA ;
 - la matrice de maturité est mise à jour dans une PR séparée ;
 - les Quality Gates GitHub restent obligatoires avant fusion ;
 - le déploiement Production reste exclusivement déclenché depuis `main`.
@@ -68,4 +88,6 @@ L’assistant n’affirme pas avoir exécuté lui-même ces tests. La preuve enr
 - `lib/enterprise/module-commercial-readiness-iteration-04.json` ;
 - `scripts/qa-erp-professional-iteration-04-finance-checks.mjs` ;
 - `docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_04.md` ;
+- `app/help/enterprise/page.tsx` ;
+- `lib/enterprise/finance-user-guides.ts` ;
 - les workspaces, routes, documents de domaine et contrats QA de l’itération 4.
