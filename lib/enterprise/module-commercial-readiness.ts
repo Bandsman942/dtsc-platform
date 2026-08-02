@@ -1,6 +1,7 @@
 import readinessManifest from "@/lib/enterprise/module-commercial-readiness.json";
 import iteration03Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-03.json";
 import iteration04Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-04.json";
+import iteration05Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-05.json";
 import {
   ENTERPRISE_MODULE_REGISTRY,
   getEnterpriseModuleDefinition,
@@ -76,16 +77,18 @@ type IterationManifest = {
 const baseManifest = readinessManifest as ReadinessManifest;
 const iteration03 = iteration03Manifest as IterationManifest;
 const iteration04 = iteration04Manifest as IterationManifest;
+const iteration05 = iteration05Manifest as IterationManifest;
 
 const manifest: ReadinessManifest = {
   ...baseManifest,
-  version: Math.max(baseManifest.version, iteration03.version, iteration04.version),
-  evaluatedAt: iteration04.evaluatedAt,
-  policyVersion: iteration04.policyVersion,
+  version: Math.max(baseManifest.version, iteration03.version, iteration04.version, iteration05.version),
+  evaluatedAt: iteration05.evaluatedAt,
+  policyVersion: iteration05.policyVersion,
   moduleOverrides: {
     ...baseManifest.moduleOverrides,
     ...iteration03.moduleOverrides,
     ...iteration04.moduleOverrides,
+    ...iteration05.moduleOverrides,
   },
 };
 

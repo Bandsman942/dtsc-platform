@@ -1,46 +1,29 @@
 # DTSC Platform — Documentation technique
 
-**Version :** ERP Consolidation 5/5 — Release A
+**Version :** ERP Professionalization 5/6
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
 ## 1. Objet
 
-Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables sont dans `AGENTS.md`; les contrats détaillés se trouvent dans les documents spécialisés du dossier `docs/`.
+Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 
-La plateforme réunit :
+La plateforme réunit : site public, compte/authentification, SaaS multi-entreprises, console interne DTSC, support, collaboration, ERP commun, extensions Health/Pharmacy, IA, PWA et notifications.
 
-- un site public ;
-- un espace compte/authentification ;
-- une application SaaS multi-entreprises ;
-- une console interne DTSC ;
-- un support client ;
-- des modules collaboratifs ;
-- un ERP commun ;
-- des extensions sectorielles Health et Pharmacy ;
-- une couche IA ;
-- une PWA et des notifications temps réel/Web Push.
-
-## 2. Stack principale
+## 2. Stack
 
 | Couche | Technologie |
 |---|---|
 | Framework | Next.js App Router 15 |
 | Interface | React 19, TypeScript, Tailwind CSS |
 | Validation | Zod |
-| ORM | Prisma 6 multi-schema |
+| ORM | Prisma 6 multi-fichiers |
 | Base | PostgreSQL |
 | Hébergement | Vercel |
 | Authentification | session serveur et cookie HTTP-only signé |
-| Temps réel | infrastructure temps réel existante selon module |
-| Appels | LiveKit côté infrastructure, sans marque technique dans l’UI |
-| IA | AI SDK et fournisseurs configurés côté serveur |
-| Stockage | stockage privé via routes serveur contrôlées |
-| QA | scripts Node dédiés + type-check + lint + build |
+| QA | scripts Node dédiés, type-check, lint et build |
 
-## 3. Architecture produits et sous-domaines
-
-Les helpers de domaine centralisent les destinations ; aucune navigation inter-produit critique ne doit hardcoder les URLs.
+## 3. Produits et sous-domaines
 
 ```text
 dtsc-platform.com          site public
@@ -50,337 +33,197 @@ console.dtsc-platform.com  console interne DTSC
 support.dtsc-platform.com  support client
 ```
 
-Le middleware protège les produits, exclut les assets et `/api/*` des réécritures, conserve le fallback offline public et empêche l’exposition de la console dans l’application cliente.
+Les helpers de domaine centralisent les URL. Le middleware protège les produits, exclut les assets et `/api/*` des réécritures, garde le fallback offline public et interdit l’exposition directe de la console dans l’application cliente.
 
-La redirection post-login n’accepte que des destinations internes fiables afin d’éviter les open redirects.
+## 4. Authentification et contexte
 
-## 4. Authentification et contexte actif
+La session identifie l’utilisateur, le rôle global, le contexte actif et l’organisation active éventuelle.
 
-La session identifie au minimum :
+- `DTSC_INTERNAL` : espace interne ;
+- `ORGANIZATION` : entreprise cliente ;
+- `GLOBAL_CLIENT` : compte client global.
 
-- l’utilisateur ;
-- le rôle global ;
-- le contexte actif ;
-- l’organisation active lorsqu’elle existe.
+Une URL, un body ou une clé étrangère fournie par le navigateur n’est jamais une preuve d’accès.
 
-Contextes principaux :
+## 5. Isolation multi-tenant
 
-- `DTSC_INTERNAL` : tenant interne et console DTSC ;
-- `ORGANIZATION` : organisation cliente active ;
-- `GLOBAL_CLIENT` : contexte client global ;
-- contextes communautaires éventuels pour les surfaces partagées.
-
-Un cookie partagé entre sous-domaines peut être activé par configuration serveur. La déconnexion expire le cookie host-only et le cookie partagé lorsqu’il existe.
-
-## 5. Multi-tenant
-
-L’isolation repose sur :
+Toute requête métier vérifie :
 
 ```text
-userId
-+ activeOrganizationId
-+ membership actif
-+ contexte de session
-+ permissions du module
-+ visibilité de l’objet
+session
+→ activeOrganizationId
+→ membership actif
+→ organisation CLIENT
+→ module actif
+→ entitlement
+→ permission
+→ visibilité de l’objet
 ```
 
-Chaque requête métier vérifie `organizationId` côté serveur. Une URL, un body ou une foreign key fournie par le client ne constitue jamais une preuve d’accès.
+Toutes les références structurantes sont revalidées dans le même `organizationId`. Les rôles globaux, un rôle `MANAGER` générique ou une relation active avec une entreprise ne donnent aucun accès implicite à la Finance d’un tenant.
 
-Les rôles globaux ne donnent aucun accès implicite aux données privées d’une organisation cliente. Un `MANAGER` n’est pas automatiquement administrateur entreprise.
+## 6. Registre canonique et maturité
 
-Le tenant interne stable est `dtsc-internal`; ses données et workflows restent séparés des modules RH/Finance propres aux clients.
+Le registre canonique définit les codes, statuts, routes, workspaces, permissions, dépendances, plans et QA. `EnterpriseModule` active un module pour un tenant, mais ne peut ouvrir un code absent, masqué ou non entitled.
 
-## 6. Registre canonique des modules
+La maturité commerciale est séparée du statut technique :
 
-L’autorité est constituée de :
+- `BACKEND_READY` ;
+- `READ_ONLY_UI` ;
+- `OPERATIONAL_UI` ;
+- `PROFESSIONAL_READY` ;
+- `COMMERCIAL_READY`.
 
-- `lib/enterprise/module-registry-data.json` ;
-- extensions de registre par itération/domaine ;
-- `lib/enterprise/module-registry.ts` ;
-- workspaces allow-listés dans le code.
+Les manifestes d’itérations sont fusionnés par `lib/enterprise/module-commercial-readiness.ts`. Une promotion vers `COMMERCIAL_READY` exige une décision explicite du propriétaire après validation E2E authentifiée et Production stable.
 
-Le registre définit : code, statut, domaine, navigation, route, workspace, permissions, secteur, plan, dépendances, aliases et QA.
+## 7. ERP commun
 
-Statuts : `ACTIVE`, `BETA`, `PLANNED`, `DEPRECATED`, `HIDDEN`, `RETIRED`.
+Le Core comprend : tiers, catalogue, sites/entrepôts, CRM, devis, contrats, commandes, livraisons, fournisseurs, achats, stock, RH/paie client, projets, temps, actifs, documents, workflows, rapports et IA.
 
-`EnterpriseModule` configure l’activation tenant mais ne peut jamais ouvrir un code absent, non compatible, non entitled ou masqué dans le registre.
+Une source de vérité unique est conservée par domaine. Les anciens objets legacy restent en lecture seule lorsqu’une migration destructive n’est pas justifiée.
 
-Références :
+## 8. Finance opérationnelle — Itération 4
 
-- `docs/ERP_MODULE_INVENTORY.md`
-- `docs/ERP_NAVIGATION_AND_ACCESS_CONTRACT.md`
-- `docs/ERP_FINAL_PERMISSION_MATRIX.md`
+Modules dédiés :
 
-## 7. Architecture ERP finale
+- `FINANCE_OVERVIEW` ;
+- `FINANCE_RECEIVABLES` ;
+- `FINANCE_PAYABLES` ;
+- `FINANCE_PAYMENTS` ;
+- `FINANCE_TREASURY` ;
+- `FINANCE_CASH` ;
+- `FINANCE_BANK` ;
+- `FINANCE_RECONCILIATION`.
 
-### Core commun
+Les factures, créances/dettes, paiements, allocations, comptes financiers, caisse, banque, transferts et rapprochements restent des objets distincts et durables.
 
-- tiers et rôles ;
-- catalogue produits/services ;
-- sites, entrepôts et emplacements ;
-- CRM ;
-- devis, contrats, commandes et livraisons ;
-- fournisseurs, achats et réceptions ;
-- stock commun et valorisation ;
-- RH/paie client ;
-- projets, timesheets, actifs et maintenance ;
-- documents ;
-- Workflow Engine v2 ;
-- rapports et assistant IA.
+## 9. Comptabilité et Finance avancée — Itération 5
 
-### Finance commune
+Modules dédiés :
 
-- configuration financière ;
-- plan comptable ;
-- exercices et périodes ;
-- journaux et lignes ;
-- factures clients/fournisseurs ;
-- créances et dettes ;
-- paiements et allocations ;
-- caisse et banque ;
-- trésorerie ;
-- rapprochements ;
-- taxes ;
-- clôture ;
-- états financiers.
+- `FINANCE_ACCOUNTING` ;
+- `FINANCE_TAX` ;
+- `FINANCE_CLOSE` ;
+- `FINANCE_STATEMENTS` ;
+- `FINANCE_ASSETS` ;
+- `FINANCE_INVENTORY`.
 
-Référence : `docs/ERP_FINAL_ARCHITECTURE.md`.
-
-## 8. Propriété des données
-
-Une seule source de vérité est autorisée par domaine.
-
-- `EnterpriseBusinessParty` : tiers communs ;
-- `EnterpriseCatalogItem` : catalogue commun ;
-- modèles CRM/ventes/achats/stock/RH/projets/actifs dédiés : opérations Core ;
-- `EnterpriseSalesInvoice`, `EnterpriseSupplierInvoice` : factures ;
-- `EnterpriseReceivable`, `EnterprisePayable` : soldes ouverts ;
-- `EnterprisePayment`, `EnterprisePaymentAllocation` : paiements ;
-- `EnterpriseCashSession`, comptes et mouvements de trésorerie : liquidités ;
-- `EnterpriseJournalEntry`, `EnterpriseJournalLine` : comptabilité ;
-- modèles Health : données cliniques ;
-- modèles Pharmacy : données réglementaires et quantités spécialisées.
-
-Référence : `docs/ERP_FINAL_DATA_OWNERSHIP.md`.
-
-## 9. Finance et comptabilisation
-
-Toute écriture respecte :
+### 9.1 Moteur comptable unique
 
 ```text
-événement métier
-→ validation
+événement métier validé
+→ registre de posting allow-listé
+→ règle et comptes actifs
+→ période autorisée
 → clé d’idempotence
-→ Posting Engine
-→ Journal Entry
-→ Journal Lines
+→ lot de comptabilisation
+→ écriture
+→ lignes
 → Σ débits = Σ crédits
 ```
 
-Une écriture `POSTED` est immuable. Les corrections utilisent une contrepassation liée puis, si nécessaire, une nouvelle écriture.
+`EnterpriseJournalEntry` et `EnterpriseJournalLine` sont l’unique grand livre commun. Une écriture `POSTED` est immuable. Une correction utilise une contrepassation liée ou une nouvelle écriture corrective.
 
-Les périodes `CLOSED`/`LOCKED` ne reçoivent aucune écriture. Les rapports utilisent uniquement les écritures communes `POSTED` et n’additionnent pas des devises incompatibles.
+### 9.2 Workspaces avancés
 
-Un paiement, une allocation, une facture et un document opérationnel restent des objets distincts.
+Le workspace Finance avancée expose :
 
-Références :
+- plan comptable et comptes ;
+- exercices et périodes ;
+- journaux et écritures ;
+- grand livre et balance ;
+- règles et anomalies ;
+- codes et taux fiscaux ;
+- checklist de clôture ;
+- états dynamiques et versions publiées ;
+- immobilisations et amortissements ;
+- valorisation comptable du stock.
 
-- `docs/ERP_FINANCE_ARCHITECTURE.md`
-- `docs/ERP_ACCOUNTING_MODEL.md`
-- `docs/ERP_POSTING_RULES.md`
-- `docs/ERP_TREASURY_MODEL.md`
-- `docs/ERP_FINANCIAL_SECURITY.md`
+Les listes volumineuses sont paginées côté serveur. Les interfaces françaises n’affichent ni UUID, ni enum brute, ni type Prisma.
 
-## 10. Pharmacy
+### 9.3 Périodes et clôture
 
-Pharmacy reste autoritaire pour :
+- `OPEN` : opérations normales ;
+- `SOFT_CLOSED` : ajustements contrôlés ;
+- `CLOSED` : mutations normales bloquées ;
+- `LOCKED` : réouverture standard interdite.
 
-- produits réglementés ;
-- lots ;
-- FEFO ;
-- péremption ;
-- rappels et blocages ;
-- qualité ;
-- pharmacovigilance ;
-- prescriptions ;
-- quantités réglementées.
+Une réouverture exige permission, motif, acteur indépendant et audit. Elle ne supprime aucune écriture ni version publiée.
 
-Les tiers, catalogues, achats, factures, paiements, caisses et écritures communs sont reliés par des extensions et mappings tenant-scoped, idempotents et observables.
+### 9.4 Fiscalité
 
-Une mutation financière Pharmacy ne doit jamais créer une seconde facture, un second paiement ou une seconde caisse.
+Les codes fiscaux utilisent des taux à date d’effet. Un changement de taux ne modifie jamais les transactions historiques. Le produit ne prétend pas automatiser une déclaration légale universelle.
 
-Références :
+### 9.5 États financiers
 
-- `docs/ERP_PHARMACY_CONVERGENCE_MAP.md`
-- `docs/ERP_SECTOR_FINANCIAL_MAPPING.md`
-- `docs/ERP_SECTOR_CUTOVER_PLAN.md`
+Un aperçu dynamique est recalculable. Une version publiée est horodatée, liée à ses paramètres, protégée par une empreinte et non modifiable.
 
-## 11. Health
+### 9.6 Immobilisations
 
-Health reste autoritaire pour :
+Un actif opérationnel devient une immobilisation uniquement après capitalisation contrôlée. La méthode actuellement exposée est l’amortissement linéaire mensuel, réellement supporté et idempotent.
 
-- patients ;
-- rendez-vous ;
-- consultations ;
-- dossiers médicaux ;
-- laboratoire ;
-- prescriptions ;
-- documents cliniques ;
-- règles de prise en charge.
+### 9.7 Valorisation du stock
 
-Le Core financier reçoit uniquement les informations nécessaires à la facturation : tiers financier, service, montant, payeur, facture, créance, paiement et allocation. Il ne reçoit ni diagnostic, symptôme, prescription, résultat de laboratoire, note médicale ou historique clinique.
+Le stock physique reste l’autorité des quantités. La Finance utilise les couches de coût moyen pondéré et les événements comptables. Une consultation de valorisation ne modifie jamais le stock physique.
 
-Les composantes patient/assureur d’une facture convergent vers une facture commune et des créances/allocations explicites.
+## 10. Documents, commentaires et notifications
 
-Références :
+Les pièces financières utilisent le stockage privé et les liens structurels. Les commentaires restent distincts des décisions de workflow et sont modifiables seulement selon la politique d’auteur.
 
-- `docs/ERP_HEALTH_CONVERGENCE_MAP.md`
-- `docs/ERP_SECTOR_DATA_CLASSIFICATION.md`
-- `docs/ERP_FINAL_SECURITY_REVIEW.md`
+Les notifications utilisent des liens profonds vers le module, l’objet et la section utile. Le backend revalide toujours l’accès à la destination.
 
-## 12. Workflow Engine v2
-
-Le moteur actif repose sur des définitions, versions et instances dédiées. Les transitions sont autorisées, auditées et idempotentes.
-
-`EnterpriseWorkflow` historique n’accepte plus de création ou édition. L’administration renvoie `410 Gone` pour les mutations legacy et oriente vers Workflow Engine v2.
-
-Références :
-
-- `docs/ENTERPRISE_WORKFLOW_ENGINE.md`
-- `docs/ERP_FINAL_LEGACY_INVENTORY.md`
-
-## 13. Legacy et Release A
-
-La Release A retire les chemins d’écriture sans destruction physique :
-
-| Objet | État |
-|---|---|
-| `EnterpriseCoreRecord` | historique paginé, `LEGACY_READ_ONLY`, mutations `410 Gone` |
-| `EnterpriseSectorRecord` | historique paginé, `LEGACY_READ_ONLY`, mutations Health/Pharmacy `410 Gone` |
-| `EnterpriseWorkflow` | archive, mutations `410 Gone` |
-| workspaces génériques sectoriels | retirés du parcours actif |
-| modules Health génériques sans contrat | `HIDDEN` + `EXPLICIT_DENY` |
-
-Chaque tentative est soumise à l’authentification, au tenant, aux permissions, à same-origin, au rate limit et à l’audit.
-
-Une Release B éventuelle peut supprimer physiquement uniquement après observation, export, sauvegarde, restauration testée, absence de dépendance et approbation explicite.
-
-Références :
-
-- `docs/ERP_FINAL_CUTOVER_STATUS.md`
-- `docs/ERP_FINAL_DELETION_REGISTER.md`
-- `docs/ERP_ROUTE_DECOMMISSION_REGISTER.md`
-- `docs/ERP_FINAL_ROLLBACK_PLAN.md`
-
-## 14. API et sécurité
+## 11. API et sécurité
 
 Contrat général d’une route mutante :
 
 ```text
 getSession
-→ contexte/organisation
-→ membership
+→ organisation et membership
 → module/entitlement
-→ permission/objet
-→ isSameOriginRequest
-→ schéma Zod
+→ permission et objet
+→ same-origin
+→ Zod
 → await rateLimit
 → transaction Prisma
-→ writeApiLog
-→ writeAuditLog
+→ ApiLog
+→ AuditLog
 ```
 
-Règles :
+Règles : aucun IDOR, aucune référence inter-tenant, aucun secret côté client, aucun log de document complet, salaire individuel, compte bancaire complet ou donnée clinique.
 
-- pas d’IDOR ;
-- pas de référence inter-tenant ;
-- pas d’accès clinique par Finance ;
-- pas de secret côté client ;
-- pas de succès silencieux sur une route retirée ;
-- erreurs métier explicites ;
-- téléchargements privés via route serveur ;
-- logs sans données sensibles.
+Les codes d’erreur Finance sont transformés en messages métier actionnables sans perdre leur valeur d’observabilité.
 
-## 15. Documents et fichiers
+## 12. UI/UX
 
-Les documents généraux utilisent `EnterpriseDocument`. Les documents médicaux restent contrôlés par Health ; les documents réglementaires restent contrôlés par Pharmacy.
+Primitives : `ModuleWorkspace`, `ModuleHeader`, `ModuleMetrics`, `ModuleToolbar`, `ModuleContent`, `ModuleSection`, `BusinessList`, `BusinessDetail`, `ContextActions`, `StatusBadge` et `EmptyState`.
 
-Tout upload valide MIME, taille, organisation, classification et permissions. Les fichiers sont stockés de façon privée ; les téléchargements sensibles sont audités.
+Mobile : rail KPI horizontal local, `min-w-0`, aucun débordement global, champs à taille tactile, clavier numérique pour les montants, dialogs scrollables et formulaires utilisables à 320–412 px.
 
-Les documents ambigus ne sont pas rendus publics et ne sont pas reliés automatiquement sur une similarité de texte.
-
-## 16. Notifications et deep links
-
-Les nouvelles notifications utilisent des routes canoniques et ouvrent :
-
-```text
-module
-+ objet précis
-+ section pertinente
-```
-
-Le backend revalide l’accès à la destination. Une notification verrouillée reste générique et ne révèle aucune donnée clinique, salariale, juridique ou financière sensible.
-
-Les aliases historiques servent uniquement aux anciennes notifications/liens qui doivent rester lisibles.
-
-## 17. UI/UX standard
-
-Primitives communes :
-
-- `ModuleWorkspace`
-- `ModuleHeader`
-- `ModuleMetrics`
-- `ModuleContent`
-- `ModuleSection`
-- `BusinessList`
-- `BusinessListItem`
-- `BusinessDetail`
-- `ContextActions`
-- `StatusBadge`
-- `EmptyState`
-
-Les workspaces évitent les cartes imbriquées, utilisent des actions réelles, des menus contextuels cohérents, une pagination serveur et des libellés métier traduits.
-
-Mobile : rail KPI horizontal local, `min-w-0`, aucun débordement global, formulaires/détails plein écran, clavier iPhone, selects tactiles, dialogs scrollables et safe areas.
-
-## 18. PWA et hors ligne
-
-Le service worker ne met jamais en cache :
-
-- `/api/*` ;
-- les pages privées HTML ;
-- les réponses d’authentification ;
-- les données utilisateur/tenant.
-
-Le fallback offline reste public, autonome et sans donnée privée. Web Push et notifications nécessitent un abonnement serveur valide et des permissions utilisateur explicites.
-
-## 19. Prisma et migrations
+## 13. Prisma et migrations
 
 - schéma multi-fichiers dans `prisma/` ;
 - migrations historiques immuables ;
-- modifications additives privilégiées ;
-- foreign keys et index tenant-aware ;
-- suppression physique en deux releases ;
+- évolutions additives privilégiées ;
+- clés et index tenant-aware ;
+- aucune suppression d’écriture, ligne, période utilisée, état publié, amortissement ou valorisation ;
 - installation depuis une base vide obligatoire ;
 - aucune dépendance cachée à un backfill manuel.
 
-Le Quality Gate démarre PostgreSQL, exécute les migrations depuis zéro, génère Prisma et vérifie la parité Finance.
+L’itération 5 réutilise les modèles existants et n’introduit pas de migration destructive.
 
-## 20. Audits finaux
+## 14. Audit d’intégrité
 
 ```bash
-pnpm audit:erp-cutover -- --dry-run --json --output artifacts/erp-cutover.json
-pnpm audit:financial-integrity -- --json
+pnpm audit:financial-integrity -- --organization-id <id> --period-id <id> --json
 ```
 
-L’audit cutover produit : `READY`, `READY_WITH_ARCHIVE`, `BLOCKED`, `MANUAL_REVIEW`.
+Filtres supportés : organisation, période, plage de dates, journal, compte, JSON et fichier de sortie.
 
-L’audit financier contrôle notamment : équilibre débit/crédit, factures sans créance, factures payées avec solde, allocations excessives, soldes négatifs, périodes fermées et postings sectoriels dupliqués.
+L’audit contrôle notamment : équilibre, lignes et en-têtes, sources, écritures sans lignes, balance, factures sans créance/dette, soldes incohérents, allocations excessives, périodes fermées, postings sectoriels dupliqués et contrepassations dupliquées.
 
-Les sorties restent agrégées et n’exposent pas de contenu médical ou financier sensible.
+Les sorties sont agrégées et ne réparent jamais silencieusement les données.
 
-## 21. QA
+## 15. QA
 
 Commandes principales :
 
@@ -392,67 +235,70 @@ pnpm qa:regression
 pnpm build
 ```
 
-QA finales :
+Itération 5 :
 
-- `qa:erp-final-cutover`
-- `qa:erp-legacy-readonly`
-- `qa:erp-deprecated-routes`
-- `qa:erp-single-source-of-truth`
-- `qa:erp-final-security`
-- `qa:erp-clean-install`
-- `qa:erp-production-readiness`
+```bash
+pnpm qa:erp-professional-accounting
+pnpm qa:erp-professional-tax
+pnpm qa:erp-professional-financial-close
+pnpm qa:erp-professional-financial-statements
+pnpm qa:erp-professional-fixed-assets
+pnpm qa:erp-professional-inventory-valuation
+pnpm qa:erp-accounting-integrity
+pnpm qa:erp-accounting-security
+pnpm qa:erp-iteration-05-commercial-readiness
+```
 
-Les QA historiques, Core v2, Finance, Pharmacy, Health, workflows, responsive, mobile, sessions et collaboration restent obligatoires.
+La CI démarre PostgreSQL, applique toutes les migrations depuis zéro, génère Prisma, exécute les audits, vérifie la parité Finance, le type-check, la régression, le lint et le build.
 
-## 22. CI/CD et Production
+## 16. CI/CD et Production
 
 ```text
 branche feature
-→ contrôles locaux
-→ commits
-→ push
+→ contrôles
 → Pull Request
 → GitHub Quality Gates
 → revue
-→ merge main
+→ merge dans main
 → prisma migrate deploy
 → pnpm build
 → Vercel Production
+→ E2E manuels du propriétaire
 ```
 
-Aucun déploiement manuel n’est autorisé depuis une branche. Les previews désactivées sont normales.
+Aucun `vercel deploy` ou `vercel --prod` n’est lancé depuis une branche. Les previews désactivées sont normales.
 
-Après merge, vérifier dans l’ordre : SHA merge, SHA `main`, SHA Production, migrations, build, authentification, tenant, Core, Finance, Pharmacy, Health, workflows, notifications, rapports, mobile, sécurité, intégrité comptable et absence d’écriture legacy.
+Après merge : vérifier SHA fusionné, SHA `main`, SHA Production, migrations, build, authentification, sélection du tenant, navigation, Finance opérationnelle, Comptabilité, Fiscalité, Clôture, États, Immobilisations, Valorisation, exports, logs critiques et audit d’intégrité.
 
-Références :
+## 17. Rollback
 
-- `docs/ERP_FINAL_OPERATIONAL_RUNBOOK.md`
-- `docs/ERP_FINAL_PRODUCTION_CHECKLIST.md`
-- `docs/ERP_FINAL_MIGRATION_REPORT.md`
+Le rollback est non destructif. Il peut masquer une action ou bloquer une route mutante tout en conservant les lectures et tout l’historique.
 
-## 23. Rollback
+Il ne doit jamais supprimer, modifier ou recréer : écriture, ligne, contrepassation, période, état publié, amortissement, valorisation ou séquence.
 
-Le rollback reste non destructif : désactiver une route/domaine, restaurer une lecture ou redirection protégée, conserver toutes les données et mappings, puis rejouer idempotemment après correction.
+## 18. Documentation spécialisée
 
-Une écriture comptable est corrigée par contrepassation ; une facture/paiement/allocation confirmé ne se supprime pas. Aucun rollback ne doit perdre un lot Pharmacy ou un dossier Health, ni exposer une donnée médicale.
+Références principales :
 
-## 24. Documentation de référence
+- `docs/ERP_FINANCE_ARCHITECTURE.md`
+- `docs/ERP_ACCOUNTING_MODEL.md`
+- `docs/ERP_POSTING_RULES.md`
+- `docs/ERP_FINANCIAL_SECURITY.md`
+- `docs/ERP_ACCOUNTING_INTEGRITY_CONTROLS.md`
+- `docs/ERP_PROFESSIONAL_ACCOUNTING.md`
+- `docs/ERP_PROFESSIONAL_TAX.md`
+- `docs/ERP_PROFESSIONAL_FINANCIAL_CLOSE.md`
+- `docs/ERP_PROFESSIONAL_FINANCIAL_STATEMENTS.md`
+- `docs/ERP_PROFESSIONAL_FIXED_ASSETS.md`
+- `docs/ERP_PROFESSIONAL_INVENTORY_VALUATION.md`
+- `docs/ERP_ITERATION_05_USER_GUIDE.md`
+- `docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_05.md`
+- `docs/CHANGELOG_ERP_PROFESSIONALIZATION_ITERATION_05.md`
 
-- `AGENTS.md`
-- `docs/ERP_FINAL_ARCHITECTURE.md`
-- `docs/ERP_FINAL_DATA_OWNERSHIP.md`
-- `docs/ERP_MODULE_INVENTORY.md`
-- `docs/ERP_FINAL_PERMISSION_MATRIX.md`
-- `docs/ERP_FINAL_SECURITY_REVIEW.md`
-- `docs/ERP_FINAL_OPERATIONAL_RUNBOOK.md`
-- `docs/ERP_FINAL_ROLLBACK_PLAN.md`
-- `docs/ERP_FINAL_PRODUCTION_CHECKLIST.md`
-- `docs/CHANGELOG_ERP_CONSOLIDATION_ITERATION_05.md`
+## 19. Statut de l’itération 5
 
-La documentation historique reste accessible dans Git ; ce document représente l’architecture active après la consolidation ERP 5/5 Release A.
+Les six modules avancés sont `PROFESSIONAL_READY` et `commercializable: false`.
 
-## Addendum 2026-08-01 — ERP professionnel, itération 2
+**Tests E2E manuels préparés — validation du propriétaire en attente.**
 
-Les modules `CRM_CUSTOMERS`, `CATALOG`, `SITES_WAREHOUSES`, `CRM_PIPELINE` et `CONTRACTS` utilisent désormais des workspaces dédiés. Les créations et modifications passent par des services métier transactionnels, une validation Zod, un contrôle de révision et des événements opérationnels.
-
-L’identité relationnelle dispose d’un résolveur serveur d’avantages, d’un worker d’expiration borné et de cibles fournisseur/RH supplémentaires. La migration `20260801170000_professionalize_erp_iteration_02` est additive.
+Aucune clôture fonctionnelle ni promotion commerciale n’est déclarée avant confirmation explicite du propriétaire.

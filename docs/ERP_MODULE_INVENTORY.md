@@ -1,6 +1,6 @@
 # Inventaire canonique des modules ERP DTSC
 
-Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry`, `pnpm qa:erp-final-cutover` et `pnpm qa:erp-iteration-03`.
+Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry`, `pnpm qa:erp-final-cutover`, `pnpm qa:erp-iteration-03` et `pnpm qa:erp-iteration-05`.
 
 ## Statuts techniques
 
@@ -50,24 +50,54 @@ Les codes suivants n’utilisent plus le workspace générique comme expérience
 | `TIME_DELIVERABLES` | Temps projet et livrables |
 | `ASSETS_MAINTENANCE` | Actifs, affectations, retours, incidents et maintenance |
 
-Leur maturité courante est `PROFESSIONAL_READY`, avec `commercializable: false` tant que les E2E authentifiés du propriétaire et le packaging final ne sont pas confirmés.
+### Itération 4/6 — Finance opérationnelle
+
+| Code canonique | Expérience dédiée |
+|---|---|
+| `FINANCE_OVERVIEW` | Configuration et vue d’ensemble Finance |
+| `FINANCE_RECEIVABLES` | Factures clients et créances |
+| `FINANCE_PAYABLES` | Factures fournisseurs et dettes |
+| `FINANCE_PAYMENTS` | Paiements, allocations et confirmations |
+| `FINANCE_TREASURY` | Comptes financiers, transferts et trésorerie |
+| `FINANCE_CASH` | Sessions de caisse, comptages et validation |
+| `FINANCE_BANK` | Relevés bancaires et lignes importées |
+| `FINANCE_RECONCILIATION` | Rapprochements et contrôles indépendants |
+
+Ces modules sont évalués séparément selon leurs preuves et les validations réelles du propriétaire.
+
+### Itération 5/6 — Comptabilité et Finance avancée
+
+| Code canonique | Expérience dédiée |
+|---|---|
+| `FINANCE_ACCOUNTING` | Plan comptable, comptes, exercices, périodes, journaux, écritures, grand livre, balance, règles et anomalies |
+| `FINANCE_TAX` | Codes fiscaux, taux à date d’effet et comptes fiscaux |
+| `FINANCE_CLOSE` | Checklist, blocages, approbation, fermeture et réouverture contrôlée |
+| `FINANCE_STATEMENTS` | Aperçus, états financiers et versions publiées immuables |
+| `FINANCE_ASSETS` | Capitalisation, registre d’immobilisations et amortissement linéaire |
+| `FINANCE_INVENTORY` | Couches de coût moyen pondéré, valorisation et versions publiées |
+
+Les six modules sont `PROFESSIONAL_READY` et `commercializable: false`. Ils ne deviennent `COMMERCIAL_READY` qu’après validation E2E authentifiée du propriétaire, Production stable et décision commerciale explicite.
 
 ## Module global de relation utilisateur
 
-`COMPANY_RELATIONSHIPS` est un module global du compte DTSC, accessible à `/enterprise-links` sans organisation active. Il ne doit pas être confondu avec un module tenant ni recréé comme alias concurrent.
+`COMPANY_RELATIONSHIPS` est un module global du compte DTSC, accessible à `/enterprise-links` sans organisation active. Il ne doit pas être confondu avec un module tenant ni recréé comme alias concurrent. Une relation active ne donne aucun accès automatique aux modules Finance.
 
 ## Finance commune
 
 `FINANCE_OVERVIEW`, `FINANCE_RECEIVABLES`, `FINANCE_PAYABLES`, `FINANCE_PAYMENTS`, `FINANCE_TREASURY`, `FINANCE_CASH`, `FINANCE_BANK`, `FINANCE_RECONCILIATION`, `FINANCE_ACCOUNTING`, `FINANCE_TAX`, `FINANCE_CLOSE`, `FINANCE_STATEMENTS`, `FINANCE_ASSETS` et `FINANCE_INVENTORY` restent soumis au registre, au membership, au plan, aux dépendances et aux permissions côté serveur.
 
-Les chaînes de l’itération 3 respectent les frontières suivantes :
+Les chaînes respectent les frontières suivantes :
 
 ```text
 commande ≠ facture
-paie calculée ≠ paiement effectué
+facture ≠ écriture comptable
+paie calculée ≠ paiement effectué ≠ écriture de paie
 actif opérationnel ≠ immobilisation comptable
 stock physique ≠ valorisation comptable
+rapport dynamique ≠ version publiée
 ```
+
+Le moteur commun reste l’unique autorité pour la partie double, les clés d’idempotence, les contrepassations et les écritures `POSTED`.
 
 ## Health
 
