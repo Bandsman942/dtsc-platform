@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Ventes et dispensation
 
-**Code canonique :** `SALES_DISPENSATION`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `SALES_DISPENSATION`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Expérience
@@ -22,5 +22,5 @@ Les utilisateurs Finance voient les références financières nécessaires, pas 
 
 ## Validation
 
-QA automatisée : FEFO, lots vendables, stock, facture/paiement communs, idempotence et audit.  
+QA automatisée : FEFO, lots vendables, stock, facture/paiement communs, idempotence et audit.
 E2E propriétaire : scénarios `I06-P-002` et `I06-P-003`.
