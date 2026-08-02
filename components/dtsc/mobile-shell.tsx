@@ -60,8 +60,18 @@ const primaryItems = [
   { href: "/notifications", labelKey: "navigation.notifications", fallback: "Notifications", icon: Bell },
 ];
 
+function navigationPath(href: string) {
+  if (!href.startsWith("http://") && !href.startsWith("https://")) return href;
+  try {
+    return new URL(href).pathname || "/";
+  } catch {
+    return href;
+  }
+}
+
 function navigationItemIsActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const targetPath = navigationPath(href);
+  return pathname === targetPath || pathname.startsWith(`${targetPath}/`);
 }
 
 export function MobilePwaHeader({
@@ -183,7 +193,7 @@ export function MobilePwaHeader({
           label={`${getCompanyRelationshipsLabel(locale, true)}${pendingCompanyRelationships > 0 ? ` (${pendingCompanyRelationships > 99 ? "99+" : pendingCompanyRelationships})` : ""}`}
         />
         {pendingEnterpriseInvitations > 0 && <QuickChip href="/enterprise-invitations" active={pathname.startsWith("/enterprise-invitations")} icon={UserPlus} label={`${translate(locale, "navigation.invitations")} (${pendingEnterpriseInvitations})`} />}
-        {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={pathname.startsWith("/admin")} icon={Shield} label={translate(locale, "navigation.admin")} />}
+        {adminAllowed && <QuickChip href={getConsoleUrl("/admin")} active={navigationItemIsActive(pathname, getConsoleUrl("/admin"))} icon={Shield} label={translate(locale, "navigation.admin")} />}
         <QuickChip href="/settings" active={pathname.startsWith("/settings")} icon={Settings} label={translate(locale, "navigation.settings")} />
         <QuickChip href="/profile" active={pathname.startsWith("/profile")} icon={User} label={translate(locale, "navigation.profile")} />
         <button type="button" onClick={() => void signOut()} className="flex shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 px-3 py-2 text-xs font-black text-dtsc-muted">
@@ -340,10 +350,10 @@ export function MobileBottomNavigation({
         {showInternalModules && canAccessAdministration(user.role) && (
           <Link
             href={getConsoleUrl("/admin")}
-            aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+            aria-current={navigationItemIsActive(pathname, getConsoleUrl("/admin")) ? "page" : undefined}
             className={cn(
               "flex min-h-9 shrink-0 snap-center items-center gap-2 rounded-full border px-3 py-1.5 text-[0.68rem] font-black",
-              pathname.startsWith("/admin") ? "border-cyan-300/50 bg-cyan-400/16 text-cyan-500" : "border-transparent bg-dtsc-page/74 text-dtsc-muted",
+              navigationItemIsActive(pathname, getConsoleUrl("/admin")) ? "border-cyan-300/50 bg-cyan-400/16 text-cyan-500" : "border-transparent bg-dtsc-page/74 text-dtsc-muted",
             )}
           >
             <Shield className="h-3.5 w-3.5" />
