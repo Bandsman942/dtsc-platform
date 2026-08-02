@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
@@ -23,6 +24,11 @@ export async function reverseJournalEntry(
       return tx.enterpriseJournalEntry.findFirstOrThrow({ where: { id: existing.reversalEntryId, organizationId }, include: { lines: true } });
     }
     if (original.status !== "POSTED") throw new EnterpriseAccountingError("ONLY_POSTED_ENTRY_CAN_BE_REVERSED", 409);
+    assertIndependentActor({
+      actorUserId,
+      relatedUserIds: [original.preparedByUserId, original.approvedByUserId, original.postedByUserId],
+      errorCode: "JOURNAL_ENTRY_SELF_REVERSAL_FORBIDDEN",
+    });
     const period = await getPostingPeriod(tx, organizationId, input.accountingDate, { allowSoftClosed: true });
     const reversal = await tx.enterpriseJournalEntry.create({
       data: {
@@ -33,7 +39,7 @@ export async function reverseJournalEntry(
         accountingDate: input.accountingDate,
         documentDate: input.accountingDate,
         reference: original.number,
-        description: `Reversal of ${original.number}: ${input.reason}`,
+        description: `Contrepassation de ${original.number} : ${input.reason}`,
         sourceModule: original.sourceModule,
         sourceEntityType: "EnterpriseJournalEntryReversal",
         sourceEntityId: original.id,
@@ -59,7 +65,7 @@ export async function reverseJournalEntry(
             siteId: line.siteId,
             assetId: line.assetId,
             inventoryItemId: line.inventoryItemId,
-            description: line.description ? `Reversal: ${line.description}` : `Reversal ${original.number}`,
+            description: line.description ? `Contrepassation : ${line.description}` : `Contrepassation ${original.number}`,
             debit: line.credit,
             credit: line.debit,
             transactionCurrencyCode: line.transactionCurrencyCode,
