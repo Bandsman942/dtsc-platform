@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Fournisseurs et commandes
 
-**Code canonique :** `SUPPLIERS_ORDERS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `SUPPLIERS_ORDERS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Convergence
@@ -22,5 +22,5 @@ Les fournisseurs et commandes sont filtrés par `organizationId`. Les validation
 
 ## Validation
 
-QA automatisée : Business Party commun, achat commun, dette/paiement communs et tenant isolation.  
+QA automatisée : Business Party commun, achat commun, dette/paiement communs et tenant isolation.
 E2E propriétaire : campagne `F-003` et scénario Pharmacy de réception.
