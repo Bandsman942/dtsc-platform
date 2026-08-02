@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { EnterpriseFinanceWorkspace } from "@/components/enterprise/enterprise-finance-workspace";
+import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
 import { EnterpriseOperationalFinanceWorkspace } from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -49,7 +49,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
           canManage={canManage}
         />
       ) : (
-        <EnterpriseFinanceWorkspace
+        <EnterpriseAdvancedFinanceWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
           definition={definition}
