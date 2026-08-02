@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { BookOpen, CircleHelp, LifeBuoy, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
   const [metrics, setMetrics] = useState<Record<string, number>>({});
   const [extra, setExtra] = useState<TExtra>({} as TExtra);
   const [canManage, setCanManage] = useState(false);
+  const [canWrite, setCanWrite] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const serializedParams = params.toString();
@@ -31,14 +32,15 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
     setError("");
     try {
       const response = await fetch(`${endpoint}?${serializedParams}`, { cache: "no-store" });
-      const body = await response.json().catch(() => null) as (TExtra & { items?: T[]; pagination?: ProfessionalPagination; metrics?: Record<string, number>; canManage?: boolean; message?: string; error?: string }) | null;
+      const body = await response.json().catch(() => null) as (TExtra & { items?: T[]; pagination?: ProfessionalPagination; metrics?: Record<string, number>; canManage?: boolean; canWrite?: boolean; message?: string; error?: string }) | null;
       if (!response.ok || !body?.items || !body.pagination) throw new Error(body?.message || body?.error || "Chargement impossible.");
       setItems(body.items);
       setPagination(body.pagination);
       setMetrics(body.metrics || {});
       setCanManage(Boolean(body.canManage));
+      setCanWrite(Boolean(body.canWrite ?? body.canManage));
       const rest = Object.fromEntries(
-        Object.entries(body).filter(([key]) => !["items", "pagination", "metrics", "canManage"].includes(key)),
+        Object.entries(body).filter(([key]) => !["items", "pagination", "metrics", "canManage", "canWrite"].includes(key)),
       );
       setExtra(rest as TExtra);
     } catch (loadError) {
@@ -49,10 +51,10 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
   }, [endpoint, serializedParams]);
 
   useEffect(() => { void load(); }, [load, refreshKey]);
-  return { items, pagination, metrics, extra, canManage, loading, error, reload: load };
+  return { items, pagination, metrics, extra, canManage, canWrite, loading, error, reload: load };
 }
 
-export async function professionalMutation(endpoint: string, payload: unknown, method: "POST" | "PATCH" = "POST") {
+export async function professionalMutation(endpoint: string, payload: unknown, method: "POST" | "PATCH" | "DELETE" = "POST") {
   const response = await fetch(endpoint, {
     method,
     headers: { "content-type": "application/json" },
@@ -74,15 +76,32 @@ export function ProfessionalTabs<T extends string>({
   items: Array<{ id: T; label: string; count?: number }>;
   label?: string;
 }) {
+  const railRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const active = rail.querySelector<HTMLElement>("[data-professional-tab-active='true']");
+    active?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [value]);
+
   return (
-    <nav aria-label={label} className="-mx-1 flex max-w-full touch-pan-x snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav
+      ref={railRef}
+      aria-label={label}
+      data-professional-tabs
+      data-horizontal-rail
+      className="flex w-full min-w-0 max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-0.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {items.map((item) => (
         <button
           key={item.id}
           type="button"
+          data-professional-tab-active={value === item.id ? "true" : undefined}
+          aria-pressed={value === item.id}
           onClick={() => onChange(item.id)}
           className={cn(
-            "min-h-10 shrink-0 snap-start rounded-full border px-3.5 py-2 text-sm font-black transition",
+            "min-h-10 shrink-0 snap-center whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-black transition",
             value === item.id ? "border-dtsc-blue bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-soft",
           )}
         >
