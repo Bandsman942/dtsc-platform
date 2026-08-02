@@ -1,17 +1,18 @@
 # Maturité commerciale ERP — DTSC Platform
 
-Version : 1
-Évaluation initiale : 1 août 2026
+Version : 3
+Évaluation courante : 2 août 2026
 
 ## Sources exécutables
 
 - Registre canonique : `lib/enterprise/module-registry*.json` et `module-registry.ts`.
-- Évaluation produit : `lib/enterprise/module-commercial-readiness.json`.
-- Résolution typée : `lib/enterprise/module-commercial-readiness.ts`.
-- Contrôle CI : `scripts/qa-erp-commercial-readiness-checks.mjs`.
+- Évaluation produit de base : `lib/enterprise/module-commercial-readiness.json`.
+- Complément itération 3 : `lib/enterprise/module-commercial-readiness-iteration-03.json`.
+- Résolution typée fusionnée : `lib/enterprise/module-commercial-readiness.ts`.
+- Contrôle CI : `scripts/qa-erp-commercial-readiness-checks.mjs` et `scripts/qa-erp-professional-iteration-03-checks.mjs`.
 - Visualisation autorisée : `/admin/erp-readiness`.
 
-La matrice affichée dans l’administration est calculée à partir de ces sources. Ce document explique la politique ; il ne duplique pas manuellement toute la liste des modules.
+La matrice affichée dans l’administration est calculée à partir de ces sources. Ce document explique la politique ; il ne remplace pas le manifeste exécutable.
 
 ## Lecture de la matrice
 
@@ -31,26 +32,51 @@ Pour chaque module, l’administration expose :
 - la date d’évaluation ;
 - la commercialisabilité.
 
-## Évaluation initiale prudente
+## Politique prudente
 
-Cette itération n’effectue aucune promotion automatique vers `COMMERCIAL_READY`.
+Aucune promotion automatique vers `COMMERCIAL_READY` n’est autorisée.
 
-Les modules sans preuve produit dédiée reçoivent une évaluation conservatrice `READ_ONLY_UI`, même s’ils sont `ACTIVE`. Les modules masqués, planifiés ou retirés sont évalués `BACKEND_READY`. Les sections d’administration consolidées peuvent être `PROFESSIONAL_READY`, mais ne sont pas commercialisées comme modules autonomes.
+Les modules sans preuve produit dédiée reçoivent une évaluation conservatrice. Les modules masqués, planifiés ou retirés restent `BACKEND_READY`. Une section d’administration consolidée peut être `PROFESSIONAL_READY` sans être vendue comme module autonome.
 
-Les pilotes évalués explicitement comprennent notamment :
+`COMMERCIAL_READY` exige simultanément :
 
-| Surface | Maturité initiale | Motif principal |
+- un parcours métier complet ;
+- formulaire, détail et actions ;
+- français commercial et internationalisation ;
+- expérience mobile ;
+- permissions et audit ;
+- documentation, onboarding et support ;
+- observabilité et QA ;
+- packaging commercial ;
+- validation fonctionnelle manuelle du propriétaire.
+
+Les tests automatisés verts ne remplacent jamais la validation E2E authentifiée.
+
+## Réévaluation de l’itération 2
+
+Les cinq modules ciblés disposent de workspaces dédiés, formulaires, détails, actions, onboarding, aide, documentation, mobile et QA ciblée. Leur promotion finale reste individuelle et dépend des contrôles CI, des scénarios navigateur authentifiés et des smoke tests Production.
+
+## Réévaluation de l’itération 3
+
+Les modules suivants sont évalués `PROFESSIONAL_READY` et restent `commercializable: false` :
+
+| Module | Preuves principales | Critères encore ouverts |
 |---|---|---|
-| Tâches & opérations | `OPERATIONAL_UI` | Flux principaux, formulaire, détail, actions et QA présents ; recette commerciale complète ouverte |
-| Demandes internes | `OPERATIONAL_UI` | Cycle de demande exploitable ; promotion commerciale non déclarée |
-| Validations | `OPERATIONAL_UI` | File et séparation des responsabilités opérationnelles |
-| Réunions | `OPERATIONAL_UI` | Participants, décisions et deep links ; recette finale ouverte |
-| Workflows | `PROFESSIONAL_READY` | Moteur, interface, audit, documentation et QA dédiés |
-| Budgets | `OPERATIONAL_UI` | Flux métier disponible ; finition linguistique et commerciale restante |
-| Rapports | `OPERATIONAL_UI` | Sources métier réelles ; adaptation par rôle et finition à poursuivre |
-| Assistant IA entreprise | `PROFESSIONAL_READY` | Expérience dédiée, isolation tenant et QA ; packaging final distinct |
+| Ventes, devis et commandes | Devis, transitions, conversion, reliquats, livraisons idempotentes | E2E propriétaire, packaging final |
+| Fournisseurs, achats et réceptions | Référentiel fournisseurs, demandes, commandes, réceptions | E2E propriétaire, packaging final |
+| Stock, transferts et inventaires | Soldes, transferts, inventaires, ajustements, protection stock négatif | E2E propriétaire, validation scanner sur appareil |
+| Ressources humaines | Dossier sans compte, consentement, contrats, organigramme | E2E propriétaire, packaging final |
+| Temps et présences | Congés, chevauchements, feuilles de temps, approbation | E2E propriétaire, packaging final |
+| Paie opérationnelle | Périodes, population, calcul, approbation, bulletins, recréation après annulation | E2E propriétaire, packaging final |
+| Projets et services | Projet, équipe, jalons, risques, détail professionnel | E2E propriétaire, validation du partage client |
+| Temps projet et livrables | Temps lié au projet, soumission, corrections et validation | E2E propriétaire, validation externe explicite |
+| Actifs et maintenance | Registre, affectation, retour, incidents, maintenance | E2E propriétaire, packaging final |
 
-La liste exacte et courante est toujours celle rendue par le manifeste et la page d’administration.
+Le commentaire opposable pour ces modules est :
+
+> Tests E2E manuels préparés — validation du propriétaire en attente.
+
+Aucun de ces modules ne peut être affiché comme `COMMERCIAL_READY` avant confirmation explicite du propriétaire.
 
 ## Anomalies bloquantes
 
@@ -64,13 +90,15 @@ Le contrôle CI échoue notamment si :
 - les permissions, l’audit, l’i18n, le responsive ou la QA manquent ;
 - des critères restent ouverts ;
 - une preuve déclarée est introuvable ;
-- un override cible un code absent du registre.
+- un override cible un code absent du registre ;
+- un module de l’itération 3 repasse silencieusement par le workspace générique ;
+- un rapport déclare les tests E2E réussis sans preuve du propriétaire.
 
 ## Maintenance
 
 Toute itération de professionnalisation doit :
 
-1. fermer les critères réellement traités ;
+1. fermer uniquement les critères réellement traités ;
 2. ajouter les preuves correspondantes ;
 3. laisser visibles les lacunes restantes ;
 4. exécuter les QA du domaine et le contrôle de maturité ;
@@ -78,7 +106,3 @@ Toute itération de professionnalisation doit :
 6. déclasser immédiatement un module lorsqu’une preuve majeure n’est plus vraie.
 
 Le statut `ACTIVE` demeure un statut technique. Il ne doit jamais être réutilisé comme argument commercial.
-
-## Réévaluation de l’itération 2
-
-Les cinq modules ciblés disposent de workspaces dédiés, formulaires, détails, actions, onboarding, aide, documentation, mobile et QA ciblée. Leur promotion finale reste individuelle et dépend des contrôles CI, des scénarios navigateur authentifiés et des smoke tests Production. Fournisseurs et RH ne sont pas promus par cette intégration transversale.
