@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Produits et médicaments
 
-**Code canonique :** `MEDICINES_PRODUCTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `MEDICINES_PRODUCTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -22,5 +22,5 @@ Toutes les références et écritures sont limitées à l’organisation active.
 
 ## Validation
 
-QA automatisée : modèle dédié, catalogue commun, routes privées, formulaires, français et responsive.  
+QA automatisée : modèle dédié, catalogue commun, routes privées, formulaires, français et responsive.
 E2E propriétaire : scénario `I06-P-001`.
