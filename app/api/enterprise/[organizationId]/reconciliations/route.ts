@@ -36,6 +36,7 @@ export async function GET(req: Request, { params }: Params) {
   const statementById = new Map(statements.map((statement) => [statement.id, statement]));
   const items = rawItems.map((item) => ({
     ...item,
+    differenceAmount: item.reconciledDifference,
     bankStatement: item.bankStatementId ? statementById.get(item.bankStatementId) || null : null,
   }));
 

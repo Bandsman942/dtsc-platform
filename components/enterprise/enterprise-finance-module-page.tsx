@@ -1,5 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { EnterpriseFinanceWorkspace } from "@/components/enterprise/enterprise-finance-workspace";
+import {
+  EnterpriseOperationalFinanceWorkspace,
+  OPERATIONAL_FINANCE_MODULE_CODES,
+} from "@/components/enterprise/professional/enterprise-operational-finance-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
@@ -30,16 +34,27 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
 
   const definition = access.definition || getEnterpriseModuleDefinition(moduleCode);
   if (!definition || definition.code !== moduleCode || definition.routeKind !== "DEDICATED_CORE") notFound();
+  const canManage = MANAGER_ROLES.has(membership.role);
 
   return (
     <AppShell user={user}>
-      <EnterpriseFinanceWorkspace
-        organizationId={organizationId}
-        organizationName={organization.name}
-        definition={definition}
-        locale={user.locale}
-        canManage={MANAGER_ROLES.has(membership.role)}
-      />
+      {OPERATIONAL_FINANCE_MODULE_CODES.has(moduleCode) ? (
+        <EnterpriseOperationalFinanceWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={definition}
+          locale={user.locale}
+          canManage={canManage}
+        />
+      ) : (
+        <EnterpriseFinanceWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={definition}
+          locale={user.locale}
+          canManage={canManage}
+        />
+      )}
     </AppShell>
   );
 }
