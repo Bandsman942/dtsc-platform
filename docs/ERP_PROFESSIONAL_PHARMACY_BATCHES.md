@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Lots et péremptions
 
-**Code canonique :** `BATCH_EXPIRY`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `BATCH_EXPIRY`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -22,5 +22,5 @@ Un lot expiré, rappelé ou bloqué n’est jamais vendable. Les routes revalide
 
 ## Validation
 
-QA automatisée : modèle lot dédié, péremption, quarantaine, rappel, permissions et responsive.  
+QA automatisée : modèle lot dédié, péremption, quarantaine, rappel, permissions et responsive.
 E2E propriétaire : scénarios `I06-P-001`, `I06-P-003` et `I06-P-005`.
