@@ -1,7 +1,7 @@
 # Module professionnel Health — Consultations
 
-**Code canonique :** `CONSULTATIONS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `CONSULTATIONS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -26,5 +26,5 @@ Une consultation peut alimenter le dossier médical, le laboratoire, la prescrip
 
 ## Validation
 
-QA automatisée : modèles dédiés, constantes, transitions, clôture, permissions, audit et responsive.  
+QA automatisée : modèles dédiés, constantes, transitions, clôture, permissions, audit et responsive.
 E2E propriétaire : scénario `I06-H-002` et confidentialité `I06-H-005`.
