@@ -133,7 +133,7 @@ export async function GET(req: Request, { params }: Params) {
   ]);
   const inventoryItemById = new Map(inventoryItems.map((item) => [item.id, item.catalogItem]));
   const warehouseById = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]));
-  const total = Number(countRows[0]?.count || 0n);
+  const total = countRows[0]?.count === undefined ? 0 : Number(countRows[0].count);
 
   await writeApiLog({
     request: req,
