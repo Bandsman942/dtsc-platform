@@ -5,6 +5,7 @@ import {
   type EnterpriseFinanceAction,
   type EnterpriseFinanceModuleCode,
 } from "@/lib/enterprise/accounting/constants";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
 
 const READ_ACTIONS = new Set<EnterpriseFinanceAction>(["view", "view_sensitive", "export"]);
@@ -64,8 +65,6 @@ export function assertIndependentActor({
   errorCode: string;
 }) {
   if (relatedUserIds.some((value) => value === actorUserId)) {
-    const error = new Error(errorCode);
-    error.name = "EnterpriseFinanceSeparationOfDutiesError";
-    throw error;
+    throw new EnterpriseAccountingError(errorCode, 409);
   }
 }
