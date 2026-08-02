@@ -1,7 +1,7 @@
 # Module professionnel Health — Rendez-vous
 
-**Code canonique :** `APPOINTMENTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `APPOINTMENTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -28,5 +28,5 @@ Le rendez-vous appartient à un patient, peut être assigné à un membre autori
 
 ## Validation
 
-QA automatisée : modèles dédiés, transitions, conversion unique, permissions, audit et responsive.  
+QA automatisée : modèles dédiés, transitions, conversion unique, permissions, audit et responsive.
 E2E propriétaire : scénario `I06-H-002` et transversal `I06-X-001`.
