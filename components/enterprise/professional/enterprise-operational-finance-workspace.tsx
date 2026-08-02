@@ -6,17 +6,6 @@ import { EnterpriseFinanceOverviewWorkspace } from "@/components/enterprise/prof
 import { EnterpriseFinancePaymentsTreasuryWorkspace } from "@/components/enterprise/professional/enterprise-finance-payments-treasury-workspace";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
-export const OPERATIONAL_FINANCE_MODULE_CODES = new Set([
-  "FINANCE_OVERVIEW",
-  "FINANCE_RECEIVABLES",
-  "FINANCE_PAYABLES",
-  "FINANCE_PAYMENTS",
-  "FINANCE_TREASURY",
-  "FINANCE_CASH",
-  "FINANCE_BANK",
-  "FINANCE_RECONCILIATION",
-]);
-
 export function EnterpriseOperationalFinanceWorkspace(props: {
   organizationId: string;
   organizationName: string;
