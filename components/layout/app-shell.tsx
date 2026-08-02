@@ -30,6 +30,7 @@ import { getEnterpriseActivityBlocks } from "@/lib/enterprise/enterprise-activit
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import { getVisibleNotificationWhereForSession } from "@/lib/notification-access";
+import { COMPANY_RELATIONSHIP_USER_ACTION_STATUSES } from "@/lib/navigation/company-relationships";
 import { prisma } from "@/lib/prisma";
 import { getVisiblePromotionalBannersForUser } from "@/lib/promotional-banners";
 
@@ -59,7 +60,19 @@ export async function AppShell({
   const notificationWhere = session
     ? await getVisibleNotificationWhereForSession(session)
     : { userId: user.id, organizationId: null };
-  const [unreadNotifications, latestUnreadNotifications, unreadCollaboratorMessages, pendingEnterpriseInvitations, employeeRecord, organizationMemberships, enterpriseModules, enterpriseActivityBlocks, enterpriseAdminDecision, promotionalBanners] = await Promise.all([
+  const [
+    unreadNotifications,
+    latestUnreadNotifications,
+    unreadCollaboratorMessages,
+    pendingEnterpriseInvitations,
+    pendingCompanyRelationships,
+    employeeRecord,
+    organizationMemberships,
+    enterpriseModules,
+    enterpriseActivityBlocks,
+    enterpriseAdminDecision,
+    promotionalBanners,
+  ] = await Promise.all([
     prisma.notification.count({
       where: {
         ...notificationWhere,
@@ -76,6 +89,12 @@ export async function AppShell({
       : Promise.resolve([]),
     getUnreadCollaborationMessageCount(session),
     getPendingEnterpriseInvitationCount(user.id),
+    prisma.enterpriseIdentityLink.count({
+      where: {
+        userId: user.id,
+        status: { in: [...COMPANY_RELATIONSHIP_USER_ACTION_STATUSES] },
+      },
+    }),
     prisma.hrcfoEmployee.findFirst({
       where: { userId: user.id, status: { not: "EXITED" } },
       select: { id: true },
@@ -137,6 +156,7 @@ export async function AppShell({
           unreadNotifications={unreadNotifications}
           unreadCollaboratorMessages={unreadCollaboratorMessages}
           pendingEnterpriseInvitations={pendingEnterpriseInvitations}
+          pendingCompanyRelationships={pendingCompanyRelationships}
           currentOrganizationId={activeOrganizationId}
           organizationOptions={organizationOptions}
           showInternalModules={dtscInternalContext}
@@ -164,6 +184,7 @@ export async function AppShell({
               unreadNotifications={unreadNotifications}
               unreadCollaboratorMessages={unreadCollaboratorMessages}
               pendingEnterpriseInvitations={pendingEnterpriseInvitations}
+              pendingCompanyRelationships={pendingCompanyRelationships}
               showEmployeeActivities={showEmployeeActivities}
               showInternalModules={dtscInternalContext}
               showCollaborationModule={showCollaborationModule}
@@ -208,6 +229,7 @@ export async function AppShell({
             unreadNotifications={unreadNotifications}
             unreadCollaboratorMessages={unreadCollaboratorMessages}
             pendingEnterpriseInvitations={pendingEnterpriseInvitations}
+            pendingCompanyRelationships={pendingCompanyRelationships}
             showEmployeeActivities={showEmployeeActivities}
             showInternalModules={dtscInternalContext}
             showCollaborationModule={showCollaborationModule}

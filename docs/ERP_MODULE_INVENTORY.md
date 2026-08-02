@@ -1,8 +1,8 @@
 # Inventaire canonique des modules ERP DTSC
 
-Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry` et `pnpm qa:erp-final-cutover`.
+Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON versionnés. Contrôles : `pnpm audit:enterprise-modules`, `pnpm qa:enterprise-module-registry`, `pnpm qa:erp-final-cutover` et `pnpm qa:erp-iteration-03`.
 
-## Statuts
+## Statuts techniques
 
 - `ACTIVE` : modèle/service, route, workspace, permission, entitlement et QA réels.
 - `BETA` : implémentation réelle encore sous observation, jamais simple CRUD générique.
@@ -11,21 +11,63 @@ Source exécutable : `lib/enterprise/module-registry.ts` et ses fichiers JSON ve
 - `DEPRECATED` : visible uniquement pendant une transition documentée.
 - `RETIRED` : retiré du produit actif.
 
+Le statut technique ne constitue pas une preuve de commercialisabilité. La maturité commerciale est évaluée séparément.
+
 ## Socle commun
 
 | Groupe | Modules canoniques actifs |
 |---|---|
 | Opérations | `TASKS_OPERATIONS`, `INTERNAL_REQUESTS`, `VALIDATIONS`, `MEETINGS`, `WORKFLOWS` |
-| Commercial | tiers, CRM, devis, contrats, commandes, livraisons et ventes dédiées |
-| Achats & ressources | `SUPPLIERS_PURCHASES`, catalogue, sites, entrepôts, stock commun, `DOCUMENTS` |
-| RH client | collaborateurs, absences, timesheets et paie opérationnelle dédiés |
-| Projets & actifs | projets, livrables, actifs et maintenances dédiés |
+| Référentiels commerciaux | `CRM_CUSTOMERS`, `CATALOG`, `SITES_WAREHOUSES`, `CRM_PIPELINE`, `CONTRACTS` |
+| Ventes | `SALES_QUOTES_ORDERS` |
+| Achats | `SUPPLIERS_PURCHASES` |
+| Stock | `INVENTORY_LOGISTICS` |
+| RH client | `HUMAN_RESOURCES`, `TIME_ATTENDANCE`, `PAYROLL_OPERATIONS` |
+| Projets | `PROJECTS_SERVICES`, `TIME_DELIVERABLES` |
+| Actifs | `ASSETS_MAINTENANCE` |
 | Intelligence | `AI_ASSISTANT` |
 | Analytics | `REPORTS` et rapports dédiés |
 
+## Modules professionnalisés par itération
+
+### Itération 2/6 — Référentiels
+
+`CRM_CUSTOMERS`, `CATALOG`, `SITES_WAREHOUSES`, `CRM_PIPELINE` et `CONTRACTS` utilisent des expériences dédiées. La relation entre une fiche métier et un compte DTSC reste fondée sur le consentement.
+
+### Itération 3/6 — Chaînes opérationnelles
+
+Les codes suivants n’utilisent plus le workspace générique comme expérience principale :
+
+| Code canonique | Expérience dédiée |
+|---|---|
+| `SALES_QUOTES_ORDERS` | Devis, commandes, reliquats et livraisons |
+| `SUPPLIERS_PURCHASES` | Fournisseurs, demandes, commandes et réceptions |
+| `INVENTORY_LOGISTICS` | Stock, transferts, inventaires et ajustements |
+| `HUMAN_RESOURCES` | Collaborateurs, identité relationnelle, contrats et organigramme |
+| `TIME_ATTENDANCE` | Congés et feuilles de temps |
+| `PAYROLL_OPERATIONS` | Périodes, calcul, approbation et bulletins |
+| `PROJECTS_SERVICES` | Projets, équipe, jalons et risques |
+| `TIME_DELIVERABLES` | Temps projet et livrables |
+| `ASSETS_MAINTENANCE` | Actifs, affectations, retours, incidents et maintenance |
+
+Leur maturité courante est `PROFESSIONAL_READY`, avec `commercializable: false` tant que les E2E authentifiés du propriétaire et le packaging final ne sont pas confirmés.
+
+## Module global de relation utilisateur
+
+`COMPANY_RELATIONSHIPS` est un module global du compte DTSC, accessible à `/enterprise-links` sans organisation active. Il ne doit pas être confondu avec un module tenant ni recréé comme alias concurrent.
+
 ## Finance commune
 
-`FINANCE_OVERVIEW`, `FINANCE_RECEIVABLES`, `FINANCE_PAYABLES`, `FINANCE_PAYMENTS`, `FINANCE_TREASURY`, `FINANCE_CASH`, `FINANCE_BANK`, `FINANCE_RECONCILIATION`, `FINANCE_ACCOUNTING`, `FINANCE_TAX`, `FINANCE_CLOSE`, `FINANCE_STATEMENTS`, `FINANCE_ASSETS` et `FINANCE_INVENTORY` sont soumis au registre, au membership, au plan, aux dépendances et aux permissions côté serveur.
+`FINANCE_OVERVIEW`, `FINANCE_RECEIVABLES`, `FINANCE_PAYABLES`, `FINANCE_PAYMENTS`, `FINANCE_TREASURY`, `FINANCE_CASH`, `FINANCE_BANK`, `FINANCE_RECONCILIATION`, `FINANCE_ACCOUNTING`, `FINANCE_TAX`, `FINANCE_CLOSE`, `FINANCE_STATEMENTS`, `FINANCE_ASSETS` et `FINANCE_INVENTORY` restent soumis au registre, au membership, au plan, aux dépendances et aux permissions côté serveur.
+
+Les chaînes de l’itération 3 respectent les frontières suivantes :
+
+```text
+commande ≠ facture
+paie calculée ≠ paiement effectué
+actif opérationnel ≠ immobilisation comptable
+stock physique ≠ valorisation comptable
+```
 
 ## Health
 
@@ -35,9 +77,9 @@ Décisions finales :
 
 | Code | Statut final | Motif |
 |---|---|---|
-| `MEDICAL_CONFIDENTIALITY` | `HIDDEN` | aucun workspace métier dédié indépendant ; confidentialité appliquée dans les modules réels |
-| `HEALTH_SETTINGS` | `HIDDEN` | paramètres gérés dans l’administration sans CRUD sectoriel générique |
-| `HEALTH_REPORTS` | `HIDDEN` | rapports canoniques à construire sur les sources dédiées, sans double comptage |
+| `MEDICAL_CONFIDENTIALITY` | `HIDDEN` | confidentialité appliquée dans les modules réels |
+| `HEALTH_SETTINGS` | `HIDDEN` | paramètres gérés dans l’administration |
+| `HEALTH_REPORTS` | `HIDDEN` | rapports canoniques à construire sans double comptage |
 
 ## Pharmacy
 
@@ -47,16 +89,12 @@ Pharmacy conserve lots, FEFO, péremption, rappels, qualité, pharmacovigilance 
 
 ## Administration consolidée
 
-`ADMIN_DASHBOARD`, `COLLABORATORS_POSITIONS`, `DEPARTMENTS`, `PERMISSIONS`, `SETTINGS` et `AUDIT_LOGS` restent uniquement des aliases/redirections vers `/enterprise-admin`. Ils ne sont pas des modules métier autonomes.
+`ADMIN_DASHBOARD`, `COLLABORATORS_POSITIONS`, `DEPARTMENTS`, `PERMISSIONS`, `SETTINGS` et `AUDIT_LOGS` restent uniquement des aliases ou redirections vers `/enterprise-admin`. Ils ne sont pas des modules métier autonomes.
 
 ## Legacy
 
 - `EnterpriseCoreRecord` : `LEGACY_READ_ONLY`.
 - `EnterpriseSectorRecord` : `LEGACY_READ_ONLY`.
 - `EnterpriseWorkflow` : `LEGACY_READ_ONLY` ; Workflow Engine v2 actif.
-- Modules fantômes : aucun code sans modèle/service, route, workspace, permission, entitlement et QA ne peut rester `ACTIVE`.
-- Secteurs futurs : `PLANNED` ou `HIDDEN`, jamais carte ou route active.
-
-## Mise à jour — Itération 2/6 (2026-08-01)
-
-`CRM_CUSTOMERS`, `CATALOG`, `SITES_WAREHOUSES`, `CRM_PIPELINE` et `CONTRACTS` ne dépendent plus du workspace générique comme expérience principale. `HUMAN_RESOURCES` et `SUPPLIERS_PURCHASES` reçoivent uniquement l’intégration d’identité transversale ; leur maturité commerciale globale n’est pas automatiquement promue.
+- Aucun code sans modèle/service, route, workspace, permission, entitlement et QA ne peut rester `ACTIVE`.
+- Les secteurs futurs restent `PLANNED` ou `HIDDEN`, jamais carte ou route active.

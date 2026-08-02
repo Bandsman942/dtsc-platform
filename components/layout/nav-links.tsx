@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ElementType, ReactNode } from "react";
-import { Bell, Bot, BriefcaseBusiness, CalendarCheck, CalendarDays, CreditCard, Headphones, Layers3, LayoutDashboard, Megaphone, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
+import { Bell, Bot, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, CreditCard, Headphones, Layers3, LayoutDashboard, Megaphone, Settings, Shield, User, UserPlus, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
@@ -11,8 +11,9 @@ import { getConsoleUrl, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
 import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
 import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
+import { COMPANY_RELATIONSHIPS_NAVIGATION, getCompanyRelationshipsLabel } from "@/lib/navigation/company-relationships";
 
- type NavItem = {
+type NavItem = {
   href: string;
   path?: string;
   label: string;
@@ -25,6 +26,7 @@ const items: NavItem[] = [
   { href: "/chat", label: "Chatbot", icon: Bot, help: "Discuter avec l'assistant DTSC et exploiter votre contexte métier." },
   { href: "/billing", label: "Abonnement", icon: CreditCard, help: "Consulter votre plan, vos limites et vos factures." },
   { href: "/company", label: "Entreprise", icon: BriefcaseBusiness, help: "Renseigner votre entreprise, vos activités et vos documents métier." },
+  { href: COMPANY_RELATIONSHIPS_NAVIGATION.href, label: COMPANY_RELATIONSHIPS_NAVIGATION.labelFr, icon: Building2, help: "Traiter vos invitations, consentements, demandes et relations actives avec les entreprises." },
   { href: "/calendar", label: "Calendrier interne", icon: CalendarDays, help: "Voir disponibilités, réunions, missions et conflits de planning." },
   { href: "/collaborators", label: "Mes collaborateurs", icon: UsersRound, help: "Créer des groupes, inviter des membres et échanger autour de vos projets." },
   { href: "/notifications", label: "Notifications", icon: Bell, help: "Lire les alertes importantes liées à votre compte." },
@@ -40,6 +42,7 @@ export function NavLinks({
   unreadNotifications = 0,
   unreadCollaboratorMessages = 0,
   pendingEnterpriseInvitations = 0,
+  pendingCompanyRelationships = 0,
   showEmployeeActivities = false,
   showInternalModules = false,
   showCollaborationModule = true,
@@ -51,6 +54,7 @@ export function NavLinks({
   unreadNotifications?: number;
   unreadCollaboratorMessages?: number;
   pendingEnterpriseInvitations?: number;
+  pendingCompanyRelationships?: number;
   showEmployeeActivities?: boolean;
   showInternalModules?: boolean;
   showCollaborationModule?: boolean;
@@ -112,7 +116,23 @@ export function NavLinks({
     const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
     const showCollaborationSignal = itemPath === "/collaborators" && unreadCollaboratorMessages > 0;
     const showInvitationSignal = itemPath === "/enterprise-invitations" && pendingEnterpriseInvitations > 0;
-    const signalCount = showInvitationSignal ? pendingEnterpriseInvitations : showNotificationSignal ? unreadNotifications : showCollaborationSignal ? unreadCollaboratorMessages : 0;
+    const showCompanyRelationshipSignal = itemPath === COMPANY_RELATIONSHIPS_NAVIGATION.href && pendingCompanyRelationships > 0;
+    const signalCount = showInvitationSignal
+      ? pendingEnterpriseInvitations
+      : showCompanyRelationshipSignal
+        ? pendingCompanyRelationships
+        : showNotificationSignal
+          ? unreadNotifications
+          : showCollaborationSignal
+            ? unreadCollaboratorMessages
+            : 0;
+    const showSignal = showNotificationSignal || showInvitationSignal || showCollaborationSignal || showCompanyRelationshipSignal;
+    const label = labelOverride
+      || (itemPath === COMPANY_RELATIONSHIPS_NAVIGATION.href
+        ? getCompanyRelationshipsLabel(locale, mobile)
+        : mobile && itemPath === "/admin"
+          ? "Admin"
+          : translate(locale, translationByHref[itemPath] || item.label));
     return (
       <Link
         key={itemPath}
@@ -129,15 +149,15 @@ export function NavLinks({
       >
         <span className="relative inline-flex">
           <item.icon className={mobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
-          {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
+          {showSignal && (
             <span className="absolute -right-1.5 -top-1.5 flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300 opacity-70" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-dtsc-surface bg-cyan-400" />
             </span>
           )}
         </span>
-        {labelOverride || (mobile && itemPath === "/admin" ? "Admin" : translate(locale, translationByHref[itemPath] || item.label))}
-        {(showNotificationSignal || showInvitationSignal || showCollaborationSignal) && (
+        {label}
+        {showSignal && (
           <span className="ml-auto rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-black leading-none text-[#001736]">
             {signalCount > 99 ? "99+" : signalCount}
           </span>

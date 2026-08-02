@@ -1,12 +1,12 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import type { ElementType } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 
 export type BusinessContextAction = {
   id: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: ElementType;
   destructive?: boolean;
   disabled?: boolean;
   hidden?: boolean;

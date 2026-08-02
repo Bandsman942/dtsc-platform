@@ -63,16 +63,16 @@ export async function professionalMutation(endpoint: string, payload: unknown, m
   return body || {};
 }
 
-export function ProfessionalTabs({
+export function ProfessionalTabs<T extends string>({
   value,
   onChange,
   items,
-  label,
+  label = "Navigation du module",
 }: {
-  value: string;
-  onChange: (value: string) => void;
-  items: Array<{ id: string; label: string; count?: number }>;
-  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  items: Array<{ id: T; label: string; count?: number }>;
+  label?: string;
 }) {
   return (
     <nav aria-label={label} className="-mx-1 flex max-w-full touch-pan-x snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

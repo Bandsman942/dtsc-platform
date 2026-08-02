@@ -1,13 +1,19 @@
 import { notFound, redirect } from "next/navigation";
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
 import { EnterpriseAiWorkspaceV2 } from "@/components/enterprise/enterprise-ai-workspace-v2";
-import { EnterpriseCommonDomainWorkspace } from "@/components/enterprise/enterprise-common-domain-workspace";
+import { EnterpriseAssetsMaintenanceWorkspace } from "@/components/enterprise/professional/enterprise-assets-maintenance-workspace";
 import { EnterpriseCatalogWorkspace } from "@/components/enterprise/professional/enterprise-catalog-workspace";
 import { EnterpriseContractsWorkspace } from "@/components/enterprise/professional/enterprise-contracts-workspace";
 import { EnterpriseCrmWorkspace } from "@/components/enterprise/professional/enterprise-crm-workspace";
 import { EnterpriseCustomersWorkspace } from "@/components/enterprise/professional/enterprise-customers-workspace";
-import { EnterpriseEmployeesIdentityWorkspace } from "@/components/enterprise/professional/enterprise-employees-identity-workspace";
+import { EnterpriseHumanResourcesWorkspace } from "@/components/enterprise/professional/enterprise-human-resources-workspace";
+import { EnterpriseInventoryOperationsWorkspace } from "@/components/enterprise/professional/enterprise-inventory-operations-workspace";
+import { EnterprisePayrollOperationsWorkspace } from "@/components/enterprise/professional/enterprise-payroll-operations-workspace";
+import { EnterpriseProcurementOperationsWorkspace } from "@/components/enterprise/professional/enterprise-procurement-operations-workspace";
+import { EnterpriseProjectsDeliverablesWorkspace } from "@/components/enterprise/professional/enterprise-projects-deliverables-workspace";
+import { EnterpriseSalesOperationsWorkspace } from "@/components/enterprise/professional/enterprise-sales-operations-workspace";
 import { EnterpriseSitesWorkspace } from "@/components/enterprise/professional/enterprise-sites-workspace";
+import { EnterpriseTimeAttendanceWorkspace } from "@/components/enterprise/professional/enterprise-time-attendance-workspace";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
 import { EnterpriseSectorModuleWorkspace } from "@/components/enterprise/enterprise-sector-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
@@ -28,15 +34,6 @@ type Params = { params: Promise<{ moduleCode: string }> };
 
 const ENTERPRISE_ADMIN_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
 const ENTERPRISE_OVERSIGHT_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
-const COMMON_DOMAIN_CODES = new Set([
-  "SALES_QUOTES_ORDERS",
-  "INVENTORY_LOGISTICS",
-  "TIME_ATTENDANCE",
-  "PAYROLL_OPERATIONS",
-  "PROJECTS_SERVICES",
-  "TIME_DELIVERABLES",
-  "ASSETS_MAINTENANCE",
-]);
 
 // Legacy QA markers retained during migration to the canonical registry:
 // canAccessEnterpriseModule / organizationId_moduleCode / !enterpriseModule.isCore
@@ -134,21 +131,32 @@ export default async function EnterpriseModulePage({ params }: Params) {
   if (definition.code === "CONTRACTS") {
     return <AppShell user={user}><EnterpriseContractsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
-
-  if (definition.code === "HUMAN_RESOURCES") {
-    return <AppShell user={user}><EnterpriseEmployeesIdentityWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  if (definition.code === "SALES_QUOTES_ORDERS") {
+    return <AppShell user={user}><EnterpriseSalesOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
-
-  if (COMMON_DOMAIN_CODES.has(definition.code)) {
-    return (
-      <AppShell user={user}>
-        <EnterpriseCommonDomainWorkspace
-          organizationId={organizationId}
-          organizationName={organization.name}
-          definition={definition}
-        />
-      </AppShell>
-    );
+  if (definition.code === "SUPPLIERS_PURCHASES") {
+    return <AppShell user={user}><EnterpriseProcurementOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} canManage={canManage} locale={user.locale} /></AppShell>;
+  }
+  if (definition.code === "INVENTORY_LOGISTICS") {
+    return <AppShell user={user}><EnterpriseInventoryOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "HUMAN_RESOURCES") {
+    return <AppShell user={user}><EnterpriseHumanResourcesWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "TIME_ATTENDANCE") {
+    return <AppShell user={user}><EnterpriseTimeAttendanceWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "PAYROLL_OPERATIONS") {
+    return <AppShell user={user}><EnterprisePayrollOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+  }
+  if (definition.code === "PROJECTS_SERVICES") {
+    return <AppShell user={user}><EnterpriseProjectsDeliverablesWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} initialFocus="PROJECTS" /></AppShell>;
+  }
+  if (definition.code === "TIME_DELIVERABLES") {
+    return <AppShell user={user}><EnterpriseProjectsDeliverablesWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} initialFocus="DELIVERABLES" /></AppShell>;
+  }
+  if (definition.code === "ASSETS_MAINTENANCE") {
+    return <AppShell user={user}><EnterpriseAssetsMaintenanceWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
 
   const canSeeAll = ENTERPRISE_OVERSIGHT_ROLES.has(membership.role);

@@ -14,3 +14,20 @@ Ces règles complètent le `AGENTS.md` racine pour toutes les API ERP des organi
 - Les `EnterpriseEntityLink` sont créés uniquement après validation que source et cible appartiennent à la même organisation.
 - Les commentaires et timelines opérationnels doivent rester paginés/bornés et respecter la visibilité métier de l'objet cible.
 - Les routes sensibles continuent d'écrire `ApiLog` et `AuditLog` selon les conventions du repository.
+
+## Professionnalisation ERP — opérations, RH, projets et actifs
+
+- Toute clé étrangère fournie par le client est revalidée dans le même `organizationId`.
+- Une opération métier ou financière ne peut être créée deux fois ; utiliser une clé idempotente ou une contrainte unique lorsque nécessaire.
+- Une livraison ne dépasse jamais le reliquat commandé.
+- Une réception n’alimente le stock qu’une seule fois.
+- Un transfert ou ajustement ne contourne jamais la protection contre le stock négatif.
+- Une période verrouillée ne peut plus être modifiée.
+- Une paie annulée peut être recréée, mais deux paies actives ne peuvent couvrir la même population et la même période.
+- L’auto-approbation est interdite lorsque la politique exige une séparation des responsabilités.
+- Les bulletins, rémunérations, comptes bancaires, contrats complets et documents RH ne sont pas inscrits dans les logs.
+- L’accès projet après révocation d’une relation externe est refusé.
+- Un actif ne peut avoir deux affectations actives.
+- Une annulation conserve l’historique ; elle ne supprime ni mouvement, réception, livraison, paie, bulletin, temps approuvé, affectation ou livrable validé.
+- Les erreurs retournées à l’utilisateur expliquent ce qui s’est passé et comment corriger sans exposer de détail sensible.
+- Les migrations sont additives ; aucune migration historique n’est modifiée.

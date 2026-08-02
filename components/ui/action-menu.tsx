@@ -1,14 +1,14 @@
 "use client";
 
-import { MoreHorizontal, MoreVertical, type LucideIcon } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { MoreHorizontal, MoreVertical } from "lucide-react";
+import { Fragment, useEffect, useRef, useState, type ElementType } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export type ActionMenuItem = {
   key: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: ElementType;
   onSelect: () => void;
   destructive?: boolean;
   disabled?: boolean;
@@ -36,24 +36,16 @@ export function ActionMenu({
   const visibleItems = items.filter((item) => !item.disabled);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
     function onPointerDown(event: PointerEvent) {
       const target = event.target as Node;
-      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
-        setOpen(false);
-      }
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
+      if (event.key === "Escape") setOpen(false);
     }
     function closeOnViewportChange(event: Event) {
-      if (event.type === "scroll" && event.target instanceof Node && menuRef.current?.contains(event.target)) {
-        return;
-      }
+      if (event.type === "scroll" && event.target instanceof Node && menuRef.current?.contains(event.target)) return;
       setOpen(false);
     }
     const visualViewport = window.visualViewport;
@@ -79,9 +71,7 @@ export function ActionMenu({
       return;
     }
     const trigger = triggerRef.current;
-    if (!trigger) {
-      return;
-    }
+    if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const visualViewport = window.visualViewport;
     const viewportLeft = visualViewport?.offsetLeft ?? 0;
@@ -103,9 +93,7 @@ export function ActionMenu({
     setOpen(true);
   }
 
-  if (!visibleItems.length) {
-    return null;
-  }
+  if (!visibleItems.length) return null;
 
   return (
     <div ref={rootRef} className={cn("relative inline-flex", className)}>
