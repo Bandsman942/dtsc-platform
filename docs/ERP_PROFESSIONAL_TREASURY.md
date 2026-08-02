@@ -8,4 +8,8 @@ Les transferts conservent compte source, compte cible, montants, devises, taux �
 
 Workflow : brouillon → approbation → exécution/confirmation → comptabilisation. Les deux côtés du transfert restent visibles et équilibrés.
 
-Maturité : `PROFESSIONAL_READY`. Validation E2E manuelle du propriétaire en attente.
+## Maturité
+
+`COMMERCIAL_READY` — `commercializable: true`.
+
+Le propriétaire a confirmé le 2 août 2026 la réussite des tests E2E authentifiés sur les comptes financiers, références masquées, transferts, approbation indépendante, soldes équilibrés et idempotence. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.
