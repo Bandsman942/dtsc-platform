@@ -18,4 +18,8 @@ Le caissier ne peut pas auto-valider sa clôture. Les rejets demandent un motif 
 
 Formulaires plein écran, montants lisibles, clavier numérique, boutons tactiles et aucune table large imposée.
 
-Maturité : `PROFESSIONAL_READY`. Test manuel tactile et authentifié encore requis.
+## Maturité
+
+`COMMERCIAL_READY` — `commercializable: true`.
+
+Le propriétaire a confirmé le 2 août 2026 la réussite du test E2E tactile et authentifié couvrant ouverture, session unique, mouvements, comptage physique, écart, justification et validation indépendante. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.
