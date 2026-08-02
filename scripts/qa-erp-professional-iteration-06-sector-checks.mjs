@@ -22,17 +22,11 @@ function reject(content, marker, label) {
   if (content.includes(marker)) failures.push(`${label}: marqueur interdit « ${marker} »`);
 }
 
-function requireFiles(files, label) {
-  for (const file of files) read(file);
-  if (files.length === 0) failures.push(`${label}: aucun fichier déclaré`);
-}
-
 const registry = read("lib/enterprise/module-registry.ts");
 const convergence = read("lib/enterprise/module-registry-sector-convergence.json");
 const cleanup = read("lib/enterprise/module-registry-final-cleanup.json");
 const readiness = read("lib/enterprise/module-commercial-readiness-iteration-06.json");
 const readinessResolver = read("lib/enterprise/module-commercial-readiness.ts");
-const regression = read("scripts/qa-regression-checks.mjs");
 const relationships = read("lib/navigation/company-relationships.ts");
 const desktopNav = read("components/layout/nav-links.tsx");
 const mobileNav = read("components/dtsc/mobile-shell.tsx");
@@ -42,6 +36,14 @@ const userGuide = read("docs/ERP_ITERATION_06_USER_GUIDE.md");
 const audit = read("docs/ERP_FINAL_PROFESSIONALIZATION_AUDIT.md");
 const matrix = read("docs/ERP_FINAL_COMMERCIAL_READINESS_MATRIX.md");
 const closure = read("docs/ERP_FINAL_PROGRAM_CLOSURE_REPORT.md");
+const confidentialityQa = read("scripts/qa-sector-data-confidentiality-checks.mjs");
+const responsiveQa = read("scripts/qa-responsive-ui-contract-checks.mjs");
+const i18nQa = read("scripts/qa-erp-i18n-checks.mjs");
+const deepLinksQa = read("scripts/qa-erp-deep-links-checks.mjs");
+const healthCoreQa = read("scripts/qa-health-core-convergence-checks.mjs");
+const healthFinanceQa = read("scripts/qa-health-financial-convergence-checks.mjs");
+const pharmacyCoreQa = read("scripts/qa-pharmacy-core-convergence-checks.mjs");
+const pharmacyFinanceQa = read("scripts/qa-pharmacy-financial-convergence-checks.mjs");
 
 const healthWorkspaces = {
   patients: "components/enterprise/health-patients-workspace.tsx",
@@ -105,6 +107,14 @@ const pharmacyModules = [
   "PHARMACY_SETTINGS",
 ];
 
+function checkDedicatedWorkspaces(workspaces, label) {
+  for (const [name, file] of Object.entries(workspaces)) {
+    const content = read(file);
+    need(content, "organizationId", `${label} ${name}: isolation tenant`);
+    reject(content, "EnterpriseSectorRecord", `${label} ${name}: pas de CRUD sectoriel générique`);
+  }
+}
+
 const checks = {
   foundation() {
     need(registry, "module-registry-sector-convergence.json", "Registre sectoriel");
@@ -119,62 +129,31 @@ const checks = {
   },
 
   health() {
-    requireFiles(Object.values(healthWorkspaces), "Workspaces Health");
-    for (const [name, file] of Object.entries(healthWorkspaces)) {
-      const content = read(file);
-      need(content, "organizationId", `Health ${name}: isolation tenant`);
-      need(content, "min-w-0", `Health ${name}: responsive`);
-      reject(content, "EnterpriseSectorRecord", `Health ${name}: pas de CRUD sectoriel générique`);
-    }
-    for (const marker of [
-      "HEALTH_CARE Patients",
-      "HEALTH_CARE Rendez-vous",
-      "HEALTH_CARE Consultations",
-      "HEALTH_CARE Dossiers médicaux",
-      "HEALTH_CARE Équipe médicale",
-      "HEALTH_CARE Laboratoire",
-    ]) need(regression, marker, "QA Health existante");
+    checkDedicatedWorkspaces(healthWorkspaces, "Health");
+    need(healthCoreQa, "success(", "QA convergence Core Health");
+    need(healthFinanceQa, "success(", "QA convergence Finance Health");
   },
 
   pharmacy() {
-    requireFiles(Object.values(pharmacyWorkspaces), "Workspaces Pharmacy");
-    for (const [name, file] of Object.entries(pharmacyWorkspaces)) {
-      const content = read(file);
-      need(content, "organizationId", `Pharmacy ${name}: isolation tenant`);
-      need(content, "min-w-0", `Pharmacy ${name}: responsive`);
-      reject(content, "EnterpriseSectorRecord", `Pharmacy ${name}: pas de CRUD sectoriel générique`);
-    }
-    for (const marker of [
-      "PHARMACY Produits",
-      "PHARMACY Lots",
-      "PHARMACY Stock",
-      "PHARMACY Réceptions",
-      "PHARMACY Ventes",
-      "PHARMACY Prescriptions",
-    ]) need(regression, marker, "QA Pharmacy existante");
+    checkDedicatedWorkspaces(pharmacyWorkspaces, "Pharmacy");
+    need(pharmacyCoreQa, "success(", "QA convergence Core Pharmacy");
+    need(pharmacyFinanceQa, "success(", "QA convergence Finance Pharmacy");
   },
 
   confidentiality() {
-    for (const marker of [
-      "Finance",
-      "données cliniques",
-      "document médical",
-      "cross-tenant",
-      "organizationId",
-    ]) need(regression, marker, "Confidentialité sectorielle");
+    for (const marker of ["MEDICAL_CONFIDENTIAL", "forbidTokens", "diagnosis:", "await rateLimit"]) {
+      need(confidentialityQa, marker, "Confidentialité sectorielle");
+    }
     need(read("lib/health-document-access.ts"), "canAccessEnterpriseModule", "Documents médicaux protégés");
     need(read("lib/pharmacy-document-access.ts"), "canAccessEnterpriseModule", "Documents Pharmacy protégés");
   },
 
   languageMobile() {
-    const allWorkspaces = [...Object.values(healthWorkspaces), ...Object.values(pharmacyWorkspaces)];
-    for (const file of allWorkspaces) {
-      const content = read(file);
-      need(content, "min-w-0", `${file}: min-width mobile`);
-      reject(content, "window.prompt", `${file}: pas de prompt navigateur`);
-    }
-    for (const marker of ["CircleHelp", "h-[94dvh]", "overflow-x-hidden", "ListControls"]) {
-      need(regression, marker, "Contrat mobile sectoriel");
+    need(responsiveQa, "min-w-0", "Contrat responsive");
+    need(responsiveQa, "320 px", "Contrat responsive mobile");
+    need(i18nQa, "success(", "QA i18n ERP");
+    for (const file of [...Object.values(healthWorkspaces), ...Object.values(pharmacyWorkspaces)]) {
+      reject(read(file), "window.prompt", `${file}: pas de prompt navigateur`);
     }
   },
 
@@ -184,6 +163,7 @@ const checks = {
     }
     need(desktopNav, "pendingCompanyRelationships", "Navigation desktop Relations entreprises");
     need(mobileNav, "pendingCompanyRelationships", "Navigation mobile Relations entreprises");
+    need(deepLinksQa, "success(", "QA liens profonds ERP");
   },
 
   readiness() {
@@ -210,6 +190,7 @@ const checks = {
       need(finalManualE2e, marker, "E2E manuel programme final");
     }
     reject(manualE2e, "Tests E2E réussis", "Aucune réussite E2E inventée");
+    reject(finalManualE2e, "Tests E2E réussis", "Aucune réussite E2E finale inventée");
     for (const marker of ["Patients", "Rendez-vous", "Consultations", "Laboratoire", "Produits", "Lots", "Dispensation", "Caisse"]) need(userGuide, marker, "Guide utilisateur sectoriel");
     for (const marker of ["PROFESSIONAL_READY", "En attente", "Dette restante"]) need(audit, marker, "Audit final");
     for (const marker of ["COMMERCIAL_READY", "PR séparée", "validation manuelle"]) need(matrix, marker, "Matrice commerciale");
