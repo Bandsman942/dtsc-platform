@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Archive, CheckCircle2, Eye, FileCheck2, PauseCircle, Pencil, Plus, RefreshCcw, Send, XCircle } from "lucide-react";
+import { Archive, CheckCircle2, Eye, FileCheck2, PauseCircle, Pencil, Plus, RefreshCcw, RotateCcw, Send, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { ProfessionalWorkflowComments } from "@/components/enterprise/professional/professional-workflow-comments";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ type Member = { id: string; label: string; email: string; role: string; position
 type Department = { id: string; labelFr: string; labelEn: string; departmentCode: string };
 type Lookups = { members: Member[]; departments: Department[]; parties: Party[] };
 type Approval = { id: string; status: string; approverUserId: string; requestedByUserId: string; requestedAt: string; decidedAt: string | null; decisionComment: string | null };
+type ContractCapabilities = { isRequester: boolean; isApprover: boolean; canEdit: boolean; canSubmit: boolean; canDecide: boolean; canOperate: boolean; canComment: boolean };
 type Contract = {
   id: string;
   reference: string;
@@ -57,6 +59,7 @@ type Contract = {
   terminationReason: string | null;
   revision: number;
   approval: Approval | null;
+  capabilities: ContractCapabilities;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -69,6 +72,7 @@ const STATUS_LABELS: Record<string, string> = {
   TERMINATED: "Résilié",
   CANCELLED: "Annulé",
 };
+const APPROVAL_STATUS_LABELS: Record<string, string> = { PENDING: "En attente", APPROVED: "Approuvé", RETURNED: "Correction demandée", REJECTED: "Refusé" };
 const CONTRACT_TYPES = [
   { id: "SERVICE", label: "Contrat de prestation" },
   { id: "SALE", label: "Contrat commercial" },
@@ -191,8 +195,16 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
 
   function availableActions(contract: Contract) {
     const actions: Array<{ id: string; label: string; icon: typeof Send }> = [];
-    if (contract.status === "DRAFT") actions.push({ id: "EDIT", label: "Modifier", icon: Pencil }, { id: "SUBMIT", label: "Soumettre", icon: Send });
-    if (contract.status === "PENDING_APPROVAL") actions.push({ id: "APPROVE", label: "Approuver", icon: CheckCircle2 }, { id: "REJECT", label: "Rejeter", icon: XCircle });
+    if (contract.status === "DRAFT" && contract.capabilities.canEdit) actions.push({ id: "EDIT", label: "Modifier", icon: Pencil });
+    if (contract.status === "DRAFT" && contract.capabilities.canSubmit) actions.push({ id: "SUBMIT", label: "Soumettre", icon: Send });
+    if (contract.status === "PENDING_APPROVAL" && contract.capabilities.canDecide) {
+      actions.push(
+        { id: "APPROVE", label: "Approuver", icon: CheckCircle2 },
+        { id: "REQUEST_CORRECTION", label: "Demander une correction", icon: RotateCcw },
+        { id: "REJECT", label: "Refuser", icon: XCircle },
+      );
+    }
+    if (!contract.capabilities.canOperate) return actions;
     if (contract.status === "APPROVED") actions.push({ id: "ACTIVATE", label: "Activer", icon: CheckCircle2 });
     if (contract.status === "ACTIVE") actions.push({ id: "SUSPEND", label: "Suspendre", icon: PauseCircle }, { id: "TERMINATE", label: "Résilier", icon: XCircle });
     if (contract.status === "SUSPENDED") actions.push({ id: "ACTIVATE", label: "Réactiver", icon: CheckCircle2 }, { id: "RENEW", label: "Renouveler", icon: RefreshCcw }, { id: "TERMINATE", label: "Résilier", icon: XCircle });
@@ -213,7 +225,7 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
 
   return (
     <ModuleWorkspace>
-      <ModuleHeader eyebrow={`Cycle contractuel · ${organizationName}`} title="Contrats commerciaux" description={definition.descriptionFr} count={`${collection.pagination.total} contrat${collection.pagination.total > 1 ? "s" : ""}`} primaryAction={collection.canManage ? <Button onClick={() => { setMessage(""); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />Nouveau contrat</Button> : undefined} />
+      <ModuleHeader eyebrow={`Cycle contractuel · ${organizationName}`} title="Contrats commerciaux" description={definition.descriptionFr} count={`${collection.pagination.total} contrat${collection.pagination.total > 1 ? "s" : ""}`} primaryAction={collection.canWrite ? <Button onClick={() => { setMessage(""); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />Nouveau contrat</Button> : undefined} />
       <ModuleMetrics label="Indicateurs contractuels">
         <ModuleMetric label="Brouillons" value={collection.metrics.draft || 0} />
         <ModuleMetric label="En attente de validation" value={collection.metrics.pendingApproval || 0} />
@@ -237,20 +249,21 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
       <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || "Contrat"} className="h-[94dvh] max-w-4xl">
         {detail ? <div className="grid gap-6">
           {message ? <ProfessionalError message={message} /> : null}
-          <div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{STATUS_LABELS[detail.status] || detail.status}</StatusBadge><StatusBadge>{detail.reference}</StatusBadge><StatusBadge>{detail.contractType}</StatusBadge></div>
+          <div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{STATUS_LABELS[detail.status] || detail.status}</StatusBadge><StatusBadge>{detail.reference}</StatusBadge><StatusBadge>{detail.contractType}</StatusBadge>{detail.capabilities.isApprover ? <StatusBadge tone="warning">Votre décision est requise</StatusBadge> : null}</div>
           <dl className="grid gap-4 border-y border-dtsc-border py-5 sm:grid-cols-2 lg:grid-cols-3">
             <div><dt className="text-xs font-black uppercase text-dtsc-muted">Partie</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.businessParty?.displayName || detail.businessParty?.legalName}</dd></div>
             <div><dt className="text-xs font-black uppercase text-dtsc-muted">Période</dt><dd className="mt-1 text-sm text-dtsc-ink">{dateLabel(detail.startDate)} → {dateLabel(detail.endDate)}</dd></div>
             <div><dt className="text-xs font-black uppercase text-dtsc-muted">Valeur indicative</dt><dd className="mt-1 text-sm text-dtsc-ink">{money(detail.indicativeAmount, detail.currency)}</dd></div>
             <div><dt className="text-xs font-black uppercase text-dtsc-muted">Renouvellement</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.renewalMode === "AUTOMATIC" ? "Automatique" : detail.renewalMode === "MANUAL" ? "Manuel" : "Aucun"}{detail.renewalNoticeDays !== null ? ` · préavis ${detail.renewalNoticeDays} jours` : ""}</dd></div>
-            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Validation</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.approval ? `${detail.approval.status === "PENDING" ? "En attente" : detail.approval.status}` : "Non demandée"}</dd></div>
+            <div><dt className="text-xs font-black uppercase text-dtsc-muted">Validation</dt><dd className="mt-1 text-sm text-dtsc-ink">{detail.approval ? APPROVAL_STATUS_LABELS[detail.approval.status] || detail.approval.status : "Non demandée"}{detail.approval?.decisionComment ? ` · ${detail.approval.decisionComment}` : ""}</dd></div>
             <div><dt className="text-xs font-black uppercase text-dtsc-muted">Révision</dt><dd className="mt-1 text-sm text-dtsc-ink">Version {detail.revision}</dd></div>
           </dl>
           {detail.description ? <section><h3 className="font-black text-dtsc-ink">Objet et résumé</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-dtsc-muted">{detail.description}</p></section> : null}
           {detail.terms ? <section><h3 className="font-black text-dtsc-ink">Clauses ou conditions</h3><p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap border-y border-dtsc-border py-3 text-sm leading-6 text-dtsc-muted">{detail.terms}</p></section> : null}
           {detail.terminationReason ? <ProfessionalError message={`Motif de résiliation : ${detail.terminationReason}`} /> : null}
-          <section><h3 className="font-black text-dtsc-ink">Documents</h3><p className="mt-1 text-sm text-dtsc-muted">Les versions contractuelles sont gérées dans le module Documents et rattachées à ce contrat par son type et sa référence.</p><Link className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-4 text-sm font-black text-dtsc-blue" href={`/enterprise-modules/DOCUMENTS?sourceEntityType=EnterpriseContract&sourceEntityId=${encodeURIComponent(detail.id)}`}>Ouvrir les documents liés</Link></section>
-          {collection.canManage && availableActions(detail).length ? <section className="sticky bottom-0 border-t border-dtsc-border bg-dtsc-surface py-3"><div className="flex flex-wrap justify-end gap-2">{availableActions(detail).map((action) => { const Icon = action.icon; return <Button key={action.id} variant={action.id === "TERMINATE" || action.id === "REJECT" ? "destructive" : "outline"} onClick={() => action.id === "EDIT" ? setEdit(detail) : ["ACTIVATE", "ARCHIVE"].includes(action.id) ? void transitionContract(detail, action.id) : setActionTarget({ contract: detail, action: action.id })}><Icon className="h-4 w-4" />{action.label}</Button>; })}</div></section> : null}
+          <section><h3 className="font-black text-dtsc-ink">Documents</h3><p className="mt-1 text-sm text-dtsc-muted">Téléversez les versions de travail, signées ou annexes dans Documents. Le contrat et sa référence sont préremplis.</p><Link className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-4 text-sm font-black text-dtsc-blue" href={`/enterprise-modules/DOCUMENTS?sourceEntityType=EnterpriseContract&sourceEntityId=${encodeURIComponent(detail.id)}&sourceReference=${encodeURIComponent(detail.reference)}&action=upload`}>Téléverser ou ouvrir les documents liés</Link></section>
+          {detail.capabilities.canComment ? <ProfessionalWorkflowComments endpoint={`/api/enterprise/${organizationId}/contracts/${detail.id}/comments`} /> : null}
+          {availableActions(detail).length ? <section id="validation" className="sticky bottom-0 border-t border-dtsc-border bg-dtsc-surface py-3"><div className="flex flex-wrap justify-end gap-2">{availableActions(detail).map((action) => { const Icon = action.icon; return <Button key={action.id} variant={action.id === "TERMINATE" || action.id === "REJECT" ? "destructive" : "outline"} onClick={() => action.id === "EDIT" ? setEdit(detail) : ["ACTIVATE", "ARCHIVE"].includes(action.id) ? void transitionContract(detail, action.id) : setActionTarget({ contract: detail, action: action.id })}><Icon className="h-4 w-4" />{action.label}</Button>; })}</div></section> : null}
         </div> : null}
       </Dialog>
 
@@ -262,17 +275,17 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
 }
 
 function actionTitle(action: string) {
-  return ({ SUBMIT: "Soumettre à validation", APPROVE: "Approuver le contrat", REJECT: "Rejeter le contrat", SUSPEND: "Suspendre le contrat", RENEW: "Renouveler le contrat", TERMINATE: "Résilier le contrat" } as Record<string, string>)[action] || "Action contractuelle";
+  return ({ SUBMIT: "Soumettre à validation", APPROVE: "Approuver le contrat", REQUEST_CORRECTION: "Demander une correction", REJECT: "Refuser le contrat", SUSPEND: "Suspendre le contrat", RENEW: "Renouveler le contrat", TERMINATE: "Résilier le contrat" } as Record<string, string>)[action] || "Action contractuelle";
 }
 
 function ActionForm({ target, members, onCancel, onSubmit }: { target: { contract: Contract; action: string }; members: Member[]; onCancel: () => void; onSubmit: (payload: Record<string, unknown>) => void }) {
-  const needsReason = ["REJECT", "SUSPEND", "TERMINATE"].includes(target.action);
+  const needsReason = ["REQUEST_CORRECTION", "REJECT", "SUSPEND", "TERMINATE"].includes(target.action);
   return <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); onSubmit({ approverUserId: String(form.get("approverUserId") || "") || null, reason: String(form.get("reason") || "") || null, renewedEndDate: String(form.get("renewedEndDate") || "") || null }); }} className="grid gap-4">
     {target.action === "SUBMIT" ? <Field label="Validateur"><NativeSelect name="approverUserId" required items={[{ id: "", label: "Sélectionner un validateur…" }, ...members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field> : null}
-    {needsReason ? <Field label="Motif"><textarea name="reason" required className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field> : null}
-    {target.action === "APPROVE" ? <Field label="Commentaire facultatif"><textarea name="reason" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field> : null}
+    {needsReason ? <Field label={target.action === "REQUEST_CORRECTION" ? "Corrections demandées" : "Motif de la décision"}><textarea name="reason" required className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" placeholder={target.action === "REQUEST_CORRECTION" ? "Décrivez précisément les éléments à corriger avant une nouvelle soumission." : "Expliquez la décision."} /></Field> : null}
+    {target.action === "APPROVE" ? <Field label="Commentaire facultatif"><textarea name="reason" className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field> : null}
     {target.action === "RENEW" ? <Field label="Nouvelle date de fin"><Input name="renewedEndDate" type="date" required /></Field> : null}
-    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Annuler</Button><Button type="submit">Confirmer</Button></div>
+    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Annuler</Button><Button type="submit" variant={target.action === "REJECT" || target.action === "TERMINATE" ? "destructive" : "default"}>Confirmer</Button></div>
   </form>;
 }
 
@@ -281,7 +294,7 @@ function ContractFormDialog({ open, onClose, title, onSubmit, lookups, message, 
     <form onSubmit={onSubmit} className="grid gap-6">
       {message ? <ProfessionalError message={message} /> : null}
       <ProfessionalFormSection title="Identification et parties">
-        <Field label="Client ou partenaire"><NativeSelect name="businessPartyId" required defaultValue={contract?.businessPartyId || ""} items={[{ id: "", label: "Sélectionner une partie…" }, ...lookups.parties.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}` }))]} /></Field>
+        <Field label="Client, collaborateur, fournisseur ou partenaire"><NativeSelect name="businessPartyId" required defaultValue={contract?.businessPartyId || ""} items={[{ id: "", label: "Sélectionner une partie…" }, ...lookups.parties.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}` }))]} /></Field>
         <Field label="Type de contrat"><NativeSelect name="contractType" defaultValue={contract?.contractType || "SERVICE"} items={CONTRACT_TYPES} /></Field>
         <Field label="Titre"><Input name="title" required defaultValue={contract?.title || ""} /></Field>
         <Field label="Responsable interne"><NativeSelect name="ownerUserId" defaultValue={contract?.ownerUserId || ""} items={[{ id: "", label: "Moi-même" }, ...lookups.members.map((member) => ({ id: member.id, label: `${member.label} · ${member.positionTitle || member.role}` }))]} /></Field>
@@ -294,8 +307,8 @@ function ContractFormDialog({ open, onClose, title, onSubmit, lookups, message, 
         <Field label="Renouvellement"><NativeSelect name="renewalMode" defaultValue={contract?.renewalMode || "NONE"} items={[{ id: "NONE", label: "Aucun" }, { id: "MANUAL", label: "Manuel" }, { id: "AUTOMATIC", label: "Automatique" }]} /></Field><Field label="Délai de préavis (jours)"><Input name="renewalNoticeDays" type="number" min="0" max="3650" defaultValue={contract?.renewalNoticeDays ?? ""} /></Field>
       </ProfessionalFormSection>
       <ProfessionalFormSection title="Objet, résumé et clauses">
-        <Field label="Objet / description"><textarea name="description" defaultValue={contract?.description || ""} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field>
-        <Field label="Clauses ou conditions"><textarea name="terms" defaultValue={contract?.terms || ""} className="min-h-40 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></Field>
+        <Field label="Objet / description"><textarea name="description" defaultValue={contract?.description || ""} className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field>
+        <Field label="Clauses ou conditions"><textarea name="terms" defaultValue={contract?.terms || ""} className="min-h-40 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field>
       </ProfessionalFormSection>
       <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={onClose}>Annuler</Button><Button type="submit" className="bg-dtsc-blue text-white">Enregistrer</Button></div>
     </form>
