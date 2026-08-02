@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Ordonnances et prescriptions
 
-**Code canonique :** `PRESCRIPTIONS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `PRESCRIPTIONS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -26,5 +26,5 @@ Une prescription ne peut pas être utilisée pour contourner les règles de lot,
 
 ## Validation
 
-QA automatisée : modèles dédiés, validation pharmacien, relations tenant, audit et responsive.  
+QA automatisée : modèles dédiés, validation pharmacien, relations tenant, audit et responsive.
 E2E propriétaire : scénario `I06-P-002`.
