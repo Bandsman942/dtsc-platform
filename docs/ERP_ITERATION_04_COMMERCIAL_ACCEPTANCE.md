@@ -1,8 +1,8 @@
 # Attestation de recette commerciale — ERP, itération 04
 
-Date de décision : 2 août 2026  
-Décideur : propriétaire de DTSC Platform  
-Environnement déclaré : Production, après fusion de l’itération 4 dans `main`  
+Date de décision : 2 août 2026
+Décideur : propriétaire de DTSC Platform
+Environnement déclaré : Production, après fusion de l’itération 4 dans `main`
 Portée : Finance opérationnelle
 
 ## Décision du propriétaire
