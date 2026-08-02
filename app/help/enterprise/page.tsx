@@ -2,16 +2,9 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { requireUser } from "@/lib/auth";
+import { FINANCE_USER_GUIDES, type FinanceUserGuide } from "@/lib/enterprise/finance-user-guides";
 
-type Guide = {
-  title: string;
-  purpose: string;
-  prerequisites: string[];
-  steps: string[];
-  workflow: string[];
-  controls: string[];
-  troubleshooting: string[];
-};
+type Guide = FinanceUserGuide;
 
 const GUIDES: Record<string, Guide> = {
   CRM_CUSTOMERS: {
@@ -21,7 +14,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez la fiche.", "Ajoutez les rôles métier utiles.", "Renseignez les contacts et adresses.", "Examinez les doublons proposés avant de confirmer."],
     workflow: ["Actif → Inactif → Archivé selon les actions disponibles.", "La liaison à un compte DTSC reste facultative et soumise au consentement."],
     controls: ["Aucune fusion automatique.", "Les données sont isolées par entreprise."],
-    troubleshooting: ["Une personne n’apparaît pas dans un sélecteur : vérifiez que sa fiche et son rôle sont actifs."]
+    troubleshooting: ["Une personne n’apparaît pas dans un sélecteur : vérifiez que sa fiche et son rôle sont actifs."],
   },
   CATALOG: {
     title: "Catalogue produits et services",
@@ -30,7 +23,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez une catégorie.", "Définissez une unité de mesure.", "Ajoutez un produit ou service.", "Renseignez prix, devise, fiscalité et statut."],
     workflow: ["Brouillon ou actif selon le formulaire, puis désactivation contrôlée."],
     controls: ["Les lots et données sectorielles restent dans leurs modules spécialisés."],
-    troubleshooting: ["Article absent d’un devis : vérifiez son statut actif et son prix de vente."]
+    troubleshooting: ["Article absent d’un devis : vérifiez son statut actif et son prix de vente."],
   },
   SITES_WAREHOUSES: {
     title: "Sites, entrepôts et emplacements",
@@ -39,7 +32,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez un site.", "Rattachez un entrepôt.", "Ajoutez zones et emplacements.", "Contrôlez la hiérarchie affichée."],
     workflow: ["Les références actives peuvent être utilisées par les opérations autorisées."],
     controls: ["Une référence appartenant à une autre entreprise est refusée."],
-    troubleshooting: ["Emplacement absent : vérifiez son entrepôt parent et son statut."]
+    troubleshooting: ["Emplacement absent : vérifiez son entrepôt parent et son statut."],
   },
   CRM_PIPELINE: {
     title: "CRM et pipeline",
@@ -48,7 +41,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Ajoutez un prospect.", "Affectez un responsable et une prochaine action.", "Faites progresser l’opportunité.", "Convertissez explicitement vers une fiche ou opportunité."],
     workflow: ["Nouveau → Contacté → Qualifié → Proposition → Négociation → Gagné ou Perdu."],
     controls: ["Le glisser-déposer n’est jamais l’unique moyen de changer d’étape."],
-    troubleshooting: ["Transition refusée : complétez le motif ou la prochaine action exigée par l’étape."]
+    troubleshooting: ["Transition refusée : complétez le motif ou la prochaine action exigée par l’étape."],
   },
   CONTRACTS: {
     title: "Contrats commerciaux",
@@ -57,7 +50,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez le contrat et sélectionnez la contrepartie.", "Renseignez période, montant, renouvellement, clauses et responsable.", "Choisissez le validateur puis soumettez.", "Le validateur approuve, refuse ou demande une correction.", "Ajoutez les commentaires et téléversez les versions signées depuis Documents."],
     workflow: ["Brouillon → En attente de validation → Approuvé → Actif.", "Une demande de correction renvoie le contrat en brouillon avec le motif conservé.", "Actif → Suspendu, Renouvelé, Résilié ou Archivé selon les règles."],
     controls: ["Seul le validateur assigné décide pendant la validation.", "Les commentaires sont modifiables ou supprimables uniquement par leur auteur.", "Le statut ne se modifie jamais directement dans le navigateur."],
-    troubleshooting: ["Actions de validation absentes : vérifiez que vous êtes le validateur sélectionné et ouvrez le lien de notification.", "Document absent : ouvrez Documents liés puis utilisez Téléverser une version."]
+    troubleshooting: ["Actions de validation absentes : vérifiez que vous êtes le validateur sélectionné et ouvrez le lien de notification.", "Document absent : ouvrez Documents liés puis utilisez Téléverser une version."],
   },
   SALES_QUOTES_ORDERS: {
     title: "Devis, commandes et livraisons",
@@ -66,7 +59,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Touchez Nouveau devis.", "Choisissez le client, la devise et les lignes.", "Enregistrez puis envoyez le devis.", "Marquez la décision client.", "Convertissez une seule fois le devis accepté.", "Enregistrez les livraisons partielles ou complètes."],
     workflow: ["Devis : Brouillon → Envoyé → Accepté ou Refusé → Converti.", "Commande : Confirmée → Partiellement livrée → Livrée → Clôturée."],
     controls: ["Totaux et taxes sont recalculés côté serveur.", "Une clé d’idempotence empêche les doubles livraisons."],
-    troubleshooting: ["Bouton Nouveau devis absent : vérifiez votre droit d’écriture.", "Livraison impossible : contrôlez les quantités restantes et l’entrepôt."]
+    troubleshooting: ["Bouton Nouveau devis absent : vérifiez votre droit d’écriture.", "Livraison impossible : contrôlez les quantités restantes et l’entrepôt."],
   },
   SUPPLIERS_PURCHASES: {
     title: "Fournisseurs, achats et réceptions",
@@ -75,7 +68,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez ou sélectionnez le fournisseur.", "Saisissez la demande ou commande d’achat.", "Choisissez le validateur lorsque requis.", "Enregistrez la réception réelle.", "Traitez les écarts et rattachez les documents."],
     workflow: ["Brouillon → Soumis → Approuvé ou Retourné → Commandé → Partiellement reçu → Reçu."],
     controls: ["La réception met à jour le stock de façon idempotente.", "La facture fournisseur reste une étape financière distincte."],
-    troubleshooting: ["Article absent : vérifiez le catalogue actif.", "Réception bloquée : la quantité ne peut dépasser le restant commandé."]
+    troubleshooting: ["Article absent : vérifiez le catalogue actif.", "Réception bloquée : la quantité ne peut dépasser le restant commandé."],
   },
   INVENTORY_LOGISTICS: {
     title: "Stock, transferts et inventaires",
@@ -84,7 +77,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Consultez Stock.", "Créez un transfert entre deux entrepôts distincts.", "Choisissez un approbateur indépendant.", "Créez une campagne d’inventaire et saisissez les quantités comptées.", "Soumettez les écarts ou ajustements."],
     workflow: ["Transfert : En attente → Validé → En transit → Clôturé.", "Inventaire : Ouvert → Comptage → Validation → Clôturé."],
     controls: ["Le stock négatif est bloqué.", "Tous les mouvements sont traçables et idempotents."],
-    troubleshooting: ["Onglets invisibles : faites glisser horizontalement le rail.", "Ajustement refusé : vérifiez le motif, la quantité et l’approbateur."]
+    troubleshooting: ["Onglets invisibles : faites glisser horizontalement le rail.", "Ajustement refusé : vérifiez le motif, la quantité et l’approbateur."],
   },
   HUMAN_RESOURCES: {
     title: "Employés et collaborateurs",
@@ -93,7 +86,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez le dossier RH.", "Choisissez poste, département et responsable.", "Renseignez les dates et conditions d’emploi.", "Invitez éventuellement le collaborateur à relier son compte.", "Clôturez le dossier sans effacer l’historique lors d’un départ."],
     workflow: ["Pré-embauche → Actif → Suspendu ou Sorti selon les actions disponibles."],
     controls: ["La fiche RH et le compte DTSC restent distincts.", "Rémunération et documents RH sont confidentiels."],
-    troubleshooting: ["Collaborateur absent d’un sélecteur : vérifiez le statut actif du dossier et de l’adhésion."]
+    troubleshooting: ["Collaborateur absent d’un sélecteur : vérifiez le statut actif du dossier et de l’adhésion."],
   },
   TIME_ATTENDANCE: {
     title: "Congés, présence et feuilles de temps",
@@ -102,7 +95,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Choisissez Demander un congé ou Déclarer du temps.", "Renseignez période, activité et projet éventuel.", "Sélectionnez le validateur.", "Soumettez.", "Le validateur approuve, refuse ou retourne pour correction."],
     workflow: ["Brouillon → Soumis → Approuvé, Refusé ou Retourné.", "Les périodes verrouillées ne sont plus modifiables."],
     controls: ["Disponibilité, absence, présence, temps approuvé et paie sont distincts.", "Les chevauchements sont contrôlés côté serveur."],
-    troubleshooting: ["Temps rejeté : corrigez la période ou les chevauchements puis soumettez de nouveau."]
+    troubleshooting: ["Temps rejeté : corrigez la période ou les chevauchements puis soumettez de nouveau."],
   },
   PAYROLL_OPERATIONS: {
     title: "Paie opérationnelle",
@@ -111,7 +104,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez la période de paie.", "Contrôlez les salariés et éléments variables.", "Générez le brouillon.", "Soumettez au validateur indépendant.", "Publiez les bulletins après approbation.", "Enregistrez le paiement séparément si le processus financier l’autorise."],
     workflow: ["Brouillon → Calculé → Soumis → Approuvé → Verrouillé ou Annulé."],
     controls: ["Une paie approuvée n’est pas automatiquement payée.", "Les bulletins ne sont visibles que par les personnes autorisées."],
-    troubleshooting: ["Soumission bloquée : ouvrez les contrôles de préparation pour voir les éléments manquants."]
+    troubleshooting: ["Soumission bloquée : ouvrez les contrôles de préparation pour voir les éléments manquants."],
   },
   PROJECTS_SERVICES: {
     title: "Projets, équipes, jalons et risques",
@@ -120,7 +113,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez le projet.", "Définissez responsable, période et budget indicatif.", "Ajoutez les membres et rôles.", "Créez jalons et risques.", "Mettez à jour l’avancement avec des commentaires traçables."],
     workflow: ["Planifié → Actif → En pause → Terminé ou Annulé."],
     controls: ["Les coûts affichés ne créent pas automatiquement une écriture comptable."],
-    troubleshooting: ["Membre absent : vérifiez l’adhésion active à l’entreprise."]
+    troubleshooting: ["Membre absent : vérifiez l’adhésion active à l’entreprise."],
   },
   TIME_DELIVERABLES: {
     title: "Prestations et livrables",
@@ -129,7 +122,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez le livrable ou la prestation.", "Décrivez le résultat attendu et l’échéance.", "Rattachez les preuves ou documents.", "Soumettez au validateur.", "Approuvez, refusez ou demandez une correction."],
     workflow: ["Brouillon → Soumis → Approuvé, Refusé ou Retourné → Livré ou Clôturé."],
     controls: ["Le temps approuvé reste distinct de la facturation et de la paie."],
-    troubleshooting: ["Validation impossible : ouvrez le détail et vérifiez que vous êtes l’approbateur assigné."]
+    troubleshooting: ["Validation impossible : ouvrez le détail et vérifiez que vous êtes l’approbateur assigné."],
   },
   ASSETS_MAINTENANCE: {
     title: "Actifs, affectations et maintenance",
@@ -138,7 +131,7 @@ const GUIDES: Record<string, Guide> = {
     steps: ["Créez l’actif.", "Renseignez catégorie, état, coût indicatif et emplacement.", "Affectez-le à un collaborateur avec une date.", "Enregistrez le retour ou l’incident.", "Planifiez et clôturez la maintenance."],
     workflow: ["Disponible → Affecté → En maintenance → Disponible, Retiré ou Perdu selon les actions autorisées."],
     controls: ["Créer un actif ne crée pas automatiquement une immobilisation comptable.", "Les affectations et retours restent historisés."],
-    troubleshooting: ["Affectation impossible : l’actif doit être disponible et le collaborateur actif."]
+    troubleshooting: ["Affectation impossible : l’actif doit être disponible et le collaborateur actif."],
   },
 };
 
@@ -146,7 +139,7 @@ export default async function EnterpriseHelpPage({ searchParams }: { searchParam
   const user = await requireUser();
   const { module } = await searchParams;
   const code = (module || "").toUpperCase();
-  const guide = GUIDES[code];
+  const guide = GUIDES[code] || FINANCE_USER_GUIDES[code];
 
   return (
     <AppShell user={user}>
