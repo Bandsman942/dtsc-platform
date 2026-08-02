@@ -37,7 +37,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
     ...(search ? { assetId: { in: assetMatches.map((item) => item.id) } } : {}),
   };
-  const [profiles, total, availableAssets] = await Promise.all([
+  const [profiles, total, allProfileAssetIds] = await Promise.all([
     prisma.enterpriseAssetAccountingProfile.findMany({
       where,
       orderBy: [{ status: "asc" }, { inServiceDate: "desc" }],
@@ -49,25 +49,45 @@ export async function GET(req: Request, { params }: Params) {
       },
     }),
     prisma.enterpriseAssetAccountingProfile.count({ where }),
+    prisma.enterpriseAssetAccountingProfile.findMany({
+      where: { organizationId },
+      select: { assetId: true },
+    }),
+  ]);
+
+  const [availableAssets, assets] = await Promise.all([
     prisma.enterpriseAsset.findMany({
       where: {
         organizationId,
         archivedAt: null,
-        accountingProfile: null,
+        id: { notIn: allProfileAssetIds.map((item) => item.assetId) },
       },
       orderBy: { name: "asc" },
       take: 250,
-      select: { id: true, code: true, name: true, acquisitionCost: true, acquisitionDate: true, status: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        indicativeValue: true,
+        acquisitionDate: true,
+        currency: true,
+        status: true,
+      },
     }),
+    profiles.length
+      ? prisma.enterpriseAsset.findMany({
+          where: { organizationId, id: { in: profiles.map((profile) => profile.assetId) } },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            serialNumber: true,
+            status: true,
+            site: { select: { code: true, name: true } },
+          },
+        })
+      : Promise.resolve([]),
   ]);
-
-  const assetIds = profiles.map((profile) => profile.assetId);
-  const assets = assetIds.length
-    ? await prisma.enterpriseAsset.findMany({
-        where: { organizationId, id: { in: assetIds } },
-        select: { id: true, code: true, name: true, serialNumber: true, status: true, site: { select: { code: true, name: true } } },
-      })
-    : [];
   const assetById = new Map(assets.map((asset) => [asset.id, asset]));
 
   await writeApiLog({
