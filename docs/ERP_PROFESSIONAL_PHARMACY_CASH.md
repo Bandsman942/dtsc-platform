@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Caisse, factures et paiements
 
-**Code canonique :** `CASH_INVOICES_PAYMENTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `CASH_INVOICES_PAYMENTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Moteurs communs
@@ -22,5 +22,5 @@ Le workspace est tactile, responsive et affiche soldes, opérations, comptage, �
 
 ## Validation
 
-QA automatisée : caisse commune, facture/paiement uniques, séparation des responsabilités et audit.  
+QA automatisée : caisse commune, facture/paiement uniques, séparation des responsabilités et audit.
 E2E propriétaire : scénario `I06-P-004`.
