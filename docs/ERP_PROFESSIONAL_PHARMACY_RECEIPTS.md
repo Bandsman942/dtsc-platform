@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Entrées et réceptions
 
-**Code canonique :** `STOCK_RECEIPTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `STOCK_RECEIPTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Parcours
@@ -26,5 +26,5 @@ Une réception validée ne produit qu’une seule entrée stock et un seul lien 
 
 ## Validation
 
-QA automatisée : achats communs, lots, mouvement unique, audit et permissions.  
+QA automatisée : achats communs, lots, mouvement unique, audit et permissions.
 E2E propriétaire : scénario `I06-P-001` et campagne finale `F-003`.
