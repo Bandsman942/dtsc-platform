@@ -1,7 +1,7 @@
 # Module professionnel Health — Dossiers médicaux
 
-**Code canonique :** `MEDICAL_RECORDS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `MEDICAL_RECORDS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -26,5 +26,5 @@ Le dossier agrège les références Health sans recopier les données cliniques 
 
 ## Validation
 
-QA automatisée : dossier unique, objets dédiés, alertes, confidentialité, routes privées et responsive.  
+QA automatisée : dossier unique, objets dédiés, alertes, confidentialité, routes privées et responsive.
 E2E propriétaire : scénarios `I06-H-002` et `I06-H-005`.
