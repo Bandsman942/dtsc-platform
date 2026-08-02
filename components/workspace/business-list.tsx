@@ -54,7 +54,8 @@ export function BusinessListItem({
         {meta ? (
           <div
             data-business-list-meta
-            className="mt-1 w-full min-w-0 break-words text-[0.72rem] font-bold leading-5 text-dtsc-muted sm:text-xs"
+            data-responsive-long-token
+            className="mt-1 w-full min-w-0 break-words [overflow-wrap:anywhere] text-[0.72rem] font-bold leading-5 text-dtsc-muted sm:text-xs"
           >
             {meta}
           </div>
