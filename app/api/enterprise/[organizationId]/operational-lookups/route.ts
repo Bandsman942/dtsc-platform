@@ -193,6 +193,15 @@ export async function GET(req: Request, { params }: Params) {
     }),
   ]);
 
+  const financePayrollPeriods = moduleCode === "FINANCE_PAYMENTS"
+    ? payrollRuns.map((run) => ({
+        id: run.id,
+        code: run.reference,
+        name: `${run.payrollPeriod.code} · ${run.payrollPeriod.name}`,
+        status: run.status,
+      }))
+    : payrollPeriods;
+
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "operational-lookups", moduleCode } });
   return NextResponse.json({
     members: members.map((member) => ({ id: member.userId, membershipId: member.id, label: member.user.name || member.user.email, email: member.user.email, role: member.role, positionTitle: member.positionTitle })),
@@ -204,7 +213,7 @@ export async function GET(req: Request, { params }: Params) {
     locations,
     inventoryItems: inventoryItems.map((item) => ({ id: item.id, minimumQuantity: item.minimumQuantity, catalogItemId: item.catalogItem.id, code: item.catalogItem.code, sku: item.catalogItem.sku, name: item.catalogItem.name })),
     projects,
-    payrollPeriods,
+    payrollPeriods: financePayrollPeriods,
     payrollRuns,
     assetCategories,
     suppliers,
