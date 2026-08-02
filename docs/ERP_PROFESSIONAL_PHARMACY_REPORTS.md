@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Rapports
 
-**Code canonique :** `PHARMACY_REPORTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `PHARMACY_REPORTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -24,5 +24,5 @@ Les rapports respectent le tenant, le plan et les permissions. Les exports ne co
 
 ## Validation
 
-QA automatisée : sources dédiées et communes, export contrôlé, absence de double comptage et responsive.  
+QA automatisée : sources dédiées et communes, export contrôlé, absence de double comptage et responsive.
 E2E propriétaire : campagne finale Pharmacy et `F-009`.
