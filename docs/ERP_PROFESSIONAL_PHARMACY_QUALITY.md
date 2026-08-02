@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Qualité et pharmacovigilance
 
-**Code canonique :** `QUALITY_PHARMACOVIGILANCE`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `QUALITY_PHARMACOVIGILANCE`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Parcours
@@ -27,5 +27,5 @@ Toute qualification, décision réglementaire, affectation, action et clôture e
 
 ## Validation
 
-QA automatisée : workflow qualité, références produit/lot, confidentialité, permissions et responsive.  
+QA automatisée : workflow qualité, références produit/lot, confidentialité, permissions et responsive.
 E2E propriétaire : scénario de rappel `I06-P-005` et campagne finale.
