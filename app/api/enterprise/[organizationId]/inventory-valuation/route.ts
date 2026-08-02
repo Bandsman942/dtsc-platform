@@ -54,6 +54,13 @@ export async function GET(req: Request, { params }: Params) {
     : [];
 
   if (search && matchingInventoryItems.length === 0) {
+    await writeApiLog({
+      request: req,
+      statusCode: 200,
+      userId: auth.session.userId,
+      startedAt,
+      metadata: { organizationId, domain: "inventory-valuation", page: 1, pageSize, emptySearch: true },
+    });
     return NextResponse.json({
       items: [],
       pagination: { page: 1, pageSize, total: 0, pageCount: 1 },
