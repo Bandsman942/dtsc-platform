@@ -22,7 +22,29 @@ Professionnalisation puis promotion commerciale de : Vue d’ensemble Finance, C
 - correspondances manuelles et clôture contrôlée ;
 - documents privés et commentaires Finance CRUD auditables ;
 - vocabulaire français explicite ;
-- dialogs plein écran, clavier numérique et actions tactiles.
+- dialogs plein écran, clavier numérique et actions tactiles ;
+- huit guides utilisateur contextuels accessibles depuis les workspaces Finance.
+
+## Guides utilisateur Finance
+
+Les boutons **Guide utilisateur** déjà visibles dans les modules ouvrent désormais un contenu dédié pour :
+
+- Vue d’ensemble Finance ;
+- Créances et factures clients ;
+- Dettes et factures fournisseurs ;
+- Paiements et allocations ;
+- Trésorerie et transferts ;
+- Caisse ;
+- Banque et relevés ;
+- Rapprochement bancaire.
+
+Chaque guide documente les prérequis, la procédure pas à pas, les statuts, les contrôles de sécurité et de séparation des responsabilités, le dépannage et les limites réellement déployées. Le guide Banque indique explicitement que la portée commercialisée correspond au CSV supporté et testé.
+
+Sources exécutables :
+
+- `app/help/enterprise/page.tsx` ;
+- `lib/enterprise/finance-user-guides.ts` ;
+- `components/enterprise/professional/professional-erp-ui.tsx`.
 
 ## Promotion commerciale
 
@@ -46,12 +68,13 @@ La gate `scripts/qa-erp-professional-iteration-04-finance-checks.mjs` doit déso
 - `commercializable` repasse à `false` ;
 - un critère manquant réapparaît ;
 - l’attestation propriétaire ou le résultat des 13 scénarios disparaît ;
+- un des huit guides contextuels disparaît ou n’est plus accessible depuis les modules ;
 - une preuve déclarée est absente ;
 - les contrats fonctionnels, sécurité, français, mobile, liens profonds ou navigation régressent.
 
 ## Migration
 
-Ajout non destructif historique de `EnterpriseFinanceComment`. La promotion commerciale n’ajoute aucune migration, ne modifie aucune migration appliquée et ne supprime aucune donnée financière.
+Ajout non destructif historique de `EnterpriseFinanceComment`. La promotion commerciale et les guides n’ajoutent aucune migration, ne modifient aucune migration appliquée et ne suppriment aucune donnée financière.
 
 ## Rollback
 
