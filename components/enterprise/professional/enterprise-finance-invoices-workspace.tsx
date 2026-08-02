@@ -92,6 +92,54 @@ type Invoice = FinanceRecord & {
     overrideReason?: string | null;
   } | null;
 };
+type CatalogLookup = {
+  id: string;
+  code: string;
+  sku?: string | null;
+  name: string;
+  itemType: string;
+  currency?: string | null;
+  indicativeSalePrice?: string | number | null;
+  indicativeCost?: string | number | null;
+};
+type SalesOrderLookup = {
+  id: string;
+  reference: string;
+  title: string;
+  businessPartyId: string;
+  contractId?: string | null;
+  status: string;
+  currency?: string | null;
+  totalAmount?: string | number | null;
+};
+type FulfillmentLookup = { id: string; reference: string; salesOrderId: string; status: string; fulfilledAt?: string | null };
+type ContractLookup = {
+  id: string;
+  reference: string;
+  title: string;
+  businessPartyId?: string | null;
+  status: string;
+  currency?: string | null;
+  indicativeAmount?: string | number | null;
+};
+type PurchaseLookup = {
+  id: string;
+  reference: string;
+  title: string;
+  supplierId?: string | null;
+  status: string;
+  currency?: string | null;
+  totalAmount?: string | number | null;
+};
+type PurchaseReceiptLookup = { id: string; reference: string; purchaseId: string };
+type FinanceSourceLookups = {
+  catalogItems?: CatalogLookup[];
+  salesOrders?: SalesOrderLookup[];
+  fulfillments?: FulfillmentLookup[];
+  commercialContracts?: ContractLookup[];
+  purchases?: PurchaseLookup[];
+  purchaseReceipts?: PurchaseReceiptLookup[];
+};
 
 const MODULE_META = {
   FINANCE_RECEIVABLES: {
@@ -124,7 +172,7 @@ function ageBucket(dueDate?: string | null) {
 
 function invoiceTransitionActions(status?: string) {
   if (status === "DRAFT") return [{ action: "SUBMIT", label: "Soumettre", icon: Send }];
-  if (status === "SUBMITTED" || status === "IN_REVIEW" || status === "PENDING_APPROVAL") return [
+  if (["SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL"].includes(String(status))) return [
     { action: "APPROVE", label: "Approuver", icon: CheckCircle2 },
     { action: "REJECT", label: "Refuser", icon: XCircle },
   ];
@@ -165,8 +213,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
   const isReceivables = moduleCode === "FINANCE_RECEIVABLES";
   const meta = MODULE_META[moduleCode];
   const searchParams = useSearchParams();
-  const requestedTab = searchParams.get("tab");
-  const [tab, setTab] = useState(requestedTab || "invoices");
+  const [tab, setTab] = useState(searchParams.get("tab") || "invoices");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -176,6 +223,10 @@ export function EnterpriseFinanceInvoicesWorkspace({
   const [creditTarget, setCreditTarget] = useState<Invoice | null>(null);
   const [actionTarget, setActionTarget] = useState<{ invoice: Invoice; action: string } | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([newLine(0)]);
+  const [selectedPartyId, setSelectedPartyId] = useState("");
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [selectedSalesOrderId, setSelectedSalesOrderId] = useState("");
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -184,15 +235,12 @@ export function EnterpriseFinanceInvoicesWorkspace({
     if (tab === "credits") return isReceivables ? "sales-credit-notes" : "supplier-credit-notes";
     return isReceivables ? "receivables" : "payables";
   }, [isReceivables, tab]);
-
   const effectiveStatus = useMemo(() => {
     if (status) return status;
-    if (tab === "overdue" || tab === "ageing") return "OPEN";
+    if (["overdue", "ageing", "to-pay"].includes(tab)) return "OPEN";
     if (tab === "to-approve") return "PENDING_APPROVAL";
-    if (tab === "to-pay") return "OPEN";
     return "";
   }, [status, tab]);
-
   const collection = useFinanceCollection<FinanceRecord>({
     endpoint: `/api/enterprise/${organizationId}/${endpoint}`,
     page,
@@ -201,11 +249,17 @@ export function EnterpriseFinanceInvoicesWorkspace({
     refreshKey,
   });
   const lookupData = useFinanceLookups(organizationId, moduleCode, refreshKey);
+  const sources = lookupData.lookups as typeof lookupData.lookups & FinanceSourceLookups;
+  const catalogItems = sources.catalogItems || [];
+  const salesOrders = (sources.salesOrders || []).filter((order) => !selectedPartyId || order.businessPartyId === selectedPartyId);
+  const fulfillments = (sources.fulfillments || []).filter((fulfillment) => !selectedSalesOrderId || fulfillment.salesOrderId === selectedSalesOrderId);
+  const contracts = (sources.commercialContracts || []).filter((contract) => !selectedPartyId || contract.businessPartyId === selectedPartyId);
+  const purchases = (sources.purchases || []).filter((purchase) => !selectedSupplierId || purchase.supplierId === selectedSupplierId);
+  const receipts = (sources.purchaseReceipts || []).filter((receipt) => !selectedPurchaseId || receipt.purchaseId === selectedPurchaseId);
 
-  const visibleItems = useMemo(() => {
-    if (tab !== "overdue") return collection.items;
-    return collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE");
-  }, [collection.items, tab]);
+  const visibleItems = useMemo(() => tab === "overdue"
+    ? collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE")
+    : collection.items, [collection.items, tab]);
 
   useEffect(() => {
     const deepId = searchParams.get(isReceivables ? "invoiceId" : "supplierInvoiceId");
@@ -214,8 +268,26 @@ export function EnterpriseFinanceInvoicesWorkspace({
     if (found) setDetail(found);
   }, [collection.items, isReceivables, searchParams]);
 
+  function resetCreateForm() {
+    setLines([newLine(0)]);
+    setSelectedPartyId("");
+    setSelectedSupplierId("");
+    setSelectedSalesOrderId("");
+    setSelectedPurchaseId("");
+  }
+
   function updateLine(key: string, field: keyof InvoiceLine, value: string) {
     setLines((current) => current.map((line) => line.key === key ? { ...line, [field]: value } : line));
+  }
+
+  function selectCatalogItem(lineKey: string, catalogItemId: string) {
+    const catalogItem = catalogItems.find((item) => item.id === catalogItemId);
+    setLines((current) => current.map((line) => line.key === lineKey ? {
+      ...line,
+      catalogItemId,
+      description: catalogItem?.name || line.description,
+      unitPrice: String((isReceivables ? catalogItem?.indicativeSalePrice : catalogItem?.indicativeCost) ?? line.unitPrice),
+    } : line));
   }
 
   async function createInvoice(event: FormEvent<HTMLFormElement>) {
@@ -255,7 +327,7 @@ export function EnterpriseFinanceInvoicesWorkspace({
     try {
       await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}`, payload);
       setCreateOpen(false);
-      setLines([newLine(0)]);
+      resetCreateForm();
       setRefreshKey((value) => value + 1);
       setMessage(locale === "fr" ? "La facture a été enregistrée en brouillon." : "The invoice was saved as a draft.");
     } catch (createError) {
@@ -268,14 +340,11 @@ export function EnterpriseFinanceInvoicesWorkspace({
     if (!actionTarget) return;
     const form = new FormData(event.currentTarget);
     try {
-      await financeMutation(
-        `/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}/${actionTarget.invoice.id}/transition`,
-        {
-          action: actionTarget.action,
-          reason: String(form.get("reason") || "") || undefined,
-          revision: actionTarget.invoice.revision,
-        },
-      );
+      await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}/${actionTarget.invoice.id}/transition`, {
+        action: actionTarget.action,
+        reason: String(form.get("reason") || "") || undefined,
+        revision: actionTarget.invoice.revision,
+      });
       setActionTarget(null);
       setDetail(null);
       setRefreshKey((value) => value + 1);
@@ -325,7 +394,6 @@ export function EnterpriseFinanceInvoicesWorkspace({
     { id: "to-pay", label: locale === "fr" ? "À payer" : "To pay" },
     { id: "overdue", label: locale === "fr" ? "En retard" : "Overdue" },
   ];
-
   const openCount = collection.items.filter((item) => ["OPEN", "ISSUED", "PARTIALLY_PAID"].includes(String(item.status))).length;
   const overdueCount = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) !== "TO_DUE").length;
   const approvalCount = collection.items.filter((item) => ["SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL"].includes(String(item.status))).length;
@@ -347,61 +415,45 @@ export function EnterpriseFinanceInvoicesWorkspace({
       </ModuleMetrics>
       <ModuleToolbar
         search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={locale === "fr" ? "Numéro, référence ou note…" : "Number, reference or note…"} />}
-        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={locale === "fr" ? "Vues financières" : "Finance views"} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[
-          { id: "", label: locale === "fr" ? "Tous les statuts" : "All statuses" },
-          ...["DRAFT", "SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL", "APPROVED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) })),
-        ]} /></div>}
+        controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={locale === "fr" ? "Vues financières" : "Finance views"} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: locale === "fr" ? "Tous les statuts" : "All statuses" }, ...["DRAFT", "SUBMITTED", "IN_REVIEW", "PENDING_APPROVAL", "APPROVED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
         summary={locale === "fr" ? "Les devises différentes restent séparées." : "Different currencies remain separated."}
       />
       <ModuleContent>
         {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
         {error ? <ProfessionalError message={error} /> : null}
         {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
-        <ModuleSection
-          title={tabs.find((item) => item.id === tab)?.label || (locale === "fr" ? "Finance" : "Finance")}
-          description={isReceivables
-            ? (locale === "fr" ? "Facture, créance, paiement, allocation et écriture restent des objets distincts." : "Invoice, receivable, payment, allocation and journal entry remain distinct objects.")
-            : (locale === "fr" ? "Le contrôle commande-réception-facture conserve chaque écart et toute dérogation." : "The purchase-order, receipt and invoice control preserves every variance and override.")}
-        >
+        <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={isReceivables ? (locale === "fr" ? "Facture, créance, paiement, allocation et écriture restent des objets distincts." : "Invoice, receivable, payment, allocation and journal entry remain distinct objects.") : (locale === "fr" ? "Le contrôle commande-réception-facture conserve chaque écart et toute dérogation." : "The purchase-order, receipt and invoice control preserves every variance and override.")}>
           {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : tab === "ageing" ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {[
-                { id: "TO_DUE", label: locale === "fr" ? "À échoir" : "Not due" },
-                { id: "D1_30", label: "1–30" },
-                { id: "D31_60", label: "31–60" },
-                { id: "D61_90", label: "61–90" },
-                { id: "D90_PLUS", label: locale === "fr" ? "Plus de 90 jours" : "Over 90 days" },
-              ].map((bucket) => {
-                const records = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) === bucket.id);
-                return <article key={bucket.id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{bucket.label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{records.length}</p><p className="mt-1 text-sm text-dtsc-muted">{locale === "fr" ? "dossier(s)" : "record(s)"}</p></article>;
-              })}
-            </div>
-          ) : (
-            <FinanceRecordList
-              items={visibleItems}
-              locale={locale}
-              emptyTitle={locale === "fr" ? "Aucun élément dans cette vue" : "No item in this view"}
-              emptyDescription={locale === "fr" ? "Utilisez le formulaire professionnel ou vérifiez les filtres." : "Use the professional form or review the filters."}
-              onOpen={setDetail}
-            />
-          )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
+              { id: "TO_DUE", label: locale === "fr" ? "À échoir" : "Not due" },
+              { id: "D1_30", label: "1–30" },
+              { id: "D31_60", label: "31–60" },
+              { id: "D61_90", label: "61–90" },
+              { id: "D90_PLUS", label: locale === "fr" ? "Plus de 90 jours" : "Over 90 days" },
+            ].map((bucket) => {
+              const records = collection.items.filter((item) => ageBucket(String(item.dueDate || "")) === bucket.id);
+              return <article key={bucket.id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{bucket.label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{records.length}</p><p className="mt-1 text-sm text-dtsc-muted">{locale === "fr" ? "dossier(s)" : "record(s)"}</p></article>;
+            })}</div>
+          ) : <FinanceRecordList items={visibleItems} locale={locale} emptyTitle={locale === "fr" ? "Aucun élément dans cette vue" : "No item in this view"} emptyDescription={locale === "fr" ? "Utilisez le formulaire professionnel ou vérifiez les filtres." : "Use the professional form or review the filters."} onOpen={setDetail} />}
           <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
         </ModuleSection>
         <ProfessionalHelp moduleCode={moduleCode} />
       </ModuleContent>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={locale === "fr" ? (isReceivables ? "Nouvelle facture client" : "Nouvelle facture fournisseur") : (isReceivables ? "New customer invoice" : "New supplier invoice")} description={locale === "fr" ? "Les totaux, taxes, sources et doublons sont contrôlés côté serveur." : "Totals, taxes, sources and duplicates are controlled server-side."} className="h-[96dvh] max-w-5xl">
+      <Dialog open={createOpen} onClose={() => { setCreateOpen(false); resetCreateForm(); }} title={locale === "fr" ? (isReceivables ? "Nouvelle facture client" : "Nouvelle facture fournisseur") : (isReceivables ? "New customer invoice" : "New supplier invoice")} description={locale === "fr" ? "Les sources sont sélectionnées dans les référentiels de l’entreprise puis revalidées côté serveur." : "Sources are selected from company master data and revalidated server-side."} className="h-[96dvh] max-w-5xl">
         <form onSubmit={createInvoice} className="grid gap-6">
           <ProfessionalFormSection title={locale === "fr" ? "Partie et source" : "Party and source"}>
-            {isReceivables ? <Field label={locale === "fr" ? "Client" : "Customer"}><NativeSelect name="businessPartyId" required items={lookupData.lookups.parties.map((party) => ({ id: party.id, label: party.displayName || party.legalName }))} /></Field> : <Field label={locale === "fr" ? "Fournisseur" : "Supplier"}><NativeSelect name="supplierId" required items={lookupData.lookups.suppliers.map((supplier) => ({ id: supplier.id, label: supplier.displayName || supplier.legalName }))} /></Field>}
-            <Field label={locale === "fr" ? "Projet" : "Project"}><NativeSelect name="projectId" items={lookupData.lookups.projects.map((project) => ({ id: project.id, label: `${project.reference} · ${project.name}` }))} /></Field>
             {isReceivables ? <>
-              <Field label={locale === "fr" ? "Commande source" : "Source order"}><Input name="salesOrderId" placeholder={locale === "fr" ? "Facultatif — sélectionner via la vente liée" : "Optional — select from the linked sale"} /></Field>
-              <Field label={locale === "fr" ? "Contrat source" : "Source contract"}><Input name="contractId" placeholder={locale === "fr" ? "Facultatif" : "Optional"} /></Field>
+              <Field label={locale === "fr" ? "Client" : "Customer"}><NativeSelect name="businessPartyId" value={selectedPartyId} onChange={setSelectedPartyId} required items={lookupData.lookups.parties.map((party) => ({ id: party.id, label: `${party.code || ""} ${party.displayName || party.legalName}`.trim() }))} /></Field>
+              <Field label={locale === "fr" ? "Commande source" : "Source order"}><NativeSelect name="salesOrderId" value={selectedSalesOrderId} onChange={setSelectedSalesOrderId} items={salesOrders.map((order) => ({ id: order.id, label: `${order.reference} · ${order.title}` }))} /></Field>
+              <Field label={locale === "fr" ? "Livraison source" : "Source fulfillment"}><NativeSelect name="fulfillmentId" items={fulfillments.map((fulfillment) => ({ id: fulfillment.id, label: `${fulfillment.reference} · ${financeStatusLabel(fulfillment.status, locale)}` }))} /></Field>
+              <Field label={locale === "fr" ? "Contrat source" : "Source contract"}><NativeSelect name="contractId" items={contracts.map((contract) => ({ id: contract.id, label: `${contract.reference} · ${contract.title}` }))} /></Field>
             </> : <>
-              <Field label={locale === "fr" ? "Commande fournisseur source" : "Source purchase order"}><Input name="purchaseId" placeholder={locale === "fr" ? "Facultatif" : "Optional"} /></Field>
-              <Field label={locale === "fr" ? "Réception source" : "Source receipt"}><Input name="purchaseReceiptId" placeholder={locale === "fr" ? "Facultatif" : "Optional"} /></Field>
+              <Field label={locale === "fr" ? "Fournisseur" : "Supplier"}><NativeSelect name="supplierId" value={selectedSupplierId} onChange={setSelectedSupplierId} required items={lookupData.lookups.suppliers.map((supplier) => ({ id: supplier.id, label: supplier.displayName || supplier.legalName }))} /></Field>
+              <Field label={locale === "fr" ? "Commande fournisseur source" : "Source purchase order"}><NativeSelect name="purchaseId" value={selectedPurchaseId} onChange={setSelectedPurchaseId} items={purchases.map((purchase) => ({ id: purchase.id, label: `${purchase.reference} · ${purchase.title}` }))} /></Field>
+              <Field label={locale === "fr" ? "Réception source" : "Source receipt"}><NativeSelect name="purchaseReceiptId" items={receipts.map((receipt) => ({ id: receipt.id, label: receipt.reference }))} /></Field>
             </>}
+            <Field label={locale === "fr" ? "Projet" : "Project"}><NativeSelect name="projectId" items={lookupData.lookups.projects.map((project) => ({ id: project.id, label: `${project.reference} · ${project.name}` }))} /></Field>
           </ProfessionalFormSection>
           <ProfessionalFormSection title={locale === "fr" ? "Dates et conditions" : "Dates and terms"}>
             <Field label={locale === "fr" ? "Date de facture" : "Invoice date"}><Input name="invoiceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
@@ -413,18 +465,19 @@ export function EnterpriseFinanceInvoicesWorkspace({
             <div className="grid gap-3 md:col-span-2">
               {lines.map((line, index) => (
                 <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
-                  <div className="md:col-span-4"><Field label={`${locale === "fr" ? "Description" : "Description"} ${index + 1}`}><Input value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required /></Field></div>
-                  <div className="md:col-span-2"><Field label={locale === "fr" ? "Quantité" : "Quantity"}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
-                  <div className="md:col-span-2"><Field label={locale === "fr" ? "Prix unitaire" : "Unit price"}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
-                  <div className="md:col-span-2"><Field label={locale === "fr" ? "Remise" : "Discount"}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
-                  <div className="flex items-end md:col-span-2"><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{locale === "fr" ? "Retirer" : "Remove"}</Button></div>
+                  <div className="md:col-span-4"><Field label={`${locale === "fr" ? "Article ou service" : "Product or service"} ${index + 1}`}><NativeSelect value={line.catalogItemId} onChange={(value) => selectCatalogItem(line.key, value)} items={catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field></div>
+                  <div className="md:col-span-4"><Field label={locale === "fr" ? "Description" : "Description"}><Input value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required /></Field></div>
+                  <div className="md:col-span-1"><Field label={locale === "fr" ? "Qté" : "Qty"}><Input value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} type="number" inputMode="decimal" min="0.000001" step="0.000001" required /></Field></div>
+                  <div className="md:col-span-1"><Field label={locale === "fr" ? "Prix" : "Price"}><Input value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" required /></Field></div>
+                  <div className="md:col-span-1"><Field label={locale === "fr" ? "Remise" : "Discount"}><Input value={line.discountAmount} onChange={(event) => updateLine(line.key, "discountAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" /></Field></div>
+                  <div className="flex items-end md:col-span-1"><Button type="button" variant="outline" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{locale === "fr" ? "Retirer" : "Remove"}</Button></div>
                 </div>
               ))}
               <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{locale === "fr" ? "Ajouter une ligne" : "Add a line"}</Button>
             </div>
           </ProfessionalFormSection>
           {isReceivables ? <ProfessionalFormSection title={locale === "fr" ? "Notes" : "Notes"}><Field label={locale === "fr" ? "Notes internes" : "Internal notes"}><textarea name="notes" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field></ProfessionalFormSection> : null}
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{locale === "fr" ? "Annuler" : "Cancel"}</Button><Button type="submit">{locale === "fr" ? "Enregistrer le brouillon" : "Save draft"}</Button></div>
+          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{locale === "fr" ? "Annuler" : "Cancel"}</Button><Button type="submit">{locale === "fr" ? "Enregistrer le brouillon" : "Save draft"}</Button></div>
         </form>
       </Dialog>
 
