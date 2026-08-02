@@ -20,4 +20,6 @@ Avant comptabilisation : annulation contrôlée. Après comptabilisation : avoir
 
 ## Maturité
 
-`PROFESSIONAL_READY`. Tests E2E manuels préparés — validation du propriétaire en attente.
+`COMMERCIAL_READY` — `commercializable: true`.
+
+La campagne E2E authentifiée a été déclarée entièrement réussie par le propriétaire le 2 août 2026, notamment pour le contrôle commande-réception-facture, les écarts, l’approbation indépendante, la dette unique et les paiements partiels puis complets. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.

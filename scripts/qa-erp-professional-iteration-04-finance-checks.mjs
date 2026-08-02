@@ -27,6 +27,7 @@ const files = {
   payments: "components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx",
   cashBank: "components/enterprise/professional/enterprise-finance-cash-bank-reconciliation-workspace.tsx",
   shared: "components/enterprise/professional/finance-professional-workspace-shared.tsx",
+  professionalUi: "components/enterprise/professional/professional-erp-ui.tsx",
   language: "components/enterprise/professional/finance-professional-ui.ts",
   comments: "app/api/enterprise/[organizationId]/finance-comments/[entityType]/[entityId]/route.ts",
   bankDetail: "app/api/enterprise/[organizationId]/bank-statements/[statementId]/route.ts",
@@ -35,7 +36,10 @@ const files = {
   schema: "prisma/enterprise-finance-professional.prisma",
   migration: "prisma/migrations/20260802123000_erp_professional_finance_comments/migration.sql",
   readiness: "lib/enterprise/module-commercial-readiness-iteration-04.json",
+  financeGuides: "lib/enterprise/finance-user-guides.ts",
+  helpCenter: "app/help/enterprise/page.tsx",
   manualE2e: "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_04.md",
+  commercialAcceptance: "docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md",
   navigation: "lib/navigation/company-relationships.ts",
   desktopNav: "components/layout/nav-links.tsx",
   mobileNav: "components/dtsc/mobile-shell.tsx",
@@ -95,18 +99,31 @@ const checks = {
     for (const marker of ["@@index([organizationId, entityType, entityId", "revision", "archivedAt"]) need(content.schema, marker, "Schéma Finance collaboratif");
     for (const marker of ["CREATE TABLE \"EnterpriseFinanceComment\"", "EnterpriseFinanceComment_scope_idx", "EnterpriseFinanceComment_author_idx"]) need(content.migration, marker, "Migration additive Finance");
   },
+  guides() {
+    need(content.helpCenter, "FINANCE_USER_GUIDES", "Centre d’aide Finance");
+    need(content.professionalUi, "Guide utilisateur", "Accès aux guides depuis les modules");
+    need(content.professionalUi, "/help/enterprise?module=", "Lien contextuel des guides");
+    for (const code of modules) need(content.financeGuides, `${code}: {`, `Guide utilisateur ${code}`);
+    for (const marker of ["Avant de commencer", "Procédure pas à pas", "Statuts et workflow", "Contrôles et confidentialité", "Dépannage"]) need(content.helpCenter, marker, "Structure du centre d’aide");
+    for (const marker of ["format CSV réellement supporté", "auto-approbation", "période fermée", "allocations", "clôture", "suggestion ambiguë"]) need(content.financeGuides, marker, "Contenu métier des guides Finance");
+  },
   readiness() {
     let readiness;
     try { readiness = JSON.parse(content.readiness); } catch (error) { failures.push(`Maturité Finance: JSON invalide (${error instanceof Error ? error.message : "unknown"})`); return; }
     for (const code of modules) {
       const entry = readiness.moduleOverrides?.[code];
       if (!entry) { failures.push(`Maturité Finance: module absent ${code}`); continue; }
-      if (entry.maturity !== "PROFESSIONAL_READY") failures.push(`${code}: maturité attendue PROFESSIONAL_READY`);
-      if (entry.commercializable !== false) failures.push(`${code}: commercializable doit rester false`);
-      if (!entry.criteriaMissing?.includes("owner-authenticated-manual-e2e-validation")) failures.push(`${code}: validation manuelle propriétaire non signalée`);
+      if (entry.maturity !== "COMMERCIAL_READY") failures.push(`${code}: maturité attendue COMMERCIAL_READY`);
+      if (entry.commercializable !== true) failures.push(`${code}: commercializable doit être true`);
+      if (entry.criteriaMissing?.length !== 0) failures.push(`${code}: aucun critère ne doit rester manquant`);
+      if (!entry.criteriaSatisfied?.includes("owner-authenticated-manual-e2e-validation")) failures.push(`${code}: validation E2E propriétaire absente`);
+      if (!entry.criteriaSatisfied?.includes("owner-commercial-acceptance")) failures.push(`${code}: acceptation commerciale propriétaire absente`);
+      if (!entry.evidence?.includes("docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md")) failures.push(`${code}: attestation commerciale absente des preuves`);
     }
-    need(content.manualE2e, "Tests E2E manuels préparés — validation du propriétaire en attente", "Statut E2E honnête");
-    reject(content.manualE2e, "Tests E2E réussis", "Statut E2E honnête");
+    need(content.manualE2e, "Campagne E2E manuelle : RÉUSSIE", "Statut E2E propriétaire");
+    need(content.commercialAcceptance, "Décision du propriétaire", "Attestation commerciale");
+    need(content.commercialAcceptance, "COMMERCIAL_READY", "Décision commerciale");
+    reject(content.manualE2e, "validation du propriétaire en attente", "Statut E2E actualisé");
   },
   navigation() {
     for (const marker of ["COMPANY_RELATIONSHIPS", "/enterprise-links", "Relations avec les entreprises"]) need(content.navigation, marker, "Relations entreprises canonique");
@@ -130,7 +147,8 @@ const aliases = {
   "deep-links": ["deeplinks"],
   security: ["security"],
   integrity: ["integrity"],
-  "commercial-readiness": ["readiness"],
+  guides: ["guides"],
+  "commercial-readiness": ["readiness", "guides"],
   "relationships-navigation": ["navigation"],
 };
 const selected = aliases[domain] || [domain];

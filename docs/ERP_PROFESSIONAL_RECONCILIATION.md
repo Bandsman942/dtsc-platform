@@ -8,4 +8,8 @@ Les critères explicables sont : montant exact, date proche, référence, tiers,
 
 Workflow : préparé → en cours → soumis → validé → clôturé. Rejet, correction et réouverture restent contrôlés.
 
-Maturité : `PROFESSIONAL_READY`. Tests E2E manuels préparés — validation du propriétaire en attente.
+## Maturité
+
+`COMMERCIAL_READY` — `commercializable: true`.
+
+Le propriétaire a confirmé le 2 août 2026 la réussite des tests E2E authentifiés de correspondance manuelle, critères explicables, ambiguïtés, protection contre le double rapprochement, validation et clôture immuable. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.

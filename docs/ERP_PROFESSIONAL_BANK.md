@@ -2,7 +2,7 @@
 
 ## Formats
 
-L’itération expose le CSV réellement supporté. Les formats additionnels ne sont pas simulés : ils seront ajoutés lorsqu’un parseur et des tests existent.
+L’itération expose le CSV réellement supporté. Les formats additionnels ne sont pas simulés : ils seront ajoutés lorsqu’un parseur et des tests existent. Cette limite de périmètre n’empêche pas la commercialisation du format officiellement supporté.
 
 ## Assistant d’import
 
@@ -21,4 +21,8 @@ Le navigateur borne le fichier à 5 Mo et 10 000 lignes. Le backend reste l’au
 
 Le détail affiche compte masqué, période, soldes, lignes, statut de rapprochement et historique. Une ligne suspecte n’est jamais supprimée automatiquement.
 
-Maturité : `PROFESSIONAL_READY`, avec validation E2E manuelle en attente.
+## Maturité
+
+`COMMERCIAL_READY` — `commercializable: true` pour le format CSV officiellement supporté.
+
+Le propriétaire a confirmé le 2 août 2026 la réussite des tests E2E authentifiés d’import, prévisualisation, doublon, fichier invalide, neutralisation des formules, confidentialité et navigation vers le détail. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.

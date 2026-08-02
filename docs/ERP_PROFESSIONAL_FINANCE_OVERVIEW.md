@@ -29,4 +29,8 @@ Créances, dettes, paiements non affectés, caisses ouvertes, rapprochements, fa
 
 ## Sécurité et maturité
 
-Les routes appliquent tenant, membership, module, entitlement, permission, validation, rate limit, transactions et audit. Maturité : `PROFESSIONAL_READY`. Promotion commerciale interdite avant confirmation des tests manuels du propriétaire.
+Les routes appliquent tenant, membership, module, entitlement, permission, validation, rate limit, transactions et audit.
+
+Maturité : `COMMERCIAL_READY` — `commercializable: true`.
+
+La promotion commerciale repose sur la confirmation explicite du propriétaire du 2 août 2026 : tous les scénarios E2E authentifiés de l’itération 4 ont réussi. La preuve de recette est conservée dans `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.

@@ -22,4 +22,6 @@ Les initiateurs et approbateurs sont séparés lorsque la politique l’exige. L
 
 ## Maturité
 
-`PROFESSIONAL_READY`, `commercializable: false` jusqu’à validation manuelle explicite du propriétaire.
+`COMMERCIAL_READY` — `commercializable: true`.
+
+Le propriétaire a confirmé le 2 août 2026 que les scénarios E2E de création, approbation, confirmation, paiement non affecté, allocation bornée, idempotence et permissions ont tous réussi. Référence : `docs/ERP_ITERATION_04_COMMERCIAL_ACCEPTANCE.md`.
