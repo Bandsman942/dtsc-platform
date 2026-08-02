@@ -1,3 +1,4 @@
+import "./qa-erp-professional-iteration-04-finance-checks.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
