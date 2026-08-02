@@ -1,7 +1,7 @@
 # Module professionnel Pharmacy — Alertes et rappels
 
-**Code canonique :** `ALERTS_EXPIRY_LOW_STOCK`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `ALERTS_EXPIRY_LOW_STOCK`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Centre de traitement
@@ -24,5 +24,5 @@ Un rappel bloque les lots concernés et empêche leur vente. Les actions de noti
 
 ## Validation
 
-QA automatisée : file opérationnelle, lots bloqués, notifications, liens profonds et audit.  
+QA automatisée : file opérationnelle, lots bloqués, notifications, liens profonds et audit.
 E2E propriétaire : scénario `I06-P-005`.
