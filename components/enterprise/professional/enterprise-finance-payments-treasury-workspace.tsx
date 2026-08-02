@@ -13,7 +13,6 @@ import {
   financeMutation,
   useFinanceCollection,
   useFinanceLookups,
-  type FinanceAccountLookup,
   type FinanceRecord,
   type OpenBalanceLookup,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
@@ -58,18 +57,6 @@ type Payment = FinanceRecord & {
   maskedExternalReference?: string | null;
   revision: number;
 };
-type Transfer = FinanceRecord & {
-  sourceFinancialAccountId: string;
-  targetFinancialAccountId: string;
-  sourceAmount: string | number;
-  targetAmount: string | number;
-  sourceCurrencyCode: string;
-  targetCurrencyCode: string;
-  exchangeRate?: string | number | null;
-  transferDate: string;
-  revision: number;
-};
-type FinanceAccount = FinanceAccountLookup & FinanceRecord;
 
 function paymentActions(status?: string) {
   if (status === "DRAFT") return [
