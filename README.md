@@ -514,19 +514,19 @@ MAISHAPAY_DEFAULT_PROVIDER
 MAISHAPAY_CALLBACK_SECRET
 ```
 
-Le pipeline exécute:
+Le projet Vercel utilise `sh vercel.sh` comme commande de build. En Production sur `main`, ce script exécute :
 
 ```bash
 pnpm install --no-frozen-lockfile
 pnpm type-check
-# Lors du build Vercel Production, le script vercel-build exécute obligatoirement :
 pnpm prisma migrate deploy
 pnpm build
 ```
 
-Le build Vercel doit conserver le script `vercel-build` de `package.json`. La migration utilise la
-`DATABASE_URL` de l'environnement Vercel ciblé et doit réussir avant que Next.js ne construise le déploiement ;
-un échec de migration bloque donc la mise en production au lieu de publier un code incompatible avec la base.
+Le script `vercel-build` de `package.json` conserve le même ordre comme garde-fou si la commande personnalisée
+Vercel est retirée. La CI vérifie les deux chemins. La migration utilise la `DATABASE_URL` de l'environnement
+Vercel ciblé et doit réussir avant que Next.js ne construise le déploiement ; un échec de migration bloque donc
+la mise en production au lieu de publier un code incompatible avec la base.
 
 ## Sécurité
 
