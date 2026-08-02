@@ -1,7 +1,7 @@
 # Module professionnel Health — Patients
 
-**Code canonique :** `PATIENTS`  
-**Maturité :** `PROFESSIONAL_READY`  
+**Code canonique :** `PATIENTS`
+**Maturité :** `PROFESSIONAL_READY`
 **Commercialisable :** non, validation manuelle en attente
 
 ## Périmètre
@@ -26,5 +26,5 @@ La fiche patient peut être reliée aux rendez-vous, consultations, laboratoire,
 
 ## Validation
 
-QA automatisée : modèles dédiés, routes privées, validation Zod, audit, responsive et absence de CRUD générique.  
+QA automatisée : modèles dédiés, routes privées, validation Zod, audit, responsive et absence de CRUD générique.
 E2E propriétaire : scénario `I06-H-001` et confidentialité `I06-H-005`.
