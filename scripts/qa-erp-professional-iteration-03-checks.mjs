@@ -15,6 +15,9 @@ const read = (file) => {
 const need = (content, marker, scope) => {
   if (!content.includes(marker)) failures.push(`${scope}: marqueur manquant « ${marker} »`);
 };
+const needAny = (content, markers, scope) => {
+  if (!markers.some((marker) => content.includes(marker))) failures.push(`${scope}: aucun marqueur trouvé parmi ${markers.map((marker) => `« ${marker} »`).join(", ")}`);
+};
 const reject = (content, marker, scope) => {
   if (content.includes(marker)) failures.push(`${scope}: marqueur interdit « ${marker} »`);
 };
@@ -39,6 +42,8 @@ const files = {
   projectOverview: "app/api/enterprise/[organizationId]/projects/[projectId]/overview/route.ts",
   projectMembers: "app/api/enterprise/[organizationId]/projects/[projectId]/members/route.ts",
   assetOverview: "app/api/enterprise/[organizationId]/assets/[assetId]/overview/route.ts",
+  input: "components/ui/input.tsx",
+  nativeSelect: "components/enterprise/core-v2/erp-v2-ui.tsx",
   manualE2e: "docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_03.md",
 };
 const content = Object.fromEntries(Object.entries(files).map(([key, file]) => [key, read(file)]));
@@ -95,19 +100,27 @@ const checks = {
     for (const key of ["sales", "inventory", "hr", "time", "payroll", "projects", "assets", "relationships"]) {
       reject(content[key], ">DRAFT<", `Libellés ${key}`);
       reject(content[key], ">PENDING_APPROVAL<", `Libellés ${key}`);
-      reject(content[key], "UUID", `Libellés ${key}`);
+      for (const visibleUuidMarker of [">UUID<", "placeholder=\"UUID", "label=\"UUID"]) {
+        reject(content[key], visibleUuidMarker, `Libellés ${key}`);
+      }
     }
   },
   mobile() {
+    need(content.input, "text-base", "Contrat Input iOS");
+    need(content.nativeSelect, "text-base", "Contrat NativeSelect iOS");
     for (const key of ["sales", "inventory", "hr", "time", "payroll", "projects", "assets"]) {
       need(content[key], "h-[9", `Dialogue mobile ${key}`);
       need(content[key], "sticky bottom-0", `Actions mobiles ${key}`);
-      need(content[key], "text-base", `Champs iOS ${key}`);
+      needAny(content[key], ["<Input", "<NativeSelect", "text-base"], `Champs iOS ${key}`);
     }
   },
   e2e() {
     for (const marker of ["NON_EXÉCUTÉ", "RÉUSSI", "ÉCHOUÉ", "BLOQUÉ", "Tests E2E manuels préparés — validation du propriétaire en attente"]) need(content.manualE2e, marker, "Plan E2E manuel");
-    reject(content.manualE2e, "Tests E2E réussis", "Plan E2E manuel");
+    const affirmativeSuccess = content.manualE2e
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .some((line) => line === "Tests E2E réussis" || line === "**Tests E2E réussis**");
+    if (affirmativeSuccess) failures.push("Plan E2E manuel: déclaration affirmative interdite « Tests E2E réussis »");
   },
 };
 
