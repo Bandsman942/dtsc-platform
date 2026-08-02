@@ -2,6 +2,7 @@ import readinessManifest from "@/lib/enterprise/module-commercial-readiness.json
 import iteration03Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-03.json";
 import iteration04Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-04.json";
 import iteration05Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-05.json";
+import iteration06Manifest from "@/lib/enterprise/module-commercial-readiness-iteration-06.json";
 import {
   ENTERPRISE_MODULE_REGISTRY,
   getEnterpriseModuleDefinition,
@@ -74,21 +75,40 @@ type IterationManifest = {
   moduleOverrides: Record<string, AssessmentSource>;
 };
 
+type SectorIterationManifest = {
+  version: number;
+  evaluatedAt: string;
+  policyVersion: string;
+  moduleCodes: string[];
+  assessment: AssessmentSource;
+};
+
 const baseManifest = readinessManifest as ReadinessManifest;
 const iteration03 = iteration03Manifest as IterationManifest;
 const iteration04 = iteration04Manifest as IterationManifest;
 const iteration05 = iteration05Manifest as IterationManifest;
+const iteration06 = iteration06Manifest as SectorIterationManifest;
+const iteration06Overrides = Object.fromEntries(
+  iteration06.moduleCodes.map((moduleCode) => [moduleCode, iteration06.assessment]),
+);
 
 const manifest: ReadinessManifest = {
   ...baseManifest,
-  version: Math.max(baseManifest.version, iteration03.version, iteration04.version, iteration05.version),
-  evaluatedAt: iteration05.evaluatedAt,
-  policyVersion: iteration05.policyVersion,
+  version: Math.max(
+    baseManifest.version,
+    iteration03.version,
+    iteration04.version,
+    iteration05.version,
+    iteration06.version,
+  ),
+  evaluatedAt: iteration06.evaluatedAt,
+  policyVersion: iteration06.policyVersion,
   moduleOverrides: {
     ...baseManifest.moduleOverrides,
     ...iteration03.moduleOverrides,
     ...iteration04.moduleOverrides,
     ...iteration05.moduleOverrides,
+    ...iteration06Overrides,
   },
 };
 
