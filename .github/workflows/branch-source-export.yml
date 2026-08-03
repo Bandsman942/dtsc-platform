@@ -23,15 +23,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wc -c .erp-patch/chunk*
-          sha256sum .erp-patch/chunk*
-          cat .erp-patch/chunk* > /tmp/erp-final-patch.b64
-          wc -c /tmp/erp-final-patch.b64
-          sha256sum /tmp/erp-final-patch.b64
+          cat .erp-patch/chunk* | LC_ALL=C tr -cd 'A-Za-z0-9+/=' > /tmp/erp-final-patch.b64
+          echo '09b11423d798c3b5c0cca46c79dee343601cb4995f19cca94fd0cf1edd82cd63  /tmp/erp-final-patch.b64' | sha256sum --check --strict
           base64 --decode /tmp/erp-final-patch.b64 > /tmp/erp-final-patch.tar.gz
-          wc -c /tmp/erp-final-patch.tar.gz
-          sha256sum /tmp/erp-final-patch.tar.gz
-          echo '2c7dbdccd2bc6b95e011b9c2be60d4e1ed84ecaebada250e7109c49cb14da078  /tmp/erp-final-patch.b64' | sha256sum --check --strict
           echo '02a8b735a7495c0f9233d58eb4f1817d0313c2abc6f53fe4008f60107998ae53  /tmp/erp-final-patch.tar.gz' | sha256sum --check --strict
           tar -tzf /tmp/erp-final-patch.tar.gz | grep -Ev '(^|/)\.\.?(/|$)' > /tmp/erp-final-patch-files.txt
           test -s /tmp/erp-final-patch-files.txt
