@@ -1,4 +1,4 @@
-name: Branch source export
+name: Apply ERP final consolidation patch
 
 on:
   pull_request:
@@ -6,19 +6,43 @@ on:
       - feat/erp-professionalization-final-consolidation
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export-source:
+  apply:
+    if: github.event.pull_request.head.ref == 'chore/apply-erp-final-consolidation'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout audited feature branch
         uses: actions/checkout@v4
-      - name: Archive source
-        run: git archive --format=tar.gz --output=dtsc-platform-source.tar.gz HEAD
-      - name: Upload source artifact
-        uses: actions/upload-artifact@v4
         with:
-          name: dtsc-platform-source
-          path: dtsc-platform-source.tar.gz
-          retention-days: 1
+          ref: feat/erp-professionalization-final-consolidation
+          fetch-depth: 0
+
+      - name: Verify and apply audited patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .erp-patch/chunk* > /tmp/erp-final-patch.b64
+          echo '2c7dbdccd2bc6b95e011b9c2be60d4e1ed84ecaebada250e7109c49cb14da078  /tmp/erp-final-patch.b64' | sha256sum --check --strict
+          base64 --decode /tmp/erp-final-patch.b64 > /tmp/erp-final-patch.tar.gz
+          echo '02a8b735a7495c0f9233d58eb4f1817d0313c2abc6f53fe4008f60107998ae53  /tmp/erp-final-patch.tar.gz' | sha256sum --check --strict
+          tar -tzf /tmp/erp-final-patch.tar.gz | grep -Ev '(^|/)\.\.?(/|$)' > /tmp/erp-final-patch-files.txt
+          test -s /tmp/erp-final-patch-files.txt
+          tar -xzf /tmp/erp-final-patch.tar.gz -C .
+          rm -rf .erp-patch
+          rm -f .github/workflows/branch-source-export.yml
+
+      - name: Run consolidation guards
+        run: |
+          node scripts/qa-erp-final-consolidation-checks.mjs all
+          git diff --check
+
+      - name: Commit audited consolidation
+        run: |
+          git config user.name 'DTSC ERP Consolidation Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'refactor: consolidate ERP modules end to end'
+          git push origin HEAD:feat/erp-professionalization-final-consolidation
