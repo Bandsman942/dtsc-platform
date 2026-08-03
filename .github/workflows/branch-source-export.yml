@@ -23,6 +23,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          wc -c .erp-patch/chunk*
+          sha256sum .erp-patch/chunk*
           cat .erp-patch/chunk* > /tmp/erp-final-patch.b64
           wc -c /tmp/erp-final-patch.b64
           sha256sum /tmp/erp-final-patch.b64
