@@ -13,6 +13,7 @@ if (!result.ok) failures.push(...result.errors);
 const registry = read("lib/modules/standard-module-registry.ts");
 const access = read("lib/modules/standard-module-access.ts");
 const navigation = read("lib/modules/standard-module-navigation.ts");
+const navLinks = read("components/layout/nav-links.tsx");
 const deepLinks = read("lib/modules/standard-module-deep-links.ts");
 const manualE2e = read("docs/MANUAL_E2E_STANDARD_MODULES_ITERATION_01.md");
 const readiness = read("docs/STANDARD_MODULE_COMMERCIAL_READINESS.md");
@@ -25,6 +26,9 @@ for (const token of ["StandardModuleAccessDecision", "reasonCode", "capabilities
 }
 for (const token of ["buildUrlForHostType", "resolveStandardModuleHref", "listStandardNavigationItems"]) {
   expect(navigation.includes(token), `Navigation standard: contrat absent ${token}`);
+}
+for (const token of ["standardNavItem", "getStandardModuleDefinition", "resolveStandardModuleHref", "ENTERPRISE_MODULES_SUBSCRIPTION"]) {
+  expect(navLinks.includes(token), `NavLinks: branchement canonique absent ${token}`);
 }
 for (const token of ["objectId", "section", "action", "context", "organizationId"]) {
   expect(deepLinks.includes(token), `Deep link standard: dimension absente ${token}`);
