@@ -47,7 +47,11 @@ jobs:
             .github/iteration03-patch.part-10
             .github/iteration03-patch.part-11
           )
+          wc -c "${PATCH_PARTS[@]}"
+          sha256sum "${PATCH_PARTS[@]}"
           cat "${PATCH_PARTS[@]}" > /tmp/iteration03-patch.b64
+          wc -c /tmp/iteration03-patch.b64
+          sha256sum /tmp/iteration03-patch.b64
           test "$(wc -c < /tmp/iteration03-patch.b64)" = "$EXPECTED_SIZE"
           test "$(sha256sum /tmp/iteration03-patch.b64 | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           base64 --decode /tmp/iteration03-patch.b64 | gzip --decompress > /tmp/iteration03.patch
