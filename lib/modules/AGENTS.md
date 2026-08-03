@@ -26,3 +26,23 @@ Ces règles s’appliquent au registre, à la navigation, aux accès, aux liens 
 22. Toute dépendance standard ou ERP est explicite, stable et vérifiée avant activation.
 23. Les reason codes d’accès sont stables, documentés et n’exposent aucune donnée protégée.
 24. Une surface Console, Support, Account ou Public conserve sa frontière de host et son contrat de retour sécurisé.
+25. Le Dashboard n’affiche que des données réelles, autorisées et obtenues depuis l’agrégateur canonique de l’espace personnel.
+26. Tout changement de contexte exige une vérification serveur du compte, du membership, de l’organisation et de la session.
+27. Un accès révoqué ne reste jamais sélectionnable et toute route cible revérifie les droits actuels.
+28. Le contexte personnel, DTSC interne et organisation cliente reste distinct dans les données, la navigation et les libellés.
+29. Les plans et leurs prix proviennent du catalogue canonique ; aucun composant n’invente une offre locale.
+30. Les fonctions et modules affichés correspondent aux entitlements et limites réellement appliqués côté serveur.
+31. Les factures SaaS, paiements SaaS et périodes d’abonnement restent distincts de la facturation et de la comptabilité ERP.
+32. Aucune préférence visible ne peut être fictive : elle doit être persistée, relue et appliquée.
+33. Une session révoquée doit cesser réellement de fonctionner ; aucune suppression visuelle ne vaut révocation serveur.
+34. Tant qu’aucun registre persistant n’existe, les sessions multi-appareils ne sont ni listées ni présentées comme révocables.
+35. Toute notification actionnable possède un lien profond interne vers l’objet précis lorsqu’il est connu.
+36. Un lien de notification ne contourne jamais une permission, un membership, un entitlement ou la propriété de l’objet.
+37. Les notifications sont recherchées et paginées côté serveur ; l’historique complet n’est jamais chargé à chaque rendu.
+38. Les invitations entreprise restent visibles depuis le compte personnel avant l’adhésion à l’organisation.
+39. L’acceptation d’une invitation est idempotente et ne crée aucun membership ni effet secondaire dupliqué.
+40. Les relations avec les entreprises utilisent exclusivement le moteur canonique d’identité, consentement et révocation.
+41. Les données du profil sont privées par défaut et les changements d’identifiant principal exigent le circuit de sécurité prévu.
+42. Web Push reflète conjointement l’état du navigateur, la configuration serveur, la préférence et la souscription de l’appareil.
+43. Les guides utilisateur décrivent uniquement les fonctions réellement déployées et restent accessibles depuis chaque module traité.
+44. Les E2E manuels de l’itération 2 restent `NON_EXÉCUTÉ` jusqu’à validation explicite du propriétaire.
