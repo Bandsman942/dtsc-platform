@@ -23,6 +23,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const fs = require('node:fs');
+          const file = '.erp-patch/chunk0506';
+          const expected = 'dab22868ceec90824ad6f86b499266ad5bf82339a46e6af33c8c389ab78da679';
+          const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+          const value = fs.readFileSync(file, 'utf8').replace(/[^A-Za-z0-9+/=]/g, '');
+          let corrected = hash(value) === expected ? value : null;
+          if (!corrected) {
+            const matches = [];
+            for (let index = 0; index < value.length; index += 1) {
+              const candidate = value.slice(0, index) + value.slice(index + 1);
+              if (hash(candidate) === expected) matches.push(candidate);
+            }
+            if (matches.length !== 1) {
+              throw new Error(`Expected exactly one safe transport correction, found ${matches.length}.`);
+            }
+            corrected = matches[0];
+          }
+          fs.writeFileSync(file, corrected);
+          NODE
           cat .erp-patch/chunk* | LC_ALL=C tr -cd 'A-Za-z0-9+/=' > /tmp/erp-final-patch.b64
           echo '09b11423d798c3b5c0cca46c79dee343601cb4995f19cca94fd0cf1edd82cd63  /tmp/erp-final-patch.b64' | sha256sum --check --strict
           base64 --decode /tmp/erp-final-patch.b64 > /tmp/erp-final-patch.tar.gz
