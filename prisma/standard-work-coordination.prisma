@@ -1,0 +1,192 @@
+model EnterpriseTaskChecklistItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  taskId         String
+  title          String
+  isCompleted    Boolean  @default(false)
+  position       Int      @default(0)
+  completedById  String?
+  completedAt    DateTime?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId, taskId, position])
+  @@index([organizationId, taskId, isCompleted])
+}
+
+model EnterpriseTaskDependency {
+  id              String   @id @default(cuid())
+  organizationId  String
+  predecessorId   String
+  successorId     String
+  dependencyType  String   @default("BLOCKS")
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  @@unique([organizationId, predecessorId, successorId, dependencyType])
+  @@unique([organizationId, id])
+  @@index([organizationId, predecessorId])
+  @@index([organizationId, successorId])
+}
+
+model EnterpriseTaskBlocker {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  taskId               String
+  reason               String
+  status               String   @default("OPEN")
+  resolutionComment    String?
+  responsibleUserId    String?
+  createdById          String
+  resolvedById         String?
+  createdAt            DateTime @default(now())
+  resolvedAt           DateTime?
+  updatedAt            DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId, taskId, status])
+  @@index([organizationId, responsibleUserId, status])
+}
+
+model EnterpriseSavedWorkFilter {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  moduleCode     String
+  name           String
+  criteriaJson   Json
+  isDefault      Boolean  @default(false)
+  visibility     String   @default("PRIVATE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, userId, moduleCode, name])
+  @@unique([organizationId, id])
+  @@index([organizationId, userId, moduleCode, isDefault])
+}
+
+model EnterpriseApprovalSubmissionVersion {
+  id                String   @id @default(cuid())
+  organizationId    String
+  approvalId        String
+  versionNumber     Int
+  submittedByUserId String
+  snapshotJson      Json
+  submissionComment String?
+  submittedAt       DateTime @default(now())
+
+  @@unique([organizationId, approvalId, versionNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, approvalId, submittedAt])
+}
+
+model EnterpriseApprovalDecision {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  approvalId          String
+  submissionVersionId String
+  actorUserId         String
+  decision            String
+  reason              String?
+  idempotencyKey      String
+  createdAt           DateTime @default(now())
+
+  @@unique([idempotencyKey])
+  @@unique([organizationId, approvalId, submissionVersionId, actorUserId])
+  @@unique([organizationId, id])
+  @@index([organizationId, approvalId, createdAt])
+}
+
+model EnterpriseMeetingAgendaItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  meetingId      String
+  title          String
+  description    String?
+  ownerUserId    String?
+  durationMinutes Int?
+  position       Int      @default(0)
+  status         String   @default("PENDING")
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId, meetingId, position])
+}
+
+model EnterpriseMeetingMinutesVersion {
+  id                String   @id @default(cuid())
+  organizationId    String
+  meetingId         String
+  versionNumber     Int
+  content           String
+  attendeeUserIds   Json?
+  absentUserIds     Json?
+  status            String   @default("DRAFT")
+  createdByUserId   String
+  publishedByUserId String?
+  createdAt         DateTime @default(now())
+  publishedAt       DateTime?
+
+  @@unique([organizationId, meetingId, versionNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, meetingId, createdAt])
+}
+
+model EnterpriseMeetingAction {
+  id             String   @id @default(cuid())
+  organizationId String
+  meetingId      String
+  agendaItemId   String?
+  taskId         String
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, meetingId, taskId])
+  @@unique([organizationId, id])
+  @@index([organizationId, meetingId, createdAt])
+  @@index([organizationId, taskId])
+}
+
+model EnterpriseDocumentLink {
+  id               String   @id @default(cuid())
+  organizationId   String
+  documentId       String
+  targetModule     String
+  targetEntityType String
+  targetEntityId   String
+  linkType         String   @default("ATTACHMENT")
+  createdById      String
+  createdAt        DateTime @default(now())
+  archivedAt       DateTime?
+
+  @@unique([organizationId, documentId, targetEntityType, targetEntityId, linkType])
+  @@unique([organizationId, id])
+  @@index([organizationId, targetEntityType, targetEntityId, archivedAt])
+  @@index([organizationId, documentId, archivedAt])
+}
+
+model EnterpriseWorkReminder {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  entityType     String
+  entityId       String
+  reminderType   String
+  remindAt       DateTime
+  status         String   @default("SCHEDULED")
+  idempotencyKey String
+  sentAt         DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([idempotencyKey])
+  @@unique([organizationId, id])
+  @@index([status, remindAt])
+  @@index([organizationId, userId, status, remindAt])
+  @@index([organizationId, entityType, entityId])
+}
