@@ -24,9 +24,24 @@ jobs:
           EXPECTED_SIZE: "89268"
           EXPECTED_SHA256: "9c9e6e5cd9bc5cc13a97363632d7227a95a143ac6e3412ea4b115d159d8a8143"
         run: |
-          wc -c .github/iteration03-patch.part-* | tee /tmp/iteration03-parts-sizes.txt
-          sha256sum .github/iteration03-patch.part-* | tee /tmp/iteration03-parts-sha256.txt
-          cat .github/iteration03-patch.part-* > /tmp/iteration03-patch.b64
+          PATCH_PARTS=(
+            .github/iteration03-patch.part-00
+            .github/iteration03-patch.part-01
+            .github/iteration03-patch.part-02
+            .github/iteration03-patch.part-03
+            .github/iteration03-patch.part-04
+            .github/iteration03-patch.part-05
+            .github/iteration03-patch.part-06
+            .github/iteration03-patch.part-07a
+            .github/iteration03-patch.part-07b
+            .github/iteration03-patch.part-08
+            .github/iteration03-patch.part-09
+            .github/iteration03-patch.part-10
+            .github/iteration03-patch.part-11
+          )
+          wc -c "${PATCH_PARTS[@]}" | tee /tmp/iteration03-parts-sizes.txt
+          sha256sum "${PATCH_PARTS[@]}" | tee /tmp/iteration03-parts-sha256.txt
+          cat "${PATCH_PARTS[@]}" > /tmp/iteration03-patch.b64
           test "$(wc -c < /tmp/iteration03-patch.b64)" = "$EXPECTED_SIZE"
           test "$(sha256sum /tmp/iteration03-patch.b64 | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           base64 --decode /tmp/iteration03-patch.b64 | gzip --decompress > /tmp/iteration03.patch
