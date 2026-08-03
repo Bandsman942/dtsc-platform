@@ -3,7 +3,7 @@ name: Branch source export
 on:
   pull_request:
     branches:
-      - main
+      - feat/erp-professionalization-final-consolidation
 
 permissions:
   contents: read
