@@ -10,6 +10,8 @@ const workflow = read(".github/workflows/quality-gates.yml");
 const agents = read("lib/modules/AGENTS.md");
 const audit = read("docs/STANDARD_MODULE_ITERATION_03_AUDIT.md");
 const e2e = read("docs/MANUAL_E2E_STANDARD_MODULES_ITERATION_03.md");
+const commercialEvidence = read("docs/STANDARD_COLLABORATION_COMMERCIAL_ACCEPTANCE_2026-08-03.md");
+const registry = read("lib/modules/standard-module-registry-data.json");
 for (const script of [
   "qa:standard-collaboration-model", "qa:standard-conversation-access", "qa:standard-message-idempotency",
   "qa:standard-collaboration-deep-links", "qa:standard-collaboration-notifications", "qa:standard-collaboration-media",
@@ -21,11 +23,13 @@ expect(workflow.includes("Standard modules iteration 03 QA"), "Quality Gates: é
 for (const invariant of ["contexte explicite", "clé d’idempotence", "propriétaire explicite", "présence doit refléter un signal réel", "tokens d’appel", "audience explicite", "actions de modération", "320 px", "COMMERCIAL_READY"]) {
   expect(agents.includes(invariant), `AGENTS modules: invariant absent ${invariant}`);
 }
-expect(audit.includes("Aucune promotion vers `COMMERCIAL_READY`"), "Audit: gouvernance COMMERCIAL_READY absente");
-expect(e2e.includes("Statut : NON_EXÉCUTÉ"), "E2E: statut NON_EXÉCUTÉ absent");
-expect(e2e.includes("Tests E2E manuels préparés — validation du propriétaire en attente"), "E2E: formule obligatoire absente");
+expect(audit.includes("COMMERCIAL_READY"), "Audit: décision COMMERCIAL_READY absente");
+expect(e2e.includes("Statut : EXÉCUTÉ"), "E2E: statut EXÉCUTÉ absent");
+expect(e2e.includes("validation commerciale du propriétaire accordée"), "E2E: validation propriétaire absente");
+expect(commercialEvidence.includes("Dr Jonathan NTUMBA") && commercialEvidence.includes("Production"), "Preuve commerciale versionnée absente");
+expect(registry.includes('"code":"COLLABORATORS"') && registry.includes('"code":"ANNOUNCEMENTS"') && registry.includes('"maturity":"COMMERCIAL_READY"'), "Registre: promotion commerciale absente");
 if (failures.length) {
   console.error(`Standard modules iteration 03 QA failed:\n- ${[...new Set(failures)].join("\n- ")}`);
   process.exit(1);
 }
-console.log("Standard modules iteration 03 QA passed without automatic commercial promotion.");
+console.log("Standard modules iteration 03 QA passed with explicit versioned owner commercial acceptance.");

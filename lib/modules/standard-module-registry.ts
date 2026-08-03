@@ -75,6 +75,7 @@ export type StandardModuleDefinition = {
   erpDependencies: string[];
   userGuidePath: string | null;
   qaContract: string | null;
+  commercialEvidencePath?: string | null;
   aliases?: string[];
   legacyRoutes?: string[];
 };
@@ -149,7 +150,7 @@ export function assertStandardModuleRegistryIntegrity() {
   for (const definition of STANDARD_MODULE_REGISTRY) {
     if (codes.has(definition.code)) failures.push(`Code dupliqué: ${definition.code}`);
     codes.add(definition.code);
-    if (definition.maturity === "COMMERCIAL_READY") {
+    if (definition.maturity === "COMMERCIAL_READY" && !definition.commercialEvidencePath) {
       failures.push(`${definition.code}: COMMERCIAL_READY interdit sans preuve propriétaire versionnée.`);
     }
     if (isStandardModuleVisible(definition) && !definition.routePath) {

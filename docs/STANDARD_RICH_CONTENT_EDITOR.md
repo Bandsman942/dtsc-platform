@@ -24,3 +24,12 @@ Les vidéos arbitraires ne sont pas injectées sous forme d’iframe. Une URL MP
 ## Réutilisation
 
 La primitive est activée dans les annonces avec images et vidéos. Les prochaines itérations doivent la réutiliser pour les contenus éditoriaux qui exigent une mise en forme riche, tout en adaptant les permissions, les endpoints média et les limites métier.
+
+## Interlignes et espacements
+
+La barre commune permet d’appliquer au bloc ou aux paragraphes sélectionnés :
+
+- un interligne de 1 à 2,5 ;
+- un espacement après paragraphe de 0 à 32 px.
+
+Ces valeurs sont enregistrées comme styles de bloc sûrs, conservées par la sanitation et rendues de façon responsive. Elles font partie de la primitive partagée réutilisable dans les futures zones d’édition DTSC.

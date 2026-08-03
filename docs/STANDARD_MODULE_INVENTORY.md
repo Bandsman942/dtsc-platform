@@ -38,7 +38,7 @@ Toute nouvelle surface non ERP doit être ajoutée au registre avant d’être r
 
 | Code | Route | Source canonique | Maturité technique |
 |---|---|---|---|
-| COLLABORATORS | `/collaborators` | CollaborationGroup et services associés | PROFESSIONAL_READY |
-| ANNOUNCEMENTS | `/announcements` | Announcement et commentaires associés | PROFESSIONAL_READY |
+| COLLABORATORS | `/collaborators` | CollaborationGroup et services associés | COMMERCIAL_READY |
+| ANNOUNCEMENTS | `/announcements` | Announcement et commentaires associés | COMMERCIAL_READY |
 
 Les appels, médias, commentaires, présence et modération sont des capacités du domaine ; ils ne créent pas de modules concurrents ni de registres parallèles.

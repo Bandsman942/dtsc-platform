@@ -130,3 +130,16 @@ model CollaborationMeetingMinutesPublication {
   @@index([groupId, createdAt])
   @@index([minutesId])
 }
+
+model CollaborationConversationFilter {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  criteriaJson Json
+  position     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId, position, updatedAt])
+}

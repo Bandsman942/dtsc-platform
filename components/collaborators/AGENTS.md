@@ -40,3 +40,11 @@
 - La création d’une conversation directe utilise le contrat canonique `targetUserId`; la ligne entière du collaborateur doit être une action tactile accessible et protégée contre les doubles appuis.
 - Un trait indique uniquement l’envoi au serveur. Deux traits ne peuvent apparaître qu’à partir d’un accusé de lecture explicite ou d’un futur accusé de livraison dédié; ne jamais les déduire de `lastSeenAt`.
 - L’extrait d’une réponse est un lien fonctionnel vers le message d’origine. Si ce message n’est pas chargé, le client demande une fenêtre ciblée au backend avant de défiler et de mettre le message en évidence.
+
+## Stabilisation commerciale Collaboration
+
+- Les messages texte reconnaissent uniquement les URL HTTP(S) sûres et les ouvrent dans un nouvel onglet avec `noopener`, `noreferrer` et `nofollow`.
+- Une mention utilisateur doit correspondre à un membre actif du groupe, être persistée et rester non lue jusqu’à l’ouverture effective du message ciblé.
+- `@tous` est résolu côté serveur vers tous les membres actifs, exclut l’auteur et exige un rôle OWNER/ADMIN du groupe ; le frontend ne peut jamais imposer seul cette audience.
+- Les accusés distinguent envoyé, lecture partielle et lecture par tous ; le vert est réservé à `allRead` calculé côté serveur.
+- Les filtres personnalisés sont privés, persistés par `userId`, bornés à vingt listes et ne modifient jamais les permissions d’accès aux conversations.

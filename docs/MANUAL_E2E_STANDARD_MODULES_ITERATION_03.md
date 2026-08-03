@@ -1,6 +1,6 @@
 # Tests E2E manuels — Modules standards, itération 03
 
-**Statut : NON_EXÉCUTÉ**
+**Statut : EXÉCUTÉ — écarts remontés par le propriétaire et stabilisation finale autorisée**
 
 ## 1. Conversation directe
 Deux utilisateurs autorisés recherchent leur collaborateur, ouvrent deux fois la conversation, vérifient sa réutilisation, envoient un message, ouvrent la notification sur le message exact et vérifient la lecture.
@@ -47,10 +47,10 @@ Envoyer pendant une coupure, vérifier l’état non envoyé, reprendre, retry s
 ## 15. Responsive
 Tester 320, 360, 375, 390, 414 et 768 px : liste, conversation, compositeur, clavier, pièces jointes, menus, appels, annonce, galerie, commentaires et filtres horizontaux.
 
-Tests E2E manuels préparés — validation du propriétaire en attente
+Tests E2E manuels exécutés — validation commerciale du propriétaire accordée sous CI/CD et Production verte
 
 ## Retour propriétaire du 3 août 2026 — correctifs demandés
 
 Le propriétaire a exécuté des scénarios E2E et signalé quatre écarts : démarrage d’une conversation directe, double confirmation de lecture, navigation vers le message cité et enrichissement des annonces. Les correctifs sont couverts par `audit-standard-collaboration-e2e-fixes.mjs`.
 
-La validation finale de ces correctifs après leur déploiement Production reste à confirmer par le propriétaire; aucune promotion automatique vers `COMMERCIAL_READY` n’est effectuée.
+La validation finale de ces correctifs après leur déploiement Production reste à confirmer par le propriétaire; la promotion vers `COMMERCIAL_READY` est explicitement autorisée par le propriétaire et versionnée dans le document d’acceptation commerciale.
