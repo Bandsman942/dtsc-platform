@@ -57,7 +57,7 @@ function requestChecks() {
 
 function validationChecks() {
   requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseApprovalSubmissionVersion", "model EnterpriseApprovalDecision", "idempotencyKey"]);
-  requireText("lib/standard-work-coordination/approval-coordination.ts", ["CORRECTION_REASON_REQUIRED", "VERSION_MISMATCH", "recordApprovalDecision", "versionNumber"]);
+  requireText("lib/standard-work-coordination/approval-coordination.ts", ["CORRECTION_REASON_REQUIRED", "VERSION_MISMATCH", "recordApprovalDecision", "versionNumber", "plannedAmount: true"]);
   requireText("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", ["REQUEST_CORRECTION", "RESUBMIT", "DELEGATE", "SELF_APPROVAL_FORBIDDEN", "notifyUser"]);
   requireNoText("lib/standard-work-coordination/approval-coordination.ts", ["totalAmount: true, revision: true, updatedAt: true } });\n    if (!item) throw new ApprovalCoordinationError(\"TARGET_NOT_FOUND\", 404, \"Budget source"]);
 }
@@ -75,15 +75,16 @@ function workflowChecks() {
 }
 
 function documentChecks() {
-  requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseDocumentLink", "@@unique([organizationId, documentId, targetEntityType, targetEntityId])"]);
-  requireText("lib/standard-work-coordination/document-coordination.ts", ["EnterpriseDocumentLink", "organizationId"]);
-  requireText("components/enterprise/core-v2/enterprise-documents-workspace.tsx", ["EnterpriseDocumentsWorkspace"]);
+  requireText("app/api/enterprise/[organizationId]/documents/[id]/links/route.ts", ["createEnterpriseLink", "EnterpriseDocument", "isSameOriginRequest", "canAccessEnterpriseDocument"]);
+  requireText("components/enterprise/core-v2/enterprise-documents-workspace.tsx", ["/links", "/versions", "/download", "signedUrl"]);
+  requireText("scripts/qa-enterprise-core-v2-sprint7-checks.mjs", ["documents"]);
+  requireNoText("prisma/standard-work-coordination.prisma", ["model EnterpriseDocumentLink"]);
 }
 
 function notificationChecks() {
   requireText("lib/standard-work-coordination/deep-links.ts", ["workCoordinationDeepLink", "isInternalWorkCoordinationLink"]);
   requireText("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts", ["workCoordinationDeepLink", "notifyUser"]);
-  requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseWorkReminder", "dedupeKey"]);
+  requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseWorkReminder", "idempotencyKey"]);
 }
 
 function guideChecks() {
