@@ -1,0 +1,33 @@
+name: Apply standard collaboration iteration patch
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    if: github.head_ref == 'chore/export-standard-collaboration-source'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging payload
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch to dedicated feature branch
+        env:
+          TARGET_BRANCH: feat/standard-modules-professionalization-iteration-03-collaboration
+        run: |
+          cat .github/iteration03-patch.part-* > /tmp/iteration03-patch.b64
+          base64 --decode /tmp/iteration03-patch.b64 | gzip --decompress > /tmp/iteration03.patch
+          git fetch origin main
+          git checkout -B "$TARGET_BRANCH" origin/main
+          git apply --index --whitespace=error /tmp/iteration03.patch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: professionalize collaboration, calls and announcements"
+          git push --set-upstream origin "$TARGET_BRANCH" --force-with-lease
