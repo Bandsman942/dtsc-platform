@@ -88,6 +88,9 @@ jobs:
       - name: Standard modules iteration 03 QA
         run: node scripts/qa-standard-modules-iteration-03.mjs
 
+      - name: Standard collaboration E2E fixes QA
+        run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
+
       - name: Lint
         run: pnpm lint
 

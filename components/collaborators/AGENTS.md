@@ -34,3 +34,9 @@
 - Le compositeur conserve une clé client stable pendant un retry et n’affiche jamais un message comme livré ou lu sans preuve serveur.
 - Une notification d’appel ouvre le groupe et présente accepter/refuser sans auto-join.
 - À 320 px, le compositeur, les pièces jointes, le retour à la liste et les contrôles d’appel restent visibles.
+
+## Stabilisation E2E post-itération 03
+
+- La création d’une conversation directe utilise le contrat canonique `targetUserId`; la ligne entière du collaborateur doit être une action tactile accessible et protégée contre les doubles appuis.
+- Un trait indique uniquement l’envoi au serveur. Deux traits ne peuvent apparaître qu’à partir d’un accusé de lecture explicite ou d’un futur accusé de livraison dédié; ne jamais les déduire de `lastSeenAt`.
+- L’extrait d’une réponse est un lien fonctionnel vers le message d’origine. Si ce message n’est pas chargé, le client demande une fenêtre ciblée au backend avant de défiler et de mettre le message en évidence.
