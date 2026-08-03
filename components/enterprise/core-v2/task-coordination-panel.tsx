@@ -16,8 +16,10 @@ type Coordination = {
 };
 
 type TaskChoice = { id: string; title: string };
+type TaskCoordinationPanelProps = { organizationId: string; taskId: string; taskChoices: TaskChoice[]; members: EnterpriseChoice[]; locale?: string | null; canUpdate?: boolean };
 
-export function TaskCoordinationPanel({ organizationId, taskId, taskChoices, members, locale }: { organizationId: string; taskId: string; taskChoices: TaskChoice[]; members: EnterpriseChoice[]; locale?: string | null }) {
+export function TaskCoordinationPanel(props: TaskCoordinationPanelProps) {
+  const { organizationId, taskId, taskChoices, members, locale } = props;
   const en = locale === "en";
   const [coordination, setCoordination] = useState<Coordination | null>(null);
   const [canUpdate, setCanUpdate] = useState(false);
