@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type EnterpriseCrossModuleProjection } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { crossModuleDefinitionsFor, type CrossModuleEventDefinition, type CrossModuleProjectorCode } from "@/lib/enterprise/cross-module/event-catalog";
 import { buildEnterpriseObjectDeepLink } from "@/lib/enterprise/cross-module/deep-links";
@@ -17,6 +17,8 @@ export class EnterpriseCrossModuleProjectionError extends Error {
 
 type DomainEventRecord = Awaited<ReturnType<typeof prisma.enterpriseDomainEvent.findUniqueOrThrow>>;
 type ProjectionTarget = { targetEntityType: string; targetEntityId: string; targetModule: string };
+type ProjectionFailure = { code: string; message: string; retryable: boolean };
+type ProjectionRunResult = { projection: EnterpriseCrossModuleProjection; skipped: boolean; targets: ProjectionTarget[]; error?: ProjectionFailure };
 
 type LinkInput = {
   organizationId: string;
@@ -115,7 +117,7 @@ async function projectSupplierInvoice(tx: Prisma.TransactionClient, event: Domai
   const payable = await tx.enterprisePayable.findFirst({ where: { organizationId: event.organizationId, supplierInvoiceId: invoice.id } });
   if (!payable) throw new EnterpriseCrossModuleProjectionError("SUPPLIER_INVOICE_PAYABLE_MISSING", "La facture comptabilisée ne possède pas sa dette commune.");
   return linkMany(tx, [
-    link({ sourceModule: "CRM_CUSTOMERS", sourceEntityType: "EnterpriseBusinessParty", sourceEntityId: invoice.businessPartyId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "BILLING_PARTY" }, event),
+    invoice.businessPartyId ? link({ sourceModule: "CRM_CUSTOMERS", sourceEntityType: "EnterpriseBusinessParty", sourceEntityId: invoice.businessPartyId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "BILLING_PARTY" }, event) : null,
     invoice.purchaseId ? link({ sourceModule: "SUPPLIERS_PURCHASES", sourceEntityType: "EnterprisePurchase", sourceEntityId: invoice.purchaseId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "INVOICED_BY" }, event) : null,
     invoice.purchaseReceiptId ? link({ sourceModule: "SUPPLIERS_PURCHASES", sourceEntityType: "EnterprisePurchaseReceipt", sourceEntityId: invoice.purchaseReceiptId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "INVOICED_BY" }, event) : null,
     invoice.projectId ? link({ sourceModule: "PROJECTS_SERVICES", sourceEntityType: "EnterpriseProject", sourceEntityId: invoice.projectId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "INVOICED_BY" }, event) : null,
@@ -224,7 +226,7 @@ async function executeProjector(tx: Prisma.TransactionClient, event: DomainEvent
   }
 }
 
-function failureDetails(error: unknown) {
+function failureDetails(error: unknown): ProjectionFailure {
   if (error instanceof EnterpriseCrossModuleProjectionError) return { code: error.code, message: error.message, retryable: error.retryable };
   if (error instanceof Prisma.PrismaClientKnownRequestError) return { code: `PRISMA_${error.code}`, message: "La projection inter-module a rencontré une erreur de données.", retryable: true };
   return { code: "CROSS_MODULE_PROJECTION_FAILED", message: error instanceof Error ? error.message.slice(0, 700) : "La projection inter-module a échoué.", retryable: true };
@@ -247,7 +249,7 @@ async function ensureProjection(event: DomainEventRecord, definition: CrossModul
   });
 }
 
-async function runProjection(projectionId: string, definition: CrossModuleEventDefinition) {
+async function runProjection(projectionId: string, definition: CrossModuleEventDefinition): Promise<ProjectionRunResult> {
   const projection = await prisma.enterpriseCrossModuleProjection.findUniqueOrThrow({ where: { id: projectionId } });
   if (projection.status === "COMPLETED") return { projection, skipped: true, targets: [] as ProjectionTarget[] };
   const staleProcessingBefore = new Date(Date.now() - 5 * 60 * 1000);
@@ -265,12 +267,12 @@ async function runProjection(projectionId: string, definition: CrossModuleEventD
   if (claimed.count !== 1) return { projection: await prisma.enterpriseCrossModuleProjection.findUniqueOrThrow({ where: { id: projection.id } }), skipped: true, targets: [] as ProjectionTarget[] };
   const event = await prisma.enterpriseDomainEvent.findFirst({ where: { id: projection.domainEventId, organizationId: projection.organizationId } });
   if (!event) {
-    const failure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };
-    const failed = await prisma.enterpriseCrossModuleProjection.update({ where: { id: projection.id }, data: { status: "DEAD", failedAt: new Date(), lastErrorCode: failure.code, lastErrorMessage: failure.message } });
+    const failure: ProjectionFailure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };
+    const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update({ where: { id: projection.id }, data: { status: "DEAD", failedAt: new Date(), lastErrorCode: failure.code, lastErrorMessage: failure.message } });
     return { projection: failed, skipped: false, targets: [] as ProjectionTarget[], error: failure };
   }
   try {
-    const targets = await prisma.$transaction((tx) => executeProjector(tx, event, definition), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    const targets = await prisma.$transaction((tx) => executeProjector(tx, event, definition.projectorCode), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const firstTarget = targets[0];
     const completed = await prisma.enterpriseCrossModuleProjection.update({
       where: { id: projection.id },
@@ -296,7 +298,7 @@ async function runProjection(projectionId: string, definition: CrossModuleEventD
     const failure = failureDetails(error);
     const current = await prisma.enterpriseCrossModuleProjection.findUniqueOrThrow({ where: { id: projection.id } });
     const dead = !failure.retryable || current.attemptCount >= 5;
-    const failed = await prisma.enterpriseCrossModuleProjection.update({
+    const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update({
       where: { id: projection.id },
       data: {
         status: dead ? "DEAD" : "FAILED",
