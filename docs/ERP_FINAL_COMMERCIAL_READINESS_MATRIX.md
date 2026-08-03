@@ -101,3 +101,22 @@ Après confirmation des scénarios concernés :
 7. fusionner uniquement après Quality Gates verts.
 
 Tant que cette procédure n’est pas terminée, les modules des itérations 5 et 6 restent `PROFESSIONAL_READY` et `commercializable: false`.
+
+
+---
+
+# Matrice finale de maturité commerciale
+
+La consolidation ne promeut aucun module automatiquement. Le niveau existant est conservé seulement si les Quality Gates passent ; tout défaut manuel critique impose un déclassement temporaire.
+
+| Condition | Niveau maximal avant validation propriétaire |
+|---|---|
+| backend seul | `BACKEND_READY` |
+| lecture seule | `READ_ONLY_UI` |
+| CRUD/workflow incomplet | `OPERATIONAL_UI` |
+| contrat professionnel, guide, permissions, mobile et QA | `PROFESSIONAL_READY` |
+| tests manuels confirmés explicitement par le propriétaire | éligible `COMMERCIAL_READY` |
+
+Déclassement obligatoire : formulaire incomplet, duplication, incohérence de statut, permission incorrecte, guide absent, notification ou deep link cassé, défaut mobile critique, projection non maîtrisée.
+
+`COMMERCIAL_READY` exige une validation manuelle du propriétaire. Aucun résultat E2E n’est présumé.

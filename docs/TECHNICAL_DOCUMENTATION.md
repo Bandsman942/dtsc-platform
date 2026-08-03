@@ -302,3 +302,7 @@ Les six modules avancés sont `PROFESSIONAL_READY` et `commercializable: false`.
 **Tests E2E manuels préparés — validation du propriétaire en attente.**
 
 Aucune clôture fonctionnelle ni promotion commerciale n’est déclarée avant confirmation explicite du propriétaire.
+
+## ERP cross-module projection control
+
+The final consolidation uses the existing durable domain-event outbox. Each consumer receives an idempotent `EnterpriseCrossModuleProjection` receipt with retry state, error metadata and exact object deep links. Sector extensions continue to reference common Finance, inventory and accounting objects.

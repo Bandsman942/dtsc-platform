@@ -79,3 +79,7 @@ Pharmacy conserve les données réglementaires et opérationnelles spécialisée
 ## Release B éventuelle
 
 Une suppression de table, colonne, adapter ou flag exige une période d’observation Production, un export, une sauvegarde, une restauration testée, l’absence de dépendance, la validation des contraintes légales et une migration indépendante compatible avec plusieurs versions applicatives.
+
+## Couche de continuité inter-module
+
+`EnterpriseDomainEvent` transporte le fait durable ; `EnterpriseCrossModuleProjection` conserve le reçu par consommateur ; `EnterpriseEntityLink` matérialise les relations polymorphes tenant-aware.

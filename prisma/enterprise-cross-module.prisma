@@ -1,0 +1,32 @@
+model EnterpriseCrossModuleProjection {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  domainEventId          String
+  eventType              String
+  sourceEntityType       String
+  sourceEntityId         String
+  consumerCode           String
+  targetModule           String
+  targetEntityType       String?
+  targetEntityId         String?
+  status                 String   @default("PENDING")
+  attemptCount           Int      @default(0)
+  availableAt            DateTime @default(now())
+  startedAt              DateTime?
+  completedAt            DateTime?
+  failedAt               DateTime?
+  lastErrorCode          String?
+  lastErrorMessage       String?
+  metadataJson           Json?
+  retryRequestedByUserId String?
+  retryRequestedAt       DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, domainEventId, consumerCode])
+  @@index([organizationId, status, availableAt])
+  @@index([organizationId, eventType, createdAt])
+  @@index([organizationId, targetModule, targetEntityType, targetEntityId])
+  @@index([domainEventId])
+}

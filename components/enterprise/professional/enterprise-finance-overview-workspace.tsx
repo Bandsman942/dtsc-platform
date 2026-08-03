@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowRight, CheckCircle2, Circle, Settings2, ShieldAlert } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, Network, RotateCcw, Settings2, ShieldAlert } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
   ProfessionalError,
@@ -49,6 +49,32 @@ type Summary = {
   pendingApprovals: number;
 };
 
+
+type ProjectionItem = {
+  id: string;
+  eventType: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  targetModule: string;
+  targetEntityType?: string | null;
+  targetEntityId?: string | null;
+  status: string;
+  attemptCount: number;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  updatedAt: string;
+  sourceDeepLink?: string | null;
+  targetDeepLink?: string | null;
+};
+
+type ProjectionHealth = {
+  items: ProjectionItem[];
+  metrics: Record<string, number>;
+  pagination: { total: number };
+};
+
+const EMPTY_PROJECTION_HEALTH: ProjectionHealth = { items: [], metrics: {}, pagination: { total: 0 } };
+
 const EMPTY_SUMMARY: Summary = {
   openReceivables: 0,
   openPayables: 0,
@@ -82,6 +108,8 @@ export function EnterpriseFinanceOverviewWorkspace({
   const locale: FinanceLocale = requestedLocale === "en" ? "en" : "fr";
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
+  const [projectionHealth, setProjectionHealth] = useState<ProjectionHealth>(EMPTY_PROJECTION_HEALTH);
+  const [retryingProjectionId, setRetryingProjectionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -91,7 +119,7 @@ export function EnterpriseFinanceOverviewWorkspace({
     setLoading(true);
     setError("");
     try {
-      const [readinessResponse, receivables, payables, payments, cash, reconciliations, approvedInvoices, pendingPayments] = await Promise.all([
+      const [readinessResponse, receivables, payables, payments, cash, reconciliations, approvedInvoices, pendingPayments, projectionsResponse] = await Promise.all([
         fetch(`/api/enterprise/${organizationId}/finance/configuration`, { cache: "no-store" }),
         totalFor(`/api/enterprise/${organizationId}/receivables?page=1&pageSize=1&status=OPEN`),
         totalFor(`/api/enterprise/${organizationId}/payables?page=1&pageSize=1&status=OPEN`),
@@ -100,10 +128,13 @@ export function EnterpriseFinanceOverviewWorkspace({
         totalFor(`/api/enterprise/${organizationId}/reconciliations?page=1&pageSize=1&status=SUBMITTED`),
         totalFor(`/api/enterprise/${organizationId}/sales-invoices?page=1&pageSize=1&status=APPROVED`),
         totalFor(`/api/enterprise/${organizationId}/payments?page=1&pageSize=1&status=PENDING_APPROVAL`),
+        fetch(`/api/enterprise/${organizationId}/erp-projections?page=1&pageSize=20`, { cache: "no-store" }),
       ]);
       const body = await readinessResponse.json().catch(() => null) as Readiness & { message?: string; error?: string } | null;
       if (!readinessResponse.ok || !body) throw new Error(body?.message || body?.error || "La préparation Finance ne peut pas être chargée.");
       setReadiness(body);
+      const projectionsBody = await projectionsResponse.json().catch(() => null) as ProjectionHealth | null;
+      if (projectionsResponse.ok && projectionsBody) setProjectionHealth(projectionsBody);
       setSummary({
         openReceivables: receivables.total,
         openPayables: payables.total,
@@ -141,6 +172,23 @@ export function EnterpriseFinanceOverviewWorkspace({
     { id: "approvers", label: locale === "fr" ? "Responsables et approbateurs" : "Owners and approvers", done: Boolean(readiness?.configuration), href: "/enterprise-admin?section=permissions" },
     { id: "verify", label: locale === "fr" ? "Vérification finale" : "Final verification", done: Boolean(readiness?.ready), href: null },
   ], [checklist, locale, readiness]);
+
+  async function retryProjection(projectionId: string) {
+    setRetryingProjectionId(projectionId);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/erp-projections/${projectionId}/retry`, { method: "POST" });
+      const body = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) throw new Error(body?.message || "La projection ne peut pas être relancée.");
+      setMessage(locale === "fr" ? "Projection inter-module relancée." : "Cross-module projection retried.");
+      await load();
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : "La projection ne peut pas être relancée.");
+    } finally {
+      setRetryingProjectionId(null);
+    }
+  }
 
   async function saveConfiguration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -235,6 +283,38 @@ export function EnterpriseFinanceOverviewWorkspace({
                     <p className="text-2xl font-black text-dtsc-blue">{action.count}</p><p className="mt-1 font-black text-dtsc-ink">{action.label}</p>
                   </Link>
                 ))}
+              </div>
+            </ModuleSection>
+
+            <ModuleSection
+              title={locale === "fr" ? "Continuité inter-module" : "Cross-module continuity"}
+              description={locale === "fr"
+                ? "Les projections relient les objets ERP sans créer de facture, paiement, mouvement de stock ou écriture en double."
+                : "Projections connect ERP objects without creating duplicate invoices, payments, stock movements or journal entries."}
+            >
+              <div className="grid gap-3 sm:grid-cols-3">
+                <article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{locale === "fr" ? "Terminées" : "Completed"}</p><p className="mt-1 text-2xl font-black text-emerald-600">{projectionHealth.metrics.COMPLETED || 0}</p></article>
+                <article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{locale === "fr" ? "À reprendre" : "Retry needed"}</p><p className="mt-1 text-2xl font-black text-amber-600">{(projectionHealth.metrics.FAILED || 0) + (projectionHealth.metrics.DEAD || 0)}</p></article>
+                <article className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{locale === "fr" ? "Total observé" : "Observed total"}</p><p className="mt-1 text-2xl font-black text-dtsc-blue">{projectionHealth.pagination.total}</p></article>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {projectionHealth.items.filter((item) => ["FAILED", "DEAD"].includes(item.status)).length ? projectionHealth.items.filter((item) => ["FAILED", "DEAD"].includes(item.status)).map((item) => (
+                  <article key={item.id} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <div className="flex flex-wrap items-start gap-3">
+                      <Network className="mt-0.5 h-5 w-5 text-amber-700" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black text-dtsc-ink">{item.eventType}</p>
+                        <p className="mt-1 text-sm text-dtsc-muted">{item.lastErrorMessage || (locale === "fr" ? "Projection en attente de reprise contrôlée." : "Projection awaiting controlled retry.")}</p>
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
+                          {item.sourceDeepLink ? <Link className="text-dtsc-blue underline" href={item.sourceDeepLink}>{locale === "fr" ? "Ouvrir la source" : "Open source"}</Link> : null}
+                          {item.targetDeepLink ? <Link className="text-dtsc-blue underline" href={item.targetDeepLink}>{locale === "fr" ? "Ouvrir la cible" : "Open target"}</Link> : null}
+                          <span className="text-dtsc-muted">{locale === "fr" ? "Tentatives" : "Attempts"}: {item.attemptCount}</span>
+                        </div>
+                      </div>
+                      {canManage ? <Button type="button" variant="outline" disabled={retryingProjectionId === item.id} onClick={() => void retryProjection(item.id)}><RotateCcw className="h-4 w-4" />{locale === "fr" ? "Relancer" : "Retry"}</Button> : null}
+                    </div>
+                  </article>
+                )) : <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm font-bold text-emerald-800 dark:text-emerald-200">{locale === "fr" ? "Aucune projection inter-module en échec dans les éléments récents." : "No failed cross-module projection in recent items."}</div>}
               </div>
             </ModuleSection>
             <ProfessionalHelp moduleCode="FINANCE_OVERVIEW" />
