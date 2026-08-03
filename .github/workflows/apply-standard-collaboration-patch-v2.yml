@@ -47,17 +47,16 @@ jobs:
             .github/iteration03-patch.part-10
             .github/iteration03-patch.part-11
           )
-          wc -c "${PATCH_PARTS[@]}"
-          sha256sum "${PATCH_PARTS[@]}"
           cat "${PATCH_PARTS[@]}" > /tmp/iteration03-patch.b64
-          wc -c /tmp/iteration03-patch.b64
-          sha256sum /tmp/iteration03-patch.b64
           test "$(wc -c < /tmp/iteration03-patch.b64)" = "$EXPECTED_SIZE"
           test "$(sha256sum /tmp/iteration03-patch.b64 | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           base64 --decode /tmp/iteration03-patch.b64 | gzip --decompress > /tmp/iteration03.patch
           git fetch origin main
           git checkout -B "$TARGET_BRANCH" origin/main
           git apply --index --whitespace=error /tmp/iteration03.patch
+          # The Actions token cannot update workflow files. The verified workflow change
+          # is restored here and will be committed separately through the GitHub connector.
+          git restore --source=origin/main --staged --worktree .github/workflows/quality-gates.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat: professionalize collaboration, calls and announcements"
