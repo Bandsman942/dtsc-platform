@@ -71,7 +71,7 @@ function denied(definition: StandardModuleDefinition | null, reasonCode: string,
 }
 
 function hasPermission(definition: StandardModuleDefinition, permissions: Set<string>, capability: StandardModuleCapability) {
-  if (!definition.permissionPrefixes.length) return true;
+  if (!definition.permissionPrefixes.length) return capability === "canView";
   const suffixes = new Set([
     "*",
     capability.replace(/^can/, "").toUpperCase(),
@@ -89,10 +89,20 @@ function policyAllows(policy: StandardModuleAccessPolicy, input: StandardModuleA
   if (policy === "EXPLICIT_DENY") return false;
   if (!input.authenticated) return false;
   if (policy === "AUTHENTICATED") return true;
-  if (policy === "ORGANIZATION_MEMBERSHIP") return input.activeContext === "ORGANIZATION" && Boolean(input.activeOrganizationId && input.hasActiveMembership);
-  if (policy === "POSITION_PERMISSION") return Boolean(input.positionCode || input.role === "ADMIN") && (input.activeContext === "DTSC_INTERNAL" || Boolean(input.hasActiveMembership));
+  if (policy === "ORGANIZATION_MEMBERSHIP") {
+    return input.activeContext === "ORGANIZATION" && Boolean(input.activeOrganizationId && input.hasActiveMembership);
+  }
+  if (policy === "POSITION_PERMISSION") {
+    if (input.activeContext === "DTSC_INTERNAL") return Boolean(input.positionCode || input.role === "ADMIN");
+    return input.activeContext === "ORGANIZATION"
+      && Boolean(input.activeOrganizationId && input.hasActiveMembership && input.positionCode);
+  }
   if (policy === "GLOBAL_ROLE") return input.role === "ADMIN" || input.role === "SUPPORT" || input.role === "MANAGER";
-  if (policy === "ADMIN_BLOCK") return input.role === "ADMIN" || input.isOwner === true || Boolean(input.positionCode);
+  if (policy === "ADMIN_BLOCK") {
+    if (input.activeContext === "DTSC_INTERNAL") return input.role === "ADMIN" || Boolean(input.positionCode);
+    return input.activeContext === "ORGANIZATION"
+      && Boolean(input.activeOrganizationId && input.hasActiveMembership && (input.isOwner || input.positionCode));
+  }
   return false;
 }
 
@@ -131,7 +141,10 @@ export function resolveStandardModuleAccess(input: StandardModuleAccessInput): S
   if (definition.accessPolicy === "PUBLIC" || definition.accessPolicy === "AUTHENTICATED" || definition.accessPolicy === "ORGANIZATION_MEMBERSHIP") {
     capabilities.canComment = true;
   }
-  if (input.role === "ADMIN" || input.isOwner) {
+  if (input.role === "ADMIN" && input.activeContext === "DTSC_INTERNAL") {
+    for (const capability of ALL_CAPABILITIES) capabilities[capability] = true;
+  }
+  if (input.isOwner && input.activeContext === "ORGANIZATION" && input.hasActiveMembership) {
     for (const capability of ALL_CAPABILITIES) capabilities[capability] = true;
   }
 
