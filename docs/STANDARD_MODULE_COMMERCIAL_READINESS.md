@@ -16,6 +16,8 @@ Le statut technique (`ACTIVE`, `BETA`, `PLANNED`, `HIDDEN`, `DEPRECATED`, `RETIR
 
 `COMMERCIAL_READY` exige : Quality Gates verts, Production issue de `main`, migrations et build stables, tests E2E manuels, validation explicite du propriétaire et preuve versionnée. Une PR de promotion séparée est recommandée.
 
+Aucun module standard n’est promu vers `COMMERCIAL_READY` automatiquement, par simple succès d’un audit, d’un build ou d’un déploiement.
+
 ## Évaluation de l’itération 2
 
 | Module | Avant | Cible après Quality Gates | Preuves principales | Limite commerciale |
