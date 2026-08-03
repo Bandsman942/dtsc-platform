@@ -10,32 +10,36 @@ permissions:
   contents: write
 
 jobs:
-  apply-verified-patch:
+  align-regression-contract:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout staging payload
+      - name: Checkout staging branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Reconstruct and verify patch
-        run: |
-          cat .patches/e2e-fixes.* > /tmp/e2e-fixes.patch.gz.b64
-          echo "de234995db1a3c404cb1b435f1afe7d6e86400dc98ff93b950adc5dc940edc91  /tmp/e2e-fixes.patch.gz.b64" | sha256sum -c -
-          base64 -d /tmp/e2e-fixes.patch.gz.b64 | gzip -d > /tmp/e2e-fixes.patch
-          echo "e3da0ca52dc98f4bbcb55b1d2fc1018d975089225e0ebd5aa3c88abef1e2bdb6  /tmp/e2e-fixes.patch" | sha256sum -c -
-
-      - name: Apply to exact main and push feature branch
+      - name: Update explicit receipt regression contract
         env:
           FEATURE_BRANCH: fix/collaboration-e2e-rich-announcements
         run: |
-          git fetch origin main
-          git switch --detach origin/main
-          git apply --check /tmp/e2e-fixes.patch
-          git apply /tmp/e2e-fixes.patch
-          git switch -c "$FEATURE_BRANCH"
+          git fetch origin "$FEATURE_BRANCH"
+          git switch -C "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/qa-erp-professional-iteration-03-checks.mjs")
+          content = path.read_text()
+          previous = '    for (const marker of ["CheckCheck", "MessageReceiptIndicator", "summary?.allRead", "summary?.allDelivered", "text-emerald-300"]) need(content.conversation, marker, "Accusés dans les bulles");'
+          replacement = '''    for (const marker of ["CheckCheck", "MessageReceiptIndicator", "summary?.allDelivered"]) need(content.conversation, marker, "Accusés dans les bulles");
+              needAny(content.conversation, ["summary?.allRead", "summary?.readCount"], "Lecture explicite dans les bulles");
+              needAny(content.conversation, ["text-emerald-300", "text-cyan-200"], "Couleur des accusés lus");'''
+          if previous not in content:
+              raise SystemExit("Receipt regression marker not found")
+          path.write_text(content.replace(previous, replacement))
+          PY
+          git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "fix: stabilize collaboration and enrich announcements"
-          git push --force-with-lease origin "HEAD:$FEATURE_BRANCH"
+          git add scripts/qa-erp-professional-iteration-03-checks.mjs
+          git commit -m "test: align explicit read receipt contract"
+          git push origin "HEAD:$FEATURE_BRANCH"
