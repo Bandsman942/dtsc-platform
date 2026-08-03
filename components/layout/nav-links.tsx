@@ -7,34 +7,54 @@ import { Bell, Bot, BriefcaseBusiness, Building2, CalendarCheck, CalendarDays, C
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { canAccessAdministration } from "@/lib/admin-access";
-import { getConsoleUrl, getSupportUrl } from "@/lib/domains";
 import { translate } from "@/lib/i18n";
 import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
 import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
 import { COMPANY_RELATIONSHIPS_NAVIGATION, getCompanyRelationshipsLabel } from "@/lib/navigation/company-relationships";
+import { resolveStandardModuleHref } from "@/lib/modules/standard-module-navigation";
+import { getStandardModuleDefinition } from "@/lib/modules/standard-module-registry";
 
 type NavItem = {
+  code: string;
   href: string;
-  path?: string;
+  path: string;
   label: string;
   icon: ElementType;
   help: string;
+  order: number;
 };
 
+function standardNavItem(code: string, icon: ElementType): NavItem {
+  const definition = getStandardModuleDefinition(code);
+  if (!definition?.routePath) {
+    throw new Error(`Standard navigation module is not registered with a route: ${code}`);
+  }
+  const path = definition.routePath.split(/[?#]/, 1)[0] || "/";
+  return {
+    code: definition.code,
+    href: definition.host === "APP" ? definition.routePath : resolveStandardModuleHref(definition) || definition.routePath,
+    path,
+    label: definition.labelFr,
+    icon,
+    help: definition.descriptionFr,
+    order: definition.navigationOrder,
+  };
+}
+
 const items: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, help: "Voir vos indicateurs, conversations récentes et accès rapides." },
-  { href: "/chat", label: "Chatbot", icon: Bot, help: "Discuter avec l'assistant DTSC et exploiter votre contexte métier." },
-  { href: "/billing", label: "Abonnement", icon: CreditCard, help: "Consulter votre plan, vos limites et vos factures." },
-  { href: "/company", label: "Entreprise", icon: BriefcaseBusiness, help: "Renseigner votre entreprise, vos activités et vos documents métier." },
-  { href: COMPANY_RELATIONSHIPS_NAVIGATION.href, label: COMPANY_RELATIONSHIPS_NAVIGATION.labelFr, icon: Building2, help: "Traiter vos invitations, consentements, demandes et relations actives avec les entreprises." },
-  { href: "/calendar", label: "Calendrier interne", icon: CalendarDays, help: "Voir disponibilités, réunions, missions et conflits de planning." },
-  { href: "/collaborators", label: "Mes collaborateurs", icon: UsersRound, help: "Créer des groupes, inviter des membres et échanger autour de vos projets." },
-  { href: "/notifications", label: "Notifications", icon: Bell, help: "Lire les alertes importantes liées à votre compte." },
-  { href: "/announcements", label: "Annonces", icon: Megaphone, help: "Suivre les publications internes et échanger en commentaires." },
-  { href: getSupportUrl("/support"), path: "/support", label: "Support", icon: Headphones, help: "Créer et suivre vos tickets avec l'équipe DTSC." },
-  { href: "/profile", label: "Profil", icon: User, help: "Mettre à jour vos informations personnelles." },
-  { href: "/settings", label: "Paramètres", icon: Settings, help: "Configurer votre compte, thème et préférences." },
-];
+  standardNavItem("DASHBOARD", LayoutDashboard),
+  standardNavItem("GLOBAL_CHATBOT", Bot),
+  standardNavItem("SUBSCRIPTION", CreditCard),
+  standardNavItem("COMPANY_PROFILE", BriefcaseBusiness),
+  standardNavItem("COMPANY_RELATIONSHIPS", Building2),
+  standardNavItem("CALENDAR", CalendarDays),
+  standardNavItem("COLLABORATORS", UsersRound),
+  standardNavItem("NOTIFICATIONS", Bell),
+  standardNavItem("ANNOUNCEMENTS", Megaphone),
+  standardNavItem("SUPPORT", Headphones),
+  standardNavItem("PROFILE", User),
+  standardNavItem("SETTINGS", Settings),
+].sort((left, right) => left.order - right.order);
 
 export function NavLinks({
   role,
@@ -68,39 +88,39 @@ export function NavLinks({
 }) {
   const pathname = usePathname();
   const employeeItems: NavItem[] = showInternalModules && showEmployeeActivities
-    ? [{ href: "/activities", label: "Activités DTSC", icon: CalendarCheck, help: "Voir les tâches, opérations, réunions et blocages internes qui vous concernent." }]
+    ? [standardNavItem("DTSC_ACTIVITIES", CalendarCheck)]
     : [];
   const visibleBaseItems = items.filter((item) => {
-    if (item.href === "/calendar") {
+    if (item.code === "CALENDAR") {
       return showInternalModules || Boolean(enterpriseContext);
     }
-    if (item.href === "/collaborators") {
+    if (item.code === "COLLABORATORS") {
       return showCollaborationModule;
     }
     return true;
   });
   const invitationItems: NavItem[] = pendingEnterpriseInvitations > 0
-    ? [{ href: "/enterprise-invitations", label: "Invitations", icon: UserPlus, help: "Accepter ou refuser vos invitations vers les espaces entreprises." }]
+    ? [standardNavItem("ENTERPRISE_INVITATIONS", UserPlus)]
     : [];
   const navItems: NavItem[] = showInternalModules && canAccessAdministration(role)
-    ? [...visibleBaseItems, ...invitationItems, ...employeeItems, { href: getConsoleUrl("/admin"), path: "/admin", label: "Administration", icon: Shield, help: "Accéder aux blocs d'administration autorisés pour votre rôle." }]
+    ? [...visibleBaseItems, ...invitationItems, ...employeeItems, standardNavItem("DTSC_INTERNAL_ADMIN", Shield)]
     : [...visibleBaseItems, ...invitationItems, ...employeeItems];
 
-  const translationByHref: Record<string, string> = {
-    "/dashboard": "navigation.dashboard",
-    "/chat": "navigation.chat",
-    "/billing": "navigation.billing",
-    "/company": "navigation.company",
-    "/calendar": "navigation.calendar",
-    "/collaborators": "navigation.collaborators",
-    "/notifications": "navigation.notifications",
-    "/enterprise-invitations": "navigation.invitations",
-    "/announcements": "navigation.announcements",
-    "/support": "navigation.support",
-    "/profile": "navigation.profile",
-    "/settings": "navigation.settings",
-    "/activities": "navigation.activities",
-    "/admin": "navigation.admin",
+  const translationByCode: Record<string, string> = {
+    DASHBOARD: "navigation.dashboard",
+    GLOBAL_CHATBOT: "navigation.chat",
+    SUBSCRIPTION: "navigation.billing",
+    COMPANY_PROFILE: "navigation.company",
+    CALENDAR: "navigation.calendar",
+    COLLABORATORS: "navigation.collaborators",
+    NOTIFICATIONS: "navigation.notifications",
+    ENTERPRISE_INVITATIONS: "navigation.invitations",
+    ANNOUNCEMENTS: "navigation.announcements",
+    SUPPORT: "navigation.support",
+    PROFILE: "navigation.profile",
+    SETTINGS: "navigation.settings",
+    DTSC_ACTIVITIES: "navigation.activities",
+    DTSC_INTERNAL_ADMIN: "navigation.admin",
   };
 
   const groupedEnterpriseModules = new Map<string, EnterpriseNavigationModule[]>();
@@ -111,12 +131,12 @@ export function NavLinks({
   }
 
   function renderItem(item: NavItem, labelOverride?: string) {
-    const itemPath = item.path || item.href;
+    const itemPath = item.path;
     const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
-    const showNotificationSignal = itemPath === "/notifications" && unreadNotifications > 0;
-    const showCollaborationSignal = itemPath === "/collaborators" && unreadCollaboratorMessages > 0;
-    const showInvitationSignal = itemPath === "/enterprise-invitations" && pendingEnterpriseInvitations > 0;
-    const showCompanyRelationshipSignal = itemPath === COMPANY_RELATIONSHIPS_NAVIGATION.href && pendingCompanyRelationships > 0;
+    const showNotificationSignal = item.code === "NOTIFICATIONS" && unreadNotifications > 0;
+    const showCollaborationSignal = item.code === "COLLABORATORS" && unreadCollaboratorMessages > 0;
+    const showInvitationSignal = item.code === "ENTERPRISE_INVITATIONS" && pendingEnterpriseInvitations > 0;
+    const showCompanyRelationshipSignal = item.code === COMPANY_RELATIONSHIPS_NAVIGATION.code && pendingCompanyRelationships > 0;
     const signalCount = showInvitationSignal
       ? pendingEnterpriseInvitations
       : showCompanyRelationshipSignal
@@ -127,15 +147,18 @@ export function NavLinks({
             ? unreadCollaboratorMessages
             : 0;
     const showSignal = showNotificationSignal || showInvitationSignal || showCollaborationSignal || showCompanyRelationshipSignal;
+    const translationKey = translationByCode[item.code];
     const label = labelOverride
-      || (itemPath === COMPANY_RELATIONSHIPS_NAVIGATION.href
+      || (item.code === COMPANY_RELATIONSHIPS_NAVIGATION.code
         ? getCompanyRelationshipsLabel(locale, mobile)
-        : mobile && itemPath === "/admin"
+        : mobile && item.code === "DTSC_INTERNAL_ADMIN"
           ? "Admin"
-          : translate(locale, translationByHref[itemPath] || item.label));
+          : translationKey
+            ? translate(locale, translationKey)
+            : item.label);
     return (
       <Link
-        key={itemPath}
+        key={`${item.code}:${item.href}`}
         href={item.href}
         title={item.help}
         className={cn(
@@ -178,11 +201,14 @@ export function NavLinks({
     <div className="space-y-1">
       {enterpriseContext.showActivities
         ? renderItem(
-            { href: "/enterprise-activities", label: "Activités entreprise", icon: CalendarCheck, help: "Soumettre et suivre les activités internes de votre entreprise." },
+            standardNavItem("ENTERPRISE_ACTIVITIES", CalendarCheck),
             translate(locale, "navigation.enterpriseActivitiesNamed").replace("{organization}", enterpriseContext.organizationName),
           )
         : null}
-      {renderItem({ href: "/enterprise-modules", label: "Modules ERP", icon: Layers3, help: "Ouvrir le hub groupé des modules ERP autorisés." }, locale === "en" ? "ERP modules" : "Modules ERP")}
+      {renderItem(
+        standardNavItem("ENTERPRISE_MODULES_SUBSCRIPTION", Layers3),
+        locale === "en" ? "ERP modules" : "Modules ERP",
+      )}
       {!mobile
         ? Array.from(groupedEnterpriseModules.entries()).map(([group, groupModules]) => {
             const groupLabel = groupModules[0]?.navigationGroupLabel || group;
@@ -197,10 +223,13 @@ export function NavLinks({
                   {groupModules
                     .sort((left, right) => left.navigationOrder - right.navigationOrder)
                     .map((enterpriseModule) => renderItem({
+                      code: enterpriseModule.code,
                       href: enterpriseModule.href,
+                      path: enterpriseModule.href.split(/[?#]/, 1)[0] || enterpriseModule.href,
                       label: enterpriseModule.label,
                       icon: resolveEnterpriseModuleIcon(enterpriseModule),
                       help: enterpriseModule.description,
+                      order: enterpriseModule.navigationOrder,
                     }, enterpriseModule.label))}
                 </div>
               </details>
@@ -209,7 +238,7 @@ export function NavLinks({
         : null}
       {enterpriseContext.showAdmin
         ? renderItem(
-            { href: "/enterprise-admin", label: "Administration entreprise", icon: Shield, help: "Administrer les collaborateurs, postes, départements, modules, abonnement, paramètres et audit." },
+            standardNavItem("ENTERPRISE_ADMINISTRATION", Shield),
             translate(locale, "navigation.enterpriseAdminNamed").replace("{organization}", enterpriseContext.organizationName),
           )
         : null}

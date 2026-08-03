@@ -1,6 +1,6 @@
 # DTSC Platform — Documentation technique
 
-**Version :** ERP Professionalization 5/6
+**Version :** Consolidation ERP + modules standards 1/8
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
@@ -64,7 +64,9 @@ Toutes les références structurantes sont revalidées dans le même `organizati
 
 ## 6. Registre canonique et maturité
 
-Le registre canonique définit les codes, statuts, routes, workspaces, permissions, dépendances, plans et QA. `EnterpriseModule` active un module pour un tenant, mais ne peut ouvrir un code absent, masqué ou non entitled.
+Le registre canonique ERP définit les codes, statuts, routes, workspaces, permissions, dépendances, plans et QA des modules ERP. `EnterpriseModule` active un module pour un tenant, mais ne peut ouvrir un code absent, masqué ou non entitled.
+
+Le registre canonique standard `lib/modules/standard-module-registry-data.json` décrit séparément les surfaces SaaS globales, entreprise standard, internes DTSC, Console, publiques, Account et Support. Une entrée standard qui consomme un moteur ERP déclare `erpDependencies` et ne devient jamais une seconde source de vérité.
 
 La maturité commerciale est séparée du statut technique :
 
@@ -74,7 +76,7 @@ La maturité commerciale est séparée du statut technique :
 - `PROFESSIONAL_READY` ;
 - `COMMERCIAL_READY`.
 
-Les manifestes d’itérations sont fusionnés par `lib/enterprise/module-commercial-readiness.ts`. Une promotion vers `COMMERCIAL_READY` exige une décision explicite du propriétaire après validation E2E authentifiée et Production stable.
+Une promotion vers `COMMERCIAL_READY` exige une décision explicite du propriétaire après validation E2E authentifiée et Production stable. Les audits refusent toute promotion automatique des modules standards.
 
 ## 7. ERP commun
 
@@ -209,7 +211,7 @@ Mobile : rail KPI horizontal local, `min-w-0`, aucun débordement global, champs
 - installation depuis une base vide obligatoire ;
 - aucune dépendance cachée à un backfill manuel.
 
-L’itération 5 réutilise les modèles existants et n’introduit pas de migration destructive.
+La fondation standard de l’itération 1 est statique et n’introduit aucune migration Prisma.
 
 ## 14. Audit d’intégrité
 
@@ -235,21 +237,22 @@ pnpm qa:regression
 pnpm build
 ```
 
-Itération 5 :
+Fondations standards :
 
 ```bash
-pnpm qa:erp-professional-accounting
-pnpm qa:erp-professional-tax
-pnpm qa:erp-professional-financial-close
-pnpm qa:erp-professional-financial-statements
-pnpm qa:erp-professional-fixed-assets
-pnpm qa:erp-professional-inventory-valuation
-pnpm qa:erp-accounting-integrity
-pnpm qa:erp-accounting-security
-pnpm qa:erp-iteration-05-commercial-readiness
+pnpm qa:standard-module-registry
+pnpm qa:standard-module-navigation
+pnpm qa:standard-module-routes
+pnpm qa:standard-module-permissions
+pnpm qa:standard-module-guides
+pnpm qa:standard-module-language
+pnpm qa:standard-module-mobile
+pnpm qa:standard-module-multi-domain
+pnpm qa:standard-module-readiness
+pnpm qa:standard-modules-iteration-01
 ```
 
-La CI démarre PostgreSQL, applique toutes les migrations depuis zéro, génère Prisma, exécute les audits, vérifie la parité Finance, le type-check, la régression, le lint et le build.
+La CI démarre PostgreSQL, applique toutes les migrations depuis zéro, génère Prisma, exécute les audits, vérifie la parité Finance, le type-check, la régression incluant l’itération standard, le lint et le build.
 
 ## 16. CI/CD et Production
 
@@ -268,7 +271,7 @@ branche feature
 
 Aucun `vercel deploy` ou `vercel --prod` n’est lancé depuis une branche. Les previews désactivées sont normales.
 
-Après merge : vérifier SHA fusionné, SHA `main`, SHA Production, migrations, build, authentification, sélection du tenant, navigation, Finance opérationnelle, Comptabilité, Fiscalité, Clôture, États, Immobilisations, Valorisation, exports, logs critiques et audit d’intégrité.
+Après merge : vérifier SHA fusionné, SHA `main`, SHA Production, migrations, build, authentification, sélection du tenant, navigation, Finance, Health, Pharmacy, modules standards, PWA/Web Push, aliases, logs critiques et audits applicables.
 
 ## 17. Rollback
 
@@ -276,33 +279,57 @@ Le rollback est non destructif. Il peut masquer une action ou bloquer une route 
 
 Il ne doit jamais supprimer, modifier ou recréer : écriture, ligne, contrepassation, période, état publié, amortissement, valorisation ou séquence.
 
+Pour le registre standard, le rollback peut retirer une intégration de navigation ou déclasser honnêtement un statut, mais ne doit jamais promouvoir un module ni inventer une route de remplacement.
+
 ## 18. Documentation spécialisée
 
-Références principales :
+Références principales ERP :
 
 - `docs/ERP_FINANCE_ARCHITECTURE.md`
 - `docs/ERP_ACCOUNTING_MODEL.md`
 - `docs/ERP_POSTING_RULES.md`
 - `docs/ERP_FINANCIAL_SECURITY.md`
 - `docs/ERP_ACCOUNTING_INTEGRITY_CONTROLS.md`
-- `docs/ERP_PROFESSIONAL_ACCOUNTING.md`
-- `docs/ERP_PROFESSIONAL_TAX.md`
-- `docs/ERP_PROFESSIONAL_FINANCIAL_CLOSE.md`
-- `docs/ERP_PROFESSIONAL_FINANCIAL_STATEMENTS.md`
-- `docs/ERP_PROFESSIONAL_FIXED_ASSETS.md`
-- `docs/ERP_PROFESSIONAL_INVENTORY_VALUATION.md`
-- `docs/ERP_ITERATION_05_USER_GUIDE.md`
-- `docs/MANUAL_E2E_ERP_PROFESSIONALIZATION_ITERATION_05.md`
-- `docs/CHANGELOG_ERP_PROFESSIONALIZATION_ITERATION_05.md`
 
-## 19. Statut de l’itération 5
+Références principales standards :
 
-Les six modules avancés sont `PROFESSIONAL_READY` et `commercializable: false`.
+- `docs/STANDARD_MODULE_INVENTORY.md`
+- `docs/STANDARD_MODULE_PROFESSIONAL_STANDARD.md`
+- `docs/STANDARD_MODULE_DOMAIN_ARCHITECTURE.md`
+- `docs/STANDARD_MODULE_NAVIGATION_CONTRACT.md`
+- `docs/STANDARD_MODULE_PERMISSION_MODEL.md`
+- `docs/STANDARD_MODULE_RESPONSIVE_CONTRACT.md`
+- `docs/STANDARD_MODULE_ACCESSIBILITY_CONTRACT.md`
+- `docs/STANDARD_MODULE_LANGUAGE_CONTRACT.md`
+- `docs/STANDARD_MODULE_USER_GUIDES_INVENTORY.md`
+- `docs/STANDARD_MODULE_USER_GUIDE_CONTRACT.md`
+- `docs/STANDARD_MODULE_COMMERCIAL_READINESS.md`
+- `docs/MANUAL_E2E_STANDARD_MODULES_ITERATION_01.md`
 
-**Tests E2E manuels préparés — validation du propriétaire en attente.**
+## 19. Contrôle des projections inter-modules ERP
 
-Aucune clôture fonctionnelle ni promotion commerciale n’est déclarée avant confirmation explicite du propriétaire.
+La consolidation utilise l’outbox durable d’événements métier. Chaque consommateur reçoit un reçu `EnterpriseCrossModuleProjection` idempotent avec état de reprise, erreur et liens profonds exacts. Les extensions sectorielles continuent de référencer les objets communs Finance, stock et comptabilité.
 
-## ERP cross-module projection control
+## 20. Fondations des modules standards — Itération 1/8
 
-The final consolidation uses the existing durable domain-event outbox. Each consumer receives an idempotent `EnterpriseCrossModuleProjection` receipt with retry state, error metadata and exact object deep links. Sector extensions continue to reference common Finance, inventory and accounting objects.
+### 20.1 Registre
+
+Le registre standard couvre les modules non ERP sans modifier l’autorité du registre ERP. Il centralise code, labels, description, famille, domaine, statut, maturité, route, host, icône, ordre, politique d’accès, permissions, plan, abonnement, dépendances, guide, QA, aliases et routes legacy.
+
+### 20.2 Navigation
+
+`components/layout/nav-links.tsx` résout les surfaces globales depuis les métadonnées canoniques. Les traversées PUBLIC, APP, ACCOUNT, CONSOLE et SUPPORT passent par les helpers de domaine. Les shells partagés sont des exceptions explicites auditées, jamais des collisions silencieuses.
+
+### 20.3 Accès et capacités
+
+`resolveStandardModuleAccess` produit une décision structurée avec reason code, message, plan requis, dépendances manquantes et capacités. Cette décision de module précède les contrôles d’objet ; elle ne les remplace pas.
+
+### 20.4 PWA, session et Web Push
+
+Cette itération réutilise les contrats existants : cookie partagé contrôlé, redirection interne fiable, session inactive/révoquée, fallback offline public, absence de cache privé et Web Push conditionné par la configuration serveur. Les comportements navigateur restent dans la checklist E2E manuelle.
+
+### 20.5 Maturité
+
+Aucune promotion vers `COMMERCIAL_READY` n’est réalisée. Les guides absents, routes BETA et validations navigateur restent des écarts visibles dans les audits et les inventaires.
+
+**Tests E2E manuels préparés — validation du propriétaire en attente**
