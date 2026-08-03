@@ -79,6 +79,9 @@ jobs:
       - name: Regression QA
         run: pnpm qa:regression
 
+      - name: Standard modules iteration 01 QA
+        run: node scripts/qa-standard-modules-iteration-01.mjs
+
       - name: Lint
         run: pnpm lint
 
