@@ -146,7 +146,23 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
     return serializeSnapshot(item);
   }
   if (entityType === "EnterpriseBudget") {
-    const item = await tx.enterpriseBudget.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, title: true, status: true, currency: true, totalAmount: true, revision: true, updatedAt: true } });
+    const item = await tx.enterpriseBudget.findFirst({
+      where: { id: entityId, organizationId },
+      select: {
+        id: true,
+        reference: true,
+        title: true,
+        description: true,
+        status: true,
+        periodStart: true,
+        periodEnd: true,
+        currency: true,
+        departmentId: true,
+        revision: true,
+        updatedAt: true,
+        lines: { select: { id: true, code: true, name: true, category: true, departmentId: true, plannedAmount: true } },
+      },
+    });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Budget source introuvable.");
     return serializeSnapshot(item);
   }
