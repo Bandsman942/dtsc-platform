@@ -7,6 +7,7 @@ const allowedHosts = new Set(["PUBLIC", "APP", "ACCOUNT", "CONSOLE", "SUPPORT"])
 const allowedStatuses = new Set(["ACTIVE", "BETA", "PLANNED", "HIDDEN", "DEPRECATED", "RETIRED"]);
 const allowedMaturities = new Set(["BACKEND_READY", "READ_ONLY_UI", "OPERATIONAL_UI", "PROFESSIONAL_READY", "COMMERCIAL_READY"]);
 const allowedPolicies = new Set(["PUBLIC", "AUTHENTICATED", "GLOBAL_ROLE", "ORGANIZATION_MEMBERSHIP", "POSITION_PERMISSION", "ADMIN_BLOCK", "EXPLICIT_DENY"]);
+const allowedFrenchAcronyms = new Set(["CEO", "COO", "CTO", "MPO", "SCO"]);
 const allowedIcons = new Set([
   "layout-dashboard", "bot", "credit-card", "briefcase-business", "building-2", "calendar-days", "users-round", "bell", "megaphone", "headphones", "user", "settings", "user-plus", "calendar-check", "list-checks", "inbox", "badge-check", "presentation", "workflow", "files", "wallet-cards", "chart-no-axes-combined", "sparkles", "shield", "users", "network", "key-round", "layers-3", "settings-2", "history", "clock-3", "calendar-x-2", "timer", "badge-dollar-sign", "route", "crown", "code-2", "kanban-square", "truck", "scale", "gauge", "receipt-text", "life-buoy", "newspaper", "shield-check", "sliders-horizontal", "globe-2", "briefcase", "blocks", "folder-kanban", "library", "mail-plus", "clipboard-pen-line", "user-round-plus", "log-in", "smartphone", "bell-ring", "cloud-off"
 ]);
@@ -163,7 +164,9 @@ function languageAudit(registry) {
   const warnings = [];
   for (const item of registry.modules) {
     if (!item.labelFr?.trim() || !item.descriptionFr?.trim()) errors.push(`${item.code}: français visible incomplet`);
-    if (/^[A-Z0-9_]+$/.test(item.labelFr || "")) errors.push(`${item.code}: enum brut exposé comme libellé français`);
+    if (/^[A-Z0-9_]+$/.test(item.labelFr || "") && !allowedFrenchAcronyms.has(item.labelFr)) {
+      errors.push(`${item.code}: enum brut exposé comme libellé français`);
+    }
     if (/\b(error|failed|token|provider|room)\b/i.test(item.descriptionFr || "")) warnings.push(`${item.code}: terme technique à relire dans la description française`);
   }
   return { errors, warnings };
