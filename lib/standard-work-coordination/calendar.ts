@@ -159,10 +159,13 @@ export async function loadUnifiedWorkCalendar(input: UnifiedCalendarInput) {
   const events: UnifiedCalendarEvent[] = [];
 
   for (const event of calendarEvents) {
+    const linkedSource = resolveLinkedCalendarSource(event.sourceEntityType, event.sourceEntityId);
+    const sourceType = linkedSource?.sourceType || "InternalCalendarEvent";
+    const sourceId = linkedSource?.sourceId || event.id;
     events.push({
-      id: `calendar:${event.id}`,
-      sourceType: "InternalCalendarEvent",
-      sourceId: event.id,
+      id: `${sourceType}:${sourceId}`,
+      sourceType,
+      sourceId,
       title: event.title,
       description: event.description,
       startsAt: event.startDateTime,
@@ -175,9 +178,9 @@ export async function loadUnifiedWorkCalendar(input: UnifiedCalendarInput) {
       organizationId: event.organizationId || input.organizationId,
       ownerId: event.ownerCollaboratorId,
       participantIds: event.participants.map((participant) => participant.collaboratorId),
-      deepLink: workCoordinationDeepLink("CALENDAR_EVENT", event.id),
-      canEdit: !event.sourceEntityId || event.sourceModule === "CALENDAR",
-      canDelete: !event.sourceEntityId || event.sourceModule === "CALENDAR",
+      deepLink: linkedSource?.deepLink || workCoordinationDeepLink("CALENDAR_EVENT", event.id),
+      canEdit: !linkedSource && (!event.sourceEntityId || event.sourceModule === "CALENDAR"),
+      canDelete: !linkedSource && (!event.sourceEntityId || event.sourceModule === "CALENDAR"),
     });
   }
 
@@ -326,11 +329,21 @@ export async function loadUnifiedWorkCalendar(input: UnifiedCalendarInput) {
 
   const deduplicated = new Map<string, UnifiedCalendarEvent>();
   for (const event of events) {
-    const key = `${event.sourceType}:${event.sourceId}`;
-    const existing = deduplicated.get(key);
-    if (!existing || existing.sourceType === "InternalCalendarEvent") deduplicated.set(key, event);
+    deduplicated.set(`${event.sourceType}:${event.sourceId}`, event);
   }
   return [...deduplicated.values()].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+}
+
+function resolveLinkedCalendarSource(entityType: string | null, entityId: string | null) {
+  if (!entityType || !entityId) return null;
+  if (entityType === "EnterpriseTask") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("TASK", entityId) };
+  if (entityType === "EnterpriseRequest") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("REQUEST", entityId) };
+  if (entityType === "EnterpriseApproval") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("APPROVAL", entityId) };
+  if (entityType === "EnterpriseMeeting") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("MEETING", entityId) };
+  if (entityType === "EnterpriseWorkflowRun") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("WORKFLOW_RUN", entityId) };
+  if (entityType === "EnterpriseDocument") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("DOCUMENT", entityId) };
+  if (entityType === "EnterpriseActivityRequest") return { sourceType: entityType, sourceId: entityId, deepLink: workCoordinationDeepLink("ACTIVITY", entityId) };
+  return null;
 }
 
 function plusMinutes(value: Date, minutes: number) {
