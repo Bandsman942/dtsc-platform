@@ -1,0 +1,32 @@
+name: Export commercial readiness source
+
+on:
+  push:
+    branches:
+      - chore/export-commercial-readiness-source
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact main source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Build source archive
+        run: |
+          git rev-parse HEAD > SOURCE_SHA.txt
+          zip -qr /tmp/dtsc-commercial-readiness-source.zip . -x '.git/*' 'node_modules/*' '.next/*'
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-commercial-readiness-source
+          path: /tmp/dtsc-commercial-readiness-source.zip
+          retention-days: 1
