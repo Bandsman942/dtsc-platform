@@ -1,0 +1,60 @@
+name: Apply verified standard collaboration patch
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply-verified-patch:
+    if: github.head_ref == 'chore/export-standard-collaboration-source'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging payload
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild and push feature branch
+        env:
+          TARGET_BRANCH: feat/standard-modules-professionalization-iteration-03-collaboration
+          EXPECTED_SIZE: "89268"
+          EXPECTED_SHA256: "9c9e6e5cd9bc5cc13a97363632d7227a95a143ac6e3412ea4b115d159d8a8143"
+        run: |
+          PATCH_PARTS=(
+            .github/iteration03-patch.part-00
+            .github/iteration03-patch.part-01
+            .github/iteration03-patch.part-02
+            .github/iteration03-patch.part-03
+            .github/iteration03-patch.part-04
+            .github/iteration03-patch.part-05
+            .github/iteration03-patch.part-06
+            .github/iteration03-patch.part-07a
+            .github/iteration03-patch.part-07b00
+            .github/iteration03-patch.part-07b01
+            .github/iteration03-patch.part-07b020
+            .github/iteration03-patch.part-07b021
+            .github/iteration03-patch.part-07b022
+            .github/iteration03-patch.part-07b023
+            .github/iteration03-patch.part-07b024
+            .github/iteration03-patch.part-07b03
+            .github/iteration03-patch.part-07b1
+            .github/iteration03-patch.part-08
+            .github/iteration03-patch.part-09
+            .github/iteration03-patch.part-10
+            .github/iteration03-patch.part-11
+          )
+          cat "${PATCH_PARTS[@]}" > /tmp/iteration03-patch.b64
+          test "$(wc -c < /tmp/iteration03-patch.b64)" = "$EXPECTED_SIZE"
+          test "$(sha256sum /tmp/iteration03-patch.b64 | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          base64 --decode /tmp/iteration03-patch.b64 | gzip --decompress > /tmp/iteration03.patch
+          git fetch origin main
+          git checkout -B "$TARGET_BRANCH" origin/main
+          git apply --index --whitespace=error /tmp/iteration03.patch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: professionalize collaboration, calls and announcements"
+          git push --set-upstream origin "$TARGET_BRANCH" --force-with-lease
