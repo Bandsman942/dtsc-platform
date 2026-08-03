@@ -48,3 +48,14 @@
 - aucune migration Prisma ;
 - aucune duplication d’un moteur ERP ;
 - les écarts de guides et routes BETA restent explicitement documentés.
+
+## 2026-08-03 — Itération 03/8
+
+- professionnalisation de Mes collaborateurs, conversations directes et groupes ;
+- annuaire global remplacé par une recherche de collaborateurs autorisés ;
+- idempotence des conversations et messages ;
+- réactions, épinglage, pièces jointes privées, présence et lectures réelles ;
+- appels avec refus, annulation, timeout manqué et durée serveur ;
+- annonces à audience explicite, brouillons, commentaires paginés et modération ;
+- guides, audits et plan E2E ajoutés ;
+- maturité `PROFESSIONAL_READY` sans promotion `COMMERCIAL_READY`.

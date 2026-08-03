@@ -3,12 +3,14 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { assertGroupMemberForSession, createGroupSystemMessage, groupMemberUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
-import { buildLiveKitRoomName } from "@/lib/livekit-service";
+import { COLLABORATION_CALL_RING_TIMEOUT_SECONDS, expireMissedCollaborationCalls } from "@/lib/collaboration-calls";
+import { buildLiveKitRoomName, isLiveKitConfigured } from "@/lib/livekit-service";
 import { notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { collaborationCallStartSchema } from "@/lib/validators";
+import { isCollaborationBlocked } from "@/lib/standard-collaboration";
 
 type Params = { params: Promise<{ id: string }> };
 type CallForClient = {
@@ -19,6 +21,7 @@ type CallForClient = {
   status: string;
   startedById: string;
   startedAt: Date;
+  acceptedAt: Date | null;
   endedAt: Date | null;
   durationSeconds: number | null;
   participants?: unknown;
@@ -34,6 +37,7 @@ function callForClient<T extends CallForClient>(call: T) {
     status: call.status,
     startedById: call.startedById,
     startedAt: call.startedAt,
+    acceptedAt: call.acceptedAt,
     endedAt: call.endedAt,
     durationSeconds: call.durationSeconds,
     participants: call.participants,
@@ -56,6 +60,7 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  await expireMissedCollaborationCalls([id]);
   const calls = await prisma.collaborationGroupCall.findMany({
     where: { groupId: id },
     orderBy: { startedAt: "desc" },
@@ -67,6 +72,7 @@ export async function GET(req: Request, { params }: Params) {
   return NextResponse.json({
     activeCall: clientCalls.find((call) => call.status === "RINGING" || call.status === "ACTIVE") || null,
     calls: clientCalls,
+    capabilities: { callsAvailable: isLiveKitConfigured(), groupCallsAvailable: isLiveKitConfigured() },
   });
 }
 
@@ -103,10 +109,26 @@ export async function POST(req: Request, { params }: Params) {
     }
   }
 
+  if (!isLiveKitConfigured()) {
+    await writeApiLog({ request: req, statusCode: 503, userId: session.userId, startedAt });
+    return NextResponse.json({ error: "CALL_NOT_AVAILABLE", message: "Les appels ne sont pas configurés pour cet environnement." }, { status: 503 });
+  }
+
   const parsed = collaborationCallStartSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ message: "Le type d'appel demandé est invalide." }, { status: 400 });
+  }
+
+  if (member.group.groupType === "DIRECT") {
+    const otherMember = await prisma.collaborationGroupMember.findFirst({
+      where: { groupId: id, userId: { not: session.userId }, status: "ACTIVE" },
+      select: { userId: true },
+    });
+    if (!otherMember || await isCollaborationBlocked(session.userId, otherMember.userId)) {
+      await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { action: "collaboration_call_blocked" } });
+      return NextResponse.json({ error: "BLOCKED", message: "Cet appel n’est pas autorisé." }, { status: 403 });
+    }
   }
 
   const existingCall = await prisma.collaborationGroupCall.findFirst({
@@ -143,6 +165,7 @@ export async function POST(req: Request, { params }: Params) {
         roomName,
         status: "RINGING",
         startedById: session.userId,
+        ringExpiresAt: new Date(Date.now() + COLLABORATION_CALL_RING_TIMEOUT_SECONDS * 1000),
         participants: {
           create: memberUserIds.map((userId) => ({
             userId,

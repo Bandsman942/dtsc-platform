@@ -333,3 +333,9 @@ Cette itération réutilise les contrats existants : cookie partagé contrôlé,
 Aucune promotion vers `COMMERCIAL_READY` n’est réalisée. Les guides absents, routes BETA et validations navigateur restent des écarts visibles dans les audits et les inventaires.
 
 **Tests E2E manuels préparés — validation du propriétaire en attente**
+
+## Modules standards — Itération 03 : collaboration
+
+La collaboration utilise `CollaborationGroup` comme agrégat canonique pour les conversations directes et de groupe. `directKey` garantit l’unicité par contexte. Les messages utilisent `clientMessageId`, lectures persistées, réactions, pièces jointes privées et modération auditée.
+
+Les appels réutilisent LiveKit et `CollaborationGroupCall`. Les transitions, l’expiration de sonnerie et les durées sont décidées côté serveur. Les annonces utilisent une audience serveur et des commentaires paginés. Voir les documents `STANDARD_COLLABORATION_*`, `STANDARD_CALLS_*`, `STANDARD_ANNOUNCEMENTS_MODEL.md` et `STANDARD_MODERATION_MODEL.md`.

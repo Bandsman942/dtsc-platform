@@ -18,3 +18,15 @@ Le registre canonique porte `userGuidePath` pour chaque module. À l’issue de 
 ## Règle de promotion
 
 Un module ne peut pas être promu vers `PROFESSIONAL_READY` ou `COMMERCIAL_READY` dans une itération future si son guide ne décrit pas exactement les fonctionnalités réellement déployées. L’audit accepte l’absence comme écart initial, mais refuse un chemin déclaré vers un fichier inexistant.
+
+## Guides ajoutés — Itération 03
+
+- `docs/user-guides/COLLABORATORS.md`
+- `docs/user-guides/DIRECT_CONVERSATIONS.md`
+- `docs/user-guides/GROUP_CONVERSATIONS.md`
+- `docs/user-guides/CALLS.md`
+- `docs/user-guides/ANNOUNCEMENTS.md`
+- `docs/user-guides/COMMENTS_AND_REACTIONS.md`
+- `docs/user-guides/COLLABORATION_MODERATION.md`
+
+Ils sont exposés dans `/help/standard` et depuis les modules Collaboration et Annonces.

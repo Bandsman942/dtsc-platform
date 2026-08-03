@@ -3,11 +3,13 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseFeature } from "@/lib/billing/entitlements";
 import { assertGroupMemberForSession, createGroupSystemMessage, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { expireMissedCollaborationCalls } from "@/lib/collaboration-calls";
 import { generateLiveKitParticipantToken, isLiveKitConfigured, liveKitUrl } from "@/lib/livekit-service";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { collaborationCallParticipantSchema } from "@/lib/validators";
+import { isCollaborationBlocked } from "@/lib/standard-collaboration";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -31,6 +33,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
+  await expireMissedCollaborationCalls();
   const call = await prisma.collaborationGroupCall.findUnique({ where: { id } });
   if (!call || (call.status !== "RINGING" && call.status !== "ACTIVE")) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
@@ -40,6 +43,16 @@ export async function POST(req: Request, { params }: Params) {
   if (!member) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (member.group.groupType === "DIRECT") {
+    const otherMember = await prisma.collaborationGroupMember.findFirst({
+      where: { groupId: call.groupId, userId: { not: session.userId }, status: "ACTIVE" },
+      select: { userId: true },
+    });
+    if (!otherMember || await isCollaborationBlocked(session.userId, otherMember.userId)) {
+      await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { action: "collaboration_call_join_blocked" } });
+      return NextResponse.json({ error: "BLOCKED", message: "Cet appel n’est pas autorisé." }, { status: 403 });
+    }
   }
   if (member.group.organizationId && !["CROSS_ORGANIZATION", "PRIVATE_NETWORK", "DTSC_SUPPORT"].includes(member.group.groupType)) {
     const featureAccess = await canUseFeature(member.group.organizationId, "collaboration-calls");
@@ -65,7 +78,7 @@ export async function POST(req: Request, { params }: Params) {
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ACTIVE" } });
+    await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ACTIVE", acceptedAt: call.acceptedAt || new Date() } });
     await tx.collaborationGroupCallParticipant.upsert({
       where: { callId_userId: { callId: call.id, userId: session.userId } },
       update: { status: "JOINED", joinedAt: new Date(), leftAt: null, microphoneEnabled, cameraEnabled },

@@ -1,0 +1,5 @@
+# Guide utilisateur — Groupes et conversations
+
+Les rôles sont propriétaire, administrateur et membre. Les gestionnaires invitent ou retirent les membres, modifient les paramètres, épinglent et modèrent dans leur groupe. Un membre peut quitter volontairement. Les messages plus anciens se chargent progressivement vers le haut.
+
+Les mentions ciblent uniquement les participants autorisés. `@tous` n’est pas disponible sans permission explicite.

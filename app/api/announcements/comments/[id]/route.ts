@@ -1,73 +1,85 @@
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
+import { canModerateAnnouncement, canReadAnnouncement } from "@/lib/announcement-access";
 import { getSession } from "@/lib/auth";
-import { getAppSettings } from "@/lib/settings";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
+import { getAppSettings } from "@/lib/settings";
+import { authorizedCollaboratorIds } from "@/lib/standard-collaboration";
 import { announcementCommentUpdateSchema } from "@/lib/validators";
 
-type Params = {
-  params: Promise<{ id: string }>;
-};
+type Params = { params: Promise<{ id: string }> };
 
-function canEdit(createdAt: Date, windowMinutes: number, isAuthor: boolean, isAdmin: boolean) {
-  if (isAdmin) {
-    return true;
-  }
-  const deadline = createdAt.getTime() + windowMinutes * 60 * 1000;
-  return isAuthor && Date.now() <= deadline;
+function canEdit(createdAt: Date, windowMinutes: number, isAuthor: boolean, moderator: boolean) {
+  return moderator || (isAuthor && Date.now() <= createdAt.getTime() + windowMinutes * 60 * 1000);
+}
+
+async function getScopedComment(id: string) {
+  return prisma.announcementComment.findUnique({
+    where: { id },
+    include: { announcement: { select: { id: true, authorId: true, organizationId: true, scope: true, moderationStatus: true, status: true, deletedAt: true } } },
+  });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = announcementCommentUpdateSchema.safeParse(await req.json());
-  if (!body.success) {
-    return NextResponse.json({ error: "Invalid comment" }, { status: 400 });
-  }
-
+  if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  const limited = await rateLimit(getRateLimitKey(req, `announcement-comment-update:${session.userId}`), 120, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+  const parsed = announcementCommentUpdateSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR" }, { status: 400 });
   const { id } = await params;
-  const [settings, comment] = await Promise.all([
-    getAppSettings(),
-    prisma.announcementComment.findUnique({
+  const [settings, comment] = await Promise.all([getAppSettings(), getScopedComment(id)]);
+  if (!comment || !canReadAnnouncement(comment.announcement, session)) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  const moderator = await canModerateAnnouncement(session, comment.announcement);
+  const isAuthor = comment.userId === session.userId;
+
+  if (parsed.data.action === "RESTORE") {
+    if (!comment.deletedAt || (!moderator && !isAuthor)) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    const restored = await prisma.announcementComment.update({
       where: { id },
-      select: { id: true, userId: true, createdAt: true },
-    }),
-  ]);
-
-  if (!comment) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+      data: { deletedAt: null, deletedById: null, restoredAt: new Date(), moderationStatus: "VISIBLE" },
+    });
+    await writeAuditLog({ userId: session.userId, action: "announcement.comment.restore", entity: "AnnouncementComment", entityId: id, request: req });
+    return NextResponse.json({ ok: true, comment: restored });
   }
 
-  const isAdmin = session.role === UserRole.ADMIN;
-  if (!canEdit(comment.createdAt, settings.commentEditWindowMinutes, comment.userId === session.userId, isAdmin)) {
-    return NextResponse.json({ error: "Edit window expired" }, { status: 403 });
+  if (!parsed.data.content || comment.deletedAt || !canEdit(comment.createdAt, settings.commentEditWindowMinutes, isAuthor, moderator)) {
+    return NextResponse.json({ error: "EDIT_NOT_ALLOWED" }, { status: 403 });
   }
-
-  const updated = await prisma.announcementComment.update({
-    where: { id: comment.id },
-    data: { content: body.data.content },
+  const authorizedIds = new Set([...(await authorizedCollaboratorIds(session)), comment.announcement.authorId, session.userId]);
+  const mentionedUserIds = [...new Set(parsed.data.mentionedUserIds.filter((userId) => authorizedIds.has(userId) && userId !== session.userId))];
+  const updated = await prisma.$transaction(async (tx) => {
+    const record = await tx.announcementComment.update({ where: { id }, data: { content: parsed.data.content!, editedAt: new Date() } });
+    await tx.announcementCommentMention.deleteMany({ where: { commentId: id } });
+    if (mentionedUserIds.length) await tx.announcementCommentMention.createMany({ data: mentionedUserIds.map((mentionedUserId) => ({ announcementId: comment.announcementId, commentId: id, mentionedUserId })), skipDuplicates: true });
+    return record;
   });
-
+  await writeAuditLog({ userId: session.userId, action: "announcement.comment.update", entity: "AnnouncementComment", entityId: id, request: req });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, comment: updated });
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const session = await getSession();
-  if (!session || session.role !== UserRole.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
+  if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   const { id } = await params;
-  const deleted = await prisma.announcementComment.deleteMany({
-    where: { id },
-  });
-
-  if (!deleted.count) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const comment = await getScopedComment(id);
+  if (!comment || !canReadAnnouncement(comment.announcement, session)) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  const moderator = await canModerateAnnouncement(session, comment.announcement);
+  if (comment.userId !== session.userId && !moderator) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!comment.deletedAt) {
+    await prisma.announcementComment.update({
+      where: { id },
+      data: { content: "Commentaire supprimé", deletedAt: new Date(), deletedById: session.userId, moderationStatus: moderator && comment.userId !== session.userId ? "MODERATED" : "DELETED" },
+    });
   }
-
+  await writeAuditLog({ userId: session.userId, action: moderator && comment.userId !== session.userId ? "announcement.comment.moderate" : "announcement.comment.delete", entity: "AnnouncementComment", entityId: id, request: req });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { canAccessGroupInSessionWithSubscription, touchUserPresence } from "@/lib/collaboration";
+import { expireMissedCollaborationCalls } from "@/lib/collaboration-calls";
 import { prisma } from "@/lib/prisma";
 
 const MAX_EVENT_AGE_MS = 10 * 60 * 1000;
@@ -51,6 +52,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ events: [], cursor: new Date().toISOString(), settings: user });
   }
 
+  await expireMissedCollaborationCalls(groupIds);
   const events = await prisma.collaborationGroupCallEvent.findMany({
     where: {
       groupId: { in: groupIds },
@@ -117,6 +119,9 @@ function humanCallEventMessage(eventType: string, storedMessage: string, callTyp
   }
   if (eventType === "CALL_ENDED") {
     return "L'appel est terminé";
+  }
+  if (eventType === "CALL_MISSED") {
+    return "Appel manqué";
   }
   if (eventType === "CALL_JOINED" || eventType === "USER_JOINED") {
     return storedMessage || "Un collaborateur a rejoint l'appel";

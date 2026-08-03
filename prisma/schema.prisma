@@ -5082,6 +5082,11 @@ model Announcement {
   status               String                 @default("ACTIVE")
   category             String                 @default("GENERAL")
   visibility           String                 @default("INTERNAL")
+  audienceJson         Json?
+  commentsEnabled      Boolean                @default(true)
+  scheduledAt          DateTime?
+  publishedAt          DateTime?
+  version              Int                    @default(1)
   viewCount            Int                    @default(0)
   shareCount           Int                    @default(0)
   reportCount          Int                    @default(0)
@@ -5098,8 +5103,10 @@ model Announcement {
   reactions            AnnouncementReaction[]
   shares               AnnouncementShare[]
   reports              AnnouncementReport[]
+  media                AnnouncementMedia[]
 
   @@index([status, createdAt])
+  @@index([scheduledAt, status])
   @@index([scope, organizationId, moderationStatus])
   @@index([authorOrganizationId])
   @@index([deletedAt, archivedAt])
@@ -5112,13 +5119,23 @@ model AnnouncementComment {
   userId         String
   parentId       String?
   content        String
+  moderationStatus String               @default("VISIBLE")
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  deletedById    String?
+  restoredAt     DateTime?
   createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
   announcement   Announcement          @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent         AnnouncementComment?  @relation("AnnouncementCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies        AnnouncementComment[] @relation("AnnouncementCommentReplies")
+  reactions      AnnouncementCommentReaction[]
+  mentions       AnnouncementCommentMention[]
+  reports        AnnouncementCommentReport[]
 
   @@index([announcementId, createdAt])
+  @@index([announcementId, moderationStatus, deletedAt, createdAt])
   @@index([userId])
   @@index([parentId])
 }
@@ -5160,6 +5177,9 @@ model AnnouncementReport {
   description    String?
   priority       String       @default("NORMAL")
   status         String       @default("OPEN")
+  moderatorId    String?
+  decision       String?
+  resolvedAt     DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
@@ -6153,9 +6173,15 @@ model CollaborationGroup {
   ownerId                     String
   companyId                   String?
   organizationId              String?
+  contextType                 String                            @default("PERSONAL")
+  directKey                   String?                           @unique
   visibility                  String                            @default("PRIVATE")
   status                      String                            @default("ACTIVE")
+  lastActivityAt              DateTime                          @default(now())
   archivedAt                  DateTime?
+  closedAt                    DateTime?
+  closedById                  String?
+  rulesJson                   Json?
   createdAt                   DateTime                          @default(now())
   updatedAt                   DateTime                          @updatedAt
   owner                       User                              @relation("CollaborationGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -6164,12 +6190,14 @@ model CollaborationGroup {
   invitations                 CollaborationGroupInvitation[]
   messages                    CollaborationGroupMessage[]
   calls                       CollaborationGroupCall[]
+  moderationActions           CollaborationModerationAction[]
   sharedConversationSnapshots CollaborationSharedConversation[]
   auditLogs                   CollaborationGroupAuditLog[]
 
   @@index([ownerId, status, updatedAt])
   @@index([companyId])
   @@index([organizationId, groupType, status])
+  @@index([contextType, status, lastActivityAt])
   @@index([meetingId])
 }
 
@@ -6179,9 +6207,11 @@ model CollaborationGroupMember {
   userId    String
   role      String             @default("MEMBER")
   status    String             @default("ACTIVE")
-  joinedAt  DateTime           @default(now())
-  leftAt    DateTime?
-  createdAt DateTime           @default(now())
+  joinedAt         DateTime           @default(now())
+  leftAt           DateTime?
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  createdAt         DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   group     CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -6220,6 +6250,13 @@ model CollaborationGroupMessage {
   replyToId                   String?
   sharedChatbotConversationId String?
   status                      String                           @default("SENT")
+  clientMessageId             String?
+  threadRootId                String?
+  editedAt                    DateTime?
+  pinnedAt                    DateTime?
+  pinnedById                  String?
+  deletionScope               String?
+  deletionReason              String?
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
   deletedAt                   DateTime?
@@ -6231,8 +6268,14 @@ model CollaborationGroupMessage {
   sharedConversationSnapshot  CollaborationSharedConversation?
   mentions                    CollaborationMessageMention[]
   reads                       CollaborationGroupMessageRead[]
+  reactions                   CollaborationMessageReaction[]
+  attachments                 CollaborationMessageAttachment[]
+  reports                     CollaborationMessageReport[]
 
+  @@unique([groupId, authorId, clientMessageId])
   @@index([groupId, createdAt])
+  @@index([groupId, pinnedAt])
+  @@index([threadRootId, createdAt])
   @@index([authorId, createdAt])
   @@index([sharedChatbotConversationId])
 }
@@ -6247,8 +6290,12 @@ model CollaborationGroupCall {
   status          String                              @default("RINGING")
   startedById     String
   startedAt       DateTime                            @default(now())
+  ringExpiresAt   DateTime?
+  acceptedAt      DateTime?
+  cancelledAt     DateTime?
   endedAt         DateTime?
   durationSeconds Int?
+  failureReason   String?
   createdAt       DateTime                            @default(now())
   group           CollaborationGroup                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   participants    CollaborationGroupCallParticipant[]

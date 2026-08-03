@@ -33,3 +33,12 @@ Chaque définition contient : code stable, libellés FR/EN, famille, domaine, st
 ## Mise à jour
 
 Toute nouvelle surface non ERP doit être ajoutée au registre avant d’être rendue visible. Toute suppression, dépréciation, migration de route, changement de plan ou promotion de maturité doit modifier le registre, les audits, la documentation et les tests correspondants dans la même PR.
+
+## Mise à jour itération 03 — Collaboration
+
+| Code | Route | Source canonique | Maturité technique |
+|---|---|---|---|
+| COLLABORATORS | `/collaborators` | CollaborationGroup et services associés | PROFESSIONAL_READY |
+| ANNOUNCEMENTS | `/announcements` | Announcement et commentaires associés | PROFESSIONAL_READY |
+
+Les appels, médias, commentaires, présence et modération sont des capacités du domaine ; ils ne créent pas de modules concurrents ni de registres parallèles.

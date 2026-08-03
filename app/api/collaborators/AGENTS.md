@@ -20,3 +20,12 @@
 - La fin d’un appel COO lié peut créer un prompt de compte-rendu idempotent. Le contenu détaillé va dans `CooMeetingMinutes`; le résumé publié dans le groupe reste un message dérivé et ne remplace pas le compte-rendu COO.
 - Les migrations Collaboration restent additives et ne détruisent pas les groupes/messages/appels/réunions existants.
 - Vercel reste production-only depuis `main`; aucune Preview de feature branch ne doit être activée.
+
+## Itération standard 03
+
+- Les conversations directes utilisent le résolveur canonique et `directKey`; aucune route ne crée une seconde conversation concurrente.
+- Une mutation de message accepte `clientMessageId` et retourne le même objet sur retry.
+- Les références message, réponse, fil, membre, média et appel sont revalidées dans le même groupe et le même contexte.
+- Les pièces jointes restent privées, contrôlées et servies par URL signée après vérification du membership.
+- Les transitions d’appel, expiration de sonnerie et durées sont calculées côté serveur.
+- Une notification d’appel ne connecte jamais automatiquement le destinataire.

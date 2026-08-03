@@ -11,8 +11,9 @@ export async function getActiveGroupMember(groupId: string, userId: string) {
   });
 }
 
-export function canManageGroup(member: { role: string } | null, role?: UserRole) {
-  return role === UserRole.ADMIN || member?.role === "OWNER" || member?.role === "ADMIN";
+export function canManageGroup(member: { role: string } | null, _role?: UserRole) {
+  // A global DTSC role never replaces active membership inside a client or private group.
+  return member?.role === "OWNER" || member?.role === "ADMIN";
 }
 
 export async function assertGroupMember(groupId: string, userId: string) {
@@ -182,8 +183,8 @@ export async function markGroupMessagesRead({
     return null;
   }
   const now = new Date();
-  return prisma.collaborationGroupMessageRead
-    .createMany({
+  return prisma.$transaction(async (tx) => {
+    await tx.collaborationGroupMessageRead.createMany({
       data: uniqueMessageIds.map((messageId) => ({
         groupId,
         userId,
@@ -191,8 +192,13 @@ export async function markGroupMessagesRead({
         readAt: now,
       })),
       skipDuplicates: true,
-    })
-    .catch(() => null);
+    });
+    await tx.collaborationGroupMember.updateMany({
+      where: { groupId, userId, status: "ACTIVE" },
+      data: { lastReadMessageId: uniqueMessageIds.at(-1) || null, lastReadAt: now },
+    });
+    return { count: uniqueMessageIds.length };
+  }).catch(() => null);
 }
 
 export async function touchUserPresence(userId: string) {

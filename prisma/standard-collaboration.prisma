@@ -1,0 +1,154 @@
+model CollaborationMessageReaction {
+  id           String                    @id @default(cuid())
+  groupId      String
+  messageId    String
+  userId       String
+  reactionType String
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  message      CollaborationGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, reactionType])
+  @@index([groupId, messageId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model CollaborationMessageAttachment {
+  id            String                    @id @default(cuid())
+  groupId       String
+  messageId     String
+  uploaderId    String
+  storageBucket String
+  storagePath   String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  checksum      String?
+  status        String                    @default("ACTIVE")
+  createdAt     DateTime                  @default(now())
+  deletedAt     DateTime?
+  message       CollaborationGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, messageId, createdAt])
+  @@index([uploaderId, createdAt])
+  @@index([status, deletedAt])
+}
+
+model CollaborationMessageReport {
+  id          String                    @id @default(cuid())
+  groupId     String
+  messageId   String
+  reporterId  String
+  reason      String
+  description String?
+  priority    String                    @default("NORMAL")
+  status      String                    @default("OPEN")
+  moderatorId String?
+  decision    String?
+  resolvedAt  DateTime?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  message     CollaborationGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, reporterId])
+  @@index([groupId, status, createdAt])
+  @@index([moderatorId, status, createdAt])
+}
+
+model CollaborationUserBlock {
+  id        String    @id @default(cuid())
+  blockerId String
+  blockedId String
+  reason    String?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId, revokedAt, createdAt])
+  @@index([blockerId, revokedAt, createdAt])
+}
+
+model CollaborationModerationAction {
+  id          String             @id @default(cuid())
+  groupId     String
+  actorId     String
+  targetType  String
+  targetId    String
+  action      String
+  reason      String?
+  metadataJson Json?
+  createdAt   DateTime           @default(now())
+  group       CollaborationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, targetType, targetId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model AnnouncementMedia {
+  id             String       @id @default(cuid())
+  announcementId String
+  uploaderId     String
+  storagePath    String
+  mimeType       String
+  sizeBytes      Int
+  originalName   String?
+  altText        String?
+  sortOrder      Int          @default(0)
+  status         String       @default("ACTIVE")
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId, status, sortOrder])
+  @@index([uploaderId, createdAt])
+}
+
+model AnnouncementCommentReaction {
+  id             String              @id @default(cuid())
+  announcementId String
+  commentId      String
+  userId       String
+  reactionType String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  comment      AnnouncementComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, reactionType])
+  @@index([announcementId, commentId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AnnouncementCommentMention {
+  id              String              @id @default(cuid())
+  announcementId  String
+  commentId       String
+  mentionedUserId String
+  isRead          Boolean             @default(false)
+  readAt          DateTime?
+  createdAt       DateTime            @default(now())
+  comment         AnnouncementComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, mentionedUserId])
+  @@index([announcementId, mentionedUserId, isRead, createdAt])
+}
+
+model AnnouncementCommentReport {
+  id          String              @id @default(cuid())
+  announcementId String
+  commentId      String
+  reporterId  String
+  reason      String
+  description String?
+  priority    String              @default("NORMAL")
+  status      String              @default("OPEN")
+  moderatorId String?
+  decision    String?
+  resolvedAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  comment     AnnouncementComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, reporterId])
+  @@index([announcementId, status, priority, createdAt])
+  @@index([moderatorId, status, createdAt])
+}

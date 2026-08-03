@@ -1,11 +1,31 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const DEFAULT_AUDIO_MAX_BYTES = 16 * 1024 * 1024;
+const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ATTACHMENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "audio/webm",
+  "audio/ogg",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/aac",
+  "audio/wav",
+  "video/mp4",
+  "video/webm",
+]);
+
 const AUDIO_TYPES = new Set([
   "audio/webm",
   "audio/ogg",
@@ -46,7 +66,14 @@ function safeExtension(file: File) {
   if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
   if (mimeType.includes("3gpp")) return "3gp";
   if (mimeType.includes("wav")) return "wav";
-  return "webm";
+  if (mimeType === "application/pdf") return "pdf";
+  if (mimeType === "text/plain") return "txt";
+  if (mimeType.includes("wordprocessingml")) return "docx";
+  if (mimeType.includes("spreadsheetml")) return "xlsx";
+  if (mimeType.includes("presentationml")) return "pptx";
+  if (mimeType === "video/mp4") return "mp4";
+  if (mimeType === "video/webm") return "webm";
+  return "bin";
 }
 
 function expectedPrefix(groupId: string) {
@@ -63,6 +90,17 @@ export function validateCollaborationImage(file: File) {
   return { ok: true as const };
 }
 
+export function validateCollaborationAttachment(file: File) {
+  const mimeType = normalizeCollaborationMimeType(file.type);
+  if (!ATTACHMENT_TYPES.has(mimeType)) {
+    return { ok: false as const, status: 415, message: "Format non pris en charge. Utilisez une image, un PDF, un document Office, un fichier texte, audio ou vidéo autorisé." };
+  }
+  if (file.size <= 0 || file.size > ATTACHMENT_MAX_BYTES) {
+    return { ok: false as const, status: 413, message: "Le fichier doit peser au maximum 25 Mo." };
+  }
+  return { ok: true as const, mimeType };
+}
+
 export function validateCollaborationAudio(file: File, maxBytes = DEFAULT_AUDIO_MAX_BYTES) {
   const mimeType = normalizeCollaborationMimeType(file.type);
   if (!AUDIO_TYPES.has(mimeType)) {
@@ -74,7 +112,7 @@ export function validateCollaborationAudio(file: File, maxBytes = DEFAULT_AUDIO_
   return { ok: true as const, mimeType };
 }
 
-async function upload(groupId: string, category: "avatar" | "stories" | "voice", objectId: string, file: File) {
+async function upload(groupId: string, category: "avatar" | "stories" | "voice" | "attachments", objectId: string, file: File) {
   const client = storageClient();
   const storagePath = `${expectedPrefix(groupId)}${category}/${objectId}/${randomUUID()}.${safeExtension(file)}`;
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -102,6 +140,12 @@ export function uploadGroupStory(groupId: string, storyId: string, file: File) {
 
 export function uploadVoiceMessage(groupId: string, messageId: string, file: File) {
   return upload(groupId, "voice", messageId, file);
+}
+
+export async function uploadMessageAttachment(groupId: string, messageId: string, file: File) {
+  const result = await upload(groupId, "attachments", messageId, file);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return { ...result, checksum: createHash("sha256").update(buffer).digest("hex") };
 }
 
 export async function createCollaborationMediaSignedUrl(groupId: string, storageBucket: string, storagePath: string, expiresInSeconds = 120) {
