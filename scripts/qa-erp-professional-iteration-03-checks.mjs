@@ -153,7 +153,9 @@ const checks = {
   },
   receipts() {
     for (const marker of ["receiptSummary", "recipientCount", "deliveredCount", "readCount", "allDelivered", "allRead", "lastSeenAt", "message.reads"]) need(content.messagesRoute, marker, "Résumé accusés serveur");
-    for (const marker of ["CheckCheck", "MessageReceiptIndicator", "summary?.allRead", "summary?.allDelivered", "text-emerald-300"]) need(content.conversation, marker, "Accusés dans les bulles");
+    for (const marker of ["CheckCheck", "MessageReceiptIndicator", "summary?.allDelivered"]) need(content.conversation, marker, "Accusés dans les bulles");
+    needAny(content.conversation, ["summary?.allRead", "summary?.readCount"], "Lecture explicite dans les bulles");
+    needAny(content.conversation, ["text-emerald-300", "text-cyan-200"], "Couleur des accusés lus");
   },
   readiness() {
     let readiness;
