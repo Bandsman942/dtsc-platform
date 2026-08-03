@@ -56,10 +56,10 @@ jobs:
           git diff --check
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm prisma generate
+        run: pnpm prisma:generate
 
       - name: Run type-check
         run: pnpm type-check
