@@ -133,3 +133,7 @@ Toute itération de professionnalisation doit :
 6. déclasser immédiatement un module lorsqu’une preuve majeure n’est plus vraie.
 
 Le statut `ACTIVE` demeure un statut technique. Il ne doit jamais être réutilisé comme argument commercial.
+
+## Règle de consolidation finale
+
+Une incohérence transverse entraîne un déclassement. `COMMERCIAL_READY` reste soumis à la confirmation manuelle du propriétaire après les scénarios de `MANUAL_E2E_ERP_FINAL_CONSOLIDATION.md`.

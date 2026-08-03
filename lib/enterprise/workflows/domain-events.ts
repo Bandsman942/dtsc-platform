@@ -20,6 +20,18 @@ type DomainEventInput = {
   idempotencyKey?: string;
 };
 
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right));
+  return `{${entries.map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`).join(",")}}`;
+}
+
+function metadataIdentity(metadata: Prisma.InputJsonValue | undefined) {
+  if (metadata === undefined) return "no-metadata";
+  return createHash("sha256").update(stableJson(metadata)).digest("hex");
+}
+
 function boundedPayload(input: DomainEventInput): Prisma.InputJsonValue {
   const payload = {
     fromStatus: input.fromStatus || null,
@@ -38,7 +50,16 @@ function boundedPayload(input: DomainEventInput): Prisma.InputJsonValue {
 
 export function buildDomainEventIdempotencyKey(input: DomainEventInput) {
   if (input.idempotencyKey) return input.idempotencyKey;
-  const seed = [input.organizationId, input.entityType, input.entityId, input.eventType, input.revision ?? "na", input.fromStatus ?? "na", input.toStatus ?? "na"].join(":");
+  const seed = [
+    input.organizationId,
+    input.entityType,
+    input.entityId,
+    input.eventType,
+    input.revision ?? "na",
+    input.fromStatus ?? "na",
+    input.toStatus ?? "na",
+    metadataIdentity(input.metadata),
+  ].join(":");
   return `workflow-event:${createHash("sha256").update(seed).digest("hex")}`;
 }
 

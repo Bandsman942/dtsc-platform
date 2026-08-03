@@ -257,3 +257,33 @@ session
 23. `COMMERCIAL_READY` exige la validation manuelle du propriétaire et une promotion auditée.
 24. Les migrations historiques ne sont jamais modifiées et les nouvelles migrations restent non destructives.
 25. La Production provient uniquement de `main`; aucun déploiement manuel de branche n’est autorisé.
+
+## ERP cross-module consolidation invariants
+
+These rules are durable for every common or sector ERP change:
+
+1. Each business concept has one canonical source of truth.
+2. A sector extension must reference, not recreate, common master data, Finance, inventory or accounting objects.
+3. Cross-module projections are durable, observable and idempotent.
+4. Every derived object retains its structural source reference.
+5. Duplicate invoices, payments, stock movements and journal entries are forbidden.
+6. Status changes happen through business services, never direct frontend writes.
+7. Cross-module references use identifiers and relations, not names, e-mail matching or free text.
+8. Forms never expose UUID entry; selectors are tenant-, permission-, status- and context-filtered.
+9. Notifications and collaboration actions use exact deep links to the object and thread.
+10. Business documents use real private uploads, classifications and permission checks.
+11. Comments remain separate from workflow decisions and preserve history.
+12. Server-side access resolution is authoritative; frontend capabilities are display hints only.
+13. An active enterprise relationship grants no implicit tenant, Finance, HR, Health, Pharmacy, project or document access.
+14. Finance must never receive unnecessary clinical content.
+15. Navigation order, icons, labels, dependencies and plan eligibility come from the canonical module registry.
+16. Every professional module has an exact, accessible user guide.
+17. French surfaces expose no raw enum, Prisma type, metric key or technical error.
+18. Mobile surfaces follow the DTSC responsive contract, including horizontal KPI/rail visibility and full-screen long forms.
+19. A module with an unresolved workflow, permission, duplication, guide, notification, deep-link or critical mobile defect must be downgraded honestly.
+20. `COMMERCIAL_READY` requires explicit manual owner validation; automated QA never promotes it alone.
+21. Historical migrations are immutable; new migrations are additive and non-destructive.
+22. No release physically deletes business, financial, clinical, lot or audit history.
+23. Posted financial consequences are corrected with credit notes, refunds, reversals or corrective entries, never silent deletion.
+24. Projection retries reuse the same receipt and source; they never create a competing projection path.
+25. Production is deployed only from `main` through the configured pipeline.

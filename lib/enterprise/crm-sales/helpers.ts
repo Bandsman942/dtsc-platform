@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { enqueueWorkflowDomainEvent } from "@/lib/enterprise/workflows/domain-events";
 
 export function enterpriseReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
@@ -37,4 +38,14 @@ export async function publishEnterpriseEvent(
   },
 ) {
   await tx.enterpriseOperationalEvent.create({ data: input });
+  await enqueueWorkflowDomainEvent(tx, {
+    organizationId: input.organizationId,
+    eventType: input.eventType,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    actorUserId: input.actorUserId,
+    fromStatus: input.fromStatus,
+    toStatus: input.toStatus,
+    metadata: input.metadataJson,
+  });
 }

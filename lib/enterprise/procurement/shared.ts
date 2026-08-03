@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
+import { enqueueWorkflowDomainEvent } from "@/lib/enterprise/workflows/domain-events";
 
 export type ProcurementTransaction = Prisma.TransactionClient;
 
@@ -107,7 +108,7 @@ export async function addEnterpriseOperationalEvent(
     metadata?: Prisma.InputJsonValue;
   }
 ) {
-  return tx.enterpriseOperationalEvent.create({ data: {
+  const event = await tx.enterpriseOperationalEvent.create({ data: {
     organizationId: data.organizationId,
     entityType: data.entityType,
     entityId: data.entityId,
@@ -118,4 +119,15 @@ export async function addEnterpriseOperationalEvent(
     toStatus: nullable(data.toStatus),
     metadataJson: data.metadata,
   } });
+  await enqueueWorkflowDomainEvent(tx, {
+    organizationId: data.organizationId,
+    eventType: data.eventType,
+    entityType: data.entityType,
+    entityId: data.entityId,
+    actorUserId: data.actorUserId,
+    fromStatus: nullable(data.fromStatus),
+    toStatus: nullable(data.toStatus),
+    metadata: data.metadata,
+  });
+  return event;
 }

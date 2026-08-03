@@ -367,3 +367,7 @@ Le lien vers projet, opportunité, client, contrat, actif, incident ou achat uti
 - `FINANCIAL_STATEMENT_GENERATED`, `FINANCIAL_STATEMENT_PUBLISHED`
 
 Les adapters de workflow appellent toujours les services métier allow-listés. Aucun adapter n’exécute de JavaScript libre, SQL libre ou HTTP arbitraire.
+
+## Continuité finale
+
+Les chaînes ventes, achats, stock, RH/paie, projets, actifs, Health et Pharmacy utilisent les événements et mappings décrits dans `ERP_CROSS_MODULE_EVENT_CATALOG.md` et `ERP_CROSS_MODULE_FINANCIAL_MAPPING.md`.

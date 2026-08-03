@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { enqueueWorkflowDomainEvent } from "@/lib/enterprise/workflows/domain-events";
 
 export function financeReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
@@ -57,6 +58,16 @@ export async function publishFinanceEvent(
   },
 ) {
   await tx.enterpriseOperationalEvent.create({ data: input });
+  await enqueueWorkflowDomainEvent(tx, {
+    organizationId: input.organizationId,
+    eventType: input.eventType,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    actorUserId: input.actorUserId,
+    fromStatus: input.fromStatus,
+    toStatus: input.toStatus,
+    metadata: input.metadataJson,
+  });
 }
 
 export function serializeFinanceValue(value: unknown): unknown {

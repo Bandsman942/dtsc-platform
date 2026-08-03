@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { WORKFLOW_LIMITS } from "@/lib/enterprise/workflows/constants";
 import { processWorkflowDomainEvent, resumeWaitingRuns } from "@/lib/enterprise/workflows/engine";
+import { processCrossModuleProjections, processPendingCrossModuleProjections } from "@/lib/enterprise/cross-module/projection-service";
 import { safeWorkflowFailureMessage } from "@/lib/enterprise/workflows/errors";
 import { prisma } from "@/lib/prisma";
 
@@ -33,12 +34,13 @@ async function claimPendingEvents(workerId: string, batchSize: number) {
 export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS.workerBatchSize, workerId = `workflow-${randomUUID()}` }: { batchSize?: number; workerId?: string } = {}) {
   const safeBatchSize = Math.max(1, Math.min(batchSize, WORKFLOW_LIMITS.workerBatchSize));
   const claimed = await claimPendingEvents(workerId, safeBatchSize);
-  const results: Array<{ id: string; status: string; error?: string }> = [];
+  const results: Array<{ id: string; status: string; error?: string; projectionFailures?: number }> = [];
   for (const event of claimed) {
     try {
+      const projectionResult = await processCrossModuleProjections(event.id);
       await processWorkflowDomainEvent(event.id);
       await prisma.enterpriseDomainEvent.updateMany({ where: { id: event.id, processingStatus: "PROCESSING", lockedBy: workerId }, data: { processingStatus: "PROCESSED", processedAt: new Date(), lockedAt: null, lockedBy: null, lastError: null } });
-      results.push({ id: event.id, status: "PROCESSED" });
+      results.push({ id: event.id, status: "PROCESSED", projectionFailures: projectionResult.failures });
     } catch (error) {
       const failure = safeWorkflowFailureMessage(error);
       const dead = event.attemptCount >= WORKFLOW_LIMITS.maxAttempts || ["SECURITY", "TERMINAL"].includes(failure.category);
@@ -47,6 +49,7 @@ export async function processPendingWorkflowEvents({ batchSize = WORKFLOW_LIMITS
       results.push({ id: event.id, status: dead ? "DEAD" : "FAILED", error: failure.code });
     }
   }
+  const pendingProjections = await processPendingCrossModuleProjections(safeBatchSize);
   const resumedRuns = await resumeWaitingRuns();
-  return { workerId, claimed: claimed.length, results, resumedRuns: resumedRuns.map((run) => ({ id: run.id, status: run.status })) };
+  return { workerId, claimed: claimed.length, results, pendingProjections: { processed: pendingProjections.processed, failures: pendingProjections.failures }, resumedRuns: resumedRuns.map((run) => ({ id: run.id, status: run.status })) };
 }

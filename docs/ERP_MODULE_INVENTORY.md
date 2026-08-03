@@ -138,3 +138,7 @@ Pharmacy conserve lots, FEFO, péremption, rappels, qualité, pharmacovigilance 
 - `EnterpriseWorkflow` : `LEGACY_READ_ONLY` ; Workflow Engine v2 actif.
 - Aucun code sans modèle/service, route, workspace, permission, entitlement et QA ne peut rester `ACTIVE`.
 - Les secteurs futurs restent `PLANNED` ou `HIDDEN`, jamais carte ou route active.
+
+## Consolidation transverse 2026-08
+
+Le registre est complété par `ERP_CANONICAL_ENTITY_OWNERSHIP.md` et `ERP_CROSS_MODULE_RELATION_MATRIX.md`. Aucun alias ne devient une seconde source.
