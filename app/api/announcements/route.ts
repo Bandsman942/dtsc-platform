@@ -33,6 +33,7 @@ export async function POST(req: Request) {
   const resolved = resolveAnnouncementScope(parsed.data.scope, session);
   const isDraft = parsed.data.publicationMode === "DRAFT";
   const now = new Date();
+  const audienceJson = (parsed.data.audience ?? {}) as Prisma.InputJsonValue;
   const announcement = await prisma.announcement.create({
     data: {
       authorId: session.userId,
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       content: parsed.data.contentHtml ? sanitizeRichHtml(parsed.data.contentHtml) : parsed.data.content,
       scope: resolved.scope,
       organizationId: resolved.organizationId,
-      audienceJson: parsed.data.audience || {},
+      audienceJson,
       commentsEnabled: parsed.data.commentsEnabled ?? true,
       status: isDraft ? "DRAFT" : "PUBLISHED",
       moderationStatus: isDraft ? "DRAFT" : "PUBLISHED",
