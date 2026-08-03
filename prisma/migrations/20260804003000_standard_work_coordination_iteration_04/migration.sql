@@ -123,20 +123,6 @@ CREATE TABLE "EnterpriseMeetingAction" (
   CONSTRAINT "EnterpriseMeetingAction_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "EnterpriseDocumentLink" (
-  "id" TEXT NOT NULL,
-  "organizationId" TEXT NOT NULL,
-  "documentId" TEXT NOT NULL,
-  "targetModule" TEXT NOT NULL,
-  "targetEntityType" TEXT NOT NULL,
-  "targetEntityId" TEXT NOT NULL,
-  "linkType" TEXT NOT NULL DEFAULT 'ATTACHMENT',
-  "createdById" TEXT NOT NULL,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "archivedAt" TIMESTAMP(3),
-  CONSTRAINT "EnterpriseDocumentLink_pkey" PRIMARY KEY ("id")
-);
-
 CREATE TABLE "EnterpriseWorkReminder" (
   "id" TEXT NOT NULL,
   "organizationId" TEXT NOT NULL,
@@ -183,10 +169,6 @@ CREATE UNIQUE INDEX "EnterpriseMeetingAction_scope_task_key" ON "EnterpriseMeeti
 CREATE UNIQUE INDEX "EnterpriseMeetingAction_organizationId_id_key" ON "EnterpriseMeetingAction"("organizationId", "id");
 CREATE INDEX "EnterpriseMeetingAction_organizationId_meetingId_createdAt_idx" ON "EnterpriseMeetingAction"("organizationId", "meetingId", "createdAt");
 CREATE INDEX "EnterpriseMeetingAction_organizationId_taskId_idx" ON "EnterpriseMeetingAction"("organizationId", "taskId");
-CREATE UNIQUE INDEX "EnterpriseDocumentLink_scope_key" ON "EnterpriseDocumentLink"("organizationId", "documentId", "targetEntityType", "targetEntityId", "linkType");
-CREATE UNIQUE INDEX "EnterpriseDocumentLink_organizationId_id_key" ON "EnterpriseDocumentLink"("organizationId", "id");
-CREATE INDEX "EnterpriseDocumentLink_target_idx" ON "EnterpriseDocumentLink"("organizationId", "targetEntityType", "targetEntityId", "archivedAt");
-CREATE INDEX "EnterpriseDocumentLink_document_idx" ON "EnterpriseDocumentLink"("organizationId", "documentId", "archivedAt");
 CREATE UNIQUE INDEX "EnterpriseWorkReminder_idempotencyKey_key" ON "EnterpriseWorkReminder"("idempotencyKey");
 CREATE UNIQUE INDEX "EnterpriseWorkReminder_organizationId_id_key" ON "EnterpriseWorkReminder"("organizationId", "id");
 CREATE INDEX "EnterpriseWorkReminder_status_remindAt_idx" ON "EnterpriseWorkReminder"("status", "remindAt");
@@ -204,4 +186,3 @@ ALTER TABLE "EnterpriseMeetingAgendaItem" ADD CONSTRAINT "EnterpriseMeetingAgend
 ALTER TABLE "EnterpriseMeetingMinutesVersion" ADD CONSTRAINT "EnterpriseMeetingMinutesVersion_meeting_fkey" FOREIGN KEY ("meetingId") REFERENCES "EnterpriseMeeting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "EnterpriseMeetingAction" ADD CONSTRAINT "EnterpriseMeetingAction_meeting_fkey" FOREIGN KEY ("meetingId") REFERENCES "EnterpriseMeeting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "EnterpriseMeetingAction" ADD CONSTRAINT "EnterpriseMeetingAction_task_fkey" FOREIGN KEY ("taskId") REFERENCES "EnterpriseTask"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "EnterpriseDocumentLink" ADD CONSTRAINT "EnterpriseDocumentLink_document_fkey" FOREIGN KEY ("documentId") REFERENCES "EnterpriseDocument"("id") ON DELETE CASCADE ON UPDATE CASCADE;
