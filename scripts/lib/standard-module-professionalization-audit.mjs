@@ -70,9 +70,18 @@ function baseAudit(registry) {
     push(errors, Array.isArray(item.permissionPrefixes), `${item.code}: permissions invalides`);
     if (["ACTIVE", "BETA"].includes(item.implementationStatus) && !item.routePath) errors.push(`${item.code}: module visible sans route`);
     if (["PLANNED", "HIDDEN", "RETIRED"].includes(item.implementationStatus) && item.maturity === "COMMERCIAL_READY") errors.push(`${item.code}: maturité commerciale incompatible`);
-    if (item.maturity === "COMMERCIAL_READY") errors.push(`${item.code}: promotion commerciale sans preuve propriétaire interdite`);
+    if (item.maturity === "COMMERCIAL_READY") {
+      if (!item.commercialEvidencePath || !exists(item.commercialEvidencePath)) {
+        errors.push(`${item.code}: promotion commerciale sans preuve propriétaire versionnée`);
+      } else {
+        const evidence = read(item.commercialEvidencePath);
+        if (!evidence.includes(item.code) || !evidence.includes("Propriétaire") || !evidence.includes("Production")) {
+          errors.push(`${item.code}: preuve propriétaire commerciale incomplète`);
+        }
+      }
+    }
     if (["ACTIVE", "BETA"].includes(item.implementationStatus) && !item.qaContract) warnings.push(`${item.code}: contrat QA absent`);
-    if (item.maturity === "PROFESSIONAL_READY" && !item.userGuidePath) warnings.push(`${item.code}: guide utilisateur exact restant à produire`);
+    if (["PROFESSIONAL_READY", "COMMERCIAL_READY"].includes(item.maturity) && !item.userGuidePath) warnings.push(`${item.code}: guide utilisateur exact restant à produire`);
 
     for (const alias of item.aliases || []) {
       const normalized = alias.trim().toUpperCase();

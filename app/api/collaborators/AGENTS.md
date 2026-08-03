@@ -29,3 +29,9 @@
 - Les pièces jointes restent privées, contrôlées et servies par URL signée après vérification du membership.
 - Les transitions d’appel, expiration de sonnerie et durées sont calculées côté serveur.
 - Une notification d’appel ne connecte jamais automatiquement le destinataire.
+
+## Mentions et filtres commerciaux
+
+- Toute mention `@tous` est détectée et autorisée côté serveur, jamais uniquement dans le composant client.
+- L’ouverture d’une conversation marque dans la même transaction les accusés de lecture et les mentions réellement chargées ; ne jamais effacer globalement toutes les mentions d’un groupe.
+- Les listes personnalisées de conversations sont toujours scoped par `session.userId`, validées, limitées, same-origin pour les mutations et sans capacité d’élargir le répertoire autorisé.

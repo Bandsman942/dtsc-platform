@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { assertGroupMemberForSession, canManageGroup, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
+import { assertGroupMemberForSession, canManageGroup, containsCollaborationMentionAll, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { meetingLinkCanJoin, syncCooMeetingLink } from "@/lib/collaboration-meeting-links";
 import { collaboratorsNotificationTarget } from "@/lib/notification-targets";
 import { notifyUser } from "@/lib/notifications";
@@ -131,6 +131,7 @@ export async function GET(req: Request, { params }: Params) {
         allDelivered: recipients.length > 0 && deliveredCount >= recipients.length,
         allRead: recipients.length > 0 && readCount >= recipients.length,
       },
+      mentionAll: containsCollaborationMentionAll(message.content) && recipients.length > 0 && recipients.every((recipient) => message.mentions.some((mention) => mention.mentionedUser.id === recipient.userId)),
       meetingLink: link
         ? {
             id: link.id,
@@ -236,7 +237,14 @@ export async function POST(req: Request, { params }: Params) {
   if (parsed.data.sharedChatbotConversationId && !sharedConversation) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
 
   const memberUserIds = await groupMemberUserIds(id);
-  const mentionedUserIds = await parseMentionedUserIds(parsed.data.mentionedUserIds, memberUserIds);
+  const mentionAll = containsCollaborationMentionAll(parsed.data.content);
+  if (mentionAll && !canManageGroup(member, session.role)) {
+    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { reason: "mention_all_requires_group_management" } });
+    return NextResponse.json({ error: "Mention @tous réservée aux responsables du groupe" }, { status: 403 });
+  }
+  const mentionedUserIds = mentionAll
+    ? memberUserIds.filter((userId) => userId !== session.userId)
+    : await parseMentionedUserIds(parsed.data.mentionedUserIds, memberUserIds);
   const message = await prisma.$transaction(async (tx) => {
     const savedMessage = await tx.collaborationGroupMessage.create({
       data: {
@@ -292,7 +300,7 @@ export async function POST(req: Request, { params }: Params) {
   });
   await Promise.all(recipients.map((userId) => notifyUser({
     userId,
-    title: mentionedUserIds.includes(userId) ? "Mention dans une conversation DTSC" : "Nouveau message professionnel",
+    title: mentionAll ? "Mention @tous dans une conversation DTSC" : mentionedUserIds.includes(userId) ? "Mention dans une conversation DTSC" : "Nouveau message professionnel",
     body: `${session.name}: ${parsed.data.content.slice(0, 160)}`,
     type: "COLLABORATION",
     targetUrl: collaboratorsNotificationTarget(id, message.id),

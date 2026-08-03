@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  AtSign,
   Bell,
   BellOff,
   BookOpen,
@@ -13,12 +14,14 @@ import {
   History,
   ImagePlus,
   Info,
+  ListFilter,
   MessageCircle,
   Paperclip,
   Flag,
   Pencil,
   Phone,
   Pin,
+  Plus,
   Settings,
   Trash2,
   UserPlus,
@@ -29,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ConversationAvatar } from "@/components/chat/ConversationAvatar";
 import { ConversationHeader } from "@/components/chat/ConversationHeader";
 import { ConversationListItem } from "@/components/chat/ConversationListItem";
@@ -107,7 +110,8 @@ type GroupMessage = {
   authorId: string;
   author: UserOption;
   replyTo?: { id: string; content: string; createdAt: string; deletedAt?: string | null; author: { id: string; name: string } } | null;
-  mentions?: Array<{ mentionedUser: { id: string; name: string } }>;
+  mentions?: Array<{ mentionedUser: { id: string; name: string; email: string; jobTitle?: string | null } }>;
+  mentionAll?: boolean;
   reads?: Array<{ userId: string; readAt: string }>;
   receiptSummary?: { recipientCount: number; deliveredCount: number; readCount: number; allDelivered: boolean; allRead: boolean };
   reactions?: MessageReaction[];
@@ -118,7 +122,18 @@ type GroupMessage = {
 type Preference = { groupId: string; userId: string; pinned: boolean; favorite: boolean; archived: boolean; notifications: "ALL" | "MENTIONS" | "NONE"; mutedUntil?: string | null };
 type Story = { id: string; groupId: string; authorId: string; caption?: string | null; createdAt: string; expiresAt: string; imageUrl?: string | null };
 type Voice = { id: string; messageId: string; authorId: string; durationMs: number; waveform?: unknown; createdAt: string; audioUrl?: string | null };
-type Filter = "ALL" | "UNREAD" | "FAVORITES" | "GROUPS" | "ARCHIVED";
+type BuiltInFilter = "ALL" | "DIRECT" | "UNREAD" | "FAVORITES" | "GROUPS" | "ARCHIVED";
+type Filter = BuiltInFilter | `CUSTOM:${string}`;
+type CustomFilterCriteria = {
+  includeDirect: boolean;
+  includeGroups: boolean;
+  unreadOnly: boolean;
+  mentionsOnly: boolean;
+  favoritesOnly: boolean;
+  selectedGroupIds: string[];
+};
+type CustomFilter = { id: string; name: string; position: number; criteriaJson: CustomFilterCriteria; createdAt: string; updatedAt: string };
+type MentionAction = { kind: "USER"; user: UserOption } | { kind: "ALL"; memberCount: number };
 type ReadInfo = {
   readBy: Array<{ user: UserOption; readAt: string }>;
   unreadBy: Array<{ user: UserOption }>;
@@ -147,6 +162,10 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [mobileListOpen, setMobileListOpen] = useState(!initialActiveGroupId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [customFilters, setCustomFilters] = useState<CustomFilter[]>([]);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [editingCustomFilter, setEditingCustomFilter] = useState<CustomFilter | null>(null);
+  const [mentionAction, setMentionAction] = useState<MentionAction | null>(null);
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -202,10 +221,11 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const loadExperience = useCallback(async () => {
     const response = await fetch("/api/collaborators/groups/experience", { cache: "no-store" });
     if (!response.ok) return;
-    const body = await response.json() as { profiles?: Array<{ groupId: string; avatarUrl?: string | null }>; preferences?: Preference[]; stories?: Story[] };
+    const body = await response.json() as { profiles?: Array<{ groupId: string; avatarUrl?: string | null }>; preferences?: Preference[]; stories?: Story[]; filters?: CustomFilter[] };
     setProfiles(Object.fromEntries((body.profiles || []).map((item) => [item.groupId, item.avatarUrl || null])));
     setPreferences(Object.fromEntries((body.preferences || []).map((item) => [item.groupId, item])));
     setStories(body.stories || []);
+    setCustomFilters(body.filters || []);
   }, []);
 
   const loadMessages = useCallback(async (groupId: string, cursor?: string | null, focusedMessageId?: string | null) => {
@@ -280,19 +300,32 @@ export function CollaboratorsConversationWorkspace(props: Props) {
 
   const visibleGroups = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    const selectedCustomFilter = filter.startsWith("CUSTOM:") ? customFilters.find((item) => `CUSTOM:${item.id}` === filter) || null : null;
     return groups
       .filter((group) => {
         const preference = preferences[group.id] || defaultPreference(group.id, currentUserId);
+        const direct = group.groupType === "DIRECT";
+        const unread = Boolean(group.unreadMessageCount || group.unreadMentionCount);
         if (filter === "ARCHIVED") return preference.archived;
         if (preference.archived) return false;
-        if (filter === "UNREAD" && !(group.unreadMessageCount || group.unreadMentionCount)) return false;
+        if (filter === "DIRECT" && !direct) return false;
+        if (filter === "UNREAD" && !unread) return false;
         if (filter === "FAVORITES" && !preference.favorite) return false;
-        if (filter === "GROUPS" && group.members.length <= 2) return false;
+        if (filter === "GROUPS" && direct) return false;
+        if (selectedCustomFilter) {
+          const criteria = normalizeCustomFilterCriteria(selectedCustomFilter.criteriaJson);
+          if (direct && !criteria.includeDirect) return false;
+          if (!direct && !criteria.includeGroups) return false;
+          if (criteria.unreadOnly && !unread) return false;
+          if (criteria.mentionsOnly && !(group.unreadMentionCount || 0)) return false;
+          if (criteria.favoritesOnly && !preference.favorite) return false;
+          if (criteria.selectedGroupIds.length && !criteria.selectedGroupIds.includes(group.id)) return false;
+        }
         if (!needle) return true;
         return `${group.name} ${group.description || ""} ${group.members.map((member) => member.user.name).join(" ")}`.toLowerCase().includes(needle);
       })
       .sort((left, right) => Number(Boolean(preferences[right.id]?.pinned)) - Number(Boolean(preferences[left.id]?.pinned)));
-  }, [currentUserId, filter, groups, preferences, query]);
+  }, [currentUserId, customFilters, filter, groups, preferences, query]);
 
   const activeStories = useMemo(() => {
     const firstByGroup = new Map<string, Story>();
@@ -301,12 +334,19 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }, [groups, stories]);
 
   const mentionSuggestions = useMemo(() => {
-    if (!activeGroup) return [];
+    if (!activeGroup) return [] as Array<{ kind: "ALL" } | { kind: "USER"; member: GroupMember }>;
     const match = content.match(/@([\p{L}\p{N}\s._-]{0,40})$/u);
-    if (!match) return [];
-    const value = match[1].toLowerCase();
-    return activeGroup.members.filter((member) => member.user.name.toLowerCase().includes(value) || member.user.email.toLowerCase().includes(value)).slice(0, 6);
-  }, [activeGroup, content]);
+    if (!match) return [] as Array<{ kind: "ALL" } | { kind: "USER"; member: GroupMember }>;
+    const value = match[1].trim().toLowerCase();
+    const suggestions: Array<{ kind: "ALL" } | { kind: "USER"; member: GroupMember }> = [];
+    if (canManage && activeGroup.groupType !== "DIRECT" && ("tous".startsWith(value) || "all".startsWith(value))) suggestions.push({ kind: "ALL" });
+    suggestions.push(...activeGroup.members
+      .filter((member) => member.userId !== currentUserId)
+      .filter((member) => member.user.name.toLowerCase().includes(value) || member.user.email.toLowerCase().includes(value))
+      .slice(0, Math.max(0, 6 - suggestions.length))
+      .map((member) => ({ kind: "USER" as const, member })));
+    return suggestions;
+  }, [activeGroup, canManage, content, currentUserId]);
 
   async function sendText() {
     if (!activeGroup || !content.trim() || sending) return;
@@ -316,7 +356,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content.trim(), mentionedUserIds, messageType: "TEXT", replyToId: replyTo?.id || "", clientMessageId }),
+      body: JSON.stringify({ content: content.trim(), mentionedUserIds: resolveMentionedUserIds(content), messageType: "TEXT", replyToId: replyTo?.id || "", clientMessageId }),
     });
     setSending(false);
     if (!response.ok) return setFeedback(userPreferences.locale === "en" ? "Unable to send message. Retry will not duplicate it." : "Impossible d’envoyer le message. Le nouvel essai ne le dupliquera pas.");
@@ -440,9 +480,66 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     window.open(body.url, "_blank", "noopener,noreferrer");
   }
 
-  function insertMention(member: GroupMember) {
-    setContent((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, `@${member.user.name} `));
-    setMentionedUserIds((current) => [...new Set([...current, member.userId])]);
+  function resolveMentionedUserIds(value: string) {
+    if (!activeGroup) return [] as string[];
+    if (containsMentionAllText(value) && canManage && activeGroup.groupType !== "DIRECT") {
+      return activeGroup.members.map((member) => member.userId).filter((userId) => userId !== currentUserId);
+    }
+    const lower = value.toLocaleLowerCase();
+    return [...new Set(mentionedUserIds.filter((userId) => {
+      const member = activeGroup.members.find((item) => item.userId === userId);
+      return member ? lower.includes(`@${member.user.name.toLocaleLowerCase()}`) : false;
+    }))];
+  }
+
+  function insertMentionSuggestion(suggestion: { kind: "ALL" } | { kind: "USER"; member: GroupMember }) {
+    if (suggestion.kind === "ALL") {
+      setContent((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, "@tous "));
+      setMentionedUserIds(activeGroup?.members.map((member) => member.userId).filter((userId) => userId !== currentUserId) || []);
+      return;
+    }
+    setContent((current) => current.replace(/@([\p{L}\p{N}\s._-]{0,40})$/u, `@${suggestion.member.user.name} `));
+    setMentionedUserIds((current) => [...new Set([...current, suggestion.member.userId])]);
+  }
+
+  async function saveCustomFilter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      name: String(form.get("name") || "").trim(),
+      position: editingCustomFilter?.position || customFilters.length,
+      criteria: {
+        includeDirect: form.get("includeDirect") === "on",
+        includeGroups: form.get("includeGroups") === "on",
+        unreadOnly: form.get("unreadOnly") === "on",
+        mentionsOnly: form.get("mentionsOnly") === "on",
+        favoritesOnly: form.get("favoritesOnly") === "on",
+        selectedGroupIds: form.getAll("selectedGroupIds").map(String),
+      },
+    };
+    if (!payload.criteria.includeDirect && !payload.criteria.includeGroups) {
+      setFeedback(userPreferences.locale === "en" ? "Select direct conversations, groups, or both." : "Sélectionnez les conversations directes, les groupes ou les deux.");
+      return;
+    }
+    const endpoint = editingCustomFilter ? `/api/collaborators/filters/${editingCustomFilter.id}` : "/api/collaborators/filters";
+    const response = await fetch(endpoint, { method: editingCustomFilter ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const body = await response.json().catch(() => null) as { error?: string; filter?: CustomFilter } | null;
+    if (!response.ok) {
+      setFeedback(body?.error || (userPreferences.locale === "en" ? "Unable to save filter." : "Impossible d’enregistrer le filtre."));
+      return;
+    }
+    setEditingCustomFilter(null);
+    await loadExperience();
+    if (body?.filter?.id) setFilter(`CUSTOM:${body.filter.id}`);
+  }
+
+  async function deleteCustomFilter(item: CustomFilter) {
+    if (!window.confirm(userPreferences.locale === "en" ? `Delete filter “${item.name}”?` : `Supprimer le filtre « ${item.name} » ?`)) return;
+    const response = await fetch(`/api/collaborators/filters/${item.id}`, { method: "DELETE" });
+    if (!response.ok) return setFeedback(userPreferences.locale === "en" ? "Unable to delete filter." : "Impossible de supprimer le filtre.");
+    if (filter === `CUSTOM:${item.id}`) setFilter("ALL");
+    if (editingCustomFilter?.id === item.id) setEditingCustomFilter(null);
+    await loadExperience();
   }
 
   async function updatePreference(groupId: string, patch: Partial<Preference>) {
@@ -504,7 +601,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   async function editCurrentMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editMessage || !editContent.trim()) return;
-    const response = await fetch(`/api/collaborators/messages/${editMessage.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: editContent.trim(), status: "EDITED", mentionedUserIds: [] }) });
+    const response = await fetch(`/api/collaborators/messages/${editMessage.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: editContent.trim(), status: "EDITED", mentionedUserIds: resolveMentionedUserIds(editContent) }) });
     if (!response.ok) return setFeedback(userPreferences.locale === "en" ? "Unable to edit message." : "Impossible de modifier le message.");
     setEditMessage(null); setEditContent("");
     if (activeGroup) await loadMessages(activeGroup.id);
@@ -618,7 +715,9 @@ export function CollaboratorsConversationWorkspace(props: Props) {
           ) : null}
           <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder={t("search")} /></div>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {(["ALL", "UNREAD", "FAVORITES", "GROUPS", "ARCHIVED"] as Filter[]).map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition", filter === item ? "border-cyan-500 bg-cyan-500/15 text-cyan-700 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}>{item === "ALL" ? t("all") : item === "UNREAD" ? t("unread") : item === "FAVORITES" ? t("favorites") : item === "GROUPS" ? t("groupsFilter") : t("archived")}</button>)}
+            {(["ALL", "DIRECT", "UNREAD", "FAVORITES", "GROUPS", "ARCHIVED"] as BuiltInFilter[]).map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition", filter === item ? "border-cyan-500 bg-cyan-500/15 text-cyan-700 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}>{item === "ALL" ? t("all") : item === "DIRECT" ? (userPreferences.locale === "en" ? "Direct" : "Directs") : item === "UNREAD" ? t("unread") : item === "FAVORITES" ? t("favorites") : item === "GROUPS" ? t("groupsFilter") : t("archived")}</button>)}
+            {customFilters.map((item) => <button key={item.id} type="button" onClick={() => setFilter(`CUSTOM:${item.id}`)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition", filter === `CUSTOM:${item.id}` ? "border-cyan-500 bg-cyan-500/15 text-cyan-700 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}>{item.name}</button>)}
+            <button type="button" onClick={() => setFilterDialogOpen(true)} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-cyan-500 px-3 py-1.5 text-xs font-black text-cyan-700 dark:text-cyan-200"><ListFilter className="h-3.5 w-3.5" />{userPreferences.locale === "en" ? "Filters" : "Filtres"}</button>
           </div>
         </div>
 
@@ -643,13 +742,36 @@ export function CollaboratorsConversationWorkspace(props: Props) {
             <ConversationHeader title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Audio"><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Video"><Video className="h-4 w-4" /></Button><ActionMenu label="Actions du groupe" items={groupMenu} /></>} />
             <div ref={messageListRef} className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
               {hasMore ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" disabled={loadingOlder} onClick={() => void loadMessages(activeGroup.id, nextCursor)}>{loadingOlder ? "…" : userPreferences.locale === "en" ? "Older messages" : "Messages précédents"}</Button></div> : null}
-              {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} onReact={(item) => void toggleReaction(item)} onPin={(item) => void togglePin(item)} onReport={(item) => void reportMessage(item)} onAttachment={(id) => void openAttachment(id)} onJumpToMessage={(id) => void jumpToMessage(id)} onMeetingChanged={() => loadMessages(activeGroup.id)} onError={setFeedback} />)}
+              {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} onReact={(item) => void toggleReaction(item)} onPin={(item) => void togglePin(item)} onReport={(item) => void reportMessage(item)} onAttachment={(id) => void openAttachment(id)} onJumpToMessage={(id) => void jumpToMessage(id)} onMention={setMentionAction} onMeetingChanged={() => loadMessages(activeGroup.id)} onError={setFeedback} />)}
               {!messages.length ? <p className="py-12 text-center text-sm font-semibold text-dtsc-muted">{t("noMessage")}</p> : null}
             </div>
-            <VoiceConversationComposer value={content} onChange={setContent} onSendText={sendText} onSendVoice={sendVoice} sending={sending} placeholder={t("writeMessage")} onError={setFeedback} labels={{ record: t("record"), cancel: t("cancel"), send: t("send"), recording: t("recording") }} before={<><input ref={attachmentInputRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} /><div className="mb-2 flex justify-end"><Button type="button" variant="outline" size="sm" disabled={sending} onClick={() => attachmentInputRef.current?.click()}><Paperclip className="h-4 w-4" />{userPreferences.locale === "en" ? "Attach" : "Joindre"}</Button></div>{replyTo ? <div className="mb-2 flex items-center gap-2 rounded-xl border border-cyan-300/50 bg-cyan-400/10 px-3 py-2 text-xs"><span className="min-w-0 flex-1"><strong>{t("reply")} · {replyTo.author.name}</strong><span className="block truncate text-dtsc-muted">{replyTo.deletedAt ? "—" : replyTo.content}</span></span><button type="button" onClick={() => setReplyTo(null)}><X className="h-4 w-4" /></button></div> : null}{mentionSuggestions.length ? <div className="absolute bottom-20 left-3 z-20 w-[min(28rem,calc(100%-1.5rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl">{mentionSuggestions.map((member) => <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-dtsc-soft"><ConversationAvatar title={member.user.name} avatarUrl={member.user.avatarUrl} className="h-8 w-8" /><span className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{member.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span></button>)}</div> : null}</>} className="relative" />
+            <VoiceConversationComposer value={content} onChange={setContent} onSendText={sendText} onSendVoice={sendVoice} sending={sending} placeholder={t("writeMessage")} onError={setFeedback} labels={{ record: t("record"), cancel: t("cancel"), send: t("send"), recording: t("recording") }} before={<><input ref={attachmentInputRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} /><div className="mb-2 flex justify-end"><Button type="button" variant="outline" size="sm" disabled={sending} onClick={() => attachmentInputRef.current?.click()}><Paperclip className="h-4 w-4" />{userPreferences.locale === "en" ? "Attach" : "Joindre"}</Button></div>{replyTo ? <div className="mb-2 flex items-center gap-2 rounded-xl border border-cyan-300/50 bg-cyan-400/10 px-3 py-2 text-xs"><span className="min-w-0 flex-1"><strong>{t("reply")} · {replyTo.author.name}</strong><span className="block truncate text-dtsc-muted">{replyTo.deletedAt ? "—" : replyTo.content}</span></span><button type="button" onClick={() => setReplyTo(null)}><X className="h-4 w-4" /></button></div> : null}{mentionSuggestions.length ? <div className="absolute bottom-20 left-3 z-20 w-[min(28rem,calc(100%-1.5rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl">{mentionSuggestions.map((suggestion) => suggestion.kind === "ALL" ? <button key="mention-all" type="button" onClick={() => insertMentionSuggestion(suggestion)} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-dtsc-soft"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-700"><AtSign className="h-4 w-4" /></span><span><strong className="block text-sm text-dtsc-ink">@tous</strong><span className="block text-xs text-dtsc-muted">{userPreferences.locale === "en" ? "Notify every active member" : "Notifier tous les membres actifs"}</span></span></button> : <button key={suggestion.member.id} type="button" onClick={() => insertMentionSuggestion(suggestion)} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-dtsc-soft"><ConversationAvatar title={suggestion.member.user.name} avatarUrl={suggestion.member.user.avatarUrl} className="h-8 w-8" /><span className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{suggestion.member.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{suggestion.member.user.jobTitle || suggestion.member.user.email}</span></span></button>)}</div> : null}</>} className="relative" />
           </>
         ) : <div className="flex h-full items-center justify-center p-6 text-center"><div><UsersRound className="mx-auto h-12 w-12 text-cyan-600" /><p className="mt-4 font-black text-dtsc-ink">{t("noConversation")}</p></div></div>}
       </main>
+
+      <Dialog open={filterDialogOpen} title={userPreferences.locale === "en" ? "Conversation filters" : "Filtres de conversations"} onClose={() => { setFilterDialogOpen(false); setEditingCustomFilter(null); }}>
+        <div className="grid gap-5">
+          <form key={editingCustomFilter?.id || "new-filter"} onSubmit={saveCustomFilter} className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+            <div className="flex items-center justify-between gap-2"><strong className="text-sm text-dtsc-ink">{editingCustomFilter ? (userPreferences.locale === "en" ? "Edit list" : "Modifier la liste") : (userPreferences.locale === "en" ? "New custom list" : "Nouvelle liste personnalisée")}</strong>{editingCustomFilter ? <Button type="button" size="sm" variant="outline" onClick={() => setEditingCustomFilter(null)}>{userPreferences.locale === "en" ? "New" : "Nouveau"}</Button> : null}</div>
+            <Input name="name" required maxLength={40} defaultValue={editingCustomFilter?.name || ""} placeholder={userPreferences.locale === "en" ? "Clients, Project team…" : "Clients, Équipe projet…"} />
+            <div className="grid grid-cols-2 gap-2 text-sm text-dtsc-ink">
+              <label className="flex items-center gap-2"><input type="checkbox" name="includeDirect" defaultChecked={editingCustomFilter ? normalizeCustomFilterCriteria(editingCustomFilter.criteriaJson).includeDirect : true} />{userPreferences.locale === "en" ? "Direct chats" : "Discussions directes"}</label>
+              <label className="flex items-center gap-2"><input type="checkbox" name="includeGroups" defaultChecked={editingCustomFilter ? normalizeCustomFilterCriteria(editingCustomFilter.criteriaJson).includeGroups : true} />{userPreferences.locale === "en" ? "Groups" : "Groupes"}</label>
+              <label className="flex items-center gap-2"><input type="checkbox" name="unreadOnly" defaultChecked={editingCustomFilter ? normalizeCustomFilterCriteria(editingCustomFilter.criteriaJson).unreadOnly : false} />{userPreferences.locale === "en" ? "Unread only" : "Non lus uniquement"}</label>
+              <label className="flex items-center gap-2"><input type="checkbox" name="mentionsOnly" defaultChecked={editingCustomFilter ? normalizeCustomFilterCriteria(editingCustomFilter.criteriaJson).mentionsOnly : false} />{userPreferences.locale === "en" ? "Mentions only" : "Mentions uniquement"}</label>
+              <label className="col-span-2 flex items-center gap-2"><input type="checkbox" name="favoritesOnly" defaultChecked={editingCustomFilter ? normalizeCustomFilterCriteria(editingCustomFilter.criteriaJson).favoritesOnly : false} />{userPreferences.locale === "en" ? "Favorites only" : "Favoris uniquement"}</label>
+            </div>
+            <div><p className="mb-2 text-xs font-black uppercase tracking-wide text-dtsc-muted">{userPreferences.locale === "en" ? "Specific conversations (optional)" : "Conversations spécifiques (facultatif)"}</p><div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-dtsc-border bg-dtsc-surface p-2">{groups.map((group) => <label key={group.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-dtsc-ink hover:bg-dtsc-soft"><input type="checkbox" name="selectedGroupIds" value={group.id} defaultChecked={editingCustomFilter ? normalizeCustomFilterCriteria(editingCustomFilter.criteriaJson).selectedGroupIds.includes(group.id) : false} /><span className="min-w-0 flex-1 truncate">{group.name}</span><span className="text-[0.65rem] font-black text-dtsc-muted">{group.groupType === "DIRECT" ? "DIRECT" : "GROUPE"}</span></label>)}</div></div>
+            <Button type="submit"><Plus className="h-4 w-4" />{editingCustomFilter ? (userPreferences.locale === "en" ? "Save list" : "Enregistrer la liste") : (userPreferences.locale === "en" ? "Create list" : "Créer la liste")}</Button>
+          </form>
+          {customFilters.length ? <div className="grid gap-2"><strong className="text-sm text-dtsc-ink">{userPreferences.locale === "en" ? "My lists" : "Mes listes"}</strong>{customFilters.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-xl border border-dtsc-border p-2"><button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setFilter(`CUSTOM:${item.id}`); setFilterDialogOpen(false); }}><strong className="block truncate text-sm text-dtsc-ink">{item.name}</strong><span className="block truncate text-xs text-dtsc-muted">{describeCustomFilter(item.criteriaJson, userPreferences.locale === "en")}</span></button><Button type="button" size="icon" variant="outline" className="h-9 w-9" onClick={() => setEditingCustomFilter(item)} aria-label={userPreferences.locale === "en" ? "Edit filter" : "Modifier le filtre"}><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="outline" className="h-9 w-9 text-red-700" onClick={() => void deleteCustomFilter(item)} aria-label={userPreferences.locale === "en" ? "Delete filter" : "Supprimer le filtre"}><Trash2 className="h-4 w-4" /></Button></div>)}</div> : null}
+        </div>
+      </Dialog>
+
+      <Dialog open={Boolean(mentionAction)} title={mentionAction?.kind === "ALL" ? "@tous" : mentionAction?.user.name || "Mention"} onClose={() => setMentionAction(null)}>
+        {mentionAction?.kind === "USER" ? <div className="grid gap-3"><div className="flex items-center gap-3"><ConversationAvatar title={mentionAction.user.name} avatarUrl={mentionAction.user.avatarUrl} className="h-12 w-12" /><div className="min-w-0"><strong className="block truncate text-dtsc-ink">{mentionAction.user.name}</strong><span className="block truncate text-sm text-dtsc-muted">{mentionAction.user.jobTitle || mentionAction.user.email}</span></div></div><Button type="button" onClick={() => { const user = mentionAction.user; setMentionAction(null); void startDirectConversation(user.id); }}><MessageCircle className="h-4 w-4" />{userPreferences.locale === "en" ? "Start direct conversation" : "Démarrer une conversation directe"}</Button><Button type="button" variant="outline" onClick={() => { const member = activeGroup?.members.find((item) => item.userId === mentionAction.user.id); if (member) insertMentionSuggestion({ kind: "USER", member }); setMentionAction(null); }}><AtSign className="h-4 w-4" />{userPreferences.locale === "en" ? "Mention again" : "Mentionner à nouveau"}</Button><Button type="button" variant="outline" onClick={() => { void navigator.clipboard?.writeText(mentionAction.user.email); setFeedback(userPreferences.locale === "en" ? "Email copied." : "Adresse e-mail copiée."); }}><Copy className="h-4 w-4" />{userPreferences.locale === "en" ? "Copy email" : "Copier l’adresse e-mail"}</Button><Button asChild type="button" variant="outline"><a href={`mailto:${mentionAction.user.email}`}>{userPreferences.locale === "en" ? "Send an email" : "Envoyer un e-mail"}</a></Button></div> : mentionAction?.kind === "ALL" ? <div className="grid gap-3"><p className="text-sm leading-6 text-dtsc-muted">{userPreferences.locale === "en" ? `This mention targets ${mentionAction.memberCount} active members and creates an unread mention for each recipient.` : `Cette mention cible ${mentionAction.memberCount} membres actifs et crée une mention non lue pour chaque destinataire.`}</p>{canManage ? <Button type="button" onClick={() => { insertMentionSuggestion({ kind: "ALL" }); setMentionAction(null); }}><AtSign className="h-4 w-4" />{userPreferences.locale === "en" ? "Mention everyone again" : "Mentionner tout le monde à nouveau"}</Button> : null}</div> : null}
+      </Dialog>
 
       <Dialog open={directOpen} title={userPreferences.locale === "en" ? "New direct conversation" : "Nouvelle conversation directe"} onClose={() => setDirectOpen(false)}>
         <div className="grid gap-3">
@@ -720,6 +842,87 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   );
 }
 
+function normalizeCustomFilterCriteria(value: CustomFilterCriteria | null | undefined): CustomFilterCriteria {
+  return {
+    includeDirect: value?.includeDirect !== false,
+    includeGroups: value?.includeGroups !== false,
+    unreadOnly: Boolean(value?.unreadOnly),
+    mentionsOnly: Boolean(value?.mentionsOnly),
+    favoritesOnly: Boolean(value?.favoritesOnly),
+    selectedGroupIds: Array.isArray(value?.selectedGroupIds) ? value.selectedGroupIds.filter((item): item is string => typeof item === "string") : [],
+  };
+}
+
+function describeCustomFilter(value: CustomFilterCriteria, english: boolean) {
+  const criteria = normalizeCustomFilterCriteria(value);
+  const labels = [
+    criteria.includeDirect && (english ? "direct" : "directs"),
+    criteria.includeGroups && (english ? "groups" : "groupes"),
+    criteria.unreadOnly && (english ? "unread" : "non lus"),
+    criteria.mentionsOnly && (english ? "mentions" : "mentions"),
+    criteria.favoritesOnly && (english ? "favorites" : "favoris"),
+    criteria.selectedGroupIds.length && `${criteria.selectedGroupIds.length} ${english ? "selected" : "sélectionnées"}`,
+  ].filter(Boolean);
+  return labels.join(" · ") || (english ? "All conversations" : "Toutes les conversations");
+}
+
+function containsMentionAllText(content: string) {
+  return /(^|\s)@(tous|all)(?=\s|[.,;:!?…]|$)/iu.test(content);
+}
+
+function ProfessionalMessageContent({ message, currentUserId, mine, onMention }: { message: GroupMessage; currentUserId: string; mine: boolean; onMention: (mention: MentionAction) => void }) {
+  const mentionedUsers = (message.mentions || []).map((item) => item.mentionedUser);
+  const mentionByLabel = new Map(mentionedUsers.map((user) => [`@${user.name}`.toLocaleLowerCase(), user]));
+  const mentionLabels = [...mentionByLabel.keys()].sort((left, right) => right.length - left.length).map(escapeRegExp);
+  const mentionSource = [message.mentionAll ? "@(?:tous|all)" : "", ...mentionLabels].filter(Boolean).join("|");
+  const externalSource = "(?:https?:\\/\\/|www\\.)[^\\s<]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,24}(?:\\/[^\\s<]*)?";
+  const matcher = new RegExp(`(${externalSource}${mentionSource ? `|${mentionSource}` : ""})`, "giu");
+  const parts: Array<ReactNode> = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = matcher.exec(message.content)) !== null) {
+    if (match.index > cursor) parts.push(message.content.slice(cursor, match.index));
+    const token = match[0];
+    if (token.startsWith("@")) {
+      const all = /^@(tous|all)$/iu.test(token);
+      const user = mentionByLabel.get(token.toLocaleLowerCase());
+      if (all) {
+        parts.push(<button key={`${match.index}-all`} type="button" onClick={() => onMention({ kind: "ALL", memberCount: mentionedUsers.length })} className={cn("inline rounded px-1 font-black underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400", mine ? "bg-white/15 text-white" : "bg-cyan-500/12 text-cyan-700 dark:text-cyan-200")}>@tous</button>);
+      } else if (user) {
+        parts.push(<button key={`${match.index}-${user.id}`} type="button" onClick={() => onMention({ kind: "USER", user })} className={cn("inline rounded px-1 font-black underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400", user.id === currentUserId ? "bg-amber-300/25 text-amber-900 dark:text-amber-200" : mine ? "bg-white/15 text-white" : "bg-cyan-500/12 text-cyan-700 dark:text-cyan-200")}>{token}</button>);
+      } else parts.push(token);
+    } else {
+      if (match.index > 0 && message.content[match.index - 1] === "@") {
+        parts.push(token);
+        cursor = match.index + token.length;
+        continue;
+      }
+      const trailing = token.match(/[.,;:!?…)}\]]+$/u)?.[0] || "";
+      const clean = trailing ? token.slice(0, -trailing.length) : token;
+      const href = normalizeMessageExternalUrl(clean);
+      parts.push(href ? <a key={`${match.index}-link`} href={href} target="_blank" rel="noopener noreferrer nofollow" className={cn("font-bold underline underline-offset-2", mine ? "text-white" : "text-cyan-700 dark:text-cyan-200")}>{clean}</a> : clean);
+      if (trailing) parts.push(trailing);
+    }
+    cursor = match.index + token.length;
+  }
+  if (cursor < message.content.length) parts.push(message.content.slice(cursor));
+  return <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{parts}</p>;
+}
+
+function normalizeMessageExternalUrl(value: string) {
+  const candidate = /^(?:https?:\/\/)/i.test(value) ? value : `https://${value}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function MessageReadInfo({ readInfo, preferences }: { readInfo: ReadInfo; preferences: UserDatePreferences }) {
   const english = preferences.locale === "en";
   return <div className="grid gap-5"><section><strong className="text-sm text-dtsc-ink">{english ? "Read by" : "Lu par"}</strong><div className="mt-2 divide-y divide-dtsc-border rounded-xl border border-dtsc-border">{readInfo.readBy.length ? readInfo.readBy.map((item) => <div key={item.user.id} className="flex items-center gap-3 p-3"><ConversationAvatar title={item.user.name} avatarUrl={item.user.avatarUrl} isOnline={isOnline(item.user.lastSeenAt)} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{item.user.name}</strong><span className="block text-xs text-dtsc-muted">{english ? "Read at" : "Lu le"} {formatUserDateTime(item.readAt, preferences, { second: "2-digit" })}</span></span><OnlineBadge online={isOnline(item.user.lastSeenAt)} english={english} /></div>) : <p className="p-3 text-sm text-dtsc-muted">{english ? "No member has read this message yet." : "Aucun membre n’a encore lu ce message."}</p>}</div></section><section><strong className="text-sm text-dtsc-ink">{english ? "Not read" : "Non lu"}</strong><div className="mt-2 divide-y divide-dtsc-border rounded-xl border border-dtsc-border">{readInfo.unreadBy.length ? readInfo.unreadBy.map((item) => <div key={item.user.id} className="flex items-center gap-3 p-3"><ConversationAvatar title={item.user.name} avatarUrl={item.user.avatarUrl} isOnline={isOnline(item.user.lastSeenAt)} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{item.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{item.user.jobTitle || item.user.email}</span></span><OnlineBadge online={isOnline(item.user.lastSeenAt)} english={english} /></div>) : <p className="p-3 text-sm text-dtsc-muted">{english ? "Read by every active member." : "Lu par tous les membres actifs."}</p>}</div></section></div>;
@@ -730,6 +933,9 @@ function OnlineBadge({ online, english }: { online: boolean; english: boolean })
 }
 
 function MessageReceiptIndicator({ summary, english }: { summary?: GroupMessage["receiptSummary"]; english: boolean }) {
+  if (summary?.allRead) {
+    return <span className="inline-flex items-center text-emerald-300" title={english ? "Read by every active recipient" : "Lu par tous les destinataires actifs"} aria-label={english ? "Read by all" : "Lu par tous"}><CheckCheck className="h-4 w-4 stroke-[2.5]" /></span>;
+  }
   if ((summary?.readCount || 0) > 0) {
     return <span className="inline-flex items-center text-cyan-200" title={english ? "Read by at least one recipient" : "Lu par au moins un destinataire"} aria-label={english ? "Read" : "Lu"}><CheckCheck className="h-4 w-4 stroke-[2.5]" /></span>;
   }
@@ -739,7 +945,7 @@ function MessageReceiptIndicator({ summary, english }: { summary?: GroupMessage[
   return <span className="inline-flex items-center text-white/65" title={english ? "Sent to the server" : "Envoyé au serveur"} aria-label={english ? "Sent" : "Envoyé"}><Check className="h-4 w-4 stroke-[2.5]" /></span>;
 }
 
-function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo, onReact, onPin, onReport, onAttachment, onJumpToMessage, onMeetingChanged, onError }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void; onReact: (message: GroupMessage) => void; onPin: (message: GroupMessage) => void; onReport: (message: GroupMessage) => void; onAttachment: (attachmentId: string) => void; onJumpToMessage: (messageId: string) => void; onMeetingChanged: () => Promise<void> | void; onError: (message: string) => void }) {
+function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo, onReact, onPin, onReport, onAttachment, onJumpToMessage, onMention, onMeetingChanged, onError }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void; onReact: (message: GroupMessage) => void; onPin: (message: GroupMessage) => void; onReport: (message: GroupMessage) => void; onAttachment: (attachmentId: string) => void; onJumpToMessage: (messageId: string) => void; onMention: (mention: MentionAction) => void; onMeetingChanged: () => Promise<void> | void; onError: (message: string) => void }) {
   if (message.messageType === "SYSTEM") return <div className="flex justify-center py-1"><span className="max-w-[90%] rounded-full bg-dtsc-soft px-3 py-1 text-center text-[0.7rem] font-semibold text-dtsc-muted">{message.content}</span></div>;
   const mine = message.authorId === currentUserId;
   const meetingMessage = message.messageType === "MEETING_LINK" || message.messageType === "MEETING_MINUTES_PROMPT" || message.messageType === "MEETING_SUMMARY";
@@ -753,7 +959,7 @@ function MessageBubble({ message, voice, currentUserId, userPreferences, canMana
     ...(mine && message.messageType === "TEXT" && !message.deletedAt ? [{ key: "edit", label: t("edit"), icon: Pencil, onSelect: () => onEdit(message) }] : []),
     ...((mine || canManage) && !message.deletedAt && !meetingMessage ? [{ key: "delete", label: t("deleteMessage"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => onDelete(message) }] : []),
   ];
-  return <div data-message-id={message.id} tabIndex={-1} className={cn("flex scroll-mt-20 outline-none focus:[&>div]:ring-2 focus:[&>div]:ring-cyan-400", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" onClick={() => onJumpToMessage(message.replyTo!.id)} aria-label={userPreferences.locale === "en" ? "Go to original message" : "Aller au message d’origine"} className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}{message.attachments?.length ? <div className="mt-2 grid gap-1">{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => onAttachment(attachment.id)} className={cn("flex items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}><Paperclip className="h-3.5 w-3.5" /><span className="min-w-0 flex-1 truncate">{attachment.originalName}</span><span className="shrink-0 opacity-70">{Math.ceil(attachment.sizeBytes / 1024)} Ko</span></button>)}</div> : null}{message.reactions?.length ? <div className="mt-2 flex flex-wrap gap-1">{Object.entries(message.reactions.reduce<Record<string, number>>((acc, reaction) => ({ ...acc, [reaction.reactionType]: (acc[reaction.reactionType] || 0) + 1 }), {})).map(([reaction, count]) => <button key={reaction} type="button" onClick={() => onReact(message)} className={cn("rounded-full border px-2 py-0.5 text-[0.68rem] font-bold", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}>♥ {count}</button>)}</div> : null}<p className={cn("mt-1 flex items-center justify-end gap-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}><span>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.editedAt || message.status === "EDITED" ? (userPreferences.locale === "en" ? " · edited" : " · modifié") : ""}{message.pinnedAt ? (userPreferences.locale === "en" ? " · pinned" : " · épinglé") : ""}</span>{mine && !meetingMessage ? <MessageReceiptIndicator summary={message.receiptSummary} english={userPreferences.locale === "en"} /> : null}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
+  return <div data-message-id={message.id} tabIndex={-1} className={cn("flex scroll-mt-20 outline-none focus:[&>div]:ring-2 focus:[&>div]:ring-cyan-400", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" onClick={() => onJumpToMessage(message.replyTo!.id)} aria-label={userPreferences.locale === "en" ? "Go to original message" : "Aller au message d’origine"} className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <ProfessionalMessageContent message={message} currentUserId={currentUserId} mine={mine} onMention={onMention} />}{message.attachments?.length ? <div className="mt-2 grid gap-1">{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => onAttachment(attachment.id)} className={cn("flex items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}><Paperclip className="h-3.5 w-3.5" /><span className="min-w-0 flex-1 truncate">{attachment.originalName}</span><span className="shrink-0 opacity-70">{Math.ceil(attachment.sizeBytes / 1024)} Ko</span></button>)}</div> : null}{message.reactions?.length ? <div className="mt-2 flex flex-wrap gap-1">{Object.entries(message.reactions.reduce<Record<string, number>>((acc, reaction) => ({ ...acc, [reaction.reactionType]: (acc[reaction.reactionType] || 0) + 1 }), {})).map(([reaction, count]) => <button key={reaction} type="button" onClick={() => onReact(message)} className={cn("rounded-full border px-2 py-0.5 text-[0.68rem] font-bold", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}>♥ {count}</button>)}</div> : null}<p className={cn("mt-1 flex items-center justify-end gap-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}><span>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.editedAt || message.status === "EDITED" ? (userPreferences.locale === "en" ? " · edited" : " · modifié") : ""}{message.pinnedAt ? (userPreferences.locale === "en" ? " · pinned" : " · épinglé") : ""}</span>{mine && !meetingMessage ? <MessageReceiptIndicator summary={message.receiptSummary} english={userPreferences.locale === "en"} /> : null}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
 }
 
 function buildGroupMenu({ activeGroup, activePreference, canManage, isOwner, t, onInfo, onFavorite, onPin, onArchive, onNotifications, onPresenceJournal, onPhoto, onStory, onInvite, onSettings, onCalls, onLeave }: { activeGroup: Group; activePreference: Preference; canManage: boolean; isOwner: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onInfo: () => void; onFavorite: () => void; onPin: () => void; onArchive: () => void; onNotifications: () => void; onPresenceJournal: () => void; onPhoto: () => void; onStory: () => void; onInvite: () => void; onSettings: () => void; onCalls: () => void; onLeave: () => void }): ActionMenuItem[] {

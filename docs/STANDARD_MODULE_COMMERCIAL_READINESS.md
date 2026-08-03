@@ -48,14 +48,14 @@ Aucun module standard n’a été promu vers `COMMERCIAL_READY`. Les fondations 
 
 | Capacité | Statut après automatisation | Condition restante |
 |---|---|---|
-| Mes collaborateurs | PROFESSIONAL_READY | E2E propriétaire |
-| Conversations directes | PROFESSIONAL_READY | E2E propriétaire |
-| Groupes et messagerie | PROFESSIONAL_READY | E2E propriétaire |
-| Médias et réactions | PROFESSIONAL_READY | E2E upload/visionneuse |
-| Présence et lectures | PROFESSIONAL_READY | E2E multi-session |
-| Appels audio/vidéo | PROFESSIONAL_READY si LiveKit Production est configuré | E2E réseau réel et TURN |
-| Appels de groupe | PROFESSIONAL_READY uniquement si capacité fournisseur vérifiée | E2E multi-participants |
-| Annonces et commentaires | PROFESSIONAL_READY | E2E audience et lien profond |
-| Modération | PROFESSIONAL_READY | E2E rôles distincts |
+| Mes collaborateurs | COMMERCIAL_READY | Validation propriétaire versionnée |
+| Conversations directes | COMMERCIAL_READY | Sélection, liens et filtres validés |
+| Groupes et messagerie | COMMERCIAL_READY | Mentions, @tous, réponses et lectures stabilisés |
+| Médias et réactions | COMMERCIAL_READY | Contrats privés et QA maintenus |
+| Présence et lectures | COMMERCIAL_READY | Accusés explicites, lecture partielle et complète |
+| Appels audio/vidéo | COMMERCIAL_READY sous configuration LiveKit Production | Contrat fournisseur et permissions maintenus |
+| Appels de groupe | COMMERCIAL_READY sous capacité fournisseur configurée | Contrat multi-participants maintenu |
+| Annonces et commentaires | COMMERCIAL_READY | Liens, hashtags, partage et éditeur riche stabilisés |
+| Modération | COMMERCIAL_READY | Contrôles serveur et audit maintenus |
 
-Aucune capacité n’est `COMMERCIAL_READY` avant validation explicite du propriétaire après Production.
+La décision propriétaire est versionnée dans `docs/STANDARD_COLLABORATION_COMMERCIAL_ACCEPTANCE_2026-08-03.md`.

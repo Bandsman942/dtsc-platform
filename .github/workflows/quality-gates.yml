@@ -91,6 +91,9 @@ jobs:
       - name: Standard collaboration E2E fixes QA
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
 
+      - name: Standard collaboration commercial readiness QA
+        run: node scripts/audit-standard-collaboration-commercial-readiness.mjs
+
       - name: Lint
         run: pnpm lint
 

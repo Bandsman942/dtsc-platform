@@ -775,3 +775,14 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Détection et filtrage des hashtags dans les annonces, transformation contrôlée des domaines web en liens externes et partage natif avec copie de secours.
 - Enrichissement de l’éditeur riche partagé DTSC : titres, citations, code, liens, tableaux, tâches, alignements, historique, images, vidéos et émojis.
 - Ajout d’un audit dédié intégré à la régression et aux Quality Gates.
+
+## 2026-08-03 — Collaboration et Annonces commercialisables
+
+- liens HTTP(S) reconnus dans les messages ;
+- mentions individuelles actionnables et `@tous` autorisé côté serveur pour OWNER/ADMIN ;
+- lecture persistante des mentions et compteurs non lus ;
+- accusé cyan en lecture partielle, vert lorsque tous les destinataires actifs ont lu ;
+- filtre natif des conversations directes et listes personnalisées persistées ;
+- interlignes et espacements de paragraphes dans `RichTextEditor` ;
+- migration additive, guides, audits, preuve propriétaire et registre commercial mis à jour ;
+- `COLLABORATORS` et `ANNOUNCEMENTS` promus vers `COMMERCIAL_READY` sous CI/CD et Production verte.

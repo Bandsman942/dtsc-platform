@@ -86,6 +86,11 @@ export async function assertGroupMemberForSession(groupId: string, session: Sess
   return member;
 }
 
+
+export function containsCollaborationMentionAll(content: string) {
+  return /(^|\s)@(tous|all)(?=\s|[.,;:!?…]|$)/iu.test(content);
+}
+
 export async function parseMentionedUserIds(values: string[] | undefined, allowedUserIds: string[]) {
   const allowed = new Set(allowedUserIds);
   return [...new Set((values || []).filter((id) => allowed.has(id)))];
@@ -193,6 +198,10 @@ export async function markGroupMessagesRead({
         readAt: now,
       })),
       skipDuplicates: true,
+    });
+    await tx.collaborationMessageMention.updateMany({
+      where: { messageId: { in: uniqueMessageIds }, mentionedUserId: userId, isRead: false },
+      data: { isRead: true, readAt: now },
     });
     await tx.collaborationGroupMember.updateMany({
       where: { groupId, userId, status: "ACTIVE" },

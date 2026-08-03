@@ -63,6 +63,25 @@ const listStyles = [
   { label: "Tirets", value: "dash" },
 ];
 
+const lineHeights = [
+  { label: "Interligne 1", value: "1" },
+  { label: "Interligne 1,15", value: "1.15" },
+  { label: "Interligne 1,5", value: "1.5" },
+  { label: "Interligne 1,75", value: "1.75" },
+  { label: "Interligne 2", value: "2" },
+  { label: "Interligne 2,5", value: "2.5" },
+];
+
+const paragraphSpacings = [
+  { label: "Espacement 0", value: "0px" },
+  { label: "Espacement 4 px", value: "4px" },
+  { label: "Espacement 8 px", value: "8px" },
+  { label: "Espacement 12 px", value: "12px" },
+  { label: "Espacement 16 px", value: "16px" },
+  { label: "Espacement 24 px", value: "24px" },
+  { label: "Espacement 32 px", value: "32px" },
+];
+
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
   { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, allowVideoEmbed = false, imageUploadUrl = "/api/admin/publications/images", onContentChange },
   ref
@@ -199,6 +218,39 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
       return;
     }
     command(name, value);
+  }
+
+  function selectedBlockElements() {
+    const editor = editorRef.current;
+    const range = rememberSelection();
+    if (!editor || !range) return [] as HTMLElement[];
+    const selector = "p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre";
+    const blocks = Array.from(editor.querySelectorAll<HTMLElement>(selector)).filter((element) => {
+      try {
+        return range.intersectsNode(element);
+      } catch {
+        return false;
+      }
+    });
+    if (blocks.length) return blocks;
+    const container = range.commonAncestorContainer instanceof HTMLElement
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement;
+    const block = container?.closest<HTMLElement>(selector) || null;
+    return block && editor.contains(block) ? [block] : [];
+  }
+
+  function applyBlockSpacing(property: "line-height" | "margin-bottom", value: string) {
+    if (!value || disabled) return;
+    const range = selectionRef.current;
+    restoreSelection(range);
+    let blocks = selectedBlockElements();
+    if (!blocks.length) {
+      document.execCommand("formatBlock", false, "p");
+      blocks = selectedBlockElements();
+    }
+    blocks.forEach((block) => block.style.setProperty(property, value));
+    sync();
   }
 
   function applyListStyle(value: string) {
@@ -502,6 +554,8 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
           <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { selectCommand("foreColor", event.target.value); event.currentTarget.value = ""; }} title="Couleur du texte" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Couleur</option>{textColors.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}</select>
           <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { selectCommand("fontName", event.target.value); event.currentTarget.value = ""; }} title="Police" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Police</option>{fontFamilies.map((font) => <option key={font.label} value={font.value}>{font.label}</option>)}</select>
           <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { selectCommand("fontSize", event.target.value); event.currentTarget.value = ""; }} title="Taille" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Taille</option>{fontSizes.map((size) => <option key={size.value} value={size.value}>{size.label}</option>)}</select>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { applyBlockSpacing("line-height", event.target.value); event.currentTarget.value = ""; }} title="Interligne" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Interligne</option>{lineHeights.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { applyBlockSpacing("margin-bottom", event.target.value); event.currentTarget.value = ""; }} title="Espacement après le paragraphe" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Espacement paragraphes</option>{paragraphSpacings.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
           <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { insertEmoji(event.target.value); event.currentTarget.value = ""; }} title="Insérer un émoji" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Émoji</option><option value="✅">✅</option><option value="📌">📌</option><option value="📣">📣</option><option value="🚀">🚀</option><option value="💡">💡</option><option value="🎯">🎯</option><option value="👏">👏</option><option value="❤️">❤️</option></select>
           <SmilePlus className="h-4 w-4 text-dtsc-muted" aria-hidden="true" />
           <Button type="button" variant="outline" size="sm" disabled={disabled} onMouseDown={() => rememberSelection()} onClick={insertTable} title="Insérer un tableau"><Table2 className="h-4 w-4" /></Button>
@@ -511,7 +565,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("removeFormat")} title="Effacer la mise en forme"><Eraser className="h-4 w-4" /></Button>
           <Palette className="h-4 w-4 text-dtsc-muted" aria-hidden="true" />
         </div>
-        <p className="mt-2 text-xs leading-5 text-dtsc-muted">Titres, citations, code, liens, tableaux, listes, alignements, images, vidéos, couleurs, historique et émojis sont disponibles dans cette primitive partagée.</p>
+        <p className="mt-2 text-xs leading-5 text-dtsc-muted">Titres, citations, code, liens, tableaux, listes, alignements, interlignes, espacements de paragraphes, images, vidéos, couleurs, historique et émojis sont disponibles dans cette primitive partagée.</p>
         {editorMessage ? <span className="mt-2 inline-flex rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-blue">{editorMessage}</span> : null}
       </div>
       <div

@@ -933,15 +933,30 @@ export const collaborationMessageSchema = z.object({
   replyToId: z.string().max(120).optional().or(z.literal("")),
   threadRootId: z.string().max(120).optional().or(z.literal("")),
   sharedChatbotConversationId: z.string().max(120).optional().or(z.literal("")),
-  mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
+  mentionedUserIds: z.array(z.string().min(5)).max(500).default([]),
 });
 
 export const collaborationMessageUpdateSchema = z.object({
   content: z.string().min(1).max(4000).optional(),
   status: z.enum(["SENT", "EDITED", "DELETED", "ARCHIVED"]).optional(),
-  mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
+  mentionedUserIds: z.array(z.string().min(5)).max(500).default([]),
 });
 
+
+export const collaborationConversationFilterCriteriaSchema = z.object({
+  includeDirect: z.coerce.boolean().default(true),
+  includeGroups: z.coerce.boolean().default(true),
+  unreadOnly: z.coerce.boolean().default(false),
+  mentionsOnly: z.coerce.boolean().default(false),
+  favoritesOnly: z.coerce.boolean().default(false),
+  selectedGroupIds: z.array(z.string().min(5).max(120)).max(100).default([]),
+});
+
+export const collaborationConversationFilterSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  position: z.coerce.number().int().min(0).max(100).default(0),
+  criteria: collaborationConversationFilterCriteriaSchema,
+});
 
 export const collaborationDirectConversationSchema = z.object({
   targetUserId: z.string().min(5).max(120),

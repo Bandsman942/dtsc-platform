@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { canAccessGroupInSessionWithSubscription, canManageGroup, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
+import { canAccessGroupInSessionWithSubscription, canManageGroup, containsCollaborationMentionAll, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
 import { removeCollaborationMedia } from "@/lib/collaboration-media";
 import { collaboratorsNotificationTarget } from "@/lib/notification-targets";
 import { notifyUser } from "@/lib/notifications";
@@ -37,7 +37,13 @@ export async function PATCH(req: Request, { params }: Params) {
   if (message.messageType === "VOICE" && parsed.data.content) return NextResponse.json({ error: "Voice messages cannot be edited" }, { status: 409 });
 
   const memberUserIds = await groupMemberUserIds(message.groupId);
-  const mentionedUserIds = await parseMentionedUserIds(parsed.data.mentionedUserIds, memberUserIds);
+  const mentionAll = containsCollaborationMentionAll(parsed.data.content || message.content);
+  if (mentionAll && !canManageGroup(member, session.role)) {
+    return NextResponse.json({ error: "Mention @tous réservée aux responsables du groupe" }, { status: 403 });
+  }
+  const mentionedUserIds = mentionAll
+    ? memberUserIds.filter((userId) => userId !== session.userId)
+    : await parseMentionedUserIds(parsed.data.mentionedUserIds, memberUserIds);
   const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.collaborationGroupMessage.update({
       where: { id },
@@ -66,7 +72,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (mentionedUserIds.length) {
     await Promise.all(mentionedUserIds.filter((userId) => userId !== session.userId).map((userId) => notifyUser({
       userId,
-      title: "Mention dans un message DTSC",
+      title: mentionAll ? "Mention @tous dans un message DTSC" : "Mention dans un message DTSC",
       body: parsed.data.content?.slice(0, 160) || "Vous avez été mentionné dans un groupe.",
       type: "COLLABORATION",
       targetUrl: collaboratorsNotificationTarget(message.groupId, message.id),

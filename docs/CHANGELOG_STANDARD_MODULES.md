@@ -59,3 +59,7 @@
 - annonces à audience explicite, brouillons, commentaires paginés et modération ;
 - guides, audits et plan E2E ajoutés ;
 - maturité `PROFESSIONAL_READY` sans promotion `COMMERCIAL_READY`.
+
+## Stabilisation commerciale du 3 août 2026
+
+Les modules `COLLABORATORS` et `ANNOUNCEMENTS` disposent désormais d’une acceptation propriétaire versionnée. Les liens de messages, mentions, `@tous`, accusés de lecture complets, listes de conversations personnalisées et espacements éditoriaux partagés sont couverts par un audit dédié et par les Quality Gates.

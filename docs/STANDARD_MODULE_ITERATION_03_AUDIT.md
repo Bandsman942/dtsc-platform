@@ -29,6 +29,6 @@
 
 ## Maturité
 
-`COLLABORATORS` et `ANNOUNCEMENTS` peuvent atteindre `PROFESSIONAL_READY` après passage de toutes les Quality Gates. Les sous-capacités appels, médias, commentaires et modération restent évaluées séparément dans `STANDARD_MODULE_COMMERCIAL_READINESS.md`.
+`COLLABORATORS` et `ANNOUNCEMENTS` atteignent `COMMERCIAL_READY` après les campagnes E2E du propriétaire, la stabilisation finale, toutes les Quality Gates et le déploiement Production correspondant. Les sous-capacités appels, médias, commentaires et modération restent évaluées séparément dans `STANDARD_MODULE_COMMERCIAL_READINESS.md`.
 
-Aucune promotion vers `COMMERCIAL_READY` n’est réalisée.
+Promotion vers `COMMERCIAL_READY` autorisée par preuve propriétaire versionnée n’est réalisée.

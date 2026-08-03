@@ -23,13 +23,19 @@ export async function GET(req: Request) {
     take: 500,
   });
   const groupIds = groups.map((group) => group.id);
+  const filtersPromise = prisma.collaborationConversationFilter.findMany({
+    where: { userId: session.userId },
+    orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
+    take: 20,
+  });
   if (!groupIds.length) {
+    const filters = await filtersPromise;
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-    return NextResponse.json({ profiles: [], preferences: [], stories: [] });
+    return NextResponse.json({ profiles: [], preferences: [], stories: [], filters });
   }
 
   const now = new Date();
-  const [profiles, preferences, stories] = await Promise.all([
+  const [profiles, preferences, stories, filters] = await Promise.all([
     prisma.collaborationGroupExperience.findMany({ where: { groupId: { in: groupIds } } }),
     prisma.collaborationGroupPreference.findMany({ where: { groupId: { in: groupIds }, userId: session.userId } }),
     prisma.collaborationGroupStory.findMany({
@@ -37,6 +43,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: 300,
     }),
+    filtersPromise,
   ]);
 
   const profilePayload = await Promise.all(profiles.map(async (profile) => ({
@@ -59,5 +66,5 @@ export async function GET(req: Request) {
   })));
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { domain: "collaboration-experience", groupCount: groupIds.length } });
-  return NextResponse.json({ profiles: profilePayload, preferences, stories: storyPayload });
+  return NextResponse.json({ profiles: profilePayload, preferences, stories: storyPayload, filters });
 }
