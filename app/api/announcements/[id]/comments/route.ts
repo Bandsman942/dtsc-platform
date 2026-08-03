@@ -92,7 +92,7 @@ export async function POST(req: Request, { params }: Params) {
     title: mentionedUserIds.includes(userId) ? "Mention dans un commentaire" : parentComment?.userId === userId ? "Nouvelle réponse à votre commentaire" : "Nouveau commentaire sur votre annonce",
     body: announcement.title,
     type: "ANNOUNCEMENT",
-    targetUrl: announcementNotificationTarget(id, comment.id),
+    targetUrl: announcementNotificationTarget(announcement.id, comment.id),
     organizationId: announcement.organizationId,
     idempotencyKey: `announcement:comment:${comment.id}:${userId}`,
   })));
