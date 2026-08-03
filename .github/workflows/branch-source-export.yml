@@ -1,9 +1,9 @@
 name: Branch source export
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/erp-professionalization-final-consolidation
+      - main
 
 permissions:
   contents: read
