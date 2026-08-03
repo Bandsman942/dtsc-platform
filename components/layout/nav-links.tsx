@@ -223,7 +223,7 @@ export function NavLinks({
                   {groupModules
                     .sort((left, right) => left.navigationOrder - right.navigationOrder)
                     .map((enterpriseModule) => renderItem({
-                      code: enterpriseModule.moduleCode,
+                      code: enterpriseModule.code,
                       href: enterpriseModule.href,
                       path: enterpriseModule.href.split(/[?#]/, 1)[0] || enterpriseModule.href,
                       label: enterpriseModule.label,
