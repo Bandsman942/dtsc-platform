@@ -15,6 +15,16 @@
 - contrats UX, confidentialité et packaging sectoriels ;
 - documentation dédiée des modules Health et Pharmacy demandés.
 
+### Complément — guides contextuels spécialisés
+
+- ajout d’un guide utilisateur exact pour chacun des 25 codes canoniques Health et Pharmacy ;
+- exposition du bouton **Guide utilisateur** dans chaque workspace spécialisé, selon la même logique que les modules Core et Finance ;
+- ajout des prérequis, procédures, statuts, contrôles, dépannage et limites réellement supportées ;
+- ajout de liens directs entre les modules qui participent au même parcours métier ;
+- ajout d’un retour direct du centre d’aide vers le module consulté ;
+- conservation du contexte patient lors des parcours Patients → Rendez-vous, Patients → Consultations et Patients → Dossier médical ;
+- renforcement de la QA afin qu’un module spécialisé sans guide, sans bouton d’aide ou sans contexte patient fasse échouer la régression.
+
 ### Confirmé
 
 - les workspaces actifs Health et Pharmacy sont dédiés ;

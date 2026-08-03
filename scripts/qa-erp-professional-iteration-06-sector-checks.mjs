@@ -44,6 +44,9 @@ const healthCoreQa = read("scripts/qa-health-core-convergence-checks.mjs");
 const healthFinanceQa = read("scripts/qa-health-financial-convergence-checks.mjs");
 const pharmacyCoreQa = read("scripts/qa-pharmacy-core-convergence-checks.mjs");
 const pharmacyFinanceQa = read("scripts/qa-pharmacy-financial-convergence-checks.mjs");
+const helpPage = read("app/help/enterprise/page.tsx");
+const sectorGuides = read("lib/enterprise/sector-user-guides.ts");
+const sectorWorkspace = read("components/enterprise/enterprise-sector-module-workspace.tsx");
 
 const healthWorkspaces = {
   patients: "components/enterprise/health-patients-workspace.tsx",
@@ -166,6 +169,23 @@ const checks = {
     need(mobileNav, "pendingCompanyRelationships", "Navigation mobile Relations entreprises");
     need(deepLinksQa, "enterprise-links?", "QA liens profonds ERP");
     need(deepLinksQa, "contract=${encodeURIComponent", "QA liens profonds ERP");
+    need(sectorWorkspace, "useSearchParams", "Liens profonds sectoriels");
+    need(sectorWorkspace, "patientLegacyRecordId", "Contexte patient intermodules");
+    need(sectorWorkspace, "initialPatientLegacyRecordId={initialPatientLegacyRecordId}", "Préremplissage patient Health");
+  },
+
+  guides() {
+    need(helpPage, "SECTOR_USER_GUIDES", "Centre d’aide sectoriel");
+    need(helpPage, "Modules et parcours liés", "Liens entre guides et modules");
+    need(helpPage, "Revenir au module", "Retour du guide vers le module");
+    need(sectorWorkspace, "ProfessionalHelp", "Accès au guide dans les workspaces sectoriels");
+    need(sectorWorkspace, "withHelp", "Guide présent sur tous les workspaces sectoriels");
+    for (const moduleCode of [...healthModules, ...pharmacyModules]) {
+      need(sectorGuides, `${moduleCode}: {`, `Guide spécialisé ${moduleCode}`);
+    }
+    for (const marker of ["prerequisites", "steps", "workflow", "controls", "troubleshooting", "relatedModules"]) {
+      need(sectorGuides, marker, "Contrat des guides spécialisés");
+    }
   },
 
   readiness() {
@@ -203,40 +223,41 @@ const checks = {
 const aliases = {
   all: Object.keys(checks),
   foundation: ["foundation"],
-  health: ["health", "confidentiality", "languageMobile"],
-  patients: ["health"],
-  appointments: ["health"],
-  consultations: ["health", "confidentiality"],
-  records: ["health", "confidentiality"],
-  team: ["health"],
-  laboratory: ["health", "confidentiality"],
-  "health-pharmacy": ["health", "pharmacy"],
-  billing: ["health", "confidentiality"],
-  insurance: ["health"],
-  "health-quality": ["health", "confidentiality"],
-  "health-documents": ["health", "confidentiality"],
-  pharmacy: ["pharmacy", "confidentiality", "languageMobile"],
-  products: ["pharmacy"],
-  batches: ["pharmacy"],
-  inventory: ["pharmacy"],
-  receipts: ["pharmacy"],
-  sales: ["pharmacy", "confidentiality"],
-  prescriptions: ["pharmacy", "confidentiality"],
-  procurement: ["pharmacy"],
-  cash: ["pharmacy"],
-  returns: ["pharmacy"],
-  alerts: ["pharmacy"],
-  "pharmacy-quality": ["pharmacy", "confidentiality"],
-  "pharmacy-documents": ["pharmacy", "confidentiality"],
-  reports: ["pharmacy"],
-  settings: ["pharmacy"],
+  health: ["health", "confidentiality", "languageMobile", "guides"],
+  patients: ["health", "guides", "navigation"],
+  appointments: ["health", "guides", "navigation"],
+  consultations: ["health", "confidentiality", "guides", "navigation"],
+  records: ["health", "confidentiality", "guides", "navigation"],
+  team: ["health", "guides"],
+  laboratory: ["health", "confidentiality", "guides"],
+  "health-pharmacy": ["health", "pharmacy", "guides"],
+  billing: ["health", "confidentiality", "guides"],
+  insurance: ["health", "guides"],
+  "health-quality": ["health", "confidentiality", "guides"],
+  "health-documents": ["health", "confidentiality", "guides"],
+  pharmacy: ["pharmacy", "confidentiality", "languageMobile", "guides"],
+  products: ["pharmacy", "guides"],
+  batches: ["pharmacy", "guides"],
+  inventory: ["pharmacy", "guides"],
+  receipts: ["pharmacy", "guides"],
+  sales: ["pharmacy", "confidentiality", "guides"],
+  prescriptions: ["pharmacy", "confidentiality", "guides"],
+  procurement: ["pharmacy", "guides"],
+  cash: ["pharmacy", "guides"],
+  returns: ["pharmacy", "guides"],
+  alerts: ["pharmacy", "guides"],
+  "pharmacy-quality": ["pharmacy", "confidentiality", "guides"],
+  "pharmacy-documents": ["pharmacy", "confidentiality", "guides"],
+  reports: ["pharmacy", "guides"],
+  settings: ["pharmacy", "guides"],
   "french-language": ["languageMobile"],
   mobile: ["languageMobile"],
   "deep-links": ["navigation"],
   confidentiality: ["confidentiality"],
+  guides: ["guides"],
   "single-source-of-truth": ["foundation", "confidentiality"],
-  "commercial-readiness": ["readiness", "documentation"],
-  "program-final-readiness": ["foundation", "readiness", "documentation", "navigation"],
+  "commercial-readiness": ["readiness", "documentation", "guides"],
+  "program-final-readiness": ["foundation", "readiness", "documentation", "navigation", "guides"],
 };
 
 const selected = aliases[scope] || [scope];

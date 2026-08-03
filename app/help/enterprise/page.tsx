@@ -3,8 +3,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { requireUser } from "@/lib/auth";
 import { FINANCE_USER_GUIDES, type FinanceUserGuide } from "@/lib/enterprise/finance-user-guides";
+import { SECTOR_USER_GUIDES, type SectorUserGuide } from "@/lib/enterprise/sector-user-guides";
 
-type Guide = FinanceUserGuide;
+type Guide = FinanceUserGuide & {
+  relatedModules?: SectorUserGuide["relatedModules"];
+  limitations?: string[];
+};
 
 const GUIDES: Record<string, Guide> = {
   CRM_CUSTOMERS: {
@@ -139,7 +143,7 @@ export default async function EnterpriseHelpPage({ searchParams }: { searchParam
   const user = await requireUser();
   const { module } = await searchParams;
   const code = (module || "").toUpperCase();
-  const guide = GUIDES[code] || FINANCE_USER_GUIDES[code];
+  const guide: Guide | undefined = GUIDES[code] || FINANCE_USER_GUIDES[code] || SECTOR_USER_GUIDES[code];
 
   return (
     <AppShell user={user}>
@@ -157,9 +161,28 @@ export default async function EnterpriseHelpPage({ searchParams }: { searchParam
               <ModuleSection title="Statuts et workflow"><ul className="grid gap-2 text-sm leading-6 text-dtsc-muted">{guide.workflow.map((item) => <li key={item}>• {item}</li>)}</ul></ModuleSection>
               <ModuleSection title="Contrôles et confidentialité"><ul className="grid gap-2 text-sm leading-6 text-dtsc-muted">{guide.controls.map((item) => <li key={item}>• {item}</li>)}</ul></ModuleSection>
               <ModuleSection title="Dépannage"><ul className="grid gap-2 text-sm leading-6 text-dtsc-muted">{guide.troubleshooting.map((item) => <li key={item}>• {item}</li>)}</ul></ModuleSection>
+              {guide.relatedModules?.length ? (
+                <ModuleSection title="Modules et parcours liés">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {guide.relatedModules.map((related) => (
+                      <Link key={related.code} href={`/enterprise-modules/${encodeURIComponent(related.code)}`} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 transition hover:bg-dtsc-soft">
+                        <strong className="block text-sm text-dtsc-ink">{related.label}</strong>
+                        <span className="mt-1 block text-sm leading-6 text-dtsc-muted">{related.reason}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </ModuleSection>
+              ) : null}
+              {guide.limitations?.length ? <ModuleSection title="Limites connues"><ul className="grid gap-2 text-sm leading-6 text-dtsc-muted">{guide.limitations.map((item) => <li key={item}>• {item}</li>)}</ul></ModuleSection> : null}
             </>
           ) : null}
-          <ModuleSection title="Besoin d’accompagnement"><div data-responsive-actions><Link href="/support" className="min-h-11 rounded-xl bg-dtsc-blue px-4 py-3 text-center text-sm font-black text-white">Contacter le support DTSC</Link><Link href="/enterprise-admin" className="min-h-11 rounded-xl border border-dtsc-border px-4 py-3 text-center text-sm font-black text-dtsc-ink">Vérifier la configuration</Link></div></ModuleSection>
+          <ModuleSection title="Besoin d’accompagnement">
+            <div data-responsive-actions>
+              {guide && code ? <Link href={`/enterprise-modules/${encodeURIComponent(code)}`} className="min-h-11 rounded-xl bg-dtsc-blue px-4 py-3 text-center text-sm font-black text-white">Revenir au module</Link> : null}
+              <Link href="/support" className="min-h-11 rounded-xl border border-dtsc-border px-4 py-3 text-center text-sm font-black text-dtsc-ink">Contacter le support DTSC</Link>
+              <Link href="/enterprise-admin" className="min-h-11 rounded-xl border border-dtsc-border px-4 py-3 text-center text-sm font-black text-dtsc-ink">Vérifier la configuration</Link>
+            </div>
+          </ModuleSection>
         </ModuleContent>
       </ModuleWorkspace>
     </AppShell>

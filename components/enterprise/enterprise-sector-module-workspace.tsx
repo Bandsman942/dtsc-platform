@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
 import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
@@ -27,9 +27,12 @@ import { PharmacyReturnLossWorkspace } from "@/components/enterprise/pharmacy-re
 import { PharmacySalesWorkspace } from "@/components/enterprise/pharmacy-sales-workspace";
 import { PharmacySettingsWorkspace } from "@/components/enterprise/pharmacy-settings-workspace";
 import { PharmacyStockWorkspace } from "@/components/enterprise/pharmacy-stock-workspace";
+import { ProfessionalHelp } from "@/components/enterprise/professional/professional-erp-ui";
 import { EmptyState } from "@/components/workspace/empty-state";
 import type { EnterpriseSectorRecordItem } from "@/lib/enterprise/enterprise-admin-types";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+
+type HealthRelatedModule = "APPOINTMENTS" | "CONSULTATIONS" | "MEDICAL_RECORDS" | "MEDICAL_DOCUMENTS";
 
 export function EnterpriseSectorModuleWorkspace(props: {
   organizationId: string;
@@ -39,43 +42,87 @@ export function EnterpriseSectorModuleWorkspace(props: {
 }) {
   const { organizationId, definition, enabledModuleCodes } = props;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const activeModuleCodes = useMemo(() => new Set(enabledModuleCodes), [enabledModuleCodes]);
+  const initialPatientLegacyRecordId = searchParams.get("patientLegacyRecordId") || "";
+
+  function openHealthRelated(moduleCode: HealthRelatedModule, patientLegacyRecordId?: string) {
+    const params = new URLSearchParams();
+    if (patientLegacyRecordId) params.set("patientLegacyRecordId", patientLegacyRecordId);
+    const query = params.toString();
+    router.push(`/enterprise-modules/${encodeURIComponent(moduleCode)}${query ? `?${query}` : ""}`);
+  }
+
+  function withHelp(workspace: ReactNode) {
+    return (
+      <div className="min-w-0 space-y-4">
+        {workspace}
+        <ProfessionalHelp moduleCode={definition.code} />
+      </div>
+    );
+  }
 
   if (definition.routeKind === "SECTOR_HEALTH") {
     if (definition.code === "PATIENTS") {
-      return <HealthPatientsWorkspace organizationId={organizationId} activeModuleCodes={activeModuleCodes} onOpenRelated={(moduleCode) => router.push(`/enterprise-modules/${encodeURIComponent(moduleCode)}`)} />;
+      return withHelp(
+        <HealthPatientsWorkspace
+          organizationId={organizationId}
+          activeModuleCodes={activeModuleCodes}
+          onOpenRelated={openHealthRelated}
+        />,
+      );
     }
     if (definition.code === "APPOINTMENTS") {
-      return <HealthAppointmentsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" activeModuleCodes={activeModuleCodes} onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")} />;
+      return withHelp(
+        <HealthAppointmentsWorkspace
+          organizationId={organizationId}
+          initialPatientLegacyRecordId={initialPatientLegacyRecordId}
+          activeModuleCodes={activeModuleCodes}
+          onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")}
+        />,
+      );
     }
     if (definition.code === "CONSULTATIONS") {
-      return <HealthConsultationsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")} />;
+      return withHelp(
+        <HealthConsultationsWorkspace
+          organizationId={organizationId}
+          initialPatientLegacyRecordId={initialPatientLegacyRecordId}
+          onOpenPatients={() => router.push("/enterprise-modules/PATIENTS")}
+        />,
+      );
     }
-    if (definition.code === "MEDICAL_RECORDS") return <HealthMedicalRecordsWorkspace organizationId={organizationId} initialPatientLegacyRecordId="" />;
-    if (definition.code === "CARE_TEAM") return <HealthStaffWorkspace organizationId={organizationId} />;
-    if (definition.code === "LABORATORY") return <HealthLaboratoryWorkspace organizationId={organizationId} />;
-    if (definition.code === "INTERNAL_PHARMACY") return <HealthPharmacyWorkspace organizationId={organizationId} />;
-    if (definition.code === "MEDICAL_BILLING") return <HealthMedicalBillingWorkspace organizationId={organizationId} />;
-    if (definition.code === "INSURANCE_COVERAGE") return <HealthInsuranceWorkspace organizationId={organizationId} />;
-    if (definition.code === "QUALITY_INCIDENTS") return <HealthQualityWorkspace organizationId={organizationId} />;
-    if (definition.code === "MEDICAL_DOCUMENTS") return <HealthDocumentsWorkspace organizationId={organizationId} />;
+    if (definition.code === "MEDICAL_RECORDS") {
+      return withHelp(
+        <HealthMedicalRecordsWorkspace
+          organizationId={organizationId}
+          initialPatientLegacyRecordId={initialPatientLegacyRecordId}
+        />,
+      );
+    }
+    if (definition.code === "CARE_TEAM") return withHelp(<HealthStaffWorkspace organizationId={organizationId} />);
+    if (definition.code === "LABORATORY") return withHelp(<HealthLaboratoryWorkspace organizationId={organizationId} />);
+    if (definition.code === "INTERNAL_PHARMACY") return withHelp(<HealthPharmacyWorkspace organizationId={organizationId} />);
+    if (definition.code === "MEDICAL_BILLING") return withHelp(<HealthMedicalBillingWorkspace organizationId={organizationId} />);
+    if (definition.code === "INSURANCE_COVERAGE") return withHelp(<HealthInsuranceWorkspace organizationId={organizationId} />);
+    if (definition.code === "QUALITY_INCIDENTS") return withHelp(<HealthQualityWorkspace organizationId={organizationId} />);
+    if (definition.code === "MEDICAL_DOCUMENTS") return withHelp(<HealthDocumentsWorkspace organizationId={organizationId} />);
   }
 
   if (definition.routeKind === "SECTOR_PHARMACY") {
-    if (definition.code === "MEDICINES_PRODUCTS") return <PharmacyProductsWorkspace organizationId={organizationId} />;
-    if (definition.code === "BATCH_EXPIRY") return <PharmacyBatchesWorkspace organizationId={organizationId} />;
-    if (definition.code === "STOCK_INVENTORY") return <PharmacyStockWorkspace organizationId={organizationId} />;
-    if (definition.code === "STOCK_RECEIPTS") return <PharmacyReceiptsWorkspace organizationId={organizationId} />;
-    if (definition.code === "SALES_DISPENSATION") return <PharmacySalesWorkspace organizationId={organizationId} />;
-    if (definition.code === "PRESCRIPTIONS") return <PharmacyPrescriptionsWorkspace organizationId={organizationId} />;
-    if (definition.code === "SUPPLIERS_ORDERS") return <PharmacyPurchasesWorkspace organizationId={organizationId} />;
-    if (definition.code === "CASH_INVOICES_PAYMENTS") return <PharmacyCashWorkspace organizationId={organizationId} />;
-    if (definition.code === "RETURNS_ADJUSTMENTS_LOSSES") return <PharmacyReturnLossWorkspace organizationId={organizationId} />;
-    if (definition.code === "ALERTS_EXPIRY_LOW_STOCK") return <PharmacyAlertsWorkspace organizationId={organizationId} />;
-    if (definition.code === "QUALITY_PHARMACOVIGILANCE") return <PharmacyQualityWorkspace organizationId={organizationId} />;
-    if (definition.code === "PHARMACY_DOCUMENTS") return <PharmacyDocumentsWorkspace organizationId={organizationId} />;
-    if (definition.code === "PHARMACY_REPORTS") return <PharmacyReportsWorkspace organizationId={organizationId} />;
-    if (definition.code === "PHARMACY_SETTINGS") return <PharmacySettingsWorkspace organizationId={organizationId} />;
+    if (definition.code === "MEDICINES_PRODUCTS") return withHelp(<PharmacyProductsWorkspace organizationId={organizationId} />);
+    if (definition.code === "BATCH_EXPIRY") return withHelp(<PharmacyBatchesWorkspace organizationId={organizationId} />);
+    if (definition.code === "STOCK_INVENTORY") return withHelp(<PharmacyStockWorkspace organizationId={organizationId} />);
+    if (definition.code === "STOCK_RECEIPTS") return withHelp(<PharmacyReceiptsWorkspace organizationId={organizationId} />);
+    if (definition.code === "SALES_DISPENSATION") return withHelp(<PharmacySalesWorkspace organizationId={organizationId} />);
+    if (definition.code === "PRESCRIPTIONS") return withHelp(<PharmacyPrescriptionsWorkspace organizationId={organizationId} />);
+    if (definition.code === "SUPPLIERS_ORDERS") return withHelp(<PharmacyPurchasesWorkspace organizationId={organizationId} />);
+    if (definition.code === "CASH_INVOICES_PAYMENTS") return withHelp(<PharmacyCashWorkspace organizationId={organizationId} />);
+    if (definition.code === "RETURNS_ADJUSTMENTS_LOSSES") return withHelp(<PharmacyReturnLossWorkspace organizationId={organizationId} />);
+    if (definition.code === "ALERTS_EXPIRY_LOW_STOCK") return withHelp(<PharmacyAlertsWorkspace organizationId={organizationId} />);
+    if (definition.code === "QUALITY_PHARMACOVIGILANCE") return withHelp(<PharmacyQualityWorkspace organizationId={organizationId} />);
+    if (definition.code === "PHARMACY_DOCUMENTS") return withHelp(<PharmacyDocumentsWorkspace organizationId={organizationId} />);
+    if (definition.code === "PHARMACY_REPORTS") return withHelp(<PharmacyReportsWorkspace organizationId={organizationId} />);
+    if (definition.code === "PHARMACY_SETTINGS") return withHelp(<PharmacySettingsWorkspace organizationId={organizationId} />);
   }
 
   return (
