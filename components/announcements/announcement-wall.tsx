@@ -32,10 +32,13 @@ type Announcement = {
   updatedAt?: string;
   createdAt: string;
   author: { id: string; name: string; role: UserRole; avatarUrl?: string | null; jobTitle?: string | null };
-  comments: Array<{ id: string; parentId: string | null; content: string; createdAt: string; user: { id: string; name: string; role: UserRole; avatarUrl?: string | null } }>;
+  comments: Array<{ id: string; parentId: string | null; content: string; createdAt: string; editedAt?: string | null; deletedAt?: string | null; moderationStatus?: string; user: { id: string; name: string; role: UserRole; avatarUrl?: string | null }; reactions?: Array<{ id: string; userId: string; reactionType: string }>; mentions?: Array<{ mentionedUserId: string }> }>;
+  _count?: { comments: number };
   reactions: Array<{ value: number }>;
   shares?: Array<{ id: string }>;
   reports?: Array<{ id: string; status: string }>;
+  commentsEnabled?: boolean;
+  capabilities?: { edit: boolean; moderate: boolean };
 };
 
 type AnnouncementCommentItem = Announcement["comments"][number];
@@ -89,6 +92,9 @@ export function AnnouncementWall({
   const [selectedTransferRecipientIds, setSelectedTransferRecipientIds] = useState<string[]>([]);
   const [reportAnnouncement, setReportAnnouncement] = useState<Announcement | null>(null);
   const [openCommentIds, setOpenCommentIds] = useState<string[]>([]);
+  const [olderCommentsByAnnouncement, setOlderCommentsByAnnouncement] = useState<Record<string, AnnouncementCommentItem[]>>({});
+  const [commentHasMoreByAnnouncement, setCommentHasMoreByAnnouncement] = useState<Record<string, boolean>>({});
+  const [loadingOlderCommentsId, setLoadingOlderCommentsId] = useState<string | null>(null);
   useToastMessage(feedback);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
@@ -118,6 +124,51 @@ export function AnnouncementWall({
     getSearchText: (announcement) =>
       `${announcement.title} ${announcement.content} ${announcement.author.name} ${announcement.author.role} ${announcement.comments.map((commentItem) => `${commentItem.content} ${commentItem.user.name}`).join(" ")}`,
   });
+
+  function commentsForAnnouncement(announcement: Announcement) {
+    const merged = [...(olderCommentsByAnnouncement[announcement.id] || []), ...announcement.comments];
+    const byId = new Map(merged.map((commentItem) => [commentItem.id, commentItem]));
+    return [...byId.values()].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+  }
+
+  async function loadOlderComments(announcement: Announcement) {
+    const currentComments = commentsForAnnouncement(announcement);
+    const oldest = currentComments[0]?.createdAt;
+    if (!oldest || loadingOlderCommentsId) return;
+    setLoadingOlderCommentsId(announcement.id);
+    const query = new URLSearchParams({ limit: "50", cursor: oldest });
+    const response = await fetch(`/api/announcements/${announcement.id}/comments?${query.toString()}`);
+    const body = await response.json().catch(() => null) as { comments?: AnnouncementCommentItem[]; hasMore?: boolean } | null;
+    if (response.ok && body) {
+      setOlderCommentsByAnnouncement((current) => ({
+        ...current,
+        [announcement.id]: [...(body.comments || []), ...(current[announcement.id] || [])],
+      }));
+      setCommentHasMoreByAnnouncement((current) => ({ ...current, [announcement.id]: Boolean(body.hasMore) }));
+    } else {
+      setFeedback("Impossible de charger les commentaires plus anciens.");
+    }
+    setLoadingOlderCommentsId(null);
+  }
+
+  async function reactToComment(commentId: string, reactionType = "LIKE") {
+    const response = await fetch(`/api/announcements/comments/${commentId}/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reactionType, action: "ADD" }) });
+    setFeedback(response.ok ? "Réaction enregistrée." : "Impossible d’enregistrer la réaction.");
+    if (response.ok) router.refresh();
+  }
+
+  async function reportComment(commentId: string) {
+    const description = window.prompt("Pourquoi signalez-vous ce commentaire ?");
+    if (description === null) return;
+    const response = await fetch(`/api/announcements/comments/${commentId}/report`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "OTHER", description, priority: "NORMAL" }) });
+    setFeedback(response.ok ? "Signalement transmis." : "Impossible de transmettre le signalement.");
+  }
+
+  async function restoreComment(commentId: string) {
+    const response = await fetch(`/api/announcements/comments/${commentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "RESTORE", mentionedUserIds: [] }) });
+    setFeedback(response.ok ? "Commentaire restauré." : "Restauration non autorisée.");
+    if (response.ok) router.refresh();
+  }
 
   async function createAnnouncement(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -343,6 +394,10 @@ export function AnnouncementWall({
               </summary>
               <form onSubmit={createAnnouncement} className="space-y-3 border-t border-dtsc-border p-4">
                 <Input name="title" value={composerTitle} onChange={(event) => setComposerTitle(event.target.value)} placeholder={t("announcements.titlePlaceholder")} required />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-black text-dtsc-muted">Audience<select name="scope" defaultValue="DTSC_OFFICIAL" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink"><option value="DTSC_OFFICIAL">DTSC officiel</option><option value="COMMUNITY">Communauté</option><option value="ORGANIZATION_ONLY">Organisation active</option><option value="GLOBAL_PRIVATE">Utilisateurs autorisés</option></select></label>
+                  <label className="grid gap-1 text-xs font-black text-dtsc-muted">Publication<select name="publicationMode" defaultValue="PUBLISH" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink"><option value="PUBLISH">Publier maintenant</option><option value="DRAFT">Enregistrer en brouillon</option></select></label>
+                </div>
                 <RichTextEditor
                   textName="content"
                   htmlName="contentHtml"
@@ -383,6 +438,11 @@ export function AnnouncementWall({
         {announcementList.paginatedItems.map((announcement) => {
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
           const dislikes = announcement.reactions.filter((reaction) => reaction.value === -1).length;
+          const visibleComments = commentsForAnnouncement(announcement);
+          const totalCommentCount = announcement._count?.comments ?? visibleComments.length;
+          const hasOlderComments = commentHasMoreByAnnouncement[announcement.id] ?? totalCommentCount > visibleComments.length;
+          const canEditAnnouncement = announcement.capabilities?.edit ?? (isAdmin || announcement.author.id === currentUserId);
+          const canModerateAnnouncement = announcement.capabilities?.moderate ?? (isAdmin || announcement.author.id === currentUserId);
           return (
             <article key={announcement.id} className="dtsc-card relative mx-auto min-w-0 max-w-3xl overflow-visible p-4 sm:p-6">
               <div className="min-w-0">
@@ -405,16 +465,16 @@ export function AnnouncementWall({
                   orientation="horizontal"
                   items={[
                     { key: "info", label: t("announcements.info"), icon: Info, onSelect: () => setInfoAnnouncement(announcement) },
-                    ...(isAdmin ? [{ key: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => openAnnouncementEditor(announcement) }] : []),
-                    ...(isAdmin ? [{ key: "delete", label: t("common.delete"), icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
+                    ...(canEditAnnouncement ? [{ key: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => openAnnouncementEditor(announcement) }] : []),
+                    ...(canModerateAnnouncement ? [{ key: "delete", label: t("common.delete"), icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
                     { key: "copy", label: t("common.copy"), icon: Copy, onSelect: () => copyAnnouncement(announcement) },
                     { key: "transfer", label: t("common.transfer"), icon: Send, onSelect: () => setTransferAnnouncement(announcement) },
                     { key: "metrics", label: t("announcements.indicators"), icon: BarChart3, onSelect: () => setMetricsAnnouncement(announcement) },
                     { key: "report", label: t("announcements.report"), icon: Flag, onSelect: () => setReportAnnouncement(announcement) },
-                    ...(isAdmin && announcement.status !== "ARCHIVED" ? [{ key: "archive", label: t("common.archive"), icon: Archive, onSelect: () => updateAnnouncementStatus(announcement, "ARCHIVE") }] : []),
-                    ...(isAdmin && announcement.status === "ARCHIVED" ? [{ key: "restore", label: t("common.restore"), icon: Undo2, onSelect: () => updateAnnouncementStatus(announcement, "RESTORE") }] : []),
-                    ...(isAdmin && !announcement.pinnedAt ? [{ key: "pin", label: t("common.pin"), icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "PIN") }] : []),
-                    ...(isAdmin && announcement.pinnedAt ? [{ key: "unpin", label: t("announcements.unpin"), icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "UNPIN") }] : []),
+                    ...(canModerateAnnouncement && announcement.status !== "ARCHIVED" ? [{ key: "archive", label: t("common.archive"), icon: Archive, onSelect: () => updateAnnouncementStatus(announcement, "ARCHIVE") }] : []),
+                    ...(canModerateAnnouncement && announcement.status === "ARCHIVED" ? [{ key: "restore", label: t("common.restore"), icon: Undo2, onSelect: () => updateAnnouncementStatus(announcement, "RESTORE") }] : []),
+                    ...(canModerateAnnouncement && !announcement.pinnedAt ? [{ key: "pin", label: t("common.pin"), icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "PIN") }] : []),
+                    ...(canModerateAnnouncement && announcement.pinnedAt ? [{ key: "unpin", label: t("announcements.unpin"), icon: Pin, onSelect: () => updateAnnouncementStatus(announcement, "UNPIN") }] : []),
                   ]}
                 />
               </div>
@@ -439,25 +499,43 @@ export function AnnouncementWall({
                   className="inline-flex items-center gap-2 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-bold text-dtsc-blue transition hover:bg-cyan-100"
                 >
                   <MessageCircle className="h-4 w-4" />
-                  {openCommentIds.includes(announcement.id) ? t("announcements.hideComments") : `${announcement.comments.length} ${t("announcements.comments")}`}
+                  {openCommentIds.includes(announcement.id) ? t("announcements.hideComments") : `${totalCommentCount} ${t("announcements.comments")}`}
                 </button>
               </div>
               {openCommentIds.includes(announcement.id) && (
                 <div className="mt-4">
+                  {hasOlderComments && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={loadingOlderCommentsId === announcement.id}
+                      onClick={() => void loadOlderComments(announcement)}
+                      className="mb-3 w-full rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"
+                    >
+                      {loadingOlderCommentsId === announcement.id ? "Chargement…" : "Charger les commentaires plus anciens"}
+                    </Button>
+                  )}
                   <AnnouncementComments
                     announcementId={announcement.id}
-                    comments={announcement.comments}
+                    comments={visibleComments}
                     currentUserId={currentUserId}
-                    isAdmin={isAdmin}
+                    isAdmin={canModerateAnnouncement}
                     commentEditWindowMinutes={commentEditWindowMinutes}
                     onEdit={setEditingComment}
                     onDelete={setDeletingComment}
                     onReply={(commentItem) => setReplyingTo({ announcementId: announcement.id, comment: commentItem })}
+                    onReact={(commentItem) => void reactToComment(commentItem.id)}
+                    onReport={(commentItem) => void reportComment(commentItem.id)}
+                    onRestore={(commentItem) => void restoreComment(commentItem.id)}
                   />
-                  <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <Input name="content" placeholder="Ajouter un commentaire..." required />
-                    <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
-                  </form>
+                  {announcement.commentsEnabled !== false ? (
+                    <form onSubmit={(event) => comment(event, announcement.id)} className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <Input name="content" placeholder="Ajouter un commentaire..." required />
+                      <Button className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Envoyer</Button>
+                    </form>
+                  ) : (
+                    <p className="mt-4 rounded-xl bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">Les commentaires sont désactivés pour cette annonce.</p>
+                  )}
                 </div>
               )}
             </article>
@@ -631,7 +709,7 @@ export function AnnouncementWall({
       <Dialog
         open={Boolean(deletingAnnouncement)}
         title="Supprimer l'annonce"
-        description="Action réservée à l'administrateur DTSC."
+        description="Cette action est réservée à l’auteur ou à un modérateur autorisé."
         onClose={() => setDeletingAnnouncement(null)}
         footer={
           <>
@@ -649,7 +727,7 @@ export function AnnouncementWall({
       <Dialog
         open={Boolean(deletingComment)}
         title="Supprimer le commentaire"
-        description="Action réservée à l'administrateur DTSC."
+        description="Cette action est réservée à l’auteur ou à un modérateur autorisé."
         onClose={() => setDeletingComment(null)}
         footer={
           <>
@@ -662,7 +740,7 @@ export function AnnouncementWall({
           </>
         }
       >
-        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression définitive de ce commentaire.</p>
+        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression logique de ce commentaire. Les réponses restent attachées et un modérateur autorisé pourra le restaurer.</p>
       </Dialog>
     </div>
   );
@@ -677,6 +755,9 @@ function AnnouncementComments({
   onEdit,
   onDelete,
   onReply,
+  onReact,
+  onReport,
+  onRestore,
 }: {
   announcementId: string;
   comments: AnnouncementCommentItem[];
@@ -686,6 +767,9 @@ function AnnouncementComments({
   onEdit: (comment: AnnouncementCommentItem) => void;
   onDelete: (comment: AnnouncementCommentItem) => void;
   onReply: (comment: AnnouncementCommentItem) => void;
+  onReact: (comment: AnnouncementCommentItem) => void;
+  onReport: (comment: AnnouncementCommentItem) => void;
+  onRestore: (comment: AnnouncementCommentItem) => void;
 }) {
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const commentsByParent = new Map<string, AnnouncementCommentItem[]>();
@@ -714,7 +798,8 @@ function AnnouncementComments({
   }
 
   function renderComment(commentItem: AnnouncementCommentItem, depth = 0) {
-    const canEditComment = isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes));
+    const canEditComment = !commentItem.deletedAt && (isAdmin || (commentItem.user.id === currentUserId && isInsideEditWindow(commentItem.createdAt, commentEditWindowMinutes)));
+    const canDeleteComment = isAdmin || commentItem.user.id === currentUserId;
     const replies = commentsByParent.get(commentItem.id) || [];
     const parentComment = commentItem.parentId ? comments.find((item) => item.id === commentItem.parentId) : null;
 
@@ -730,7 +815,7 @@ function AnnouncementComments({
                   <span className="mt-1 line-clamp-2 block">{parentComment.content}</span>
                 </button>
               )}
-              <p className="mt-1 break-words text-sm text-dtsc-muted">{commentItem.content}</p>
+              <p className={`mt-1 break-words text-sm text-dtsc-muted ${commentItem.deletedAt ? "italic opacity-70" : ""}`}>{commentItem.deletedAt ? "Commentaire supprimé" : commentItem.content}{commentItem.editedAt ? " · modifié" : ""}</p>{commentItem.reactions?.length ? <p className="mt-2 text-xs font-bold text-cyan-700">♥ {commentItem.reactions.length}</p> : null}
             </div>
             <ActionMenu
               className="absolute right-2 top-2"
@@ -738,8 +823,10 @@ function AnnouncementComments({
               items={[
                 { key: "reply", label: "Répondre", icon: MessageCircle, onSelect: () => onReply(commentItem) },
                 { key: "copy", label: "Copier le texte", icon: Copy, onSelect: () => copyText(commentItem.content) },
+                ...(!commentItem.deletedAt ? [{ key: "react", label: "Réagir", icon: ThumbsUp, onSelect: () => onReact(commentItem) }, { key: "report", label: "Signaler", icon: Flag, onSelect: () => onReport(commentItem) }] : []),
                 ...(canEditComment ? [{ key: "edit", label: "Modifier", icon: Pencil, onSelect: () => onEdit(commentItem) }] : []),
-                ...(isAdmin ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => onDelete(commentItem) }] : []),
+                ...(canDeleteComment && !commentItem.deletedAt ? [{ key: "delete", label: "Supprimer", icon: Trash2, destructive: true, onSelect: () => onDelete(commentItem) }] : []),
+                ...(commentItem.deletedAt && canDeleteComment ? [{ key: "restore", label: "Restaurer", icon: Undo2, onSelect: () => onRestore(commentItem) }] : []),
               ]}
             />
           </div>

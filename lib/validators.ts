@@ -811,6 +811,12 @@ export const announcementSchema = z.object({
   title: z.string().min(3).max(160),
   content: z.string().min(3).max(8_000),
   contentHtml: z.string().max(60_000).optional().or(z.literal("")),
+  scope: z.enum(["GLOBAL_PUBLIC", "GLOBAL_PRIVATE", "COMMUNITY", "DTSC_OFFICIAL", "ORGANIZATION_ONLY", "GROUP_ONLY"]).optional(),
+  organizationId: z.string().min(5).max(120).optional().nullable().or(z.literal("")),
+  commentsEnabled: z.coerce.boolean().optional(),
+  scheduledAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  audience: z.record(z.string(), z.unknown()).optional(),
+  publicationMode: z.enum(["PUBLISH", "DRAFT"]).default("PUBLISH"),
 });
 
 export const announcementUpdateSchema = announcementSchema;
@@ -818,11 +824,14 @@ export const announcementUpdateSchema = announcementSchema;
 export const announcementCommentSchema = z.object({
   content: z.string().min(1).max(1_000),
   parentId: z.string().min(1).max(120).optional().or(z.literal("")),
+  mentionedUserIds: z.array(z.string().min(5).max(120)).max(20).default([]),
 });
 
 export const announcementCommentUpdateSchema = z.object({
-  content: z.string().min(1).max(1_000),
-});
+  content: z.string().min(1).max(1_000).optional(),
+  mentionedUserIds: z.array(z.string().min(5).max(120)).max(20).default([]),
+  action: z.enum(["RESTORE"]).optional(),
+}).refine((value) => Boolean(value.action || value.content), { message: "Une action ou un contenu est requis." });
 
 export const announcementReactionSchema = z.object({
   value: z.union([z.literal(1), z.literal(-1)]),
@@ -864,7 +873,7 @@ export const announcementStatusSchema = z.object({
 export const collaborationGroupSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(800).optional().or(z.literal("")),
-  groupType: z.enum(["COMPANY", "PROJECT", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "OTHER"]).default("PROJECT"),
+  groupType: z.enum(["DIRECT", "GROUP", "ORGANIZATION", "DTSC_INTERNAL", "SYSTEM", "COMPANY", "PROJECT", "DTSC_SUPPORT", "INTERNAL", "CLIENT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "OTHER"]).default("PROJECT"),
   visibility: z.enum(["PRIVATE", "COMPANY", "INTERNAL"]).default("PRIVATE"),
 });
 
@@ -919,8 +928,10 @@ export const collaborationInvitationResponseSchema = z.object({
 
 export const collaborationMessageSchema = z.object({
   content: z.string().min(1).max(4000),
-  messageType: z.enum(["TEXT", "CHATBOT_SHARE", "ENTERPRISE_AI_SHARE", "SYSTEM", "FILE", "LINK"]).default("TEXT"),
+  messageType: z.enum(["TEXT", "CHATBOT_SHARE", "ENTERPRISE_AI_SHARE", "SYSTEM", "FILE", "IMAGE", "AUDIO", "VIDEO", "LINK"]).default("TEXT"),
+  clientMessageId: z.string().min(8).max(120).optional().or(z.literal("")),
   replyToId: z.string().max(120).optional().or(z.literal("")),
+  threadRootId: z.string().max(120).optional().or(z.literal("")),
   sharedChatbotConversationId: z.string().max(120).optional().or(z.literal("")),
   mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
 });
@@ -929,6 +940,44 @@ export const collaborationMessageUpdateSchema = z.object({
   content: z.string().min(1).max(4000).optional(),
   status: z.enum(["SENT", "EDITED", "DELETED", "ARCHIVED"]).optional(),
   mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
+});
+
+
+export const collaborationDirectConversationSchema = z.object({
+  targetUserId: z.string().min(5).max(120),
+});
+
+export const collaborationUserBlockSchema = z.object({
+  targetUserId: z.string().min(5).max(120),
+  action: z.enum(["BLOCK", "UNBLOCK"]),
+  reason: z.string().max(500).optional().or(z.literal("")),
+});
+
+export const collaborationMessageReactionSchema = z.object({
+  reactionType: z.enum(["LIKE", "LOVE", "LAUGH", "CELEBRATE", "SUPPORT", "INSIGHTFUL"]),
+  action: z.enum(["ADD", "REMOVE"]).default("ADD"),
+});
+
+export const collaborationMessagePinSchema = z.object({
+  action: z.enum(["PIN", "UNPIN"]),
+});
+
+export const collaborationContentReportSchema = z.object({
+  reason: z.enum(["INAPPROPRIATE", "SPAM", "HARASSMENT", "CONFIDENTIAL", "DANGEROUS_FILE", "OTHER"]),
+  description: z.string().max(1200).optional().or(z.literal("")),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "CRITICAL"]).default("NORMAL"),
+});
+
+export const announcementCommentReactionSchema = z.object({
+  reactionType: z.enum(["LIKE", "LOVE", "SUPPORT", "INSIGHTFUL"]),
+  action: z.enum(["ADD", "REMOVE"]).default("ADD"),
+});
+
+export const collaborationModerationSchema = z.object({
+  targetType: z.enum(["MESSAGE", "COMMENT", "MEDIA", "GROUP", "USER"]),
+  targetId: z.string().min(5).max(120),
+  action: z.enum(["HIDE", "RESTORE", "DELETE_LOGICAL", "WARN", "LIMIT", "REMOVE_MEMBER", "CLOSE_REPORT"]),
+  reason: z.string().min(2).max(1000),
 });
 
 export const commentMentionSchema = z.object({

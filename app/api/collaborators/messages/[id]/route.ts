@@ -3,7 +3,8 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { canAccessGroupInSessionWithSubscription, canManageGroup, groupMemberUserIds, parseMentionedUserIds, writeGroupAudit } from "@/lib/collaboration";
 import { removeCollaborationMedia } from "@/lib/collaboration-media";
-import { notifyUsers } from "@/lib/notifications";
+import { collaboratorsNotificationTarget } from "@/lib/notification-targets";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -41,8 +42,8 @@ export async function PATCH(req: Request, { params }: Params) {
     const saved = await tx.collaborationGroupMessage.update({
       where: { id },
       data: {
-        ...(parsed.data.content ? { content: parsed.data.content, status: parsed.data.status || "EDITED" } : {}),
-        ...(parsed.data.status === "DELETED" ? { status: "DELETED", deletedAt: new Date() } : {}),
+        ...(parsed.data.content ? { content: parsed.data.content, status: parsed.data.status || "EDITED", editedAt: new Date() } : {}),
+        ...(parsed.data.status === "DELETED" ? { status: "DELETED", content: "Message supprimé", deletedAt: new Date(), deletionScope: "FOR_ALL", deletionReason: "Suppression demandée" } : {}),
         ...(parsed.data.status === "ARCHIVED" ? { status: "ARCHIVED" } : {}),
       },
     });
@@ -63,14 +64,15 @@ export async function PATCH(req: Request, { params }: Params) {
     return saved;
   });
   if (mentionedUserIds.length) {
-    await notifyUsers({
-      userIds: mentionedUserIds.filter((userId) => userId !== session.userId),
+    await Promise.all(mentionedUserIds.filter((userId) => userId !== session.userId).map((userId) => notifyUser({
+      userId,
       title: "Mention dans un message DTSC",
       body: parsed.data.content?.slice(0, 160) || "Vous avez été mentionné dans un groupe.",
       type: "COLLABORATION",
-      targetUrl: `/collaborators?groupId=${encodeURIComponent(message.groupId)}`,
+      targetUrl: collaboratorsNotificationTarget(message.groupId, message.id),
       organizationId: message.group.organizationId,
-    });
+      idempotencyKey: `collaboration:message-edit-mention:${message.id}:${userId}`,
+    })));
   }
   await writeGroupAudit({ groupId: message.groupId, actorId: session.userId, action: "message.update", entityType: "CollaborationGroupMessage", entityId: id });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
@@ -100,9 +102,10 @@ export async function DELETE(req: Request, { params }: Params) {
   const voice = await prisma.collaborationVoiceMessage.findUnique({ where: { messageId: id } });
   const deletedAt = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.collaborationGroupMessage.update({ where: { id }, data: { status: "DELETED", deletedAt } });
+    await tx.collaborationGroupMessage.update({ where: { id }, data: { status: "DELETED", content: "Message supprimé", deletedAt, deletionScope: "FOR_ALL", deletionReason: message.authorId === session.userId ? "Suppression par l’auteur" : "Suppression par modération" } });
     await tx.collaborationSharedConversation.updateMany({ where: { messageId: id }, data: { status: "DELETED", deletedAt } });
     await tx.collaborationVoiceMessage.updateMany({ where: { messageId: id }, data: { deletedAt } });
+    await tx.collaborationMessageAttachment.updateMany({ where: { messageId: id }, data: { status: "DELETED", deletedAt } });
   });
   if (voice) await removeCollaborationMedia(message.groupId, voice.storageBucket, voice.storagePath);
   await writeGroupAudit({ groupId: message.groupId, actorId: session.userId, action: "message.delete", entityType: "CollaborationGroupMessage", entityId: id });

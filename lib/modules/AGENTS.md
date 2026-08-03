@@ -46,3 +46,27 @@ Ces règles s’appliquent au registre, à la navigation, aux accès, aux liens 
 42. Web Push reflète conjointement l’état du navigateur, la configuration serveur, la préférence et la souscription de l’appareil.
 43. Les guides utilisateur décrivent uniquement les fonctions réellement déployées et restent accessibles depuis chaque module traité.
 44. Les E2E manuels de l’itération 2 restent `NON_EXÉCUTÉ` jusqu’à validation explicite du propriétaire.
+
+## Collaboration professionnelle — itération 03
+
+45. Toute conversation possède un contexte explicite ; connaître son identifiant ne donne jamais accès à son contenu.
+46. Les conversations directes sont résolues de manière idempotente dans un même contexte.
+47. Tout message pouvant être rejoué possède une clé d’idempotence stable et les réponses restent dans la même conversation.
+48. Les permissions sont revérifiées à chaque mutation ; un participant retiré perd immédiatement l’accès.
+49. Chaque groupe possède un propriétaire explicite qui transfère la propriété avant de quitter.
+50. Réactions et mentions sont dédupliquées ; une mention cible uniquement un participant autorisé.
+51. Toute pièce jointe utilise un upload réel contrôlé, un stockage privé et une URL signée temporaire.
+52. Les images s’ouvrent dans la visionneuse commune sans étirement ni perte de ratio.
+53. Les commentaires utilisent le contrat commun de pagination, masquage, suppression logique, restauration et lien profond.
+54. La présence doit refléter un signal réel et expirer après l’absence de heartbeat ; une session existante ne suffit pas.
+55. Les indicateurs de lecture ne sont jamais inventés et proviennent uniquement des lectures persistées.
+56. Toute synchronisation ou canal temps réel revérifie l’autorisation et la reconnexion ne crée aucun doublon.
+57. Un bouton d’appel n’apparaît pas sans infrastructure disponible ; les tokens d’appel sont temporaires et liés à l’utilisateur et à l’appel.
+58. Les états d’appel et la durée sont décidés côté serveur ; un appel manqué suit un timeout explicite.
+59. Toute annonce possède une audience explicite calculée côté serveur et utilise les notifications canoniques.
+60. Toute notification collaborative possède un lien profond vers l’objet précis et une clé de déduplication.
+61. Les actions de modération sont auditées et un administrateur de groupe n’est pas modérateur global.
+62. Les listes de messages, commentaires, annonces et historiques d’appel sont bornées et paginées.
+63. Les conversations, appels, galeries et commentaires restent utilisables à 320 px, clavier mobile ouvert compris.
+64. Les guides décrivent uniquement les fonctions réellement déployées.
+65. Aucun module de cette itération n’est promu automatiquement vers `COMMERCIAL_READY`.

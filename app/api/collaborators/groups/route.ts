@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { UserStatus, type Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { canUseFeature } from "@/lib/billing/entitlements";
@@ -12,6 +12,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { collaborationGroupSchema } from "@/lib/validators";
+import { directConversationDisplayName, getAuthorizedCollaborators, getCollaborationPresenceMap } from "@/lib/standard-collaboration";
 
 function isSameOriginRequest(req: Request) {
   const origin = req.headers.get("origin");
@@ -93,12 +94,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
-    prisma.user.findMany({
-      where: { status: UserStatus.ACTIVE },
-      select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true },
-      orderBy: { name: "asc" },
-      take: 500,
-    }),
+    getAuthorizedCollaborators(session, { limit: 100 }),
   ]);
   const groupIds = groups.map((group) => group.id);
   const unreadMentions = groupIds.length
@@ -135,19 +131,32 @@ export async function GET(req: Request) {
       createdAt: current?.createdAt || mention.message.createdAt,
     });
   }
+  const presenceMap = await getCollaborationPresenceMap([
+    ...users.map((collaborator) => collaborator.id),
+    ...groups.flatMap((group) => group.members.map((member) => member.userId)),
+  ]);
   const groupsWithMentionState = groups.map((group) => {
     const mention = unreadMentionByGroup.get(group.id);
-    return {
+    const withPresence = {
       ...group,
+      members: group.members.map((member) => ({
+        ...member,
+        user: { ...member.user, lastSeenAt: presenceMap.get(member.userId) || member.user.lastSeenAt },
+      })),
       unreadMessageCount: unreadMessageByGroup.get(group.id) || 0,
       unreadMentionCount: mention?.count || 0,
       unreadMentionPreview: mention?.preview || null,
       lastMentionAt: mention?.createdAt || null,
     };
+    return directConversationDisplayName(withPresence, session.userId);
   });
+  const usersWithPresence = users.map((collaborator) => ({
+    ...collaborator,
+    lastSeenAt: presenceMap.get(collaborator.id) || collaborator.lastSeenAt,
+  }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ groups: groupsWithMentionState, invitations, users });
+  return NextResponse.json({ groups: groupsWithMentionState, invitations, users: usersWithPresence });
 }
 
 export async function POST(req: Request) {
@@ -193,7 +202,9 @@ export async function POST(req: Request) {
       name: parsed.data.name,
       description: parsed.data.description || null,
       groupType: parsed.data.groupType,
+      contextType: session.activeContext || "GLOBAL_CLIENT",
       visibility: parsed.data.visibility,
+      lastActivityAt: new Date(),
       ownerId: session.userId,
       organizationId,
       members: {

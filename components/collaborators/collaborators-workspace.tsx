@@ -63,6 +63,7 @@ type GroupCall = {
   status: string;
   startedById: string;
   startedAt: string;
+  acceptedAt?: string | null;
   endedAt?: string | null;
   durationSeconds?: number | null;
   participants?: GroupCallParticipant[];
@@ -167,7 +168,6 @@ export function CollaboratorsWorkspace({
   useToastMessage(feedback);
   const trackedActiveCallIds = useRef<Set<string>>(new Set());
   const hasTrackedInitialCalls = useRef(false);
-  const autoJoinCallIdRef = useRef(initialJoinCallId || "");
   const activeGroup = groups.find((group) => group.id === activeGroupId) || null;
   const activeMember = activeGroup?.members.find((member) => member.userId === currentUserId);
   const canManage = activeMember?.role === "OWNER" || activeMember?.role === "ADMIN";
@@ -214,7 +214,7 @@ export function CollaboratorsWorkspace({
       if (document.visibilityState === "visible") {
         void refresh();
       }
-    }, 2500);
+    }, 7000);
     function refreshWhenVisible() {
       if (document.visibilityState === "visible") {
         void refresh();
@@ -442,22 +442,19 @@ export function CollaboratorsWorkspace({
   ]);
 
   useEffect(() => {
-    const targetCallId = autoJoinCallIdRef.current;
-    if (!targetCallId || joinedCall || callJoining) {
-      return;
-    }
-    const targetGroup = groups.find((group) =>
-      (group.calls || []).some((call) => call.id === targetCallId && (call.status === "RINGING" || call.status === "ACTIVE"))
-    );
-    const targetCall = targetGroup?.calls?.find((call) => call.id === targetCallId && (call.status === "RINGING" || call.status === "ACTIVE"));
-    if (!targetGroup || !targetCall) {
-      return;
-    }
+    if (!initialJoinCallId) return;
+    const targetGroup = groups.find((group) => (group.calls || []).some((call) => call.id === initialJoinCallId && (call.status === "RINGING" || call.status === "ACTIVE")));
+    if (!targetGroup) return;
     setActiveGroupId(targetGroup.id);
     setMobileGroupListOpen(false);
-    autoJoinCallIdRef.current = "";
-    void joinGroupCall(targetCall);
-  }, [callJoining, groups, joinedCall, joinGroupCall]);
+  }, [groups, initialJoinCallId]);
+
+  async function rejectGroupCall(call: GroupCall) {
+    const response = await fetch(`/api/collaborators/calls/${call.id}/reject`, { method: "POST" });
+    const body = await response.json().catch(() => null) as { message?: string } | null;
+    setFeedback(response.ok ? "Appel refusé." : body?.message || "Impossible de refuser l’appel.");
+    if (response.ok) await refresh();
+  }
 
   async function leaveJoinedCall() {
     if (!joinedCall) {
@@ -615,10 +612,10 @@ export function CollaboratorsWorkspace({
               actions={(
                 <>
                   {activeCall ? (
-                    <Button type="button" onClick={() => joinGroupCall(activeCall)} disabled={callJoining} className="hidden rounded-full bg-cyan-500 text-[#001736] hover:bg-cyan-300 sm:inline-flex">
-                      <PhoneCall className="h-4 w-4" />
-                      Rejoindre
-                    </Button>
+                    <div className="hidden items-center gap-2 sm:flex">
+                      <Button type="button" onClick={() => joinGroupCall(activeCall)} disabled={callJoining} className="rounded-full bg-cyan-500 text-[#001736] hover:bg-cyan-300"><PhoneCall className="h-4 w-4" />Rejoindre</Button>
+                      {activeCall.startedById !== currentUserId ? <Button type="button" variant="outline" onClick={() => rejectGroupCall(activeCall)} className="rounded-full"><PhoneOff className="h-4 w-4" />Refuser</Button> : null}
+                    </div>
                   ) : (
                     <>
                       <Button type="button" variant="outline" onClick={() => startGroupCall("AUDIO")} className="hidden rounded-full border-dtsc-border bg-dtsc-surface text-dtsc-blue sm:inline-flex" aria-label="Démarrer un appel audio">
@@ -635,6 +632,7 @@ export function CollaboratorsWorkspace({
                       ...(activeCall
                         ? [
                             { key: "join-call", label: "Rejoindre l'appel", icon: PhoneCall, onSelect: () => joinGroupCall(activeCall) },
+                            ...(activeCall.startedById !== currentUserId ? [{ key: "reject-call", label: "Refuser l'appel", icon: PhoneOff, destructive: true, onSelect: () => rejectGroupCall(activeCall) }] : []),
                             ...(canEndActiveCall ? [{ key: "end-call", label: "Terminer l'appel", icon: PhoneOff, destructive: true, onSelect: () => endGroupCall(activeCall) }] : []),
                           ]
                         : [
@@ -988,6 +986,7 @@ function MessageThread({
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const previousGroupIdRef = useRef(group.id);
   const previousLastMessageIdRef = useRef<string | null>(null);
+  const pendingClientMessageIdRef = useRef<string | null>(null);
   const lastMessageId = messages.length ? messages[messages.length - 1].id : null;
   const mentionSuggestions = useMemo(() => {
     const match = content.match(/@([\p{L}\p{N}\s._-]{0,40})$/u);
@@ -1002,12 +1001,15 @@ function MessageThread({
 
   async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const clientMessageId = pendingClientMessageIdRef.current || crypto.randomUUID();
+    pendingClientMessageIdRef.current = clientMessageId;
     const response = await fetch(`/api/collaborators/groups/${group.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, mentionedUserIds, messageType: "TEXT", replyToId: replyTo?.id || "" }),
+      body: JSON.stringify({ content, mentionedUserIds, messageType: "TEXT", replyToId: replyTo?.id || "", clientMessageId }),
     });
     if (response.ok) {
+      pendingClientMessageIdRef.current = null;
       setContent("");
       setMentionedUserIds([]);
       setReplyTo(null);
@@ -1088,7 +1090,10 @@ function MessageThread({
       </div>
       <ConversationComposer
         value={content}
-        onChange={setContent}
+        onChange={(value) => {
+          if (value !== content) pendingClientMessageIdRef.current = null;
+          setContent(value);
+        }}
         onSubmit={sendMessage}
         placeholder="Écrire un message ou mentionner @collaborateur..."
         className="relative"
@@ -1457,7 +1462,7 @@ function GroupCallRoom({
   const [fullscreenFocus, setFullscreenFocus] = useState<FullscreenFocusTarget>("auto");
   const [focusControlsVisible, setFocusControlsVisible] = useState(true);
   const [compactFullscreenUi, setCompactFullscreenUi] = useState(false);
-  const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.startedAt));
+  const [duration, setDuration] = useState(callDurationFromStart(joinedCall.call.acceptedAt || joinedCall.call.startedAt));
   const callShellRef = useRef<HTMLDivElement | null>(null);
   const connectionWasInterruptedRef = useRef(false);
   const t = (key: string) => translate(userPreferences.locale, key);
@@ -1483,9 +1488,9 @@ function GroupCallRoom({
   }, [joinedCall.call.id]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => setDuration(callDurationFromStart(joinedCall.call.startedAt)), 1000);
+    const interval = window.setInterval(() => setDuration(callDurationFromStart(joinedCall.call.acceptedAt || joinedCall.call.startedAt)), 1000);
     return () => window.clearInterval(interval);
-  }, [joinedCall.call.startedAt]);
+  }, [joinedCall.call.acceptedAt, joinedCall.call.startedAt]);
 
   useEffect(() => {
     function syncFullscreenState() {
@@ -2017,6 +2022,7 @@ function CallChatPanel({
   const [content, setContent] = useState("");
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  const pendingClientMessageIdRef = useRef<string | null>(null);
   const [panelRect, setPanelRect] = useState({ x: 12, y: 76, width: 340, height: 520 });
   const panelRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -2124,6 +2130,8 @@ function CallChatPanel({
       return;
     }
     setSending(true);
+    const clientMessageId = pendingClientMessageIdRef.current || crypto.randomUUID();
+    pendingClientMessageIdRef.current = clientMessageId;
     const response = await fetch(`/api/collaborators/groups/${group.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2131,10 +2139,12 @@ function CallChatPanel({
         content: trimmedContent,
         messageType: "TEXT",
         mentionedUserIds,
+        clientMessageId,
       }),
     });
     setSending(false);
     if (response.ok) {
+      pendingClientMessageIdRef.current = null;
       setContent("");
       setMentionedUserIds([]);
       await onMessageSent();
@@ -2208,7 +2218,10 @@ function CallChatPanel({
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/8 p-1.5">
           <Input
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={(event) => {
+              pendingClientMessageIdRef.current = null;
+              setContent(event.target.value);
+            }}
             placeholder={t("calls.callChatPlaceholder")}
             className="h-10 border-0 bg-transparent text-white placeholder:text-slate-400 focus-visible:ring-0"
           />

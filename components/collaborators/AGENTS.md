@@ -27,3 +27,10 @@
 - Préserver les réponses, mentions, accusés de lecture, invitations, présence, partage de conversations et historique de messages existants.
 - Toute nouvelle UI visible doit rester disponible en français et en anglais.
 - Préserver les règles iOS/PWA existantes : contrôles natifs pour les fichiers, zones tactiles suffisantes, safe areas et composer accessible avec clavier ouvert.
+
+## Itération standard 03
+
+- La liste de collaborateurs n’est jamais alimentée par un annuaire global ouvert.
+- Le compositeur conserve une clé client stable pendant un retry et n’affiche jamais un message comme livré ou lu sans preuve serveur.
+- Une notification d’appel ouvre le groupe et présente accepter/refuser sans auto-join.
+- À 320 px, le compositeur, les pièces jointes, le retour à la liste et les contrôles d’appel restent visibles.

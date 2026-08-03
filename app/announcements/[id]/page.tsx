@@ -5,40 +5,42 @@ import { AnnouncementMediaEnhancer } from "@/components/announcements/announceme
 import { AnnouncementWall } from "@/components/announcements/announcement-wall";
 import { AppShell } from "@/components/layout/app-shell";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { announcementVisibilityWhere } from "@/lib/announcement-access";
 import { getSession, requireUser } from "@/lib/auth";
-import { getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ commentId?: string }>;
+  searchParams: Promise<{ commentId?: string; comment?: string }>;
 };
+
+const commentInclude = {
+  user: { select: { id: true, name: true, role: true, avatarUrl: true } },
+  reactions: { select: { id: true, userId: true, reactionType: true } },
+  mentions: { select: { mentionedUserId: true } },
+} satisfies Prisma.AnnouncementCommentInclude;
 
 export default async function AnnouncementDetailPage({ params, searchParams }: PageProps) {
   const user = await requireUser();
   const session = await getSession();
+  if (!session) notFound();
+
   const { id } = await params;
-  const { commentId } = await searchParams;
+  const query = await searchParams;
+  const commentId = query.commentId || query.comment;
   const activeOrganizationId = getActiveOrganizationId(session);
-  const dtscInternalContext = isDtscInternalSession(session);
-  const globalAnnouncementScopes = ["GLOBAL_PUBLIC", "GLOBAL_PRIVATE", "COMMUNITY", "DTSC_OFFICIAL"];
-  const visibilityWhere: Prisma.AnnouncementWhereInput = dtscInternalContext
-    ? { id, deletedAt: null }
-    : activeOrganizationId
-      ? {
-          id,
-          deletedAt: null,
-          moderationStatus: "PUBLISHED",
-          OR: [{ scope: { in: globalAnnouncementScopes } }, { scope: "ORGANIZATION_ONLY", organizationId: activeOrganizationId }],
-        }
-      : { id, deletedAt: null, moderationStatus: "PUBLISHED", scope: { in: globalAnnouncementScopes } };
+  const visibilityWhere: Prisma.AnnouncementWhereInput = {
+    id,
+    ...announcementVisibilityWhere(session),
+  };
   const transferRecipientWhere: Prisma.UserWhereInput = activeOrganizationId
     ? {
-        status: "ACTIVE" as const,
+        status: "ACTIVE",
         organizationMemberships: { some: { organizationId: activeOrganizationId, status: "ACTIVE", removedAt: null } },
       }
-    : { status: "ACTIVE" as const, id: user.id };
+    : { status: "ACTIVE", id: user.id };
 
   const [settings, announcement, users] = await Promise.all([
     getAppSettings(),
@@ -47,9 +49,11 @@ export default async function AnnouncementDetailPage({ params, searchParams }: P
       include: {
         author: { select: { id: true, name: true, role: true, avatarUrl: true, jobTitle: true } },
         comments: {
-          orderBy: { createdAt: "asc" },
-          include: { user: { select: { id: true, name: true, role: true, avatarUrl: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+          include: commentInclude,
         },
+        _count: { select: { comments: true } },
         reactions: { select: { value: true } },
         shares: { select: { id: true } },
         reports: { select: { id: true, status: true } },
@@ -72,7 +76,34 @@ export default async function AnnouncementDetailPage({ params, searchParams }: P
   ]);
 
   if (!announcement) notFound();
-  await prisma.announcement.update({ where: { id: announcement.id }, data: { viewCount: { increment: 1 }, lastAction: "Annonce consultée depuis une notification" } });
+  announcement.comments.reverse();
+
+  if (commentId && !announcement.comments.some((comment) => comment.id === commentId)) {
+    const targetedComment = await prisma.announcementComment.findFirst({
+      where: { id: commentId, announcementId: announcement.id },
+      include: commentInclude,
+    });
+    if (targetedComment) announcement.comments.push(targetedComment);
+  }
+
+  await prisma.announcement.update({
+    where: { id: announcement.id },
+    data: { viewCount: { increment: 1 }, lastAction: "Annonce consultée depuis une notification" },
+  });
+
+  const internalModerator = session.activeContext === "DTSC_INTERNAL" && ["ADMIN", "SUPPORT"].includes(user.role);
+  const organizationModerator = ["OWNER", "ADMIN"].includes(session.activeOrganizationRole || "");
+  const contextualModerator = announcement.organizationId
+    ? Boolean(activeOrganizationId === announcement.organizationId && organizationModerator)
+    : internalModerator;
+  const author = announcement.authorId === user.id;
+  const announcementWithCapabilities = {
+    ...announcement,
+    capabilities: {
+      edit: contextualModerator || (author && Date.now() <= announcement.createdAt.getTime() + settings.announcementEditWindowMinutes * 60 * 1000),
+      moderate: contextualModerator || author,
+    },
+  };
 
   return (
     <AppShell user={user}>
@@ -80,7 +111,7 @@ export default async function AnnouncementDetailPage({ params, searchParams }: P
         <ModuleHeader
           eyebrow="Annonce notifiée"
           title={announcement.title}
-          count={`${announcement.comments.length} commentaire${announcement.comments.length > 1 ? "s" : ""}`}
+          count={`${announcement._count.comments} commentaire${announcement._count.comments > 1 ? "s" : ""}`}
           description="Vous consultez directement l’annonce ou le commentaire à l’origine de la notification."
         />
         <ModuleContent>
@@ -89,7 +120,7 @@ export default async function AnnouncementDetailPage({ params, searchParams }: P
               <AnnouncementMediaEnhancer />
               <AnnouncementDeepLinkActivator commentId={commentId} />
               <AnnouncementWall
-                announcements={JSON.parse(JSON.stringify([announcement]))}
+                announcements={JSON.parse(JSON.stringify([announcementWithCapabilities]))}
                 currentUserId={user.id}
                 role={user.role}
                 locale={user.locale}

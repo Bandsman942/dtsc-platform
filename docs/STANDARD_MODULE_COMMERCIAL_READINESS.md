@@ -43,3 +43,19 @@ La cible `PROFESSIONAL_READY` n’est acquise qu’après succès de la PR, fusi
 ## État de l’itération 1
 
 Aucun module standard n’a été promu vers `COMMERCIAL_READY`. Les fondations de l’itération 1 restent la base opposable des itérations 2 à 8.
+
+## Itération 03 — Évaluation séparée
+
+| Capacité | Statut après automatisation | Condition restante |
+|---|---|---|
+| Mes collaborateurs | PROFESSIONAL_READY | E2E propriétaire |
+| Conversations directes | PROFESSIONAL_READY | E2E propriétaire |
+| Groupes et messagerie | PROFESSIONAL_READY | E2E propriétaire |
+| Médias et réactions | PROFESSIONAL_READY | E2E upload/visionneuse |
+| Présence et lectures | PROFESSIONAL_READY | E2E multi-session |
+| Appels audio/vidéo | PROFESSIONAL_READY si LiveKit Production est configuré | E2E réseau réel et TURN |
+| Appels de groupe | PROFESSIONAL_READY uniquement si capacité fournisseur vérifiée | E2E multi-participants |
+| Annonces et commentaires | PROFESSIONAL_READY | E2E audience et lien profond |
+| Modération | PROFESSIONAL_READY | E2E rôles distincts |
+
+Aucune capacité n’est `COMMERCIAL_READY` avant validation explicite du propriétaire après Production.

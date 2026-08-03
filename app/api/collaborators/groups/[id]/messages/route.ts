@@ -1,16 +1,30 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { assertGroupMemberForSession, canManageGroup, groupMemberUserIds, markGroupMessagesRead, parseMentionedUserIds, touchUserPresence, writeGroupAudit } from "@/lib/collaboration";
 import { meetingLinkCanJoin, syncCooMeetingLink } from "@/lib/collaboration-meeting-links";
-import { notifyUsers } from "@/lib/notifications";
+import { collaboratorsNotificationTarget } from "@/lib/notification-targets";
+import { notifyUser } from "@/lib/notifications";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { isCollaborationBlocked } from "@/lib/standard-collaboration";
 import { collaborationMessageSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
+
+const messageInclude = {
+  author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
+  replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
+  mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
+  reads: { select: { userId: true, readAt: true } },
+  reactions: { select: { id: true, userId: true, reactionType: true, createdAt: true } },
+  attachments: { where: { status: "ACTIVE", deletedAt: null }, select: { id: true, originalName: true, mimeType: true, sizeBytes: true, status: true } },
+  sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
+  sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
+} satisfies Prisma.CollaborationGroupMessageInclude;
 
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -40,27 +54,33 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 30), 1), 50);
   const cursor = url.searchParams.get("cursor") || undefined;
-  const [records, receiptMembers] = await Promise.all([
+  const [initialRecords, receiptMembers] = await Promise.all([
     prisma.collaborationGroupMessage.findMany({
       where: { groupId: id, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
       orderBy: { createdAt: "desc" },
       take: limit + 1,
-      include: {
-        author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
-        replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
-        mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
-        reads: { select: { userId: true, readAt: true } },
-        sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
-        sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
-      },
+      include: messageInclude,
     }),
     prisma.collaborationGroupMember.findMany({
       where: { groupId: id, status: "ACTIVE" },
       select: { userId: true, user: { select: { lastSeenAt: true } } },
     }),
   ]);
-  const hasMore = records.length > limit;
-  const baseMessages = records.slice(0, limit).reverse();
+  let records = initialRecords;
+  const focusedMessageId = url.searchParams.get("messageId") || undefined;
+  let hasMore = records.length > limit;
+  if (focusedMessageId && !cursor && !records.some((message) => message.id === focusedMessageId)) {
+    const target = await prisma.collaborationGroupMessage.findFirst({ where: { id: focusedMessageId, groupId: id }, select: { id: true, createdAt: true } });
+    if (target) {
+      const [older, newer] = await Promise.all([
+        prisma.collaborationGroupMessage.findMany({ where: { groupId: id, createdAt: { lte: target.createdAt } }, orderBy: { createdAt: "desc" }, take: 16, include: messageInclude }),
+        prisma.collaborationGroupMessage.findMany({ where: { groupId: id, createdAt: { gt: target.createdAt } }, orderBy: { createdAt: "asc" }, take: 15, include: messageInclude }),
+      ]);
+      records = [...newer.reverse(), ...older];
+      hasMore = older.length > 15;
+    }
+  }
+  const baseMessages = records.slice(0, focusedMessageId && !cursor ? 31 : limit).reverse();
   const messageIds = baseMessages.map((message) => message.id);
   const [meetingLinks, minutePublications] = messageIds.length
     ? await Promise.all([
@@ -98,8 +118,10 @@ export async function GET(req: Request, { params }: Params) {
     const reportOwnerUserId = linkedMeeting?.reportOwnerEmployeeId ? reportOwnerUserByEmployee.get(linkedMeeting.reportOwnerEmployeeId) : null;
     const recipients = receiptMembers.filter((receiptMember) => receiptMember.userId !== message.authorId);
     const readIds = new Set(message.reads.filter((read) => read.userId !== message.authorId).map((read) => read.userId));
-    const deliveredCount = recipients.filter((recipient) => readIds.has(recipient.userId) || Boolean(recipient.user.lastSeenAt && recipient.user.lastSeenAt >= message.createdAt)).length;
+    // Delivery is never inferred from a session timestamp. Until a dedicated delivery ACK exists,
+    // only an explicit read receipt proves receipt of the message.
     const readCount = recipients.filter((recipient) => readIds.has(recipient.userId)).length;
+    const deliveredCount = readCount;
     return {
       ...message,
       receiptSummary: {
@@ -168,12 +190,35 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid message" }, { status: 400 });
   }
+  if (parsed.data.clientMessageId) {
+    const existing = await prisma.collaborationGroupMessage.findFirst({
+      where: { groupId: id, authorId: session.userId, clientMessageId: parsed.data.clientMessageId },
+      select: { id: true, groupId: true, authorId: true, content: true, messageType: true, status: true, createdAt: true },
+    });
+    if (existing) {
+      await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { idempotent: true } });
+      return NextResponse.json({ ok: true, message: existing, idempotent: true });
+    }
+  }
+  if (member.group.groupType === "DIRECT") {
+    const otherMember = await prisma.collaborationGroupMember.findFirst({
+      where: { groupId: id, userId: { not: session.userId }, status: "ACTIVE" },
+      select: { userId: true },
+    });
+    if (!otherMember || await isCollaborationBlocked(session.userId, otherMember.userId)) {
+      return NextResponse.json({ error: "BLOCKED", message: "Cette conversation n’accepte plus de nouveaux messages." }, { status: 403 });
+    }
+  }
   if (parsed.data.replyToId) {
     const reply = await prisma.collaborationGroupMessage.findFirst({ where: { id: parsed.data.replyToId, groupId: id }, select: { id: true } });
     if (!reply) {
       await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { reason: "cross_group_reply" } });
       return NextResponse.json({ error: "Invalid reply target" }, { status: 400 });
     }
+  }
+  if (parsed.data.threadRootId) {
+    const threadRoot = await prisma.collaborationGroupMessage.findFirst({ where: { id: parsed.data.threadRootId, groupId: id }, select: { id: true } });
+    if (!threadRoot) return NextResponse.json({ error: "Invalid thread target" }, { status: 400 });
   }
 
   const organizationId = getActiveOrganizationId(session);
@@ -199,7 +244,9 @@ export async function POST(req: Request, { params }: Params) {
         authorId: session.userId,
         content: parsed.data.content,
         messageType: parsed.data.messageType,
+        clientMessageId: parsed.data.clientMessageId || null,
         replyToId: parsed.data.replyToId || null,
+        threadRootId: parsed.data.threadRootId || parsed.data.replyToId || null,
         sharedChatbotConversationId: parsed.data.sharedChatbotConversationId || null,
         mentions: { create: mentionedUserIds.map((mentionedUserId) => ({ mentionedUserId, isRead: mentionedUserId === session.userId })) },
       },
@@ -221,16 +268,10 @@ export async function POST(req: Request, { params }: Params) {
         },
       });
     }
+    await tx.collaborationGroup.update({ where: { id }, data: { lastActivityAt: new Date() } });
     return tx.collaborationGroupMessage.findUniqueOrThrow({
       where: { id: savedMessage.id },
-      include: {
-        author: { select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, lastSeenAt: true } },
-        replyTo: { select: { id: true, content: true, author: { select: { id: true, name: true } }, createdAt: true, deletedAt: true } },
-        mentions: { include: { mentionedUser: { select: { id: true, name: true, email: true, jobTitle: true } } } },
-        reads: { select: { userId: true, readAt: true } },
-        sharedChatbotConversation: { select: { id: true, title: true, updatedAt: true } },
-        sharedConversationSnapshot: { select: { id: true, title: true, status: true, createdAt: true, deletedAt: true } },
-      },
+      include: messageInclude,
     });
   });
   await markGroupMessagesRead({ groupId: id, userId: session.userId, messageIds: [message.id] });
@@ -249,14 +290,15 @@ export async function POST(req: Request, { params }: Params) {
     if (preference.mutedUntil && preference.mutedUntil.getTime() > currentTime) return false;
     return true;
   });
-  await notifyUsers({
-    userIds: recipients,
-    title: mentionedUserIds.length ? "Mention dans un groupe DTSC" : "Nouveau message de groupe",
+  await Promise.all(recipients.map((userId) => notifyUser({
+    userId,
+    title: mentionedUserIds.includes(userId) ? "Mention dans une conversation DTSC" : "Nouveau message professionnel",
     body: `${session.name}: ${parsed.data.content.slice(0, 160)}`,
     type: "COLLABORATION",
-    targetUrl: `/collaborators?groupId=${encodeURIComponent(id)}`,
+    targetUrl: collaboratorsNotificationTarget(id, message.id),
     organizationId: member.group.organizationId,
-  });
+    idempotencyKey: `collaboration:message:${message.id}:${userId}`,
+  })));
   await writeGroupAudit({ groupId: id, actorId: session.userId, action: "message.create", entityType: "CollaborationGroupMessage", entityId: message.id });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, message }, { status: 201 });

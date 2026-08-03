@@ -39,16 +39,21 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (call.status === "ENDED") {
+  if (["ENDED", "CANCELLED", "REJECTED", "MISSED", "FAILED"].includes(call.status)) {
     const followUp = call.meetingId ? await prisma.collaborationMeetingMinutesPublication.findUnique({ where: { callId: call.id } }) : null;
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "collaboration_call_end_idempotent" } });
     return NextResponse.json({ ok: true, meetingFollowUp: followUp });
   }
 
   const endedAt = new Date();
-  const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - call.startedAt.getTime()) / 1000));
+  const cancelledBeforeAnswer = call.status === "RINGING" && !call.acceptedAt;
+  const finalStatus = cancelledBeforeAnswer ? "CANCELLED" : "ENDED";
+  const eventType = cancelledBeforeAnswer ? "CALL_CANCELLED" : "CALL_ENDED";
+  const eventMessage = cancelledBeforeAnswer ? "L’appel a été annulé." : "L’appel est terminé.";
+  const activeStartedAt = call.acceptedAt || call.startedAt;
+  const durationSeconds = cancelledBeforeAnswer ? 0 : Math.max(0, Math.round((endedAt.getTime() - activeStartedAt.getTime()) / 1000));
   const followUp = await prisma.$transaction(async (tx) => {
-    await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: "ENDED", endedAt, durationSeconds } });
+    await tx.collaborationGroupCall.update({ where: { id: call.id }, data: { status: finalStatus, endedAt, cancelledAt: cancelledBeforeAnswer ? endedAt : null, durationSeconds } });
     await tx.collaborationGroupCallParticipant.updateMany({
       where: { callId: call.id, status: { in: ["INVITED", "JOINED"] } },
       data: { status: "LEFT", leftAt: endedAt },
@@ -59,14 +64,21 @@ export async function POST(req: Request, { params }: Params) {
         groupId: call.groupId,
         meetingId: call.meetingId,
         userId: session.userId,
-        eventType: "CALL_ENDED",
-        message: "L'appel est terminé.",
+        eventType,
+        message: eventMessage,
       },
     });
 
     if (!call.meetingId) return null;
 
     await tx.cooMeeting.updateMany({ where: { id: call.meetingId, activeCallId: call.id }, data: { activeCallId: null } });
+    if (cancelledBeforeAnswer) {
+      await tx.collaborationMeetingLink.updateMany({
+        where: { meetingId: call.meetingId },
+        data: { status: "SCHEDULED", lastCallId: call.id },
+      });
+      return null;
+    }
     await tx.collaborationMeetingLink.updateMany({
       where: { meetingId: call.meetingId },
       data: { status: "COMPLETED", lastCallId: call.id },
@@ -96,9 +108,9 @@ export async function POST(req: Request, { params }: Params) {
     });
   });
 
-  await createGroupSystemMessage({ groupId: call.groupId, actorId: session.userId, content: "L'appel est terminé." });
-  await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: "call.end", entityType: "CollaborationGroupCall", entityId: call.id });
-  await writeAuditLog({ userId: session.userId, action: "collaboration.call.end", entity: "CollaborationGroupCall", entityId: call.id, request: req });
+  await createGroupSystemMessage({ groupId: call.groupId, actorId: session.userId, content: eventMessage });
+  await writeGroupAudit({ groupId: call.groupId, actorId: session.userId, action: cancelledBeforeAnswer ? "call.cancel" : "call.end", entityType: "CollaborationGroupCall", entityId: call.id });
+  await writeAuditLog({ userId: session.userId, action: cancelledBeforeAnswer ? "collaboration.call.cancel" : "collaboration.call.end", entity: "CollaborationGroupCall", entityId: call.id, request: req });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, meetingFollowUp: followUp });
 }

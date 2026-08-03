@@ -6,7 +6,14 @@ export type StandardGuideSlug =
   | "settings"
   | "notifications"
   | "invitations"
-  | "company-relationships";
+  | "company-relationships"
+  | "collaborators"
+  | "direct-conversations"
+  | "group-conversations"
+  | "calls"
+  | "announcements"
+  | "comments-reactions"
+  | "collaboration-moderation";
 
 export type StandardGuide = {
   slug: StandardGuideSlug;
@@ -84,6 +91,72 @@ export const STANDARD_PERSONAL_WORKSPACE_GUIDES: Record<StandardGuideSlug, Stand
       { title: "Avant de répondre", steps: ["Vérifiez l’organisation, l’initiateur et le rôle proposé.", "Une invitation reste visible dans le compte personnel avant l’adhésion.", "Une organisation inactive ou supprimée ne peut pas être rejointe."] },
       { title: "Acceptation", steps: ["L’acceptation active le membership prévu.", "Une nouvelle tentative identique retourne le même résultat sans doublon.", "Après acceptation, vous pouvez choisir de basculer vers le nouvel espace."] },
       { title: "Refus", steps: ["Le refus retire l’invitation active et conserve l’audit.", "Le même lien ne peut plus être utilisé comme une invitation en attente.", "L’émetteur peut être notifié sans recevoir de données sensibles."] },
+    ],
+  },
+
+  collaborators: {
+    slug: "collaborators",
+    title: "Guide Mes collaborateurs",
+    summary: "Rechercher des collaborateurs autorisés, démarrer une conversation et gérer ses groupes.",
+    sections: [
+      { title: "Recherche autorisée", steps: ["La recherche affiche uniquement les relations permises par votre contexte.", "Choisissez un collaborateur puis démarrez une conversation directe.", "Une conversation existante est réutilisée automatiquement."] },
+      { title: "Groupes", steps: ["Créez un groupe et invitez uniquement des utilisateurs autorisés.", "Les rôles propriétaire, administrateur et membre possèdent des capacités distinctes.", "Le propriétaire transfère la propriété avant de quitter."] },
+      { title: "Confidentialité", steps: ["Bloquez une relation directe lorsque nécessaire.", "Un blocage empêche les nouveaux messages et appels.", "Un accès révoqué est revérifié à chaque ouverture."] },
+    ],
+  },
+  "direct-conversations": {
+    slug: "direct-conversations",
+    title: "Guide des conversations directes",
+    summary: "Envoyer des messages idempotents, répondre, réagir, joindre des fichiers et consulter les lectures réelles.",
+    sections: [
+      { title: "Messagerie", steps: ["Rédigez puis envoyez votre message.", "En cas de reprise réseau, réessayez : la clé client empêche le doublon.", "Répondez uniquement à un message de la même conversation."] },
+      { title: "Médias et actions", steps: ["Joignez un fichier pris en charge.", "Ouvrez une image dans la visionneuse plein écran.", "Réagissez, épinglez selon vos droits ou signalez le contenu."] },
+    ],
+  },
+  "group-conversations": {
+    slug: "group-conversations",
+    title: "Guide des groupes collaboratifs",
+    summary: "Inviter, administrer les membres, transférer la propriété et suivre une conversation paginée.",
+    sections: [
+      { title: "Membres", steps: ["Invitez un collaborateur autorisé.", "Promouvez ou rétrogradez selon votre rôle.", "Retirez un membre lorsque la politique du groupe le permet."] },
+      { title: "Historique", steps: ["Chargez les messages précédents progressivement.", "Les messages supprimés conservent un placeholder lorsque nécessaire.", "Les mentions ciblent uniquement les participants autorisés."] },
+    ],
+  },
+  calls: {
+    slug: "calls",
+    title: "Guide des appels audio et vidéo",
+    summary: "Lancer, accepter, refuser, annuler, rejoindre et terminer un appel configuré.",
+    sections: [
+      { title: "Avant l’appel", steps: ["Vérifiez les permissions du microphone et de la caméra.", "Le bouton apparaît seulement lorsque le fournisseur est configuré.", "Une notification ouvre l’appel sans vous connecter automatiquement."] },
+      { title: "États", steps: ["Acceptez ou refusez l’appel entrant.", "L’appelant peut annuler avant réponse.", "Après 45 secondes sans réponse, l’appel devient manqué."] },
+      { title: "Historique", steps: ["Quitter ne termine pas toujours l’appel pour les autres.", "Terminer ferme l’appel globalement pour un utilisateur autorisé.", "La durée est calculée côté serveur depuis l’acceptation."] },
+    ],
+  },
+  announcements: {
+    slug: "announcements",
+    title: "Guide des Annonces",
+    summary: "Créer un brouillon ou une publication avec une audience explicite, des médias et des commentaires.",
+    sections: [
+      { title: "Publication", steps: ["Rédigez le titre et le contenu.", "Choisissez l’audience proposée dans votre contexte.", "Publiez maintenant ou gardez un brouillon privé."] },
+      { title: "Interactions", steps: ["Ouvrez les images en plein écran.", "Réagissez ou commentez lorsque les commentaires sont activés.", "Utilisez Signaler pour un contenu problématique."] },
+    ],
+  },
+  "comments-reactions": {
+    slug: "comments-reactions",
+    title: "Guide des commentaires et réactions",
+    summary: "Répondre, mentionner, réagir, modifier, supprimer logiquement et restaurer selon ses capacités.",
+    sections: [
+      { title: "Commentaires", steps: ["Ouvrez le bloc uniquement lorsque nécessaire.", "Répondez à un commentaire existant ou mentionnez une personne autorisée.", "Les commentaires plus anciens se chargent progressivement."] },
+      { title: "Suppression", steps: ["Supprimez votre commentaire selon la politique.", "Un placeholder conserve les réponses associées.", "Un modérateur autorisé peut restaurer le commentaire."] },
+    ],
+  },
+  "collaboration-moderation": {
+    slug: "collaboration-moderation",
+    title: "Guide de modération collaborative",
+    summary: "Signaler un contenu et appliquer une décision auditée dans le bon périmètre.",
+    sections: [
+      { title: "Signalement", steps: ["Choisissez un motif exact.", "Ajoutez une description utile sans recopier de donnée sensible.", "Le signalement est transmis aux modérateurs du contexte."] },
+      { title: "Décision", steps: ["Un modérateur peut masquer, restaurer ou supprimer logiquement.", "Un administrateur de groupe ne devient pas modérateur global.", "Chaque décision est historisée et auditée."] },
     ],
   },
   "company-relationships": {
