@@ -21,8 +21,12 @@ jobs:
       - name: Apply patch to dedicated feature branch
         env:
           TARGET_BRANCH: feat/standard-modules-professionalization-iteration-03-collaboration
+          EXPECTED_SIZE: "89268"
+          EXPECTED_SHA256: "TO_BE_FILLED"
         run: |
+          wc -c .github/iteration03-patch.part-* | tee /tmp/iteration03-parts-sizes.txt
           cat .github/iteration03-patch.part-* > /tmp/iteration03-patch.b64
+          test "$(wc -c < /tmp/iteration03-patch.b64)" = "$EXPECTED_SIZE"
           base64 --decode /tmp/iteration03-patch.b64 | gzip --decompress > /tmp/iteration03.patch
           git fetch origin main
           git checkout -B "$TARGET_BRANCH" origin/main
