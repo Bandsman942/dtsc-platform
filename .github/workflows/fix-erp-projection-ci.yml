@@ -45,6 +45,7 @@ jobs:
             ('async function runProjection(projectionId: string, definition: CrossModuleEventDefinition) {', 'async function runProjection(projectionId: string, definition: CrossModuleEventDefinition): Promise<ProjectionRunResult> {'),
             ('    const failure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };\n    const failed = await prisma.enterpriseCrossModuleProjection.update(', '    const failure: ProjectionFailure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };\n    const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update('),
             ('    const failed = await prisma.enterpriseCrossModuleProjection.update({\n      where: { id: projection.id },\n      data: {\n        status: dead ? "DEAD" : "FAILED",', '    const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update({\n      where: { id: projection.id },\n      data: {\n        status: dead ? "DEAD" : "FAILED",'),
+            ('const targets = await prisma.$transaction((tx) => executeProjector(tx, event, definition), {', 'const targets = await prisma.$transaction((tx) => executeProjector(tx, event, definition.projectorCode), {'),
           ]
           for before, after in replacements:
             if before not in source:
