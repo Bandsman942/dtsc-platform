@@ -41,6 +41,9 @@ jobs:
           tar -tzf /tmp/erp-final-patch.tar.gz | grep -Ev '(^|/)\.\.?(/|$)' > /tmp/erp-final-patch-files.txt
           test -s /tmp/erp-final-patch-files.txt
           tar -xzf /tmp/erp-final-patch.tar.gz -C .
+          sed -i 's/[[:space:]]\+$//' \
+            docs/ERP_CROSS_MODULE_CONSOLIDATION_AUDIT.md \
+            docs/MANUAL_E2E_ERP_FINAL_CONSOLIDATION.md
           rm -rf .erp-patch
           rm -f .github/workflows/branch-source-export.yml
 
