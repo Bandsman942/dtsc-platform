@@ -10,6 +10,9 @@ const allowedPolicies = new Set(["PUBLIC", "AUTHENTICATED", "GLOBAL_ROLE", "ORGA
 const allowedIcons = new Set([
   "layout-dashboard", "bot", "credit-card", "briefcase-business", "building-2", "calendar-days", "users-round", "bell", "megaphone", "headphones", "user", "settings", "user-plus", "calendar-check", "list-checks", "inbox", "badge-check", "presentation", "workflow", "files", "wallet-cards", "chart-no-axes-combined", "sparkles", "shield", "users", "network", "key-round", "layers-3", "settings-2", "history", "clock-3", "calendar-x-2", "timer", "badge-dollar-sign", "route", "crown", "code-2", "kanban-square", "truck", "scale", "gauge", "receipt-text", "life-buoy", "newspaper", "shield-check", "sliders-horizontal", "globe-2", "briefcase", "blocks", "folder-kanban", "library", "mail-plus", "clipboard-pen-line", "user-round-plus", "log-in", "smartphone", "bell-ring", "cloud-off"
 ]);
+const allowedSharedRouteShells = new Map([
+  ["CONSOLE:/admin", new Set(["DTSC_INTERNAL_ADMIN", "CONSOLE_OVERVIEW"])],
+]);
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
@@ -38,6 +41,11 @@ function routeCandidates(routePath) {
 
 function push(list, condition, message) {
   if (!condition) list.push(message);
+}
+
+function isAllowedSharedRoute(routeKey, moduleCodes) {
+  const allowedCodes = allowedSharedRouteShells.get(routeKey);
+  return Boolean(allowedCodes && moduleCodes.every((code) => allowedCodes.has(code)));
 }
 
 function baseAudit(registry) {
@@ -72,15 +80,28 @@ function baseAudit(registry) {
     }
     if (item.routePath) {
       const routeKey = `${item.host}:${item.routePath}`;
-      const existing = routes.get(routeKey);
-      if (existing) errors.push(`Route canonique dupliquée: ${routeKey} (${existing}, ${item.code})`);
-      routes.set(routeKey, item.code);
+      const routeModules = routes.get(routeKey) || [];
+      const candidateModules = [...routeModules, item.code];
+      if (routeModules.length && !isAllowedSharedRoute(routeKey, candidateModules)) {
+        errors.push(`Route canonique dupliquée: ${routeKey} (${candidateModules.join(", ")})`);
+      }
+      routes.set(routeKey, candidateModules);
+    }
+  }
+
+  for (const [routeKey, moduleCodes] of routes) {
+    if (moduleCodes.length > 1 && isAllowedSharedRoute(routeKey, moduleCodes)) {
+      warnings.push(`Shell partagé documenté: ${routeKey} (${moduleCodes.join(", ")})`);
     }
   }
 
   for (const item of registry.modules) {
     for (const dependency of item.dependencies) {
       if (!codes.has(dependency)) errors.push(`${item.code}: dépendance standard inconnue ${dependency}`);
+    }
+    for (const alias of item.aliases || []) {
+      const normalized = alias.trim().toUpperCase();
+      if (codes.has(normalized)) errors.push(`${item.code}: alias en conflit avec le code canonique ${normalized}`);
     }
   }
   return { errors, warnings };
