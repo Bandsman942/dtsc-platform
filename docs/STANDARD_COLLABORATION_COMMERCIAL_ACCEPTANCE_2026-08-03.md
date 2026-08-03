@@ -1,7 +1,9 @@
 # Acceptation commerciale — Collaboration et Annonces
 
-**Date :** 3 août 2026  
-**Propriétaire :** Dr Jonathan NTUMBA  
+**Date :** 3 août 2026
+
+**Propriétaire :** Dr Jonathan NTUMBA
+
 **Modules :** `COLLABORATORS`, `ANNOUNCEMENTS`
 
 ## Décision propriétaire
