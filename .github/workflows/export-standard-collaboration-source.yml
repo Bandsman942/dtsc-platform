@@ -1,9 +1,9 @@
 name: Export standard collaboration source
 
 on:
-  push:
+  pull_request:
     branches:
-      - chore/export-standard-collaboration-source
+      - main
 
 permissions:
   contents: read
