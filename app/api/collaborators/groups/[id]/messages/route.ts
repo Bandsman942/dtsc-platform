@@ -54,7 +54,7 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 30), 1), 50);
   const cursor = url.searchParams.get("cursor") || undefined;
-  let [records, receiptMembers] = await Promise.all([
+  const [initialRecords, receiptMembers] = await Promise.all([
     prisma.collaborationGroupMessage.findMany({
       where: { groupId: id, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
       orderBy: { createdAt: "desc" },
@@ -66,6 +66,7 @@ export async function GET(req: Request, { params }: Params) {
       select: { userId: true, user: { select: { lastSeenAt: true } } },
     }),
   ]);
+  let records = initialRecords;
   const focusedMessageId = url.searchParams.get("messageId") || undefined;
   let hasMore = records.length > limit;
   if (focusedMessageId && !cursor && !records.some((message) => message.id === focusedMessageId)) {
