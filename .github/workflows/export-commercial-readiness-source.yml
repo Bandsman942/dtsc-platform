@@ -1,9 +1,9 @@
 name: Export commercial readiness source
 
 on:
-  push:
+  pull_request:
     branches:
-      - chore/export-commercial-readiness-source
+      - main
   workflow_dispatch:
 
 permissions:
