@@ -1,0 +1,25 @@
+name: Branch source export
+
+on:
+  push:
+    branches:
+      - feat/erp-professionalization-final-consolidation
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Archive source
+        run: |
+          tar --exclude=.git --exclude=node_modules -czf dtsc-platform-source.tar.gz .
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-platform-source
+          path: dtsc-platform-source.tar.gz
+          retention-days: 1
