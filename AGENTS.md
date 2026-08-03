@@ -229,3 +229,31 @@ session
 - Les avantages liés à une relation sont décidés côté serveur et exigent une relation active.
 - Les notifications ouvrent l’objet précis et la section pertinente après authentification.
 - Les migrations de professionnalisation restent additives et la Production provient uniquement de `main`.
+
+## Règles durables — professionnalisation sectorielle finale
+
+1. Les modules Health et Pharmacy utilisent les primitives DTSC et des workspaces dédiés.
+2. Une extension sectorielle ne recrée jamais une source commune.
+3. Toute facture sectorielle financière possède une facture commune unique.
+4. Tout paiement sectoriel utilise le moteur commun.
+5. Toute caisse sectorielle utilise les sessions communes.
+6. Les mouvements de stock sectoriels sont idempotents.
+7. Pharmacy conserve lots, FEFO, péremption, rappels et données réglementaires.
+8. Health conserve patients, dossiers et données cliniques.
+9. Aucune donnée clinique inutile ne doit entrer dans Finance.
+10. Les documents médicaux restent sous contrôle Health.
+11. Les documents réglementaires restent sous contrôle Pharmacy.
+12. Une fiche patient, client ou professionnel peut exister sans compte DTSC.
+13. Toute liaison à un compte DTSC exige un consentement explicite.
+14. Une relation active ne donne aucun accès médical, financier ou administratif automatique.
+15. Les formulaires longs utilisent des étapes ou sections métier.
+16. Aucun UUID, enum brute ou type Prisma n’est visible dans l’interface.
+17. Les messages français utilisent des dictionnaires contrôlés et des erreurs humaines.
+18. Les notifications sensibles restent génériques.
+19. Relations avec les entreprises reste visible dans la navigation globale, sans tenant actif.
+20. Les modules sans contrat professionnel restent masqués.
+21. Le registre canonique contrôle l’ordre, les groupes et les icônes.
+22. Les tests E2E manuels ne sont jamais déclarés réussis sans confirmation explicite du propriétaire.
+23. `COMMERCIAL_READY` exige la validation manuelle du propriétaire et une promotion auditée.
+24. Les migrations historiques ne sont jamais modifiées et les nouvelles migrations restent non destructives.
+25. La Production provient uniquement de `main`; aucun déploiement manuel de branche n’est autorisé.
