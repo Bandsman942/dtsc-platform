@@ -32,7 +32,7 @@ function standardNavItem(code: string, icon: ElementType): NavItem {
   const path = definition.routePath.split(/[?#]/, 1)[0] || "/";
   return {
     code: definition.code,
-    href: resolveStandardModuleHref(definition) || definition.routePath,
+    href: definition.host === "APP" ? definition.routePath : resolveStandardModuleHref(definition) || definition.routePath,
     path,
     label: definition.labelFr,
     icon,
