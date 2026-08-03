@@ -1,0 +1,33 @@
+name: Export standard collaboration source
+
+on:
+  push:
+    branches:
+      - chore/export-standard-collaboration-source
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create source archive
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            -czf dtsc-standard-collaboration-source.tar.gz .
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-standard-collaboration-source
+          path: dtsc-standard-collaboration-source.tar.gz
+          retention-days: 1
