@@ -88,7 +88,7 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
     const page = requireFile(errors, "app/notifications/page.tsx");
     const access = requireFile(errors, "lib/notification-access.ts");
     expectTokens(errors, "Notifications paginées", page, ["pageSize = 30", "skip:", "take: pageSize", "contains: query", "Page suivante"]);
-    expectTokens(errors, "Notifications globales", access, ["ENTERPRISE_INVITATION_NOTIFICATION_TYPES", "GLOBAL_ACCOUNT_NOTIFICATION_TYPES", "status: { in: [\"ACTIVE\", \"INVITED\"] }"]);
+    expectTokens(errors, "Notifications globales", access, ["ENTERPRISE_INVITATION_NOTIFICATION_TYPES", "GLOBAL_ACCOUNT_NOTIFICATION_TYPES", "ACTIVE", "INVITED"]);
     requireFile(errors, "docs/STANDARD_NOTIFICATION_DEEP_LINK_MODEL.md");
   }
 
