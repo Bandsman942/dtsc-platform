@@ -17,9 +17,10 @@ type Coordination = {
 
 type TaskChoice = { id: string; title: string };
 
-export function TaskCoordinationPanel({ organizationId, taskId, canUpdate, taskChoices, members, locale }: { organizationId: string; taskId: string; canUpdate: boolean; taskChoices: TaskChoice[]; members: EnterpriseChoice[]; locale?: string | null }) {
+export function TaskCoordinationPanel({ organizationId, taskId, taskChoices, members, locale }: { organizationId: string; taskId: string; taskChoices: TaskChoice[]; members: EnterpriseChoice[]; locale?: string | null }) {
   const en = locale === "en";
   const [coordination, setCoordination] = useState<Coordination | null>(null);
+  const [canUpdate, setCanUpdate] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const endpoint = `/api/enterprise/${organizationId}/tasks/${taskId}/coordination`;
@@ -27,13 +28,19 @@ export function TaskCoordinationPanel({ organizationId, taskId, canUpdate, taskC
   const load = useCallback(async () => {
     setLoading(true);
     const response = await fetch(endpoint, { cache: "no-store" });
-    const body = (await response.json().catch(() => null)) as { coordination?: Coordination; message?: string } | null;
-    if (!response.ok || !body?.coordination) setMessage(body?.message || (en ? "Unable to load task coordination." : "Impossible de charger la coordination de la tâche."));
-    else setCoordination(body.coordination);
+    const body = (await response.json().catch(() => null)) as { coordination?: Coordination; capabilities?: { canUpdate?: boolean }; message?: string } | null;
+    if (!response.ok || !body?.coordination) {
+      setMessage(body?.message || (en ? "Unable to load task coordination." : "Impossible de charger la coordination de la tâche."));
+    } else {
+      setCoordination(body.coordination);
+      setCanUpdate(Boolean(body.capabilities?.canUpdate));
+    }
     setLoading(false);
   }, [endpoint, en]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function mutate(payload: Record<string, unknown>) {
     const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
