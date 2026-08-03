@@ -9,6 +9,7 @@ import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 
 type Params = { params: Promise<{ organizationId: string; id: string; decisionId: string }> };
 
@@ -47,10 +48,15 @@ export async function POST(req: Request, { params }: Params) {
         dueAt: data.dueAt instanceof Date ? data.dueAt : undefined,
       },
     });
-    if (task.assignedToUserId && task.assignedToUserId !== session.userId) await notifyUser({ userId: task.assignedToUserId, organizationId, type: "ENTERPRISE_TASK", title: "Action issue d’une réunion", body: task.title, targetUrl: "/enterprise-modules/TASKS_OPERATIONS" });
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_MEETING_DECISION_TASK_CREATED", entity: "EnterpriseTask", entityId: task.id, request: req, metadata: { organizationId, meetingId: id, decisionId } });
+    await prisma.enterpriseMeetingAction.upsert({
+      where: { organizationId_meetingId_taskId: { organizationId, meetingId: id, taskId: task.id } },
+      create: { organizationId, meetingId: id, taskId: task.id, createdById: session.userId },
+      update: {},
+    });
+    if (task.assignedToUserId && task.assignedToUserId !== session.userId) await notifyUser({ userId: task.assignedToUserId, organizationId, type: "ENTERPRISE_TASK", title: "Action issue d’une réunion", body: task.title, targetUrl: workCoordinationDeepLink("TASK", task.id) });
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_MEETING_DECISION_TASK_CREATED", entity: "EnterpriseTask", entityId: task.id, request: req, metadata: { organizationId, meetingId: id, decisionId, meetingActionLinked: true } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "meetings", meetingId: id, decisionId, taskId: task.id } });
-    return NextResponse.json({ ok: true, task }, { status: 201 });
+    return NextResponse.json({ ok: true, task });
   } catch (error) {
     const normalized = normalizeEnterpriseCoreV2Error(error);
     return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
