@@ -1,9 +1,9 @@
-import { CreditCard } from "lucide-react";
+import { CreditCard, ReceiptText, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { SubscriptionStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { BillingPlans } from "@/components/billing/billing-plans";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
@@ -12,57 +12,103 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
 import { ensureBillingPlans } from "@/lib/billing";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { formatEnumLabel } from "@/lib/labels";
 import { isMaishaPayConfigured } from "@/lib/maishapay";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
-import { formatEnumLabel } from "@/lib/labels";
+
+function dateLabel(value: Date | string | null | undefined) {
+  if (!value) return "Non définie";
+  return new Date(value).toLocaleDateString("fr-FR");
+}
 
 export default async function BillingPage() {
   const user = await requireUser();
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [plans, activeSubscription, recentInvoices, organizationEntitlements, organizationBillingRecords] = await Promise.all([
+  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, organizationBillingRecords, usageToday, documentCount] = await Promise.all([
     ensureBillingPlans(),
     prisma.subscription.findFirst({
-      where: { userId: user.id, status: SubscriptionStatus.ACTIVE },
+      where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       include: { plan: true },
     }),
     prisma.invoice.findMany({
       where: { userId: user.id },
       orderBy: { issuedAt: "desc" },
-      take: 5,
+      take: 10,
+    }),
+    prisma.payment.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, reference: true, providerReference: true, provider: true, amount: true, currency: true, status: true, paidAt: true, createdAt: true },
     }),
     getOrganizationEntitlements(activeOrganizationId),
     activeOrganizationId ? prisma.billingRecord.findMany({
       where: { organizationId: activeOrganizationId },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 10,
     }) : [],
+    prisma.usageLog.aggregate({
+      where: {
+        userId: user.id,
+        organizationId: activeOrganizationId,
+        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      },
+      _count: { _all: true },
+      _sum: { totalTokens: true },
+    }),
+    prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
   ]);
 
-  const activePlan = activeSubscription?.plan;
+  const activePlan = latestSubscription?.plan;
+  const subscriptionActive = latestSubscription?.status === "ACTIVE";
+  const contextualPlanLabel = organizationEntitlements && !organizationEntitlements.isDtscInternal
+    ? organizationEntitlements.planLabel
+    : activePlan?.name || "Gratuit";
+  const contextualStatus = organizationEntitlements && !organizationEntitlements.isDtscInternal
+    ? organizationEntitlements.subscriptionStatus
+    : latestSubscription?.status || "FREE";
+  const contextualActive = organizationEntitlements && !organizationEntitlements.isDtscInternal
+    ? organizationEntitlements.subscriptionActive
+    : subscriptionActive || !latestSubscription;
 
   return (
     <AppShell user={user}>
       <ModuleWorkspace>
         <ModuleHeader
-          eyebrow="Abonnements"
-          title="Plans DTSC Chatbot"
-          count={activePlan?.name || "Aucun plan actif"}
-          description="Choisissez un niveau d’accès selon votre volume de conversations, vos besoins documentaires et votre usage professionnel."
+          eyebrow="Abonnement SaaS"
+          title="Plan, capacités et facturation DTSC"
+          count={`Plan ${contextualPlanLabel}`}
+          description="Cette page explique le plan réellement appliqué au contexte, ses limites, la consommation et les factures SaaS. Elle reste distincte de toute facture comptable ERP."
+          secondaryActions={(
+            <Button asChild variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              <Link href="/help/standard?guide=billing">Guide de l’Abonnement</Link>
+            </Button>
+          )}
         />
         <ModuleMetrics label="Indicateurs de l’abonnement">
-          <ModuleMetric label="Plan courant" value={activePlan?.name || "Aucun"} hint={<span className="inline-flex items-center gap-1"><CreditCard className="h-3.5 w-3.5" />Abonnement utilisateur</span>} />
-          <ModuleMetric label="Messages / jour" value={activePlan?.dailyMessageLimit ?? 0} hint="Limite active" />
-          <ModuleMetric label="Tokens / jour" value={activePlan?.dailyTokenLimit ?? 0} hint="Capacité IA" />
-          <ModuleMetric label="Documents" value={activePlan?.maxDocuments ?? 0} hint="Capacité privée" />
+          <ModuleMetric label="Plan appliqué" value={contextualPlanLabel} hint={organizationEntitlements && !organizationEntitlements.isDtscInternal ? "Organisation active" : "Compte personnel"} />
+          <ModuleMetric label="Statut" value={formatEnumLabel(contextualStatus)} hint={contextualActive ? "Capacités actives" : "Intervention requise"} />
+          <ModuleMetric label="Messages aujourd’hui" value={usageToday._count._all} hint={activePlan ? `Limite ${activePlan.dailyMessageLimit}` : "Usage réel"} />
+          <ModuleMetric label="Tokens aujourd’hui" value={usageToday._sum.totalTokens || 0} hint={activePlan ? `Limite ${activePlan.dailyTokenLimit}` : "Usage réel"} />
+          <ModuleMetric label="Documents" value={documentCount} hint={activePlan ? `Limite ${activePlan.maxDocuments}` : "Contexte actif"} />
+          <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationBillingRecords.length} hint="Historique récent" />
         </ModuleMetrics>
         <ModuleContent>
-          <ModuleSection title="Plans disponibles" description={paymentAvailable ? "Sélectionnez le plan adapté à votre usage." : "Les plans restent visibles; le paiement en ligne est temporairement indisponible."}>
+          <ModuleSection title="Source de vérité commerciale" description="Le catalogue de plans, l’abonnement, les entitlements et les limites serveur déterminent les capacités disponibles.">
+            <BusinessList ariaLabel="Résumé commercial">
+              <BusinessListItem leading={<CreditCard className="h-5 w-5 text-cyan-600" />} title="Plan et statut" description={`Plan ${contextualPlanLabel} · ${formatEnumLabel(contextualStatus)}`} status={<StatusBadge tone={contextualActive ? "success" : "warning"}>{contextualActive ? "Actif" : "À vérifier"}</StatusBadge>} />
+              <BusinessListItem leading={<ShieldCheck className="h-5 w-5 text-cyan-600" />} title="Autorité serveur" description="Le frontend n’autorise jamais seul un module, une fonctionnalité ou un dépassement de limite." status={<StatusBadge>Entitlements canoniques</StatusBadge>} />
+              <BusinessListItem leading={<ReceiptText className="h-5 w-5 text-cyan-600" />} title="Séparation des factures" description="Les documents ci-dessous concernent l’abonnement DTSC. Les factures clients, fournisseurs et comptables restent dans les modules ERP." status={<StatusBadge>Facturation SaaS</StatusBadge>} />
+            </BusinessList>
+          </ModuleSection>
+
+          <ModuleSection title="Plans disponibles" description={paymentAvailable ? "Sélectionnez un plan uniquement lorsque le changement est réellement supporté par le fournisseur de paiement." : "Le catalogue reste consultable; aucune action de paiement fictive n’est présentée lorsque le fournisseur n’est pas configuré."}>
             <BillingPlans
-              activePlanId={activeSubscription?.planId}
+              activePlanId={latestSubscription?.status === "ACTIVE" ? latestSubscription.planId : undefined}
               paymentAvailable={paymentAvailable}
               plans={plans.map((plan) => ({
                 id: plan.id,
@@ -77,53 +123,83 @@ export default async function BillingPage() {
           </ModuleSection>
 
           <Accordion>
+            <AccordionItem title="Abonnement personnel" defaultOpen>
+              {latestSubscription ? (
+                <BusinessList ariaLabel="Détails de l’abonnement personnel">
+                  <BusinessListItem title="Plan" description={latestSubscription.plan.name} status={<StatusBadge>{formatEnumLabel(latestSubscription.status)}</StatusBadge>} />
+                  <BusinessListItem title="Début de période" description={dateLabel(latestSubscription.currentPeriodStart)} />
+                  <BusinessListItem title="Fin de période" description={dateLabel(latestSubscription.currentPeriodEnd)} />
+                  <BusinessListItem title="Renouvellement" description={latestSubscription.cancelAtPeriodEnd ? "Annulation programmée en fin de période" : "Aucune annulation programmée"} status={<StatusBadge tone={latestSubscription.cancelAtPeriodEnd ? "warning" : "success"}>{latestSubscription.cancelAtPeriodEnd ? "Fin de période" : "Maintenu"}</StatusBadge>} />
+                </BusinessList>
+              ) : <EmptyState compact title="Plan gratuit" description="Aucun abonnement personnel payant n’est enregistré. Les capacités gratuites appliquées par le serveur restent disponibles." />}
+            </AccordionItem>
+
             {organizationEntitlements && !organizationEntitlements.isDtscInternal ? (
-              <AccordionItem title="Abonnement de votre organisation" defaultOpen>
+              <AccordionItem title="Abonnement de l’organisation active">
                 <div className="min-w-0 space-y-4">
-                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-dtsc-border pb-4">
-                    <div className="min-w-0">
-                      <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Espace organisation</p>
-                      <h2 className="mt-1 break-words text-xl font-black text-dtsc-ink">Plan {organizationEntitlements.planLabel}</h2>
-                      <p className="mt-2 text-sm font-semibold leading-6 text-dtsc-muted">Statut {formatEnumLabel(organizationEntitlements.subscriptionStatus)} · {organizationEntitlements.subscriptionActive ? "accès actif" : "vérification requise"}</p>
-                    </div>
-                    <StatusBadge tone={organizationEntitlements.subscriptionActive ? "success" : "warning"}>{organizationEntitlements.subscriptionActive ? "Actif" : "Limité"}</StatusBadge>
-                  </div>
                   <BusinessList ariaLabel="Limites de l’abonnement organisation">
                     {[
-                      ["Modules", `${organizationEntitlements.modules.filter((enterpriseModule) => enterpriseModule.allowed).length}/${organizationEntitlements.modules.length}`],
+                      ["Plan", organizationEntitlements.planLabel],
+                      ["Statut", formatEnumLabel(organizationEntitlements.subscriptionStatus)],
+                      ["Modules autorisés", `${organizationEntitlements.modules.filter((enterpriseModule) => enterpriseModule.allowed).length}/${organizationEntitlements.modules.length}`],
                       ["Utilisateurs", String(organizationEntitlements.limits.maxUsers)],
                       ["Documents", String(organizationEntitlements.limits.maxDocuments)],
                       ["Stockage", `${organizationEntitlements.limits.maxStorageMb} Mo`],
                       ["Appels", `${organizationEntitlements.limits.maxMonthlyCallMinutes} min/mois`],
                       ["Support", organizationEntitlements.limits.supportLevel],
-                      ["Fin", organizationEntitlements.expiresAt ? new Date(organizationEntitlements.expiresAt).toLocaleDateString("fr-FR") : "Non définie"],
-                      ["Essai", organizationEntitlements.trialEndsAt ? new Date(organizationEntitlements.trialEndsAt).toLocaleDateString("fr-FR") : "Non défini"],
+                      ["Expiration", dateLabel(organizationEntitlements.expiresAt)],
+                      ["Fin d’essai", dateLabel(organizationEntitlements.trialEndsAt)],
                     ].map(([label, value]) => <BusinessListItem key={label} title={label} status={<StatusBadge>{value}</StatusBadge>} />)}
                   </BusinessList>
                   {organizationBillingRecords.length ? (
-                    <BusinessList ariaLabel="Facturation organisation">
+                    <BusinessList ariaLabel="Facturation SaaS de l’organisation">
                       {organizationBillingRecords.map((record) => (
-                        <BusinessListItem key={record.id} title={record.reference || record.id} description={`${Number(record.amount).toFixed(2)} ${record.currency}`} status={<StatusBadge>{formatEnumLabel(record.status)}</StatusBadge>} />
+                        <BusinessListItem
+                          key={record.id}
+                          title={record.reference || `Facturation ${record.id.slice(-8)}`}
+                          description={`${Number(record.amount).toFixed(2)} ${record.currency} · ${record.paymentMethod || "Moyen non renseigné"}`}
+                          meta={record.createdAt.toLocaleDateString("fr-FR")}
+                          status={<StatusBadge>{formatEnumLabel(record.status)}</StatusBadge>}
+                          actions={record.invoiceUrl ? <Link href={record.invoiceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">Ouvrir le document</Link> : undefined}
+                        />
                       ))}
                     </BusinessList>
                   ) : <EmptyState compact title="Aucune facturation organisation" />}
                 </div>
               </AccordionItem>
             ) : null}
-            <AccordionItem title="Factures récentes">
+
+            <AccordionItem title="Factures personnelles récentes">
               {recentInvoices.length ? (
-                <BusinessList ariaLabel="Factures récentes">
+                <BusinessList ariaLabel="Factures SaaS personnelles récentes">
                   {recentInvoices.map((invoice) => (
                     <BusinessListItem
                       key={invoice.id}
                       title={invoice.number}
                       description={`${invoice.planName} · ${Number(invoice.amount).toFixed(2)} ${invoice.currency}`}
+                      meta={`Émise le ${invoice.issuedAt.toLocaleDateString("fr-FR")}${invoice.dueAt ? ` · Échéance ${invoice.dueAt.toLocaleDateString("fr-FR")}` : ""}`}
                       status={<StatusBadge>{formatEnumLabel(invoice.status)}</StatusBadge>}
                       actions={<Link href={`/api/invoices/${invoice.id}/pdf`} target="_blank" className="inline-flex min-h-11 items-center rounded-xl bg-[#002b5b] px-3 text-xs font-black text-white hover:bg-[#001736]">Télécharger</Link>}
                     />
                   ))}
                 </BusinessList>
-              ) : <EmptyState compact title="Aucune facture" description="Aucune facture n’est disponible pour le moment." />}
+              ) : <EmptyState compact title="Aucune facture personnelle" description="Aucune facture SaaS n’est disponible pour le moment." />}
+            </AccordionItem>
+
+            <AccordionItem title="Paiements récents">
+              {recentPayments.length ? (
+                <BusinessList ariaLabel="Paiements SaaS récents">
+                  {recentPayments.map((payment) => (
+                    <BusinessListItem
+                      key={payment.id}
+                      title={payment.reference}
+                      description={`${Number(payment.amount).toFixed(2)} ${payment.currency} · ${payment.provider}`}
+                      meta={`${payment.providerReference || "Référence fournisseur non disponible"} · ${dateLabel(payment.paidAt || payment.createdAt)}`}
+                      status={<StatusBadge>{formatEnumLabel(payment.status)}</StatusBadge>}
+                    />
+                  ))}
+                </BusinessList>
+              ) : <EmptyState compact title="Aucun paiement récent" />}
             </AccordionItem>
           </Accordion>
         </ModuleContent>

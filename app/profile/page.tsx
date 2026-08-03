@@ -1,10 +1,14 @@
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfileActivityHistory, type ProfileActivityItem } from "@/components/profile/profile-activity-history";
 import { ProfileAccountInfo } from "@/components/profile/profile-account-info";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { StatusBadge } from "@/components/workspace/status-badge";
 import { requireUser } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
 import { formatEnumLabel } from "@/lib/labels";
@@ -80,7 +84,12 @@ export default async function ProfilePage() {
           eyebrow="Compte client"
           title="Profil utilisateur"
           count={formatEnumLabel(user.role)}
-          description="Informations de contact, identité professionnelle, préférences personnelles et visibilité publique maîtrisée."
+          description="Gérez l’identité personnelle et professionnelle du compte. Les informations sensibles restent privées par défaut et l’adresse e-mail principale n’est jamais modifiée silencieusement depuis ce formulaire."
+          secondaryActions={(
+            <Button asChild variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
+              <Link href="/help/standard?guide=profile">Guide du Profil</Link>
+            </Button>
+          )}
         />
         <ModuleMetrics label="Indicateurs du profil">
           <ModuleMetric label="Notifications récentes" value={notifications.length} hint="Activité enregistrée" />
@@ -89,6 +98,13 @@ export default async function ProfilePage() {
           <ModuleMetric label="Messages de groupe" value={groupMessages.length} hint="Contributions récentes" />
         </ModuleMetrics>
         <ModuleContent>
+          <ModuleSection title="Visibilité et responsabilités" description="Le profil ne remplace ni le membership d’une organisation, ni son poste officiel, ni ses permissions.">
+            <BusinessList ariaLabel="Politique de visibilité du profil">
+              <BusinessListItem title="Adresse e-mail" description={user.email} status={<StatusBadge tone="warning">Identifiant principal</StatusBadge>} />
+              <BusinessListItem title="Profil public" description={user.publicProfileConsent ? "Consentement accordé pour les surfaces explicitement prévues." : "Aucune visibilité publique consentie."} status={<StatusBadge tone={user.publicProfileConsent ? "success" : "neutral"}>{user.publicProfileConsent ? "Autorisé" : "Privé"}</StatusBadge>} />
+              <BusinessListItem title="Photo et informations professionnelles" description="Utilisées dans la navigation, les messages et publications uniquement selon les droits et préférences applicables." status={<StatusBadge>Contrôlé</StatusBadge>} />
+            </BusinessList>
+          </ModuleSection>
           <ModuleSection title="Compte et activité" description={`Historique limité selon la politique de rétention de ${settings.notificationRetentionDays} jours.`}>
             <Accordion>
               <AccordionItem title="Informations du compte" defaultOpen>

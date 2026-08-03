@@ -50,6 +50,7 @@ export async function PATCH(req: Request, { params }: Params) {
         role: true,
         status: true,
         invitedBy: true,
+        joinedAt: true,
         removedAt: true,
         organization: {
           select: { id: true, name: true, status: true, deletedAt: true, organizationType: true },
@@ -79,6 +80,28 @@ export async function PATCH(req: Request, { params }: Params) {
     });
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden", message: "Cette invitation ne vous appartient pas." }, { status: 403 });
+  }
+
+  if (parsed.data.action === "ACCEPT" && invitation.status === "ACTIVE" && !invitation.removedAt) {
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_accept_replayed", organizationId: invitation.organizationId } });
+    return NextResponse.json({
+      ok: true,
+      idempotent: true,
+      status: "ACTIVE",
+      organizationId: invitation.organizationId,
+      redirectTo: "/dashboard",
+    });
+  }
+
+  if (parsed.data.action === "DECLINE" && invitation.status === "REMOVED" && invitation.removedAt) {
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_decline_replayed", organizationId: invitation.organizationId } });
+    return NextResponse.json({
+      ok: true,
+      idempotent: true,
+      status: "REMOVED",
+      organizationId: invitation.organizationId,
+      redirectTo: "/enterprise-invitations",
+    });
   }
 
   if (invitation.status !== "INVITED" || invitation.removedAt) {
@@ -120,6 +143,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_accepted", organizationId: invitation.organizationId } });
     return NextResponse.json({
       ok: true,
+      idempotent: false,
       status: membership.status,
       organizationId: membership.organizationId,
       redirectTo: "/dashboard",
@@ -151,6 +175,7 @@ export async function PATCH(req: Request, { params }: Params) {
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { action: "enterprise_invitation_declined", organizationId: invitation.organizationId } });
   return NextResponse.json({
     ok: true,
+    idempotent: false,
     status: "REMOVED",
     organizationId: invitation.organizationId,
     redirectTo: "/enterprise-invitations",
