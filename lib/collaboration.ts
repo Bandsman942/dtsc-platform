@@ -11,8 +11,9 @@ export async function getActiveGroupMember(groupId: string, userId: string) {
   });
 }
 
-export function canManageGroup(member: { role: string } | null, _role?: UserRole) {
+export function canManageGroup(member: { role: string } | null, role?: UserRole) {
   // A global DTSC role never replaces active membership inside a client or private group.
+  void role;
   return member?.role === "OWNER" || member?.role === "ADMIN";
 }
 
