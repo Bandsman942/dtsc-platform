@@ -151,7 +151,8 @@ const checks = {
   languageMobile() {
     need(responsiveQa, "min-w-0", "Contrat responsive");
     need(responsiveQa, "320 px", "Contrat responsive mobile");
-    need(i18nQa, "success(", "QA i18n ERP");
+    need(i18nQa, "requiredKeys", "QA i18n ERP");
+    need(i18nQa, "visibleTechnicalPatterns", "QA i18n ERP");
     for (const file of [...Object.values(healthWorkspaces), ...Object.values(pharmacyWorkspaces)]) {
       reject(read(file), "window.prompt", `${file}: pas de prompt navigateur`);
     }
@@ -163,7 +164,8 @@ const checks = {
     }
     need(desktopNav, "pendingCompanyRelationships", "Navigation desktop Relations entreprises");
     need(mobileNav, "pendingCompanyRelationships", "Navigation mobile Relations entreprises");
-    need(deepLinksQa, "success(", "QA liens profonds ERP");
+    need(deepLinksQa, "enterprise-links?", "QA liens profonds ERP");
+    need(deepLinksQa, "contract=${encodeURIComponent", "QA liens profonds ERP");
   },
 
   readiness() {
