@@ -1,0 +1,63 @@
+name: Fix ERP projection type-check
+
+on:
+  pull_request:
+    branches:
+      - feat/erp-professionalization-final-consolidation
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.ref == 'chore/fix-erp-projection-ci'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/erp-professionalization-final-consolidation
+          fetch-depth: 0
+
+      - name: Apply targeted TypeScript corrections
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          path = Path('lib/enterprise/cross-module/projection-service.ts')
+          source = path.read_text()
+          replacements = [
+            ('import { Prisma } from "@prisma/client";', 'import { Prisma, type EnterpriseCrossModuleProjection } from "@prisma/client";'),
+            ('type ProjectionTarget = { targetEntityType: string; targetEntityId: string; targetModule: string };', 'type ProjectionTarget = { targetEntityType: string; targetEntityId: string; targetModule: string };\ntype ProjectionFailure = { code: string; message: string; retryable: boolean };\ntype ProjectionRunResult = { projection: EnterpriseCrossModuleProjection; skipped: boolean; targets: ProjectionTarget[]; error?: ProjectionFailure };'),
+            ('    link({ sourceModule: "CRM_CUSTOMERS", sourceEntityType: "EnterpriseBusinessParty", sourceEntityId: invoice.businessPartyId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "BILLING_PARTY" }, event),', '    invoice.businessPartyId ? link({ sourceModule: "CRM_CUSTOMERS", sourceEntityType: "EnterpriseBusinessParty", sourceEntityId: invoice.businessPartyId, targetModule: "FINANCE_PAYABLES", targetEntityType: "EnterpriseSupplierInvoice", targetEntityId: invoice.id, linkType: "BILLING_PARTY" }, event) : null,'),
+            ('function failureDetails(error: unknown) {', 'function failureDetails(error: unknown): ProjectionFailure {'),
+            ('async function runProjection(projectionId: string, definition: CrossModuleEventDefinition) {', 'async function runProjection(projectionId: string, definition: CrossModuleEventDefinition): Promise<ProjectionRunResult> {'),
+            ('    const failure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };\n    const failed = await prisma.enterpriseCrossModuleProjection.update(', '    const failure: ProjectionFailure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };\n    const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update('),
+            ('    const failed = await prisma.enterpriseCrossModuleProjection.update({\n      where: { id: projection.id },\n      data: {\n        status: dead ? "DEAD" : "FAILED",', '    const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update({\n      where: { id: projection.id },\n      data: {\n        status: dead ? "DEAD" : "FAILED",'),
+          ]
+          for before, after in replacements:
+            if before not in source:
+              raise SystemExit(f'Missing expected source fragment: {before[:90]}')
+            source = source.replace(before, after, 1)
+          path.write_text(source)
+          PY
+          rm -f .github/workflows/fix-erp-projection-ci.yml
+          git diff --check
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Run type-check
+        run: pnpm type-check
+
+      - name: Commit correction
+        run: |
+          git config user.name 'DTSC ERP Consolidation Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix: type ERP cross-module projection results'
+          git push origin HEAD:feat/erp-professionalization-final-consolidation
