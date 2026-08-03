@@ -15,8 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Archive source
-        run: |
-          tar --exclude=.git --exclude=node_modules --exclude=dtsc-platform-source.tar.gz -czf dtsc-platform-source.tar.gz .
+        run: git archive --format=tar.gz --output=dtsc-platform-source.tar.gz HEAD
       - name: Upload source artifact
         uses: actions/upload-artifact@v4
         with:
