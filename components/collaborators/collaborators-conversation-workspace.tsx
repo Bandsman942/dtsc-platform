@@ -162,6 +162,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [groupDialog, setGroupDialog] = useState<"create" | "edit" | null>(null);
   const [directOpen, setDirectOpen] = useState(false);
   const [directSearch, setDirectSearch] = useState("");
+  const [startingDirectUserId, setStartingDirectUserId] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -207,12 +208,13 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     setStories(body.stories || []);
   }, []);
 
-  const loadMessages = useCallback(async (groupId: string, cursor?: string | null) => {
+  const loadMessages = useCallback(async (groupId: string, cursor?: string | null, focusedMessageId?: string | null) => {
     if (!groupId) return;
     if (cursor) setLoadingOlder(true);
     const params = new URLSearchParams({ limit: "30" });
     if (cursor) params.set("cursor", cursor);
-    if (!cursor && initialMessageId) params.set("messageId", initialMessageId);
+    const targetMessageId = focusedMessageId || initialMessageId;
+    if (!cursor && targetMessageId) params.set("messageId", targetMessageId);
     const response = await fetch(`/api/collaborators/groups/${groupId}/messages?${params.toString()}`, { cache: "no-store" });
     const body = await response.json().catch(() => null) as { messages?: GroupMessage[]; nextCursor?: string | null; hasMore?: boolean } | null;
     if (response.ok && body) {
@@ -261,17 +263,20 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     return () => { active = false; };
   }, [directPeer, infoOpen]);
 
+  const focusMessageById = useCallback((messageId: string, behavior: ScrollBehavior = "smooth") => {
+    const target = messageListRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+    if (!target) return false;
+    target.scrollIntoView({ behavior, block: "center" });
+    target.focus({ preventScroll: true });
+    return true;
+  }, []);
+
   useEffect(() => {
     const element = messageListRef.current;
     if (!element || !messages.length) return;
-    const targeted = initialMessageId ? element.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(initialMessageId)}"]`) : null;
-    if (targeted) {
-      targeted.scrollIntoView({ block: "center" });
-      targeted.focus({ preventScroll: true });
-      return;
-    }
+    if (initialMessageId && focusMessageById(initialMessageId, "auto")) return;
     element.scrollTop = element.scrollHeight;
-  }, [activeGroupId, initialMessageId, messages.length]);
+  }, [activeGroupId, focusMessageById, initialMessageId, messages.length]);
 
   const visibleGroups = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -345,18 +350,38 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     }
   }
 
-  async function startDirectConversation(userId: string) {
-    const response = await fetch("/api/collaborators/direct", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-    const body = await response.json().catch(() => null) as { group?: { id: string }; message?: string } | null;
-    if (!response.ok || !body?.group?.id) return setFeedback(body?.message || (userPreferences.locale === "en" ? "Unable to start conversation." : "Impossible de démarrer la conversation."));
-    setDirectOpen(false);
-    setDirectSearch("");
-    await refreshGroups();
-    selectGroup(body.group.id);
+  async function startDirectConversation(targetUserId: string) {
+    if (startingDirectUserId) return;
+    setStartingDirectUserId(targetUserId);
+    try {
+      const response = await fetch("/api/collaborators/direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId }),
+      });
+      const body = await response.json().catch(() => null) as { group?: { id: string }; message?: string } | null;
+      if (!response.ok || !body?.group?.id) {
+        setFeedback(body?.message || (userPreferences.locale === "en" ? "Unable to start conversation." : "Impossible de démarrer la conversation."));
+        return;
+      }
+      setDirectOpen(false);
+      setDirectSearch("");
+      await refreshGroups();
+      selectGroup(body.group.id);
+    } finally {
+      setStartingDirectUserId(null);
+    }
+  }
+
+  async function jumpToMessage(messageId: string) {
+    if (focusMessageById(messageId)) return;
+    if (!activeGroup) return;
+    await loadMessages(activeGroup.id, null, messageId);
+    window.setTimeout(() => {
+      if (!focusMessageById(messageId)) {
+        setFeedback(userPreferences.locale === "en" ? "Original message is unavailable." : "Le message d’origine n’est plus disponible.");
+      }
+    }, 0);
   }
 
   async function uploadAttachment(file: File) {
@@ -618,7 +643,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
             <ConversationHeader title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Audio"><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Video"><Video className="h-4 w-4" /></Button><ActionMenu label="Actions du groupe" items={groupMenu} /></>} />
             <div ref={messageListRef} className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
               {hasMore ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" disabled={loadingOlder} onClick={() => void loadMessages(activeGroup.id, nextCursor)}>{loadingOlder ? "…" : userPreferences.locale === "en" ? "Older messages" : "Messages précédents"}</Button></div> : null}
-              {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} onReact={(item) => void toggleReaction(item)} onPin={(item) => void togglePin(item)} onReport={(item) => void reportMessage(item)} onAttachment={(id) => void openAttachment(id)} onMeetingChanged={() => loadMessages(activeGroup.id)} onError={setFeedback} />)}
+              {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} onReact={(item) => void toggleReaction(item)} onPin={(item) => void togglePin(item)} onReport={(item) => void reportMessage(item)} onAttachment={(id) => void openAttachment(id)} onJumpToMessage={(id) => void jumpToMessage(id)} onMeetingChanged={() => loadMessages(activeGroup.id)} onError={setFeedback} />)}
               {!messages.length ? <p className="py-12 text-center text-sm font-semibold text-dtsc-muted">{t("noMessage")}</p> : null}
             </div>
             <VoiceConversationComposer value={content} onChange={setContent} onSendText={sendText} onSendVoice={sendVoice} sending={sending} placeholder={t("writeMessage")} onError={setFeedback} labels={{ record: t("record"), cancel: t("cancel"), send: t("send"), recording: t("recording") }} before={<><input ref={attachmentInputRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} /><div className="mb-2 flex justify-end"><Button type="button" variant="outline" size="sm" disabled={sending} onClick={() => attachmentInputRef.current?.click()}><Paperclip className="h-4 w-4" />{userPreferences.locale === "en" ? "Attach" : "Joindre"}</Button></div>{replyTo ? <div className="mb-2 flex items-center gap-2 rounded-xl border border-cyan-300/50 bg-cyan-400/10 px-3 py-2 text-xs"><span className="min-w-0 flex-1"><strong>{t("reply")} · {replyTo.author.name}</strong><span className="block truncate text-dtsc-muted">{replyTo.deletedAt ? "—" : replyTo.content}</span></span><button type="button" onClick={() => setReplyTo(null)}><X className="h-4 w-4" /></button></div> : null}{mentionSuggestions.length ? <div className="absolute bottom-20 left-3 z-20 w-[min(28rem,calc(100%-1.5rem))] rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl">{mentionSuggestions.map((member) => <button key={member.id} type="button" onClick={() => insertMention(member)} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-dtsc-soft"><ConversationAvatar title={member.user.name} avatarUrl={member.user.avatarUrl} className="h-8 w-8" /><span className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{member.user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{member.user.jobTitle || member.user.email}</span></span></button>)}</div> : null}</>} className="relative" />
@@ -631,10 +656,10 @@ export function CollaboratorsConversationWorkspace(props: Props) {
           <SearchBar value={directSearch} onChange={setDirectSearch} placeholder={userPreferences.locale === "en" ? "Search an authorized collaborator" : "Rechercher un collaborateur autorisé"} />
           <div className="max-h-[55dvh] overflow-y-auto rounded-xl border border-dtsc-border p-2">
             {users.filter((user) => user.id !== currentUserId).filter((user) => `${user.name} ${user.email} ${user.jobTitle || ""}`.toLowerCase().includes(directSearch.trim().toLowerCase())).slice(0, 60).map((user) => (
-              <button key={user.id} type="button" onClick={() => void startDirectConversation(user.id)} className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-dtsc-soft">
+              <button key={user.id} type="button" disabled={Boolean(startingDirectUserId)} aria-busy={startingDirectUserId === user.id} onClick={() => void startDirectConversation(user.id)} className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left transition hover:bg-dtsc-soft disabled:cursor-wait disabled:opacity-60">
                 <ConversationAvatar title={user.name} avatarUrl={user.avatarUrl} isOnline={isOnline(user.lastSeenAt)} className="h-10 w-10" />
                 <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{user.jobTitle || user.email}</span></span>
-                <MessageCircle className="h-4 w-4 text-cyan-600" />
+                {startingDirectUserId === user.id ? <span className="text-xs font-black text-cyan-600">…</span> : <MessageCircle className="h-4 w-4 text-cyan-600" />}
               </button>
             ))}
             {!users.filter((user) => user.id !== currentUserId).length ? <p className="p-4 text-center text-sm text-dtsc-muted">{userPreferences.locale === "en" ? "No authorized collaborator is available." : "Aucun collaborateur autorisé n’est disponible."}</p> : null}
@@ -705,12 +730,16 @@ function OnlineBadge({ online, english }: { online: boolean; english: boolean })
 }
 
 function MessageReceiptIndicator({ summary, english }: { summary?: GroupMessage["receiptSummary"]; english: boolean }) {
-  if (summary?.allRead) return <span className="inline-flex items-center text-emerald-300" title={english ? "Read by every active member" : "Lu par tous les membres actifs"} aria-label={english ? "Read by everyone" : "Lu par tous"}><CheckCheck className="h-3.5 w-3.5" /></span>;
-  if (summary?.allDelivered) return <span className="inline-flex items-center text-white/75" title={english ? "Delivered to every active member" : "Reçu par tous les membres actifs"} aria-label={english ? "Delivered to everyone" : "Reçu par tous"}><CheckCheck className="h-3.5 w-3.5" /></span>;
-  return <span className="inline-flex items-center text-white/65" title={english ? "Sent to the server" : "Envoyé au serveur"} aria-label={english ? "Sent" : "Envoyé"}><Check className="h-3.5 w-3.5" /></span>;
+  if ((summary?.readCount || 0) > 0) {
+    return <span className="inline-flex items-center text-cyan-200" title={english ? "Read by at least one recipient" : "Lu par au moins un destinataire"} aria-label={english ? "Read" : "Lu"}><CheckCheck className="h-4 w-4 stroke-[2.5]" /></span>;
+  }
+  if (summary?.allDelivered) {
+    return <span className="inline-flex items-center text-white/80" title={english ? "Delivered to every active member" : "Reçu par tous les membres actifs"} aria-label={english ? "Delivered" : "Reçu"}><CheckCheck className="h-4 w-4 stroke-[2.5]" /></span>;
+  }
+  return <span className="inline-flex items-center text-white/65" title={english ? "Sent to the server" : "Envoyé au serveur"} aria-label={english ? "Sent" : "Envoyé"}><Check className="h-4 w-4 stroke-[2.5]" /></span>;
 }
 
-function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo, onReact, onPin, onReport, onAttachment, onMeetingChanged, onError }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void; onReact: (message: GroupMessage) => void; onPin: (message: GroupMessage) => void; onReport: (message: GroupMessage) => void; onAttachment: (attachmentId: string) => void; onMeetingChanged: () => Promise<void> | void; onError: (message: string) => void }) {
+function MessageBubble({ message, voice, currentUserId, userPreferences, canManage, t, onReply, onEdit, onDelete, onInfo, onReact, onPin, onReport, onAttachment, onJumpToMessage, onMeetingChanged, onError }: { message: GroupMessage; voice?: Voice; currentUserId: string; userPreferences: UserDatePreferences; canManage: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onReply: (message: GroupMessage) => void; onEdit: (message: GroupMessage) => void; onDelete: (message: GroupMessage) => void; onInfo: (messageId: string) => void; onReact: (message: GroupMessage) => void; onPin: (message: GroupMessage) => void; onReport: (message: GroupMessage) => void; onAttachment: (attachmentId: string) => void; onJumpToMessage: (messageId: string) => void; onMeetingChanged: () => Promise<void> | void; onError: (message: string) => void }) {
   if (message.messageType === "SYSTEM") return <div className="flex justify-center py-1"><span className="max-w-[90%] rounded-full bg-dtsc-soft px-3 py-1 text-center text-[0.7rem] font-semibold text-dtsc-muted">{message.content}</span></div>;
   const mine = message.authorId === currentUserId;
   const meetingMessage = message.messageType === "MEETING_LINK" || message.messageType === "MEETING_MINUTES_PROMPT" || message.messageType === "MEETING_SUMMARY";
@@ -724,7 +753,7 @@ function MessageBubble({ message, voice, currentUserId, userPreferences, canMana
     ...(mine && message.messageType === "TEXT" && !message.deletedAt ? [{ key: "edit", label: t("edit"), icon: Pencil, onSelect: () => onEdit(message) }] : []),
     ...((mine || canManage) && !message.deletedAt && !meetingMessage ? [{ key: "delete", label: t("deleteMessage"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => onDelete(message) }] : []),
   ];
-  return <div data-message-id={message.id} tabIndex={-1} className={cn("flex scroll-mt-20 outline-none focus:[&>div]:ring-2 focus:[&>div]:ring-cyan-400", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}{message.attachments?.length ? <div className="mt-2 grid gap-1">{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => onAttachment(attachment.id)} className={cn("flex items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}><Paperclip className="h-3.5 w-3.5" /><span className="min-w-0 flex-1 truncate">{attachment.originalName}</span><span className="shrink-0 opacity-70">{Math.ceil(attachment.sizeBytes / 1024)} Ko</span></button>)}</div> : null}{message.reactions?.length ? <div className="mt-2 flex flex-wrap gap-1">{Object.entries(message.reactions.reduce<Record<string, number>>((acc, reaction) => ({ ...acc, [reaction.reactionType]: (acc[reaction.reactionType] || 0) + 1 }), {})).map(([reaction, count]) => <button key={reaction} type="button" onClick={() => onReact(message)} className={cn("rounded-full border px-2 py-0.5 text-[0.68rem] font-bold", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}>♥ {count}</button>)}</div> : null}<p className={cn("mt-1 flex items-center justify-end gap-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}><span>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.editedAt || message.status === "EDITED" ? (userPreferences.locale === "en" ? " · edited" : " · modifié") : ""}{message.pinnedAt ? (userPreferences.locale === "en" ? " · pinned" : " · épinglé") : ""}</span>{mine && !meetingMessage ? <MessageReceiptIndicator summary={message.receiptSummary} english={userPreferences.locale === "en"} /> : null}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
+  return <div data-message-id={message.id} tabIndex={-1} className={cn("flex scroll-mt-20 outline-none focus:[&>div]:ring-2 focus:[&>div]:ring-cyan-400", mine ? "justify-end" : "justify-start")}><div className={cn("group relative max-w-[88%] rounded-2xl px-3 py-2 shadow-sm sm:max-w-[72%]", mine ? "rounded-br-md bg-cyan-600 text-white" : "rounded-bl-md border border-dtsc-border bg-dtsc-surface text-dtsc-ink", meetingMessage && "border border-dtsc-border bg-dtsc-surface text-dtsc-ink")}><div className="flex items-start gap-2"><div className="min-w-0 flex-1">{!mine && !meetingMessage ? <p className="mb-1 text-[0.7rem] font-black text-cyan-700 dark:text-cyan-300">{message.author.name}</p> : null}{message.replyTo && !meetingMessage ? <button type="button" onClick={() => onJumpToMessage(message.replyTo!.id)} aria-label={userPreferences.locale === "en" ? "Go to original message" : "Aller au message d’origine"} className={cn("mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[0.7rem]", mine ? "border-white/70 bg-white/10" : "border-cyan-500 bg-dtsc-page")}><strong className="block truncate">{message.replyTo.author.name}</strong><span className="block truncate opacity-75">{message.replyTo.deletedAt ? "—" : message.replyTo.content}</span></button> : null}{message.deletedAt ? <p className="italic opacity-70">{userPreferences.locale === "en" ? "Message deleted" : "Message supprimé"}</p> : meetingMessage ? <CollaborationMeetingMessageContent messageType={message.messageType} content={message.content} meetingLink={message.meetingLink} meetingFollowUp={message.meetingFollowUp} preferences={userPreferences} onChanged={onMeetingChanged} onError={onError} /> : message.messageType === "VOICE" ? <div className="min-w-[220px]"><p className="mb-1 text-xs font-bold">{t("messageVoice")}</p>{voice?.audioUrl ? <audio controls preload="none" src={voice.audioUrl} className="h-9 w-full max-w-[280px]" /> : <p className="text-xs opacity-70">Audio indisponible</p>}</div> : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>}{message.attachments?.length ? <div className="mt-2 grid gap-1">{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => onAttachment(attachment.id)} className={cn("flex items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}><Paperclip className="h-3.5 w-3.5" /><span className="min-w-0 flex-1 truncate">{attachment.originalName}</span><span className="shrink-0 opacity-70">{Math.ceil(attachment.sizeBytes / 1024)} Ko</span></button>)}</div> : null}{message.reactions?.length ? <div className="mt-2 flex flex-wrap gap-1">{Object.entries(message.reactions.reduce<Record<string, number>>((acc, reaction) => ({ ...acc, [reaction.reactionType]: (acc[reaction.reactionType] || 0) + 1 }), {})).map(([reaction, count]) => <button key={reaction} type="button" onClick={() => onReact(message)} className={cn("rounded-full border px-2 py-0.5 text-[0.68rem] font-bold", mine ? "border-white/25 bg-white/10" : "border-dtsc-border bg-dtsc-page")}>♥ {count}</button>)}</div> : null}<p className={cn("mt-1 flex items-center justify-end gap-1 text-right text-[0.62rem] font-semibold", mine && !meetingMessage ? "text-white/70" : "text-dtsc-muted")}><span>{formatRelativeUserDateTime(message.createdAt, userPreferences)}{message.editedAt || message.status === "EDITED" ? (userPreferences.locale === "en" ? " · edited" : " · modifié") : ""}{message.pinnedAt ? (userPreferences.locale === "en" ? " · pinned" : " · épinglé") : ""}</span>{mine && !meetingMessage ? <MessageReceiptIndicator summary={message.receiptSummary} english={userPreferences.locale === "en"} /> : null}</p></div><ActionMenu items={items} label="Message" orientation="horizontal" className={cn("-mr-1 -mt-1 scale-75 opacity-70 transition group-hover:opacity-100", mine && !meetingMessage ? "[&_button]:border-white/20 [&_button]:bg-white/10 [&_button]:text-white" : "")} /></div></div></div>;
 }
 
 function buildGroupMenu({ activeGroup, activePreference, canManage, isOwner, t, onInfo, onFavorite, onPin, onArchive, onNotifications, onPresenceJournal, onPhoto, onStory, onInvite, onSettings, onCalls, onLeave }: { activeGroup: Group; activePreference: Preference; canManage: boolean; isOwner: boolean; t: (key: Parameters<typeof collaborationExperienceT>[1]) => string; onInfo: () => void; onFavorite: () => void; onPin: () => void; onArchive: () => void; onNotifications: () => void; onPresenceJournal: () => void; onPhoto: () => void; onStory: () => void; onInvite: () => void; onSettings: () => void; onCalls: () => void; onLeave: () => void }): ActionMenuItem[] {

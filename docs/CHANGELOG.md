@@ -766,3 +766,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Hotfix Sprint 5 : une paie annulée ou refusée ne bloque plus une nouvelle préparation de la même période, tout en conservant son historique.
 - Ajout d'une readiness de soumission HR & CFO, de blocages lisibles avant envoi CEO/COO et d'erreurs d'action explicitement affichées comme erreurs.
 <!-- /SPRINT_05_PAYROLL_RETRY_CHANGELOG -->
+
+## 3 août 2026 — Stabilisation post-E2E Collaboration et Annonces
+
+- Correction du contrat de création des conversations directes (`targetUserId`) et protection contre les doubles appuis mobiles.
+- Rétablissement des doubles traits lorsque la lecture d’un message est réellement enregistrée, sans fabriquer un accusé de livraison.
+- Navigation depuis un message cité vers le message d’origine, avec chargement ciblé de l’historique si nécessaire.
+- Détection et filtrage des hashtags dans les annonces, transformation contrôlée des domaines web en liens externes et partage natif avec copie de secours.
+- Enrichissement de l’éditeur riche partagé DTSC : titres, citations, code, liens, tableaux, tâches, alignements, historique, images, vidéos et émojis.
+- Ajout d’un audit dédié intégré à la régression et aux Quality Gates.

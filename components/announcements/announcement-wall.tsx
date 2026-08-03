@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { UserRole } from "@prisma/client";
-import { Archive, BarChart3, Copy, Flag, Info, MessageCircle, Megaphone, Pencil, Pin, Send, ThumbsDown, ThumbsUp, Trash2, Undo2 } from "lucide-react";
+import { Archive, BarChart3, Copy, Flag, Info, MessageCircle, Megaphone, Pencil, Pin, Send, Share2, ThumbsDown, ThumbsUp, Trash2, Undo2 } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -14,7 +14,7 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { translate } from "@/lib/i18n";
 import { formatEnumLabel } from "@/lib/labels";
-import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
+import { enhanceRichContentHtml } from "@/lib/rich-content";
 
 type Announcement = {
   id: string;
@@ -95,6 +95,7 @@ export function AnnouncementWall({
   const [olderCommentsByAnnouncement, setOlderCommentsByAnnouncement] = useState<Record<string, AnnouncementCommentItem[]>>({});
   const [commentHasMoreByAnnouncement, setCommentHasMoreByAnnouncement] = useState<Record<string, boolean>>({});
   const [loadingOlderCommentsId, setLoadingOlderCommentsId] = useState<string | null>(null);
+  const announcementSearchRef = useRef<HTMLDivElement | null>(null);
   useToastMessage(feedback);
   const canPost = canPublish(role, allowClientAnnouncements);
   const isAdmin = role === "ADMIN";
@@ -356,6 +357,36 @@ export function AnnouncementWall({
     );
   }
 
+  function filterByHashtag(hashtag: string) {
+    const normalized = hashtag.startsWith("#") ? hashtag : `#${hashtag}`;
+    announcementList.setQuery(normalized);
+    announcementList.setPage(1);
+    announcementSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFeedback(`Annonces filtrées par ${normalized}.`);
+  }
+
+  async function shareAnnouncement(announcement: Announcement) {
+    const url = `${window.location.origin}/announcements/${encodeURIComponent(announcement.id)}`;
+    const payload = { title: announcement.title, text: announcement.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240), url };
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share(payload);
+        setFeedback("Annonce partagée.");
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setFeedback("Lien de l’annonce copié.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(url);
+        setFeedback("Lien de l’annonce copié.");
+      } catch {
+        setFeedback("Impossible de partager cette annonce.");
+      }
+    }
+  }
+
   async function report(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!reportAnnouncement) {
@@ -404,6 +435,7 @@ export function AnnouncementWall({
                   placeholder={t("announcements.contentPlaceholder")}
                   minHeightClassName="min-h-40"
                   allowImageUpload
+                  allowVideoEmbed
                   imageUploadUrl="/api/announcements/images"
                   onContentChange={setComposerContent}
                 />
@@ -424,16 +456,18 @@ export function AnnouncementWall({
 
       <section className="min-w-0 space-y-5">
         {announcements.length > 0 && (
-          <ListControls
-            query={announcementList.query}
-            onQueryChange={announcementList.setQuery}
-            page={announcementList.page}
-            pageCount={announcementList.pageCount}
-            totalCount={announcementList.totalCount}
-            filteredCount={announcementList.filteredCount}
-            placeholder={t("announcements.searchPlaceholder")}
-            onPageChange={announcementList.setPage}
-          />
+          <div ref={announcementSearchRef}>
+            <ListControls
+              query={announcementList.query}
+              onQueryChange={announcementList.setQuery}
+              page={announcementList.page}
+              pageCount={announcementList.pageCount}
+              totalCount={announcementList.totalCount}
+              filteredCount={announcementList.filteredCount}
+              placeholder={t("announcements.searchPlaceholder")}
+              onPageChange={announcementList.setPage}
+            />
+          </div>
         )}
         {announcementList.paginatedItems.map((announcement) => {
           const likes = announcement.reactions.filter((reaction) => reaction.value === 1).length;
@@ -457,7 +491,7 @@ export function AnnouncementWall({
                     </div>
                   </div>
                   <h2 className="mt-3 break-words text-xl font-black leading-tight text-dtsc-ink sm:text-2xl">{announcement.title}</h2>
-                  <RichAnnouncementContent content={announcement.content} />
+                  <RichAnnouncementContent content={announcement.content} onHashtagClick={filterByHashtag} />
                 </div>
                 <ActionMenu
                   className="absolute right-4 top-4 sm:right-5 sm:top-5"
@@ -469,6 +503,7 @@ export function AnnouncementWall({
                     ...(canModerateAnnouncement ? [{ key: "delete", label: t("common.delete"), icon: Trash2, destructive: true, onSelect: () => setDeletingAnnouncement(announcement) }] : []),
                     { key: "copy", label: t("common.copy"), icon: Copy, onSelect: () => copyAnnouncement(announcement) },
                     { key: "transfer", label: t("common.transfer"), icon: Send, onSelect: () => setTransferAnnouncement(announcement) },
+                    { key: "share", label: "Partager", icon: Share2, onSelect: () => void shareAnnouncement(announcement) },
                     { key: "metrics", label: t("announcements.indicators"), icon: BarChart3, onSelect: () => setMetricsAnnouncement(announcement) },
                     { key: "report", label: t("announcements.report"), icon: Flag, onSelect: () => setReportAnnouncement(announcement) },
                     ...(canModerateAnnouncement && announcement.status !== "ARCHIVED" ? [{ key: "archive", label: t("common.archive"), icon: Archive, onSelect: () => updateAnnouncementStatus(announcement, "ARCHIVE") }] : []),
@@ -559,6 +594,7 @@ export function AnnouncementWall({
               placeholder={t("announcements.contentPlaceholder")}
               minHeightClassName="min-h-48"
               allowImageUpload
+              allowVideoEmbed
               imageUploadUrl="/api/announcements/images"
               onContentChange={(content) => setEditingDraft((current) => current ? { ...current, content: content.text, contentHtml: content.html } : current)}
             />
@@ -573,7 +609,7 @@ export function AnnouncementWall({
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-600">DTSC</p>
             <h2 className="mt-2 break-words text-2xl font-black text-dtsc-ink">{composerTitle || t("announcements.titlePlaceholder")}</h2>
             {composerContent.html ? (
-              <RichAnnouncementContent content={composerContent.html} />
+              <RichAnnouncementContent content={composerContent.html} onHashtagClick={filterByHashtag} />
             ) : (
               <p className="mt-3 text-sm leading-7 text-dtsc-muted">{composerContent.text || t("announcements.previewEmpty")}</p>
             )}
@@ -918,15 +954,19 @@ function transferSearchScore(searchable: string, tokens: string[]) {
   }, 0);
 }
 
-function RichAnnouncementContent({ content }: { content: string }) {
-  if (hasHtmlMarkup(content)) {
-    return (
-      <div
-        className="dtsc-publication-content dtsc-feed-content mt-3 text-dtsc-muted"
-        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content) }}
-      />
-    );
+function RichAnnouncementContent({ content, onHashtagClick }: { content: string; onHashtagClick: (hashtag: string) => void }) {
+  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-dtsc-hashtag]");
+    if (!target) return;
+    event.preventDefault();
+    onHashtagClick(target.dataset.dtscHashtag || target.textContent || "");
   }
 
-  return <p className="dtsc-feed-content mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted">{content}</p>;
+  return (
+    <div
+      className="dtsc-publication-content dtsc-feed-content mt-3 whitespace-pre-wrap leading-7 text-dtsc-muted"
+      onClick={handleClick}
+      dangerouslySetInnerHTML={{ __html: enhanceRichContentHtml(content) }}
+    />
+  );
 }

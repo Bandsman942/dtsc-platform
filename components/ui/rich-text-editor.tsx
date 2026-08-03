@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type MouseEvent, type MutableRefObject } from "react";
-import { AlignCenter, AlignLeft, Bold, ImagePlus, Italic, List, ListOrdered, Palette, Trash2, Underline } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Code2, Eraser, Heading1, Heading2, Highlighter, ImagePlus, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Minus, Palette, Quote, Redo2, SmilePlus, Strikethrough, Table2, Trash2, Underline, Undo2, Unlink, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type RichTextEditorProps = {
@@ -12,6 +12,7 @@ type RichTextEditorProps = {
   defaultValue?: string;
   minHeightClassName?: string;
   allowImageUpload?: boolean;
+  allowVideoEmbed?: boolean;
   imageUploadUrl?: string;
   onContentChange?: (content: { text: string; html: string }) => void;
 };
@@ -63,7 +64,7 @@ const listStyles = [
 ];
 
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
-  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, imageUploadUrl = "/api/admin/publications/images", onContentChange },
+  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, allowVideoEmbed = false, imageUploadUrl = "/api/admin/publications/images", onContentChange },
   ref
 ) {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -419,122 +420,99 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
     }
   }
 
+  function insertLink() {
+    const range = rememberSelection();
+    const value = window.prompt("Adresse du lien (https://…)", "https://");
+    if (!value) return;
+    const href = normalizeEditorUrl(value);
+    if (!href) {
+      setEditorMessage("Adresse de lien invalide.");
+      return;
+    }
+    restoreSelection(range);
+    document.execCommand("createLink", false, href);
+    sync();
+  }
+
+  function insertVideo() {
+    const range = rememberSelection();
+    const value = window.prompt("Adresse HTTPS de la vidéo", "https://");
+    if (!value) return;
+    const href = normalizeEditorUrl(value);
+    if (!href) {
+      setEditorMessage("Adresse de vidéo invalide.");
+      return;
+    }
+    const escaped = escapeHtml(href);
+    const directVideo = /\.(?:mp4|webm|ogg)(?:[?#].*)?$/i.test(href);
+    insertHtml(directVideo
+      ? `<figure class="dtsc-publication-video"><video controls preload="metadata" src="${escaped}"></video><figcaption>Vidéo intégrée</figcaption></figure>`
+      : `<figure class="dtsc-publication-video-card"><a href="${escaped}" target="_blank" rel="noopener noreferrer nofollow">🎬 Ouvrir la vidéo</a><figcaption>${escaped}</figcaption></figure>`, range);
+  }
+
+  function insertTable() {
+    const range = rememberSelection();
+    insertHtml('<table class="dtsc-rich-table"><thead><tr><th>Colonne 1</th><th>Colonne 2</th><th>Colonne 3</th></tr></thead><tbody><tr><td>Valeur</td><td>Valeur</td><td>Valeur</td></tr><tr><td>Valeur</td><td>Valeur</td><td>Valeur</td></tr></tbody></table><p><br></p>', range);
+  }
+
+  function insertEmoji(value: string) {
+    if (!value) return;
+    insertHtml(escapeHtml(value));
+  }
+
+  function normalizeEditorUrl(value: string) {
+    const candidate = /^(?:https?:\/\/|mailto:)/i.test(value) ? value.trim() : `https://${value.trim()}`;
+    try {
+      const parsed = new URL(candidate);
+      return ["http:", "https:", "mailto:"].includes(parsed.protocol) ? parsed.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+
   return (
     <div ref={shellRef} className="relative overflow-hidden rounded-xl border border-dtsc-border bg-dtsc-surface">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-dtsc-border bg-dtsc-surface/95 px-3 py-2 backdrop-blur">
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("bold")} title="Mettre le texte sélectionné en gras." className="rounded-lg">
-          <Bold className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("italic")} title="Mettre le texte sélectionné en italique." className="rounded-lg">
-          <Italic className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("underline")} title="Souligner le texte sélectionné." className="rounded-lg">
-          <Underline className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("foreColor", "#00a7c7")} title="Appliquer la couleur d'accent DTSC." className="rounded-lg">
-          <Palette className="h-4 w-4" />
-        </Button>
-        <select
-          disabled={disabled}
-          defaultValue=""
-          onMouseDown={() => rememberSelection()}
-          onChange={(event) => {
-            selectCommand("foreColor", event.target.value);
-            event.currentTarget.value = "";
-          }}
-          title="Appliquer une couleur contrôlée au texte sélectionné."
-          className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"
-        >
-          <option value="">Couleur</option>
-          {textColors.map((color) => (
-            <option key={color.value} value={color.value}>
-              {color.label}
-            </option>
-          ))}
-        </select>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("insertUnorderedList")} title="Créer une liste à puces professionnelle." className="rounded-lg">
-          <List className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("insertOrderedList")} title="Créer une numérotation." className="rounded-lg">
-          <ListOrdered className="h-4 w-4" />
-        </Button>
-        <select
-          disabled={disabled}
-          defaultValue=""
-          onMouseDown={() => rememberSelection()}
-          onChange={(event) => {
-            applyListStyle(event.target.value);
-            event.currentTarget.value = "";
-          }}
-          title="Insérer un type de liste avancé."
-          className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"
-        >
-          <option value="">Type de liste</option>
-          {listStyles.map((style) => (
-            <option key={style.value} value={style.value}>
-              {style.label}
-            </option>
-          ))}
-        </select>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyLeft")} title="Aligner à gauche." className="rounded-lg">
-          <AlignLeft className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyCenter")} title="Centrer le texte sélectionné." className="rounded-lg">
-          <AlignCenter className="h-4 w-4" />
-        </Button>
-        {allowImageUpload && (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={disabled || isUploadingImage}
-              onMouseDown={() => rememberSelection()}
-              onClick={() => fileInputRef.current?.click()}
-              title="Ajouter une image optimisée à l'emplacement du curseur."
-              className="rounded-lg"
-            >
-              <ImagePlus className="h-4 w-4" />
-            </Button>
-            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={handleFileChange} />
-          </>
-        )}
-        <select
-          disabled={disabled}
-          defaultValue=""
-          onChange={(event) => selectCommand("fontName", event.target.value)}
-          title="Changer la police du texte sélectionné."
-          className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"
-        >
-          <option value="">Police</option>
-          {fontFamilies.map((font) => (
-            <option key={font.label} value={font.value}>
-              {font.label}
-            </option>
-          ))}
-        </select>
-        <select
-          disabled={disabled}
-          defaultValue=""
-          onChange={(event) => selectCommand("fontSize", event.target.value)}
-          title="Changer la taille du texte sélectionné."
-          className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"
-        >
-          <option value="">Taille</option>
-          {fontSizes.map((size) => (
-            <option key={size.value} value={size.value}>
-              {size.label}
-            </option>
-          ))}
-        </select>
-        <span className="text-xs leading-5 text-dtsc-muted">
-          Le collage conserve autant que possible le gras, l&apos;italique, les couleurs, images et émojis.
-        </span>
-        {allowImageUpload && editorMessage && (
-          <span className="rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-blue">
-            {editorMessage}
-          </span>
-        )}
+      <div className="sticky top-0 z-10 max-h-60 overflow-y-auto border-b border-dtsc-border bg-dtsc-surface/95 px-3 py-2 backdrop-blur" role="toolbar" aria-label="Outils d’édition riche">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("undo")} title="Annuler"><Undo2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("redo")} title="Rétablir"><Redo2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("bold")} title="Gras"><Bold className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("italic")} title="Italique"><Italic className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("underline")} title="Souligné"><Underline className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("strikeThrough")} title="Barré"><Strikethrough className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("hiliteColor", "#fef08a")} title="Surligner"><Highlighter className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onMouseDown={() => rememberSelection()} onClick={insertLink} title="Ajouter un lien"><Link2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("unlink")} title="Retirer le lien"><Unlink className="h-4 w-4" /></Button>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { if (event.target.value) command("formatBlock", event.target.value); event.currentTarget.value = ""; }} title="Style de paragraphe" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink">
+            <option value="">Paragraphe</option><option value="p">Texte normal</option><option value="h1">Titre 1</option><option value="h2">Titre 2</option><option value="h3">Titre 3</option><option value="blockquote">Citation</option><option value="pre">Bloc de code</option>
+          </select>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("formatBlock", "h1")} title="Titre principal"><Heading1 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("formatBlock", "h2")} title="Sous-titre"><Heading2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("formatBlock", "blockquote")} title="Citation"><Quote className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("formatBlock", "pre")} title="Bloc de code"><Code2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("insertUnorderedList")} title="Liste à puces"><List className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("insertOrderedList")} title="Liste numérotée"><ListOrdered className="h-4 w-4" /></Button>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { applyListStyle(event.target.value); event.currentTarget.value = ""; }} title="Type de liste" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Type de liste</option>{listStyles.map((style) => <option key={style.value} value={style.value}>{style.label}</option>)}</select>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("outdent")} title="Diminuer le retrait"><IndentDecrease className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("indent")} title="Augmenter le retrait"><IndentIncrease className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyLeft")} title="Aligner à gauche"><AlignLeft className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyCenter")} title="Centrer"><AlignCenter className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyRight")} title="Aligner à droite"><AlignRight className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("justifyFull")} title="Justifier"><AlignJustify className="h-4 w-4" /></Button>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { selectCommand("foreColor", event.target.value); event.currentTarget.value = ""; }} title="Couleur du texte" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Couleur</option>{textColors.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}</select>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { selectCommand("fontName", event.target.value); event.currentTarget.value = ""; }} title="Police" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Police</option>{fontFamilies.map((font) => <option key={font.label} value={font.value}>{font.label}</option>)}</select>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { selectCommand("fontSize", event.target.value); event.currentTarget.value = ""; }} title="Taille" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Taille</option>{fontSizes.map((size) => <option key={size.value} value={size.value}>{size.label}</option>)}</select>
+          <select disabled={disabled} defaultValue="" onMouseDown={() => rememberSelection()} onChange={(event) => { insertEmoji(event.target.value); event.currentTarget.value = ""; }} title="Insérer un émoji" className="h-9 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-xs font-bold text-dtsc-ink"><option value="">Émoji</option><option value="✅">✅</option><option value="📌">📌</option><option value="📣">📣</option><option value="🚀">🚀</option><option value="💡">💡</option><option value="🎯">🎯</option><option value="👏">👏</option><option value="❤️">❤️</option></select>
+          <SmilePlus className="h-4 w-4 text-dtsc-muted" aria-hidden="true" />
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onMouseDown={() => rememberSelection()} onClick={insertTable} title="Insérer un tableau"><Table2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onMouseDown={() => rememberSelection()} onClick={() => insertHtml("<hr>")} title="Insérer un séparateur"><Minus className="h-4 w-4" /></Button>
+          {allowVideoEmbed ? <Button type="button" variant="outline" size="sm" disabled={disabled} onMouseDown={() => rememberSelection()} onClick={insertVideo} title="Insérer une vidéo"><Video className="h-4 w-4" /></Button> : null}
+          {allowImageUpload ? <><Button type="button" variant="outline" size="sm" disabled={disabled || isUploadingImage} onMouseDown={() => rememberSelection()} onClick={() => fileInputRef.current?.click()} title="Ajouter une image"><ImagePlus className="h-4 w-4" /></Button><input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={handleFileChange} /></> : null}
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => command("removeFormat")} title="Effacer la mise en forme"><Eraser className="h-4 w-4" /></Button>
+          <Palette className="h-4 w-4 text-dtsc-muted" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-xs leading-5 text-dtsc-muted">Titres, citations, code, liens, tableaux, listes, alignements, images, vidéos, couleurs, historique et émojis sont disponibles dans cette primitive partagée.</p>
+        {editorMessage ? <span className="mt-2 inline-flex rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-blue">{editorMessage}</span> : null}
       </div>
       <div
         ref={setRefs}
@@ -547,7 +525,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         onClick={handleEditorClick}
         onKeyUp={rememberSelection}
         onScroll={handleEditorScroll}
-        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:mx-auto [&_figure]:my-4 [&_figure]:max-w-[640px] [&_img]:max-h-[320px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:bg-dtsc-page [&_img]:object-contain [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
+        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:mx-auto [&_figure]:my-4 [&_figure]:max-w-[640px] [&_img]:max-h-[320px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:bg-dtsc-page [&_img]:object-contain [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-400 [&_blockquote]:bg-dtsc-page [&_blockquote]:px-4 [&_blockquote]:py-2 [&_code]:rounded [&_code]:bg-dtsc-soft [&_code]:px-1 [&_hr]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-slate-950 [&_pre]:p-3 [&_pre]:text-slate-100 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-dtsc-border [&_td]:p-2 [&_th]:border [&_th]:border-dtsc-border [&_th]:bg-dtsc-soft [&_th]:p-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
       />

@@ -38,3 +38,9 @@ pnpm build
 ```
 
 Une PR UI ne doit pas être fusionnée si le contrat responsive ou l'un de ces Quality Gates échoue.
+
+## Contenu riche partagé
+
+- Les zones éditoriales professionnelles réutilisent `components/ui/rich-text-editor.tsx` au lieu de créer un éditeur métier parallèle.
+- Les capacités visibles doivent rester compatibles avec la sanitation de `lib/rich-content.ts`; aucun bouton ne doit prétendre intégrer un format que l’affichage sécurisé supprime silencieusement.
+- Les liens externes, hashtags, images et vidéos doivent conserver des comportements accessibles, mobiles et sûrs. Les iframes arbitraires restent interdites sans politique d’hébergement explicitement approuvée.
