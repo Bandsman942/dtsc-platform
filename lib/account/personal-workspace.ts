@@ -159,7 +159,7 @@ export async function getPersonalWorkspaceSummary({
       where: notificationWhere,
       orderBy: { createdAt: "desc" },
       take: 10,
-      select: { id: true, title: true, body: true, type: true, targetUrl: true, readAt: true, createdAt: true },
+      select: { id: true, title: true, body: true, type: true, targetUrl: true, organizationId: true, readAt: true, createdAt: true },
     }),
     prisma.supportTicket.count({
       where: { userId: user.id, status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS] } },
@@ -191,8 +191,8 @@ export async function getPersonalWorkspaceSummary({
   ]);
 
   const actionableRelationshipStatuses = new Set(["INVITED", "PENDING_CONSENT", "PENDING_USER", "PENDING_USER_APPROVAL", "PENDING"]);
-  const pendingRelationships = identityLinks.filter((identityLink) => actionableRelationshipStatuses.has(identityLink.status));
-  const activeRelationshipCount = identityLinks.filter((identityLink) => identityLink.status === "ACTIVE").length;
+  const relationshipsWithOrganization = identityLinks.filter((identityLink) => Boolean(identityLink.organization));
+  const pendingRelationships = relationshipsWithOrganization.filter((identityLink) => actionableRelationshipStatuses.has(identityLink.status));
 
   const actions: WorkspaceAction[] = [];
   for (const invitation of pendingInvitations.slice(0, 5)) {
@@ -207,9 +207,11 @@ export async function getPersonalWorkspaceSummary({
     });
   }
   for (const identityLink of pendingRelationships.slice(0, 5)) {
+    const organization = identityLink.organization;
+    if (!organization) continue;
     actions.push({
       id: `relationship:${identityLink.id}`,
-      title: `Relation avec ${identityLink.organization.name}`,
+      title: `Relation avec ${organization.name}`,
       description: "Une demande, une invitation ou un consentement attend votre intervention.",
       href: `/enterprise-links?link=${encodeURIComponent(identityLink.id)}`,
       category: "RELATION",
@@ -253,6 +255,19 @@ export async function getPersonalWorkspaceSummary({
     });
   }
 
+  const relationshipActivity: WorkspaceActivity[] = relationshipsWithOrganization.slice(0, 6).flatMap((identityLink) => {
+    const organization = identityLink.organization;
+    if (!organization) return [];
+    return [{
+      id: `relationship:${identityLink.id}`,
+      title: `Relation · ${organization.name}`,
+      description: `Statut ${identityLink.status}`,
+      href: `/enterprise-links?link=${encodeURIComponent(identityLink.id)}`,
+      category: "RELATION" as const,
+      occurredAt: identityLink.createdAt.toISOString(),
+    }];
+  });
+
   const recentActivity: WorkspaceActivity[] = [
     ...recentNotifications.map((notification) => ({
       id: `notification:${notification.id}`,
@@ -270,14 +285,7 @@ export async function getPersonalWorkspaceSummary({
       category: "INVITATION" as const,
       occurredAt: invitation.createdAt.toISOString(),
     })),
-    ...identityLinks.slice(0, 6).map((identityLink) => ({
-      id: `relationship:${identityLink.id}`,
-      title: `Relation · ${identityLink.organization.name}`,
-      description: `Statut ${identityLink.status}`,
-      href: `/enterprise-links?link=${encodeURIComponent(identityLink.id)}`,
-      category: "RELATION" as const,
-      occurredAt: identityLink.createdAt.toISOString(),
-    })),
+    ...relationshipActivity,
     ...recentConversations.map((conversation) => ({
       id: `conversation:${conversation.id}`,
       title: conversation.title,
