@@ -100,18 +100,18 @@ model EnterpriseApprovalDecision {
 }
 
 model EnterpriseMeetingAgendaItem {
-  id             String   @id @default(cuid())
-  organizationId String
-  meetingId      String
-  title          String
-  description    String?
-  ownerUserId    String?
+  id              String   @id @default(cuid())
+  organizationId  String
+  meetingId       String
+  title           String
+  description     String?
+  ownerUserId     String?
   durationMinutes Int?
-  position       Int      @default(0)
-  status         String   @default("PENDING")
-  createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  position        Int      @default(0)
+  status          String   @default("PENDING")
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([organizationId, id])
   @@index([organizationId, meetingId, position])
@@ -149,24 +149,6 @@ model EnterpriseMeetingAction {
   @@unique([organizationId, id])
   @@index([organizationId, meetingId, createdAt])
   @@index([organizationId, taskId])
-}
-
-model EnterpriseDocumentLink {
-  id               String   @id @default(cuid())
-  organizationId   String
-  documentId       String
-  targetModule     String
-  targetEntityType String
-  targetEntityId   String
-  linkType         String   @default("ATTACHMENT")
-  createdById      String
-  createdAt        DateTime @default(now())
-  archivedAt       DateTime?
-
-  @@unique([organizationId, documentId, targetEntityType, targetEntityId, linkType])
-  @@unique([organizationId, id])
-  @@index([organizationId, targetEntityType, targetEntityId, archivedAt])
-  @@index([organizationId, documentId, archivedAt])
 }
 
 model EnterpriseWorkReminder {
