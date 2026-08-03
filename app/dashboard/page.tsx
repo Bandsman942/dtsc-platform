@@ -5,8 +5,6 @@ import {
   Bot,
   BriefcaseBusiness,
   Building2,
-  CheckCircle2,
-  Clock3,
   CreditCard,
   ExternalLink,
   Headphones,
