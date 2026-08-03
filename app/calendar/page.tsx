@@ -2,13 +2,27 @@ import { redirect } from "next/navigation";
 import type { CollaboratorAvailability, Prisma } from "@prisma/client";
 import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
 import { DtscWorkSchedulePanel } from "@/components/calendar/dtsc-work-schedule-panel";
+import { UnifiedWorkCalendarPanel, type UnifiedWorkCalendarItem } from "@/components/calendar/unified-work-calendar-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { canAccessInternalCalendar, calendarEventInclude, canUseInternalCalendarFeature, collaboratorAvailabilityWhere, getCalendarCollaborators, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
 import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
+import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
+import { loadUnifiedWorkCalendar } from "@/lib/standard-work-coordination/calendar";
 import { serializeScheduleException, serializeWeeklyAvailability, todayDateKey } from "@/lib/work-schedule";
+
+const CALENDAR_SOURCE_MODULES = [
+  ["tasks", "TASKS_OPERATIONS"],
+  ["requests", "INTERNAL_REQUESTS"],
+  ["approvals", "VALIDATIONS"],
+  ["meetings", "MEETINGS"],
+  ["workflows", "WORKFLOWS"],
+  ["documents", "DOCUMENTS"],
+] as const;
+
+type CalendarProjectionSource = "calendar" | "tasks" | "requests" | "approvals" | "meetings" | "workflows" | "documents";
 
 export default async function CalendarPage() {
   const user = await requireUser();
@@ -41,7 +55,21 @@ export default async function CalendarPage() {
     ? { organizationId: context.activeOrganizationId, collaboratorId: context.calendarCollaboratorId, deletedAt: null }
     : collaboratorAvailabilityWhere(context);
   const teamReadAllowed = context.dtscInternal && context.canViewOrganizationAvailability;
-  const [events, availabilities, collaborators, weeklyRecords, exceptionRecords, teamWeeklyRecords, teamExceptionRecords] = await Promise.all([
+  const sourceAccess = await Promise.all(
+    CALENDAR_SOURCE_MODULES.map(async ([source, moduleCode]) => ({
+      source,
+      allowed: await canAccessEnterpriseModule(session.userId, context.activeOrganizationId || "", moduleCode, "read"),
+    })),
+  );
+  const allowedSources: CalendarProjectionSource[] = [
+    "calendar",
+    ...sourceAccess.filter((entry) => entry.allowed).map((entry) => entry.source),
+  ];
+  const now = new Date();
+  const unifiedFrom = new Date(now.getTime() - 14 * 86_400_000);
+  const unifiedTo = new Date(now.getTime() + 60 * 86_400_000);
+
+  const [events, availabilities, collaborators, weeklyRecords, exceptionRecords, teamWeeklyRecords, teamExceptionRecords, unifiedEvents] = await Promise.all([
     prisma.internalCalendarEvent.findMany({
       where: internalCalendarAccessWhere(context),
       include: calendarEventInclude(),
@@ -90,6 +118,17 @@ export default async function CalendarPage() {
           take: 500,
         })
       : Promise.resolve([]),
+    loadUnifiedWorkCalendar({
+      organizationId: context.activeOrganizationId,
+      userId: session.userId,
+      canSeeAll: context.canViewGlobal,
+      dtscInternal: context.dtscInternal,
+      timezone: user.timezone || "Africa/Kinshasa",
+      from: unifiedFrom,
+      to: unifiedTo,
+      sources: allowedSources,
+      internalCalendarWhere: internalCalendarAccessWhere(context),
+    }),
   ]);
 
   const today = todayDateKey(user.timezone || "Africa/Kinshasa");
@@ -123,6 +162,7 @@ export default async function CalendarPage() {
             timezone={user.timezone || "Africa/Kinshasa"}
           />
         )}
+        <UnifiedWorkCalendarPanel initialEvents={unifiedEvents.map(serializeUnifiedEvent)} locale={user.locale} />
         <InternalCalendarModule
           initialEvents={events.map(serializeCalendarEvent)}
           initialAvailabilities={availabilities.map(serializeAvailability)}
@@ -178,6 +218,14 @@ function serializeCalendarEvent(event: CalendarEventRecord): CalendarEventItem {
       message: conflict.message,
       resolved: conflict.resolved,
     })),
+  };
+}
+
+function serializeUnifiedEvent(event: Awaited<ReturnType<typeof loadUnifiedWorkCalendar>>[number]): UnifiedWorkCalendarItem {
+  return {
+    ...event,
+    startsAt: event.startsAt.toISOString(),
+    endsAt: event.endsAt.toISOString(),
   };
 }
 
