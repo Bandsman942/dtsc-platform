@@ -14,8 +14,8 @@ type Params = { params: Promise<{ id: string }> };
 
 const commentInclude = {
   user: { select: { id: true, name: true, role: true, avatarUrl: true } },
-  reactions: { include: { user: { select: { id: true, name: true } } } },
-  mentions: { include: { mentionedUser: { select: { id: true, name: true } } } },
+  reactions: true,
+  mentions: true,
 } as const;
 
 export async function GET(req: Request, { params }: Params) {
