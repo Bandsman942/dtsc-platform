@@ -15,6 +15,8 @@ Les sources canoniques, relations, événements, idempotence, reprise, deep link
 - paquet de consolidation vérifié par empreintes SHA-256 avant application ;
 - 116 contrôles transverses de consolidation exécutés avec succès sur la branche ;
 - `git diff --check` et `git diff --cached --check` exécutés avec succès ;
+- migration complète sur PostgreSQL vide et parité de schéma Finance validées par GitHub ;
+- correction ciblée des types de projections inter-modules validée avec génération Prisma et `pnpm type-check` ;
 - Quality Gates complets GitHub requis avant toute fusion ;
 - aucune promotion automatique vers `COMMERCIAL_READY`.
 
