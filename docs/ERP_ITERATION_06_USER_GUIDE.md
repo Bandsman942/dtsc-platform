@@ -1,6 +1,6 @@
 # Guide utilisateur — Professionnalisation ERP, itération 6
 
-**Version :** 1.0
+**Version :** 1.1
 **Date :** 3 août 2026
 **Périmètre :** extensions Health et Pharmacy de DTSC Platform
 
@@ -11,6 +11,14 @@ Les modules Health et Pharmacy utilisent l’expérience DTSC commune : en-tête
 Une fiche métier peut exister sans compte DTSC. Une liaison avec un compte global exige un consentement explicite dans **Relations avec les entreprises** et ne donne aucun accès médical, financier ou administratif automatique.
 
 Sur téléphone, le parcours recommandé est : liste → détail plein écran → formulaire plein écran → retour. Les formulaires longs sont organisés par sections et les identifiants techniques ne sont jamais demandés à l’utilisateur.
+
+### Accéder au guide exact du module
+
+Chaque workspace Health et Pharmacy affiche désormais **Guide utilisateur**, **Contacter le support** et **Permissions et configuration**.
+
+Le guide contextuel est résolu avec le code canonique du module ouvert. Il décrit uniquement les fonctionnalités réellement exposées : prérequis, procédure, statuts, contrôles, confidentialité, dépannage et limites connues. Il propose également les modules liés du même parcours et un bouton **Revenir au module**.
+
+La QA de l’itération 6 échoue si un module spécialisé actif ne possède plus son guide ou si le bouton d’aide disparaît.
 
 ## 2. Health
 
@@ -23,6 +31,8 @@ Sur téléphone, le parcours recommandé est : liste → détail plein écran �
 5. Enregistrer, puis utiliser le menu d’actions pour créer un rendez-vous, ouvrir une consultation, ajouter un document ou consulter le dossier médical.
 
 Un patient peut être créé sans compte DTSC. L’archivage conserve l’historique. Les informations sensibles ne sont visibles qu’avec la permission appropriée.
+
+Lorsque Rendez-vous, Consultations ou Dossier médical est ouvert depuis la fiche patient, le contexte du patient est conservé et le formulaire ou dossier cible est prérempli ou ouvert automatiquement.
 
 ### Rendez-vous
 
@@ -124,6 +134,8 @@ Les paramètres critiques expliquent leur effet, leur date d’effet et leur his
 ## 4. Aide, permissions et support
 
 Chaque module indique la première action, les permissions requises, les limites connues et le chemin de support. Lorsqu’une action est refusée, le message explique le problème, la raison et l’action possible.
+
+Les liens proposés dans le guide ouvrent les modules canoniques réellement reliés : patient, rendez-vous, consultation, dossier, laboratoire, documents, lots, stock, réception, vente, caisse et Finance commune.
 
 ## 5. Statut commercial
 
