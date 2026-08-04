@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Bot, Building2, Users, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,8 +27,7 @@ export function ConversationAvatar({
   return (
     <span className={cn("relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#002b5b] text-sm font-black text-white shadow-[0_8px_24px_rgba(0,43,91,0.18)] sm:h-11 sm:w-11", className)}>
       {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatarUrl} alt={title} className="h-full w-full object-cover" />
+        <Image src={avatarUrl} alt={title} fill unoptimized sizes="48px" className="object-cover" />
       ) : type === "collaborator" ? (
         <span>{label}</span>
       ) : (
