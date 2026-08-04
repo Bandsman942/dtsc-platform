@@ -1,0 +1,98 @@
+name: Fix iteration 06 type check
+
+on:
+  push:
+    branches:
+      - chore/fix-iteration06-typecheck
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/standard-modules-professionalization-iteration-06-enterprise-governance
+          fetch-depth: 0
+
+      - name: Apply focused type fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('app/enterprise-admin/page.tsx')
+          content = page.read_text()
+          old = '''      <EnterpriseAdministrationModule
+                organization={dataset.organization}
+                dashboard={dataset.dashboard}
+                locale={user.locale}
+                members={dataset.members}
+                modules={dataset.modules}
+                departments={dataset.departments}
+                positions={dataset.positions}
+                activityBlocks={dataset.activityBlocks}
+                workflows={dataset.workflows}
+                recentRequests={dataset.recentRequests}
+                calendarEvents={dataset.calendarEvents}
+                sectorRecords={dataset.sectorRecords}
+                entitlements={dataset.entitlements}
+                configurationIssues={dataset.configurationIssues}
+                initialSection={section}
+              />'''.replace('        ', '')
+          old = '''      <EnterpriseAdministrationModule
+                organization={dataset.organization}
+                dashboard={dataset.dashboard}
+                locale={user.locale}
+                members={dataset.members}
+                modules={dataset.modules}
+                departments={dataset.departments}
+                positions={dataset.positions}
+                activityBlocks={dataset.activityBlocks}
+                workflows={dataset.workflows}
+                recentRequests={dataset.recentRequests}
+                calendarEvents={dataset.calendarEvents}
+                sectorRecords={dataset.sectorRecords}
+                entitlements={dataset.entitlements}
+                configurationIssues={dataset.configurationIssues}
+                initialSection={section}
+              />'''
+          old = old.replace('              ', '      ').replace('                ', '        ')
+          new = '''      <EnterpriseAdministrationModule
+                {...dataset}
+                locale={user.locale}
+                initialSection={section}
+              />'''.replace('              ', '      ').replace('                ', '        ')
+          if old not in content:
+              raise SystemExit('EnterpriseAdministrationModule call not found')
+          page.write_text(content.replace(old, new))
+
+          budget = Path('lib/enterprise/finance/budget-service.ts')
+          content = budget.read_text()
+          marker = 'type BudgetTransitionAction = keyof typeof ENTERPRISE_BUDGET_TRANSITIONS;\n'
+          replacement = marker + 'type PreparedBudgetLine = Omit<Prisma.EnterpriseBudgetLineCreateManyInput, "organizationId" | "budgetId">;\n'
+          if 'type PreparedBudgetLine' not in content:
+              if marker not in content:
+                  raise SystemExit('Budget type marker not found')
+              content = content.replace(marker, replacement)
+          content = content.replace(
+              'const prepared: Prisma.EnterpriseBudgetLineUncheckedCreateWithoutBudgetInput[] = [];',
+              'const prepared: PreparedBudgetLine[] = [];',
+          )
+          content = content.replace('    prepared.push({\n      organizationId,\n      code:', '    prepared.push({\n      code:')
+          content = content.replace(
+              'await tx.enterpriseBudgetLine.createMany({ data: lines.map((line) => ({ ...line, budgetId })) });',
+              'await tx.enterpriseBudgetLine.createMany({ data: lines.map((line) => ({ ...line, organizationId, budgetId })) });',
+          )
+          budget.write_text(content)
+          PY
+
+      - name: Commit and push feature fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/enterprise-admin/page.tsx lib/enterprise/finance/budget-service.ts
+          git diff --cached --check
+          git commit -m "fix(governance): align admin dataset and budget line inputs"
+          git push origin HEAD:feat/standard-modules-professionalization-iteration-06-enterprise-governance
