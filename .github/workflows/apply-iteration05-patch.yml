@@ -1,0 +1,35 @@
+name: Apply iteration 05 patch
+
+on:
+  push:
+    branches:
+      - feat/standard-modules-professionalization-iteration-05-ai-knowledge
+    paths:
+      - .github/iteration05.patch.xz.b64
+      - .github/workflows/apply-iteration05-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout publishing branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Apply iteration patch
+        run: |
+          base64 --decode .github/iteration05.patch.xz.b64 | xz --decompress > /tmp/iteration05.patch
+          git apply --index --whitespace=error-all /tmp/iteration05.patch
+          git rm .github/iteration05.patch.xz.b64 .github/workflows/apply-iteration05-patch.yml
+
+      - name: Publish implementation commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: professionalize DTSC AI and commercial maturity governance"
+          git push origin HEAD:${{ github.ref_name }}
