@@ -35,30 +35,44 @@ export function calendarResourceReservationConflictWhere({
 }
 
 export async function listCalendarResources(organizationId: string) {
-  return prisma.calendarResource.findMany({
+  const resources = await prisma.calendarResource.findMany({
     where: { organizationId, isActive: true, archivedAt: null },
-    include: {
-      calendarResourceReservations: {
-        where: { status: "CONFIRMED", canceledAt: null, endsAt: { gte: new Date() } },
-        orderBy: { startsAt: "asc" },
-        take: 20,
-      },
-    },
     orderBy: [{ resourceType: "asc" }, { name: "asc" }],
     take: 300,
   });
+  const reservations = resources.length
+    ? await prisma.calendarResourceReservation.findMany({
+        where: {
+          organizationId,
+          resourceId: { in: resources.map((resource) => resource.id) },
+          status: "CONFIRMED",
+          canceledAt: null,
+          endsAt: { gte: new Date() },
+        },
+        orderBy: { startsAt: "asc" },
+        take: 1000,
+      })
+    : [];
+  return resources.map((resource) => ({
+    ...resource,
+    reservations: reservations.filter((reservation) => reservation.resourceId === resource.id).slice(0, 20),
+  }));
 }
 
 export async function evaluateOperationalSlaInstances(now = new Date()) {
   const instances = await prisma.operationalSlaInstance.findMany({
     where: { status: { in: ["RUNNING", "WARNING"] }, completedAt: null },
-    include: { operationalSlaPolicy: true },
     orderBy: { dueAt: "asc" },
     take: 1000,
   });
-  const updates = [] as Array<{ id: string; status: string }>;
+  const policies = instances.length
+    ? await prisma.operationalSlaPolicy.findMany({ where: { id: { in: [...new Set(instances.map((instance) => instance.policyId))] } } })
+    : [];
+  const policiesById = new Map(policies.map((policy) => [policy.id, policy]));
+  const updates: Array<{ id: string; status: string }> = [];
   for (const instance of instances) {
-    const policy = instance.operationalSlaPolicy;
+    const policy = policiesById.get(instance.policyId);
+    if (!policy) continue;
     const warningAt = policy.warningMinutes ? new Date(instance.dueAt.getTime() - policy.warningMinutes * 60_000) : null;
     let status = instance.status;
     if (instance.dueAt <= now) status = "BREACHED";
