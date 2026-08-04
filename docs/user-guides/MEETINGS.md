@@ -2,66 +2,62 @@
 
 ## Rôle du module
 
-Le module **Réunions** couvre la planification, les participants, l'ordre du jour, le compte rendu et les actions de suivi. Une réunion datée apparaît dans le Calendrier selon les droits des participants.
+Le module **Réunions** couvre la préparation, la tenue, le compte rendu, les décisions et les tâches de suivi.
+
+Le bouton **Guide utilisateur** ouvre ce guide directement dans l’application.
 
 ## Créer une réunion
 
-Cliquez sur **Nouvelle réunion** et renseignez :
+Renseignez le titre, l’objet, les dates, le mode, le lieu ou lien d’appel, l’organisateur, les participants, le département et la source éventuelle.
 
-- le titre et l'objet ;
-- la date et l'heure de début et de fin ;
-- le mode et le lieu ou lien d'appel ;
-- l'organisateur ;
-- les participants actifs ;
-- le département et la source éventuelle.
+Lorsque la réunion est créée depuis le Calendrier interne, le créateur reste responsable et les autres collaborateurs sont invités. Une réunion n’apparaît dans le calendrier personnel d’un participant qu’après son acceptation.
 
-Le serveur vérifie l'organisation, les membres, les dates et les permissions. Le moteur calendrier reste responsable de la détection des conflits lorsqu'il est appelé par le parcours de planification.
+## Conflits et créneaux
 
-## Invitations
+Les conflits du responsable et de chaque participant sont contrôlés avant la planification et de nouveau avant l’acceptation.
 
-Les participants sont persistés avec leur statut. Les notifications ouvrent la réunion exacte. L'acceptation, le refus ou la proposition d'un autre créneau ne sont affichés que si le parcours correspondant est réellement disponible.
+Le moteur local de proposition de créneaux peut rechercher des périodes compatibles sur quatorze jours maximum.
 
 ## Ordre du jour
 
-Dans le détail de la réunion, ajoutez des sujets avec :
+Ajoutez des sujets avec :
 
-- un titre et une description ;
+- un titre ;
+- une description ;
 - un responsable facultatif ;
 - une durée estimée ;
 - une position ;
 - un statut de traitement.
 
-Les sujets restent liés à l'identifiant de la réunion et peuvent être utilisés comme origine d'une action de suivi.
+## Checklist et progression
+
+Les résultats de préparation ou de suivi peuvent être ajoutés à la checklist. La progression est calculée à partir des éléments réalisés.
 
 ## Compte rendu
 
-Enregistrez un compte rendu avec les participants présents, les absents et le contenu. Chaque enregistrement crée une version. Une version publiée conserve l'auteur, la date de publication et son numéro ; elle n'est pas remplacée silencieusement par une nouvelle saisie.
+Chaque enregistrement crée une version. Une version publiée conserve son numéro, son auteur et sa date. Une nouvelle version ne remplace jamais silencieusement l’historique.
 
-## Décisions
+## Décisions et tâches de suivi
 
-Les décisions métier existantes de la réunion restent historisées. Elles peuvent servir de contexte à une action de suivi, mais ne sont pas converties en tâches sans action explicite.
+Une décision peut être transformée explicitement en vraie tâche :
 
-## Actions de suivi
+1. la tâche est créée dans le module Tâches ;
+2. le responsable et l’échéance sont enregistrés ;
+3. le lien réunion → tâche est conservé ;
+4. la tâche apparaît dans le calendrier lorsqu’elle est datée.
 
-Utilisez **Créer une action de suivi** pour créer une vraie tâche avec un responsable et une échéance. Le système :
+## Commentaires et mentions
 
-1. crée la tâche dans le module Tâches ;
-2. crée un lien réunion → tâche ;
-3. conserve éventuellement le sujet d'ordre du jour d'origine ;
-4. rend la tâche visible dans le Calendrier lorsqu'elle est datée.
-
-Une action de suivi ne reste donc pas un simple texte dans le compte rendu.
+Les participants autorisés peuvent commenter et mentionner des collaborateurs. Les mentions cliquables proposent des actions professionnelles soumises aux permissions actuelles.
 
 ## Appels audio et vidéo
 
-Lorsqu'un lien d'appel est associé, la réunion réutilise l'infrastructure Collaboration déjà déployée. Les droits de rejoindre et l'état réel de l'appel sont contrôlés par ce moteur ; aucun second système d'appel n'est créé.
+Les réunions réutilisent l’infrastructure Collaboration déjà déployée. Aucun second moteur d’appel n’est créé.
 
-## Archivage et annulation
+## Ressources
 
-Une réunion annulée ou archivée reste consultable selon les règles de conservation. Les actions et comptes rendus déjà produits ne sont pas supprimés par l'annulation.
+Le créateur responsable peut réserver une salle, un véhicule, un équipement ou un espace de travail pour sa réunion. Le moteur interdit les chevauchements de réservation.
 
-## Limites
+## Synchronisation externe
 
-- La proposition automatique de créneaux n'est pas annoncée si le moteur ne la fournit pas.
-- Les invités externes et les réponses de calendrier externes ne sont disponibles que si une intégration réelle existe.
-- L'édition collaborative simultanée du compte rendu n'est pas garantie ; les versions protègent l'historique.
+Google Calendar et Microsoft 365 restent désactivés proprement tant que leurs variables OAuth ne sont pas configurées. Aucun faux succès ni aucune exception Production ne sont produits.

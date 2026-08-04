@@ -2,61 +2,85 @@
 
 ## Rôle du module
 
-**Activités entreprise** permet aux membres d'une organisation cliente d'envoyer des demandes structurées vers les blocs d'activité activés, sans leur donner automatiquement accès aux modules d'administration correspondants.
+**Activités entreprise** regroupe les actions opérationnelles de l’organisation cliente active : demandes, tâches, opérations, workflows, documents et parcours sectoriels autorisés.
 
-## Accéder au module
+Le contexte d’entreprise est toujours affiché et contrôlé côté serveur. Aucune donnée d’une autre organisation n’est accessible en modifiant une URL ou un identifiant.
 
-Sélectionnez une organisation active, puis ouvrez **Activités entreprise**. Le nom, le secteur et les blocs disponibles proviennent de la configuration de cette organisation.
+## Guide intégré
 
-## Blocs d'activité
+Le bouton **Guide utilisateur** affiché au début du module ouvre une aide contextuelle recherchable. Le guide décrit les fonctions réellement actives dans l’entreprise sélectionnée.
 
-Chaque bloc correspond à une action réellement configurée : demande interne, besoin métier, signalement ou transmission vers un module cible. Un bloc désactivé ou non autorisé n'est pas proposé.
+## Créer une activité
 
-## Créer une activité ou demande
+Sélectionnez un bloc d’activité actif puis renseignez les champs demandés :
 
-Sélectionnez le bloc, puis renseignez :
+- titre ;
+- description ;
+- priorité ;
+- destinataire ou responsable actif ;
+- module cible ;
+- informations sectorielles utiles ;
+- documents lorsque le parcours le prévoit.
 
-- le titre et la description ;
-- la priorité ;
-- le destinataire actif lorsque le formulaire le permet ;
-- les informations complémentaires propres au bloc.
+Le serveur vérifie le membership actif, le bloc, le module, le destinataire et toutes les références dans le même `organizationId`.
 
-Le serveur vérifie :
+## Liste et Kanban
 
-- le membership actif ;
-- l'accès au bloc ;
-- le destinataire ;
-- l'organisation ;
+Les modules opérationnels associés proposent des vues Liste et Kanban lorsque les statuts évoluent dans le temps.
+
+Les colonnes représentent les étapes réelles du processus. Le déplacement ou la transition d’un objet n’est pas un simple changement visuel : le serveur vérifie que l’utilisateur est le responsable, le destinataire ou un acteur explicitement autorisé.
+
+## Checklist et progression
+
+Les tâches et opérations compatibles utilisent une checklist. Le responsable ajoute les résultats à réaliser et coche les éléments terminés.
+
+La progression est calculée automatiquement à partir des éléments actifs. Un pourcentage saisi librement ne constitue pas une preuve d’avancement.
+
+## Commentaires et mentions
+
+Les commentaires restent liés à l’objet canonique. Les utilisateurs autorisés peuvent échanger, répondre, modifier ou supprimer leurs propres commentaires.
+
+Les mentions `@collaborateur` sont mises en évidence. Lorsqu’une action professionnelle est proposée, elle reste soumise aux permissions du module de destination.
+
+## Demandes internes
+
+Une demande créée depuis Activités entreprise est reliée à la demande standard correspondante. Le demandeur suit son statut, tandis que le destinataire explicite prend en charge, répond, résout et clôture selon le workflow autorisé.
+
+Les objets sont reliés par leurs identifiants techniques ; aucune liaison n’est déduite par similarité de titre.
+
+## Documents
+
+Les pièces jointes utilisent le module Documents :
+
+- stockage privé ;
+- validation du type et de la taille ;
+- versions ;
+- visibilité contrôlée ;
+- téléchargements audités ;
+- liens vers plusieurs objets sans duplication du fichier.
+
+L’indexation avancée et la comparaison visuelle restent désactivées proprement tant que leurs fournisseurs externes ne sont pas configurés.
+
+## SLA
+
+Une politique SLA peut être rattachée à un objet réel par un administrateur autorisé. Le SLA calcule une échéance, un avertissement et un dépassement sans modifier automatiquement le statut métier de l’objet.
+
+## Notifications et calendrier
+
+Les affectations, invitations, mentions et décisions peuvent produire une notification ouvrant l’objet exact.
+
+Les dates intégrées apparaissent dans le Calendrier uniquement lorsqu’une source canonique les expose. Le Calendrier ne crée pas une copie indépendante de chaque activité.
+
+## Sécurité
+
+Toute action sensible revérifie :
+
+- la session ;
+- l’organisation active ;
+- le membership ;
+- le module et le bloc actifs ;
+- l’entitlement ;
+- la permission ;
+- la propriété ou la responsabilité de l’objet ;
+- l’origine de la requête ;
 - les données du formulaire.
-
-La soumission crée une `EnterpriseActivityRequest`. Le parcours actuel crée également une `EnterpriseRequest` canonique liée pour le suivi standard des demandes.
-
-## Affectation et suivi
-
-Le demandeur voit ses activités. Les responsables autorisés voient les demandes du périmètre entreprise. Le destinataire ou les gestionnaires reçoivent une notification et traitent la demande dans le module cible ou dans **Demandes internes**.
-
-## Source canonique et liens
-
-L'activité conserve son bloc et son contexte sectoriel. La demande standard liée conserve la chaîne de traitement opérationnelle. Les deux objets sont reliés par identifiants ; aucune correspondance n'est déduite par le titre.
-
-## Statuts et historique
-
-Les statuts disponibles dépendent du bloc et du module cible. La création et les transitions importantes sont auditées. Une activité historique reste lisible même si un bloc est ensuite désactivé.
-
-## Documents et commentaires
-
-Lorsque le parcours le propose, les pièces jointes utilisent le module Documents et les commentaires utilisent la primitive commune. Les accès sont limités aux membres autorisés de l'organisation.
-
-## Notifications et liens profonds
-
-Une nouvelle demande notifie le destinataire sélectionné ou les responsables de l'entreprise. Les liens ouvrent le bon contexte ; un membership révoqué entraîne un refus sûr.
-
-## Calendrier
-
-Une activité datée apparaît uniquement si son service canonique expose une date intégrée. Le Calendrier ne crée pas automatiquement un événement indépendant pour toute activité.
-
-## Limites
-
-- Les formulaires dynamiques varient selon les blocs réellement configurés ; le module n'affiche pas des champs fictifs.
-- L'ancienne `EnterpriseActivityRequest` et la demande standard restent deux objets liés pendant la convergence progressive ; elles ne doivent pas diverger silencieusement.
-- Les SLA, validations multiples et documents obligatoires dépendent du workflow ou du module cible activé.

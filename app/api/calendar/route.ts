@@ -5,16 +5,20 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import {
   canAccessInternalCalendar,
   canUseInternalCalendarFeature,
-  canManageCollaboratorCalendar,
   calendarEventInclude,
   collaboratorAvailabilityWhere,
   detectCalendarConflicts,
   getCalendarCollaborators,
   getCalendarContext,
-  internalCalendarAccessWhere,
   notifyCalendarParticipants,
   validateCalendarCollaborators,
 } from "@/lib/internal-calendar";
+import {
+  calendarEventAccessWhere,
+  calendarOwnedOrAcceptedWhere,
+  creatorParticipantCreate,
+  invitedParticipantCreate,
+} from "@/lib/calendar-participation";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -39,25 +43,29 @@ export async function GET(req: Request) {
   }
   const calendarAccess = await canUseInternalCalendarFeature(context);
   if (!calendarAccess.allowed) {
-    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+    const status = calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403;
+    await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt });
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status });
   }
+
   const url = new URL(req.url);
   const startParam = url.searchParams.get("start");
   const endParam = url.searchParams.get("end");
   const collaboratorId = url.searchParams.get("collaboratorId") || "";
   const query = (url.searchParams.get("q") || "").trim();
+  const scope = url.searchParams.get("scope") === "team" && context.canViewGlobal ? "team" : "mine";
+  const accessWhere = scope === "team" ? calendarEventAccessWhere(context) : calendarOwnedOrAcceptedWhere(context);
 
   const where: Prisma.InternalCalendarEventWhereInput = {
     AND: [
-      internalCalendarAccessWhere(context),
+      accessWhere,
       startParam ? { endDateTime: { gte: new Date(startParam) } } : {},
       endParam ? { startDateTime: { lte: new Date(endParam) } } : {},
       collaboratorId
         ? {
             OR: [
               { ownerCollaboratorId: collaboratorId },
-              { participants: { some: { collaboratorId, participantStatus: "Actif" } } },
+              { participants: { some: { collaboratorId, participantStatus: "Actif", responseStatus: "Accepté" } } },
             ],
           }
         : {},
@@ -80,12 +88,12 @@ export async function GET(req: Request) {
       where,
       include: calendarEventInclude(),
       orderBy: [{ startDateTime: "asc" }, { createdAt: "desc" }],
-      take: 200,
+      take: 300,
     }),
     prisma.collaboratorAvailability.findMany({
       where: collaboratorAvailabilityWhere(context),
       orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
-      take: 200,
+      take: 500,
     }),
     getCalendarCollaborators(context),
   ]);
@@ -95,8 +103,9 @@ export async function GET(req: Request) {
     events,
     availabilities,
     collaborators,
+    scope,
     context: {
-      employeeId: context.calendarCollaboratorId || null,
+      employeeId: context.calendarCollaboratorId,
       canViewGlobal: context.canViewGlobal,
       canViewPeopleAvailability: context.canViewPeopleAvailability,
       canManagePeople: context.canManagePeople,
@@ -116,60 +125,49 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const limited = await rateLimit(getRateLimitKey(req, `calendar-event-create:${session.userId}`), 80, 60 * 60 * 1000);
-  if (!limited.ok) {
-    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations calendrier sur une courte période." }, { status: 429 });
-  }
-  if (!canAccessInternalCalendar({ role: session.role }, session)) {
-    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Le calendrier interne est réservé aux collaborateurs autorisés de l'espace actif." }, { status: 403 });
-  }
+  if (!limited.ok) return NextResponse.json({ error: "Too many requests", message: "Trop d'opérations calendrier sur une courte période." }, { status: 429 });
+  if (!canAccessInternalCalendar({ role: session.role }, session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const context = await getCalendarContext({ id: session.userId, role: session.role }, session);
-  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
-    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Aucun espace calendrier actif." }, { status: 403 });
-  }
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) return NextResponse.json({ error: "Forbidden", message: "Aucun espace calendrier actif." }, { status: 403 });
   const calendarAccess = await canUseInternalCalendarFeature(context);
   if (!calendarAccess.allowed) {
-    await writeApiLog({ request: req, statusCode: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status: calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403 });
+    const status = calendarAccess.code === "PLAN_REQUIRED" || calendarAccess.code === "SUBSCRIPTION_REQUIRED" ? 402 : 403;
+    return NextResponse.json({ error: calendarAccess.code, message: calendarAccess.message }, { status });
   }
-  const parsed = internalCalendarEventSchema.safeParse(await req.json());
-  if (!parsed.success) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les données de l'événement sont invalides." }, { status: 400 });
-  }
+  const parsed = internalCalendarEventSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Les données de l'événement sont invalides." }, { status: 400 });
 
   const { participantIds, allowConflicts, ...data } = parsed.data;
-  const ownerCollaboratorId = data.ownerCollaboratorId || context.calendarCollaboratorId || "";
-  if (!canManageCollaboratorCalendar(context, ownerCollaboratorId)) {
-    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Vous ne pouvez pas modifier ce planning." }, { status: 403 });
+  const ownerCollaboratorId = context.calendarCollaboratorId;
+  if (data.ownerCollaboratorId && data.ownerCollaboratorId !== ownerCollaboratorId) {
+    return NextResponse.json({
+      error: "OWNER_IMMUTABLE",
+      message: "Le créateur reste responsable de l'événement. Ajoutez les autres collaborateurs comme participants.",
+    }, { status: 400 });
   }
-
-  const allParticipantIds = [...new Set([ownerCollaboratorId, ...participantIds].filter(Boolean))];
-  if (!(await validateCalendarCollaborators(context, allParticipantIds))) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
+  const invitedParticipantIds = [...new Set(participantIds.filter((id) => id && id !== ownerCollaboratorId))];
+  const conflictCollaboratorIds = [ownerCollaboratorId, ...invitedParticipantIds];
+  if (!(await validateCalendarCollaborators(context, conflictCollaboratorIds))) {
     return NextResponse.json({ error: "Invalid participants", message: "Tous les collaborateurs doivent appartenir à l'organisation active." }, { status: 400 });
   }
+
   const conflicts = await detectCalendarConflicts({
     context,
-    participantIds: allParticipantIds,
+    participantIds: conflictCollaboratorIds,
     startDateTime: data.startDateTime,
     endDateTime: data.endDateTime,
   });
   const hasBlockingConflict = conflicts.some((conflict) => conflict.severity === "Bloquant");
   if ((hasBlockingConflict && !context.canOverrideConflicts) || (conflicts.length > 0 && !allowConflicts)) {
-    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt, metadata: { conflictCount: conflicts.length } });
-    return NextResponse.json({ error: "CALENDAR_CONFLICT", message: "Conflit de disponibilité détecté.", conflicts }, { status: 409 });
+    return NextResponse.json({ error: "CALENDAR_CONFLICT", message: "Conflit de disponibilité détecté pour le responsable ou un participant.", conflicts }, { status: 409 });
   }
 
   const linkedSource = await createCalendarLinkedSource({
     context,
     data,
     ownerCollaboratorId,
-    participantIds: allParticipantIds,
+    participantIds: conflictCollaboratorIds,
     createdById: session.userId,
   });
 
@@ -177,7 +175,7 @@ export async function POST(req: Request) {
     data: {
       ...data,
       organizationId: context.activeOrganizationId,
-      ownerCollaboratorId: ownerCollaboratorId || null,
+      ownerCollaboratorId,
       departmentId: data.departmentId || context.employee?.departmentId || null,
       physicalLocation: data.physicalLocation || null,
       meetingLink: data.meetingLink || null,
@@ -186,10 +184,7 @@ export async function POST(req: Request) {
       sourceEntityId: linkedSource?.sourceEntityId || data.sourceEntityId || null,
       createdBy: session.userId,
       participants: {
-        create: allParticipantIds.map((collaboratorId) => ({
-          collaboratorId,
-          role: collaboratorId === ownerCollaboratorId ? "Organisateur" : "Participant",
-        })),
+        create: [creatorParticipantCreate(ownerCollaboratorId), ...invitedParticipantIds.map(invitedParticipantCreate)],
       },
       conflicts: {
         create: conflicts.map((conflict) => ({
@@ -205,14 +200,23 @@ export async function POST(req: Request) {
     include: calendarEventInclude(),
   });
 
-  await notifyCalendarParticipants({
-    context,
-    participantIds: allParticipantIds,
-    title: "Nouvel événement calendrier",
-    body: event.title,
-    targetUrl: `/calendar?event=${event.id}`,
+  if (invitedParticipantIds.length) {
+    await notifyCalendarParticipants({
+      context,
+      participantIds: invitedParticipantIds,
+      title: "Invitation à un événement calendrier",
+      body: `${event.title} · acceptez ou refusez votre participation.`,
+      targetUrl: `/calendar?invitation=${event.id}`,
+    });
+  }
+  await writeAuditLog({
+    userId: session.userId,
+    action: "INTERNAL_CALENDAR_EVENT_CREATED",
+    entity: "InternalCalendarEvent",
+    entityId: event.id,
+    request: req,
+    metadata: { conflictCount: conflicts.length, invitedParticipantCount: invitedParticipantIds.length, ownerCollaboratorId },
   });
-  await writeAuditLog({ userId: session.userId, action: "INTERNAL_CALENDAR_EVENT_CREATED", entity: "InternalCalendarEvent", entityId: event.id, request: req, metadata: { conflictCount: conflicts.length } });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { conflictCount: conflicts.length } });
   return NextResponse.json({ ok: true, event }, { status: 201 });
 }
@@ -251,7 +255,7 @@ async function createCalendarLinkedSource({
         priority,
         status: "SUBMITTED",
         createdById,
-        assignedToUserId: null,
+        assignedToUserId: createdById,
         targetModuleCode: "INTERNAL_CALENDAR",
         metadataJson: {
           eventType: data.eventType,
@@ -398,14 +402,8 @@ function timeString(date: Date) {
 }
 
 function calendarPriorityToInternalPriority(priority: string) {
-  if (priority === "Critique") {
-    return "CRITICAL";
-  }
-  if (priority === "Élevée") {
-    return "HIGH";
-  }
-  if (priority === "Faible") {
-    return "LOW";
-  }
+  if (priority === "Critique") return "CRITICAL";
+  if (priority === "Élevée") return "HIGH";
+  if (priority === "Faible") return "LOW";
   return "NORMAL";
 }

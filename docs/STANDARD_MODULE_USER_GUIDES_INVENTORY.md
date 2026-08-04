@@ -1,25 +1,18 @@
 # Inventaire des guides utilisateurs des modules standards
 
-## État initial
+## Règle générale
 
-Le registre canonique porte `userGuidePath` pour chaque module. À l’issue de l’itération 1, la majorité des modules standards ne possède pas encore de guide exact versionné. Cet état est volontairement visible dans l’audit et n’est pas transformé artificiellement en réussite.
+Le registre canonique porte `userGuidePath` pour chaque module. Un module ne peut pas être promu vers `PROFESSIONAL_READY` ou `COMMERCIAL_READY` si son guide ne décrit pas exactement les fonctionnalités réellement déployées.
 
-## Priorités des itérations suivantes
+Un guide utilisateur :
 
-1. Compte, authentification, profil, paramètres et abonnement.
-2. Notifications, annonces, support, calendrier et collaboration.
-3. Activités entreprise, tâches, demandes, validations, réunions et workflows.
-4. Documents, rapports et assistant IA entreprise.
-5. Administration entreprise et audit.
-6. Activités et fonctions internes DTSC.
-7. Console DTSC.
-8. Site public, contenus, ressources et formulaires publics.
+- ne remplace pas les contrôles d’accès ;
+- n’expose aucun secret ni détail technique sensible ;
+- décrit les limites et fonctionnalités conditionnelles ;
+- est actualisé dans le même travail que le code ;
+- est affiché dans l’application lorsqu’un point d’entrée contextuel existe.
 
-## Règle de promotion
-
-Un module ne peut pas être promu vers `PROFESSIONAL_READY` ou `COMMERCIAL_READY` dans une itération future si son guide ne décrit pas exactement les fonctionnalités réellement déployées. L’audit accepte l’absence comme écart initial, mais refuse un chemin déclaré vers un fichier inexistant.
-
-## Guides ajoutés — Itération 03
+## Guides Collaboration — Itération 03
 
 - `docs/user-guides/COLLABORATORS.md`
 - `docs/user-guides/DIRECT_CONVERSATIONS.md`
@@ -29,9 +22,7 @@ Un module ne peut pas être promu vers `PROFESSIONAL_READY` ou `COMMERCIAL_READY
 - `docs/user-guides/COMMENTS_AND_REACTIONS.md`
 - `docs/user-guides/COLLABORATION_MODERATION.md`
 
-Ils sont exposés dans `/help/standard` et depuis les modules Collaboration et Annonces.
-
-## Guides ajoutés — Itération 04
+## Guides Travail et coordination — Itération 04
 
 - `docs/user-guides/CALENDAR.md`
 - `docs/user-guides/DTSC_ACTIVITIES.md`
@@ -43,6 +34,70 @@ Ils sont exposés dans `/help/standard` et depuis les modules Collaboration et A
 - `docs/user-guides/WORKFLOWS.md`
 - `docs/user-guides/DOCUMENTS.md`
 
-Chaque guide documente les sources canoniques, les actions réellement exposées, les permissions, les liens profonds et les limites connues. L'audit `qa:standard-work-coordination-guides` vérifie leur présence et le maintien explicite d'une section **Limites**.
+## Guide ajouté après les tests E2E du propriétaire
 
-Les guides ne constituent pas une preuve E2E. Leur exactitude finale doit être confirmée après le déploiement Production et les scénarios manuels du propriétaire.
+- `docs/user-guides/ADMIN_RBAC_INDIVIDUAL_PERMISSIONS.md`
+
+## Guides contextuels affichés dans l’application
+
+Les définitions structurées vivent dans :
+
+```text
+lib/user-guides/iteration04-guides.ts
+```
+
+Le composant commun d’affichage est :
+
+```text
+components/user-guides/contextual-user-guide.tsx
+```
+
+Les points d’entrée intégrés sont :
+
+- Calendrier interne ;
+- Activités DTSC ;
+- Activités entreprise ;
+- Tâches et opérations ;
+- Demandes internes ;
+- Validations ;
+- Réunions ;
+- Workflows ;
+- Documents ;
+- Administration → Accès RBAC.
+
+Le guide intégré est recherchable, mobile-first et affiche :
+
+- le public concerné ;
+- la date d’actualisation ;
+- les capacités ;
+- les étapes ;
+- les avertissements ;
+- les fonctionnalités conditionnelles.
+
+## Fonctions documentées dans la remédiation E2E
+
+Les guides couvrent désormais explicitement :
+
+- filtres de disponibilités par période, date et département ;
+- calendrier personnel et calendrier d’équipe ;
+- invitations avec acceptation ou refus ;
+- responsabilité immuable du créateur ;
+- conflits des participants ;
+- vues Kanban ;
+- transitions réservées au responsable ou au destinataire ;
+- checklists et progression calculée ;
+- commentaires CRUD et mentions professionnelles ;
+- historique détaillé des prestations ;
+- permission individuelle pour les semaines passées ;
+- ressources réservables ;
+- suggestions de créneaux ;
+- synchronisation externe conditionnelle ;
+- indexation documentaire conditionnelle ;
+- comparaison visuelle conditionnelle ;
+- SLA avancés.
+
+## Validation
+
+Les audits vérifient la présence des fichiers, les codes structurés, les points d’entrée dans l’application et les termes opposables.
+
+Les guides ne constituent pas une preuve E2E. Leur exactitude finale doit être confirmée après le nouveau déploiement Production et les scénarios manuels du propriétaire.

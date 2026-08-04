@@ -10,7 +10,7 @@ function expect(name, condition) {
   checks.push({ name, ok: Boolean(condition) });
 }
 
-const dashboard = read("components/activities/activities-dashboard.tsx");
+const dashboard = read("components/activities/activities-dashboard-v3.tsx");
 const detail = read("components/activities/activity-detail.tsx");
 const forms = read("components/activities/activity-forms.tsx");
 const workspace = read("components/workspace/module-workspace.tsx");

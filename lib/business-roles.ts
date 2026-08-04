@@ -1,6 +1,7 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canAccessAdminBlock, parseAdminRoleAccess, type AdminBlockId, type AdminRoleAccess } from "@/lib/admin-access";
+import { canReadAdminSectionByIndividualGrant } from "@/lib/dtsc-individual-permissions";
 
 export const businessRoleCodes = {
   CEO: "CEO",
@@ -88,6 +89,9 @@ export async function canAccessAdminBlockByPosition(userId: string, role: UserRo
   if (role === UserRole.ADMIN) {
     return true;
   }
+  if (await canReadAdminSectionByIndividualGrant(userId, blockId)) {
+    return true;
+  }
   const context = await getCollaboratorBusinessContext(userId);
   return adminBlockMatchesOfficialPosition(blockId, context.positionCode);
 }
@@ -121,6 +125,10 @@ export async function canAccessAdminSection(user: { id: string; role: UserRole }
   }
   if (user.role === UserRole.CLIENT) {
     return false;
+  }
+
+  if (await canReadAdminSectionByIndividualGrant(user.id, blockId)) {
+    return true;
   }
 
   const access = accessInput && typeof accessInput === "object" && "MANAGER" in accessInput

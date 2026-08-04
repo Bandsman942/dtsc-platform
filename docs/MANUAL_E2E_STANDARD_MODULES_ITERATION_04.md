@@ -1,140 +1,211 @@
-# E2E manuel — modules standards — Itération 04
+# E2E manuel — modules standards — Itération 04 — Remédiation propriétaire
 
-**Statut : NON_EXÉCUTÉ**
+**Statut : NON_EXÉCUTÉ — NOUVEAU CYCLE APRÈS REMÉDIATION**
+
+Les tests initiaux du propriétaire ont produit les améliorations de cette branche. Les scénarios ci-dessous doivent être exécutés sur le nouveau déploiement Production avant toute promotion commerciale.
 
 ## Préconditions
 
-- utiliser une organisation cliente de test et plusieurs membres actifs ;
-- disposer d'un administrateur, d'un responsable, d'un demandeur, d'un validateur et d'un membre sans permission ;
-- conserver les identifiants des objets créés et les captures utiles ;
-- ne pas utiliser de données médicales, financières ou personnelles réelles.
+- une organisation DTSC interne avec plusieurs collaborateurs actifs et plusieurs départements ;
+- une entreprise cliente avec plusieurs membres actifs ;
+- un administrateur DTSC, un responsable, un SUPPORT, un collaborateur standard et un utilisateur sans permission ;
+- deux sessions ou navigateurs pour tester les invitations ;
+- uniquement des données fictives ;
+- conservation des identifiants, captures, rôles et résultats.
 
-## 1. Calendrier personnel et navigation
+## 1. Disponibilités — rails de période
 
-- Ouvrir `/calendar`, changer les vues existantes, rechercher et filtrer.
-- Créer un événement direct, le modifier par formulaire puis l'annuler.
-- Vérifier le fuseau utilisateur et `/calendar?event={id}`.
-- Résultat : l'objet exact s'ouvre, sans fuite de contexte.
+- Ouvrir Calendrier → Disponibilités.
+- Tester Aujourd’hui, Cette semaine, Ce mois, Cette année et Date précise.
+- Vérifier que les résultats changent réellement selon la période.
+- Résultat attendu : aucun filtre décoratif, aucun blocage du rail horizontal sur mobile.
 
-## 2. Calendrier multi-sources
+## 2. Disponibilités — départements et vues
 
-- Créer une tâche avec échéance, une réunion et une demande datée.
-- Actualiser l'agenda unifié et ouvrir chaque source.
-- Terminer la tâche puis actualiser.
-- Résultat : une seule projection par objet canonique et état actualisé.
+- Tester Tous les départements puis chaque département.
+- Tester Liste, Par collaborateur et Par statut.
+- Combiner période, département et statut.
+- Résultat attendu : décompte, contenu et synthèses cohérents.
 
-## 3. Conflits
+## 3. Créateur responsable
 
-- Créer deux événements incompatibles pour un même participant.
-- Vérifier le message de conflit, corriger le créneau ou utiliser l'exception autorisée.
-- Résultat : conflit évalué côté serveur et participant identifié sans donnée interdite.
+- Comme collaborateur A, créer un événement en sélectionnant B et C.
+- Vérifier que A reste responsable et que le formulaire ne permet pas de choisir B comme responsable.
+- Tenter une requête directe avec `ownerCollaboratorId=B`.
+- Résultat attendu : refus `OWNER_IMMUTABLE` côté serveur.
 
-## 4. Activité DTSC
+## 4. Invitation depuis un collaborateur
 
-- Créer une activité interne, assigner, commenter et joindre un document selon les capacités existantes.
-- Soumettre, demander une correction puis terminer.
-- Résultat : historique conservé et notifications actionnables.
+- Ouvrir la liste ou disponibilité de B et choisir l’action de création.
+- Résultat attendu : B est pré-sélectionné comme participant ; A reste responsable.
 
-## 5. Activité entreprise
+## 5. Invitation en attente
 
-- Créer une activité dans une organisation cliente, assigner un membre et ouvrir depuis la notification.
-- Résultat : contexte correct, accès refusé hors organisation.
+- Vérifier que B reçoit une notification et retrouve l’événement dans Invitations.
+- Avant réponse, ouvrir Mon calendrier de B.
+- Résultat attendu : l’événement n’y apparaît pas.
 
-## 6. Tâche, checklist et blocage
+## 6. Acceptation
 
-- Créer et assigner une tâche.
-- Ajouter plusieurs éléments de checklist, les cocher et vérifier la progression calculée.
-- Déclarer un blocage, le résoudre puis terminer et archiver la tâche.
-- Résultat : progression non arbitraire et historique complet.
+- Comme B, accepter l’invitation.
+- Résultat attendu : le serveur revérifie les conflits et l’événement rejoint Mon calendrier de B.
 
-## 7. Dépendance cyclique
+## 7. Refus
 
-- Créer A, B et C ; ajouter A → B puis B → C.
-- Tenter C → A.
-- Résultat : refus `DEPENDENCY_CYCLE`, sans relation partielle.
+- Inviter C puis refuser comme C.
+- Résultat attendu : le créateur est notifié ; l’événement ne rejoint pas le calendrier de C.
 
-## 8. Filtres personnels
+## 8. Conflit participant
 
-- Créer un filtre pour un module pris en charge, le définir par défaut, recharger, modifier puis supprimer.
-- Résultat : persistance privée, aucun élargissement des objets visibles.
+- Créer un événement qui chevauche l’agenda ou l’absence de B.
+- Résultat attendu : le conflit de B est détecté avant création et avant acceptation.
 
-## 9. Demande interne
+## 9. Calendrier personnel et équipe
 
-- Créer un brouillon, renseigner catégorie/type, priorité, destinataire et échéance.
-- Soumettre, assigner, demander une information, répondre, résoudre, clôturer et rouvrir lorsque permis.
-- Résultat : statuts valides, historique et notifications cohérents.
+- Comparer Mon calendrier et Calendrier équipe avec un responsable autorisé.
+- Résultat attendu : Mon calendrier n’affiche que les objets créés, dirigés ou acceptés ; la vue équipe respecte les droits.
 
-## 10. Validation avec correction
+## 10. CRUD de ses événements
 
-- Soumettre un objet avec un validateur distinct.
-- Ouvrir comme validateur, consulter la source, commenter et demander une correction motivée.
-- Corriger comme demandeur, soumettre à nouveau et approuver.
-- Résultat : versions 1 et 2 conservées, décision liée à la version 2, source actualisée.
+- Créer, ouvrir, modifier puis annuler son événement.
+- Vérifier la date de création et la date de dernière modification.
+- Tenter les mêmes actions comme simple participant.
+- Résultat attendu : participant en lecture ; créateur responsable en écriture.
 
-## 11. Refus et double décision
+## 11. Checklist d’événement
 
-- Soumettre un second objet et le refuser avec motif.
-- Réessayer une décision ou rejouer la requête.
-- Résultat : refus historisé et seconde décision empêchée/idempotente.
+- Ajouter plusieurs résultats à réaliser, cocher progressivement et vérifier la progression.
+- Résultat attendu : progression calculée, aucune saisie manuelle de pourcentage.
 
-## 12. Réunion
+## 12. Suggestions de créneaux
 
-- Créer une réunion avec plusieurs participants et vérifier les conflits.
-- Accepter/refuser selon les actions disponibles, modifier le créneau, ajouter l'ordre du jour.
-- Rédiger et publier un compte rendu, enregistrer une décision et créer une action de suivi.
-- Résultat : l'action référence une vraie tâche et reste liée à la réunion.
+- Sélectionner plusieurs participants, une durée et une période.
+- Résultat attendu : propositions locales sans conflit bloquant ; période supérieure à quatorze jours refusée.
 
-## 13. Workflow
+## 13. Ressources
 
-- Créer ou sélectionner un modèle, publier une version et démarrer une instance.
-- Agir avec les acteurs prévus, demander une correction, suspendre/reprendre et terminer selon les capacités déployées.
-- Résultat : acteurs serveur déterministes, transitions et retries sans doublon.
+- Créer une salle, la réserver pour un événement, puis tenter un chevauchement.
+- Résultat attendu : première réservation confirmée, seconde refusée avec `RESOURCE_CONFLICT`.
 
-## 14. Versionnement de workflow
+## 14. Synchronisation externe non configurée
 
-- Démarrer une instance avec une version active.
-- Publier une nouvelle version du modèle puis démarrer une seconde instance.
-- Résultat : l'ancienne instance conserve sa version ; la nouvelle utilise la nouvelle version.
+- En Production sans variables OAuth, ouvrir Outils avancés.
+- Résultat attendu : boutons désactivés, message humain, aucune erreur serveur ou client.
 
-## 15. Documents
+## 15. Vue Kanban Activités DTSC
 
-- Uploader un vrai fichier autorisé, ouvrir l'aperçu si le format le permet et télécharger.
-- Lier le document à une tâche, créer une nouvelle version, restaurer/activer une version antérieure selon les actions disponibles, archiver puis restaurer.
-- Résultat : versions conservées, un seul binaire par version et liens persistants.
+- Basculer Liste/Kanban et ouvrir des cartes de chaque colonne.
+- Résultat attendu : objets regroupés selon leurs statuts réels et détails ouvrables.
 
-## 16. Permissions documentaires
+## 16. Autorité de transition
 
-- Ouvrir le document avec un utilisateur autorisé puis avec un utilisateur non autorisé, y compris par URL directe.
-- Résultat : téléchargement et aperçu refusés sans révéler les métadonnées privées.
+- Comme superviseur non responsable, tenter de changer le statut d’une tâche assignée à un autre collaborateur.
+- Comme assigné, effectuer la même transition.
+- Résultat attendu : superviseur refusé, assigné autorisé.
 
-## 17. Intégration ERP
+## 17. Checklist de tâche
 
-- Utiliser un achat, budget, dépense ou autre objet ERP disposant d'une validation/échéance commune.
-- Ouvrir depuis la file standard, décider avec l'acteur autorisé et vérifier l'état ERP.
-- Résultat : état source synchronisé et aucun moteur ou objet métier dupliqué.
+- Tenter de terminer une tâche sans checklist, puis avec checklist incomplète, puis complète.
+- Résultat attendu : `CHECKLIST_REQUIRED`, puis `CHECKLIST_INCOMPLETE`, puis réussite à 100 %.
 
-## 18. Accès révoqué
+## 18. Blocage
 
-- Ouvrir une tâche, une réunion et un document d'organisation.
-- Révoquer le membership dans une autre session puis actualiser les liens directs.
-- Résultat : objets filtrés et accès refusés de manière sûre.
+- Déclarer un blocage sans motif puis avec motif.
+- Résultat attendu : motif obligatoire et objet Blocage lié créé une seule fois.
 
-## 19. Mobile
+## 19. Commentaires CRUD
 
-Tester 320, 360, 375, 390, 414 et 768 px :
+- Ajouter, répondre, modifier et supprimer un commentaire.
+- Charger les commentaires précédents.
+- Résultat attendu : structure du fil conservée et permissions appliquées.
 
-- agenda, filtres horizontaux, listes, formulaires, validations, réunions, workflows, documents, aperçus, commentaires et dialogues ;
-- navigation clavier et clavier mobile ;
-- absence de débordement global et actions principales accessibles.
+## 20. Mention professionnelle
 
-## 20. PWA et reprise
+- Mentionner un collaborateur dans une tâche ou opération.
+- Cliquer sur la mention.
+- Résultat attendu : profil, conversation, préparation d’invitation calendrier et copie du nom sont proposés ; les destinations revérifient l’accès.
 
-- Installer la PWA, recevoir une notification ou un rappel de test et ouvrir l'objet.
-- Couper le réseau pendant une consultation, rétablir la connexion puis rejouer une mutation idempotente.
-- Résultat : aucune donnée privée mise en cache hors politique, aucune double transition.
+## 21. Historique des prestations
+
+- Ouvrir plusieurs semaines de l’historique.
+- Résultat attendu : entrées, durées, décisions, révisions, dates de création et modification visibles.
+
+## 22. Semaine passée sans permission
+
+- Comme collaborateur standard, ouvrir une semaine passée encore modifiable.
+- Tenter aussi une requête directe de soumission.
+- Résultat attendu : bouton absent et refus `PAST_PERIOD_PERMISSION_REQUIRED`.
+
+## 23. Permission individuelle
+
+- Comme ADMIN, accorder `work.past_period.submit` avec motif et expiration.
+- Recharger comme collaborateur et soumettre la semaine passée.
+- Révoquer la permission puis recommencer.
+- Résultat attendu : autorisé avant révocation, refusé après révocation, audit complet.
+
+## 24. Accès Administration ciblé
+
+- Accorder à un SUPPORT une permission `admin.section.<section>.read`.
+- Vérifier qu’il voit cette section sans obtenir le poste métier correspondant.
+- Tenter de modifier un objet dont il n’est pas responsable.
+- Résultat attendu : lecture ciblée seulement ; mutation refusée.
+
+## 25. DENY prioritaire
+
+- Enregistrer un ALLOW puis un DENY actif sur le même code.
+- Résultat attendu : le DENY prévaut.
+
+## 26. SLA
+
+- Créer une politique, la rattacher à un objet, déclencher l’évaluation avant avertissement, pendant l’avertissement et après échéance.
+- Résultat attendu : RUNNING, WARNING puis BREACHED sans changement automatique du statut métier.
+
+## 27. Documents avancés non configurés
+
+- Demander une indexation et une comparaison visuelle sans variables fournisseur.
+- Résultat attendu : état `NOT_CONFIGURED`, réponse 503 contrôlée, aucune clé exposée, aucun faux résultat.
+
+## 28. Documents avancés configurés — environnement de test uniquement
+
+- Configurer un fournisseur fictif ou de test.
+- Indexer une version et comparer deux versions différentes.
+- Résultat attendu : URLs signées courtes, statut READY ou FAILED contrôlé, résultat et audit sans secret.
+
+## 29. Guides intégrés
+
+Ouvrir les guides depuis :
+
+- Calendrier ;
+- Activités DTSC ;
+- Activités entreprise ;
+- Tâches ;
+- Demandes ;
+- Validations ;
+- Réunions ;
+- Workflows ;
+- Documents ;
+- Administration RBAC.
+
+Résultat attendu : guide recherchable, mobile, actualisé et conforme aux fonctions visibles.
+
+## 30. Mobile
+
+Tester 320, 360, 375, 390, 414 et 768 px : rails, Kanban, dialogues, formulaires, guides, invitations, commentaires, ressources et prestations.
+
+Résultat attendu : aucun débordement global, actions tactiles accessibles et scroll local fonctionnel.
+
+## 31. Accès révoqué
+
+Révoquer le membership ou le dossier collaborateur dans une autre session, puis réessayer les liens directs.
+
+Résultat attendu : accès refusé sans fuite de métadonnées.
+
+## 32. Régression des scénarios initiaux
+
+Rejouer les scénarios de l’itération 04 : agenda unifié, demandes, validations avec correction, réunions, workflows, documents, intégration ERP, PWA et notifications.
 
 ## Rapport du propriétaire
 
-Pour chaque scénario, renseigner : exécutant, date, environnement, résultat, anomalies, captures et identifiants de test.
+Pour chaque scénario, renseigner : exécutant, date, environnement, compte, rôle/poste, données de test, résultat, anomalie, capture et identifiant.
 
 **Tests E2E manuels préparés — validation du propriétaire en attente**

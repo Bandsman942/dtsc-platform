@@ -2,63 +2,88 @@
 
 ## Rôle du module
 
-Le module **Tâches et opérations** suit le travail opérationnel d'une entreprise : création, affectation, échéance, statut, checklist, dépendances et blocages.
+Le module **Tâches et opérations** permet de planifier, assigner, exécuter et suivre le travail opérationnel dans le contexte actif.
 
-## Créer une tâche
+Le bouton **Guide utilisateur** de l’en-tête ouvre la version contextuelle du présent guide dans l’application.
 
-Cliquez sur **Nouvelle tâche**, puis renseignez le titre, la description, le type, la priorité, le responsable, le département, la date de début et l'échéance. Une référence source peut être utilisée par les services métier lorsqu'une tâche est générée depuis un autre module.
+## Créer une tâche ou une opération
 
-Le responsable sélectionné doit être membre actif de l'entreprise. Les contrôles de contexte et de permission sont exécutés côté serveur.
+Renseignez :
 
-## Trouver le travail pertinent
+- le titre et le résultat attendu ;
+- le responsable ou l’assigné actif ;
+- le département ;
+- la priorité ;
+- les dates ;
+- la description ;
+- la checklist initiale ;
+- les dépendances éventuelles.
 
-La liste permet de rechercher et de filtrer par statut, priorité, responsable, département et retard. Les résultats sont paginés. Les filtres personnels enregistrés sont privés et ne modifient jamais les droits d'accès.
+Toutes les références sont revérifiées dans la même organisation.
 
-## Cycle de vie
+## Vues Liste et Kanban
 
-Selon l'état et vos capacités, vous pouvez :
+La vue Liste permet la recherche, les filtres et la pagination.
 
-- démarrer une tâche ;
-- la bloquer ;
-- la reprendre ;
-- la terminer ;
-- l'annuler ;
-- l'archiver si vous êtes responsable autorisé.
+La vue Kanban regroupe les objets selon leurs statuts réels. Une transition n’est enregistrée que si le serveur confirme que l’utilisateur est le destinataire, l’assigné ou le responsable explicite.
 
-Une tâche terminée reste consultable ; l'archivage est une action distincte.
+Les superviseurs peuvent consulter un périmètre élargi, mais ne deviennent pas automatiquement responsables de chaque opération.
 
 ## Checklist et progression
 
-Dans le détail, ajoutez des éléments de checklist et cochez-les au fur et à mesure. La progression est calculée à partir du nombre d'éléments terminés. Lorsqu'aucune checklist n'existe, le module n'invente pas un pourcentage.
+La progression provient exclusivement des éléments actifs de la checklist :
 
-## Dépendances
+```text
+éléments réalisés ÷ éléments actifs × 100
+```
 
-Vous pouvez indiquer qu'une tâche dépend d'une autre. Le serveur refuse :
+Le responsable peut ajouter, cocher, décocher et retirer les éléments. Chaque réalisation conserve sa date et son auteur.
+
+Une tâche ne peut pas être terminée ou soumise à validation lorsque :
+
+- aucune checklist n’existe ;
+- un élément reste non réalisé ;
+- la progression calculée est inférieure à 100 %.
+
+## Statuts et historique
+
+Les transitions autorisées dépendent de l’état courant et de la responsabilité enregistrée. Chaque transition conserve :
+
+- l’ancien statut ;
+- le nouveau statut ;
+- l’acteur ;
+- la date ;
+- le motif ;
+- la progression calculée.
+
+## Dépendances et sous-tâches
+
+Le serveur refuse :
 
 - une dépendance vers la même tâche ;
-- une relation vers une tâche d'une autre organisation ;
-- une relation qui créerait un cycle.
+- une dépendance vers une autre organisation ;
+- une dépendance créant un cycle.
 
-Les dépendances sont persistées et restent visibles dans le détail.
+Les sous-tâches conservent leur propre responsable, leur checklist et leur statut.
 
 ## Blocages
 
-Déclarez un blocage avec un motif et, si nécessaire, un responsable de résolution. La tâche passe à l'état bloqué lorsqu'elle était à faire ou en cours. Pour résoudre le blocage, ajoutez un commentaire de résolution. Lorsque le dernier blocage actif est résolu, la tâche reprend l'état en cours.
+Un blocage exige un motif. Il peut créer un objet de blocage lié à la tâche ou à l’opération.
 
-## Sous-tâches
+Le responsable de résolution documente la correction. La résolution du dernier blocage actif permet la reprise du processus lorsque le workflow le prévoit.
 
-Une tâche peut être créée avec une tâche parente. La relation utilise l'identifiant canonique de la tâche, jamais le titre. Chaque sous-tâche conserve son propre statut et son propre responsable.
+## Commentaires et mentions
 
-## Calendrier et notifications
+Les participants autorisés peuvent échanger dans le détail de l’objet. Les mentions cliquables proposent des actions professionnelles sans contourner les permissions de destination.
 
-Une tâche datée apparaît dans l'agenda unifié selon vos droits. L'affectation peut produire une notification ouvrant le module de tâches. La fin ou la modification de la tâche actualise sa projection au prochain chargement.
+## Filtres sauvegardés
 
-## Accès
+Les filtres personnels peuvent être enregistrés pour retrouver un périmètre de travail. Un filtre ne change jamais les permissions serveur.
 
-Les responsables autorisés peuvent voir toutes les tâches du contexte. Les autres utilisateurs voient les tâches qu'ils ont créées ou qui leur sont assignées. Les actions de coordination sont réservées au créateur, à l'assigné ou à un gestionnaire autorisé.
+## Calendrier, documents et SLA
 
-## Limites
+Une tâche datée apparaît dans l’agenda unifié selon les droits de l’utilisateur.
 
-- Le board avancé et le partage de filtres ne sont pas annoncés comme disponibles dans cette itération.
-- Le réordonnancement graphique des sous-tâches n'est pas exposé si l'interface ne le propose pas.
-- Les documents et commentaires utilisent les modules communs ; leur disponibilité dépend des capacités du contexte.
+Les documents restent gérés dans le module Documents et peuvent être liés à plusieurs objets sans duplication.
+
+Une politique SLA peut être rattachée à une tâche ou une opération. Elle calcule une échéance, un avertissement et un dépassement, sans modifier automatiquement le statut métier.

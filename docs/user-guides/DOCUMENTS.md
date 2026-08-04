@@ -2,68 +2,80 @@
 
 ## Rôle du module
 
-Le module **Documents** conserve des métadonnées privées, des fichiers réels versionnés et des liens vers les objets de travail de l'entreprise. Il réutilise le stockage canonique et les contrôles d'accès existants.
+Le module **Documents** conserve des métadonnées privées, des fichiers réels versionnés et des liens vers les objets de travail de l’entreprise.
+
+Le bouton **Guide utilisateur** ouvre ce guide directement dans l’application.
 
 ## Créer un document
 
-Cliquez sur **Nouveau document** et renseignez :
+Renseignez le titre, la description, le type, la catégorie, la visibilité, le propriétaire, le département et la date d’expiration éventuelle.
 
-- le titre et la description ;
-- le type et la catégorie ;
-- la visibilité ;
-- le propriétaire et le département ;
-- la date d'expiration éventuelle.
-
-La création des métadonnées ne remplace pas le téléversement du fichier. Après création, utilisez le formulaire de version pour envoyer un fichier réel.
+La création des métadonnées ne remplace pas le téléversement d’un fichier réel.
 
 ## Téléverser une version
 
-Le téléversement utilise un formulaire multipart et vérifie côté serveur :
+Chaque téléversement vérifie :
 
-- session et contexte entreprise ;
-- droits sur le document ;
-- type MIME, extension et taille ;
-- stockage privé ;
-- révision courante du document.
+- la session ;
+- l’organisation active ;
+- les permissions ;
+- le type MIME ;
+- l’extension ;
+- la taille ;
+- le stockage privé ;
+- la révision courante.
 
-Chaque fichier accepté crée une nouvelle version. Le numéro courant augmente ; l'ancien fichier reste conservé selon la politique de rétention.
+Chaque fichier accepté crée une nouvelle version. L’ancienne version reste conservée.
 
-## Recherche et filtres
+## Recherche, aperçu et téléchargement
 
-La liste permet de rechercher et filtrer par statut, visibilité et type. Les résultats sont paginés et chargent les métadonnées utiles, pas le contenu intégral des fichiers.
+La liste est paginée et filtrable. Le téléchargement utilise une URL signée temporaire créée après contrôle d’accès.
 
-## Télécharger et prévisualiser
+Les images et PDF peuvent être prévisualisés lorsque le navigateur et le service le permettent. Une URL signée ne constitue jamais un lien public permanent.
 
-Le téléchargement demande une URL signée après vérification des permissions. L'aperçu dépend du format et du navigateur : images et PDF peuvent être ouverts lorsque le service le permet ; les autres formats restent téléchargeables.
+## Lier un document
 
-Une URL signée est temporaire et ne doit pas être partagée comme lien public permanent.
+Un même document peut être relié à plusieurs tâches, demandes, validations, réunions, contrats, projets, actifs, fournisseurs ou achats sans dupliquer le fichier.
 
-## Lier un document à un objet
+Le lien canonique utilise l’identifiant de l’objet et son organisation.
 
-Utilisez **Lier** pour associer le document à une tâche, demande, validation, réunion, contrat, projet, actif, fournisseur ou achat pris en charge. Le lien utilise le mécanisme canonique `EnterpriseEntityLink` ; le fichier n'est pas copié.
+## Versions et historique
 
-Un parcours métier peut aussi ouvrir le module Documents avec un contexte de source. Le document créé est alors lié à l'objet après validation du type et de l'organisation.
+Le détail affiche les versions, numéros, noms de fichiers, auteurs et dates. Une nouvelle version ne remplace pas silencieusement l’historique.
 
-## Visibilité et permissions
+## Indexation documentaire avancée
 
-Les visibilités prises en charge sont notamment :
+L’indexation avancée est protégée par une configuration serveur.
 
-- organisation ;
-- département ;
-- restreint.
+Lorsque le fournisseur n’est pas configuré :
 
-Le créateur, le propriétaire, les accès explicites et les gestionnaires autorisés déterminent les capacités réelles. Toute route de téléchargement, version ou lien revérifie ces droits côté serveur.
+- l’état `NOT_CONFIGURED` est enregistré ;
+- l’utilisateur reçoit une explication ;
+- aucune erreur non contrôlée n’est produite ;
+- aucune fausse indexation n’est annoncée.
+
+Lorsque le fournisseur est configuré, le serveur :
+
+1. revérifie les permissions ;
+2. génère une URL signée courte pour la version ;
+3. appelle le fournisseur depuis le serveur ;
+4. conserve le fournisseur, le statut, le checksum, le nombre de segments et la référence d’index ;
+5. n’expose jamais la clé API au client.
+
+## Comparaison visuelle de versions
+
+La comparaison exige deux versions différentes du même document.
+
+Sans fournisseur configuré, la fonction reste désactivée proprement.
+
+Avec un fournisseur configuré, le serveur transmet deux URLs signées temporaires, enregistre le statut, le résumé et la référence du résultat visuel, puis audite l’opération.
+
+## Visibilité et sécurité
+
+Les capacités dépendent du créateur, du propriétaire, du département, de la visibilité, des accès explicites et des permissions du module.
+
+Toutes les routes de lecture, version, lien, indexation et comparaison revérifient les droits côté serveur.
 
 ## Archivage
 
-Archiver retire le document des listes actives sans supprimer immédiatement ses fichiers, versions ou liens. Les documents historiques restent accessibles selon les permissions et les règles de conservation.
-
-## Documents ERP
-
-Les documents provenant d'un module ERP restent canoniques dans le même système documentaire. Le module Documents les retrouve par lien ; il ne duplique pas les fichiers pour chaque écran.
-
-## Limites
-
-- La restauration d'une ancienne version comme version active n'est annoncée que si l'action est exposée par le backend.
-- L'indexation du contenu intégral n'est pas automatique pour tous les fichiers ; elle dépend des règles de sécurité et des services RAG activés.
-- Le partage externe public n'est pas disponible par défaut.
+L’archivage retire le document des listes actives sans supprimer immédiatement les fichiers, versions ou liens historiques.

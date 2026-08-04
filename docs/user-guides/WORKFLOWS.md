@@ -2,63 +2,53 @@
 
 ## Rôle du module
 
-Le module **Workflows** exécute des processus transverses versionnés. Il distingue le modèle, sa version publiée, l'instance en cours, les étapes, les acteurs et les événements d'exécution.
+Le module **Workflows** exécute des processus transverses versionnés. Il distingue le modèle, la version publiée, l’instance, les étapes, les acteurs, les transitions et les événements d’exécution.
+
+Le bouton **Guide utilisateur** ouvre ce guide directement dans l’application.
 
 ## Modèles et versions
 
-Un modèle décrit le déclencheur, les étapes, transitions, acteurs, conditions, délais, notifications et résultat attendu. Une version publiée n'est pas modifiée rétroactivement : toute évolution fonctionnelle crée une nouvelle version.
+Un modèle décrit le déclencheur, les étapes, les acteurs, les conditions, les délais, les notifications et le résultat attendu.
 
-Une instance reste liée à la version avec laquelle elle a démarré, même si une nouvelle version du modèle est publiée ensuite.
-
-## Créer ou modifier un modèle
-
-Les gestionnaires autorisés peuvent créer un modèle en brouillon, configurer ses étapes et publier une version. Les formulaires doivent utiliser les types d'étapes et règles proposés par le moteur ; aucun code JavaScript ou expression arbitraire n'est accepté.
+Une version publiée n’est jamais modifiée rétroactivement. Toute évolution crée une nouvelle version, tandis que les instances existantes restent liées à leur version d’origine.
 
 ## Démarrer une instance
 
-Une instance peut être démarrée depuis le module Workflows ou par un service métier intégré. Elle conserve :
+Une instance conserve :
 
-- le modèle et sa version ;
-- l'objet source ;
-- l'utilisateur initiateur ;
-- l'étape actuelle ;
+- le modèle et la version ;
+- l’objet source ;
+- l’initiateur ;
+- l’étape actuelle ;
 - les acteurs résolus ;
-- l'historique et les événements d'outbox.
+- les délais ;
+- l’historique ;
+- les événements d’outbox.
 
-## Acteurs
+## Acteurs et transitions
 
-Les acteurs sont résolus côté serveur à partir des règles prises en charge : utilisateur, rôle, poste, département, responsable de l'objet ou gestionnaire autorisé. La résolution enregistrée ne dépend pas d'un libellé saisi dans l'interface.
+Les acteurs sont résolus côté serveur à partir des règles prises en charge : utilisateur, rôle, poste, département, responsable d’objet ou gestionnaire explicitement autorisé.
 
-## Agir sur une étape
-
-Selon votre affectation et l'état, vous pouvez approuver, refuser, demander une correction ou exécuter l'action prévue. Le serveur vérifie l'étape courante, l'acteur, la version et la transition autorisée.
+Une transition est disponible uniquement pour l’acteur résolu de l’étape courante. Les droits ne sont pas déduits d’un libellé saisi dans l’interface.
 
 ## Conditions
 
-Les conditions utilisent uniquement les champs et opérateurs autorisés. Elles sont évaluées côté serveur et auditées. Un modèle ne peut pas exécuter du code fourni par l'utilisateur.
+Les conditions utilisent uniquement des champs et opérateurs allow-listés. Aucun code JavaScript fourni par l’utilisateur n’est exécuté.
 
-## Délais, suspension et reprise
+## Idempotence
 
-Une instance peut porter une date limite, une date de reprise, une escalade ou un retry selon le type d'étape. Les actions disponibles incluent, lorsque le modèle le permet :
+Chaque transition possède une clé stable. Un double clic, un retry réseau ou un worker relancé ne produit pas deux décisions ni deux effets métier.
 
-- suspendre ;
-- reprendre ;
-- attendre une information ou un événement ;
-- annuler ;
-- réessayer après erreur.
+## Délais, SLA et reprise
 
-Les instances avec `resumeAt` peuvent apparaître dans l'agenda unifié.
+Les délais d’étape, dates de reprise et escalades sont conservés dans l’instance.
 
-## Idempotence et retries
-
-Chaque transition et effet externe utilise les mécanismes d'idempotence du moteur. Un double clic, un événement d'outbox rejoué ou un worker relancé ne doit pas créer une deuxième décision ou un deuxième effet métier.
+Une politique SLA peut compléter le workflow sans remplacer son statut métier. Le SLA calcule les états RUNNING, WARNING et BREACHED.
 
 ## Observabilité
 
-Le détail expose l'état, la version, l'étape actuelle, les acteurs, les délais et l'historique disponibles. Les erreurs et retries sont conservés sans afficher de secrets ou de données sensibles dans les logs utilisateur.
+Le détail expose la version, l’étape, les acteurs, les délais, les transitions, les erreurs et les retries autorisés. Les secrets et données sensibles ne sont jamais affichés dans les logs utilisateur.
 
-## Limites
+## Liens profonds
 
-- Les types d'étapes disponibles dépendent du moteur déjà déployé ; le module ne simule pas des règles complexes uniquement dans le frontend.
-- Les éditeurs graphiques avancés, quorums et branches parallèles ne sont annoncés que si le backend les prend réellement en charge.
-- La correction d'un objet source dépend de l'adaptateur métier correspondant.
+Une notification peut ouvrir directement l’instance avec `?run=...`. L’accès est revérifié au moment de l’ouverture.

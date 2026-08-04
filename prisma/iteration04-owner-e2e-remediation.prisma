@@ -1,0 +1,221 @@
+model DtscIndividualPermissionGrant {
+  id             String   @id @default(cuid())
+  grantKey       String   @unique
+  userId         String
+  employeeId     String?
+  permissionCode String
+  scopeType      String   @default("GLOBAL")
+  scopeValue     String?
+  effect         String   @default("ALLOW")
+  reason         String?
+  validFrom      DateTime @default(now())
+  validUntil     DateTime?
+  grantedById    String
+  revokedAt      DateTime?
+  revokedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, permissionCode, revokedAt])
+  @@index([employeeId, permissionCode, revokedAt])
+  @@index([scopeType, scopeValue, permissionCode])
+  @@index([validUntil, revokedAt])
+}
+
+model OperationalChecklistItem {
+  id            String    @id @default(cuid())
+  organizationId String?
+  objectType    String
+  objectId      String
+  label         String
+  position      Int       @default(0)
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  completedById String?
+  createdById   String
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([organizationId, objectType, objectId, deletedAt])
+  @@index([objectType, objectId, position])
+  @@index([completed, completedAt])
+}
+
+model OperationalStatusTransition {
+  id             String   @id @default(cuid())
+  organizationId String?
+  objectType     String
+  objectId       String
+  fromStatus     String?
+  toStatus       String
+  actorUserId    String
+  actorEmployeeId String?
+  reason         String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, objectType, objectId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model CalendarResource {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  resourceType   String
+  description    String?
+  location       String?
+  capacity       Int?
+  isActive       Boolean   @default(true)
+  configurationJson Json?
+  createdById    String
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([organizationId, name, resourceType])
+  @@index([organizationId, resourceType, isActive, archivedAt])
+}
+
+model CalendarResourceReservation {
+  id             String   @id @default(cuid())
+  organizationId String
+  resourceId     String
+  eventId        String
+  requestedById  String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         String   @default("CONFIRMED")
+  notes          String?
+  canceledAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([resourceId, eventId])
+  @@index([organizationId, resourceId, startsAt, endsAt, status])
+  @@index([eventId, status])
+}
+
+model CalendarExternalSyncState {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  userId               String
+  provider             String
+  status               String   @default("NOT_CONFIGURED")
+  credentialReference String?
+  externalCalendarId  String?
+  lastSyncedAt        DateTime?
+  lastErrorCode       String?
+  lastErrorMessage    String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, userId, provider])
+  @@index([organizationId, provider, status])
+  @@index([userId, status])
+}
+
+model CalendarSlotSuggestion {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  requestedById       String
+  participantIdsJson  Json
+  rangeStart          DateTime
+  rangeEnd            DateTime
+  durationMinutes     Int
+  provider             String   @default("LOCAL")
+  status               String   @default("READY")
+  suggestionsJson     Json?
+  errorCode            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([organizationId, requestedById, createdAt])
+  @@index([status, createdAt])
+}
+
+model EnterpriseDocumentIndexState {
+  id              String   @id @default(cuid())
+  organizationId  String
+  documentId      String
+  versionId       String?
+  provider        String   @default("LOCAL_METADATA")
+  status          String   @default("NOT_CONFIGURED")
+  contentHash     String?
+  chunkCount      Int      @default(0)
+  indexReference  String?
+  errorCode       String?
+  errorMessage    String?
+  indexedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, documentId, versionId])
+  @@index([organizationId, status, updatedAt])
+  @@index([documentId, versionId])
+}
+
+model EnterpriseDocumentVersionComparison {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  documentId            String
+  leftVersionId         String
+  rightVersionId        String
+  provider              String   @default("LOCAL_METADATA")
+  status                String   @default("NOT_CONFIGURED")
+  summaryJson           Json?
+  visualDiffStoragePath String?
+  errorCode             String?
+  errorMessage          String?
+  requestedById         String
+  completedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([documentId, leftVersionId, rightVersionId])
+  @@index([organizationId, status, createdAt])
+}
+
+model OperationalSlaPolicy {
+  id                String    @id @default(cuid())
+  organizationId    String?
+  name              String
+  objectType        String
+  priority          String?
+  startStatus       String?
+  stopStatusesJson  Json?
+  targetMinutes     Int
+  warningMinutes    Int?
+  escalationJson    Json?
+  isActive          Boolean   @default(true)
+  createdById       String
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, objectType, isActive, archivedAt])
+}
+
+model OperationalSlaInstance {
+  id                String    @id @default(cuid())
+  organizationId    String?
+  policyId          String
+  objectType        String
+  objectId          String
+  responsibleUserId String?
+  startedAt         DateTime
+  dueAt             DateTime
+  warnedAt          DateTime?
+  breachedAt        DateTime?
+  completedAt       DateTime?
+  pausedAt          DateTime?
+  status            String    @default("RUNNING")
+  lastEvaluatedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([policyId, objectType, objectId])
+  @@index([organizationId, status, dueAt])
+  @@index([responsibleUserId, status, dueAt])
+}
