@@ -27,11 +27,15 @@ export async function PATCH(req: Request, { params }: Params) {
   const { id } = await params;
   const actor = await getOperationalActor(user);
   const access = await resolveOperationalObjectAccess({ actor, objectType: "TASK", objectId: id, action: "status" });
-  if (!access.allowed || !access.object) {
+  if (!access.allowed) {
     await writeApiLog({ request: req, statusCode: access.reason === "NOT_FOUND" ? 404 : 403, userId: user.id, startedAt });
     return NextResponse.json({ error: access.reason || "Forbidden", message: "Seul le collaborateur assigné ou responsable peut faire évoluer cette tâche." }, { status: access.reason === "NOT_FOUND" ? 404 : 403 });
   }
-  const task = access.object;
+  const task = await prisma.cooTask.findUnique({ where: { id } });
+  if (!task) {
+    await writeApiLog({ request: req, statusCode: 404, userId: user.id, startedAt });
+    return NextResponse.json({ error: "NOT_FOUND", message: "Tâche introuvable." }, { status: 404 });
+  }
   const parsed = taskUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Mise à jour de tâche invalide." }, { status: 400 });
 
@@ -103,6 +107,6 @@ export async function PATCH(req: Request, { params }: Params) {
 async function notifyTask(task: { assigneeEmployeeId: string | null; responsibleEmployeeId: string | null; createdById: string | null; title: string }, actorId: string, status: string) {
   const employeeIds = [task.assigneeEmployeeId, task.responsibleEmployeeId].filter((id): id is string => Boolean(id));
   const employees = await prisma.hrcfoEmployee.findMany({ where: { id: { in: employeeIds } }, select: { userId: true } });
-  const recipients = [...new Set([...employees.map((employee) => employee.userId), task.createdById].filter((id): id is string => Boolean(id) && id !== actorId))];
-  await notifyUsers({ userIds: recipients, title: "Tâche COO mise à jour", body: `${task.title} est maintenant ${status}.`, type: "COO_TASK", targetUrl: `/activities?task=${task.title}` });
+  const recipients = [...new Set([...employees.map((employee) => employee.userId), task.createdById].filter((recipientId): recipientId is string => Boolean(recipientId) && recipientId !== actorId))];
+  await notifyUsers({ userIds: recipients, title: "Tâche COO mise à jour", body: `${task.title} est maintenant ${status}.`, type: "COO_TASK", targetUrl: `/activities?task=${encodeURIComponent(task.id)}` });
 }
