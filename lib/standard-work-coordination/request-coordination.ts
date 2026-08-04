@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { canMutateOwnedObject, enterpriseRequestVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { prisma } from "@/lib/prisma";
