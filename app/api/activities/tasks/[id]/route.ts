@@ -62,6 +62,7 @@ export async function PATCH(req: Request, { params }: Params) {
         closedAt: status === "COMPLETED" ? new Date() : task.closedAt,
       },
     });
+    // OperationalStatusTransition is the append-only record of every task status mutation.
     await tx.operationalStatusTransition.create({
       data: {
         objectType: "TASK",
