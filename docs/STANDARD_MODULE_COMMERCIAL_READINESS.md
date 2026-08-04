@@ -59,3 +59,20 @@ Aucun module standard n’a été promu vers `COMMERCIAL_READY`. Les fondations 
 | Modération | COMMERCIAL_READY | Contrôles serveur et audit maintenus |
 
 La décision propriétaire est versionnée dans `docs/STANDARD_COLLABORATION_COMMERCIAL_ACCEPTANCE_2026-08-03.md`.
+
+## Itération 04 — Évaluation séparée
+
+| Module | Avant l'itération | Cible maximale après Quality Gates et Production | Preuves principales | Condition commerciale restante |
+|---|---|---|---|---|
+| Calendrier unifié | `OPERATIONAL_UI` | `PROFESSIONAL_READY` | agrégation bornée, source canonique, déduplication, conflits existants, guide et QA | E2E multi-sources, fuseau et mobile |
+| Disponibilités / exceptions | `OPERATIONAL_UI` | `PROFESSIONAL_READY` si non-régression | persistance et contrôles du calendrier existant | E2E chevauchements et confidentialité |
+| Activités DTSC | `OPERATIONAL_UI` | `OPERATIONAL_UI` / à confirmer | vue transverse et guide, domaines historiques conservés | E2E des fonctions internes avant toute promotion |
+| Activités entreprise | `OPERATIONAL_UI` | `PROFESSIONAL_READY` | activité sectorielle liée à une demande standard, accès et guide | E2E formulaire, assignation et notification |
+| Tâches & opérations | `OPERATIONAL_UI` | `PROFESSIONAL_READY` | checklist, progression calculée, dépendances, cycles, blocages, filtres et deep link | E2E multi-utilisateur et archivage |
+| Demandes internes | `OPERATIONAL_UI` | `PROFESSIONAL_READY` | information, réponse, résolution, clôture, réouverture, historique et deep link | E2E du cycle complet |
+| Validations | `OPERATIONAL_UI` | `PROFESSIONAL_READY` | version soumise, correction, resoumission, délégation, décision idempotente et source synchronisée | E2E avec demandeur/validateur distincts |
+| Réunions | `OPERATIONAL_UI` | `PROFESSIONAL_READY` | ordre du jour, compte rendu versionné, conflits, décisions et tâches de suivi | E2E invitations, appel et publication |
+| Workflows | `OPERATIONAL_UI` | `PROFESSIONAL_READY` selon QA moteur | définitions/version/instances, acteurs serveur, idempotence et observabilité | E2E versionnement, retry et ouverture exacte du run |
+| Documents | `OPERATIONAL_UI` | `PROFESSIONAL_READY` selon QA stockage | upload privé, versions, URLs signées, accès et liens canoniques multiples | E2E aperçu, URL directe, archivage et restauration |
+
+La cible reste provisoire tant que la PR n'est pas verte, revue, fusionnée dans `main` et vérifiée en Production. Les E2E de l'itération 04 restent `NON_EXÉCUTÉ`. Aucune entrée ci-dessus ne passe à `COMMERCIAL_READY` dans cette PR.
