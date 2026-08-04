@@ -132,8 +132,12 @@ export async function loadUnifiedWorkCalendar(input: UnifiedCalendarInput) {
           where: {
             organizationId: input.organizationId,
             status: { in: ACTIVE_WORKFLOW_STATUSES },
-            OR: [{ resumeAt: { gte: from, lte: to } }, { resumeAt: null, startedAt: { gte: from, lte: to } }],
-            ...(input.canSeeAll ? {} : { OR: [{ startedByUserId: input.userId }, { decisionActorUserId: input.userId }, { stepRuns: { some: { assignedUserId: input.userId } } }] }),
+            AND: [
+              { OR: [{ resumeAt: { gte: from, lte: to } }, { resumeAt: null, startedAt: { gte: from, lte: to } }] },
+              ...(input.canSeeAll
+                ? []
+                : [{ OR: [{ startedByUserId: input.userId }, { decisionActorUserId: input.userId }, { stepRuns: { some: { assignedUserId: input.userId } } }] }]),
+            ],
           },
           select: { id: true, sourceEntityType: true, sourceEntityId: true, status: true, resumeAt: true, startedAt: true, startedByUserId: true, decisionActorUserId: true },
           orderBy: [{ resumeAt: "asc" }, { startedAt: "asc" }],
