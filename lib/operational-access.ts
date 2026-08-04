@@ -77,8 +77,9 @@ export async function resolveOperationalObjectAccess({
     const operation = await prisma.cooOperation.findUnique({ where: { id: objectId } });
     if (!operation) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
     const responsible = operation.leadEmployeeId === employeeId;
+    const collaborators = operation.collaborators || "";
     const normalizedEmployeeId = employeeId.toLocaleLowerCase();
-    const participant = operation.collaborators.includes(employeeId) || operation.collaborators.toLocaleLowerCase().includes(normalizedEmployeeId);
+    const participant = collaborators.includes(employeeId) || collaborators.toLocaleLowerCase().includes(normalizedEmployeeId);
     const creator = operation.createdById === actor.userId;
     const canRead = responsible || participant || creator || isExecutiveReader;
     const canExecute = responsible || canManageAnyStatus;
@@ -109,7 +110,8 @@ export async function resolveOperationalObjectAccess({
     const meeting = await prisma.cooMeeting.findUnique({ where: { id: objectId } });
     if (!meeting) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
     const responsible = meeting.reportOwnerEmployeeId === employeeId;
-    const participant = meeting.participants.includes(employeeId);
+    const participants = meeting.participants || "";
+    const participant = participants.includes(employeeId);
     const creator = meeting.createdById === actor.userId;
     const canRead = responsible || participant || creator || isExecutiveReader;
     const canExecute = responsible || creator || canManageAnyStatus;
