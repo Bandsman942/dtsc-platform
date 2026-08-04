@@ -53,22 +53,18 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   const collection = useEnterpriseV2Collection<Task>({ endpoint: `/api/enterprise/${organizationId}/tasks`, params, refreshKey });
 
   useEffect(() => {
-    if (!deepLinkedTaskId || deepLinkResolved) return;
-    const visible = collection.items.find((item) => item.id === deepLinkedTaskId);
-    if (visible) {
-      setDetail(visible);
-      setDeepLinkResolved(true);
-      return;
-    }
-    if (collection.loading) return;
+    if (!deepLinkedTaskId || deepLinkResolved || collection.loading) return;
+    let cancelled = false;
     void fetch(`/api/enterprise/${organizationId}/tasks/${deepLinkedTaskId}/coordination`, { cache: "no-store" })
       .then(async (response) => ({ response, body: await response.json().catch(() => null) as { task?: Task; message?: string } | null }))
       .then(({ response, body }) => {
+        if (cancelled) return;
         if (response.ok && body?.task) setDetail(body.task);
         else setMessage(body?.message || (en ? "This task is unavailable." : "Cette tâche est indisponible."));
         setDeepLinkResolved(true);
       });
-  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedTaskId, en, organizationId]);
+    return () => { cancelled = true; };
+  }, [collection.loading, deepLinkResolved, deepLinkedTaskId, en, organizationId]);
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
