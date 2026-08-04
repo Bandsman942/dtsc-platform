@@ -29,6 +29,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const url = new URL(req.url);
   const { page, pageSize } = pageParams(url);
+  const id = url.searchParams.get("id")?.trim() || "";
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const priority = url.searchParams.get("priority")?.trim() || "";
@@ -40,6 +41,7 @@ export async function GET(req: Request, { params }: Params) {
   const now = new Date();
 
   const filters: Prisma.EnterpriseTaskWhereInput[] = [];
+  if (id) filters.push({ id });
   if (search) filters.push({ OR: [{ title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }] });
   if (status) filters.push({ status });
   if (priority) filters.push({ priority });
@@ -60,7 +62,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseTask.findMany({ where, orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseTask.count({ where }),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", page, pageSize } });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "tasks", page, pageSize, focusedId: id || null } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage, currentUserId: session.userId });
 }
 
