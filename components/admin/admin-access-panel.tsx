@@ -5,7 +5,9 @@ import { ShieldCheck } from "lucide-react";
 import { DtscIndividualPermissionsPanel } from "@/components/admin/dtsc-individual-permissions-panel";
 import { Button } from "@/components/ui/button";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { adminBlocks, type AdminRoleAccess } from "@/lib/admin-access";
+import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
 
 const configurableRoles = ["MANAGER", "SUPPORT"] as const;
 
@@ -32,17 +34,20 @@ export function AdminAccessPanel({ access }: { access: AdminRoleAccess }) {
   return (
     <div className="min-w-0 space-y-6">
       <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-300">
-            <ShieldCheck className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">RBAC administration</p>
-            <h2 className="mt-1 break-words text-2xl font-black text-dtsc-ink">Accès par blocs pour les rôles non-client</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
-              Le rôle ADMIN conserve toujours tous les blocs. Vous pouvez ouvrir uniquement les sections utiles aux rôles MANAGER et SUPPORT. Les permissions nominatives ci-dessous ajoutent ensuite une dérogation précise sans modifier le rôle global.
-            </p>
+        <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-300">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">RBAC administration</p>
+              <h2 className="mt-1 break-words text-2xl font-black text-dtsc-ink">Accès par blocs pour les rôles non-client</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
+                Le rôle ADMIN conserve toujours tous les blocs. Vous pouvez ouvrir uniquement les sections utiles aux rôles MANAGER et SUPPORT. Les permissions nominatives ci-dessous ajoutent ensuite une dérogation précise sans modifier le rôle global.
+              </p>
+            </div>
           </div>
+          <ContextualUserGuide guide={ITERATION04_USER_GUIDES.ADMIN_RBAC} compact />
         </div>
 
         <form onSubmit={save} className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
