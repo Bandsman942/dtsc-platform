@@ -1,6 +1,6 @@
 # DTSC Platform — Documentation technique
 
-**Version :** Consolidation ERP + modules standards 1/8
+**Version :** Consolidation ERP + modules standards 4/8
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
@@ -339,3 +339,41 @@ Aucune promotion vers `COMMERCIAL_READY` n’est réalisée. Les guides absents,
 La collaboration utilise `CollaborationGroup` comme agrégat canonique pour les conversations directes et de groupe. `directKey` garantit l’unicité par contexte. Les messages utilisent `clientMessageId`, lectures persistées, réactions, pièces jointes privées et modération auditée.
 
 Les appels réutilisent LiveKit et `CollaborationGroupCall`. Les transitions, l’expiration de sonnerie et les durées sont décidées côté serveur. Les annonces utilisent une audience serveur et des commentaires paginés. Voir les documents `STANDARD_COLLABORATION_*`, `STANDARD_CALLS_*`, `STANDARD_ANNOUNCEMENTS_MODEL.md` et `STANDARD_MODERATION_MODEL.md`.
+
+## 21. Modules standards — Itération 04 : coordination du travail
+
+### 21.1 Calendrier agrégé
+
+`/api/calendar/unified` agrège les événements autorisés de la période visible : calendrier, tâches, demandes, validations, réunions, instances de workflow et documents à échéance. Chaque entrée conserve `sourceType`, `sourceId`, le contexte, le fuseau et un lien profond. Une projection calendrier liée adopte la clé de l'objet canonique, puis la projection source la remplace dans la déduplication.
+
+La plage est limitée à quatre-vingt-treize jours et chaque source est bornée. Le filtre temporel et la visibilité des workflows sont combinés dans des groupes `AND` distincts pour éviter qu'un `OR` n'en écrase un autre.
+
+### 21.2 Coordination des tâches et demandes
+
+Les extensions additives comprennent : checklists, dépendances, blocages et filtres personnels. La progression est calculée uniquement depuis une checklist réelle. Les dépendances sont tenant-scoped et les cycles sont refusés.
+
+Les demandes disposent d'un cycle d'information, réponse, résolution, clôture et réouverture avec commentaires et événements. Les interfaces ouvrent l'objet exact depuis `?task=` et `?request=` après contrôle serveur.
+
+### 21.3 Validations versionnées
+
+Une validation conserve des versions de soumission et des décisions idempotentes. La correction exige un motif, la resoumission crée une nouvelle version et la délégation vérifie le membership du nouveau validateur. Les services métier existants restent responsables de la décision finale sur les achats, budgets, dépenses et autres sources.
+
+### 21.4 Réunions
+
+L'ordre du jour, les versions de compte rendu et les liens réunion-tâche sont persistés. Une décision peut créer une vraie tâche par la route dédiée. Les appels réutilisent Collaboration ; aucun second moteur audio/vidéo n'est créé.
+
+### 21.5 Workflows
+
+Le moteur `EnterpriseWorkflow*` existant reste canonique : définitions, versions, étapes, transitions, instances, tentatives idempotentes, événements et outbox. Une instance reste liée à sa version d'origine. Les reprises temporelles peuvent être projetées dans le Calendrier.
+
+### 21.6 Documents
+
+Les documents utilisent `EnterpriseDocument`, `EnterpriseDocumentVersion`, les accès privés, le stockage signé et `EnterpriseEntityLink`. L'itération 04 ne crée ni table de fichiers ni table de liens concurrente. Les listes chargent les métadonnées et demandent les fichiers à la demande.
+
+### 21.7 QA et documentation
+
+Les scripts `qa:standard-*` de l'itération 04 convergent vers `scripts/qa-standard-work-coordination-checks.mjs` et sont inclus dans `qa:regression`. Les modèles détaillés, la matrice de permissions, les liens profonds, les notifications, les neuf guides et le plan E2E sont référencés par `docs/STANDARD_MODULE_ITERATION_04_AUDIT.md`.
+
+La PR peut viser `PROFESSIONAL_READY` uniquement après Quality Gates, revue, fusion et vérification Production. `COMMERCIAL_READY` reste interdit sans E2E explicite du propriétaire.
+
+**Tests E2E manuels préparés — validation du propriétaire en attente**
