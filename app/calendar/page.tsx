@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { CollaboratorAvailability, Prisma } from "@prisma/client";
+import { CalendarAdvancedToolsSection } from "@/components/calendar/calendar-advanced-tools-section";
 import {
   InternalCalendarWorkspaceV2,
   type ProfessionalAvailability,
@@ -205,6 +206,24 @@ export default async function CalendarPage() {
           }}
           locale={user.locale}
           timezone={user.timezone || "Africa/Kinshasa"}
+        />
+
+        <CalendarAdvancedToolsSection
+          context={context}
+          events={events.map((event) => ({
+            id: event.id,
+            title: event.title,
+            startDateTime: event.startDateTime,
+            endDateTime: event.endDateTime,
+            createdBy: event.createdBy,
+            ownerCollaboratorId: event.ownerCollaboratorId,
+          }))}
+          collaborators={collaborators.map((collaborator) => ({
+            id: collaborator.id,
+            fullName: collaborator.fullName,
+            department: collaborator.department,
+            jobTitle: collaborator.jobTitle,
+          }))}
         />
 
         <UnifiedWorkCalendarPanel initialEvents={unifiedEvents.map(serializeUnifiedEvent)} locale={user.locale} />
