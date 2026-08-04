@@ -104,7 +104,7 @@ export async function PATCH(req: Request, { params }: Params) {
   return NextResponse.json({ ok: true, task: updated, progress: checklist.progress });
 }
 
-async function notifyTask(task: { assigneeEmployeeId: string | null; responsibleEmployeeId: string | null; createdById: string | null; title: string }, actorId: string, status: string) {
+async function notifyTask(task: { id: string; assigneeEmployeeId: string | null; responsibleEmployeeId: string | null; createdById: string | null; title: string }, actorId: string, status: string) {
   const employeeIds = [task.assigneeEmployeeId, task.responsibleEmployeeId].filter((id): id is string => Boolean(id));
   const employees = await prisma.hrcfoEmployee.findMany({ where: { id: { in: employeeIds } }, select: { userId: true } });
   const recipients = [...new Set([...employees.map((employee) => employee.userId), task.createdById].filter((recipientId): recipientId is string => Boolean(recipientId) && recipientId !== actorId))];
