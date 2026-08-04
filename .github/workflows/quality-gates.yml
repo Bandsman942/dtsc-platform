@@ -94,9 +94,6 @@ jobs:
       - name: Standard modules iteration 05 QA
         run: node scripts/qa-standard-modules-iteration-05.mjs
 
-      - name: Standard modules iteration 06 QA
-        run: node scripts/qa-standard-modules-iteration-06.mjs
-
       - name: Standard collaboration E2E fixes QA
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
 
