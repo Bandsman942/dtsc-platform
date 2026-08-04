@@ -345,7 +345,7 @@ export function InternalCalendarWorkspaceV2({
           <p className="text-sm leading-6 text-dtsc-muted">L’événement sera retiré des calendriers actifs. L’action reste traçable.</p>
           <div className="mt-5 flex flex-col justify-end gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => setEventToDelete(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">Conserver</Button>
-            <Button type="button" onClick={() => void deleteEvent(eventToDelete)} className="rounded-xl bg-red-600 text-white">Annuler l'événement</Button>
+            <Button type="button" onClick={() => void deleteEvent(eventToDelete)} className="rounded-xl bg-red-600 text-white">Annuler l’événement</Button>
           </div>
         </Dialog>
       ) : null}
