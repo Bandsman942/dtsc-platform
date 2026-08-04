@@ -121,12 +121,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
     }
 
+    const sessionUserId = session.userId;
+    const authorizedAccess = access;
+    const conversationId = conversation.id;
+    const conversationTitle = conversation.title;
+
     const modelCall = await startAiModelCall({
-      userId: session.userId,
+      userId: sessionUserId,
       organizationId: data.organizationId,
       contextCode: "ORGANIZATION",
       locale,
-      enterpriseConversationId: conversation.id,
+      enterpriseConversationId: conversationId,
       selection: routed.selection,
       providerCode: routed.providerCode,
       providerModelId: routed.providerModelId,
@@ -145,7 +150,7 @@ export async function POST(req: Request) {
           prisma.enterpriseAiMessage.create({
             data: {
               organizationId: data.organizationId,
-              conversationId: conversation.id,
+              conversationId,
               role: "assistant",
               content: result.content,
               model: routed.modelCode,
@@ -154,19 +159,19 @@ export async function POST(req: Request) {
               tokenHint: outputTokens,
             },
           }),
-          prisma.enterpriseAiConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date(), title: conversation.title === "Nouvelle conversation" ? data.content.slice(0, 90) : undefined } }),
+          prisma.enterpriseAiConversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date(), title: conversationTitle === "Nouvelle conversation" ? data.content.slice(0, 90) : undefined } }),
         );
       }
       writes.push(
-        recordEnterpriseAiUsage({ organizationId: data.organizationId, assistantId: access.assistantId, conversationId: conversation.id, userId: session.userId, inputTokens, outputTokens, estimatedCost: cost.amount }),
+        recordEnterpriseAiUsage({ organizationId: data.organizationId, assistantId: authorizedAccess.assistantId, conversationId, userId: sessionUserId, inputTokens, outputTokens, estimatedCost: cost.amount }),
         completed
           ? completeAiModelCall({ callId: modelCall.id, model: routed.selection.selectedModel, inputTokens, outputTokens, cachedInputTokens: result.usage.cachedInputTokens, durationMs: result.durationMs, firstTokenLatencyMs: result.firstTokenLatencyMs })
           : interruptAiModelCall(modelCall.id, result.durationMs),
-        writeAuditLog({ userId: session.userId, action: completed ? "ENTERPRISE_AI_CHAT_COMPLETED" : "ENTERPRISE_AI_CHAT_INTERRUPTED", entity: "EnterpriseAiConversation", entityId: conversation.id, request: req, metadata: { organizationId: data.organizationId, providerCode: routed.providerCode, modelCode: routed.modelCode, toolCount: toolResults.length, citationCount: knowledge.citations.length, useKnowledge, useTools, taskType, fallbackUsed: routed.fallbackUsed, locale, interrupted: !completed } }),
+        writeAuditLog({ userId: sessionUserId, action: completed ? "ENTERPRISE_AI_CHAT_COMPLETED" : "ENTERPRISE_AI_CHAT_INTERRUPTED", entity: "EnterpriseAiConversation", entityId: conversationId, request: req, metadata: { organizationId: data.organizationId, providerCode: routed.providerCode, modelCode: routed.modelCode, toolCount: toolResults.length, citationCount: knowledge.citations.length, useKnowledge, useTools, taskType, fallbackUsed: routed.fallbackUsed, locale, interrupted: !completed } }),
       );
       await Promise.all(writes);
-      await getEnterpriseAiUsageSnapshot(data.organizationId, session.userId, access);
-      await writeApiLog({ request: req, statusCode: completed ? 200 : 499, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, conversationId: conversation.id, providerCode: routed.providerCode, modelCode: routed.modelCode, totalTokens: inputTokens + outputTokens, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed } });
+      await getEnterpriseAiUsageSnapshot(data.organizationId, sessionUserId, authorizedAccess);
+      await writeApiLog({ request: req, statusCode: completed ? 200 : 499, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, providerCode: routed.providerCode, modelCode: routed.modelCode, totalTokens: inputTokens + outputTokens, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed } });
     }
 
     const stream = createAuditedAiTextStream({
@@ -178,7 +183,7 @@ export async function POST(req: Request) {
       onFailed: async (streamError, result) => {
         console.error("Enterprise AI streaming failed", streamError);
         await failAiModelCall(modelCall.id, "STREAM_INTERRUPTED", result.durationMs);
-        await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, conversationId: conversation.id, reasonCode: "STREAM_INTERRUPTED", providerCode: routed.providerCode, modelCode: routed.modelCode } });
+        await writeApiLog({ request: req, statusCode: 502, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, reasonCode: "STREAM_INTERRUPTED", providerCode: routed.providerCode, modelCode: routed.modelCode } });
       },
     });
 
@@ -186,7 +191,7 @@ export async function POST(req: Request) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
-        "X-Conversation-Id": conversation.id,
+        "X-Conversation-Id": conversationId,
         "X-AI-Provider": routed.providerCode,
         "X-AI-Model": routed.modelCode,
         "X-AI-Task": taskType,

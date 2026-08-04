@@ -148,12 +148,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
   }
 
+  const sessionUserId = session.userId;
+  const conversationId = conversation.id;
+
   const modelCall = await startAiModelCall({
-    userId: session.userId,
+    userId: sessionUserId,
     organizationId,
     contextCode,
     locale,
-    conversationId: conversation.id,
+    conversationId,
     selection: routed.selection,
     providerCode: routed.providerCode,
     providerModelId: routed.providerModelId,
@@ -168,12 +171,12 @@ export async function POST(req: Request) {
     const totalTokens = result.usage.totalTokens || inputTokens + outputTokens;
     const cost = estimateAiCost({ model: routed.selection.selectedModel, inputTokens, outputTokens, cachedInputTokens: result.usage.cachedInputTokens });
     const writes: Promise<unknown>[] = [
-      prisma.usageLog.create({ data: { userId: session.userId, organizationId, conversationId: conversation.id, model: routed.modelCode, inputTokens, outputTokens, totalTokens, estimatedCost: cost.amount ?? 0 } }),
+      prisma.usageLog.create({ data: { userId: sessionUserId, organizationId, conversationId, model: routed.modelCode, inputTokens, outputTokens, totalTokens, estimatedCost: cost.amount ?? 0 } }),
     ];
     if (result.content.trim()) {
       writes.push(
-        prisma.message.create({ data: { conversationId: conversation.id, organizationId, role: "assistant", content: result.content, model: routed.modelCode, tokensUsed: totalTokens } }),
-        prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } }),
+        prisma.message.create({ data: { conversationId, organizationId, role: "assistant", content: result.content, model: routed.modelCode, tokensUsed: totalTokens } }),
+        prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }),
       );
     }
     writes.push(
@@ -185,9 +188,9 @@ export async function POST(req: Request) {
     await writeApiLog({
       request: req,
       statusCode: completed ? 200 : 499,
-      userId: session.userId,
+      userId: sessionUserId,
       startedAt,
-      metadata: { providerCode: routed.providerCode, model: routed.modelCode, conversationId: conversation.id, totalTokens, useCompanyContext, useKnowledge, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed },
+      metadata: { providerCode: routed.providerCode, model: routed.modelCode, conversationId, totalTokens, useCompanyContext, useKnowledge, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed },
     });
   }
 
@@ -200,7 +203,7 @@ export async function POST(req: Request) {
     onFailed: async (error, result) => {
       console.error("AI streaming failed", error);
       await failAiModelCall(modelCall.id, "STREAM_INTERRUPTED", result.durationMs);
-      await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { conversationId: conversation.id, reasonCode: "STREAM_INTERRUPTED", providerCode: routed.providerCode, modelCode: routed.modelCode } });
+      await writeApiLog({ request: req, statusCode: 502, userId: sessionUserId, startedAt, metadata: { conversationId, reasonCode: "STREAM_INTERRUPTED", providerCode: routed.providerCode, modelCode: routed.modelCode } });
     },
   });
 
