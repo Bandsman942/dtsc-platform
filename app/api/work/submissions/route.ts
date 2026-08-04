@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { DTSC_SPECIAL_PERMISSIONS, hasDtscIndividualPermission } from "@/lib/dtsc-individual-permissions";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -28,10 +29,13 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Employee required" }, { status: 403 });
   }
-  const rawLimit = Number(new URL(req.url).searchParams.get("limit") || 12);
-  const state = await getOwnWorkState(actor, Number.isFinite(rawLimit) ? rawLimit : 12);
+  const rawLimit = Number(new URL(req.url).searchParams.get("limit") || 24);
+  const [state, canSubmitPastPeriods] = await Promise.all([
+    getOwnWorkState(actor, Number.isFinite(rawLimit) ? rawLimit : 24),
+    hasDtscIndividualPermission(session.userId, DTSC_SPECIAL_PERMISSIONS.SUBMIT_PAST_WORK_PERIOD),
+  ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json(state);
+  return NextResponse.json({ ...state, capabilities: { canSubmitPastPeriods } });
 }
 
 export async function POST(req: Request) {
