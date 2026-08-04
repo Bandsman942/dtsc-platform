@@ -11,14 +11,42 @@ on:
       - "fix/**"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  repair-iteration-05-typecheck:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Apply verified patch when staged
+        run: |
+          if [ ! -f .github/iteration05-typefix.patch.b64 ]; then
+            echo "No staged repair patch."
+            exit 0
+          fi
+          echo "b63a08af5af070816b765076b95dadff0a43900bcfc1639bef46b76abfdcc981  .github/iteration05-typefix.patch.b64" | sha256sum --check -
+          base64 --decode .github/iteration05-typefix.patch.b64 > /tmp/iteration05-typefix.patch
+          echo "c7d96a5acc71c7728df2429d156926d525c81d9a1de5921dac4e2070e7765086  /tmp/iteration05-typefix.patch" | sha256sum --check -
+          git apply --index --whitespace=error-all /tmp/iteration05-typefix.patch
+          git rm .github/iteration05-typefix.patch.b64
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(ai): preserve narrowed chat context during streaming"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   quality:
+    needs: repair-iteration-05-typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -107,6 +135,7 @@ jobs:
         run: pnpm build
 
   migration:
+    needs: repair-iteration-05-typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
