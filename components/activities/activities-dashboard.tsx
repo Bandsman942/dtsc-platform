@@ -1,1 +1,1 @@
-export { ActivitiesDashboardV2 as ActivitiesDashboard } from "@/components/activities/activities-dashboard-v2";
+export { ActivitiesDashboardV3 as ActivitiesDashboard } from "@/components/activities/activities-dashboard-v3";
