@@ -1,6 +1,7 @@
 "use client";
 
 import { Archive, CheckCircle2, Eye, PauseCircle, Pencil, Play, Plus, RotateCcw, XCircle } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -13,6 +14,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { EnterpriseTaskForm } from "@/components/enterprise/core-v2/task-form";
+import { TaskCoordinationPanel } from "@/components/enterprise/core-v2/task-coordination-panel";
 import { NativeSelect, formatEnterpriseDate, priorityChoicesEn, priorityChoicesFr, priorityLabel, statusLabel, statusTone, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
 
@@ -21,6 +23,8 @@ type LegacyRecord = { id: string; recordType: string; title: string; description
 
 export function EnterpriseTasksWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const en = locale === "en";
+  const searchParams = useSearchParams();
+  const deepLinkedTaskId = searchParams.get("task");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -31,12 +35,14 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Task | null>(null);
+  const [dismissedDeepLinkId, setDismissedDeepLinkId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Task | null>(null);
   const [pendingAction, setPendingAction] = useState<{ task: Task; action: string } | null>(null);
   const [message, setMessage] = useState("");
   useToastMessage(message);
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "20" });
+    if (deepLinkedTaskId) value.set("id", deepLinkedTaskId);
     if (search.trim()) value.set("search", search.trim());
     if (status) value.set("status", status);
     if (priority) value.set("priority", priority);
@@ -44,8 +50,12 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     if (department) value.set("department", department);
     if (overdue) value.set("overdue", "true");
     return value;
-  }, [assignee, department, overdue, page, priority, search, status]);
+  }, [assignee, deepLinkedTaskId, department, overdue, page, priority, search, status]);
   const collection = useEnterpriseV2Collection<Task>({ endpoint: `/api/enterprise/${organizationId}/tasks`, params, refreshKey });
+  const focusedTask = deepLinkedTaskId && dismissedDeepLinkId !== deepLinkedTaskId
+    ? collection.items.find((item) => item.id === deepLinkedTaskId) || null
+    : null;
+  const activeDetail = detail || focusedTask;
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,6 +82,11 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     } catch (error) { setMessage(error instanceof Error ? error.message : "ACTION_FAILED"); }
   }
 
+  function closeDetail() {
+    setDetail(null);
+    if (deepLinkedTaskId) setDismissedDeepLinkId(deepLinkedTaskId);
+  }
+
   return <div className="grid min-w-0 gap-5">
     <ModuleMetrics label={en ? "Task indicators" : "Indicateurs tâches"}>
       <ModuleMetric label={en ? "Visible" : "Visibles"} value={collection.pagination.total} />
@@ -88,13 +103,13 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
         <Button variant={overdue ? "default" : "outline"} onClick={() => { setOverdue((value) => !value); setPage(1); }}>{en ? "Overdue" : "En retard"}</Button>
       </div>
-      {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : collection.items.length ? <BusinessList ariaLabel={en ? "Tasks" : "Tâches"}>{collection.items.map((task) => <BusinessListItem key={task.id} title={task.title} status={<StatusBadge tone={statusTone(task.status)}>{statusLabel(locale, task.status)}</StatusBadge>} meta={`${task.taskType} · ${priorityLabel(locale, task.priority)} · ${formatEnterpriseDate(task.dueAt, locale)}`} description={task.description || (en ? "No description." : "Aucune description.")} onOpen={() => setDetail(task)} openLabel={en ? `Open ${task.title}` : `Ouvrir ${task.title}`} actions={<ContextActions label={en ? "Task actions" : "Actions tâche"} actions={actionsFor(task, canManage, en, setDetail, setEdit, setPendingAction)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No tasks" : "Aucune tâche"} description={collection.error || (en ? "No task matches the current filters." : "Aucune tâche ne correspond aux filtres." )} />}
+      {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : collection.items.length ? <BusinessList ariaLabel={en ? "Tasks" : "Tâches"}>{collection.items.map((task) => <BusinessListItem key={task.id} title={task.title} status={<StatusBadge tone={statusTone(task.status)}>{statusLabel(locale, task.status)}</StatusBadge>} meta={`${task.taskType} · ${priorityLabel(locale, task.priority)} · ${formatEnterpriseDate(task.dueAt, locale)}`} description={task.description || (en ? "No description." : "Aucune description.")} onOpen={() => setDetail(task)} openLabel={en ? `Open ${task.title}` : `Ouvrir ${task.title}`} actions={<ContextActions label={en ? "Task actions" : "Actions tâche"} actions={actionsFor(task, canManage, en, setDetail, setEdit, setPendingAction)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No tasks" : "Aucune tâche"} description={collection.error || (deepLinkedTaskId ? (en ? "This task is unavailable or no longer accessible." : "Cette tâche est indisponible ou n’est plus accessible.") : (en ? "No task matches the current filters." : "Aucune tâche ne correspond aux filtres."))} />}
       <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>Page {collection.pagination.page}/{collection.pagination.pageCount}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
     </ModuleSection>
     {legacyRecords.length ? <ModuleSection title={en ? "Historical items" : "Historique"} description={en ? "Legacy tasks remain readable and read-only." : "Les anciennes tâches restent lisibles et non modifiables."}><BusinessList ariaLabel="legacy">{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{en ? "History" : "Historique"}</StatusBadge>} meta={`${record.recordType} · ${statusLabel(locale, record.status)}`} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={en ? "New task" : "Nouvelle tâche"} className="h-[94dvh] max-w-4xl"><EnterpriseTaskForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
     <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={en ? "Edit task" : "Modifier la tâche"} className="h-[94dvh] max-w-4xl">{edit ? <EnterpriseTaskForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || ""}>{detail ? <div className="grid gap-3 text-sm"><div className="flex gap-2"><StatusBadge tone={statusTone(detail.status)}>{statusLabel(locale, detail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, detail.priority)}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{detail.description || (en ? "No description." : "Aucune description.")}</p><p>{en ? "Due" : "Échéance"} : {formatEnterpriseDate(detail.dueAt, locale)}</p><p>{en ? "Revision" : "Révision"} : {detail.revision}</p>{detail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{en ? "Linked source" : "Source liée"} : {detail.sourceModule} · {detail.sourceEntityType}</p> : null}</div> : null}</Dialog>
+    <Dialog open={Boolean(activeDetail)} onClose={closeDetail} title={activeDetail?.title || ""} className="h-[94dvh] max-w-5xl">{activeDetail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex gap-2"><StatusBadge tone={statusTone(activeDetail.status)}>{statusLabel(locale, activeDetail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, activeDetail.priority)}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{activeDetail.description || (en ? "No description." : "Aucune description.")}</p><p>{en ? "Due" : "Échéance"} : {formatEnterpriseDate(activeDetail.dueAt, locale)}</p><p>{en ? "Revision" : "Révision"} : {activeDetail.revision}</p>{activeDetail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{en ? "Linked source" : "Source liée"} : {activeDetail.sourceModule} · {activeDetail.sourceEntityType}</p> : null}</div><TaskCoordinationPanel organizationId={organizationId} taskId={activeDetail.id} canUpdate={canManage || activeDetail.createdByUserId === collection.meta.currentUserId || activeDetail.assignedToUserId === collection.meta.currentUserId} taskChoices={collection.items.map((task) => ({ id: task.id, title: task.title }))} members={members} locale={locale} /></div> : null}</Dialog>
     <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title={en ? "Confirm action" : "Confirmer l’action"}><p className="text-sm text-dtsc-muted">{pendingAction?.action} · {pendingAction?.task.title}</p><Button onClick={() => void runAction()} className="mt-4 bg-dtsc-blue text-white">{en ? "Confirm" : "Confirmer"}</Button></Dialog>
   </div>;
 }

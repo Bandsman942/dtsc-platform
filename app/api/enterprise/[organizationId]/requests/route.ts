@@ -28,6 +28,7 @@ export async function GET(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const url = new URL(req.url);
   const { page, pageSize } = pagination(url);
+  const id = url.searchParams.get("id")?.trim() || "";
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const requestType = url.searchParams.get("type")?.trim() || "";
@@ -37,6 +38,7 @@ export async function GET(req: Request, { params }: Params) {
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const filters: Prisma.EnterpriseRequestWhereInput[] = [];
+  if (id) filters.push({ id });
   if (search) filters.push({ OR: [{ title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }, { requestType: { contains: search, mode: "insensitive" } }] });
   if (status) filters.push({ status });
   if (requestType) filters.push({ requestType });
@@ -54,7 +56,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseRequest.findMany({ where, orderBy: [{ priority: "desc" }, { updatedAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseRequest.count({ where }),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", page, pageSize } });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "requests", page, pageSize, focusedId: id || null } });
   return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage, currentUserId: session.userId });
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { Archive, CheckCircle2, Eye, FileCheck2, Pencil, Play, Plus, SquareCheckBig, XCircle } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -13,6 +14,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { EnterpriseMeetingForm } from "@/components/enterprise/core-v2/meeting-form";
+import { MeetingCoordinationPanel } from "@/components/enterprise/core-v2/meeting-coordination-panel";
 import { EnterpriseTaskForm } from "@/components/enterprise/core-v2/task-form";
 import { Field, NativeSelect, formatEnterpriseDate, statusLabel, statusTone, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
@@ -24,6 +26,8 @@ type LegacyRecord = { id: string; recordType: string; title: string; description
 
 export function EnterpriseMeetingsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const en = locale === "en";
+  const searchParams = useSearchParams();
+  const deepLinkedMeetingId = searchParams.get("meeting");
   const [view, setView] = useState("upcoming");
   const [search, setSearch] = useState("");
   const [participant, setParticipant] = useState("");
@@ -33,6 +37,7 @@ export function EnterpriseMeetingsWorkspace({ organizationId, members, departmen
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Meeting | null>(null);
+  const [deepLinkResolved, setDeepLinkResolved] = useState(false);
   const [edit, setEdit] = useState<Meeting | null>(null);
   const [pendingAction, setPendingAction] = useState<{ meeting: Meeting; action: string } | null>(null);
   const [decisionMeeting, setDecisionMeeting] = useState<Meeting | null>(null);
@@ -49,6 +54,24 @@ export function EnterpriseMeetingsWorkspace({ organizationId, members, departmen
   }, [date, department, page, participant, search, view]);
   const collection = useEnterpriseV2Collection<Meeting>({ endpoint: `/api/enterprise/${organizationId}/meetings`, params, refreshKey });
   const currentUserId = collection.meta.currentUserId || "";
+
+  useEffect(() => {
+    if (!deepLinkedMeetingId || deepLinkResolved) return;
+    const visible = collection.items.find((item) => item.id === deepLinkedMeetingId);
+    if (visible) {
+      setDetail(visible);
+      setDeepLinkResolved(true);
+      return;
+    }
+    if (collection.loading) return;
+    void fetch(`/api/enterprise/${organizationId}/meetings/${deepLinkedMeetingId}/coordination`, { cache: "no-store" })
+      .then(async (response) => ({ response, body: await response.json().catch(() => null) as { meeting?: Omit<Meeting, "decisions">; message?: string } | null }))
+      .then(({ response, body }) => {
+        if (response.ok && body?.meeting) setDetail({ ...body.meeting, decisions: [] });
+        else setMessage(body?.message || (en ? "This meeting is unavailable." : "Cette réunion est indisponible."));
+        setDeepLinkResolved(true);
+      });
+  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedMeetingId, en, organizationId]);
 
   function meetingPayload(form: FormData) {
     const payload = Object.fromEntries(form.entries());
@@ -107,16 +130,16 @@ export function EnterpriseMeetingsWorkspace({ organizationId, members, departmen
     {legacyRecords.length ? <ModuleSection title={en ? "Historical meetings" : "Historique des réunions"} description={en ? "Legacy meetings and MINUTES records remain read-only." : "Les anciennes réunions et pseudo-MINUTES restent en lecture seule."}><BusinessList ariaLabel="legacy meetings">{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{en ? "History" : "Historique"}</StatusBadge>} meta={`${record.recordType} · ${statusLabel(locale, record.status)}`} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={en ? "New meeting" : "Nouvelle réunion"} className="h-[94dvh] max-w-4xl"><EnterpriseMeetingForm locale={locale} members={members} departments={departments} onSubmit={createMeeting} /></Dialog>
     <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={en ? "Edit meeting" : "Modifier la réunion"} className="h-[94dvh] max-w-4xl">{edit ? <EnterpriseMeetingForm locale={locale} members={members} departments={departments} value={{ ...edit, participantIds: edit.participants.map((item) => item.userId) }} onSubmit={updateMeeting} /> : null}</Dialog>
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || ""} className="h-[92dvh] max-w-4xl">{detail ? <MeetingDetail meeting={detail} members={members} locale={locale} onDecision={() => setDecisionMeeting(detail)} onTask={(decision) => setTaskDecision({ meeting: detail, decision })} /> : null}</Dialog>
+    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || ""} className="h-[94dvh] max-w-5xl">{detail ? <MeetingDetail organizationId={organizationId} meeting={detail} members={members} locale={locale} onDecision={() => setDecisionMeeting(detail)} onTask={(decision) => setTaskDecision({ meeting: detail, decision })} onChanged={() => setRefreshKey((value) => value + 1)} /> : null}</Dialog>
     <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title={en ? "Confirm meeting action" : "Confirmer l’action réunion"}><p className="text-sm text-dtsc-muted">{pendingAction?.action} · {pendingAction?.meeting.title}</p><Button onClick={() => void runAction()} className="mt-4 bg-dtsc-blue text-white">{en ? "Confirm" : "Confirmer"}</Button></Dialog>
     <Dialog open={Boolean(decisionMeeting)} onClose={() => setDecisionMeeting(null)} title={en ? "Record a decision" : "Enregistrer une décision"}><form onSubmit={createDecision} className="grid gap-4"><Field label={en ? "Decision title" : "Titre de la décision"}><Input name="title" required minLength={3} /></Field><Field label={en ? "Description" : "Description"}><textarea name="description" className="min-h-28 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" /></Field><Button className="bg-dtsc-blue text-white">{en ? "Save decision" : "Enregistrer"}</Button></form></Dialog>
     <Dialog open={Boolean(taskDecision)} onClose={() => setTaskDecision(null)} title={en ? "Create action from decision" : "Créer une tâche depuis la décision"} description={taskDecision?.decision.title} className="h-[92dvh] max-w-4xl"><EnterpriseTaskForm locale={locale} members={members} departments={departments} onSubmit={createDecisionTask} /></Dialog>
   </div>;
 }
 
-function MeetingDetail({ meeting, members, locale, onDecision, onTask }: { meeting: Meeting; members: EnterpriseChoice[]; locale?: string | null; onDecision: () => void; onTask: (decision: Decision) => void }) {
+function MeetingDetail({ organizationId, meeting, members, locale, onDecision, onTask, onChanged }: { organizationId: string; meeting: Meeting; members: EnterpriseChoice[]; locale?: string | null; onDecision: () => void; onTask: (decision: Decision) => void; onChanged: () => void }) {
   const en = locale === "en";
-  return <div className="grid gap-5 text-sm"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(meeting.status)}>{statusLabel(locale, meeting.status)}</StatusBadge><StatusBadge>{meeting.locationMode}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{meeting.agenda || (en ? "No agenda." : "Aucun ordre du jour.")}</p><div className="grid gap-2 border-y border-dtsc-border py-3 sm:grid-cols-2"><span>{en ? "Start" : "Début"} : {formatEnterpriseDate(meeting.startAt, locale)}</span><span>{en ? "End" : "Fin"} : {formatEnterpriseDate(meeting.endAt, locale)}</span><span>{en ? "Location" : "Lieu"} : {meeting.physicalLocation || meeting.meetingLink || "—"}</span><span>{en ? "Revision" : "Révision"} : {meeting.revision}</span></div><section><h3 className="mb-2 font-black">{en ? "Participants" : "Participants"}</h3><div className="flex flex-wrap gap-2">{meeting.participants.map((participant) => <StatusBadge key={participant.id}>{members.find((item) => item.id === participant.userId)?.label || participant.userId}</StatusBadge>)}</div></section><section><h3 className="mb-2 font-black">{en ? "Minutes" : "Compte rendu"}</h3><p className="whitespace-pre-wrap text-dtsc-muted">{meeting.minutes || (en ? "No minutes yet." : "Aucun compte rendu pour le moment.")}</p></section><section className="grid gap-2"><div className="flex items-center justify-between"><h3 className="font-black">{en ? "Decisions" : "Décisions"}</h3><Button variant="outline" onClick={onDecision}><Plus className="h-4 w-4" />{en ? "Decision" : "Décision"}</Button></div>{meeting.decisions.length ? meeting.decisions.map((decision) => <div key={decision.id} className="flex min-w-0 items-start justify-between gap-3 border-t border-dtsc-border py-3"><div className="min-w-0"><p className="font-semibold">{decision.title}</p><p className="text-dtsc-muted">{decision.description || formatEnterpriseDate(decision.decidedAt, locale)}</p></div>{decision.taskId ? <StatusBadge tone="success">{en ? "Task linked" : "Tâche liée"}</StatusBadge> : <Button variant="outline" size="sm" onClick={() => onTask(decision)}><SquareCheckBig className="h-4 w-4" />{en ? "Create task" : "Créer tâche"}</Button>}</div>) : <p className="text-dtsc-muted">{en ? "No decision recorded." : "Aucune décision enregistrée."}</p>}</section></div>;
+  return <div className="grid gap-5 text-sm"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(meeting.status)}>{statusLabel(locale, meeting.status)}</StatusBadge><StatusBadge>{meeting.locationMode}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{meeting.agenda || (en ? "No agenda." : "Aucun ordre du jour.")}</p><div className="grid gap-2 border-y border-dtsc-border py-3 sm:grid-cols-2"><span>{en ? "Start" : "Début"} : {formatEnterpriseDate(meeting.startAt, locale)}</span><span>{en ? "End" : "Fin"} : {formatEnterpriseDate(meeting.endAt, locale)}</span><span>{en ? "Location" : "Lieu"} : {meeting.physicalLocation || meeting.meetingLink || "—"}</span><span>{en ? "Revision" : "Révision"} : {meeting.revision}</span></div><section><h3 className="mb-2 font-black">{en ? "Participants" : "Participants"}</h3><div className="flex flex-wrap gap-2">{meeting.participants.map((participant) => <StatusBadge key={participant.id}>{members.find((item) => item.id === participant.userId)?.label || participant.userId}</StatusBadge>)}</div></section><section><h3 className="mb-2 font-black">{en ? "Minutes" : "Compte rendu"}</h3><p className="whitespace-pre-wrap text-dtsc-muted">{meeting.minutes || (en ? "No minutes yet." : "Aucun compte rendu pour le moment.")}</p></section><section className="grid gap-2"><div className="flex items-center justify-between"><h3 className="font-black">{en ? "Decisions" : "Décisions"}</h3><Button variant="outline" onClick={onDecision}><Plus className="h-4 w-4" />{en ? "Decision" : "Décision"}</Button></div>{meeting.decisions.length ? meeting.decisions.map((decision) => <div key={decision.id} className="flex min-w-0 items-start justify-between gap-3 border-t border-dtsc-border py-3"><div className="min-w-0"><p className="font-semibold">{decision.title}</p><p className="text-dtsc-muted">{decision.description || formatEnterpriseDate(decision.decidedAt, locale)}</p></div>{decision.taskId ? <StatusBadge tone="success">{en ? "Task linked" : "Tâche liée"}</StatusBadge> : <Button variant="outline" size="sm" onClick={() => onTask(decision)}><SquareCheckBig className="h-4 w-4" />{en ? "Create task" : "Créer tâche"}</Button>}</div>) : <p className="text-dtsc-muted">{en ? "No decision recorded." : "Aucune décision enregistrée."}</p>}</section><MeetingCoordinationPanel organizationId={organizationId} meetingId={meeting.id} members={members} locale={locale} onChanged={onChanged} /></div>;
 }
 
 function meetingActions(meeting: Meeting, canManage: boolean, currentUserId: string, en: boolean, detail: (item: Meeting) => void, edit: (item: Meeting) => void, decision: (item: Meeting) => void, action: (value: { meeting: Meeting; action: string }) => void): BusinessContextAction[] {

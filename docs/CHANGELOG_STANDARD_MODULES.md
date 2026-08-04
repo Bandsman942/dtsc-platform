@@ -63,3 +63,43 @@
 ## Stabilisation commerciale du 3 août 2026
 
 Les modules `COLLABORATORS` et `ANNOUNCEMENTS` disposent désormais d’une acceptation propriétaire versionnée. Les liens de messages, mentions, `@tous`, accusés de lecture complets, listes de conversations personnalisées et espacements éditoriaux partagés sont couverts par un audit dédié et par les Quality Gates.
+
+## 2026-08-04 — Itération 04/8 — Coordination du travail
+
+### Ajouté
+
+- agenda de travail unifié avec période bornée, visibilité tenant-scoped, sources canoniques et liens profonds ;
+- checklists, progression calculée, dépendances avec détection de cycle et blocages de tâches ;
+- filtres personnels persistés sans élargissement des permissions ;
+- cycle enrichi des demandes : information, réponse, résolution, clôture et réouverture ;
+- versions de soumission, correction motivée, resoumission, délégation et décisions de validation idempotentes ;
+- ordre du jour, versions de compte rendu et liens vers des tâches réelles pour les réunions ;
+- modèle de rappels dédupliqués ;
+- neuf guides utilisateurs, modèles techniques, matrice de permissions, plan E2E et audit d'itération ;
+- QA dédiée intégrée à `qa:regression`.
+
+### Réutilisé sans duplication
+
+- moteur de workflows versionné et idempotent existant ;
+- documents privés, versions, URLs signées et stockage canonique ;
+- `EnterpriseEntityLink` pour les liens documentaires multiples ;
+- moteur de notifications et Web Push ;
+- commentaires opérationnels/collaboratifs ;
+- infrastructure d'appels de Collaboration ;
+- services ERP pour les décisions sur achats, budgets et dépenses.
+
+### Corrigé
+
+- déduplication des événements calendrier liés à une tâche, demande, validation, réunion, workflow ou document ;
+- conservation simultanée du filtre temporel et du filtre de visibilité des workflows ;
+- contrôle des actions de coordination des tâches par utilisateur réel ;
+- snapshot des budgets basé sur leurs champs et lignes réels ;
+- ouverture précise des tâches, demandes, validations et réunions depuis les liens profonds.
+
+### Gouvernance
+
+- migration additive uniquement ;
+- aucune table documentaire ou moteur métier concurrent ;
+- Quality Gates et E2E manuels requis avant toute promotion ;
+- statut E2E : `NON_EXÉCUTÉ` ;
+- aucune promotion de l'itération 04 vers `COMMERCIAL_READY`.

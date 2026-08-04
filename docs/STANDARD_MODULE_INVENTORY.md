@@ -42,3 +42,19 @@ Toute nouvelle surface non ERP doit être ajoutée au registre avant d’être r
 | ANNOUNCEMENTS | `/announcements` | Announcement et commentaires associés | COMMERCIAL_READY |
 
 Les appels, médias, commentaires, présence et modération sont des capacités du domaine ; ils ne créent pas de modules concurrents ni de registres parallèles.
+
+## Mise à jour itération 04 — Coordination du travail
+
+| Surface | Route principale | Source canonique | Extension de l'itération 04 |
+|---|---|---|---|
+| Calendrier | `/calendar` | `InternalCalendarEvent` + projections des sources | agenda unifié, période bornée, déduplication et deep links |
+| Activités DTSC | `/activities` | domaines internes COO/CEO/CTO/MPO/SCO/Legal existants | guide et intégration calendrier/coordination sans migration forcée |
+| Activités entreprise | `/enterprise-activities` | `EnterpriseActivityRequest` liée à `EnterpriseRequest` | chaîne de demande explicite et documentation de la coexistence |
+| Tâches & opérations | `/enterprise-modules/TASKS_OPERATIONS` | `EnterpriseTask` | checklist, dépendances, blocages, filtres et deep link exact |
+| Demandes internes | `/enterprise-modules/INTERNAL_REQUESTS` | `EnterpriseRequest` | information, réponse, résolution, clôture, réouverture et historique |
+| Validations | `/enterprise-modules/VALIDATIONS` | `EnterpriseApproval` | versions de soumission, correction, délégation et décision idempotente |
+| Réunions | `/enterprise-modules/MEETINGS` | `EnterpriseMeeting` | ordre du jour, versions de compte rendu et tâches de suivi |
+| Workflows | `/enterprise-modules/WORKFLOWS` | moteur `EnterpriseWorkflow*` existant | réutilisation versionnée, projection calendrier et QA transverse |
+| Documents | `/enterprise-modules/DOCUMENTS` | `EnterpriseDocument*` + `EnterpriseEntityLink` | liens multiples canoniques, aucun stockage ou lien parallèle |
+
+Ces surfaces restent au maximum candidates à `PROFESSIONAL_READY` jusqu'aux Quality Gates, à la fusion, à la vérification Production et aux E2E manuels du propriétaire. Aucune entrée de l'itération 04 n'est promue vers `COMMERCIAL_READY` dans cette PR.
