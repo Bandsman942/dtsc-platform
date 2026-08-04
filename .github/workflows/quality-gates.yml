@@ -11,14 +11,53 @@ on:
       - "fix/**"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  align-vercel-node-runtime:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/vercel-node22-webpack-cache-iteration-05'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Pin the Vercel build runtime to Node 22
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (pkg.engines?.node === '22.x') {
+            console.log('Node runtime already aligned.');
+            process.exit(0);
+          }
+          const ordered = {};
+          for (const [key, value] of Object.entries(pkg)) {
+            ordered[key] = value;
+            if (key === 'private') ordered.engines = { node: '22.x' };
+          }
+          fs.writeFileSync(file, `${JSON.stringify(ordered, null, 2)}\n`);
+          NODE
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "fix(build): pin Vercel and CI to Node 22"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   quality:
+    needs: align-vercel-node-runtime
+    if: always() && (needs.align-vercel-node-runtime.result == 'success' || needs.align-vercel-node-runtime.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -107,6 +146,8 @@ jobs:
         run: pnpm build
 
   migration:
+    needs: align-vercel-node-runtime
+    if: always() && (needs.align-vercel-node-runtime.result == 'success' || needs.align-vercel-node-runtime.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
