@@ -1,9 +1,14 @@
 import { z } from "zod";
 import {
   ENTERPRISE_BUDGET_ACTIONS,
+  ENTERPRISE_BUDGET_ALERT_RULES,
+  ENTERPRISE_BUDGET_ALERT_STATUSES,
+  ENTERPRISE_BUDGET_SCENARIOS,
   ENTERPRISE_EXPENSE_ACTIONS,
+  ENTERPRISE_FORECAST_METHODS,
   ENTERPRISE_REPORT_ACTIONS,
   ENTERPRISE_REPORT_TYPES,
+  ENTERPRISE_REPORT_VIEW_VISIBILITIES,
 } from "@/lib/enterprise/finance/constants";
 
 const optionalText = (max = 5000) => z.string().trim().max(max).optional().or(z.literal(""));
@@ -19,8 +24,17 @@ export const enterpriseBudgetLineSchema = z.object({
   name: z.string().trim().min(2).max(240),
   description: optionalText(3000),
   category: optionalText(120),
+  accountCode: optionalText(120),
+  costCenterCode: optionalText(120),
   departmentId: optionalId,
+  projectId: optionalId,
+  siteId: optionalId,
+  responsibleUserId: optionalId,
+  quantity: z.coerce.number().min(0).max(1_000_000_000).optional(),
+  unitCode: optionalText(40),
+  hypothesis: optionalText(3000),
   plannedAmount: amount,
+  forecastAmount: amount.optional(),
 });
 
 const budgetBase = z.object({
@@ -29,7 +43,14 @@ const budgetBase = z.object({
   periodStart: z.coerce.date(),
   periodEnd: z.coerce.date(),
   currency: currency.default("USD"),
+  scenarioCode: z.enum(ENTERPRISE_BUDGET_SCENARIOS).default("BASE"),
+  fiscalYearCode: optionalText(80),
   departmentId: optionalId,
+  ownerUserId: optionalId,
+  forecastAmount: amount.optional(),
+  forecastMethod: z.enum(ENTERPRISE_FORECAST_METHODS).optional(),
+  forecastConfidence: z.coerce.number().min(0).max(100).optional(),
+  assumptions: z.record(z.string(), z.unknown()).optional(),
   lines: z.array(enterpriseBudgetLineSchema).min(1).max(300),
 });
 
@@ -44,7 +65,14 @@ export const enterpriseBudgetUpdateSchema = z.object({
   periodStart: z.coerce.date().optional(),
   periodEnd: z.coerce.date().optional(),
   currency: currency.optional(),
+  scenarioCode: z.enum(ENTERPRISE_BUDGET_SCENARIOS).optional(),
+  fiscalYearCode: optionalText(80),
   departmentId: optionalId,
+  ownerUserId: optionalId,
+  forecastAmount: amount.optional(),
+  forecastMethod: z.enum(ENTERPRISE_FORECAST_METHODS).optional(),
+  forecastConfidence: z.coerce.number().min(0).max(100).optional(),
+  assumptions: z.record(z.string(), z.unknown()).optional(),
   lines: z.array(enterpriseBudgetLineSchema).min(1).max(300).optional(),
 }).superRefine((data, ctx) => {
   if (data.periodStart && data.periodEnd && data.periodEnd < data.periodStart) ctx.addIssue({ code: "custom", path: ["periodEnd"], message: "La fin de période doit être postérieure au début." });
@@ -55,8 +83,25 @@ export const enterpriseBudgetActionSchema = z.object({
   action: z.enum(ENTERPRISE_BUDGET_ACTIONS),
   approverUserId: optionalId,
   comment: optionalText(3000),
+  revisionReason: optionalText(3000),
 }).superRefine((data, ctx) => {
   if (data.action === "SUBMIT" && !data.approverUserId) ctx.addIssue({ code: "custom", path: ["approverUserId"], message: "Un approbateur doit être désigné." });
+  if (data.action === "CREATE_REVISION" && !data.revisionReason) ctx.addIssue({ code: "custom", path: ["revisionReason"], message: "Le motif de révision est obligatoire." });
+});
+
+export const enterpriseBudgetAlertSchema = z.object({
+  ruleCode: z.enum(ENTERPRISE_BUDGET_ALERT_RULES),
+  thresholdValue: z.coerce.number().min(0).max(1_000_000_000_000),
+  thresholdType: z.enum(["AMOUNT", "PERCENT"]),
+  severity: z.enum(["INFO", "WARNING", "CRITICAL"]).default("WARNING"),
+  budgetLineId: optionalId,
+  responsibleUserId: optionalId,
+  recipientUserIds: z.array(z.string().trim().min(1).max(180)).max(100).optional().default([]),
+});
+
+export const enterpriseBudgetAlertActionSchema = z.object({
+  status: z.enum(ENTERPRISE_BUDGET_ALERT_STATUSES),
+  comment: optionalText(3000),
 });
 
 const expenseBase = z.object({
@@ -131,6 +176,21 @@ export const enterpriseReportGenerateSchema = z.object({
 export const enterpriseReportActionSchema = z.object({
   revision,
   action: z.enum(ENTERPRISE_REPORT_ACTIONS),
+});
+
+export const enterpriseReportViewSchema = z.object({
+  reportType: z.enum(ENTERPRISE_REPORT_TYPES),
+  name: z.string().trim().min(2).max(160),
+  visibility: z.enum(ENTERPRISE_REPORT_VIEW_VISIBILITIES).default("PERSONAL"),
+  filters: z.record(z.string(), z.unknown()).optional(),
+  dimensions: z.array(z.string().trim().min(1).max(120)).max(30).optional(),
+  sort: z.array(z.object({ field: z.string().trim().min(1).max(120), direction: z.enum(["asc", "desc"]) })).max(10).optional(),
+  isDefault: z.boolean().optional().default(false),
+  isFavorite: z.boolean().optional().default(false),
+});
+
+export const enterpriseReportViewUpdateSchema = enterpriseReportViewSchema.partial().extend({
+  archived: z.boolean().optional(),
 });
 
 export const enterpriseSprint8OperationalCommentSchema = z.object({

@@ -835,6 +835,8 @@ model Organization {
   enterpriseDepartments        EnterpriseDepartment[]
   enterpriseActivityBlocks     EnterpriseActivityBlock[]
   enterpriseWorkflows          EnterpriseWorkflow[]
+  enterpriseOrganizationRoles  EnterpriseOrganizationRole[]
+  enterpriseSecurityPolicy     EnterpriseOrganizationSecurityPolicy?
   enterpriseActivityRequests   EnterpriseActivityRequest[]
   enterpriseSectorRecords      EnterpriseSectorRecord[]
   healthPatients               HealthPatient[]
@@ -1127,6 +1129,7 @@ model EnterpriseDepartment {
   descriptionFr           String?
   descriptionEn           String?
   responsibleUserId       String?
+  parentDepartmentId      String?
   isActive                Boolean                       @default(true)
   sortOrder               Int                           @default(0)
   sourceTemplateId        String?
@@ -1134,6 +1137,8 @@ model EnterpriseDepartment {
   updatedAt               DateTime                      @updatedAt
   organization            Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sourceTemplate          SectorTemplateDepartment?     @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  parentDepartment        EnterpriseDepartment?          @relation("EnterpriseDepartmentHierarchy", fields: [organizationId, parentDepartmentId], references: [organizationId, id], onDelete: SetNull)
+  childDepartments        EnterpriseDepartment[]         @relation("EnterpriseDepartmentHierarchy")
   positions               EnterprisePosition[]
   healthAppointments      HealthAppointment[]
   healthConsultations     HealthConsultation[]
@@ -1146,6 +1151,7 @@ model EnterpriseDepartment {
   @@index([organizationId])
   @@index([departmentCode])
   @@index([responsibleUserId])
+  @@index([organizationId, parentDepartmentId])
 }
 
 model EnterpriseActivityBlock {
@@ -4808,12 +4814,78 @@ model OrganizationMember {
   organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   healthStaffAssignment HealthStaffAssignment?
+  organizationRoleAssignments EnterpriseOrganizationMemberRole[]
 
   @@unique([organizationId, userId])
+  @@unique([organizationId, id])
   @@index([userId, status])
   @@index([organizationId, role, status])
   @@index([organizationId, positionId, status])
   @@index([organizationId, positionCode, status])
+}
+
+model EnterpriseOrganizationRole {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String
+  labelFr         String
+  labelEn         String
+  descriptionFr   String?
+  descriptionEn   String?
+  isSystem        Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  permissionsJson Json?
+  modulesJson     Json?
+  createdByUserId String
+  archivedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments     EnterpriseOrganizationMemberRole[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, isSystem, isActive])
+  @@index([organizationId, archivedAt])
+}
+
+model EnterpriseOrganizationMemberRole {
+  id               String   @id @default(cuid())
+  organizationId   String
+  memberId         String
+  roleId           String
+  assignedByUserId String
+  assignedAt       DateTime @default(now())
+  revokedAt        DateTime?
+  reason           String?
+  member           OrganizationMember @relation(fields: [organizationId, memberId], references: [organizationId, id], onDelete: Cascade)
+  role             EnterpriseOrganizationRole @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, memberId, roleId])
+  @@index([organizationId, memberId, revokedAt])
+  @@index([organizationId, roleId, revokedAt])
+}
+
+model EnterpriseOrganizationSecurityPolicy {
+  id                        String   @id @default(cuid())
+  organizationId            String   @unique
+  sessionIdleMinutes        Int      @default(60)
+  invitationExpiryHours     Int      @default(168)
+  maxPendingInvitations     Int      @default(100)
+  requireApprovedDomains    Boolean  @default(false)
+  allowedEmailDomainsJson   Json?
+  defaultInvitationRole     String   @default("MEMBER")
+  requireInvitationApproval Boolean  @default(false)
+  requireMfa                Boolean  @default(false)
+  sensitiveExportApproval   Boolean  @default(true)
+  devicePolicyJson          Json?
+  dataExportPolicyJson      Json?
+  updatedByUserId           String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  organization              Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([requireMfa, updatedAt])
 }
 
 model OrganizationAdminGrant {
@@ -5223,20 +5295,31 @@ model AppSetting {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  action    String
-  entity    String
-  entityId  String?
-  metadata  Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id             String   @id @default(cuid())
+  userId         String?
+  organizationId String?
+  requestId      String?
+  action         String
+  entity         String
+  entityId       String?
+  result         String   @default("SUCCESS")
+  reasonCode     String?
+  riskLevel      String?
+  beforeJson     Json?
+  afterJson      Json?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action, createdAt])
   @@index([action, createdAt])
   @@index([entity, entityId])
+  @@index([requestId])
+  @@index([riskLevel, createdAt])
 }
 
 model WebhookEvent {

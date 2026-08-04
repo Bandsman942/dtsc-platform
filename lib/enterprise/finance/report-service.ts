@@ -7,6 +7,7 @@ import { enterpriseMoney, enterpriseMoneyZero } from "@/lib/enterprise/finance/m
 import { addEnterpriseOperationalEvent, createEnterpriseLink, nullable, requireEnterpriseSourceReference } from "@/lib/enterprise/procurement/shared";
 import type { enterpriseReportActionSchema, enterpriseReportGenerateSchema } from "@/lib/enterprise/finance/validators";
 import { prisma } from "@/lib/prisma";
+import { calculateBudgetMetrics, getReportCatalogEntry, getReportMetricCodes } from "@/lib/enterprise/reporting/metric-registry";
 
 type ReportGenerateInput = z.infer<typeof enterpriseReportGenerateSchema>;
 type ReportActionInput = z.infer<typeof enterpriseReportActionSchema>;
@@ -66,10 +67,11 @@ async function budgetVsActualSnapshot(tx: Tx, organizationId: string, input: Rep
     const committedRemaining = Prisma.Decimal.max(enterpriseMoneyZero(), committed.sub(realized).sub(released)).toDecimalPlaces(2);
     const actual = actualMap.get(line.id) || enterpriseMoneyZero();
     const planned = enterpriseMoney(line.plannedAmount);
-    const available = planned.sub(committedRemaining).sub(actual).toDecimalPlaces(2);
+    const metrics = calculateBudgetMetrics({ planned, committed: committedRemaining, actual });
+    const available = metrics.available;
     const bucket = currencyBuckets.get(line.budget.currency) || { planned: enterpriseMoneyZero(), committedRemaining: enterpriseMoneyZero(), actual: enterpriseMoneyZero(), available: enterpriseMoneyZero() };
     bucket.planned = bucket.planned.add(planned).toDecimalPlaces(2); bucket.committedRemaining = bucket.committedRemaining.add(committedRemaining).toDecimalPlaces(2); bucket.actual = bucket.actual.add(actual).toDecimalPlaces(2); bucket.available = bucket.available.add(available).toDecimalPlaces(2); currencyBuckets.set(line.budget.currency, bucket);
-    return { budgetId: line.budget.id, budgetReference: line.budget.reference, budgetTitle: line.budget.title, budgetStatus: line.budget.status, budgetLineId: line.id, code: line.code, name: line.name, category: line.category, departmentId: line.departmentId, currency: line.budget.currency, planned: moneyString(planned), committed: moneyString(committedRemaining), actual: moneyString(actual), available: moneyString(available), utilizationPercent: planned.gt(0) ? actual.div(planned).mul(100).toDecimalPlaces(2).toNumber() : 0 };
+    return { budgetId: line.budget.id, budgetReference: line.budget.reference, budgetTitle: line.budget.title, budgetStatus: line.budget.status, budgetLineId: line.id, code: line.code, name: line.name, category: line.category, departmentId: line.departmentId, currency: line.budget.currency, planned: moneyString(planned), committed: moneyString(committedRemaining), actual: moneyString(actual), available: moneyString(available), variance: moneyString(metrics.variance), utilizationPercent: metrics.consumptionRate.toNumber(), deepLink: `/enterprise-modules/FINANCE_BUDGETS?budgetId=${encodeURIComponent(line.budget.id)}&lineId=${encodeURIComponent(line.id)}` };
   });
   return { schema: "budget-vs-actual/v1", truncated: totalLineCount > lines.length, totalLineCount, currencies: [...currencyBuckets.entries()].map(([currency, value]) => ({ currency, planned: moneyString(value.planned), committed: moneyString(value.committedRemaining), actual: moneyString(value.actual), available: moneyString(value.available), utilizationPercent: value.planned.gt(0) ? value.actual.div(value.planned).mul(100).toDecimalPlaces(2).toNumber() : 0 })), lines: detail };
 }
@@ -127,13 +129,31 @@ export async function generateEnterpriseReport(organizationId: string, actorUser
       if (!budget) throw new EnterpriseCoreV2Error("Le budget du rapport n’appartient pas à cette entreprise.", 400, "INVALID_REPORT_BUDGET");
       if (input.currency && budget.currency !== input.currency) throw new EnterpriseCoreV2Error("Le filtre de devise ne correspond pas au budget sélectionné.", 400, "REPORT_CURRENCY_MISMATCH");
     }
-    const snapshot = await buildSnapshot(tx, organizationId, input);
+    const rawSnapshot = await buildSnapshot(tx, organizationId, input);
     const generatedAt = new Date();
+    const catalog = getReportCatalogEntry(input.reportType);
+    const metricCodes = getReportMetricCodes(input.reportType);
+    const snapshot = {
+      meta: {
+        reportCode: input.reportType,
+        sourcePolicyCode: catalog?.sourcePolicyCode || "CANONICAL_ENTERPRISE_DATA",
+        freshnessPolicyCode: catalog?.freshnessPolicyCode || "REQUEST_TIME",
+        freshnessAt: generatedAt.toISOString(),
+        periodStart: input.periodStart || null,
+        periodEnd: input.periodEnd || null,
+        currency: input.currency || null,
+        unitCode: input.currency ? `CURRENCY:${input.currency}` : "MIXED_OR_CONTEXTUAL",
+        roundingPolicyCode: "HALF_UP_2",
+        metricDefinitionCodes: metricCodes,
+        missingValuesPolicy: "NULL_IS_NOT_ZERO",
+      },
+      data: rawSnapshot,
+    };
     const filters = { periodStart: input.periodStart || null, periodEnd: input.periodEnd || null, currency: input.currency || null, departmentId: input.departmentId || null, supplierId: input.supplierId || null, budgetId: input.budgetId || null, category: input.category || null };
-    const report = await tx.enterpriseReport.create({ data: { organizationId, reference: reportReference(), title: input.title, description: nullable(input.description), reportType: input.reportType, status: "GENERATED", periodStart: dateOrUndefined(input.periodStart) || null, periodEnd: dateOrUndefined(input.periodEnd) || null, currency: nullable(input.currency), generatedByUserId: actorUserId, generatedAt, sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, schemaVersion: 1, filtersJson: filters as Prisma.InputJsonValue, snapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
+    const report = await tx.enterpriseReport.create({ data: { organizationId, reference: reportReference(), title: input.title, description: nullable(input.description), reportType: input.reportType, status: "GENERATED", periodStart: dateOrUndefined(input.periodStart) || null, periodEnd: dateOrUndefined(input.periodEnd) || null, currency: nullable(input.currency), unitCode: input.currency ? `CURRENCY:${input.currency}` : null, roundingPolicyCode: "HALF_UP_2", sourcePolicyCode: catalog?.sourcePolicyCode || "CANONICAL_ENTERPRISE_DATA", metricDefinitionCodesJson: metricCodes as Prisma.InputJsonValue, freshnessAt: generatedAt, generatedByUserId: actorUserId, generatedAt, sourceModule: source?.sourceModule || null, sourceEntityType: source?.sourceEntityType || null, sourceEntityId: source?.sourceEntityId || null, schemaVersion: 1, filtersJson: filters as Prisma.InputJsonValue, snapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
     if (input.budgetId) await createEnterpriseLink(tx, { organizationId, sourceModule: "FINANCE_BUDGETS", sourceEntityType: "EnterpriseBudget", sourceEntityId: input.budgetId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
     if (source) await createEnterpriseLink(tx, { organizationId, sourceModule: source.sourceModule, sourceEntityType: source.sourceEntityType, sourceEntityId: source.sourceEntityId, targetModule: "REPORTS", targetEntityType: "EnterpriseReport", targetEntityId: report.id, linkType: "REPORT_SOURCE", createdById: actorUserId });
-    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseReport", entityId: report.id, eventType: "ENTERPRISE_REPORT_GENERATED", summary: "Rapport généré depuis les données ERP réelles.", actorUserId, toStatus: "GENERATED", metadata: { reportType: report.reportType, schemaVersion: report.schemaVersion } });
+    await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseReport", entityId: report.id, eventType: "ENTERPRISE_REPORT_GENERATED", summary: "Rapport généré depuis les données ERP réelles.", actorUserId, toStatus: "GENERATED", metadata: { reportType: report.reportType, schemaVersion: report.schemaVersion, freshnessAt: generatedAt.toISOString(), metricCodes } });
     return report;
   });
 }

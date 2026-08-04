@@ -160,6 +160,23 @@ export async function POST(req: Request, { params }: Params) {
     const responsible = await prisma.organizationMember.findFirst({ where: { organizationId, userId: data.responsibleUserId, status: "ACTIVE", removedAt: null }, select: { userId: true } });
     if (!responsible) return NextResponse.json({ error: "Invalid responsible", message: "Le responsable du département doit être membre actif de cette entreprise." }, { status: 400 });
   }
+  if (data.entityType === "department" && data.parentDepartmentId) {
+    const parent = await prisma.enterpriseDepartment.findFirst({ where: { id: data.parentDepartmentId, organizationId }, select: { id: true, parentDepartmentId: true, departmentCode: true } });
+    if (!parent) return NextResponse.json({ error: "DEPARTMENT_PARENT_INVALID", message: "Le département parent doit appartenir à cette entreprise." }, { status: 400 });
+    const existing = await prisma.enterpriseDepartment.findUnique({ where: { organizationId_departmentCode: { organizationId, departmentCode: data.departmentCode } }, select: { id: true } });
+    if (existing?.id === parent.id) return NextResponse.json({ error: "DEPARTMENT_CYCLE", message: "Un département ne peut pas être son propre parent." }, { status: 409 });
+    if (existing) {
+      let cursor: string | null = parent.parentDepartmentId;
+      const visited = new Set<string>([parent.id]);
+      while (cursor) {
+        if (cursor === existing.id) return NextResponse.json({ error: "DEPARTMENT_CYCLE", message: "Ce déplacement créerait un cycle dans la hiérarchie." }, { status: 409 });
+        if (visited.has(cursor)) return NextResponse.json({ error: "DEPARTMENT_CYCLE", message: "La hiérarchie existante contient un cycle." }, { status: 409 });
+        visited.add(cursor);
+        const ancestor = await prisma.enterpriseDepartment.findFirst({ where: { id: cursor, organizationId }, select: { parentDepartmentId: true } });
+        cursor = ancestor?.parentDepartmentId || null;
+      }
+    }
+  }
   if (data.entityType === "position" && data.departmentId) {
     const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
     if (!department) return NextResponse.json({ error: "Invalid department", message: "Le département sélectionné n'appartient pas à cette entreprise." }, { status: 400 });
@@ -174,6 +191,7 @@ export async function POST(req: Request, { params }: Params) {
         descriptionFr: data.descriptionFr || null,
         descriptionEn: data.descriptionEn || null,
         responsibleUserId: data.responsibleUserId || null,
+        parentDepartmentId: data.parentDepartmentId || null,
         sortOrder: data.sortOrder,
         isActive: data.isActive,
       },
@@ -185,11 +203,12 @@ export async function POST(req: Request, { params }: Params) {
         descriptionFr: data.descriptionFr || null,
         descriptionEn: data.descriptionEn || null,
         responsibleUserId: data.responsibleUserId || null,
+        parentDepartmentId: data.parentDepartmentId || null,
         sortOrder: data.sortOrder,
         isActive: data.isActive,
       },
     });
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_DEPARTMENT_UPSERTED", entity: "EnterpriseDepartment", entityId: department.id, request: req, metadata: { organizationId } });
+    await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_DEPARTMENT_UPSERTED", entity: "EnterpriseDepartment", entityId: department.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true, department });
   }
@@ -222,7 +241,7 @@ export async function POST(req: Request, { params }: Params) {
         permissionsJson: data.permissions.length ? data.permissions : [],
       },
     });
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_POSITION_UPSERTED", entity: "EnterprisePosition", entityId: position.id, request: req, metadata: { organizationId } });
+    await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_POSITION_UPSERTED", entity: "EnterprisePosition", entityId: position.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
     return NextResponse.json({ ok: true, position });
   }
@@ -232,6 +251,11 @@ export async function POST(req: Request, { params }: Params) {
   const settingsJson = {
     ...previousSettings,
     defaultLanguage: data.defaultLanguage,
+    primaryCurrency: data.primaryCurrency,
+    fiscalYearStartMonth: data.fiscalYearStartMonth,
+    dateFormat: data.dateFormat,
+    numberFormat: data.numberFormat,
+    retentionDays: data.retentionDays,
     ...(previous?.sectorCode === "HEALTH_CARE" ? { health: {
       establishmentType: data.establishmentType,
       patientPrefix: data.patientPrefix,
@@ -274,7 +298,7 @@ export async function POST(req: Request, { params }: Params) {
       brandingJson,
     },
   });
-  await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_SETTINGS_UPDATED", entity: "Organization", entityId: organization.id, request: req, metadata: { organizationId, sector: organization.sectorCode } });
+  await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_SETTINGS_UPDATED", entity: "Organization", entityId: organization.id, request: req, metadata: { organizationId, sector: organization.sectorCode } });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, organization });
 }

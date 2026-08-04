@@ -1,18 +1,36 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
+function jsonObject(value: Prisma.InputJsonValue | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.InputJsonValue> : null;
+}
+
 export async function writeAuditLog({
   userId,
+  organizationId,
+  requestId,
   action,
   entity,
   entityId,
+  result = "SUCCESS",
+  reasonCode,
+  riskLevel,
+  before,
+  after,
   metadata,
   request,
 }: {
   userId?: string | null;
+  organizationId?: string | null;
+  requestId?: string | null;
   action: string;
   entity: string;
   entityId?: string | null;
+  result?: "SUCCESS" | "DENIED" | "FAILED" | "PARTIAL";
+  reasonCode?: string | null;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  before?: Prisma.InputJsonValue;
+  after?: Prisma.InputJsonValue;
   metadata?: Prisma.InputJsonValue;
   request?: Request;
 }) {
@@ -21,14 +39,24 @@ export async function writeAuditLog({
     request?.headers.get("x-real-ip") ||
     null;
   const userAgent = request?.headers.get("user-agent") || null;
+  const metadataObject = jsonObject(metadata);
+  const resolvedOrganizationId = organizationId || (typeof metadataObject?.organizationId === "string" ? metadataObject.organizationId : null);
+  const resolvedRequestId = requestId || request?.headers.get("x-request-id") || request?.headers.get("x-vercel-id") || null;
 
   return prisma.auditLog
     .create({
       data: {
         userId: userId || null,
+        organizationId: resolvedOrganizationId,
+        requestId: resolvedRequestId,
         action,
         entity,
         entityId: entityId || null,
+        result,
+        reasonCode: reasonCode || null,
+        riskLevel: riskLevel || null,
+        beforeJson: before,
+        afterJson: after,
         metadata: metadata || undefined,
         ipAddress,
         userAgent,

@@ -25,8 +25,12 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseOperationalEvent.findMany({ where: { organizationId, entityType: "EnterpriseBudget", entityId: id }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseBudget", targetEntityId: id, archivedAt: null }, orderBy: { requestedAt: "desc" } }),
   ]);
+  const [alerts, versions] = await Promise.all([
+    prisma.enterpriseBudgetAlert.findMany({ where: { organizationId, budgetId: id }, orderBy: [{ status: "asc" }, { severity: "desc" }, { triggeredAt: "desc" }], take: 100 }),
+    prisma.enterpriseBudget.findMany({ where: { organizationId, OR: [{ id: position.budget.parentBudgetId || id }, { parentBudgetId: position.budget.parentBudgetId || id }], archivedAt: null }, select: { id: true, reference: true, title: true, scenarioCode: true, versionNumber: true, status: true, createdAt: true, approvedAt: true, frozenAt: true }, orderBy: { versionNumber: "desc" }, take: 50 }),
+  ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "budgets", budgetId: id } });
-  return NextResponse.json({ budget: position.budget, lines: position.lines.map((entry) => ({ ...entry.line, plannedAmount: entry.planned, committedAmount: entry.remainingCommitment, actualAmount: entry.actual, availableAmount: entry.available })), totals: { plannedAmount: position.planned, committedAmount: position.committedRemaining, actualAmount: position.actual, availableAmount: position.available }, purchases, expenses, links, events, approval, canManage: access.canManage });
+  return NextResponse.json({ budget: position.budget, lines: position.lines.map((entry) => ({ ...entry.line, plannedAmount: entry.planned, committedAmount: entry.remainingCommitment, actualAmount: entry.actual, availableAmount: entry.available })), totals: { plannedAmount: position.planned, committedAmount: position.committedRemaining, actualAmount: position.actual, availableAmount: position.available }, purchases, expenses, links, events, approval, alerts, versions, canManage: access.canManage });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

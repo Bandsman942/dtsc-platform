@@ -58,6 +58,26 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Self removal forbidden", message: "Vous ne pouvez pas retirer votre propre accès depuis cette action." }, { status: 409 });
   }
+  const criticalAdminRoles = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
+  const nextRole = data.role || member.role;
+  const removesCriticalAccess = criticalAdminRoles.has(member.role) && (
+    data.action === "remove" || data.action === "suspend" || data.status === "REMOVED" || data.status === "SUSPENDED" || !criticalAdminRoles.has(nextRole)
+  );
+  if (removesCriticalAccess) {
+    const remainingCriticalAdmins = await prisma.organizationMember.count({
+      where: {
+        organizationId,
+        id: { not: member.id },
+        status: "ACTIVE",
+        removedAt: null,
+        role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"] },
+      },
+    });
+    if (remainingCriticalAdmins === 0) {
+      await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_LAST_ADMIN_CHANGE_BLOCKED", entity: "OrganizationMember", entityId: memberId, request: req, result: "DENIED", reasonCode: "LAST_ADMIN_PROTECTED", riskLevel: "CRITICAL", metadata: { attemptedAction: data.action, attemptedRole: data.role, attemptedStatus: data.status } });
+      return NextResponse.json({ error: "LAST_ADMIN_PROTECTED", message: "Ajoutez un autre administrateur actif avant de retirer ou rétrograder le dernier accès administratif critique." }, { status: 409 });
+    }
+  }
   const position = data.positionId
     ? await prisma.enterprisePosition.findFirst({
         where: { id: data.positionId, organizationId, isActive: true },
@@ -142,6 +162,14 @@ export async function DELETE(req: Request, { params }: Params) {
   if (member.userId === session.userId) {
     await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Self removal forbidden", message: "Vous ne pouvez pas retirer votre propre accès depuis cette action." }, { status: 409 });
+  }
+  const fullMember = await prisma.organizationMember.findFirst({ where: { id: memberId, organizationId, removedAt: null }, select: { role: true } });
+  if (fullMember && ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(fullMember.role)) {
+    const remainingCriticalAdmins = await prisma.organizationMember.count({ where: { organizationId, id: { not: memberId }, status: "ACTIVE", removedAt: null, role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"] } } });
+    if (remainingCriticalAdmins === 0) {
+      await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_LAST_ADMIN_CHANGE_BLOCKED", entity: "OrganizationMember", entityId: memberId, request: req, result: "DENIED", reasonCode: "LAST_ADMIN_PROTECTED", riskLevel: "CRITICAL" });
+      return NextResponse.json({ error: "LAST_ADMIN_PROTECTED", message: "Le dernier administrateur critique ne peut pas être retiré." }, { status: 409 });
+    }
   }
   const now = new Date();
   await prisma.organizationMember.update({ where: { id: memberId }, data: { status: "REMOVED", removedAt: now } });
