@@ -75,7 +75,6 @@ export function creatorParticipantCreate(collaboratorId: string) {
     role: "Organisateur",
     participantStatus: CALENDAR_PARTICIPANT_STATUS.ACTIVE,
     responseStatus: CALENDAR_RESPONSE.ACCEPTED,
-    respondedAt: new Date(),
   };
 }
 
@@ -85,6 +84,5 @@ export function invitedParticipantCreate(collaboratorId: string) {
     role: "Participant",
     participantStatus: CALENDAR_PARTICIPANT_STATUS.ACTIVE,
     responseStatus: CALENDAR_RESPONSE.PENDING,
-    respondedAt: null,
   };
 }
