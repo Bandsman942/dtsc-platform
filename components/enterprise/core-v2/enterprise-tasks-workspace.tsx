@@ -1,7 +1,8 @@
 "use client";
 
 import { Archive, CheckCircle2, Eye, PauseCircle, Pencil, Play, Plus, RotateCcw, XCircle } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -22,6 +23,8 @@ type LegacyRecord = { id: string; recordType: string; title: string; description
 
 export function EnterpriseTasksWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const en = locale === "en";
+  const searchParams = useSearchParams();
+  const deepLinkedTaskId = searchParams.get("task");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -32,6 +35,7 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Task | null>(null);
+  const [deepLinkResolved, setDeepLinkResolved] = useState(false);
   const [edit, setEdit] = useState<Task | null>(null);
   const [pendingAction, setPendingAction] = useState<{ task: Task; action: string } | null>(null);
   const [message, setMessage] = useState("");
@@ -47,6 +51,24 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     return value;
   }, [assignee, department, overdue, page, priority, search, status]);
   const collection = useEnterpriseV2Collection<Task>({ endpoint: `/api/enterprise/${organizationId}/tasks`, params, refreshKey });
+
+  useEffect(() => {
+    if (!deepLinkedTaskId || deepLinkResolved) return;
+    const visible = collection.items.find((item) => item.id === deepLinkedTaskId);
+    if (visible) {
+      setDetail(visible);
+      setDeepLinkResolved(true);
+      return;
+    }
+    if (collection.loading) return;
+    void fetch(`/api/enterprise/${organizationId}/tasks/${deepLinkedTaskId}/coordination`, { cache: "no-store" })
+      .then(async (response) => ({ response, body: await response.json().catch(() => null) as { task?: Task; message?: string } | null }))
+      .then(({ response, body }) => {
+        if (response.ok && body?.task) setDetail(body.task);
+        else setMessage(body?.message || (en ? "This task is unavailable." : "Cette tâche est indisponible."));
+        setDeepLinkResolved(true);
+      });
+  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedTaskId, en, organizationId]);
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
