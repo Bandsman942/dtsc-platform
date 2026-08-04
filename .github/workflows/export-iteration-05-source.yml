@@ -25,13 +25,12 @@ jobs:
             --exclude=.git \
             --exclude=node_modules \
             --exclude=.next \
-            --exclude='*.tar.gz' \
-            -czf dtsc-platform-iteration-05-source.tar.gz .
+            -czf /tmp/dtsc-platform-iteration-05-source.tar.gz .
 
       - name: Upload source archive
         uses: actions/upload-artifact@v4
         with:
           name: dtsc-platform-iteration-05-source
-          path: dtsc-platform-iteration-05-source.tar.gz
+          path: /tmp/dtsc-platform-iteration-05-source.tar.gz
           if-no-files-found: error
           retention-days: 1
