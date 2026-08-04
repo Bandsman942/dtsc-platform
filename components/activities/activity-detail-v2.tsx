@@ -33,7 +33,6 @@ export function ActivityDetailV2({
           objectType={checklistObjectType}
           objectId={item.id}
           title="Résultats à réaliser"
-          onProgressChange={onChanged ? () => onChanged() : undefined}
         />
       ) : null}
       <ActivityDetail
