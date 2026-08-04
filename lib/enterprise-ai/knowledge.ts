@@ -10,6 +10,9 @@ export type EnterpriseAiKnowledgeCitation = {
   confidentiality: string;
   content: string;
   distance: number;
+  language: string;
+  pageNumber: number | null;
+  section: string | null;
 };
 
 function normalizeOptional(value?: string | null) {
@@ -47,6 +50,7 @@ export async function indexEnterpriseAiKnowledgeSource({
   moduleCode,
   title,
   confidentiality,
+  language = "fr",
   file,
 }: {
   organizationId: string;
@@ -56,6 +60,7 @@ export async function indexEnterpriseAiKnowledgeSource({
   moduleCode?: string | null;
   title?: string | null;
   confidentiality: string;
+  language?: string;
   file: File;
 }) {
   const source = await prisma.enterpriseAiKnowledgeSource.create({
@@ -68,6 +73,7 @@ export async function indexEnterpriseAiKnowledgeSource({
       sourceType: "DOCUMENT",
       status: "PROCESSING",
       confidentiality,
+      language: language === "en" ? "en" : "fr",
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
       sizeBytes: file.size,
@@ -83,8 +89,8 @@ export async function indexEnterpriseAiKnowledgeSource({
     for (const chunk of chunks) {
       const embedding = await createEmbedding(chunk);
       await prisma.$executeRawUnsafe(
-        `INSERT INTO "EnterpriseAiKnowledgeChunk" ("id", "organizationId", "sourceId", "sectorCode", "moduleCode", "content", "tokenHint", "embedding")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector)`,
+        `INSERT INTO "EnterpriseAiKnowledgeChunk" ("id", "organizationId", "sourceId", "sectorCode", "moduleCode", "content", "tokenHint", "language", "embedding")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector)`,
         randomUUID(),
         organizationId,
         source.id,
@@ -92,6 +98,7 @@ export async function indexEnterpriseAiKnowledgeSource({
         normalizeOptional(moduleCode),
         chunk,
         Math.ceil(chunk.length / 4),
+        language === "en" ? "en" : "fr",
         toVectorLiteral(embedding)
       );
     }
@@ -124,12 +131,14 @@ export async function retrieveEnterpriseAiKnowledge({
   sectorCode,
   moduleCode,
   canReadSensitive,
+  queryLocale,
 }: {
   organizationId: string;
   question: string;
   sectorCode?: string | null;
   moduleCode?: string | null;
   canReadSensitive: boolean;
+  queryLocale?: string | null;
 }) {
   const allowedConfidentialities = canReadSensitive ? ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "MANAGERS_ONLY"] : ["PUBLIC", "INTERNAL"];
   const readySources = await prisma.enterpriseAiKnowledgeSource.count({
@@ -146,7 +155,7 @@ export async function retrieveEnterpriseAiKnowledge({
 
   const embedding = await createEmbedding(question);
   const rows = await prisma.$queryRawUnsafe<EnterpriseAiKnowledgeCitation[]>(
-    `SELECT kc."sourceId", ks."title", ks."confidentiality", kc."content", (kc."embedding" <=> $1::vector) AS distance
+    `SELECT kc."sourceId", ks."title", ks."confidentiality", kc."content", kc."language", kc."pageNumber", kc."section", (kc."embedding" <=> $1::vector) AS distance
      FROM "EnterpriseAiKnowledgeChunk" kc
      INNER JOIN "EnterpriseAiKnowledgeSource" ks ON ks."id" = kc."sourceId"
      WHERE kc."organizationId" = $2
@@ -166,8 +175,8 @@ export async function retrieveEnterpriseAiKnowledge({
   );
 
   const context = rows
-    .map((row, index) => `Source entreprise ${index + 1} - ${row.title} (${row.confidentiality})\n${row.content}`)
+    .map((row, index) => `Source entreprise ${index + 1} - ${row.title} (${row.confidentiality}, langue ${row.language}${row.pageNumber ? `, page ${row.pageNumber}` : ""})\n${row.content}`)
     .join("\n\n---\n\n");
 
-  return { context, citations: rows };
+  return { context, citations: rows, queryLocale: queryLocale || null };
 }

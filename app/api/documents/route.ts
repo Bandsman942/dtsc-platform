@@ -34,6 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const organizationId = getActiveOrganizationId(session);
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } });
 
   const formData = await req.formData().catch(() => null);
   const file = formData?.get("file");
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
       userId: session.userId,
       organizationId,
       title: body.data.title || undefined,
+      language: user?.locale === "en" ? "en" : "fr",
       file,
     });
     await writeAuditLog({

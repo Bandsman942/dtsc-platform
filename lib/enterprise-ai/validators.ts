@@ -16,6 +16,7 @@ export const enterpriseAiKnowledgeUploadSchema = z.object({
   sectorCode: z.string().trim().max(80).optional().or(z.literal("")),
   moduleCode: z.string().trim().max(80).optional().or(z.literal("")),
   confidentiality: z.enum(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "MANAGERS_ONLY"]).default("INTERNAL"),
+  language: z.enum(["fr", "en"]).default("fr"),
 });
 
 export const enterpriseAiKnowledgeListSchema = z.object({

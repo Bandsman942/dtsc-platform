@@ -76,3 +76,15 @@ La décision propriétaire est versionnée dans `docs/STANDARD_COLLABORATION_COM
 | Documents | `OPERATIONAL_UI` | `PROFESSIONAL_READY` selon QA stockage | upload privé, versions, URLs signées, accès et liens canoniques multiples | E2E aperçu, URL directe, archivage et restauration |
 
 La cible reste provisoire tant que la PR n'est pas verte, revue, fusionnée dans `main` et vérifiée en Production. Les E2E de l'itération 04 restent `NON_EXÉCUTÉ`. Aucune entrée ci-dessus ne passe à `COMMERCIAL_READY` dans cette PR.
+## Itération 05 — Évaluation séparée
+
+| Capacité | Cible automatisée | Condition commerciale restante |
+|---|---|---|
+| Chatbot global | `PROFESSIONAL_READY` | E2E propriétaire Production |
+| Assistant IA entreprise | `PROFESSIONAL_READY` | E2E isolation, RAG et outils |
+| Orchestration et fallback | `PROFESSIONAL_READY` sous configuration fournisseur | preuve des fournisseurs Production |
+| Connaissance/RAG | `PROFESSIONAL_READY` | E2E multilingue et révocation |
+| i18n et guides IA | `PROFESSIONAL_READY` | vérification FR/EN mobile |
+| Maturité commerciale/Kanban | `PROFESSIONAL_READY` | E2E rôles et transitions |
+
+`COMMERCIAL_READY` reste bloqué sans Production, E2E `PASSED`, preuve persistée et validation explicite du propriétaire.

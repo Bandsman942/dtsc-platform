@@ -351,7 +351,7 @@ export async function POST(req: Request) {
               inputTokens: usage.inputTokens,
               outputTokens: usage.outputTokens,
               totalTokens: usage.totalTokens,
-              estimatedCost: estimateCost(),
+              estimatedCost: estimateCost({ model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }),
             },
           });
 

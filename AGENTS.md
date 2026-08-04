@@ -287,3 +287,20 @@ These rules are durable for every common or sector ERP change:
 23. Posted financial consequences are corrected with credit notes, refunds, reversals or corrective entries, never silent deletion.
 24. Projection retries reuse the same receipt and source; they never create a competing projection path.
 25. Production is deployed only from `main` through the configured pipeline.
+
+## 12. STANDARD_AI_ITERATION_05_RULES
+
+- Toute nouvelle interface utilise le moteur i18n canonique ; aucun texte visible nouveau n'est codé en dur sans exception documentée et les `reasonCode` restent indépendants de la langue.
+- Les réponses IA suivent la langue explicitement demandée puis la locale du compte ; les messages, documents, commentaires et citations utilisateur ne sont jamais traduits silencieusement.
+- Les guides utilisent le registre et le composant natifs existants, avec leurs locales ; aucun registre ou rendu parallèle de guides n'est autorisé.
+- Administration DTSC → Maturité commerciale reste la source canonique ERP et standard. Toute transition est contrôlée côté serveur, motivée, prouvée, idempotente et auditée.
+- `COMMERCIAL_READY` exige Production, SHA, E2E manuel `PASSED` et validation explicite du propriétaire ; aucune promotion automatique n'est autorisée.
+- Une dégradation de maturité exige un incident documenté ; un glisser-déposer ne modifie jamais seulement l'état client.
+- Toute conversation IA possède un contexte et une locale explicites. Les modèles et fournisseurs proviennent du catalogue canonique.
+- Un fallback ne peut jamais affaiblir confidentialité, tenant, permission, plan, sortie structurée ou langue attendue.
+- Les outils IA appellent les services métier canoniques ; une mutation sensible exige aperçu, confirmation, idempotence et audit.
+- Toute recherche RAG filtre tenant, permission, statut et confidentialité avant de retourner un fragment.
+- Les coûts sont enregistrés au moment de l'appel ; un tarif absent reste `UNKNOWN` et n'est jamais remplacé par zéro.
+- Les prompts critiques sont versionnés et rollbackables. Le raisonnement interne privé n'est jamais exposé.
+- Les surfaces IA et Kanban restent utilisables à 320 px.
+- Les E2E manuels restent `NON_EXÉCUTÉ` tant que le propriétaire ne les a pas confirmés explicitement.

@@ -58,3 +58,6 @@ Les appels, médias, commentaires, présence et modération sont des capacités 
 | Documents | `/enterprise-modules/DOCUMENTS` | `EnterpriseDocument*` + `EnterpriseEntityLink` | liens multiples canoniques, aucun stockage ou lien parallèle |
 
 Ces surfaces restent au maximum candidates à `PROFESSIONAL_READY` jusqu'aux Quality Gates, à la fusion, à la vérification Production et aux E2E manuels du propriétaire. Aucune entrée de l'itération 04 n'est promue vers `COMMERCIAL_READY` dans cette PR.
+## Itération 05 — Intelligence artificielle et maturité
+
+Le registre standard version 3 classe `GLOBAL_CHATBOT`, `ENTERPRISE_AI_ASSISTANT` et `CONSOLE_MODULE_MATURITY` comme `PROFESSIONAL_READY` après preuve automatisée. Le Chatbot et l’Assistant consomment le catalogue IA canonique ; la console de maturité couvre désormais ERP et standards. Aucune entrée n’est promue automatiquement vers `COMMERCIAL_READY`.

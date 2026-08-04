@@ -72,6 +72,7 @@ export async function recordEnterpriseAiUsage({
   userId,
   inputTokens,
   outputTokens,
+  estimatedCost,
 }: {
   organizationId: string;
   assistantId: string;
@@ -79,6 +80,7 @@ export async function recordEnterpriseAiUsage({
   userId: string;
   inputTokens: number;
   outputTokens: number;
+  estimatedCost?: number | null;
 }) {
   const periodStart = currentEnterpriseAiPeriod();
   const totalTokens = inputTokens + outputTokens;
@@ -94,6 +96,7 @@ export async function recordEnterpriseAiUsage({
       inputTokens,
       outputTokens,
       totalTokens,
+      estimatedCost: estimatedCost || 0,
     },
     update: {
       assistantId,
@@ -102,6 +105,7 @@ export async function recordEnterpriseAiUsage({
       inputTokens: { increment: inputTokens },
       outputTokens: { increment: outputTokens },
       totalTokens: { increment: totalTokens },
+      estimatedCost: { increment: estimatedCost || 0 },
     },
   });
 }
