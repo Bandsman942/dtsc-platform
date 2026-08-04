@@ -46,9 +46,10 @@ export async function resolveOperationalObjectAccess({
       include: { participants: true },
     });
     if (!event) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
+    const employeeId = actor.employeeId;
     const isCreator = event.createdBy === actor.userId;
-    const isOwner = Boolean(actor.employeeId && event.ownerCollaboratorId === actor.employeeId);
-    const isAcceptedParticipant = Boolean(actor.employeeId && event.participants.some((participant) => participant.collaboratorId === actor.employeeId && participant.participantStatus === "Actif" && participant.responseStatus === "Accepté"));
+    const isOwner = Boolean(employeeId && event.ownerCollaboratorId === employeeId);
+    const isAcceptedParticipant = Boolean(employeeId && event.participants.some((participant) => participant.collaboratorId === employeeId && participant.participantStatus === "Actif" && participant.responseStatus === "Accepté"));
     const canRead = isCreator || isOwner || isAcceptedParticipant || isExecutiveReader;
     const canMutate = isCreator && isOwner;
     return {
@@ -60,11 +61,12 @@ export async function resolveOperationalObjectAccess({
   }
 
   if (!actor.employeeId) return { allowed: false as const, reason: "NO_EMPLOYEE" as const, object: null };
+  const employeeId = actor.employeeId;
 
   if (objectType === "TASK") {
     const task = await prisma.cooTask.findUnique({ where: { id: objectId } });
     if (!task) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
-    const responsible = task.responsibleEmployeeId === actor.employeeId || task.assigneeEmployeeId === actor.employeeId;
+    const responsible = task.responsibleEmployeeId === employeeId || task.assigneeEmployeeId === employeeId;
     const creator = task.createdById === actor.userId;
     const canRead = responsible || creator || isExecutiveReader;
     const canExecute = responsible || canManageAnyStatus;
@@ -74,8 +76,9 @@ export async function resolveOperationalObjectAccess({
   if (objectType === "OPERATION") {
     const operation = await prisma.cooOperation.findUnique({ where: { id: objectId } });
     if (!operation) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
-    const responsible = operation.leadEmployeeId === actor.employeeId;
-    const participant = operation.collaborators.includes(actor.employeeId) || operation.collaborators.toLocaleLowerCase().includes(actor.employeeId.toLocaleLowerCase());
+    const responsible = operation.leadEmployeeId === employeeId;
+    const normalizedEmployeeId = employeeId.toLocaleLowerCase();
+    const participant = operation.collaborators.includes(employeeId) || operation.collaborators.toLocaleLowerCase().includes(normalizedEmployeeId);
     const creator = operation.createdById === actor.userId;
     const canRead = responsible || participant || creator || isExecutiveReader;
     const canExecute = responsible || canManageAnyStatus;
@@ -85,8 +88,8 @@ export async function resolveOperationalObjectAccess({
   if (objectType === "DEPARTMENT_REQUEST") {
     const request = await prisma.cooDepartmentRequest.findUnique({ where: { id: objectId } });
     if (!request) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
-    const responsible = request.targetResponsibleEmployeeId === actor.employeeId;
-    const requester = request.requesterEmployeeId === actor.employeeId;
+    const responsible = request.targetResponsibleEmployeeId === employeeId;
+    const requester = request.requesterEmployeeId === employeeId;
     const canRead = responsible || requester || isExecutiveReader;
     const canExecute = responsible || canManageAnyStatus;
     return { allowed: action === "read" || action === "comment" ? canRead : canExecute, reason: canRead ? null : "FORBIDDEN", object: request, capabilities: { responsible, requester, canRead, canExecute } } as const;
@@ -95,7 +98,7 @@ export async function resolveOperationalObjectAccess({
   if (objectType === "BLOCKER") {
     const blocker = await prisma.cooBlocker.findUnique({ where: { id: objectId } });
     if (!blocker) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
-    const responsible = blocker.responsibleEmployeeId === actor.employeeId;
+    const responsible = blocker.responsibleEmployeeId === employeeId;
     const creator = blocker.createdById === actor.userId;
     const canRead = responsible || creator || isExecutiveReader;
     const canExecute = responsible || canManageAnyStatus;
@@ -105,8 +108,8 @@ export async function resolveOperationalObjectAccess({
   if (objectType === "MEETING") {
     const meeting = await prisma.cooMeeting.findUnique({ where: { id: objectId } });
     if (!meeting) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
-    const responsible = meeting.reportOwnerEmployeeId === actor.employeeId;
-    const participant = meeting.participants.includes(actor.employeeId);
+    const responsible = meeting.reportOwnerEmployeeId === employeeId;
+    const participant = meeting.participants.includes(employeeId);
     const creator = meeting.createdById === actor.userId;
     const canRead = responsible || participant || creator || isExecutiveReader;
     const canExecute = responsible || creator || canManageAnyStatus;
@@ -115,8 +118,8 @@ export async function resolveOperationalObjectAccess({
 
   const request = await prisma.collaboratorRequest.findUnique({ where: { id: objectId } });
   if (!request) return { allowed: false as const, reason: "NOT_FOUND" as const, object: null };
-  const responsible = request.targetEmployeeId === actor.employeeId;
-  const requester = request.requesterEmployeeId === actor.employeeId;
+  const responsible = request.targetEmployeeId === employeeId;
+  const requester = request.requesterEmployeeId === employeeId;
   const canRead = responsible || requester || isExecutiveReader;
   const canExecute = responsible || canManageAnyStatus;
   return { allowed: action === "read" || action === "comment" ? canRead : canExecute, reason: canRead ? null : "FORBIDDEN", object: request, capabilities: { responsible, requester, canRead, canExecute } } as const;
