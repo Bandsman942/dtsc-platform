@@ -5,11 +5,21 @@ const nextConfig: NextConfig = {
   experimental: {
     // DTSC has a large App Router surface. Keep production builds below Vercel's
     // memory ceiling without weakening type-checking, linting or the build gate.
+    cpus: 2,
     webpackBuildWorker: true,
     webpackMemoryOptimizations: true,
     serverSourceMaps: false,
     staticGenerationMaxConcurrency: 2,
     staticGenerationMinPagesPerWorker: 50,
+  },
+  webpack(config, { dev }) {
+    // Vercel restores the previous build cache before compilation. Disabling
+    // Webpack's production cache avoids retaining and serializing the very large
+    // DTSC module graph while the optimized bundles are being created.
+    if (!dev) {
+      config.cache = false;
+    }
+    return config;
   },
   images: {
     remotePatterns: [
