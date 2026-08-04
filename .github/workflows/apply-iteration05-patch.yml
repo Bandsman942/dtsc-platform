@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - .github/iteration05.patch.xz.b64
-      - .github/workflows/apply-iteration05-patch.yml
+      - ".github/iteration05-parts/**"
+      - ".github/workflows/apply-iteration05-patch.yml"
 
 permissions:
   contents: write
@@ -22,10 +22,16 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Apply iteration patch
+      - name: Verify and apply iteration patch
         run: |
-          base64 --decode .github/iteration05.patch.xz.b64 | xz --decompress > /tmp/iteration05.patch
+          cat .github/iteration05-parts/* > /tmp/iteration05.patch.xz.b64
+          wc -c .github/iteration05-parts/* /tmp/iteration05.patch.xz.b64
+          sha256sum .github/iteration05-parts/*
+          echo "183419bb3efdf0fc160a007470694297203a2710f5b794c8ee5e287abe640d12  /tmp/iteration05.patch.xz.b64" | sha256sum --check -
+          base64 --decode /tmp/iteration05.patch.xz.b64 | xz --decompress > /tmp/iteration05.patch
+          echo "d28381401bafa25dcd9bc22361d22d41c795259aa43d735e65923589636c9488  /tmp/iteration05.patch" | sha256sum --check -
           git apply --index --whitespace=error-all /tmp/iteration05.patch
+          git rm -r .github/iteration05-parts
           git rm .github/iteration05.patch.xz.b64 .github/workflows/apply-iteration05-patch.yml
 
       - name: Publish implementation commit
