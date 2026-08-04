@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  productionBrowserSourceMaps: false,
+  experimental: {
+    // DTSC has a large App Router surface. Keep production builds below Vercel's
+    // memory ceiling without weakening type-checking, linting or the build gate.
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
+    serverSourceMaps: false,
+    staticGenerationMaxConcurrency: 2,
+    staticGenerationMinPagesPerWorker: 50,
+  },
   images: {
     remotePatterns: [
       {
