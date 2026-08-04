@@ -11,6 +11,7 @@ const ALLOWED_SECTIONS = new Set([
   "modules",
   "subscription",
   "settings",
+  "security",
   "audit",
   "templates",
 ]);

@@ -907,13 +907,14 @@
       "promotionPermissionRequired": "Permission de promotion commerciale requise.",
       "degradationPermissionRequired": "Permission de dégradation requise.",
       "professionalEvidenceRequired": "Preuves professionnelles incomplètes.",
-      "ownerValidationRequired": "Validation du propriétaire requise.",
+      "ownerValidationRequired": "Validation explicite du propriétaire requise",
       "incidentEvidenceRequired": "Une preuve d’incident est requise.",
       "transitionNotAllowed": "Transition non autorisée.",
       "maturityConflict": "La maturité a changé. Actualisez puis recommencez.",
       "transitionFailed": "La transition n’a pas pu être enregistrée.",
       "matrix": "Matrice",
-      "kanban": "Kanban"
+      "kanban": "Kanban",
+      "iteration06": "Itération 6 — Gouvernance entreprise"
     }
   },
   "userGuides": {
@@ -939,6 +940,62 @@
       "searchPlaceholder": "Rechercher une action, une règle ou une limitation…",
       "noResult": "Aucune section du guide ne correspond à cette recherche.",
       "limitations": "Fonctionnalités conditionnelles ou limites connues"
+    },
+    "enterpriseGovernance": {
+      "budgets": "Budgets et dépenses",
+      "reports": "Rapports et indicateurs",
+      "administration": "Administration entreprise",
+      "security": "Sécurité entreprise",
+      "audit": "Journaux d’audit"
     }
+  },
+  "budgets": {
+    "title": "Budgets et dépenses",
+    "scenario": "Scénario",
+    "version": "Version",
+    "actual": "Réalisé",
+    "committed": "Engagé",
+    "available": "Disponible",
+    "forecast": "Prévision",
+    "variance": "Écart",
+    "freshness": "Fraîcheur",
+    "frozen": "Gelé",
+    "alerts": "Alertes budgétaires"
+  },
+  "reports": {
+    "title": "Rapports et indicateurs",
+    "catalog": "Catalogue",
+    "source": "Source",
+    "freshness": "Fraîcheur",
+    "unit": "Unité",
+    "filters": "Filtres",
+    "savedViews": "Vues enregistrées",
+    "favorites": "Favoris",
+    "export": "Exporter",
+    "noData": "Aucune donnée disponible pour cette période."
+  },
+  "metrics": {
+    "definition": "Définition de l’indicateur",
+    "calculation": "Méthode de calcul",
+    "rounding": "Politique d’arrondi",
+    "deepLink": "Ouvrir les données sources"
+  },
+  "enterpriseAdmin": {
+    "title": "Administration de l’entreprise",
+    "overview": "Vue générale",
+    "collaborators": "Collaborateurs et postes",
+    "departments": "Départements",
+    "roles": "Rôles",
+    "permissions": "Permissions",
+    "modules": "Modules et capacités",
+    "subscription": "Abonnement et limites",
+    "settings": "Paramètres et identité visuelle",
+    "security": "Sécurité",
+    "audit": "Audit et historique",
+    "configurationChecklist": "Checklist de configuration réelle",
+    "lastAdminProtected": "Le dernier administrateur critique ne peut pas être retiré.",
+    "systemRoleProtected": "Ce rôle système est protégé.",
+    "permissionSimulation": "Simulation des permissions",
+    "exportApprovalRequired": "Une approbation est requise pour cet export sensible."
   }
 }

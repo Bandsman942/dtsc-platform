@@ -20,6 +20,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { ENTERPRISE_CORE_MODULES, isEnterpriseCoreModuleCode } from "@/lib/enterprise/enterprise-core";
 import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
 import { ENTERPRISE_MODULE_GUIDE_MAP, getIteration04UserGuide } from "@/lib/user-guides/iteration04-guides";
+import { getIteration06UserGuide } from "@/lib/user-guides/iteration06-guides";
 
 type ActivityBlock = { id: string; labelFr: string; labelEn: string; blockCode: string };
 type SectorRecord = { id: string; title: string; summary: string | null; status: string; updatedAt: Date };
@@ -83,7 +84,12 @@ export function EnterpriseModuleWorkspace({
   const memberChoices = activeMembers.map((member) => ({ id: member.user.id, label: `${member.user.name} · ${member.role}` }));
   const departmentChoices = coreData.departments.filter((item) => item.isActive).map((item) => ({ id: item.id, label: item.labelFr }));
   const guideCode = ENTERPRISE_MODULE_GUIDE_MAP[enterpriseModule.code];
-  const guide = getIteration04UserGuide(guideCode);
+  const iteration06Guide = enterpriseModule.code === "FINANCE_BUDGETS"
+    ? getIteration06UserGuide("FINANCE_BUDGETS", locale)
+    : enterpriseModule.code === "REPORTS"
+      ? getIteration06UserGuide("REPORTS", locale)
+      : null;
+  const guide = iteration06Guide || getIteration04UserGuide(guideCode);
 
   return (
     <ModuleWorkspace>
