@@ -1,7 +1,7 @@
 # Tests E2E manuels — Modules standards — Itération 06
 
-**Statut : `NON_EXÉCUTÉ`**  
-**Propriétaire de validation :** propriétaire DTSC Platform  
+**Statut : `NON_EXÉCUTÉ`**
+**Propriétaire de validation :** propriétaire DTSC Platform
 **Environnement requis :** Production issue du SHA fusionné dans `main`
 
 > Tests E2E manuels préparés — validation du propriétaire en attente
