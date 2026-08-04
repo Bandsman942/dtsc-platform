@@ -31,6 +31,7 @@ type Tx = Prisma.TransactionClient;
 type BudgetPosition = Awaited<ReturnType<typeof getBudgetPosition>>;
 type BudgetLinePosition = BudgetPosition["lines"][number];
 type BudgetTransitionAction = keyof typeof ENTERPRISE_BUDGET_TRANSITIONS;
+type PreparedBudgetLine = Omit<Prisma.EnterpriseBudgetLineCreateManyInput, "organizationId" | "budgetId">;
 
 function budgetReference() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -69,14 +70,13 @@ async function requireOptionalSite(tx: Tx, organizationId: string, siteId?: stri
 }
 
 async function validateBudgetLines(tx: Tx, organizationId: string, lines: EnterpriseBudgetCreateInput["lines"]) {
-  const prepared: Prisma.EnterpriseBudgetLineUncheckedCreateWithoutBudgetInput[] = [];
+  const prepared: PreparedBudgetLine[] = [];
   for (const line of lines) {
     const departmentId = await requireEnterpriseDepartment(tx, organizationId, line.departmentId);
     const projectId = await requireOptionalProject(tx, organizationId, line.projectId);
     const siteId = await requireOptionalSite(tx, organizationId, line.siteId);
     const responsibleUserId = await requireOptionalMember(tx, organizationId, line.responsibleUserId);
     prepared.push({
-      organizationId,
       code: nullable(line.code),
       name: line.name,
       description: nullable(line.description),
@@ -177,7 +177,7 @@ export async function updateEnterpriseBudget(organizationId: string, budgetId: s
       const inUse = await tx.enterpriseBudgetLine.count({ where: { organizationId, budgetId, OR: [{ commitments: { some: {} } }, { purchases: { some: {} } }, { expenses: { some: {} } }] } });
       if (inUse) throw new EnterpriseCoreV2Error("Les lignes déjà utilisées ne peuvent pas être remplacées. Créez une nouvelle version.", 409, "BUDGET_LINES_IN_USE");
       await tx.enterpriseBudgetLine.deleteMany({ where: { organizationId, budgetId } });
-      await tx.enterpriseBudgetLine.createMany({ data: lines.map((line) => ({ ...line, budgetId })) });
+      await tx.enterpriseBudgetLine.createMany({ data: lines.map((line) => ({ ...line, organizationId, budgetId })) });
     }
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseBudget", entityId: budgetId, eventType: "ENTERPRISE_BUDGET_UPDATED", summary: "Budget mis à jour.", actorUserId, fromStatus: existing.status, toStatus: existing.status });
     return getBudgetPosition(tx, organizationId, budgetId);

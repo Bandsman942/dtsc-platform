@@ -57,22 +57,10 @@ export default async function EnterpriseAdminPage({ searchParams }: PageProps) {
   return (
     <AppShell user={user}>
       <EnterpriseAdministrationModule
-        organization={dataset.organization}
-        dashboard={dataset.dashboard}
-        locale={user.locale}
-        members={dataset.members}
-        modules={dataset.modules}
-        departments={dataset.departments}
-        positions={dataset.positions}
-        activityBlocks={dataset.activityBlocks}
-        workflows={dataset.workflows}
-        recentRequests={dataset.recentRequests}
-        calendarEvents={dataset.calendarEvents}
-        sectorRecords={dataset.sectorRecords}
-        entitlements={dataset.entitlements}
-        configurationIssues={dataset.configurationIssues}
-        initialSection={section}
-      />
+      {...dataset}
+      locale={user.locale}
+      initialSection={section}
+    />
     </AppShell>
   );
 }
