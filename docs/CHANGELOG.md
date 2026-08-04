@@ -786,3 +786,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - interlignes et espacements de paragraphes dans `RichTextEditor` ;
 - migration additive, guides, audits, preuve propriétaire et registre commercial mis à jour ;
 - `COLLABORATORS` et `ANNOUNCEMENTS` promus vers `COMMERCIAL_READY` sous CI/CD et Production verte.
+
+## 2026-08-05 — Modules standards 06/08
+
+- professionnalisation des budgets, scénarios, versions, suivi, alertes et sources ERP ;
+- catalogue de rapports et métriques avec fraîcheur, vues enregistrées et exports cohérents ;
+- administration entreprise, RBAC, simulation, sécurité, audit et protection du dernier administrateur ;
+- i18n et guides natifs français/anglais ;
+- Kanban de maturité mis à jour, sans promotion automatique vers `COMMERCIAL_READY` ;
+- migration additive et Quality Gates de l’itération 06.
