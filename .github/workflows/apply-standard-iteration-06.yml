@@ -24,24 +24,22 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Download and decode iteration 06 commit series
+      - name: Rebuild iteration 06 commit series
         run: |
-          curl --fail --location --retry 3 "https://drive.usercontent.google.com/download?id=1aJPq6KU0JdILoPaTmsfgMyk1t_ses0Ce&export=download&confirm=t" --output /tmp/iteration06-series
-          file /tmp/iteration06-series
-          if gzip --test /tmp/iteration06-series 2>/dev/null; then
-            gzip --decompress --stdout /tmp/iteration06-series > /tmp/iteration06-series.mbox
-          elif xz --test /tmp/iteration06-series 2>/dev/null; then
-            xz --decompress --stdout /tmp/iteration06-series > /tmp/iteration06-series.mbox
-          else
-            echo "Unsupported transfer format" >&2
-            head -c 128 /tmp/iteration06-series | xxd >&2
-            exit 1
-          fi
-          grep -q '^From ' /tmp/iteration06-series.mbox
+          cat .transfer/iteration06.xz.b64.* > /tmp/iteration06.xz.b64
+          base64 --decode /tmp/iteration06.xz.b64 > /tmp/iteration06-series.mbox.xz
+          xz --test /tmp/iteration06-series.mbox.xz
+          xz --decompress --stdout /tmp/iteration06-series.mbox.xz > /tmp/iteration06-series.mbox
+          test -s /tmp/iteration06-series.mbox
 
-      - name: Apply commit series to feature branch
+      - name: Apply product commits to feature branch
         run: |
           git checkout feat/standard-modules-professionalization-iteration-06-enterprise-governance
           git reset --hard origin/feat/standard-modules-professionalization-iteration-06-enterprise-governance
           git am /tmp/iteration06-series.mbox
+          git checkout origin/feat/standard-modules-professionalization-iteration-06-enterprise-governance -- .github/workflows/quality-gates.yml
+          if ! git diff --quiet; then
+            git add .github/workflows/quality-gates.yml
+            git commit -m "chore(ci): defer quality gate workflow update"
+          fi
           git push origin HEAD:feat/standard-modules-professionalization-iteration-06-enterprise-governance
