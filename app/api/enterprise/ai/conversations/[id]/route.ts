@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterprisePreferenceView, getEnterpriseAiConversationPreference } from "@/lib/assistant-conversation-preferences";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
 import { enterpriseAiConversationListSchema, enterpriseAiConversationUpdateSchema } from "@/lib/enterprise-ai/validators";
-import { isConfiguredOpenAIModel } from "@/lib/openai-config";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -32,7 +33,10 @@ export async function PATCH(req: Request, { params }: Params) {
 
   if (typeof data.modelOverride !== "undefined") {
     const modelOverride = data.modelOverride?.trim() || "";
-    if (modelOverride && !isConfiguredOpenAIModel(modelOverride)) return NextResponse.json({ error: "Model not configured" }, { status: 400 });
+    const userLocale = await prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } });
+    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context: "ORGANIZATION", locale: userLocale?.locale || "fr" })) {
+      return NextResponse.json({ reasonCode: "MODEL_UNAVAILABLE", message: getAiErrorMessage("MODEL_UNAVAILABLE", userLocale?.locale) }, { status: 400 });
+    }
   }
 
   const now = new Date();

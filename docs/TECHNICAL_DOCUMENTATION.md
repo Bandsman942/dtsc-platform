@@ -377,3 +377,6 @@ Les scripts `qa:standard-*` de l'itération 04 convergent vers `scripts/qa-stand
 La PR peut viser `PROFESSIONAL_READY` uniquement après Quality Gates, revue, fusion et vérification Production. `COMMERCIAL_READY` reste interdit sans E2E explicite du propriétaire.
 
 **Tests E2E manuels préparés — validation du propriétaire en attente**
+## Itération 05 — Couche IA gouvernée
+
+La couche `lib/ai/` fournit types, catalogue, classification, abstraction fournisseur, orchestration/fallback, erreurs stables, prompts versionnés, registre d’outils, i18n des erreurs, coûts et observabilité. Les routes existantes `/api/chat/v2` et `/api/enterprise/ai/chat` l’utilisent sans recréer leurs historiques. La migration `20260804173000_standard_ai_governance_iteration_05` ajoute les appels modèle et les preuves/transitions de maturité, plus les métadonnées linguistiques de connaissance. La console `/admin/erp-readiness` devient la surface canonique ERP + standards en matrice/Kanban.

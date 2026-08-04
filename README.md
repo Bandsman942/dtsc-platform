@@ -30,9 +30,15 @@ La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND
 La logique SaaS des plans et entitlements est documentee dans [docs/SAAS_PLANS_AND_ENTITLEMENTS.md](docs/SAAS_PLANS_AND_ENTITLEMENTS.md).
 La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLIST.md](docs/SUBDOMAIN_QA_CHECKLIST.md).
 La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CHECKLIST.md](docs/QA_REGRESSION_CHECKLIST.md).
+La gouvernance IA de l’itération 5 est documentée dans [docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md](docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md), avec le catalogue fournisseurs/modèles, le RAG multilingue, les outils autorisés, les coûts, l’observabilité et le Kanban de maturité commerciale.
 
 ## Fonctionnalités
 
+- Intelligence artificielle gouvernée par un catalogue canonique de fournisseurs et modèles, avec classification de tâche, routage central, fallbacks compatibles avec la confidentialité, reason codes stables, prompts versionnés, observabilité détaillée par appel et coût exact/calculé/estimé/inconnu.
+- Chatbot global et IA Assistant Entreprise raccordés au même orchestrateur sans recréer leurs conversations, quotas, outils ni historiques; réponses localisées, citations enrichies et arrêt des mutations après interruption.
+- RAG documentaire multilingue tenant-aware et permission-aware avec langue, version, page, section et offsets de citation, retrait logique des fragments révoqués et conservation de la langue source.
+- Guides utilisateurs IA intégrés au composant natif de l’application en français et en anglais.
+- Administration DTSC enrichie d’un Kanban de maturité commerciale fondé sur le registre canonique, avec filtres réels, historique, preuves persistées et transitions contrôlées côté serveur; `COMMERCIAL_READY` reste bloqué sans Production, E2E propriétaire et validation explicite.
 - Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
 - Contenus publics harmonisés autour des 7 leviers numériques officiels DTSC, avec solutions, secteurs et projets présentés comme des cas d'application.
 - Pages publiques Services, Solutions, Secteurs, Projets et À propos enrichies avec blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
@@ -159,6 +165,9 @@ NEXT_PUBLIC_SUPPORT_URL=https://support.dtsc-platform.com
 OPENAI_MODEL=gpt-5-nano
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
+# Catalogues JSON optionnels pour fournisseurs/modèles compatibles Responses API:
+AI_PROVIDER_CATALOG_JSON=
+AI_MODEL_CATALOG_JSON=
 NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
 LIVEKIT_API_KEY=
 LIVEKIT_API_SECRET=

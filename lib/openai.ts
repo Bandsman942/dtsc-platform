@@ -1,5 +1,7 @@
 import { dtsc } from "@/lib/dtsc";
 import { env, requireEnv } from "@/lib/env";
+import { getAiModelDefinition } from "@/lib/ai/catalog";
+import { estimateAiCost } from "@/lib/ai/costs";
 
 export const DTSC_SYSTEM_PROMPT = [
   "Tu es l'assistant virtuel officiel de DTSC - Data and Tech Solutions Consulting, cabinet base a Kinshasa en Republique democratique du Congo.",
@@ -200,6 +202,8 @@ export async function createOpenAITextResponse({
   };
 }
 
-export function estimateCost() {
-  return 0;
+export function estimateCost({ model, inputTokens, outputTokens }: { model: string; inputTokens: number; outputTokens: number }) {
+  const definition = getAiModelDefinition(model);
+  if (!definition) return null;
+  return estimateAiCost({ model: definition, inputTokens, outputTokens }).amount;
 }

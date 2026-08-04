@@ -113,11 +113,13 @@ export async function indexKnowledgeDocument({
   userId,
   organizationId = null,
   title,
+  language = "fr",
   file,
 }: {
   userId: string;
   organizationId?: string | null;
   title?: string;
+  language?: string;
   file: File;
 }) {
   const document = await prisma.knowledgeDocument.create({
@@ -129,6 +131,7 @@ export async function indexKnowledgeDocument({
       mimeType: file.type || "application/octet-stream",
       sizeBytes: file.size,
       status: DocumentStatus.PROCESSING,
+      language: language === "en" ? "en" : "fr",
     },
   });
 
@@ -140,14 +143,15 @@ export async function indexKnowledgeDocument({
     for (const chunk of chunks) {
       const embedding = await createEmbedding(chunk);
       await prisma.$executeRawUnsafe(
-        `INSERT INTO "KnowledgeChunk" ("id", "documentId", "userId", "organizationId", "content", "tokenHint", "embedding")
-         VALUES ($1, $2, $3, $4, $5, $6, $7::vector)`,
+        `INSERT INTO "KnowledgeChunk" ("id", "documentId", "userId", "organizationId", "content", "tokenHint", "language", "embedding")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector)`,
         randomUUID(),
         document.id,
         userId,
         organizationId,
         chunk,
         Math.ceil(chunk.length / 4),
+        language === "en" ? "en" : "fr",
         toVectorLiteral(embedding)
       );
     }

@@ -47,7 +47,7 @@ type AdminSectionId = AdminBlockId | "access" | "erpReadiness";
 
 const adminSections: Array<{ id: AdminSectionId; label: string; description: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Vue générale", description: "KPIs et synthèse plateforme", icon: BarChart3 },
-  { id: "erpReadiness", label: "Maturité ERP", description: "Statuts et preuves de commercialisation", icon: BarChart3 },
+  { id: "erpReadiness", label: "Maturité commerciale", description: "ERP, modules standards, preuves et Kanban", icon: BarChart3 },
   { id: "access", label: "Accès RBAC", description: "Droits des rôles non-client", icon: ShieldCheck },
   { id: "settings", label: "Paramètres plateforme", description: "Limites, OTP, diffusions", icon: Settings },
   { id: "promotions", label: "Bannières promo", description: "Messages ciblés", icon: BadgePercent },

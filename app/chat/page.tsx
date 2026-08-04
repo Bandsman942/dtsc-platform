@@ -2,7 +2,7 @@ import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-im
 import { ChatWorkspaceV2 } from "@/components/chat/chat-workspace-v2";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
-import { getConfiguredOpenAIModels, getDisplayName } from "@/lib/openai-config";
+import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
@@ -41,7 +41,10 @@ export default async function ChatPage({
     prisma.message.count({ where: { userId: user.id, organizationId: activeOrganizationId, role: "user", createdAt: { gte: today } } }),
     prisma.usageLog.aggregate({ where: { userId: user.id, organizationId: activeOrganizationId, createdAt: { gte: today } }, _sum: { totalTokens: true } }),
   ]);
-  const models = getConfiguredOpenAIModels().map((id) => ({ id, label: getDisplayName(id) }));
+  const models = listCatalogAiModelsForUi({
+    context: activeOrganizationId ? "ORGANIZATION" : session?.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : "PERSONAL",
+    locale: user.locale,
+  });
 
   return (
     <AppShell user={user}>

@@ -362,6 +362,8 @@ model KnowledgeDocument {
   storageBucket  String?
   storagePath    String?
   status         DocumentStatus   @default(PROCESSING)
+  language       String           @default("fr")
+  versionNumber  Int              @default(1)
   extractedText  String?
   errorMessage   String?
   createdAt      DateTime         @default(now())
@@ -382,6 +384,11 @@ model KnowledgeChunk {
   organizationId String?
   content        String
   tokenHint      Int                          @default(0)
+  language       String                       @default("fr")
+  pageNumber     Int?
+  section        String?
+  offsetStart    Int?
+  offsetEnd      Int?
   embedding      Unsupported("vector(1536)")?
   createdAt      DateTime                     @default(now())
   document       KnowledgeDocument            @relation(fields: [documentId], references: [id], onDelete: Cascade)
@@ -657,6 +664,8 @@ model EnterpriseAiKnowledgeSource {
   sourceType      String                       @default("DOCUMENT")
   status          String                       @default("PROCESSING")
   confidentiality String                       @default("INTERNAL")
+  language        String                       @default("fr")
+  versionNumber   Int                          @default(1)
   fileName        String?
   mimeType        String?
   sizeBytes       Int?
@@ -687,6 +696,11 @@ model EnterpriseAiKnowledgeChunk {
   moduleCode     String?
   content        String
   tokenHint      Int                          @default(0)
+  language       String                       @default("fr")
+  pageNumber     Int?
+  section        String?
+  offsetStart    Int?
+  offsetEnd      Int?
   embedding      Unsupported("vector(1536)")?
   createdAt      DateTime                     @default(now())
   organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)

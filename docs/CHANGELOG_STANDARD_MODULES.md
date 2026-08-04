@@ -103,3 +103,18 @@ Les modules `COLLABORATORS` et `ANNOUNCEMENTS` disposent désormais d’une acce
 - Quality Gates et E2E manuels requis avant toute promotion ;
 - statut E2E : `NON_EXÉCUTÉ` ;
 - aucune promotion de l'itération 04 vers `COMMERCIAL_READY`.
+## Itération 5 — IA, connaissance et maturité commerciale
+
+### Ajouté
+- catalogue canonique fournisseurs/modèles, routage et fallback ;
+- observabilité par appel, prompts versionnés et coûts non inventés ;
+- langue/version des sources, citations enrichies et RAG multilingue ;
+- registre d’outils permissionnés ;
+- huit guides natifs FR/EN ;
+- Kanban unifié ERP/standard et transitions persistées.
+
+### Gouvernance
+- aucun second moteur de conversation, RAG, i18n, guides ou maturité ;
+- aucune mutation sensible activée sans confirmation/idempotence ;
+- aucune promotion automatique `COMMERCIAL_READY` ;
+- E2E manuel `NON_EXÉCUTÉ`.

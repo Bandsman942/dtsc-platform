@@ -38,7 +38,7 @@ for (const marker of ['definition.accessPolicy === "ADMIN_ONLY"', "listEnterpris
 }
 
 const dtscAdmin = read("app/admin/page.tsx");
-for (const marker of ["Maturité ERP", "/admin/erp-readiness", "erpReadiness"]) {
+for (const marker of ["Maturité commerciale", "/admin/erp-readiness", "erpReadiness"]) {
   if (!dtscAdmin.includes(marker)) failures.push(`Administration DTSC: ${marker}`);
 }
 

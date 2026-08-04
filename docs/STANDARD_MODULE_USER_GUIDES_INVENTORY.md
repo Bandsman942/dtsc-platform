@@ -101,3 +101,6 @@ Les guides couvrent désormais explicitement :
 Les audits vérifient la présence des fichiers, les codes structurés, les points d’entrée dans l’application et les termes opposables.
 
 Les guides ne constituent pas une preuve E2E. Leur exactitude finale doit être confirmée après le nouveau déploiement Production et les scénarios manuels du propriétaire.
+## Guides IA et maturité — Itération 05
+
+Les définitions structurées FR/EN vivent dans `lib/user-guides/iteration05-guides.ts` et utilisent le composant natif `ContextualUserGuide`. Codes : `GLOBAL_CHATBOT`, `ENTERPRISE_AI_ASSISTANT`, `AI_CONVERSATIONS`, `AI_FILES_AND_SOURCES`, `AI_TOOLS_AND_CONFIRMATIONS`, `AI_PRIVACY_AND_SECURITY`, `AI_LIMITS_AND_USAGE`, `COMMERCIAL_MATURITY_KANBAN`. Les points d’entrée sont intégrés au Chatbot, à l’Assistant entreprise et à Administration DTSC → Maturité commerciale.

@@ -27,7 +27,7 @@ import {
   resolveEnterpriseModuleRoute,
 } from "@/lib/enterprise/module-registry";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
-import { getConfiguredOpenAIModels, getDisplayName } from "@/lib/openai-config";
+import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ moduleCode: string }> };
@@ -74,7 +74,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
   const canManage = ENTERPRISE_ADMIN_ROLES.has(membership.role);
 
   if (definition.routeKind === "AI_SERVICE") {
-    const models = getConfiguredOpenAIModels().map((id) => ({ id, label: getDisplayName(id) }));
+    const models = listCatalogAiModelsForUi({ context: "ORGANIZATION", locale: user.locale });
     return (
       <AppShell user={user}>
         <AssistantImmersiveWorkspaceShell variant="enterprise">

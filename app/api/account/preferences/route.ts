@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { isConfiguredOpenAIModel } from "@/lib/openai-config";
+import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiErrorMessage } from "@/lib/ai/i18n";
+import type { AiContextCode } from "@/lib/ai/types";
 import { prisma } from "@/lib/prisma";
 import { accountPreferencesSchema } from "@/lib/validators";
 
@@ -30,15 +32,20 @@ export async function PATCH(req: Request) {
   }
 
   const preferredModel = body.data.preferredModel?.trim() || null;
-  if (preferredModel && !isConfiguredOpenAIModel(preferredModel)) {
+  const aiContext: AiContextCode = session.activeContext === "DTSC_INTERNAL"
+    ? "DTSC_INTERNAL"
+    : session.activeContext === "ORGANIZATION"
+      ? "ORGANIZATION"
+      : "PERSONAL";
+  if (preferredModel && !isCatalogAiModelAllowed({ modelCode: preferredModel, context: aiContext, locale: body.data.locale })) {
     await writeApiLog({
       request: req,
       statusCode: 400,
       userId: user.id,
       startedAt,
-      metadata: { reason: "MODEL_NOT_CONFIGURED" },
+      metadata: { reasonCode: "MODEL_UNAVAILABLE" },
     });
-    return NextResponse.json({ error: "Model not configured" }, { status: 400 });
+    return NextResponse.json({ reasonCode: "MODEL_UNAVAILABLE", message: getAiErrorMessage("MODEL_UNAVAILABLE", body.data.locale) }, { status: 400 });
   }
 
   await prisma.user.update({

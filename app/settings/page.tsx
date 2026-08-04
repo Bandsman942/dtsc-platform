@@ -10,7 +10,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/c
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
 import { formatEnumLabel } from "@/lib/labels";
-import { getConfiguredOpenAIModels, getDisplayName } from "@/lib/openai-config";
+import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 
 function sessionDate(value: number | undefined) {
   return value ? new Date(value * 1000).toLocaleString("fr-FR") : "Non disponible";
@@ -19,10 +19,10 @@ function sessionDate(value: number | undefined) {
 export default async function SettingsPage() {
   const user = await requireUser();
   const session = await getSession();
-  const models = getConfiguredOpenAIModels().map((id) => ({
-    id,
-    label: getDisplayName(id),
-  }));
+  const models = listCatalogAiModelsForUi({
+    context: session?.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : session?.activeContext === "ORGANIZATION" ? "ORGANIZATION" : "PERSONAL",
+    locale: user.locale,
+  });
 
   return (
     <AppShell user={user}>

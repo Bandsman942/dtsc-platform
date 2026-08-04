@@ -52,6 +52,8 @@ export async function GET(req: Request) {
       sectorCode: source.sectorCode,
       moduleCode: source.moduleCode,
       confidentiality: source.confidentiality,
+      language: source.language,
+      versionNumber: source.versionNumber,
       fileName: source.fileName,
       mimeType: source.mimeType,
       sizeBytes: source.sizeBytes,
@@ -95,6 +97,7 @@ export async function POST(req: Request) {
     sectorCode: formData?.get("sectorCode") || "",
     moduleCode: formData?.get("moduleCode") || "",
     confidentiality: formData?.get("confidentiality") || "INTERNAL",
+    language: formData?.get("language") || "fr",
   });
   if (!parsed.success || !(file instanceof File)) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
@@ -124,6 +127,7 @@ export async function POST(req: Request) {
       moduleCode: parsed.data.moduleCode || null,
       title: parsed.data.title || null,
       confidentiality: parsed.data.confidentiality,
+      language: parsed.data.language,
       file,
     });
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_AI_SOURCE_INDEXED", entity: "EnterpriseAiKnowledgeSource", entityId: source.id, request: req, metadata: { organizationId: parsed.data.organizationId, confidentiality: source.confidentiality } });

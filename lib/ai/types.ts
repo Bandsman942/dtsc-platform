@@ -1,0 +1,116 @@
+import type { OpenAIInputMessage } from "@/lib/openai";
+
+export type AiContextCode = "PERSONAL" | "DTSC_INTERNAL" | "ORGANIZATION" | "PROJECT" | "MODULE" | "OBJECT";
+
+export type AiTaskType =
+  | "GENERAL_CHAT"
+  | "REASONING"
+  | "SUMMARIZATION"
+  | "DOCUMENT_ANALYSIS"
+  | "EXTRACTION"
+  | "STRUCTURED_GENERATION"
+  | "CODE"
+  | "TRANSLATION"
+  | "ENTERPRISE_SEARCH"
+  | "TOOL_EXECUTION"
+  | "VISION"
+  | "AUDIO"
+  | "EMBEDDING"
+  | "RERANKING";
+
+export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
+
+export type AiProviderDefinition = {
+  code: string;
+  labelKey: string;
+  descriptionKey: string;
+  protocol: "OPENAI_RESPONSES";
+  baseUrl: string;
+  apiKeyEnv: string;
+  status: AiModelStatus;
+  regions: string[];
+  dataPolicyCode: string;
+  supportsStreaming: boolean;
+};
+
+export type AiModelDefinition = {
+  code: string;
+  providerCode: string;
+  providerModelId: string;
+  labelKey: string;
+  descriptionKey: string;
+  status: AiModelStatus;
+  capabilities: {
+    text: boolean;
+    vision: boolean;
+    audioInput: boolean;
+    audioOutput: boolean;
+    tools: boolean;
+    structuredOutput: boolean;
+    embeddings: boolean;
+    reasoning: boolean;
+  };
+  contextWindow?: number | null;
+  maximumOutputTokens?: number | null;
+  supportsStreaming: boolean;
+  costProfile?: {
+    inputPerMillion?: number | null;
+    outputPerMillion?: number | null;
+    cachedInputPerMillion?: number | null;
+    currency?: string | null;
+  };
+  allowedContexts: AiContextCode[];
+  allowedLocales?: string[];
+  minimumPlan?: string | null;
+  dataPolicyCode: string;
+  fallbackModelCodes: string[];
+  taskTypes?: AiTaskType[];
+};
+
+export type AiProviderErrorCode =
+  | "PROVIDER_UNAVAILABLE"
+  | "MODEL_UNAVAILABLE"
+  | "RATE_LIMITED"
+  | "TIMEOUT"
+  | "CONTEXT_TOO_LARGE"
+  | "CONTENT_REJECTED"
+  | "INVALID_REQUEST"
+  | "AUTHENTICATION_FAILED"
+  | "STRUCTURED_OUTPUT_INVALID"
+  | "TOOL_CALL_INVALID"
+  | "STREAM_INTERRUPTED"
+  | "UNKNOWN_PROVIDER_ERROR";
+
+export type AiRouteRequest = {
+  requestedModel?: string | null;
+  taskType: AiTaskType;
+  context: AiContextCode;
+  locale: string;
+  messages: OpenAIInputMessage[];
+  instructions: string;
+  userId: string;
+  organizationId?: string | null;
+  tags?: string[];
+  signal?: AbortSignal;
+};
+
+export type AiRouteSelection = {
+  strategyCode: string;
+  taskType: AiTaskType;
+  requestedModel: string | null;
+  selectedModel: AiModelDefinition;
+  fallbackModelCodes: string[];
+  selectionReason: string;
+  estimatedInputCost: number | null;
+  currency: string | null;
+};
+
+export type AiStreamResult = {
+  stream: ReadableStream<Uint8Array>;
+  selection: AiRouteSelection;
+  providerCode: string;
+  modelCode: string;
+  providerModelId: string;
+  fallbackUsed: boolean;
+  attempts: Array<{ providerCode: string; modelCode: string; outcome: "SUCCESS" | "FAILED"; reasonCode?: AiProviderErrorCode }>;
+};

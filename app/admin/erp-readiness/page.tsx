@@ -3,44 +3,21 @@ import { ErpCommercialReadinessDashboard } from "@/components/admin/erp-commerci
 import { AppShell } from "@/components/layout/app-shell";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { getSession, requireUser } from "@/lib/auth";
-import {
-  listEnterpriseModuleCommercialAssessments,
-  type EnterpriseModuleCommercialMaturity,
-} from "@/lib/enterprise/module-commercial-readiness";
+import { DTSC_SPECIAL_PERMISSIONS, hasDtscIndividualPermission } from "@/lib/dtsc-individual-permissions";
+import { listCommercialMaturityCards } from "@/lib/commercial-maturity-governance";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { getDashboardUrl } from "@/lib/domains";
 
-const MATURITIES = new Set<EnterpriseModuleCommercialMaturity>([
-  "BACKEND_READY",
-  "READ_ONLY_UI",
-  "OPERATIONAL_UI",
-  "PROFESSIONAL_READY",
-  "COMMERCIAL_READY",
-]);
-
-export default async function ErpReadinessPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; maturity?: string }>;
-}) {
+export default async function CommercialReadinessPage() {
   const user = await requireUser();
   const session = await getSession();
-  if (!isDtscInternalSession(session) || !canAccessAdministration(user.role)) {
-    redirect(getDashboardUrl());
-  }
-
-  const { q, maturity } = await searchParams;
-  const selectedMaturity = MATURITIES.has(maturity as EnterpriseModuleCommercialMaturity)
-    ? (maturity as EnterpriseModuleCommercialMaturity)
-    : undefined;
-
-  return (
-    <AppShell user={user}>
-      <ErpCommercialReadinessDashboard
-        assessments={listEnterpriseModuleCommercialAssessments()}
-        selectedMaturity={selectedMaturity}
-        query={q}
-      />
-    </AppShell>
-  );
+  if (!isDtscInternalSession(session) || !canAccessAdministration(user.role)) redirect(getDashboardUrl());
+  const isAdmin = user.role === "ADMIN";
+  const [cards, canManage, canPromoteCommercial, canDegrade] = await Promise.all([
+    listCommercialMaturityCards(),
+    isAdmin ? Promise.resolve(true) : hasDtscIndividualPermission(user.id, DTSC_SPECIAL_PERMISSIONS.MANAGE_COMMERCIAL_MATURITY),
+    isAdmin ? Promise.resolve(true) : hasDtscIndividualPermission(user.id, DTSC_SPECIAL_PERMISSIONS.PROMOTE_COMMERCIAL_READY),
+    isAdmin ? Promise.resolve(true) : hasDtscIndividualPermission(user.id, DTSC_SPECIAL_PERMISSIONS.DEGRADE_COMMERCIAL_MATURITY),
+  ]);
+  return <AppShell user={user}><ErpCommercialReadinessDashboard cards={cards} locale={user.locale} canManage={canManage} canPromoteCommercial={canPromoteCommercial} canDegrade={canDegrade} /></AppShell>;
 }

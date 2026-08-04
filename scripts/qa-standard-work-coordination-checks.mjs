@@ -132,7 +132,24 @@ function guideChecks() {
   for (const guide of guides) requireText(`docs/user-guides/${guide}.md`, ["# Guide utilisateur", "Guide"]);
   requireText("docs/user-guides/ADMIN_RBAC_INDIVIDUAL_PERMISSIONS.md", ["Permissions individuelles DTSC", "ALLOW", "DENY", "work.past_period.submit"]);
   requireText("lib/user-guides/iteration04-guides.ts", ["CALENDAR:", "DTSC_ACTIVITIES:", "ENTERPRISE_ACTIVITIES:", "ADMIN_RBAC:", "updatedAt: \"2026-08-04\""]);
-  requireText("components/user-guides/contextual-user-guide.tsx", ["Guide utilisateur", "Rechercher dans le guide", "Fonctionnalités conditionnelles"]);
+  requireText("components/user-guides/contextual-user-guide.tsx", [
+    "useAppLocale",
+    "translate",
+    "userGuides.common.userGuide",
+    "userGuides.common.searchLabel",
+    "userGuides.common.searchPlaceholder",
+    "userGuides.common.limitations",
+  ]);
+  requireText("locales/fr.json", [
+    '"userGuide": "Guide utilisateur"',
+    '"searchLabel": "Rechercher dans le guide"',
+    '"limitations": "Fonctionnalités conditionnelles ou limites connues"',
+  ]);
+  requireText("locales/en.json", [
+    '"userGuide": "User guide"',
+    '"searchLabel": "Search this guide"',
+    '"limitations": "Conditional features or known limitations"',
+  ]);
   requireText("components/admin/admin-access-panel.tsx", ["ContextualUserGuide", "ADMIN_RBAC"]);
   requireText("components/enterprise/enterprise-module-workspace.tsx", ["ENTERPRISE_MODULE_GUIDE_MAP", "ContextualUserGuide"]);
   requireText("components/enterprise/enterprise-activities-module.tsx", ["ENTERPRISE_ACTIVITIES", "ContextualUserGuide"]);

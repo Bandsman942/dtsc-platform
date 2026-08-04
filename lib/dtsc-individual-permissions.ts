@@ -9,6 +9,9 @@ export const DTSC_SPECIAL_PERMISSIONS = {
   MANAGE_CALENDAR_RESOURCES: "calendar.resources.manage",
   MANAGE_OPERATIONAL_SLA: "operations.sla.manage",
   CHANGE_ANY_OPERATION_STATUS: "operations.status.manage_any",
+  MANAGE_COMMERCIAL_MATURITY: "commercial_maturity.manage",
+  PROMOTE_COMMERCIAL_READY: "commercial_maturity.promote_commercial",
+  DEGRADE_COMMERCIAL_MATURITY: "commercial_maturity.degrade",
 } as const;
 
 export type DtscSpecialPermission = (typeof DTSC_SPECIAL_PERMISSIONS)[keyof typeof DTSC_SPECIAL_PERMISSIONS];
@@ -53,6 +56,24 @@ const staticPermissionCatalog = [
     label: "Modifier tout statut opérationnel",
     description: "Dérogation sensible réservée aux responsables autorisés ; toutes les transitions restent auditées.",
     category: "Opérations",
+  },
+  {
+    code: DTSC_SPECIAL_PERMISSIONS.MANAGE_COMMERCIAL_MATURITY,
+    label: "Gérer la maturité commerciale",
+    description: "Autorise l’enregistrement contrôlé des preuves et transitions de maturité hors promotion commerciale finale.",
+    category: "Maturité commerciale",
+  },
+  {
+    code: DTSC_SPECIAL_PERMISSIONS.PROMOTE_COMMERCIAL_READY,
+    label: "Promouvoir vers COMMERCIAL_READY",
+    description: "Autorise la promotion commerciale uniquement lorsque Production, E2E propriétaire et preuves sont présents.",
+    category: "Maturité commerciale",
+  },
+  {
+    code: DTSC_SPECIAL_PERMISSIONS.DEGRADE_COMMERCIAL_MATURITY,
+    label: "Dégrader la maturité commerciale",
+    description: "Autorise une dégradation auditée après preuve d’incident ou de régression critique.",
+    category: "Maturité commerciale",
   },
 ] as const;
 
