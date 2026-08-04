@@ -1,7 +1,8 @@
 "use client";
 
 import { Archive, CheckCircle2, Eye, Pencil, Plus, Send, ShieldCheck, UserCheck, XCircle } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -13,14 +14,18 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { EnterpriseRequestForm } from "@/components/enterprise/core-v2/request-form";
+import { RequestCoordinationPanel } from "@/components/enterprise/core-v2/request-coordination-panel";
 import { Field, NativeSelect, formatEnterpriseDate, priorityChoicesEn, priorityChoicesFr, priorityLabel, statusLabel, statusTone, type EnterpriseChoice } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
 
 type RequestItem = { id: string; requestType: string; title: string; description: string; status: string; priority: string; requestedByUserId: string; assignedToUserId: string | null; departmentId: string | null; dueAt: string | null; sourceModule: string | null; sourceEntityType: string | null; revision: number; createdAt: string };
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; priority: string; updatedAt: string };
+const requestStatuses = ["DRAFT", "SUBMITTED", "TRIAGED", "ASSIGNED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "WAITING_APPROVAL", "CORRECTION_REQUESTED", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "CLOSED", "REOPENED", "CANCELLED"];
 
 export function EnterpriseRequestsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const en = locale === "en";
+  const searchParams = useSearchParams();
+  const deepLinkedRequestId = searchParams.get("request");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -30,6 +35,7 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<RequestItem | null>(null);
+  const [deepLinkResolved, setDeepLinkResolved] = useState(false);
   const [edit, setEdit] = useState<RequestItem | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<RequestItem | null>(null);
   const [pendingAction, setPendingAction] = useState<{ request: RequestItem; action: string } | null>(null);
@@ -45,6 +51,24 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     return value;
   }, [department, page, priority, search, status, type]);
   const collection = useEnterpriseV2Collection<RequestItem>({ endpoint: `/api/enterprise/${organizationId}/requests`, params, refreshKey });
+
+  useEffect(() => {
+    if (!deepLinkedRequestId || deepLinkResolved) return;
+    const visible = collection.items.find((item) => item.id === deepLinkedRequestId);
+    if (visible) {
+      setDetail(visible);
+      setDeepLinkResolved(true);
+      return;
+    }
+    if (collection.loading) return;
+    void fetch(`/api/enterprise/${organizationId}/requests/${deepLinkedRequestId}/coordination`, { cache: "no-store" })
+      .then(async (response) => ({ response, body: await response.json().catch(() => null) as { request?: RequestItem; message?: string } | null }))
+      .then(({ response, body }) => {
+        if (response.ok && body?.request) setDetail(body.request);
+        else setMessage(body?.message || (en ? "This request is unavailable." : "Cette demande est indisponible."));
+        setDeepLinkResolved(true);
+      });
+  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedRequestId, en, organizationId]);
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,13 +99,13 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     <ModuleMetrics label={en ? "Request indicators" : "Indicateurs demandes"}>
       <ModuleMetric label={en ? "Visible" : "Visibles"} value={collection.pagination.total} />
       <ModuleMetric label={en ? "Submitted" : "Soumises"} value={collection.items.filter((item) => item.status === "SUBMITTED").length} />
-      <ModuleMetric label={en ? "In review" : "En revue"} value={collection.items.filter((item) => item.status === "IN_REVIEW").length} />
+      <ModuleMetric label={en ? "Waiting requester" : "Attente demandeur"} value={collection.items.filter((item) => item.status === "WAITING_REQUESTER").length} />
       <ModuleMetric label={en ? "Historical" : "Historiques"} value={legacyRecords.length} />
     </ModuleMetrics>
-    <ModuleSection title={en ? "Internal requests" : "Demandes internes"} description={en ? "Self-service requests with their own lifecycle, separate from approval decisions." : "Demandes self-service avec leur propre cycle, distinct des décisions de validation."} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{en ? "New request" : "Nouvelle demande"}</Button> : undefined}>
+    <ModuleSection title={en ? "Internal requests" : "Demandes internes"} description={en ? "Self-service requests with information, resolution, closure and reopening flows." : "Demandes self-service avec information, résolution, clôture et réouverture historisées."} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{en ? "New request" : "Nouvelle demande"}</Button> : undefined}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3 xl:grid-cols-5">
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search requests…" : "Rechercher une demande…"} />
-        <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"].map((id) => ({ id, label: statusLabel(locale, id) }))} />
+        <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: en ? "All statuses" : "Tous les statuts" }, ...requestStatuses.map((id) => ({ id, label: statusLabel(locale, id) }))]} />
         <Input value={type} onChange={(event) => { setType(event.target.value); setPage(1); }} placeholder={en ? "Request type" : "Type de demande"} />
         <NativeSelect value={priority} onChange={(value) => { setPriority(value); setPage(1); }} items={en ? priorityChoicesEn : priorityChoicesFr} />
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
@@ -92,7 +116,7 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     {legacyRecords.length ? <ModuleSection title={en ? "Historical requests" : "Historique des demandes"} description={en ? "Legacy requests remain readable and read-only." : "Les anciennes demandes restent lisibles et non modifiables."}><BusinessList ariaLabel="legacy requests">{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{en ? "History" : "Historique"}</StatusBadge>} meta={`${statusLabel(locale, record.status)} · ${priorityLabel(locale, record.priority)}`} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={en ? "New internal request" : "Nouvelle demande interne"} className="h-[94dvh] max-w-4xl"><EnterpriseRequestForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
     <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={en ? "Edit request" : "Modifier la demande"} className="h-[94dvh] max-w-4xl">{edit ? <EnterpriseRequestForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || ""}>{detail ? <div className="grid gap-3 text-sm"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{statusLabel(locale, detail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, detail.priority)}</StatusBadge><StatusBadge>{detail.requestType}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{detail.description}</p><p>{en ? "Due" : "Échéance"} : {formatEnterpriseDate(detail.dueAt, locale)}</p><p>{en ? "Revision" : "Révision"} : {detail.revision}</p>{detail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{en ? "Linked source" : "Source liée"} : {detail.sourceModule} · {detail.sourceEntityType}</p> : null}</div> : null}</Dialog>
+    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.title || ""} className="h-[94dvh] max-w-5xl">{detail ? <div className="grid gap-5 text-sm"><div className="grid gap-3"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(detail.status)}>{statusLabel(locale, detail.status)}</StatusBadge><StatusBadge>{priorityLabel(locale, detail.priority)}</StatusBadge><StatusBadge>{detail.requestType}</StatusBadge></div><p className="leading-6 text-dtsc-muted">{detail.description}</p><p>{en ? "Due" : "Échéance"} : {formatEnterpriseDate(detail.dueAt, locale)}</p><p>{en ? "Revision" : "Révision"} : {detail.revision}</p>{detail.sourceEntityType ? <p className="text-xs text-dtsc-muted">{en ? "Linked source" : "Source liée"} : {detail.sourceModule} · {detail.sourceEntityType}</p> : null}</div><RequestCoordinationPanel organizationId={organizationId} requestId={detail.id} locale={locale} onChanged={() => setRefreshKey((value) => value + 1)} /></div> : null}</Dialog>
     <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} title={en ? "Request approval" : "Créer une validation"} description={approvalTarget?.title}><form onSubmit={createApproval} className="grid gap-4"><Field label={en ? "Designated approver" : "Approbateur désigné"}><NativeSelect name="approverUserId" required items={members} /></Field><Button className="bg-dtsc-blue text-white">{en ? "Request approval" : "Demander la validation"}</Button></form></Dialog>
     <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title={en ? "Confirm action" : "Confirmer l’action"}><p className="text-sm text-dtsc-muted">{pendingAction?.action} · {pendingAction?.request.title}</p><Button onClick={() => void runAction()} className="mt-4 bg-dtsc-blue text-white">{en ? "Confirm" : "Confirmer"}</Button></Dialog>
   </div>;
@@ -100,12 +124,12 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
 
 function actionsFor(requestRecord: RequestItem, canManage: boolean, en: boolean, detail: (item: RequestItem) => void, edit: (item: RequestItem) => void, approval: (item: RequestItem) => void, action: (value: { request: RequestItem; action: string }) => void): BusinessContextAction[] {
   const items: BusinessContextAction[] = [{ id: "open", label: en ? "Open" : "Ouvrir", icon: Eye, onSelect: () => detail(requestRecord) }];
-  if (requestRecord.status === "DRAFT" || canManage) items.push({ id: "edit", label: en ? "Edit" : "Modifier", icon: Pencil, onSelect: () => edit(requestRecord) });
+  if (requestRecord.status === "DRAFT" || requestRecord.status === "CORRECTION_REQUESTED" || canManage) items.push({ id: "edit", label: en ? "Edit" : "Modifier", icon: Pencil, onSelect: () => edit(requestRecord) });
   if (requestRecord.status === "DRAFT") items.push({ id: "submit", label: en ? "Submit" : "Soumettre", icon: Send, onSelect: () => action({ request: requestRecord, action: "SUBMIT" }) });
   if (requestRecord.status === "SUBMITTED") items.push({ id: "take", label: en ? "Take ownership" : "Prendre en charge", icon: UserCheck, onSelect: () => action({ request: requestRecord, action: "TAKE" }) });
-  if (["SUBMITTED", "IN_REVIEW"].includes(requestRecord.status)) items.push({ id: "approval", label: en ? "Request approval" : "Créer validation", icon: ShieldCheck, onSelect: () => approval(requestRecord) });
+  if (["SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS"].includes(requestRecord.status)) items.push({ id: "approval", label: en ? "Request approval" : "Créer validation", icon: ShieldCheck, onSelect: () => approval(requestRecord) });
   if (["IN_REVIEW", "APPROVED"].includes(requestRecord.status)) items.push({ id: "fulfill", label: en ? "Mark fulfilled" : "Marquer traitée", icon: CheckCircle2, onSelect: () => action({ request: requestRecord, action: "FULFILL" }) });
-  if (["DRAFT", "SUBMITTED", "IN_REVIEW"].includes(requestRecord.status)) items.push({ id: "cancel", label: en ? "Cancel" : "Annuler", icon: XCircle, destructive: true, separatorBefore: true, onSelect: () => action({ request: requestRecord, action: "CANCEL" }) });
+  if (["DRAFT", "SUBMITTED", "IN_REVIEW", "ASSIGNED", "IN_PROGRESS", "WAITING_REQUESTER"].includes(requestRecord.status)) items.push({ id: "cancel", label: en ? "Cancel" : "Annuler", icon: XCircle, destructive: true, separatorBefore: true, onSelect: () => action({ request: requestRecord, action: "CANCEL" }) });
   if (canManage) items.push({ id: "archive", label: en ? "Archive" : "Archiver", icon: Archive, separatorBefore: true, onSelect: () => action({ request: requestRecord, action: "ARCHIVE" }) });
   return items;
 }
