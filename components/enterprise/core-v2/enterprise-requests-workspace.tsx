@@ -53,22 +53,18 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
   const collection = useEnterpriseV2Collection<RequestItem>({ endpoint: `/api/enterprise/${organizationId}/requests`, params, refreshKey });
 
   useEffect(() => {
-    if (!deepLinkedRequestId || deepLinkResolved) return;
-    const visible = collection.items.find((item) => item.id === deepLinkedRequestId);
-    if (visible) {
-      setDetail(visible);
-      setDeepLinkResolved(true);
-      return;
-    }
-    if (collection.loading) return;
+    if (!deepLinkedRequestId || deepLinkResolved || collection.loading) return;
+    let cancelled = false;
     void fetch(`/api/enterprise/${organizationId}/requests/${deepLinkedRequestId}/coordination`, { cache: "no-store" })
       .then(async (response) => ({ response, body: await response.json().catch(() => null) as { request?: RequestItem; message?: string } | null }))
       .then(({ response, body }) => {
+        if (cancelled) return;
         if (response.ok && body?.request) setDetail(body.request);
         else setMessage(body?.message || (en ? "This request is unavailable." : "Cette demande est indisponible."));
         setDeepLinkResolved(true);
       });
-  }, [collection.items, collection.loading, deepLinkResolved, deepLinkedRequestId, en, organizationId]);
+    return () => { cancelled = true; };
+  }, [collection.loading, deepLinkResolved, deepLinkedRequestId, en, organizationId]);
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
