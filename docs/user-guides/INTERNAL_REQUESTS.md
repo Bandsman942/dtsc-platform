@@ -2,63 +2,71 @@
 
 ## Rôle du module
 
-Le module **Demandes internes** formalise un besoin adressé à une équipe ou à un responsable de l'entreprise. Il conserve le demandeur, le type, la description, la priorité, l'assignation, l'échéance, les réponses et l'historique.
+Le module **Demandes internes** formalise un besoin adressé à un collaborateur, une équipe ou un responsable de l’organisation active.
+
+Le bouton **Guide utilisateur** ouvre cette aide directement dans l’application.
 
 ## Créer une demande
 
-Cliquez sur **Nouvelle demande** et renseignez :
+Renseignez le type, le titre, la description, la priorité, le destinataire ou le département, l’échéance et les documents éventuels.
 
-- le type ou la catégorie proposée ;
-- l'objet et la description ;
-- la priorité ;
-- le destinataire ou le département ;
-- l'échéance souhaitée lorsque nécessaire ;
-- la source métier éventuelle.
+Le destinataire doit être actif dans la même organisation. Toutes les références sont contrôlées côté serveur.
 
-Le formulaire valide le contexte, le membership et le destinataire côté serveur. Une demande peut être enregistrée en brouillon ou directement soumise selon le parcours.
+## Vue Liste et Kanban
 
-## Rechercher et filtrer
+La vue Liste permet la recherche et les filtres.
 
-Utilisez la recherche et les filtres de statut, priorité, assigné et département. Les résultats sont paginés et limités aux demandes que votre rôle peut consulter.
+La vue Kanban regroupe les demandes selon leur état : à traiter, en cours, en attente d’information, bloquées, résolues ou clôturées.
 
-## Traitement
+Le changement de statut est réservé au destinataire explicite, au responsable enregistré ou à une permission individuelle dédiée. Une vue de supervision n’accorde pas automatiquement le droit de traiter la demande.
 
-Selon vos capacités et l'état courant, les actions professionnelles incluent :
+## Cycle de traitement
 
-- soumettre une demande en brouillon ;
-- trier ou assigner la demande ;
-- commencer le traitement ;
-- demander des informations complémentaires ;
-- répondre et reprendre le traitement ;
+Les actions possibles comprennent :
+
+- soumettre ;
+- prendre en charge ;
+- demander une information ;
+- répondre ;
+- reprendre ;
 - résoudre ;
 - clôturer ;
-- rouvrir lorsque la règle l'autorise ;
-- rejeter ou annuler avec un motif lorsque requis.
+- rouvrir ;
+- rejeter ou annuler avec un motif.
 
-Les transitions non autorisées sont refusées côté serveur.
+Chaque transition est auditée et conserve son acteur, sa date, le statut précédent, le nouveau statut et le motif.
 
-## Demande d'information
+## Checklist et progression
 
-Lorsqu'une information manque, le responsable peut placer la demande en attente du demandeur et expliquer ce qui est nécessaire. Le demandeur répond dans le même objet ; l'historique conserve les deux actions.
+Une demande peut contenir une checklist de résultats attendus. Le destinataire coche les éléments réalisés et la progression est calculée automatiquement.
+
+## Demande d’information
+
+Lorsqu’une information manque, le responsable explique précisément ce qui est attendu. Le demandeur répond dans le même objet. L’historique conserve les deux actions.
 
 ## Résolution, clôture et réouverture
 
-**Résolue** signifie qu'une solution a été fournie. **Clôturée** signifie que le traitement est terminé. Une réouverture ne supprime jamais l'ancienne résolution ; elle crée un nouvel événement d'historique et notifie l'assigné lorsque le moteur le prévoit.
+**Résolue** signifie qu’une solution a été fournie. **Clôturée** signifie que le processus est terminé.
 
-## Validation
+Une réouverture crée un nouvel événement d’historique ; elle ne supprime pas la résolution précédente.
 
-Une demande soumise peut produire une validation commune lorsque le parcours métier l'exige. La file de validations ne copie pas la demande : elle référence l'objet source et ouvre sa fiche.
+## Commentaires, mentions et documents
 
-## Documents, commentaires et notifications
+Les utilisateurs autorisés peuvent commenter et mentionner des collaborateurs. Les mentions cliquables proposent des actions professionnelles soumises aux permissions de destination.
 
-Les pièces jointes utilisent le stockage documentaire canonique. Les commentaires utilisent la primitive commune et peuvent produire des notifications. Une notification ouvre la demande exacte et revérifie l'accès actuel.
+Les documents utilisent le stockage privé et versionné du module Documents.
 
-## SLA
+## SLA avancé
 
-Le module n'affiche un délai SLA que lorsqu'un calcul serveur réel est disponible. Une simple date d'échéance n'est pas présentée comme un SLA contractuel.
+Une politique SLA réelle peut être rattachée à la demande. Elle définit :
 
-## Limites
+- une durée cible ;
+- un délai d’avertissement ;
+- les statuts de départ et d’arrêt ;
+- les acteurs d’escalade éventuels.
 
-- Les catégories configurables dépendent des référentiels déjà activés dans l'entreprise.
-- Les matrices SLA complexes, pauses automatiques et escalades planifiées ne sont pas annoncées si elles ne sont pas configurées.
-- La suppression définitive d'une demande traitée n'est pas proposée ; l'historique reste conservé.
+Le SLA calcule les états RUNNING, WARNING et BREACHED. Il ne modifie pas automatiquement le statut métier de la demande.
+
+## Notifications et liens profonds
+
+Les affectations, réponses, mentions, résolutions et réouvertures peuvent produire une notification ouvrant la demande exacte. Les permissions sont revérifiées à l’ouverture.
