@@ -24,57 +24,21 @@ jobs:
 
           page = Path('app/enterprise-admin/page.tsx')
           content = page.read_text()
-          old = '''      <EnterpriseAdministrationModule
-                organization={dataset.organization}
-                dashboard={dataset.dashboard}
-                locale={user.locale}
-                members={dataset.members}
-                modules={dataset.modules}
-                departments={dataset.departments}
-                positions={dataset.positions}
-                activityBlocks={dataset.activityBlocks}
-                workflows={dataset.workflows}
-                recentRequests={dataset.recentRequests}
-                calendarEvents={dataset.calendarEvents}
-                sectorRecords={dataset.sectorRecords}
-                entitlements={dataset.entitlements}
-                configurationIssues={dataset.configurationIssues}
-                initialSection={section}
-              />'''.replace('        ', '')
-          old = '''      <EnterpriseAdministrationModule
-                organization={dataset.organization}
-                dashboard={dataset.dashboard}
-                locale={user.locale}
-                members={dataset.members}
-                modules={dataset.modules}
-                departments={dataset.departments}
-                positions={dataset.positions}
-                activityBlocks={dataset.activityBlocks}
-                workflows={dataset.workflows}
-                recentRequests={dataset.recentRequests}
-                calendarEvents={dataset.calendarEvents}
-                sectorRecords={dataset.sectorRecords}
-                entitlements={dataset.entitlements}
-                configurationIssues={dataset.configurationIssues}
-                initialSection={section}
-              />'''
-          old = old.replace('              ', '      ').replace('                ', '        ')
-          new = '''      <EnterpriseAdministrationModule
+          start_marker = '      <EnterpriseAdministrationModule\n        organization={dataset.organization}'
+          start = content.index(start_marker)
+          end = content.index('      />', start) + len('      />')
+          replacement = '''      <EnterpriseAdministrationModule
                 {...dataset}
                 locale={user.locale}
                 initialSection={section}
-              />'''.replace('              ', '      ').replace('                ', '        ')
-          if old not in content:
-              raise SystemExit('EnterpriseAdministrationModule call not found')
-          page.write_text(content.replace(old, new))
+              />'''.replace('                ', '        ').replace('              ', '      ')
+          page.write_text(content[:start] + replacement + content[end:])
 
           budget = Path('lib/enterprise/finance/budget-service.ts')
           content = budget.read_text()
           marker = 'type BudgetTransitionAction = keyof typeof ENTERPRISE_BUDGET_TRANSITIONS;\n'
           replacement = marker + 'type PreparedBudgetLine = Omit<Prisma.EnterpriseBudgetLineCreateManyInput, "organizationId" | "budgetId">;\n'
           if 'type PreparedBudgetLine' not in content:
-              if marker not in content:
-                  raise SystemExit('Budget type marker not found')
               content = content.replace(marker, replacement)
           content = content.replace(
               'const prepared: Prisma.EnterpriseBudgetLineUncheckedCreateWithoutBudgetInput[] = [];',
