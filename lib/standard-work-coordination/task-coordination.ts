@@ -36,16 +36,6 @@ export async function getTaskCoordinationContext(args: {
         canSeeAll: access.canSeeAll,
       }),
     },
-    select: {
-      id: true,
-      organizationId: true,
-      title: true,
-      status: true,
-      createdByUserId: true,
-      assignedToUserId: true,
-      parentTaskId: true,
-      revision: true,
-    },
   });
   if (!task) return null;
   const canMutate = canMutateOwnedObject({
