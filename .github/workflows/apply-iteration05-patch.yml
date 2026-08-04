@@ -1,9 +1,9 @@
 name: Apply iteration 05 patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/standard-modules-professionalization-iteration-05-ai-knowledge
+      - main
     paths:
       - .github/iteration05.patch.xz.b64
       - .github/workflows/apply-iteration05-patch.yml
@@ -13,13 +13,14 @@ permissions:
 
 jobs:
   apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout publishing branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Apply iteration patch
         run: |
@@ -32,4 +33,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat: professionalize DTSC AI and commercial maturity governance"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
