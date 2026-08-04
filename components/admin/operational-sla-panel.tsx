@@ -116,7 +116,7 @@ export function OperationalSlaPanel() {
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-600"><Gauge className="h-4 w-4" /> SLA opérationnels avancés</p>
           <h2 className="mt-2 text-2xl font-black text-dtsc-ink">Politiques, avertissements et dépassements</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Les politiques sont liées à des objets réels. L'évaluation calcule les états RUNNING, WARNING et BREACHED sans modifier le statut métier de l'objet.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Les politiques sont liées à des objets réels. L’évaluation calcule les états RUNNING, WARNING et BREACHED sans modifier le statut métier de l’objet.</p>
         </div>
         <Button type="button" variant="outline" onClick={() => void evaluate()} disabled={saving} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"><RefreshCcw className="h-4 w-4" /> Évaluer maintenant</Button>
       </div>

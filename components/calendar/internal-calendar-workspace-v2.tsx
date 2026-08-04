@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { CalendarCheck2, CalendarClock, Check, ChevronRight, Clock3, Filter, Pencil, Plus, RefreshCcw, Search, Trash2, UserRoundPlus, Users, X } from "lucide-react";
+import { CalendarCheck2, CalendarClock, Check, Filter, Pencil, Plus, RefreshCcw, Search, Trash2, UserRoundPlus, Users, X } from "lucide-react";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -240,7 +240,7 @@ export function InternalCalendarWorkspaceV2({
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Planning professionnel</p>
             <h1 className="mt-1 break-words text-3xl font-black text-dtsc-ink sm:text-4xl">Calendrier interne</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Le créateur reste responsable de son événement. Les autres collaborateurs reçoivent une invitation et l'événement ne rejoint leur agenda qu'après acceptation.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Le créateur reste responsable de son événement. Les autres collaborateurs reçoivent une invitation et l’événement ne rejoint leur agenda qu’après acceptation.</p>
           </div>
           <div className="flex min-w-0 flex-wrap gap-2">
             <ContextualUserGuide guide={ITERATION04_USER_GUIDES.CALENDAR} compact />
@@ -342,7 +342,7 @@ export function InternalCalendarWorkspaceV2({
 
       {eventToDelete ? (
         <Dialog open title="Annuler l'événement" description={eventToDelete.title} onClose={() => setEventToDelete(null)} className="max-w-lg">
-          <p className="text-sm leading-6 text-dtsc-muted">L'événement sera retiré des calendriers actifs. L'action reste traçable.</p>
+          <p className="text-sm leading-6 text-dtsc-muted">L’événement sera retiré des calendriers actifs. L’action reste traçable.</p>
           <div className="mt-5 flex flex-col justify-end gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => setEventToDelete(null)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">Conserver</Button>
             <Button type="button" onClick={() => void deleteEvent(eventToDelete)} className="rounded-xl bg-red-600 text-white">Annuler l'événement</Button>
@@ -497,7 +497,7 @@ function InvitationList({ invitations, collaborators, onSelect, onRespond }: { i
   return (
     <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
       <h2 className="text-2xl font-black text-dtsc-ink">Invitations en attente</h2>
-      <p className="mt-2 text-sm leading-6 text-dtsc-muted">Tant que vous n'acceptez pas, l'événement n'est pas ajouté à votre calendrier personnel.</p>
+      <p className="mt-2 text-sm leading-6 text-dtsc-muted">Tant que vous n’acceptez pas, l’événement n’est pas ajouté à votre calendrier personnel.</p>
       <div className="mt-5 grid min-w-0 gap-3 lg:grid-cols-2">
         {invitations.map((event) => (
           <article key={event.id} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
@@ -578,7 +578,7 @@ function EventFormDialog({ event, template, collaborators, context, onClose, onS
           <FormField label="Précision du lieu" hint="Salle, adresse ou information utile."><Input name="physicalLocation" defaultValue={event?.physicalLocation || ""} className="h-12 rounded-xl bg-dtsc-page" /></FormField>
         </div>
         <FormField label="Description / agenda" hint="Objectifs, consignes et résultats attendus."><textarea name="description" defaultValue={event?.description || ""} className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" /></FormField>
-        <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h3 className="font-black text-dtsc-ink">Participants à inviter</h3><p className="mt-1 text-xs leading-5 text-dtsc-muted">Chaque personne devra accepter avant que l'événement apparaisse dans son calendrier personnel.</p><div className="mt-3 grid max-h-72 min-w-0 gap-2 overflow-y-auto sm:grid-cols-2">{collaborators.filter((collaborator) => collaborator.id !== context.employeeId).map((collaborator) => <label key={collaborator.id} className="flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm"><input name="participantIds" value={collaborator.id} type="checkbox" defaultChecked={selected.has(collaborator.id)} className="mt-1 h-4 w-4 shrink-0 accent-cyan-500" /><span className="min-w-0"><span className="block break-words font-black text-dtsc-ink">{collaborator.fullName}</span><span className="mt-1 block break-words text-xs text-dtsc-muted">{collaborator.jobTitle} · {collaborator.department}</span></span></label>)}</div></section>
+        <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h3 className="font-black text-dtsc-ink">Participants à inviter</h3><p className="mt-1 text-xs leading-5 text-dtsc-muted">Chaque personne devra accepter avant que l’événement apparaisse dans son calendrier personnel.</p><div className="mt-3 grid max-h-72 min-w-0 gap-2 overflow-y-auto sm:grid-cols-2">{collaborators.filter((collaborator) => collaborator.id !== context.employeeId).map((collaborator) => <label key={collaborator.id} className="flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm"><input name="participantIds" value={collaborator.id} type="checkbox" defaultChecked={selected.has(collaborator.id)} className="mt-1 h-4 w-4 shrink-0 accent-cyan-500" /><span className="min-w-0"><span className="block break-words font-black text-dtsc-ink">{collaborator.fullName}</span><span className="mt-1 block break-words text-xs text-dtsc-muted">{collaborator.jobTitle} · {collaborator.department}</span></span></label>)}</div></section>
         {conflicts.length ? <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4"><h3 className="font-black text-amber-800 dark:text-amber-200">Conflits du responsable ou des participants</h3><div className="mt-2 space-y-2 text-sm text-amber-800 dark:text-amber-200">{conflicts.map((conflict, index) => <p key={`${conflict.message}-${index}`}>• {conflict.message}</p>)}</div><label className="mt-3 flex items-start gap-2 text-sm font-bold text-amber-900 dark:text-amber-100"><input type="checkbox" checked={allowConflicts} onChange={(inputEvent) => setAllowConflicts(inputEvent.target.checked)} className="mt-1 h-4 w-4 accent-amber-600" />Créer malgré les avertissements autorisés. Les conflits bloquants restent interdits.</label></section> : null}
         <div className="flex flex-col justify-end gap-2 sm:flex-row"><Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">Annuler</Button><Button type="submit" className="rounded-xl bg-dtsc-blue text-white">Enregistrer et notifier</Button></div>
       </form>

@@ -14,7 +14,7 @@ const reservationSchema = z.object({
   notes: z.string().trim().max(800).optional().or(z.literal("")),
 }).strict();
 
-async function getContext(req: Request) {
+async function getContext() {
   const session = await getSession();
   if (!session || !canAccessInternalCalendar({ role: session.role }, session)) return null;
   const context = await getCalendarContext({ id: session.userId, role: session.role }, session);
@@ -26,7 +26,7 @@ async function getContext(req: Request) {
 export async function POST(req: Request) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const auth = await getContext(req);
+  const auth = await getContext();
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const limited = await rateLimit(getRateLimitKey(req, `calendar-resource-reservation:${auth.session.userId}`), 120, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const auth = await getContext(req);
+  const auth = await getContext();
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = z.object({ id: z.string().min(5).max(120) }).safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });

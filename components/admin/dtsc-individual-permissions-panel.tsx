@@ -176,7 +176,7 @@ export function DtscIndividualPermissionsPanel() {
           <form onSubmit={grant} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <div>
               <h3 className="font-black text-dtsc-ink">Nouvelle permission</h3>
-              <p className="mt-1 text-xs leading-5 text-dtsc-muted">Sélectionnez le collaborateur, l'acte autorisé, la durée et un motif professionnel.</p>
+              <p className="mt-1 text-xs leading-5 text-dtsc-muted">Sélectionnez le collaborateur, l’acte autorisé, la durée et un motif professionnel.</p>
             </div>
 
             <label className="grid gap-2 text-sm font-bold text-dtsc-ink">

@@ -49,7 +49,6 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const startedAt = Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

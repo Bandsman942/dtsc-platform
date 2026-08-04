@@ -46,7 +46,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-600"><BookOpenCheck className="h-4 w-4" /> Aide contextuelle</p>
             <h2 className="mt-2 break-words text-xl font-black text-dtsc-ink">Guide des activités de {organization.name}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Le guide décrit les règles réelles de création, assignation, checklist, progression, commentaires, Kanban et transitions autorisées dans l'entreprise active.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Le guide décrit les règles réelles de création, assignation, checklist, progression, commentaires, Kanban et transitions autorisées dans l’entreprise active.</p>
           </div>
           <ContextualUserGuide guide={ITERATION04_USER_GUIDES.ENTERPRISE_ACTIVITIES} compact />
         </div>

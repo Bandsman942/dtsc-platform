@@ -145,7 +145,7 @@ export function CalendarAdvancedToolsPanel({
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">Outils avancés du calendrier</p>
           <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Créneaux, ressources et synchronisation externe</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Les fonctions locales restent disponibles. Les intégrations externes sont bloquées proprement lorsqu'aucun fournisseur n'est configuré.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Les fonctions locales restent disponibles. Les intégrations externes sont bloquées proprement lorsqu’aucun fournisseur n’est configuré.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => setSuggestionDialog(true)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"><CalendarSearch className="h-4 w-4" /> Proposer un créneau</Button>
@@ -173,11 +173,11 @@ export function CalendarAdvancedToolsPanel({
             <div className="flex items-start gap-2">{featureStatuses.externalCalendar.available ? <ShieldCheck className="mt-1 h-4 w-4 shrink-0" /> : <CloudOff className="mt-1 h-4 w-4 shrink-0" />}<p>{integrationMessage}</p></div>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2"><Button type="button" variant="outline" onClick={() => void requestExternalConnection("GOOGLE")} disabled={!featureStatuses.externalCalendar.available} className="rounded-xl border-dtsc-border">Google Calendar</Button><Button type="button" variant="outline" onClick={() => void requestExternalConnection("MICROSOFT")} disabled={!featureStatuses.externalCalendar.available} className="rounded-xl border-dtsc-border">Microsoft 365</Button></div>
-          <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-dtsc-muted"><Shapes className="mt-0.5 h-4 w-4 shrink-0" />La synchronisation ne contourne jamais l'acceptation des participants ni les contrôles d'accès du calendrier interne.</p>
+          <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-dtsc-muted"><Shapes className="mt-0.5 h-4 w-4 shrink-0" />La synchronisation ne contourne jamais l’acceptation des participants ni les contrôles d’accès du calendrier interne.</p>
         </section>
       </div>
 
-      <Dialog open={resourceDialog} title="Nouvelle ressource calendrier" description="Créez une ressource interne réservée à l'organisation active." onClose={() => setResourceDialog(false)} className="max-w-2xl">
+      <Dialog open={resourceDialog} title="Nouvelle ressource calendrier" description="Créez une ressource interne réservée à l’organisation active." onClose={() => setResourceDialog(false)} className="max-w-2xl">
         <form onSubmit={createResource} className="grid gap-3"><div className="grid gap-3 sm:grid-cols-2"><FormField label="Nom" hint="Nom lisible de la ressource."><Input name="name" required minLength={2} maxLength={160} className="h-12 rounded-xl bg-dtsc-page" /></FormField><FormField label="Type" hint="Catégorie de réservation."><select name="resourceType" className="h-12 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink">{["ROOM", "VEHICLE", "EQUIPMENT", "WORKSPACE", "OTHER"].map((value) => <option key={value}>{value}</option>)}</select></FormField><FormField label="Localisation" hint="Bâtiment, site ou emplacement."><Input name="location" maxLength={300} className="h-12 rounded-xl bg-dtsc-page" /></FormField><FormField label="Capacité" hint="Nombre de personnes ou unités."><Input name="capacity" type="number" min={1} max={10000} className="h-12 rounded-xl bg-dtsc-page" /></FormField></div><FormField label="Description" hint="Contraintes et informations utiles."><textarea name="description" maxLength={1000} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" /></FormField><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setResourceDialog(false)} className="rounded-xl">Annuler</Button><Button type="submit" disabled={saving} className="rounded-xl bg-dtsc-blue text-white">Créer</Button></div></form>
       </Dialog>
 
