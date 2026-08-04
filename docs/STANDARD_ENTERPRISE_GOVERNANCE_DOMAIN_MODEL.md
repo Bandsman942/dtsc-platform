@@ -1,7 +1,7 @@
 # Modèle canonique de pilotage et de gouvernance d’entreprise
 
-**Itération :** Modules standards 06/08  
-**Date :** 5 août 2026  
+**Itération :** Modules standards 06/08
+**Date :** 5 août 2026
 **Statut :** implémenté, E2E propriétaire non exécuté
 
 ## 1. Autorités de données
