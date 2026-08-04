@@ -38,8 +38,7 @@ jobs:
           git reset --hard origin/feat/standard-modules-professionalization-iteration-06-enterprise-governance
           git am /tmp/iteration06-series.mbox
           git checkout origin/feat/standard-modules-professionalization-iteration-06-enterprise-governance -- .github/workflows/quality-gates.yml
-          if ! git diff --quiet; then
-            git add .github/workflows/quality-gates.yml
+          if ! git diff --cached --quiet; then
             git commit -m "chore(ci): defer quality gate workflow update"
           fi
           git push origin HEAD:feat/standard-modules-professionalization-iteration-06-enterprise-governance
