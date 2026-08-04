@@ -1,0 +1,21 @@
+name: Export iteration 06 feature
+
+on:
+  push:
+    branches:
+      - chore/export-iteration-06-feature-validation
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive --format=zip --output=iteration-06-feature.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iteration-06-feature
+          path: iteration-06-feature.zip
+          retention-days: 1
