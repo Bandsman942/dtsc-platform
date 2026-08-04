@@ -1,11 +1,23 @@
 import { redirect } from "next/navigation";
 import type { CollaboratorAvailability, Prisma } from "@prisma/client";
-import { InternalCalendarModule, type CalendarAvailabilityItem, type CalendarEventItem } from "@/components/calendar/internal-calendar-module";
+import {
+  InternalCalendarWorkspaceV2,
+  type ProfessionalAvailability,
+  type ProfessionalCalendarEvent,
+} from "@/components/calendar/internal-calendar-workspace-v2";
 import { DtscWorkSchedulePanel } from "@/components/calendar/dtsc-work-schedule-panel";
 import { UnifiedWorkCalendarPanel, type UnifiedWorkCalendarItem } from "@/components/calendar/unified-work-calendar-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
-import { canAccessInternalCalendar, calendarEventInclude, canUseInternalCalendarFeature, collaboratorAvailabilityWhere, getCalendarCollaborators, getCalendarContext, internalCalendarAccessWhere } from "@/lib/internal-calendar";
+import { calendarEventAccessWhere, calendarInvitationWhere } from "@/lib/calendar-participation";
+import {
+  canAccessInternalCalendar,
+  calendarEventInclude,
+  canUseInternalCalendarFeature,
+  collaboratorAvailabilityWhere,
+  getCalendarCollaborators,
+  getCalendarContext,
+} from "@/lib/internal-calendar";
 import { SaasAccessNotice } from "@/components/enterprise/saas-access-notice";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { canAccessEnterpriseModule } from "@/lib/enterprise-sector-templates";
@@ -27,15 +39,11 @@ type CalendarProjectionSource = "calendar" | "tasks" | "requests" | "approvals" 
 export default async function CalendarPage() {
   const user = await requireUser();
   const session = await getSession();
-  if (!session || !canAccessInternalCalendar(user, session)) {
-    redirect("/dashboard");
-  }
+  if (!session || !canAccessInternalCalendar(user, session)) redirect("/dashboard");
 
   const context = await getCalendarContext({ id: user.id, role: user.role }, session);
+  if (!context.activeOrganizationId || !context.calendarCollaboratorId) redirect("/dashboard");
 
-  if (!context.activeOrganizationId || !context.calendarCollaboratorId) {
-    redirect("/dashboard");
-  }
   const calendarAccess = await canUseInternalCalendarFeature(context);
   if (!calendarAccess.allowed) {
     const entitlements = await getOrganizationEntitlements(context.activeOrganizationId);
@@ -69,17 +77,33 @@ export default async function CalendarPage() {
   const unifiedFrom = new Date(now.getTime() - 14 * 86_400_000);
   const unifiedTo = new Date(now.getTime() + 60 * 86_400_000);
 
-  const [events, availabilities, collaborators, weeklyRecords, exceptionRecords, teamWeeklyRecords, teamExceptionRecords, unifiedEvents] = await Promise.all([
+  const [
+    events,
+    invitations,
+    availabilities,
+    collaborators,
+    weeklyRecords,
+    exceptionRecords,
+    teamWeeklyRecords,
+    teamExceptionRecords,
+    unifiedEvents,
+  ] = await Promise.all([
     prisma.internalCalendarEvent.findMany({
-      where: internalCalendarAccessWhere(context),
+      where: calendarEventAccessWhere(context),
       include: calendarEventInclude(),
       orderBy: [{ startDateTime: "asc" }, { createdAt: "desc" }],
-      take: 200,
+      take: 300,
+    }),
+    prisma.internalCalendarEvent.findMany({
+      where: calendarInvitationWhere(context),
+      include: calendarEventInclude(),
+      orderBy: [{ startDateTime: "asc" }, { createdAt: "desc" }],
+      take: 100,
     }),
     prisma.collaboratorAvailability.findMany({
       where: ownAvailabilityWhere,
       orderBy: [{ specificDate: "asc" }, { recurrenceStart: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
-      take: 200,
+      take: 500,
     }),
     getCalendarCollaborators(context),
     context.dtscInternal
@@ -106,16 +130,16 @@ export default async function CalendarPage() {
       : Promise.resolve([]),
     teamReadAllowed
       ? prisma.collaboratorAvailability.findMany({
-          where: { organizationId: context.activeOrganizationId, deletedAt: null, recurrenceType: "Hebdomadaire", specificDate: null, dayOfWeek: { not: null }, availabilityStatus: "Disponible" },
+          where: { organizationId: context.activeOrganizationId, deletedAt: null, recurrenceType: "Hebdomadaire", specificDate: null, dayOfWeek: { not: null } },
           orderBy: [{ collaboratorId: "asc" }, { dayOfWeek: "asc" }, { startTime: "asc" }],
-          take: 500,
+          take: 1000,
         })
       : Promise.resolve([]),
     teamReadAllowed
       ? prisma.collaboratorAvailability.findMany({
           where: { organizationId: context.activeOrganizationId, deletedAt: null, recurrenceType: "Aucune", specificDate: { not: null } },
           orderBy: [{ specificDate: "desc" }, { startTime: "asc" }],
-          take: 500,
+          take: 1000,
         })
       : Promise.resolve([]),
     loadUnifiedWorkCalendar({
@@ -127,7 +151,7 @@ export default async function CalendarPage() {
       from: unifiedFrom,
       to: unifiedTo,
       sources: allowedSources,
-      internalCalendarWhere: internalCalendarAccessWhere(context),
+      internalCalendarWhere: calendarEventAccessWhere(context),
     }),
   ]);
 
@@ -139,11 +163,14 @@ export default async function CalendarPage() {
   });
   const weeklyMinutes = activeWeekly.reduce((sum, record) => sum + Math.max(0, timeMinutes(record.endTime) - timeMinutes(record.startTime)), 0);
   const activeDays = new Set(activeWeekly.map((record) => record.dayOfWeek).filter((value): value is number => typeof value === "number"));
+  const explorerRecords = context.dtscInternal
+    ? (teamReadAllowed ? [...teamWeeklyRecords, ...teamExceptionRecords] : [...weeklyRecords, ...exceptionRecords])
+    : availabilities;
 
   return (
     <AppShell user={user}>
       <div className="min-w-0 space-y-7">
-        {context.dtscInternal && (
+        {context.dtscInternal ? (
           <DtscWorkSchedulePanel
             initialWeeklyAvailabilities={weeklyRecords.map(serializeWeeklyAvailability)}
             initialExceptions={exceptionRecords.map((record) => serializeScheduleException(record, true))}
@@ -161,24 +188,26 @@ export default async function CalendarPage() {
             locale={user.locale}
             timezone={user.timezone || "Africa/Kinshasa"}
           />
-        )}
-        <UnifiedWorkCalendarPanel initialEvents={unifiedEvents.map(serializeUnifiedEvent)} locale={user.locale} />
-        <InternalCalendarModule
+        ) : null}
+
+        <InternalCalendarWorkspaceV2
           initialEvents={events.map(serializeCalendarEvent)}
-          initialAvailabilities={availabilities.map(serializeAvailability)}
+          initialInvitations={invitations.map(serializeCalendarEvent)}
+          availabilityRecords={explorerRecords.map(serializeAvailability)}
           collaborators={collaborators}
           context={{
-            employeeId: context.calendarCollaboratorId || null,
+            employeeId: context.calendarCollaboratorId,
+            userId: session.userId,
             canViewGlobal: context.canViewGlobal,
             canViewPeopleAvailability: context.canViewPeopleAvailability,
-            canManagePeople: context.canManagePeople,
-            canManagePeopleAvailability: !context.dtscInternal && context.canManagePeople,
             canOverrideConflicts: context.canOverrideConflicts,
             dtscScheduleProjection: context.dtscInternal,
           }}
-          userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
-          showLegacyAvailabilityEditor={!context.dtscInternal}
+          locale={user.locale}
+          timezone={user.timezone || "Africa/Kinshasa"}
         />
+
+        <UnifiedWorkCalendarPanel initialEvents={unifiedEvents.map(serializeUnifiedEvent)} locale={user.locale} />
       </div>
     </AppShell>
   );
@@ -186,7 +215,7 @@ export default async function CalendarPage() {
 
 type CalendarEventRecord = Prisma.InternalCalendarEventGetPayload<{ include: { participants: true; conflicts: true } }>;
 
-function serializeCalendarEvent(event: CalendarEventRecord): CalendarEventItem {
+function serializeCalendarEvent(event: CalendarEventRecord): ProfessionalCalendarEvent {
   return {
     id: event.id,
     title: event.title,
@@ -203,6 +232,9 @@ function serializeCalendarEvent(event: CalendarEventRecord): CalendarEventItem {
     ownerCollaboratorId: event.ownerCollaboratorId,
     departmentId: event.departmentId,
     visibility: event.visibility,
+    createdBy: event.createdBy,
+    createdAt: event.createdAt.toISOString(),
+    updatedAt: event.updatedAt.toISOString(),
     participants: event.participants.map((participant) => ({
       id: participant.id,
       collaboratorId: participant.collaboratorId,
@@ -222,14 +254,10 @@ function serializeCalendarEvent(event: CalendarEventRecord): CalendarEventItem {
 }
 
 function serializeUnifiedEvent(event: Awaited<ReturnType<typeof loadUnifiedWorkCalendar>>[number]): UnifiedWorkCalendarItem {
-  return {
-    ...event,
-    startsAt: event.startsAt.toISOString(),
-    endsAt: event.endsAt.toISOString(),
-  };
+  return { ...event, startsAt: event.startsAt.toISOString(), endsAt: event.endsAt.toISOString() };
 }
 
-function serializeAvailability(availability: CollaboratorAvailability): CalendarAvailabilityItem {
+function serializeAvailability(availability: CollaboratorAvailability): ProfessionalAvailability {
   return {
     id: availability.id,
     collaboratorId: availability.collaboratorId,
