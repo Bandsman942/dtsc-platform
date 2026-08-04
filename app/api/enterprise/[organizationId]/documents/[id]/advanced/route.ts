@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -151,4 +152,7 @@ async function callProvider(endpoint: string, apiKey: string, payload: Record<st
 function safeInteger(value: unknown) { const number = Number(value); return Number.isInteger(number) && number >= 0 ? number : 0; }
 function safeString(value: unknown) { return typeof value === "string" && value.length <= 500 ? value : null; }
 function safeErrorMessage(error: unknown) { return error instanceof Error ? error.message.slice(0, 500) : "Unknown provider error"; }
-function asJsonObject(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function asJsonObject(value: unknown): Prisma.InputJsonObject {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Prisma.InputJsonObject;
+}
