@@ -24,6 +24,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # The source series is versioned in this branch to avoid external transfer dependencies.
       - name: Rebuild iteration 06 commit series
         run: |
           cat .transfer/iteration06.xz.b64.* > /tmp/iteration06.xz.b64
