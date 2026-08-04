@@ -52,7 +52,7 @@ function taskChecks() {
 
 function requestChecks() {
   requireText("app/api/enterprise/[organizationId]/requests/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit"]);
-  requireText("lib/standard-work-coordination/request-coordination.ts", ["REQUEST_INFORMATION", "REOPEN", "EnterpriseOperationalEvent"]);
+  requireText("lib/standard-work-coordination/request-coordination.ts", ["REQUEST_INFORMATION", "REOPEN", "enterpriseOperationalEvent", "enterpriseOperationalComment"]);
 }
 
 function validationChecks() {
@@ -64,20 +64,20 @@ function validationChecks() {
 
 function meetingChecks() {
   requireText("prisma/standard-work-coordination.prisma", ["model EnterpriseMeetingAgendaItem", "model EnterpriseMeetingMinutesVersion", "model EnterpriseMeetingAction"]);
-  requireText("lib/standard-work-coordination/meeting-coordination.ts", ["ADD_AGENDA_ITEM", "SAVE_MINUTES", "PUBLISH_MINUTES", "CREATE_FOLLOW_UP_TASK"]);
+  requireText("lib/standard-work-coordination/meeting-coordination.ts", ["ADD_AGENDA_ITEM", "SAVE_MINUTES", "LINK_TASK", "MEETING_MINUTES_PUBLISHED"]);
   requireText("app/api/enterprise/[organizationId]/meetings/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit"]);
 }
 
 function workflowChecks() {
   requireText("components/enterprise/core-v2/enterprise-workflows-workspace.tsx", ["EnterpriseWorkflowsWorkspace"]);
-  requireText("lib/enterprise/workflows/runtime-utils.ts", ["idempotency"]);
+  requireText("prisma/enterprise-workflow-engine.prisma", ["model EnterpriseWorkflowVersion", "model EnterpriseWorkflowActionAttempt", "idempotencyKey", "workflowVersionId"]);
   requireText("scripts/qa-enterprise-workflow-engine-checks.mjs", ["workflow"]);
 }
 
 function documentChecks() {
   requireText("app/api/enterprise/[organizationId]/documents/[id]/links/route.ts", ["createEnterpriseLink", "EnterpriseDocument", "isSameOriginRequest", "canAccessEnterpriseDocument"]);
   requireText("components/enterprise/core-v2/enterprise-documents-workspace.tsx", ["/links", "/versions", "/download", "signedUrl"]);
-  requireText("scripts/qa-enterprise-core-v2-sprint7-checks.mjs", ["documents"]);
+  requireText("scripts/qa-enterprise-core-v2-sprint7-checks.mjs", ["EnterpriseDocumentVersion", "createSignedUrl", "private storage"]);
   requireNoText("prisma/standard-work-coordination.prisma", ["model EnterpriseDocumentLink"]);
 }
 
