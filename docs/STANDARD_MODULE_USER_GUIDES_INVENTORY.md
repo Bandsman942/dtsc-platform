@@ -30,3 +30,19 @@ Un module ne peut pas être promu vers `PROFESSIONAL_READY` ou `COMMERCIAL_READY
 - `docs/user-guides/COLLABORATION_MODERATION.md`
 
 Ils sont exposés dans `/help/standard` et depuis les modules Collaboration et Annonces.
+
+## Guides ajoutés — Itération 04
+
+- `docs/user-guides/CALENDAR.md`
+- `docs/user-guides/DTSC_ACTIVITIES.md`
+- `docs/user-guides/ENTERPRISE_ACTIVITIES.md`
+- `docs/user-guides/TASKS_OPERATIONS.md`
+- `docs/user-guides/INTERNAL_REQUESTS.md`
+- `docs/user-guides/VALIDATIONS.md`
+- `docs/user-guides/MEETINGS.md`
+- `docs/user-guides/WORKFLOWS.md`
+- `docs/user-guides/DOCUMENTS.md`
+
+Chaque guide documente les sources canoniques, les actions réellement exposées, les permissions, les liens profonds et les limites connues. L'audit `qa:standard-work-coordination-guides` vérifie leur présence et le maintien explicite d'une section **Limites**.
+
+Les guides ne constituent pas une preuve E2E. Leur exactitude finale doit être confirmée après le déploiement Production et les scénarios manuels du propriétaire.
