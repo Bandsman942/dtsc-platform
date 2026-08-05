@@ -22,6 +22,7 @@ export type ManagedBillingPlan = {
   slug: string;
   description: string;
   audience?: string;
+  commercialAudience?: string;
   priceUsd: number;
   dailyMessageLimit: number;
   dailyTokenLimit: number;
@@ -67,6 +68,7 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
     if (!editingPlan) return;
     const formData = new FormData(event.currentTarget);
     const payload = {
+      audience: String(formData.get("audience") || "PERSONAL"),
       name: String(formData.get("name") || ""),
       description: String(formData.get("description") || ""),
       priceUsd: String(formData.get("priceUsd") || ""),
@@ -125,7 +127,7 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-600">{english ? "DTSC ERP offer" : "Offre ERP DTSC"}</p>
                 <h3 className="mt-1 break-words text-xl font-black text-dtsc-ink">{plan.name}</h3>
-                {plan.audience && <p className="mt-2 text-xs font-bold leading-5 text-dtsc-muted">{plan.audience}</p>}
+                {plan.commercialAudience && <p className="mt-2 text-xs font-bold leading-5 text-dtsc-muted">{plan.commercialAudience}</p>}<p className="mt-2 inline-flex rounded-full bg-cyan-400/15 px-2.5 py-1 text-[0.68rem] font-black text-cyan-700 dark:text-cyan-200">{plan.audience === "ENTERPRISE" ? (english ? "Enterprise" : "Entreprise") : plan.audience === "BOTH" ? (english ? "Personal + enterprise" : "Personnel + entreprise") : (english ? "Personal" : "Personnel")}</p>
                 <p className="mt-2 text-sm leading-6 text-dtsc-muted">{plan.description}</p>
               </div>
               <div className="flex shrink-0 items-start gap-2">
@@ -188,7 +190,7 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
             <p className="rounded-lg border border-cyan-300/40 bg-cyan-400/10 p-4 text-sm font-semibold leading-6 text-dtsc-ink md:col-span-2">
               {english ? "The technical identifier and included module level remain governed by the DTSC catalog." : "L’identifiant technique et le niveau des modules inclus restent gouvernés par le catalogue DTSC."}
             </p>
-            <FormField label={english ? "Commercial name" : "Nom commercial"}><Input name="name" defaultValue={editingPlan.name} minLength={2} maxLength={120} required /></FormField>
+            <FormField label={english ? "Subscription type" : "Type d’abonnement"}><select name="audience" defaultValue={editingPlan.audience || "PERSONAL"} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink"><option value="PERSONAL">{english ? "Personal" : "Personnel"}</option><option value="ENTERPRISE">{english ? "Enterprise" : "Entreprise"}</option><option value="BOTH">{english ? "Personal and enterprise" : "Personnel et entreprise"}</option></select></FormField><FormField label={english ? "Commercial name" : "Nom commercial"}><Input name="name" defaultValue={editingPlan.name} minLength={2} maxLength={120} required /></FormField>
             <FormField label={english ? "Monthly price in USD" : "Prix mensuel en USD"}>
               <Input name="priceUsd" type="number" min="0" max="1000000" step="0.01" defaultValue={editingPlan.priceUsd} readOnly={editingPlan.id === "freemium"} required />
             </FormField>

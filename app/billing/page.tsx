@@ -27,7 +27,7 @@ export default async function BillingPage() {
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, organizationBillingRecords, usageToday, documentCount] = await Promise.all([
+  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, organizationBillingRecords, organizationInvoices, usageToday, documentCount] = await Promise.all([
     ensureBillingPlans(),
     prisma.subscription.findFirst({
       where: { userId: user.id },
@@ -35,7 +35,7 @@ export default async function BillingPage() {
       include: { plan: true },
     }),
     prisma.invoice.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, invoiceType: "SUBSCRIPTION_PERSONAL" },
       orderBy: { issuedAt: "desc" },
       take: 10,
     }),
@@ -51,6 +51,7 @@ export default async function BillingPage() {
       orderBy: { createdAt: "desc" },
       take: 10,
     }) : [],
+    activeOrganizationId ? prisma.invoice.findMany({ where: { organizationId: activeOrganizationId, invoiceType: "SUBSCRIPTION_ENTERPRISE" }, orderBy: { issuedAt: "desc" }, take: 10 }) : [],
     prisma.usageLog.aggregate({
       where: {
         userId: user.id,
@@ -95,7 +96,7 @@ export default async function BillingPage() {
           <ModuleMetric label="Messages aujourd’hui" value={usageToday._count._all} hint={activePlan ? `Limite ${activePlan.dailyMessageLimit}` : "Usage réel"} />
           <ModuleMetric label="Tokens aujourd’hui" value={usageToday._sum.totalTokens || 0} hint={activePlan ? `Limite ${activePlan.dailyTokenLimit}` : "Usage réel"} />
           <ModuleMetric label="Documents" value={documentCount} hint={activePlan ? `Limite ${activePlan.maxDocuments}` : "Contexte actif"} />
-          <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationBillingRecords.length} hint="Historique récent" />
+          <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationInvoices.length} hint="Historique récent" />
         </ModuleMetrics>
         <ModuleContent>
           <ModuleSection title="Source de vérité commerciale" description="Le catalogue de plans, l’abonnement, les entitlements et les limites serveur déterminent les capacités disponibles.">
@@ -107,19 +108,10 @@ export default async function BillingPage() {
           </ModuleSection>
 
           <ModuleSection title="Plans disponibles" description={paymentAvailable ? "Sélectionnez un plan uniquement lorsque le changement est réellement supporté par le fournisseur de paiement." : "Le catalogue reste consultable; aucune action de paiement fictive n’est présentée lorsque le fournisseur n’est pas configuré."}>
-            <BillingPlans
-              activePlanId={latestSubscription?.status === "ACTIVE" ? latestSubscription.planId : undefined}
-              paymentAvailable={paymentAvailable}
-              plans={plans.map((plan) => ({
-                id: plan.id,
-                name: plan.name,
-                description: plan.description,
-                priceUsd: Number(plan.priceUsd),
-                dailyMessageLimit: plan.dailyMessageLimit,
-                dailyTokenLimit: plan.dailyTokenLimit,
-                maxDocuments: plan.maxDocuments,
-              }))}
-            />
+            <div className="space-y-6">
+              <div><h3 className="mb-3 text-lg font-black text-dtsc-ink">Offres personnelles</h3><BillingPlans scope="PERSONAL" activePlanId={latestSubscription?.status === "ACTIVE" ? latestSubscription.planId : undefined} paymentAvailable={paymentAvailable} plans={plans.filter((plan) => ["PERSONAL", "BOTH"].includes(plan.audience)).map((plan) => ({ id: plan.id, name: plan.name, description: plan.description, priceUsd: Number(plan.priceUsd), dailyMessageLimit: plan.dailyMessageLimit, dailyTokenLimit: plan.dailyTokenLimit, maxDocuments: plan.maxDocuments }))} /></div>
+              {activeOrganizationId && activeOrganizationId !== "dtsc-internal" ? <div><h3 className="mb-3 text-lg font-black text-dtsc-ink">Offres de l’entreprise active</h3><BillingPlans scope="ENTERPRISE" paymentAvailable={paymentAvailable} plans={plans.filter((plan) => ["ENTERPRISE", "BOTH"].includes(plan.audience)).map((plan) => ({ id: plan.id, name: plan.name, description: plan.description, priceUsd: Number(plan.priceUsd), dailyMessageLimit: plan.dailyMessageLimit, dailyTokenLimit: plan.dailyTokenLimit, maxDocuments: plan.maxDocuments }))} /></div> : null}
+            </div>
           </ModuleSection>
 
           <Accordion>
@@ -151,8 +143,9 @@ export default async function BillingPage() {
                       ["Fin d’essai", dateLabel(organizationEntitlements.trialEndsAt)],
                     ].map(([label, value]) => <BusinessListItem key={label} title={label} status={<StatusBadge>{value}</StatusBadge>} />)}
                   </BusinessList>
+                  {organizationInvoices.length ? <BusinessList ariaLabel="Factures d’abonnement de l’organisation">{organizationInvoices.map((invoice) => <BusinessListItem key={invoice.id} title={invoice.number} description={`${invoice.planName} · ${Number(invoice.amount).toFixed(2)} ${invoice.currency}`} meta={`Émise le ${invoice.issuedAt.toLocaleDateString("fr-FR")}`} status={<StatusBadge>{formatEnumLabel(invoice.status)}</StatusBadge>} actions={<Link href={`/api/invoices/${invoice.id}/pdf`} target="_blank" className="inline-flex min-h-11 items-center rounded-xl bg-[#002b5b] px-3 text-xs font-black text-white hover:bg-[#001736]">Télécharger</Link>} />)}</BusinessList> : <EmptyState compact title="Aucune facture entreprise" />}
                   {organizationBillingRecords.length ? (
-                    <BusinessList ariaLabel="Facturation SaaS de l’organisation">
+                    <BusinessList ariaLabel="Paiements SaaS de l’organisation">
                       {organizationBillingRecords.map((record) => (
                         <BusinessListItem
                           key={record.id}

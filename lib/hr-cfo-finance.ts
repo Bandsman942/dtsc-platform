@@ -429,6 +429,8 @@ async function createOperationalInvoice(
       number: buildOperationalInvoiceNumber(),
       userId: input.userId,
       planName: input.title,
+      invoiceType: "HRCFO_TRANSACTION",
+      recipientEmails: [],
       amount: input.amount,
       currency: input.currency,
       status: input.paidAt ? InvoiceStatus.PAID : InvoiceStatus.ISSUED,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, Eye, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Columns3, Eye, List, Pencil, Plus, Search, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
@@ -82,6 +82,10 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
   const [submitTarget, setSubmitTarget] = useState<WorkSubmission | null>(null);
   const [conflictMessage, setConflictMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [weeklyView, setWeeklyView] = useState<"kanban" | "list">("kanban");
+  const [historyView, setHistoryView] = useState<"kanban" | "list">("kanban");
+  const [historyAxis, setHistoryAxis] = useState<"status" | "period">("status");
+  const [workQuery, setWorkQuery] = useState("");
   useToastMessage(message);
 
   const load = useCallback(async () => {
@@ -184,11 +188,15 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
               ) : null}
             </div>
 
-            <SubmissionEntries
-              submission={current}
+            <WorkEntriesBoard
+              entries={current.entries}
               locale={locale}
+              view={weeklyView}
+              query={workQuery}
               editable={currentEditable}
               saving={saving}
+              onViewChange={setWeeklyView}
+              onQueryChange={setWorkQuery}
               onEdit={(entry) => setEntryDialog({ open: true, entry, submission: current })}
               onDelete={(entry) => void removeEntry(entry, current)}
             />
@@ -202,30 +210,23 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
         <ModuleSection
           id="work-prestations-history"
           title={english ? "Submission history" : "Historique des prestations"}
-          description={english ? "Open any week to review entries, revisions, review decisions and timestamps." : "Ouvrez chaque semaine pour consulter les prestations, révisions, décisions de validation et dates de traçabilité."}
+          description={english ? "Filterable Kanban by status or period, with the same canonical submission data." : "Kanban filtrable par statut ou période, fondé sur les mêmes soumissions canoniques."}
           count={String(state.submissions.length)}
         >
-          <BusinessList ariaLabel={english ? "Submission history" : "Historique des prestations"}>
-            {state.submissions.map((submission) => {
-              const isPast = submission.periodEnd < state.currentPeriod.periodEnd;
-              const canSubmitPast = Boolean(state.capabilities?.canSubmitPastPeriods);
-              return (
-                <BusinessListItem
-                  key={submission.id}
-                  title={`${formatDate(submission.periodStart, locale)} → ${formatDate(submission.periodEnd, locale)}`}
-                  meta={`${english ? "Declared" : "Déclaré"}: ${formatMinutes(submission.declaredMinutes)}${submission.validatedMinutes !== null ? ` · ${english ? "Validated" : "Validé"}: ${formatMinutes(submission.validatedMinutes)}` : ""}`}
-                  description={submission.reviewComment || (isPast && isEditable(submission) && !canSubmitPast ? (english ? "Past-period submission requires an individual permission." : "La soumission de cette semaine passée exige une permission individuelle.") : (english ? "Open for full details." : "Ouvrez pour afficher tous les détails."))}
-                  status={<StatusBadge tone={statusTone(submission.status)}>{statusLabel(submission.status, english)}</StatusBadge>}
-                  actions={(
-                    <div className="flex items-center gap-2">
-                      <Button type="button" variant="outline" size="icon" onClick={() => setSelectedSubmission(submission)} className="rounded-xl border-dtsc-border text-dtsc-blue" aria-label={english ? "Open submission details" : "Ouvrir le détail des prestations"}><Eye className="h-4 w-4" /></Button>
-                      {canSubmitSubmission(submission) ? <Button type="button" size="icon" onClick={() => setSubmitTarget(submission)} className="rounded-xl bg-dtsc-blue text-white" aria-label={english ? "Submit period" : "Soumettre la période"}><Send className="h-4 w-4" /></Button> : null}
-                    </div>
-                  )}
-                />
-              );
-            })}
-          </BusinessList>
+          <SubmissionHistoryBoard
+            submissions={state.submissions}
+            currentPeriodEnd={state.currentPeriod.periodEnd}
+            canSubmitPast={Boolean(state.capabilities?.canSubmitPastPeriods)}
+            locale={locale}
+            english={english}
+            view={historyView}
+            axis={historyAxis}
+            onViewChange={setHistoryView}
+            onAxisChange={setHistoryAxis}
+            onOpen={setSelectedSubmission}
+            onSubmit={setSubmitTarget}
+            canSubmit={canSubmitSubmission}
+          />
         </ModuleSection>
       ) : null}
 
@@ -296,6 +297,48 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
     </>
   );
 }
+
+
+function WorkEntriesBoard({ entries, locale, view, query, editable, saving, onViewChange, onQueryChange, onEdit, onDelete }: { entries: WorkEntry[]; locale?: string | null; view: "kanban" | "list"; query: string; editable: boolean; saving: boolean; onViewChange: (view: "kanban" | "list") => void; onQueryChange: (value: string) => void; onEdit: (entry: WorkEntry) => void; onDelete: (entry: WorkEntry) => void }) {
+  const filtered = entries.filter((entry) => normalizeWorkSearch([entry.summary, entry.details, entry.locationMode, entry.workType, entry.workDate].filter(Boolean).join(" ")).includes(normalizeWorkSearch(query)));
+  const modes = [...new Set(filtered.map((entry) => entry.locationMode || "Non défini"))].sort((left, right) => left.localeCompare(right, "fr"));
+  return (
+    <div className="min-w-0 space-y-4">
+      <div data-responsive-actions className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <label className="relative min-w-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Filtrer les prestations de la semaine…" className="h-11 min-w-0 rounded-xl bg-dtsc-page pl-9" /></label>
+        <div className="grid grid-cols-2 rounded-xl border border-dtsc-border bg-dtsc-page p-1"><Button type="button" size="sm" variant={view === "kanban" ? "default" : "ghost"} onClick={() => onViewChange("kanban")} className="rounded-lg"><Columns3 className="h-4 w-4" />Kanban</Button><Button type="button" size="sm" variant={view === "list" ? "default" : "ghost"} onClick={() => onViewChange("list")} className="rounded-lg"><List className="h-4 w-4" />Liste</Button></div>
+      </div>
+      {!filtered.length ? <EmptyState compact title="Aucune prestation" description="Aucune prestation ne correspond au filtre actif." icon={Clock3} /> : view === "list" ? <SubmissionEntries submission={{ id: "view", periodStart: "", periodEnd: "", status: "DRAFT", declaredMinutes: 0, validatedMinutes: null, submittedAt: null, reviewComment: null, revision: 0, entries: filtered, reviews: [] }} locale={locale} editable={editable} saving={saving} onEdit={onEdit} onDelete={onDelete} /> : (
+        <div className="flex min-w-0 max-w-full gap-4 overflow-x-auto pb-3" aria-label="Prestations hebdomadaires en Kanban par mode de travail">
+          {modes.map((mode) => {
+            const cards = filtered.filter((entry) => (entry.locationMode || "Non défini") === mode);
+            return <section key={mode} className="w-[min(86vw,22rem)] shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3"><div className="flex items-center justify-between gap-3"><h3 className="break-words font-black text-dtsc-ink">{mode}</h3><span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-xs font-black text-cyan-700 dark:text-cyan-200">{cards.length}</span></div><div className="mt-3 max-h-[60dvh] space-y-3 overflow-y-auto pr-1">{cards.map((entry) => <article key={entry.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex flex-wrap gap-2">{entry.scheduleBlockingCount > 0 ? <StatusBadge tone="danger">Conflit absence</StatusBadge> : entry.scheduleOutsideAvailability ? <StatusBadge tone="warning">Hors disponibilité</StatusBadge> : entry.scheduleWarningCount > 0 ? <StatusBadge tone="info">Avertissement</StatusBadge> : <StatusBadge tone="success">Planning cohérent</StatusBadge>}</div><h4 className="mt-3 break-words font-black text-dtsc-ink">{entry.summary}</h4><p className="mt-1 text-xs font-bold text-dtsc-muted">{formatDate(entry.workDate, locale)} · {entry.startTime} → {entry.endTime} · {formatMinutes(entry.workedMinutes)}</p><p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-dtsc-muted">{workTypeLabel(entry.workType)}{entry.details ? ` · ${entry.details}` : ""}</p>{editable ? <div data-responsive-actions className="mt-3 flex flex-wrap gap-2 border-t border-dtsc-border pt-3"><Button type="button" size="sm" variant="outline" onClick={() => onEdit(entry)} className="rounded-lg"><Pencil className="h-3.5 w-3.5" />Modifier</Button><Button type="button" size="sm" variant="outline" disabled={saving} onClick={() => onDelete(entry)} className="rounded-lg text-red-700"><Trash2 className="h-3.5 w-3.5" />Supprimer</Button></div> : null}</article>)}</div></section>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubmissionHistoryBoard({ submissions, currentPeriodEnd, canSubmitPast, locale, english, view, axis, onViewChange, onAxisChange, onOpen, onSubmit, canSubmit }: { submissions: WorkSubmission[]; currentPeriodEnd: string; canSubmitPast: boolean; locale?: string | null; english: boolean; view: "kanban" | "list"; axis: "status" | "period"; onViewChange: (view: "kanban" | "list") => void; onAxisChange: (axis: "status" | "period") => void; onOpen: (submission: WorkSubmission) => void; onSubmit: (submission: WorkSubmission) => void; canSubmit: (submission: WorkSubmission) => boolean }) {
+  const groups = new Map<string, WorkSubmission[]>();
+  for (const submission of submissions) {
+    const key = axis === "status" ? submission.status : periodBucket(submission.periodEnd, currentPeriodEnd);
+    groups.set(key, [...(groups.get(key) || []), submission]);
+  }
+  const columns = [...groups.entries()].sort(([left], [right]) => historyOrder(axis, left) - historyOrder(axis, right)).map(([key, items]) => ({ key, label: axis === "status" ? statusLabel(key, english) : periodLabel(key, english), items }));
+  return <div className="min-w-0 space-y-4"><div data-responsive-actions className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[auto_auto] sm:justify-end"><label className="flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-xs font-black text-dtsc-muted">{english ? "Group by" : "Regrouper par"}<select value={axis} onChange={(event) => onAxisChange(event.target.value as "status" | "period")} className="h-9 border-0 bg-transparent text-sm font-black text-dtsc-ink outline-none"><option value="status">{english ? "Status" : "Statut"}</option><option value="period">{english ? "Period" : "Période"}</option></select></label><div className="grid grid-cols-2 rounded-xl border border-dtsc-border bg-dtsc-page p-1"><Button type="button" size="sm" variant={view === "kanban" ? "default" : "ghost"} onClick={() => onViewChange("kanban")} className="rounded-lg"><Columns3 className="h-4 w-4" />Kanban</Button><Button type="button" size="sm" variant={view === "list" ? "default" : "ghost"} onClick={() => onViewChange("list")} className="rounded-lg"><List className="h-4 w-4" />Liste</Button></div></div>{view === "list" ? <BusinessList ariaLabel={english ? "Submission history" : "Historique des prestations"}>{submissions.map((submission) => <SubmissionHistoryItem key={submission.id} submission={submission} currentPeriodEnd={currentPeriodEnd} canSubmitPast={canSubmitPast} locale={locale} english={english} onOpen={onOpen} onSubmit={onSubmit} canSubmit={canSubmit} />)}</BusinessList> : <div className="flex min-w-0 max-w-full gap-4 overflow-x-auto pb-3" aria-label={english ? "Submission history Kanban" : "Historique des prestations en Kanban"}>{columns.map((column) => <section key={column.key} className="w-[min(86vw,22rem)] shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3"><div className="flex items-center justify-between gap-3"><h3 className="break-words font-black text-dtsc-ink">{column.label}</h3><span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-xs font-black text-cyan-700 dark:text-cyan-200">{column.items.length}</span></div><div className="mt-3 max-h-[60dvh] space-y-3 overflow-y-auto pr-1">{column.items.map((submission) => <article key={submission.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><StatusBadge tone={statusTone(submission.status)}>{statusLabel(submission.status, english)}</StatusBadge><h4 className="mt-3 break-words font-black text-dtsc-ink">{formatDate(submission.periodStart, locale)} → {formatDate(submission.periodEnd, locale)}</h4><p className="mt-2 text-xs leading-5 text-dtsc-muted">{english ? "Declared" : "Déclaré"}: {formatMinutes(submission.declaredMinutes)} · {submission.entries.length} prestation(s)</p>{submission.reviewComment ? <p className="mt-2 line-clamp-3 text-xs leading-5 text-dtsc-muted">{submission.reviewComment}</p> : null}<div data-responsive-actions className="mt-3 flex flex-wrap gap-2 border-t border-dtsc-border pt-3"><Button type="button" size="sm" variant="outline" onClick={() => onOpen(submission)} className="rounded-lg"><Eye className="h-3.5 w-3.5" />{english ? "Open" : "Ouvrir"}</Button>{canSubmit(submission) ? <Button type="button" size="sm" onClick={() => onSubmit(submission)} className="rounded-lg bg-dtsc-blue text-white"><Send className="h-3.5 w-3.5" />{english ? "Submit" : "Soumettre"}</Button> : null}</div></article>)}</div></section>)}</div>}</div>;
+}
+
+function SubmissionHistoryItem({ submission, currentPeriodEnd, canSubmitPast, locale, english, onOpen, onSubmit, canSubmit }: { submission: WorkSubmission; currentPeriodEnd: string; canSubmitPast: boolean; locale?: string | null; english: boolean; onOpen: (submission: WorkSubmission) => void; onSubmit: (submission: WorkSubmission) => void; canSubmit: (submission: WorkSubmission) => boolean }) {
+  const isPast = submission.periodEnd < currentPeriodEnd;
+  return <BusinessListItem title={`${formatDate(submission.periodStart, locale)} → ${formatDate(submission.periodEnd, locale)}`} meta={`${english ? "Declared" : "Déclaré"}: ${formatMinutes(submission.declaredMinutes)}${submission.validatedMinutes !== null ? ` · ${english ? "Validated" : "Validé"}: ${formatMinutes(submission.validatedMinutes)}` : ""}`} description={submission.reviewComment || (isPast && isEditable(submission) && !canSubmitPast ? (english ? "Past-period submission requires an individual permission." : "La soumission de cette semaine passée exige une permission individuelle.") : (english ? "Open for full details." : "Ouvrez pour afficher tous les détails."))} status={<StatusBadge tone={statusTone(submission.status)}>{statusLabel(submission.status, english)}</StatusBadge>} actions={<div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon" onClick={() => onOpen(submission)} className="rounded-xl border-dtsc-border text-dtsc-blue" aria-label={english ? "Open submission details" : "Ouvrir le détail des prestations"}><Eye className="h-4 w-4" /></Button>{canSubmit(submission) ? <Button type="button" size="icon" onClick={() => onSubmit(submission)} className="rounded-xl bg-dtsc-blue text-white" aria-label={english ? "Submit period" : "Soumettre la période"}><Send className="h-4 w-4" /></Button> : null}</div>} />;
+}
+
+function periodBucket(periodEnd: string, currentPeriodEnd: string) { if (periodEnd === currentPeriodEnd) return "CURRENT"; return periodEnd < currentPeriodEnd ? "PAST" : "FUTURE"; }
+function periodLabel(value: string, english: boolean) { const labels: Record<string, [string, string]> = { CURRENT: ["Période courante", "Current period"], PAST: ["Périodes passées", "Past periods"], FUTURE: ["Périodes futures", "Future periods"] }; return labels[value]?.[english ? 1 : 0] || value; }
+function historyOrder(axis: "status" | "period", value: string) { const status: Record<string, number> = { DRAFT: 10, SUBMITTED: 20, RESUBMITTED: 21, CHANGES_REQUESTED: 30, APPROVED: 40, REJECTED: 50, CANCELLED: 60 }; const period: Record<string, number> = { CURRENT: 10, PAST: 20, FUTURE: 30 }; return (axis === "status" ? status : period)[value] || 90; }
+function normalizeWorkSearch(value: string) { return value.toLocaleLowerCase("fr-FR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); }
 
 function SubmissionEntries({ submission, locale, editable, saving, onEdit, onDelete }: { submission: WorkSubmission; locale?: string | null; editable: boolean; saving: boolean; onEdit: (entry: WorkEntry) => void; onDelete: (entry: WorkEntry) => void }) {
   return submission.entries.length ? (

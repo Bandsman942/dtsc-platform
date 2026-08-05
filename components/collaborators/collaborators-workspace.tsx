@@ -68,7 +68,7 @@ type GroupCall = {
   durationSeconds?: number | null;
   participants?: GroupCallParticipant[];
 };
-type JoinedCall = {
+export type JoinedCall = {
   call: GroupCall;
   token: string;
   livekitUrl: string;
@@ -1428,7 +1428,7 @@ function CallHistoryStrip({ group, userPreferences }: { group: Group; userPrefer
   );
 }
 
-function GroupCallRoom({
+export function GroupCallRoom({
   joinedCall,
   group,
   messages,

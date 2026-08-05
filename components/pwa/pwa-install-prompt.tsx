@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
+import { ProfessionalToolbox } from "@/components/toolbox/professional-toolbox";
 import { StandardModuleFallbackGuide } from "@/components/user-guides/standard-module-fallback-guide";
 import { Button } from "@/components/ui/button";
 
@@ -65,6 +66,7 @@ export function PWAInstallPrompt() {
     <>
       <Suspense fallback={null}>
         <StandardModuleFallbackGuide />
+        <ProfessionalToolbox />
       </Suspense>
       {visible && installEvent ? (
         <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-3xl rounded-2xl border border-cyan-400/40 bg-dtsc-surface p-4 shadow-[0_24px_80px_rgba(0,23,54,0.24)] sm:left-auto sm:right-6 sm:max-w-md">

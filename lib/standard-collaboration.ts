@@ -70,7 +70,7 @@ async function authorizedOrganizationIds(session: SessionPayload) {
 export async function authorizedCollaboratorIds(session: SessionPayload) {
   const organizationIds = await authorizedOrganizationIds(session);
   const scopedGroupFilter = collaborationGroupScopeWhere(session);
-  const [memberships, identityLinks, sharedGroupMembers, blocks] = await Promise.all([
+  const [memberships, identityLinks, sharedGroupMembers, connections, blocks] = await Promise.all([
     organizationIds.length
       ? prisma.organizationMember.findMany({
           where: {
@@ -107,6 +107,14 @@ export async function authorizedCollaboratorIds(session: SessionPayload) {
       select: { userId: true },
       take: 2_000,
     }),
+    prisma.collaborationConnection.findMany({
+      where: {
+        status: "ACCEPTED",
+        OR: [{ requesterId: session.userId }, { recipientId: session.userId }],
+      },
+      select: { requesterId: true, recipientId: true },
+      take: 2_000,
+    }),
     prisma.collaborationUserBlock.findMany({
       where: { revokedAt: null, OR: [{ blockerId: session.userId }, { blockedId: session.userId }] },
       select: { blockerId: true, blockedId: true },
@@ -119,6 +127,7 @@ export async function authorizedCollaboratorIds(session: SessionPayload) {
   for (const item of memberships) ids.add(item.userId);
   for (const item of identityLinks) if (item.userId) ids.add(item.userId);
   for (const item of sharedGroupMembers) ids.add(item.userId);
+  for (const item of connections) ids.add(item.requesterId === session.userId ? item.recipientId : item.requesterId);
   ids.delete(session.userId);
   for (const blockedId of blockedIds) ids.delete(blockedId);
   return [...ids];

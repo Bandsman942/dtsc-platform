@@ -1,0 +1,31 @@
+model SubscriptionManualPayment {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String   @unique
+  scope                      String
+  userId                     String?
+  organizationId             String?
+  planId                     String
+  subscriptionId             String?
+  organizationSubscriptionId String?
+  amount                     Decimal  @db.Decimal(10, 2)
+  currency                   String   @default("USD")
+  paymentMethod              String
+  paymentReference           String?
+  status                     String   @default("PENDING_VALIDATION")
+  requestedByUserId          String
+  validatedByUserId          String?
+  validationComment          String?
+  validatedAt                DateTime?
+  invoiceId                  String?
+  revenueTransactionId       String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([scope, status, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([validatedByUserId, validatedAt])
+  @@index([invoiceId])
+  @@index([revenueTransactionId])
+}

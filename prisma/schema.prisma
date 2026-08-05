@@ -264,6 +264,7 @@ model BillingPlan {
   name                      String
   slug                      String                     @unique
   description               String
+  audience                  String                     @default("PERSONAL")
   priceUsd                  Decimal                    @db.Decimal(10, 2)
   dailyMessageLimit         Int
   dailyTokenLimit           Int
@@ -347,9 +348,14 @@ model Invoice {
   payment            Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
   hrcfoTransactionId String?       @unique
   hrcfoTransaction   HrcfoExpense? @relation(fields: [hrcfoTransactionId], references: [id], onDelete: SetNull)
+  invoiceType         String        @default("SUBSCRIPTION_PERSONAL")
+  organizationId      String?
+  recipientEmails     Json?
 
   @@index([userId, issuedAt])
   @@index([status, issuedAt])
+  @@index([invoiceType, issuedAt])
+  @@index([organizationId, invoiceType, issuedAt])
 }
 
 model KnowledgeDocument {

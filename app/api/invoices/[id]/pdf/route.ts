@@ -1,4 +1,7 @@
+import { requireConsoleCapability } from "@/lib/admin-api";
 import { getSession } from "@/lib/auth";
+import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
+import { canAccessOrganizationAdministration, requireActiveOrganizationMembership } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,14 +22,22 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const invoice = await prisma.invoice.findFirst({
-    where: session.role === "ADMIN" ? { id } : { id, userId: session.userId },
+  const invoice = await prisma.invoice.findUnique({
+    where: { id },
     include: { user: true, payment: true, hrcfoTransaction: { include: { account: true, department: true, budget: true } } },
   });
 
-  if (!invoice) {
-    return new Response("Not found", { status: 404 });
+  if (!invoice) return new Response("Not found", { status: 404 });
+  let authorized = invoice.userId === session.userId || session.role === "ADMIN";
+  if (!authorized && invoice.organizationId && session.activeOrganizationId === invoice.organizationId) {
+    const membership = await requireActiveOrganizationMembership(session, invoice.organizationId);
+    authorized = Boolean(membership && canAccessOrganizationAdministration(membership.role));
   }
+  if (!authorized && invoice.invoiceType === "HRCFO_TRANSACTION") {
+    const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.FINANCE_INVOICES_READ);
+    authorized = !access.response;
+  }
+  if (!authorized) return new Response("Not found", { status: 404 });
 
   const invoiceNumber = escapeHtml(invoice.number);
   const clientName = escapeHtml(invoice.user.name);

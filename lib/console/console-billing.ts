@@ -59,7 +59,7 @@ export async function getConsoleBillingDataset(input: {
     prisma.billingPlan.findMany({
       orderBy: [{ sortOrder: "asc" }, { priceUsd: "asc" }],
       select: {
-        id: true, name: true, slug: true, description: true, priceUsd: true, dailyMessageLimit: true, dailyTokenLimit: true,
+        id: true, name: true, slug: true, description: true, audience: true, priceUsd: true, dailyMessageLimit: true, dailyTokenLimit: true,
         maxDocuments: true, isActive: true, sortOrder: true, updatedAt: true,
         _count: { select: { subscriptions: true, organizationSubscriptions: true, versions: true } },
         versions: { orderBy: { version: "desc" }, take: 5 },
@@ -79,7 +79,8 @@ export async function getConsoleBillingDataset(input: {
       configuredName: plan.name,
       slug: plan.slug,
       description: PLAN_COMMERCIAL_PROFILES[planCode].promiseFr,
-      audience: PLAN_COMMERCIAL_PROFILES[planCode].audienceFr,
+      audience: plan.audience,
+      commercialAudience: PLAN_COMMERCIAL_PROFILES[planCode].audienceFr,
       priceUsd: Number(plan.priceUsd),
       dailyMessageLimit: plan.dailyMessageLimit,
       dailyTokenLimit: plan.dailyTokenLimit,
@@ -131,10 +132,20 @@ export async function getConsoleBillingDataset(input: {
     createdAt: payment.createdAt.toISOString(), paidAt: payment.paidAt?.toISOString() || null,
   }));
 
+  const [personalSubscriptions, personalTargets, manualPayments, invoiceRows] = await Promise.all([
+    prisma.subscription.findMany({ orderBy: [{ updatedAt: "desc" }, { id: "desc" }], include: { user: { select: { id: true, name: true, email: true } }, plan: { select: { id: true, name: true, audience: true, priceUsd: true } } }, take: 100 }),
+    prisma.user.findMany({ where: { status: "ACTIVE" }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true }, take: 300 }),
+    prisma.subscriptionManualPayment.findMany({ orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 }),
+    prisma.invoice.findMany({ orderBy: [{ issuedAt: "desc" }, { id: "desc" }], include: { user: { select: { name: true, email: true } }, hrcfoTransaction: { select: { title: true, transactionCategory: true, status: true } } }, take: 150 }),
+  ]);
+  const userMap = new Map(personalTargets.map((item) => [item.id, item]));
+  const organizationMap = new Map(organizations.map((item) => [item.id, item]));
+  const planMap = new Map(plans.map((item) => [item.id, item]));
+
   return {
     payments,
     billingPlans,
-    billingPlanOptions: billingPlans.filter((plan) => activePlanIds.has(plan.id)).map(({ id, name, slug, priceUsd, planCode, limits, moduleCatalog }) => ({ id, name, slug, priceUsd, planCode, limits, moduleCatalog })),
+    billingPlanOptions: billingPlans.filter((plan) => activePlanIds.has(plan.id) && ["ENTERPRISE", "BOTH"].includes(plan.audience)).map(({ id, name, slug, priceUsd, planCode, limits, moduleCatalog, audience }) => ({ id, name, slug, priceUsd, planCode, limits, moduleCatalog, audience })),
     organizationSubscriptionItems,
     billingSummary: {
       organizations: organizationTotal,
@@ -149,6 +160,11 @@ export async function getConsoleBillingDataset(input: {
       invoices: invoiceCount,
     },
     paymentAuditItems,
+    personalSubscriptionItems: personalSubscriptions.map((item) => ({ id: item.id, userId: item.userId, userName: item.user.name, userEmail: item.user.email, planId: item.planId, planName: item.plan.name, priceUsd: Number(item.plan.priceUsd), status: item.status, currentPeriodStart: item.currentPeriodStart?.toISOString() || null, currentPeriodEnd: item.currentPeriodEnd?.toISOString() || null, updatedAt: item.updatedAt.toISOString() })),
+    personalTargets,
+    enterpriseTargets: organizations.map((item) => ({ id: item.id, name: item.name, email: item.email })),
+    manualPaymentItems: manualPayments.map((item) => ({ id: item.id, scope: item.scope, targetId: item.userId || item.organizationId || "", targetName: item.userId ? (userMap.get(item.userId)?.name || userMap.get(item.userId)?.email || item.userId) : item.organizationId ? (organizationMap.get(item.organizationId)?.name || item.organizationId) : "Cible inconnue", planId: item.planId, planName: planMap.get(item.planId)?.name || item.planId, amount: Number(item.amount), currency: item.currency, paymentMethod: item.paymentMethod, paymentReference: item.paymentReference, status: item.status, validationComment: item.validationComment, invoiceId: item.invoiceId, revenueTransactionId: item.revenueTransactionId, createdAt: item.createdAt.toISOString(), validatedAt: item.validatedAt?.toISOString() || null })),
+    invoiceItems: invoiceRows.map((item) => ({ id: item.id, number: item.number, invoiceType: item.invoiceType, organizationId: item.organizationId, recipient: item.user.name || item.user.email, recipientEmail: item.user.email, planName: item.planName, amount: Number(item.amount), currency: item.currency, status: item.status, issuedAt: item.issuedAt.toISOString(), paidAt: item.paidAt?.toISOString() || null, emailSentAt: item.emailSentAt?.toISOString() || null, transactionTitle: item.hrcfoTransaction?.title || null, transactionCategory: item.hrcfoTransaction?.transactionCategory || null })),
     organizationPagination: buildConsolePagination(organizationTotal, paging.page, paging.pageSize),
     paymentPagination: buildConsolePagination(paymentTotal, paymentPaging.page, paymentPaging.pageSize),
     filters: { search, status: input.status || null, planId: input.planId || null, paymentStatus: input.paymentStatus || null },

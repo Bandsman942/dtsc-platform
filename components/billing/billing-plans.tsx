@@ -20,10 +20,12 @@ export function BillingPlans({
   plans,
   activePlanId,
   paymentAvailable,
+  scope = "PERSONAL",
 }: {
   plans: Plan[];
   activePlanId?: string;
   paymentAvailable: boolean;
+  scope?: "PERSONAL" | "ENTERPRISE";
 }) {
   const [walletId, setWalletId] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
@@ -41,7 +43,7 @@ export function BillingPlans({
     }
 
     setIsPending(true);
-    const response = await fetch("/api/billing/checkout", {
+    const response = await fetch(scope === "ENTERPRISE" ? "/api/billing/organization-checkout" : "/api/billing/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ planId, walletId, provider: "MPESA" }),
@@ -55,9 +57,9 @@ export function BillingPlans({
     }
 
     if (body.free) {
-      toastSuccess("Plan gratuit activé.");
+      toastSuccess(scope === "ENTERPRISE" ? "Offre entreprise activée." : "Plan gratuit activé.");
     } else {
-      toastInfo(`Paiement initié. Référence: ${body.paymentReference}. Confirmez la demande sur votre téléphone.`, "Paiement initié");
+      toastInfo(`${scope === "ENTERPRISE" ? "Paiement entreprise initié" : "Paiement initié"}. Référence: ${body.paymentReference}. Confirmez la demande sur votre téléphone.`, "Paiement initié");
     }
   }
 

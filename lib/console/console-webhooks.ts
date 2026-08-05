@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { activateSubscriptionFromPayment } from "@/lib/billing";
+import { activateOrganizationSubscriptionFromBillingReference, activateSubscriptionFromPayment } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { maishaPayCallbackSchema } from "@/lib/validators";
 
@@ -26,7 +26,8 @@ export async function processStoredWebhookEvent(eventId: string, options: { manu
     if (!payload.success) throw new Error("Stored payload no longer matches the provider contract.");
     const reference = payload.data.transactionReference || payload.data.originatingTransactionId;
     if (!reference) throw new Error("Stored payment reference is missing.");
-    const result = await activateSubscriptionFromPayment(reference, payload.data);
+    const personalResult = await activateSubscriptionFromPayment(reference, payload.data);
+    const result = personalResult.ok ? personalResult : await activateOrganizationSubscriptionFromBillingReference(reference, payload.data);
     if (!result.ok) {
       await prisma.webhookEvent.update({ where: { id: event.id }, data: { status: "UNMATCHED", lastError: result.reason, processedAt: new Date(), nextRetryAt: new Date(Date.now() + 15 * 60 * 1000) } });
       return { ok: false as const, reasonCode: "PAYMENT_NOT_FOUND", reference };
