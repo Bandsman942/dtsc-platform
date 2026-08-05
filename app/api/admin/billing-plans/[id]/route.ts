@@ -1,8 +1,7 @@
-import { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { isDtscInternalSession } from "@/lib/organizations";
+import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -14,89 +13,97 @@ export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
     await writeApiLog({ request: req, statusCode: 403, startedAt, metadata: { action: "billing_plan_update_origin_denied" } });
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", reasonCode: "ORIGIN_FORBIDDEN" }, { status: 403 });
   }
+  const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.SUBSCRIPTIONS_MANAGE);
+  if (access.response) return access.response;
 
-  const session = await getSession();
-  if (!session) {
-    await writeApiLog({ request: req, statusCode: 401, startedAt });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isDtscInternalSession(session) || session.role !== UserRole.ADMIN) {
-    await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Seul un administrateur DTSC peut modifier les plans et tarifs." }, { status: 403 });
-  }
-
-  const limited = await rateLimit(getRateLimitKey(req, `billing-plan-update:${session.userId}`), 30, 60 * 60 * 1000);
+  const limited = await rateLimit(getRateLimitKey(req, `billing-plan-update:${access.session.userId}`), 30, 60 * 60 * 1000);
   if (!limited.ok) {
-    await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Too many requests", message: "Trop de modifications tarifaires sur une courte période." }, { status: 429 });
+    await writeApiLog({ request: req, statusCode: 429, userId: access.session.userId, startedAt });
+    return NextResponse.json({ error: "Too many requests", reasonCode: "RATE_LIMITED" }, { status: 429 });
   }
-
   const parsed = billingPlanUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Invalid payload", message: "Les informations du plan sont invalides." }, { status: 400 });
+    await writeApiLog({ request: req, statusCode: 400, userId: access.session.userId, startedAt });
+    return NextResponse.json({ error: "Invalid payload", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
   }
 
   const { id } = await params;
-  const current = await prisma.billingPlan.findUnique({ where: { id } });
-  if (!current) {
-    await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Not found", message: "Plan introuvable." }, { status: 404 });
-  }
-  if (current.id === "freemium" && !parsed.data.isActive) {
-    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Free plan required", message: "Le plan gratuit Découverte doit rester actif pour les inscriptions et le fallback de paiement." }, { status: 409 });
-  }
-  if (current.id === "freemium" && parsed.data.priceUsd !== 0) {
-    await writeApiLog({ request: req, statusCode: 409, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Free plan price required", message: "Le plan Découverte doit conserver un prix de 0 USD. Modifiez un plan payant pour changer la tarification." }, { status: 409 });
+  const current = await prisma.billingPlan.findUnique({ where: { id }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
+  if (!current) return NextResponse.json({ error: "Not found", reasonCode: "NOT_FOUND" }, { status: 404 });
+  if (current.id === "freemium" && (!parsed.data.isActive || parsed.data.priceUsd !== 0)) {
+    return NextResponse.json({ error: "Protected free plan", reasonCode: "SYSTEM_PLAN_PROTECTED" }, { status: 409 });
   }
 
-  const updated = await prisma.billingPlan.update({
-    where: { id },
-    data: {
-      name: parsed.data.name,
-      description: parsed.data.description,
-      priceUsd: parsed.data.priceUsd,
-      dailyMessageLimit: parsed.data.dailyMessageLimit,
-      dailyTokenLimit: parsed.data.dailyTokenLimit,
-      maxDocuments: parsed.data.maxDocuments,
-      sortOrder: parsed.data.sortOrder,
-      isActive: parsed.data.isActive,
-    },
+  const effectiveAt = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    let latestVersion = current.versions[0]?.version || 0;
+    if (!latestVersion) {
+      await tx.billingPlanVersion.create({
+        data: {
+          planId: current.id,
+          version: 1,
+          name: current.name,
+          description: current.description,
+          priceUsd: current.priceUsd,
+          dailyMessageLimit: current.dailyMessageLimit,
+          dailyTokenLimit: current.dailyTokenLimit,
+          maxDocuments: current.maxDocuments,
+          effectiveAt: current.createdAt,
+          retiredAt: effectiveAt,
+          createdByUserId: access.session.userId,
+          reason: "Initial historical snapshot created before iteration 07 update",
+        },
+      });
+      latestVersion = 1;
+    } else {
+      await tx.billingPlanVersion.updateMany({ where: { planId: current.id, version: latestVersion, retiredAt: null }, data: { retiredAt: effectiveAt } });
+    }
+
+    const next = await tx.billingPlan.update({
+      where: { id },
+      data: {
+        name: parsed.data.name,
+        description: parsed.data.description,
+        priceUsd: parsed.data.priceUsd,
+        dailyMessageLimit: parsed.data.dailyMessageLimit,
+        dailyTokenLimit: parsed.data.dailyTokenLimit,
+        maxDocuments: parsed.data.maxDocuments,
+        sortOrder: parsed.data.sortOrder,
+        isActive: parsed.data.isActive,
+      },
+    });
+    await tx.billingPlanVersion.create({
+      data: {
+        planId: next.id,
+        version: latestVersion + 1,
+        name: next.name,
+        description: next.description,
+        priceUsd: next.priceUsd,
+        dailyMessageLimit: next.dailyMessageLimit,
+        dailyTokenLimit: next.dailyTokenLimit,
+        maxDocuments: next.maxDocuments,
+        effectiveAt,
+        createdByUserId: access.session.userId,
+        reason: parsed.data.reason,
+      },
+    });
+    return next;
   });
 
   await writeAuditLog({
-    userId: session.userId,
-    action: "BILLING_PLAN_UPDATED",
+    userId: access.session.userId,
+    action: "BILLING_PLAN_VERSION_CREATED",
     entity: "BillingPlan",
     entityId: updated.id,
+    before: { name: current.name, priceUsd: Number(current.priceUsd), dailyMessageLimit: current.dailyMessageLimit, dailyTokenLimit: current.dailyTokenLimit, maxDocuments: current.maxDocuments, sortOrder: current.sortOrder, isActive: current.isActive },
+    after: { name: updated.name, priceUsd: Number(updated.priceUsd), dailyMessageLimit: updated.dailyMessageLimit, dailyTokenLimit: updated.dailyTokenLimit, maxDocuments: updated.maxDocuments, sortOrder: updated.sortOrder, isActive: updated.isActive },
+    reasonCode: access.reasonCode,
+    riskLevel: "HIGH",
+    metadata: { reason: parsed.data.reason, slug: current.slug, effectiveAt: effectiveAt.toISOString() },
     request: req,
-    metadata: {
-      reason: parsed.data.reason,
-      slug: current.slug,
-      previous: {
-        name: current.name,
-        priceUsd: Number(current.priceUsd),
-        dailyMessageLimit: current.dailyMessageLimit,
-        dailyTokenLimit: current.dailyTokenLimit,
-        maxDocuments: current.maxDocuments,
-        sortOrder: current.sortOrder,
-        isActive: current.isActive,
-      },
-      next: {
-        name: updated.name,
-        priceUsd: Number(updated.priceUsd),
-        dailyMessageLimit: updated.dailyMessageLimit,
-        dailyTokenLimit: updated.dailyTokenLimit,
-        maxDocuments: updated.maxDocuments,
-        sortOrder: updated.sortOrder,
-        isActive: updated.isActive,
-      },
-    },
   });
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { planId: updated.id } });
-  return NextResponse.json({ ok: true, planId: updated.id });
+  await writeApiLog({ request: req, statusCode: 200, userId: access.session.userId, startedAt, metadata: { planId: updated.id } });
+  return NextResponse.json({ ok: true, planId: updated.id, reasonCode: access.reasonCode });
 }

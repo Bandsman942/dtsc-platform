@@ -88,3 +88,7 @@ La cible reste provisoire tant que la PR n'est pas verte, revue, fusionnée dans
 | Maturité commerciale/Kanban | `PROFESSIONAL_READY` | E2E rôles et transitions |
 
 `COMMERCIAL_READY` reste bloqué sans Production, E2E `PASSED`, preuve persistée et validation explicite du propriétaire.
+
+## Itération 07
+
+Les modules Console sont évalués séparément et peuvent atteindre `PROFESSIONAL_READY` après QA et Production. `COMMERCIAL_READY` reste bloqué tant que les E2E manuels du propriétaire ne sont pas `PASSED` et qu’une validation explicite n’est pas persistée.

@@ -275,6 +275,7 @@ model BillingPlan {
   subscriptions             Subscription[]
   organizationSubscriptions OrganizationSubscription[]
   invoices                  Invoice[]
+  versions                  BillingPlanVersion[]
 
   @@index([isActive, sortOrder])
 }
@@ -5010,6 +5011,16 @@ model SupportTicket {
   status               TicketStatus    @default(OPEN)
   priority             TicketPriority  @default(MEDIUM)
   resolution           String?
+  assignedAt           DateTime?
+  firstRespondedAt     DateTime?
+  slaFirstResponseDueAt DateTime?
+  slaResolutionDueAt   DateTime?
+  slaPausedAt          DateTime?
+  slaBreachedAt        DateTime?
+  escalatedAt          DateTime?
+  escalationReason     String?
+  satisfactionRating   Int?
+  satisfactionComment  String?
   resolvedAt           DateTime?
   closedAt             DateTime?
   createdAt            DateTime        @default(now())
@@ -5021,6 +5032,9 @@ model SupportTicket {
   @@index([userId, status])
   @@index([organizationId, status, createdAt])
   @@index([priority, createdAt])
+  @@index([assignedToDtscUserId, status, updatedAt])
+  @@index([slaFirstResponseDueAt, firstRespondedAt])
+  @@index([slaResolutionDueAt, resolvedAt])
 }
 
 model TicketMessage {
@@ -5062,14 +5076,21 @@ model PublicPublication {
   content    String
   coverLabel String?
   published  Boolean                     @default(false)
+  status     String                      @default("DRAFT")
+  locale     String                      @default("fr")
+  seoJson    Json?
+  publishedAt DateTime?
+  archivedAt DateTime?
   authorId   String?
   createdAt  DateTime                    @default(now())
   updatedAt  DateTime                    @updatedAt
   author     User?                       @relation(fields: [authorId], references: [id], onDelete: SetNull)
   comments   PublicPublicationComment[]
   reactions  PublicPublicationReaction[]
+  versions   PublicPublicationVersion[]
 
   @@index([category, published, createdAt])
+  @@index([status, locale, publishedAt])
   @@index([authorId])
 }
 
@@ -5328,14 +5349,22 @@ model WebhookEvent {
   eventType   String
   status      String    @default("RECEIVED")
   payload     Json
-  attempts    Int       @default(0)
-  lastError   String?
-  processedAt DateTime?
+  attempts       Int       @default(0)
+  lastError      String?
+  requestId      String?
+  idempotencyKey String?
+  lastAttemptAt  DateTime?
+  nextRetryAt    DateTime?
+  appliedAt      DateTime?
+  processedAt    DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([provider, eventType, createdAt])
   @@index([status, createdAt])
+  @@index([requestId])
+  @@index([idempotencyKey])
+  @@unique([provider, idempotencyKey])
 }
 
 model ApiLog {
@@ -5353,6 +5382,138 @@ model ApiLog {
   @@index([path, createdAt])
   @@index([statusCode, createdAt])
   @@index([userId, createdAt])
+}
+
+
+model BillingPlanVersion {
+  id                   String      @id @default(cuid())
+  planId               String
+  version              Int
+  name                 String
+  description          String
+  priceUsd             Decimal     @db.Decimal(10, 2)
+  dailyMessageLimit    Int
+  dailyTokenLimit      Int
+  maxDocuments         Int
+  effectiveAt          DateTime
+  retiredAt            DateTime?
+  createdByUserId      String?
+  reason               String?
+  createdAt            DateTime    @default(now())
+  plan                 BillingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, version])
+  @@index([planId, effectiveAt])
+}
+
+model PublicPublicationVersion {
+  id              String            @id @default(cuid())
+  publicationId   String
+  version         Int
+  title           String
+  slug            String
+  category        String
+  excerpt         String
+  content         String
+  coverLabel      String?
+  published       Boolean
+  locale          String            @default("fr")
+  seoJson         Json?
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+  publication     PublicPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([publicationId, version])
+  @@index([publicationId, createdAt])
+}
+
+model PlatformIncident {
+  id                String   @id @default(cuid())
+  reference         String   @unique
+  title             String
+  description       String
+  service           String
+  severity          String
+  status            String   @default("OPEN")
+  ownerUserId       String?
+  startedAt         DateTime
+  detectedAt        DateTime @default(now())
+  impact             String?
+  updatesJson        Json?
+  resolvedAt         DateTime?
+  cause              String?
+  correctiveActions String?
+  logReference       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, severity, startedAt])
+  @@index([service, startedAt])
+  @@index([ownerUserId])
+}
+
+model FeatureFlag {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  descriptionFr     String
+  descriptionEn     String
+  status            String   @default("DISABLED")
+  audience          String   @default("INTERNAL")
+  environment       String   @default("PRODUCTION")
+  rolloutPercentage Int      @default(0)
+  organizationIds   Json?
+  userIds           Json?
+  startsAt          DateTime?
+  endsAt            DateTime?
+  ownerUserId       String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status, environment])
+  @@index([ownerUserId])
+}
+
+model PlatformSettingHistory {
+  id              String   @id @default(cuid())
+  settingCode     String
+  category        String
+  valueType       String
+  previousValue   Json?
+  nextValue       Json?
+  sensitive       Boolean  @default(false)
+  environment     String   @default("PRODUCTION")
+  effect          String?
+  restartRequired Boolean  @default(false)
+  reason          String
+  actorUserId     String
+  requestId       String?
+  createdAt       DateTime @default(now())
+
+  @@index([settingCode, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([requestId])
+}
+
+model ConsoleOperationJob {
+  id             String   @id @default(cuid())
+  operationType  String
+  status         String   @default("PENDING")
+  actorUserId    String
+  reason         String
+  requestId      String?
+  inputJson      Json?
+  resultJson     Json?
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([operationType, status, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([requestId])
 }
 
 model HrcfoEmployee {

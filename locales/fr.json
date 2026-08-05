@@ -997,5 +997,109 @@
     "systemRoleProtected": "Ce rôle système est protégé.",
     "permissionSimulation": "Simulation des permissions",
     "exportApprovalRequired": "Une approbation est requise pour cet export sensible."
+  },
+  "console": {
+    "title": "Centre de pilotage DTSC Platform",
+    "eyebrow": "Console DTSC SaaS",
+    "description": "Pilotez les entreprises clientes, abonnements, support, sécurité, contenus et modules internes depuis des sections séparées et autorisées.",
+    "filters": {
+      "search": "Recherche",
+      "status": "Statut",
+      "role": "Rôle",
+      "source": "Source",
+      "priority": "Priorité",
+      "pageSize": "Par page",
+      "apply": "Appliquer"
+    },
+    "sections": {
+      "overview": {
+        "label": "Vue générale",
+        "description": "KPIs, santé et actions attendues"
+      },
+      "module-maturity": {
+        "label": "Maturité commerciale",
+        "description": "Modules, preuves et Kanban"
+      },
+      "access": {
+        "label": "Accès RBAC",
+        "description": "Capacités et permissions individuelles"
+      },
+      "platform-settings": {
+        "label": "Paramètres plateforme",
+        "description": "Configuration globale et feature flags"
+      },
+      "promotions": {
+        "label": "Bannières promo",
+        "description": "Messages ciblés et statistiques"
+      },
+      "content": {
+        "label": "Publications & contenus",
+        "description": "Contenus publics versionnés"
+      },
+      "users": {
+        "label": "Utilisateurs & accès",
+        "description": "Comptes, rôles, statuts et limites"
+      },
+      "organizations": {
+        "label": "Entreprises clientes",
+        "description": "Cycle de vie et isolation"
+      },
+      "subscriptions": {
+        "label": "Abonnements & facturation",
+        "description": "Plans, paiements et revenus"
+      },
+      "support": {
+        "label": "Support client",
+        "description": "Tickets, SLA et escalades"
+      },
+      "visits": {
+        "label": "Visites",
+        "description": "Audience et acquisition collectées"
+      },
+      "security-audit": {
+        "label": "Sécurité & audit",
+        "description": "Audit, API et webhooks"
+      },
+      "hr-cfo": {
+        "label": "HR & CFO",
+        "description": "RH, finances et contrôle"
+      },
+      "sco": {
+        "label": "SCO",
+        "description": "Achats, stocks et logistique"
+      },
+      "coo": {
+        "label": "COO",
+        "description": "Opérations et coordination"
+      },
+      "ceo": {
+        "label": "CEO",
+        "description": "Pilotage exécutif"
+      },
+      "mpo": {
+        "label": "MPO",
+        "description": "Projets et livrables"
+      },
+      "cto": {
+        "label": "CTO",
+        "description": "Technologie et qualité"
+      },
+      "legal": {
+        "label": "Legal Advisor",
+        "description": "Juridique et conformité"
+      }
+    },
+    "errors": {
+      "forbidden": "Vous n’êtes pas autorisé à accéder à cette section.",
+      "unknownSection": "Section Console inconnue."
+    },
+    "common": {
+      "freshness": "Dernière actualisation",
+      "source": "Source",
+      "period": "Période",
+      "definition": "Définition",
+      "empty": "Aucune donnée disponible.",
+      "guide": "Guide utilisateur"
+    }
   }
 }

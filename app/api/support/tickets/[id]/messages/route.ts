@@ -73,9 +73,21 @@ export async function POST(req: Request, { params }: Params) {
     },
   });
 
+  const senderIsTicketOwner = ticket.userId === session.userId;
+  const currentTicket = await prisma.supportTicket.findUnique({
+    where: { id: ticket.id },
+    select: { firstRespondedAt: true, slaFirstResponseDueAt: true, slaBreachedAt: true },
+  });
+  const respondedAt = !senderIsTicketOwner && !currentTicket?.firstRespondedAt ? new Date() : currentTicket?.firstRespondedAt;
   await prisma.supportTicket.update({
     where: { id: ticket.id },
-    data: { status: "IN_PROGRESS" },
+    data: {
+      status: "IN_PROGRESS",
+      firstRespondedAt: respondedAt,
+      slaBreachedAt: !senderIsTicketOwner && !currentTicket?.firstRespondedAt && currentTicket?.slaFirstResponseDueAt && respondedAt && respondedAt > currentTicket.slaFirstResponseDueAt
+        ? currentTicket.slaBreachedAt || respondedAt
+        : currentTicket?.slaBreachedAt,
+    },
   });
 
   const targetUrl = supportNotificationTarget(ticket.id, message.id);

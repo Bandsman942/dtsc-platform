@@ -118,3 +118,15 @@ Les modules `COLLABORATORS` et `ANNOUNCEMENTS` disposent désormais d’une acce
 - aucune mutation sensible activée sans confirmation/idempotence ;
 - aucune promotion automatique `COMMERCIAL_READY` ;
 - E2E manuel `NON_EXÉCUTÉ`.
+
+## 2026-08-05 — Itération 07 : Console DTSC professionnelle
+
+- routes Console canoniques et aliases historiques ;
+- chargement par section sans mutation au rendu ;
+- pagination utilisateurs, organisations, abonnements, support, contenu et audit ;
+- capacités RBAC Console et permissions individuelles ;
+- protection du dernier administrateur ;
+- versionnement des plans et publications ;
+- SLA Support, incidents, feature flags, webhooks idempotents et exports audités ;
+- i18n, guides natifs et cartes Kanban `STANDARD-07` ;
+- statut E2E : `NON_EXÉCUTÉ`.

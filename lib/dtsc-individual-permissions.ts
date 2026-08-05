@@ -1,6 +1,7 @@
 import type { AdminBlockId } from "@/lib/admin-access";
 import { adminBlocks } from "@/lib/admin-access";
 import { prisma } from "@/lib/prisma";
+import { CONSOLE_CAPABILITIES, CONSOLE_CAPABILITY_LABELS, consoleCapabilityPermission } from "@/lib/console/console-capability-catalog";
 
 export const DTSC_SPECIAL_PERMISSIONS = {
   SUBMIT_PAST_WORK_PERIOD: "work.past_period.submit",
@@ -84,6 +85,12 @@ export const DTSC_INDIVIDUAL_PERMISSION_CATALOG = [
     label: `Accéder à Administration · ${block.label}`,
     description: block.description,
     category: "Administration",
+  })),
+  ...Object.values(CONSOLE_CAPABILITIES).map((capability) => ({
+    code: consoleCapabilityPermission(capability),
+    label: CONSOLE_CAPABILITY_LABELS[capability].fr,
+    description: `${CONSOLE_CAPABILITY_LABELS[capability].fr}. Cette permission reste vérifiée côté serveur et auditée pour les mutations sensibles.`,
+    category: CONSOLE_CAPABILITY_LABELS[capability].category,
   })),
 ];
 

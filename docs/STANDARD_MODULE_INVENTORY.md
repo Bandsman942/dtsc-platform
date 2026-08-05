@@ -61,3 +61,7 @@ Ces surfaces restent au maximum candidates à `PROFESSIONAL_READY` jusqu'aux Qua
 ## Itération 05 — Intelligence artificielle et maturité
 
 Le registre standard version 3 classe `GLOBAL_CHATBOT`, `ENTERPRISE_AI_ASSISTANT` et `CONSOLE_MODULE_MATURITY` comme `PROFESSIONAL_READY` après preuve automatisée. Le Chatbot et l’Assistant consomment le catalogue IA canonique ; la console de maturité couvre désormais ERP et standards. Aucune entrée n’est promue automatiquement vers `COMMERCIAL_READY`.
+
+## Itération 07 — Console DTSC
+
+Modules concernés : CONSOLE_OVERVIEW, CONSOLE_USERS, CONSOLE_CLIENT_ENTERPRISES, CONSOLE_SUBSCRIPTIONS, CONSOLE_SUPPORT, CONSOLE_CONTENT, CONSOLE_VISITS, CONSOLE_PLATFORM_SETTINGS, CONSOLE_SECURITY_AUDIT, CONSOLE_RBAC, DTSC_INTERNAL_ADMIN, DTSC_HR_CFO, DTSC_SCO, DTSC_COO, DTSC_CEO, DTSC_MPO, DTSC_CTO et DTSC_LEGAL. Leurs routes canoniques sont sous `/admin` et leur contrat QA est `scripts/qa-standard-dtsc-console-checks.mjs`.

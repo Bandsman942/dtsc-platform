@@ -116,10 +116,19 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const now = new Date();
   if (parsed.data.action === "ACCEPT") {
-    const membership = await prisma.organizationMember.update({
-      where: { id: invitation.id },
-      data: { status: "ACTIVE", joinedAt: now, removedAt: null },
-      select: { id: true, organizationId: true, status: true, joinedAt: true },
+    const membership = await prisma.$transaction(async (tx) => {
+      const updatedMembership = await tx.organizationMember.update({
+        where: { id: invitation.id },
+        data: { status: "ACTIVE", joinedAt: now, removedAt: null },
+        select: { id: true, organizationId: true, status: true, joinedAt: true },
+      });
+      if (["ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "OWNER"].includes(invitation.role)) {
+        await tx.organizationAdminGrant.updateMany({
+          where: { organizationId: invitation.organizationId, userId: invitation.userId, status: "PENDING", revokedAt: null },
+          data: { status: "ACTIVE", grantedAt: now, reason: "Invitation administrateur acceptée" },
+        });
+      }
+      return updatedMembership;
     });
 
     await writeAuditLog({
@@ -150,9 +159,17 @@ export async function PATCH(req: Request, { params }: Params) {
     });
   }
 
-  await prisma.organizationMember.update({
-    where: { id: invitation.id },
-    data: { status: "REMOVED", removedAt: now, joinedAt: null },
+  await prisma.$transaction(async (tx) => {
+    await tx.organizationMember.update({
+      where: { id: invitation.id },
+      data: { status: "REMOVED", removedAt: now, joinedAt: null },
+    });
+    if (["ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "OWNER"].includes(invitation.role)) {
+      await tx.organizationAdminGrant.updateMany({
+        where: { organizationId: invitation.organizationId, userId: invitation.userId, status: "PENDING", revokedAt: null },
+        data: { status: "REVOKED", revokedAt: now, reason: "Invitation administrateur refusée" },
+      });
+    }
   });
   await writeAuditLog({
     userId: session.userId,

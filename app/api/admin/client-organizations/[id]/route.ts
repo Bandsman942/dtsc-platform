@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
+import { notifyUser, notifyUsers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -27,10 +30,14 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isDtscInternalSession(session) || !canManageClientOrganizations(session.role)) {
+  if (!isDtscInternalSession(session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Seul DTSC peut gérer les entreprises clientes." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", reasonCode: "NOT_DTSC_INTERNAL" }, { status: 403 });
   }
+  const capability = await requireConsoleCapability(CONSOLE_CAPABILITIES.ORGANIZATIONS_MANAGE);
+  const legacyRoleRecognized = canManageClientOrganizations(session.role);
+  if (!legacyRoleRecognized && capability.response) return capability.response;
+  if (capability.response) return capability.response;
   const limited = await rateLimit(getRateLimitKey(req, `client-organization-update:${session.userId}`), 60, 60 * 60 * 1000);
   if (!limited.ok) {
     await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
@@ -62,17 +69,22 @@ export async function PATCH(req: Request, { params }: Params) {
     await prisma.$transaction(async (tx) => {
       await tx.organizationMember.upsert({
         where: { organizationId_userId: { organizationId: id, userId: targetUserId } },
-        update: { role: "ADMIN_ENTREPRISE", status: "ACTIVE", removedAt: null, joinedAt: new Date() },
-        create: { organizationId: id, userId: targetUserId, role: "ADMIN_ENTREPRISE", status: "ACTIVE", invitedBy: session.userId, joinedAt: new Date() },
+        update: { role: "ADMIN_ENTREPRISE", status: "INVITED", removedAt: null, joinedAt: null, invitedBy: session.userId },
+        create: { organizationId: id, userId: targetUserId, role: "ADMIN_ENTREPRISE", status: "INVITED", invitedBy: session.userId, joinedAt: null },
       });
+      await tx.organizationAdminGrant.updateMany({ where: { organizationId: id, userId: targetUserId, revokedAt: null }, data: { status: "REVOKED", revokedAt: new Date(), reason: "Superseded by a new invitation" } });
       await tx.organizationAdminGrant.create({
-        data: { organizationId: id, userId: targetUserId, grantedByDtscUserId: session.userId, status: "ACTIVE", reason: data.reason || "Attribution par DTSC" },
+        data: { organizationId: id, userId: targetUserId, grantedByDtscUserId: session.userId, status: "PENDING", reason: data.reason || "Attribution en attente d'acceptation" },
       });
     });
-    await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_ADMIN_GRANTED", entity: "Organization", entityId: id, request: req, metadata: { userId: targetUserId } });
+    await notifyUser({ userId: targetUserId, title: `Invitation administrateur · ${organization.name}`, body: data.reason || "DTSC vous invite à administrer cette entreprise. Votre acceptation est obligatoire.", type: "ENTERPRISE_INVITATION", targetUrl: `/enterprise-invitations?organizationId=${encodeURIComponent(id)}`, organizationId: id }).catch(() => null);
+    await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_ADMIN_INVITED", entity: "Organization", entityId: id, reasonCode: capability.reasonCode, request: req, metadata: { userId: targetUserId, reason: data.reason || null } });
   } else if (data.action === "revoke_admin") {
-    if (!data.userId) return NextResponse.json({ error: "Missing user" }, { status: 400 });
+    if (!data.userId) return NextResponse.json({ error: "Missing user", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
     const targetUserId = data.userId;
+    const activeAdminCount = await prisma.organizationAdminGrant.count({ where: { organizationId: id, status: "ACTIVE", revokedAt: null } });
+    const targetActiveGrant = await prisma.organizationAdminGrant.findFirst({ where: { organizationId: id, userId: targetUserId, status: "ACTIVE", revokedAt: null }, select: { id: true } });
+    if (targetActiveGrant && activeAdminCount <= 1 && organization.status === "ACTIVE") return NextResponse.json({ error: "Last organization administrator protected", reasonCode: "LAST_ADMIN_PROTECTED" }, { status: 409 });
     await prisma.$transaction(async (tx) => {
       await tx.organizationAdminGrant.updateMany({
         where: { organizationId: id, userId: targetUserId, status: "ACTIVE" },
@@ -83,7 +95,7 @@ export async function PATCH(req: Request, { params }: Params) {
         data: { role: "MEMBER" },
       });
     });
-    await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_ADMIN_REVOKED", entity: "Organization", entityId: id, request: req, metadata: { userId: targetUserId } });
+    await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_ADMIN_REVOKED", entity: "Organization", entityId: id, reasonCode: capability.reasonCode, riskLevel: "HIGH", request: req, metadata: { userId: targetUserId, reason: data.reason || null } });
   } else if (data.action === "apply_sector_template") {
     const sectorId = data.sectorId || organization.sectorId;
     if (!sectorId) {
@@ -178,7 +190,11 @@ export async function PATCH(req: Request, { params }: Params) {
             status: data.status || organization.status,
           },
     });
-    await writeAuditLog({ userId: session.userId, action: data.action === "set_status" ? "CLIENT_ORGANIZATION_STATUS_CHANGED" : "CLIENT_ORGANIZATION_UPDATED", entity: "Organization", entityId: id, request: req, metadata: { status: data.status } });
+    if (data.action === "set_status" && data.status && data.status !== organization.status) {
+      const adminIds = await prisma.organizationAdminGrant.findMany({ where: { organizationId: id, status: "ACTIVE", revokedAt: null }, select: { userId: true } });
+      await notifyUsers({ userIds: adminIds.map((grant) => grant.userId), title: `Statut de ${organization.name} modifié`, body: `${organization.status} → ${data.status}. ${data.reason || "Contactez le support DTSC pour toute précision."}`, type: "ORGANIZATION_STATUS", targetUrl: "/company", organizationId: id }).catch(() => null);
+    }
+    await writeAuditLog({ userId: session.userId, action: data.action === "set_status" ? "CLIENT_ORGANIZATION_STATUS_CHANGED" : "CLIENT_ORGANIZATION_UPDATED", entity: "Organization", entityId: id, reasonCode: capability.reasonCode, riskLevel: data.action === "set_status" ? "HIGH" : "MEDIUM", request: req, before: { status: organization.status, name: organization.name }, after: { status: data.status || organization.status, name: data.name || organization.name }, metadata: { status: data.status, reason: data.reason || null } });
   }
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });

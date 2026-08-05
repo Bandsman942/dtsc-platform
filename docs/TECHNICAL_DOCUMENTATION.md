@@ -384,3 +384,7 @@ La couche `lib/ai/` fournit types, catalogue, classification, abstraction fourni
 ## Modules standards — Itération 06 — Gouvernance d’entreprise (2026-08-05)
 
 L’itération 06 professionnalise Budgets, Rapports et Administration entreprise sans dupliquer les moteurs ERP. Les budgets utilisent des versions additives, scénarios, gel, prévisions et alertes ; les métriques communes sont définies dans `lib/enterprise/reporting/metric-registry.ts`. L’administration ajoute rôles d’organisation, simulation de permissions, politiques de sécurité, protection du dernier administrateur, hiérarchie des départements et audit enrichi. La migration `20260805003000_standard_enterprise_governance_iteration_06` est additive. Les guides natifs sont dans `lib/user-guides/iteration06-guides.ts` et la QA agrégée est `pnpm qa:standard-modules-iteration-06`.
+
+## Console DTSC — professionnalisation Itération 07
+
+La Console globale utilise désormais des routes canoniques sous `/admin`, des datasets paginés dans `lib/console`, des capacités serveur explicites, des guides natifs et des audits dédiés. Les synchronisations financières ont été retirées du rendu. Voir `docs/STANDARD_DTSC_CONSOLE_ARCHITECTURE.md` et les contrats Console associés.

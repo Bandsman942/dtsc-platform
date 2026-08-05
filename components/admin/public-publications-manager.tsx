@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, Globe2, Trash2 } from "lucide-react";
+import { Edit3, Eye, Globe2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -117,7 +117,7 @@ export function PublicPublicationsManager({
 
   async function remove(publication: Publication) {
     const response = await fetch(`/api/admin/publications/${publication.id}`, { method: "DELETE" });
-    setMessage(response.ok ? "Publication supprimée." : "Impossible de supprimer cette publication.");
+    setMessage(response.ok ? "Publication archivée." : "Impossible d’archiver cette publication.");
     if (response.ok) {
       setItems((current) => current.filter((item) => item.id !== publication.id));
       setPendingDelete(null);
@@ -203,6 +203,7 @@ export function PublicPublicationsManager({
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => window.open(`/admin/content/preview/${publication.id}`, "_blank", "noopener,noreferrer")} className="rounded-xl" aria-label="Prévisualiser"><Eye className="h-4 w-4" /></Button>
                   <Button type="button" variant="outline" size="sm" disabled={!canEditPublication(publication)} onClick={() => {
                     setEditing(publication);
                     setEditingDraft({

@@ -380,16 +380,34 @@ export async function createSubscriptionIncomeTransaction(paymentId: string) {
   return transaction;
 }
 
-export async function syncPaidSubscriptionIncomeTransactions() {
+export async function reconcilePaidSubscriptionIncomeTransactions(input: { limit?: number } = {}) {
+  const limit = Math.min(500, Math.max(1, input.limit || 100));
   const paidPayments = await prisma.payment.findMany({
-    where: { status: PaymentStatus.PAID, subscriptionId: { not: null } },
+    where: {
+      status: PaymentStatus.PAID,
+      subscriptionId: { not: null },
+      OR: [
+        { invoice: null },
+        { invoice: { hrcfoTransactionId: null } },
+      ],
+    },
     select: { id: true },
     orderBy: { createdAt: "asc" },
+    take: limit,
   });
 
+  let applied = 0;
   for (const payment of paidPayments) {
+    const before = await prisma.hrcfoExpense.findFirst({ where: { sourceType: "PAYMENT", sourceId: payment.id }, select: { id: true } });
     await createSubscriptionIncomeTransaction(payment.id);
+    if (!before) applied += 1;
   }
+  await reconcileFinancialState();
+  return { scanned: paidPayments.length, applied, limit };
+}
+
+export async function syncPaidSubscriptionIncomeTransactions() {
+  return reconcilePaidSubscriptionIncomeTransactions({ limit: 500 });
 }
 
 async function createOperationalInvoice(

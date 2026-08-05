@@ -336,3 +336,31 @@ These rules are durable for every common or sector ERP change:
 27. Les budgets, rapports, matrices, audits, guides et Kanban restent utilisables à 320 px avec une alternative clavier aux actions de glisser-déposer.
 28. Les E2E manuels ne sont jamais déclarés réussis sans confirmation explicite du propriétaire.
 29. Les migrations historiques restent immuables et toute migration de gouvernance est additive, non destructive et compatible base vide/base existante.
+
+## 14. STANDARD_DTSC_CONSOLE_ITERATION_07_RULES
+
+1. Une page Console de lecture ne produit aucune mutation métier.
+2. Les synchronisations financières ne sont jamais lancées pendant le rendu.
+3. Les routes Console utilisent les identifiants canoniques de `lib/console/console-routes.ts`.
+4. Les anciennes sections sont gérées par des aliases contrôlés sans boucle et avec conservation des filtres.
+5. Chaque section charge uniquement ses données.
+6. Les listes Console sont paginées côté serveur ; un `take` fixe n’est pas une stratégie de consultation.
+7. Aucun KPI ne peut être fictif ; toute métrique possède source, définition, période, unité et fraîcheur.
+8. Les permissions Console sont vérifiées par capacité côté serveur.
+9. Voir une section ne donne pas toutes les mutations.
+10. Le dernier administrateur global et le dernier administrateur critique d’une organisation sont protégés.
+11. Les organisations restent isolées ; la Console n’ouvre pas arbitrairement les données métier privées.
+12. Une suspension ou un archivage conserve les données et exige un motif audité.
+13. La réconciliation est explicite, bornée, idempotente et jamais exécutée au rendu.
+14. Les historiques commerciaux conservent les versions de plan et de publication.
+15. Les tickets utilisent le moteur Support canonique ; une conversation générale n’est pas un ticket sans lien explicite.
+16. Les contenus utilisent le modèle public canonique et une suppression Console archive au lieu de détruire l’historique.
+17. Les secrets ne sont jamais affichés ; seuls leurs états de configuration peuvent être exposés.
+18. Les retries webhook sont contrôlés, bornés, idempotents, redacted et audités.
+19. Les textes Console utilisent le moteur i18n et des `reasonCode` stables.
+20. Les guides utilisent `ContextualUserGuide` et le registre natif ; chaque section possède un guide exact.
+21. Les modules de l’itération 7 apparaissent dans le Kanban sous `STANDARD-07`.
+22. `COMMERCIAL_READY` exige Production, E2E propriétaire et validation explicite ; aucune promotion automatique.
+23. Les interfaces restent utilisables à 320 px et toute action drag-and-drop possède une alternative clavier.
+24. Node 22 et les protections de build ne sont pas retirés sans preuve.
+25. Aucune QA historique n’est supprimée et aucun déploiement Production manuel depuis une branche n’est autorisé.

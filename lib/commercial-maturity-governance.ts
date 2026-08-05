@@ -142,7 +142,7 @@ export async function listCommercialMaturityCards(): Promise<CommercialMaturityC
       maturity,
       routePath: definition.routePath,
       minimumPlan: definition.minimumPlan,
-      iteration: latestApplied?.iterationCode || null,
+      iteration: latestApplied?.iterationCode || (definition.qaContract === "scripts/qa-standard-dtsc-console-checks.mjs" ? "STANDARD-07" : null),
       responsible: null,
       dependencies: [...definition.dependencies, ...definition.erpDependencies],
       incidents: evidenceRows.filter((item) => item.evidenceType === "INCIDENT").map((item) => ({ id: item.id, title: item.title, description: item.description, url: item.url, createdAt: item.createdAt.toISOString() })),

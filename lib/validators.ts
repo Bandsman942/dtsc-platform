@@ -92,6 +92,10 @@ export const supportTicketUpdateSchema = z.object({
   status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   resolution: z.string().max(2_000).optional().or(z.literal("")),
+  assignedToDtscUserId: z.string().max(160).optional().or(z.literal("")),
+  escalationReason: z.string().max(1_000).optional().or(z.literal("")),
+  pauseSla: z.coerce.boolean().optional(),
+  reason: z.string().trim().min(3).max(500).default("Support ticket update"),
 });
 
 export const enterpriseOrganizationCreateSchema = z.object({
@@ -139,6 +143,10 @@ export const enterpriseOrganizationUpdateSchema = z.object({
   templateMode: z.enum(["merge", "replace_sector"]).default("merge"),
   reason: z.string().max(500).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
+}).superRefine((value, ctx) => {
+  if (["set_status", "grant_admin", "revoke_admin", "soft_delete"].includes(value.action) && !value.reason?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Un motif est obligatoire pour cette action sensible." });
+  }
 });
 
 const organizationSubscriptionStatusSchema = z.enum([
@@ -1027,6 +1035,7 @@ export const adminSettingsSchema = z.object({
   signUpOtpEnabled: z.coerce.boolean(),
   signUpOtpExpirationMinutes: z.coerce.number().int().min(2).max(60),
   applyLimitsToExistingUsers: z.coerce.boolean().default(false),
+  reason: z.string().trim().min(3).max(500).default("Console settings update"),
 });
 
 export const broadcastSchema = z.object({
