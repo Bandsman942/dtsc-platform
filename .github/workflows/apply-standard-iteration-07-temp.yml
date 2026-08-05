@@ -29,8 +29,8 @@ jobs:
           xz --decompress /tmp/iteration07.patch.xz
           git apply --check /tmp/iteration07.patch
           git apply /tmp/iteration07.patch
+          git checkout -- .github/workflows/quality-gates.yml
           rm -rf .iteration07
-          rm -f .github/workflows/apply-standard-iteration-07-temp.yml
 
       - name: Commit professional Console implementation
         shell: bash
