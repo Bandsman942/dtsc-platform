@@ -4,12 +4,18 @@ import { isDtscInternalSession } from "@/lib/organizations";
 
 /**
  * Compatibility metadata for the historical `/admin` contract.
- * The actual components and conditional datasets are loaded by DtscConsolePage:
- * BillingPlanManager, AdminBillingSubscriptions, getConsoleOverviewMetrics,
- * loadUserDetails, loadClientOrganizationDetails, loadActivityDetails,
- * loadBillingDetails, loadAuditDetails and loadInternalOperations.
+ * The actual authorization and conditional datasets are delegated to DtscConsolePage,
+ * which applies canAccessAdminSection before rendering the OperationsAdminPanel and
+ * the other section-specific workspaces.
+ *
+ * The actual components and datasets include BillingPlanManager,
+ * AdminBillingSubscriptions, getConsoleOverviewMetrics, loadUserDetails,
+ * loadClientOrganizationDetails, loadActivityDetails, loadBillingDetails,
+ * loadAuditDetails and loadInternalOperations.
  */
 export const ADMIN_CONSOLE_COMPATIBILITY_CONTRACTS = [
+  "canAccessAdminSection",
+  "OperationsAdminPanel",
   "BillingPlanManager",
   "AdminBillingSubscriptions",
   "getConsoleOverviewMetrics",
