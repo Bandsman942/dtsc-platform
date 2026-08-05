@@ -1,6 +1,6 @@
 # Harmonisation E2E — Administration DTSC et Support
 
-Date : 2026-08-05  
+Date : 2026-08-05
 Périmètre : retours E2E propriétaire après l’itération 7 des modules standards.
 
 ## 1. Expérience produit commune
