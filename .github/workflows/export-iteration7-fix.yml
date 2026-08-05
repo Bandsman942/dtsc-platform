@@ -1,0 +1,26 @@
+name: Export iteration 7 E2E source
+
+on:
+  push:
+    branches:
+      - fix/e2e-iteration-07-activities-billing-collaboration
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Build source archive
+        run: |
+          tar --exclude='.git' --exclude='node_modules' -czf /tmp/dtsc-iteration7-source.tgz .
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-iteration7-source
+          path: /tmp/dtsc-iteration7-source.tgz
+          retention-days: 1
