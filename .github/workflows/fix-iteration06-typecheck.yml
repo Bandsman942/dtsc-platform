@@ -1,4 +1,4 @@
-name: Fix iteration 06 finance contracts
+name: Fix iteration 06 native guides
 
 on:
   push:
@@ -17,47 +17,57 @@ jobs:
           ref: feat/standard-modules-professionalization-iteration-06-enterprise-governance
           fetch-depth: 0
 
-      - name: Restore stable finance contracts
+      - name: Teach the historical audit to resolve native guide identifiers
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          schema = Path('prisma/enterprise-finance-reporting.prisma')
-          content = schema.read_text()
-          old = '  plannedAmount     Decimal                      @db.Decimal(18, 2)'
-          new = '  plannedAmount  Decimal @db.Decimal(18, 2)'
-          if old not in content and new not in content:
-              raise SystemExit('plannedAmount Decimal field not found')
-          schema.write_text(content.replace(old, new))
+          path = Path('scripts/lib/standard-module-professionalization-audit.mjs')
+          content = path.read_text()
+          old = '''function exists(file) {
+            return fs.existsSync(path.join(root, file));
+          }
+          '''.replace('          ', '')
+          new = r'''function escapeRegExp(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          }
 
-          budget = Path('lib/enterprise/finance/budget-service.ts')
-          content = budget.read_text()
-          edit_guard = 'if (!["DRAFT", "PREPARING", "CORRECTION_REQUESTED"].includes(existing.status))'
-          if edit_guard not in content and 'if (existing.status !== "DRAFT")' not in content:
-              raise SystemExit('budget edit guard not found')
-          content = content.replace(edit_guard, 'if (existing.status !== "DRAFT")')
-          content = content.replace(
-              'if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "VALIDATOR_NOT_ALLOWED");',
-              'if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "SELF_APPROVAL_DENIED");',
-          )
-          content = content.replace(
-              'if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "VALIDATOR_NOT_ALLOWED");',
-              'if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "SELF_APPROVAL_DENIED");',
-          )
-          content = content.replace('"REVISION_MISMATCH"', '"REVISION_CONFLICT"')
-          budget.write_text(content)
+          function nativeGuideExists(uri) {
+            const code = uri.slice("native://".length).trim();
+            if (!/^[A-Z0-9_]+$/.test(code)) return false;
+            const guidesRoot = path.join(root, "lib/user-guides");
+            if (!fs.existsSync(guidesRoot)) return false;
+            const escaped = escapeRegExp(code);
+            const registryKey = new RegExp(String.raw`^\s*${escaped}\s*:\s*\{`, "m");
+            const explicitCode = new RegExp(String.raw`code\s*:\s*["']${escaped}["']`);
+            return fs.readdirSync(guidesRoot, { withFileTypes: true }).some((entry) => {
+              if (!entry.isFile() || !entry.name.endsWith(".ts")) return false;
+              const source = fs.readFileSync(path.join(guidesRoot, entry.name), "utf8");
+              return registryKey.test(source) || explicitCode.test(source);
+            });
+          }
+
+          function exists(file) {
+            if (file.startsWith("native://")) return nativeGuideExists(file);
+            return fs.existsSync(path.join(root, file));
+          }
+          '''.replace('          ', '')
+          if old not in content:
+            raise SystemExit('historical exists() helper not found')
+          path.write_text(content.replace(old, new))
           PY
 
-      - name: Validate restored contracts
+      - name: Validate native guide references
         run: |
-          node scripts/qa-enterprise-finance-reports-checks.mjs
+          node scripts/qa-standard-modules-iteration-01.mjs
+          node scripts/audit-standard-enterprise-governance-guides.mjs
           git diff --check
 
       - name: Commit and push feature fix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add prisma/enterprise-finance-reporting.prisma lib/enterprise/finance/budget-service.ts
+          git add scripts/lib/standard-module-professionalization-audit.mjs
           git diff --cached --check
-          git commit -m "fix(finance): preserve budget workflow compatibility"
+          git commit -m "fix(guides): resolve native guide registry references"
           git push origin HEAD:feat/standard-modules-professionalization-iteration-06-enterprise-governance
