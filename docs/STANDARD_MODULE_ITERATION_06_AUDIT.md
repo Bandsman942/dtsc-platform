@@ -13,7 +13,10 @@
 ## Vérifications CI
 
 - le dataset de l’administration transmet l’ensemble des rôles, politiques de sécurité, événements d’audit et contrôles de configuration au composant natif ;
-- les lignes budgétaires utilisent des entrées Prisma distinctes et cohérentes pour la création imbriquée et le remplacement transactionnel par `createMany`.
+- les lignes budgétaires utilisent des entrées Prisma distinctes et cohérentes pour la création imbriquée et le remplacement transactionnel par `createMany` ;
+- les montants budgétaires restent des `Decimal` Prisma ;
+- le PATCH budgétaire normal reste limité au statut `DRAFT`, tandis que les corrections utilisent la transition contrôlée `CORRECTION_REQUESTED → REOPEN → DRAFT` ;
+- les codes historiques `SELF_APPROVAL_DENIED` et `REVISION_CONFLICT` sont conservés pour la compatibilité des clients et des audits.
 
 ## Limites honnêtes
 
