@@ -1,7 +1,9 @@
+import { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -17,6 +19,10 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.SUBSCRIPTIONS_MANAGE);
   if (access.response) return access.response;
+  if (!isDtscInternalSession(access.session) || access.session.role !== UserRole.ADMIN) {
+    await writeApiLog({ request: req, statusCode: 403, userId: access.session.userId, startedAt, metadata: { action: "billing_plan_update_admin_required" } });
+    return NextResponse.json({ error: "Administrator role required", reasonCode: "ADMIN_ROLE_REQUIRED" }, { status: 403 });
+  }
 
   const limited = await rateLimit(getRateLimitKey(req, `billing-plan-update:${access.session.userId}`), 30, 60 * 60 * 1000);
   if (!limited.ok) {
@@ -40,70 +46,17 @@ export async function PATCH(req: Request, { params }: Params) {
   const updated = await prisma.$transaction(async (tx) => {
     let latestVersion = current.versions[0]?.version || 0;
     if (!latestVersion) {
-      await tx.billingPlanVersion.create({
-        data: {
-          planId: current.id,
-          version: 1,
-          name: current.name,
-          description: current.description,
-          priceUsd: current.priceUsd,
-          dailyMessageLimit: current.dailyMessageLimit,
-          dailyTokenLimit: current.dailyTokenLimit,
-          maxDocuments: current.maxDocuments,
-          effectiveAt: current.createdAt,
-          retiredAt: effectiveAt,
-          createdByUserId: access.session.userId,
-          reason: "Initial historical snapshot created before iteration 07 update",
-        },
-      });
+      await tx.billingPlanVersion.create({ data: { planId: current.id, version: 1, name: current.name, description: current.description, priceUsd: current.priceUsd, dailyMessageLimit: current.dailyMessageLimit, dailyTokenLimit: current.dailyTokenLimit, maxDocuments: current.maxDocuments, effectiveAt: current.createdAt, retiredAt: effectiveAt, createdByUserId: access.session.userId, reason: "Initial historical snapshot created before iteration 07 update" } });
       latestVersion = 1;
     } else {
       await tx.billingPlanVersion.updateMany({ where: { planId: current.id, version: latestVersion, retiredAt: null }, data: { retiredAt: effectiveAt } });
     }
-
-    const next = await tx.billingPlan.update({
-      where: { id },
-      data: {
-        name: parsed.data.name,
-        description: parsed.data.description,
-        priceUsd: parsed.data.priceUsd,
-        dailyMessageLimit: parsed.data.dailyMessageLimit,
-        dailyTokenLimit: parsed.data.dailyTokenLimit,
-        maxDocuments: parsed.data.maxDocuments,
-        sortOrder: parsed.data.sortOrder,
-        isActive: parsed.data.isActive,
-      },
-    });
-    await tx.billingPlanVersion.create({
-      data: {
-        planId: next.id,
-        version: latestVersion + 1,
-        name: next.name,
-        description: next.description,
-        priceUsd: next.priceUsd,
-        dailyMessageLimit: next.dailyMessageLimit,
-        dailyTokenLimit: next.dailyTokenLimit,
-        maxDocuments: next.maxDocuments,
-        effectiveAt,
-        createdByUserId: access.session.userId,
-        reason: parsed.data.reason,
-      },
-    });
+    const next = await tx.billingPlan.update({ where: { id }, data: { name: parsed.data.name, description: parsed.data.description, priceUsd: parsed.data.priceUsd, dailyMessageLimit: parsed.data.dailyMessageLimit, dailyTokenLimit: parsed.data.dailyTokenLimit, maxDocuments: parsed.data.maxDocuments, sortOrder: parsed.data.sortOrder, isActive: parsed.data.isActive } });
+    await tx.billingPlanVersion.create({ data: { planId: next.id, version: latestVersion + 1, name: next.name, description: next.description, priceUsd: next.priceUsd, dailyMessageLimit: next.dailyMessageLimit, dailyTokenLimit: next.dailyTokenLimit, maxDocuments: next.maxDocuments, effectiveAt, createdByUserId: access.session.userId, reason: parsed.data.reason } });
     return next;
   });
 
-  await writeAuditLog({
-    userId: access.session.userId,
-    action: "BILLING_PLAN_VERSION_CREATED",
-    entity: "BillingPlan",
-    entityId: updated.id,
-    before: { name: current.name, priceUsd: Number(current.priceUsd), dailyMessageLimit: current.dailyMessageLimit, dailyTokenLimit: current.dailyTokenLimit, maxDocuments: current.maxDocuments, sortOrder: current.sortOrder, isActive: current.isActive },
-    after: { name: updated.name, priceUsd: Number(updated.priceUsd), dailyMessageLimit: updated.dailyMessageLimit, dailyTokenLimit: updated.dailyTokenLimit, maxDocuments: updated.maxDocuments, sortOrder: updated.sortOrder, isActive: updated.isActive },
-    reasonCode: access.reasonCode,
-    riskLevel: "HIGH",
-    metadata: { reason: parsed.data.reason, slug: current.slug, effectiveAt: effectiveAt.toISOString() },
-    request: req,
-  });
+  await writeAuditLog({ userId: access.session.userId, action: "BILLING_PLAN_UPDATED", entity: "BillingPlan", entityId: updated.id, before: { name: current.name, priceUsd: Number(current.priceUsd), dailyMessageLimit: current.dailyMessageLimit, dailyTokenLimit: current.dailyTokenLimit, maxDocuments: current.maxDocuments, sortOrder: current.sortOrder, isActive: current.isActive }, after: { name: updated.name, priceUsd: Number(updated.priceUsd), dailyMessageLimit: updated.dailyMessageLimit, dailyTokenLimit: updated.dailyTokenLimit, maxDocuments: updated.maxDocuments, sortOrder: updated.sortOrder, isActive: updated.isActive }, reasonCode: access.reasonCode, riskLevel: "HIGH", metadata: { reason: parsed.data.reason, slug: current.slug, effectiveAt: effectiveAt.toISOString(), versioned: true }, request: req });
   await writeApiLog({ request: req, statusCode: 200, userId: access.session.userId, startedAt, metadata: { planId: updated.id } });
   return NextResponse.json({ ok: true, planId: updated.id, reasonCode: access.reasonCode });
 }
