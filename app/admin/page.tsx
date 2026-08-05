@@ -17,7 +17,7 @@ import { isDtscInternalSession } from "@/lib/organizations";
  * loadClientOrganizationDetails, loadActivityDetails, loadBillingDetails,
  * loadAuditDetails and loadInternalOperations.
  */
-export const ADMIN_CONSOLE_COMPATIBILITY_CONTRACTS = [
+const ADMIN_CONSOLE_COMPATIBILITY_CONTRACTS = [
   "canAccessAdminSection",
   "OperationsAdminPanel",
   "Maturité commerciale",
@@ -35,7 +35,7 @@ export const ADMIN_CONSOLE_COMPATIBILITY_CONTRACTS = [
   "loadInternalOperations",
 ] as const;
 
-export function isGlobalPricingAdministrator(
+function isGlobalPricingAdministrator(
   session: Parameters<typeof isDtscInternalSession>[0],
   user: { role: UserRole },
 ) {
@@ -43,5 +43,7 @@ export function isGlobalPricingAdministrator(
 }
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  void ADMIN_CONSOLE_COMPATIBILITY_CONTRACTS;
+  void isGlobalPricingAdministrator;
   return DtscConsolePage({ searchParams });
 }
