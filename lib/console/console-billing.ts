@@ -70,6 +70,7 @@ export async function getConsoleBillingDataset(input: {
     prisma.invoice.count(),
   ]);
 
+  const activePlanIds = new Set(plans.filter((plan) => plan.isActive).map((plan) => plan.id));
   const billingPlans = plans.map((plan) => {
     const planCode = resolveSaasPlanCode(plan);
     return {
@@ -133,7 +134,7 @@ export async function getConsoleBillingDataset(input: {
   return {
     payments,
     billingPlans,
-    billingPlanOptions: billingPlans.filter((plan) => plan.isActive).map(({ id, name, slug, priceUsd, planCode, limits, moduleCatalog }) => ({ id, name, slug, priceUsd, planCode, limits, moduleCatalog })),
+    billingPlanOptions: billingPlans.filter((plan) => activePlanIds.has(plan.id)).map(({ id, name, slug, priceUsd, planCode, limits, moduleCatalog }) => ({ id, name, slug, priceUsd, planCode, limits, moduleCatalog })),
     organizationSubscriptionItems,
     billingSummary: {
       organizations: organizationTotal,
