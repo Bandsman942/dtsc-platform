@@ -1,4 +1,4 @@
-name: Fix iteration 06 type check
+name: Fix iteration 06 finance contracts
 
 on:
   push:
@@ -17,46 +17,47 @@ jobs:
           ref: feat/standard-modules-professionalization-iteration-06-enterprise-governance
           fetch-depth: 0
 
-      - name: Apply focused type fixes
+      - name: Restore stable finance contracts
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          page = Path('app/enterprise-admin/page.tsx')
-          content = page.read_text()
-          start_marker = '      <EnterpriseAdministrationModule\n        organization={dataset.organization}'
-          start = content.index(start_marker)
-          end = content.index('      />', start) + len('      />')
-          replacement = '''      <EnterpriseAdministrationModule
-                {...dataset}
-                locale={user.locale}
-                initialSection={section}
-              />'''.replace('                ', '        ').replace('              ', '      ')
-          page.write_text(content[:start] + replacement + content[end:])
+          schema = Path('prisma/enterprise-finance-reporting.prisma')
+          content = schema.read_text()
+          old = '  plannedAmount     Decimal                      @db.Decimal(18, 2)'
+          new = '  plannedAmount  Decimal @db.Decimal(18, 2)'
+          if old not in content and new not in content:
+              raise SystemExit('plannedAmount Decimal field not found')
+          schema.write_text(content.replace(old, new))
 
           budget = Path('lib/enterprise/finance/budget-service.ts')
           content = budget.read_text()
-          marker = 'type BudgetTransitionAction = keyof typeof ENTERPRISE_BUDGET_TRANSITIONS;\n'
-          replacement = marker + 'type PreparedBudgetLine = Omit<Prisma.EnterpriseBudgetLineCreateManyInput, "organizationId" | "budgetId">;\n'
-          if 'type PreparedBudgetLine' not in content:
-              content = content.replace(marker, replacement)
+          edit_guard = 'if (!["DRAFT", "PREPARING", "CORRECTION_REQUESTED"].includes(existing.status))'
+          if edit_guard not in content and 'if (existing.status !== "DRAFT")' not in content:
+              raise SystemExit('budget edit guard not found')
+          content = content.replace(edit_guard, 'if (existing.status !== "DRAFT")')
           content = content.replace(
-              'const prepared: Prisma.EnterpriseBudgetLineUncheckedCreateWithoutBudgetInput[] = [];',
-              'const prepared: PreparedBudgetLine[] = [];',
+              'if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "VALIDATOR_NOT_ALLOWED");',
+              'if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "SELF_APPROVAL_DENIED");',
           )
-          content = content.replace('    prepared.push({\n      organizationId,\n      code:', '    prepared.push({\n      code:')
           content = content.replace(
-              'await tx.enterpriseBudgetLine.createMany({ data: lines.map((line) => ({ ...line, budgetId })) });',
-              'await tx.enterpriseBudgetLine.createMany({ data: lines.map((line) => ({ ...line, organizationId, budgetId })) });',
+              'if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "VALIDATOR_NOT_ALLOWED");',
+              'if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "SELF_APPROVAL_DENIED");',
           )
+          content = content.replace('"REVISION_MISMATCH"', '"REVISION_CONFLICT"')
           budget.write_text(content)
           PY
+
+      - name: Validate restored contracts
+        run: |
+          node scripts/qa-enterprise-finance-reports-checks.mjs
+          git diff --check
 
       - name: Commit and push feature fix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/enterprise-admin/page.tsx lib/enterprise/finance/budget-service.ts
+          git add prisma/enterprise-finance-reporting.prisma lib/enterprise/finance/budget-service.ts
           git diff --cached --check
-          git commit -m "fix(governance): align admin dataset and budget line inputs"
+          git commit -m "fix(finance): preserve budget workflow compatibility"
           git push origin HEAD:feat/standard-modules-professionalization-iteration-06-enterprise-governance
