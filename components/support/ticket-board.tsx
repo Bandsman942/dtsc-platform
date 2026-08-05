@@ -11,6 +11,7 @@ export const SUPPORT_TICKET_BOARD_CONTRACT = {
   replyState: "setReplyingTo",
   editState: "setEditing",
   deleteState: "setDeleting",
+  slaPauseField: "pauseSla",
   collapsiblePrimitive: "CollapsibleThread",
   threadLabel: 'label="commentaire(s)"',
   multilineComposer: "<textarea",
