@@ -16,7 +16,8 @@
 - les lignes budgétaires utilisent des entrées Prisma distinctes et cohérentes pour la création imbriquée et le remplacement transactionnel par `createMany` ;
 - les montants budgétaires restent des `Decimal` Prisma ;
 - le PATCH budgétaire normal reste limité au statut `DRAFT`, tandis que les corrections utilisent la transition contrôlée `CORRECTION_REQUESTED → REOPEN → DRAFT` ;
-- les codes historiques `SELF_APPROVAL_DENIED` et `REVISION_CONFLICT` sont conservés pour la compatibilité des clients et des audits.
+- les codes historiques `SELF_APPROVAL_DENIED` et `REVISION_CONFLICT` sont conservés pour la compatibilité des clients et des audits ;
+- les références `native://...` sont résolues uniquement lorsqu’un code de guide correspondant existe réellement dans le registre natif `lib/user-guides`.
 
 ## Limites honnêtes
 
