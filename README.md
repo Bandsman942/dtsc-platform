@@ -597,3 +597,7 @@ pnpm prisma migrate dev
 pnpm prisma migrate deploy
 pnpm prisma studio
 ```
+
+### Professionnalisation des modules standards — Itération 06
+
+Budgets, rapports et gouvernance des entreprises clientes disposent désormais de contrats professionnels : versions et scénarios, sources ERP traçables, métriques définies, administration tenant-scoped, rôles et permissions serveur, politiques de sécurité, audit, i18n et guides natifs. Voir `docs/STANDARD_MODULE_ITERATION_06_AUDIT.md` et `docs/MANUAL_E2E_STANDARD_MODULES_ITERATION_06.md`.

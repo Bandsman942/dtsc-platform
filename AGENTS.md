@@ -304,3 +304,35 @@ These rules are durable for every common or sector ERP change:
 - Les prompts critiques sont versionnés et rollbackables. Le raisonnement interne privé n'est jamais exposé.
 - Les surfaces IA et Kanban restent utilisables à 320 px.
 - Les E2E manuels restent `NON_EXÉCUTÉ` tant que le propriétaire ne les a pas confirmés explicitement.
+
+## 13. STANDARD_ENTERPRISE_GOVERNANCE_ITERATION_06_RULES
+
+1. Les budgets ne remplacent jamais les écritures ERP.
+2. Tout montant réalisé possède une source canonique et une date de fraîcheur.
+3. Les engagements et les réalisations restent distincts et ne sont jamais comptés deux fois.
+4. Toute formule budgétaire ou de reporting est centralisée, documentée et testée.
+5. Un budget approuvé ou gelé est versionné avant révision ; il n'est jamais écrasé silencieusement.
+6. Les validations budgétaires utilisent le moteur commun de validations et de workflows.
+7. Les prévisions assistées par IA restent des propositions avec méthode, hypothèses et limites.
+8. Tout indicateur possède une définition canonique, une source, une unité, une période et une fraîcheur.
+9. Les graphiques, tableaux, APIs et exports utilisent les mêmes formules.
+10. Aucune valeur statique ou absente n'est présentée comme donnée métier réelle.
+11. Les exports respectent filtres, permissions, organisation, locale, devise et classification.
+12. L'administration d'entreprise reste strictement isolée par tenant et distincte de la Console DTSC.
+13. Un collaborateur retiré perd immédiatement son membership, ses capacités et ses canaux temps réel, sans suppression de son compte global.
+14. Le dernier administrateur critique est protégé contre la révocation, la suspension et la rétrogradation accidentelles.
+15. Les rôles système critiques ne sont ni supprimables ni affaiblissables par un rôle personnalisé.
+16. Toute mutation de rôle, permission, module, paramètre ou politique de sécurité est contrôlée côté serveur et auditée.
+17. L'héritage des permissions est déterministe et sa source reste explicable.
+18. Une simulation de permission ne modifie jamais le membership, le rôle ou les capacités.
+19. L'activation d'un module vérifie le registre, le plan, l'abonnement, les dépendances, la configuration et la disponibilité technique.
+20. La désactivation d'un module conserve les données et bloque les nouvelles mutations selon la politique canonique.
+21. Aucun paramètre visible ne doit être fictif ; tout contrôle affiché produit un effet persistant et vérifiable.
+22. Toutes les surfaces de l'itération utilisent le moteur i18n canonique et des reason codes stables.
+23. Les guides utilisent le composant et le registre natifs existants ; aucun registre documentaire parallèle n'est autorisé.
+24. Les modules de l'itération 6 sont suivis dans le Kanban canonique de maturité commerciale avec preuves et historique.
+25. Toute transition de maturité est contrôlée côté serveur, motivée, auditée et liée aux preuves disponibles.
+26. `COMMERCIAL_READY` exige Production stable, E2E manuel `PASSED` et validation explicite du propriétaire ; aucune promotion automatique n'est autorisée.
+27. Les budgets, rapports, matrices, audits, guides et Kanban restent utilisables à 320 px avec une alternative clavier aux actions de glisser-déposer.
+28. Les E2E manuels ne sont jamais déclarés réussis sans confirmation explicite du propriétaire.
+29. Les migrations historiques restent immuables et toute migration de gouvernance est additive, non destructive et compatible base vide/base existante.

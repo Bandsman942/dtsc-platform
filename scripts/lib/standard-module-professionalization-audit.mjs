@@ -19,7 +19,27 @@ function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function nativeGuideExists(uri) {
+  const code = uri.slice("native://".length).trim();
+  if (!/^[A-Z0-9_]+$/.test(code)) return false;
+  const guidesRoot = path.join(root, "lib/user-guides");
+  if (!fs.existsSync(guidesRoot)) return false;
+  const escaped = escapeRegExp(code);
+  const registryKey = new RegExp(String.raw`^\s*${escaped}\s*:\s*\{`, "m");
+  const explicitCode = new RegExp(String.raw`code\s*:\s*["']${escaped}["']`);
+  return fs.readdirSync(guidesRoot, { withFileTypes: true }).some((entry) => {
+    if (!entry.isFile() || !entry.name.endsWith(".ts")) return false;
+    const source = fs.readFileSync(path.join(guidesRoot, entry.name), "utf8");
+    return registryKey.test(source) || explicitCode.test(source);
+  });
+}
+
 function exists(file) {
+  if (file.startsWith("native://")) return nativeGuideExists(file);
   return fs.existsSync(path.join(root, file));
 }
 

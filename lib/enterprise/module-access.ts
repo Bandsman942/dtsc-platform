@@ -118,9 +118,14 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
     prisma.organizationMember.findFirst({
       where: { userId, organizationId, status: "ACTIVE", removedAt: null },
       select: {
+        id: true,
         role: true,
         positionId: true,
         positionCode: true,
+        organizationRoleAssignments: {
+          where: { revokedAt: null, role: { isActive: true, archivedAt: null } },
+          select: { role: { select: { permissionsJson: true, modulesJson: true, code: true } } },
+        },
         organization: { select: { id: true, status: true, deletedAt: true, organizationType: true, sectorCode: true } },
       },
     }),
@@ -167,11 +172,14 @@ async function getEnterpriseAccessSnapshot(userId: string, organizationId: strin
     }
   }
 
+  const inheritedRolePermissions = membership.organizationRoleAssignments.flatMap((assignment) => permissionList(assignment.role.permissionsJson));
+  const permissions = Array.from(new Set([...permissionList(position?.permissionsJson), ...inheritedRolePermissions]));
+
   return {
     organizationId,
     sectorCode: membership.organization.sectorCode,
     role: membership.role,
-    permissions: permissionList(position?.permissionsJson),
+    permissions,
     enabledCanonicalCodes,
     tenantModuleByCanonicalCode,
     entitlementByCanonicalCode,

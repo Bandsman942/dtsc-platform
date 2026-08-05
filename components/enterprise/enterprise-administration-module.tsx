@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { EnterpriseAdminSectionActivator } from "@/components/enterprise/enterprise-admin-section-activator";
+import { EnterpriseAuditPanel, EnterpriseRolesPermissionsPanel, EnterpriseSecurityPolicyPanel } from "@/components/enterprise/enterprise-governance-panels";
 import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
+import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import {
   EnterpriseBrandingSettingsPanel,
   EnterpriseCalendarPanel,
@@ -21,6 +23,7 @@ import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseAdminDataset, EnterpriseModuleItem } from "@/lib/enterprise/enterprise-admin-types";
+import { getIteration06UserGuide } from "@/lib/user-guides/iteration06-guides";
 
 const ADMIN_SECTIONS = [
   ["overview", "Vue d’ensemble"],
@@ -31,6 +34,7 @@ const ADMIN_SECTIONS = [
   ["modules", "Modules"],
   ["subscription", "Abonnement & limites"],
   ["settings", "Paramètres entreprise"],
+  ["security", "Sécurité"],
   ["audit", "Audit & historique"],
   ["templates", "Templates sectoriels"],
 ] as const;
@@ -45,6 +49,10 @@ export function EnterpriseAdministrationModule(
     members,
     departments,
     positions,
+    roles,
+    securityPolicy,
+    auditItems,
+    configurationChecklist,
     recentRequests,
     calendarEvents,
     entitlements,
@@ -154,6 +162,7 @@ export function EnterpriseAdministrationModule(
   return (
     <ModuleWorkspace>
       <EnterpriseAdminSectionActivator section={initialSection} />
+      <div className="flex justify-end"><ContextualUserGuide guide={getIteration06UserGuide("ENTERPRISE_ADMINISTRATION", locale)} compact /></div>
       <nav aria-label="Sections administration entreprise" className="flex snap-x gap-2 overflow-x-auto pb-2">
         {ADMIN_SECTIONS.map(([code, label]) => (
           <Link key={code} href={`/enterprise-admin?section=${code}`} className="min-h-11 shrink-0 snap-start rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2.5 text-xs font-black text-dtsc-muted hover:border-cyan-400/40 hover:text-dtsc-blue">
@@ -165,6 +174,10 @@ export function EnterpriseAdministrationModule(
       <div id="enterprise-admin-overview" className="scroll-mt-24 outline-none">
         <EnterpriseAdministrationSummary organization={organization} dashboard={dashboard} entitlements={entitlements} activeMembers={activeMembers} pendingMembers={pendingMembers} visibleModules={visibleModules} />
       </div>
+      <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4" aria-labelledby="enterprise-configuration-checklist-title">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="enterprise-configuration-checklist-title" className="font-black text-dtsc-ink">Checklist de configuration réelle</h2><p className="text-sm text-dtsc-muted">Chaque état vient d’un contrôle persistant, jamais d’un pourcentage décoratif.</p></div><StatusBadge tone={configurationChecklist.every((item) => item.complete) ? "success" : "warning"}>{configurationChecklist.filter((item) => item.complete).length}/{configurationChecklist.length}</StatusBadge></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{configurationChecklist.map((item) => <Link key={item.code} href={item.deepLink} className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-bold text-dtsc-ink"><span>{item.label}</span><StatusBadge tone={item.complete ? "success" : "warning"}>{item.complete ? "OK" : item.reasonCode}</StatusBadge></Link>)}</div>
+      </section>
 
       <ModuleContent>
         <div id="enterprise-admin-subscription" className="scroll-mt-24 outline-none">
@@ -202,13 +215,14 @@ export function EnterpriseAdministrationModule(
         </div>
 
         <div id="enterprise-admin-positions" className="scroll-mt-24 outline-none">
-          <span id="enterprise-admin-permissions" className="scroll-mt-24" />
-          <ModuleSection title="Postes, rôles & permissions" description="Les permissions de poste restent l’autorité métier sans élargissement automatique du rôle Manager.">
-            <Accordion>
-              <AccordionItem title="Postes et permissions" defaultOpen>
-                <EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} />
-              </AccordionItem>
-            </Accordion>
+          <ModuleSection title="Postes" description="Les postes structurent les responsabilités et fournissent des permissions héritées explicables.">
+            <Accordion><AccordionItem title="Postes et permissions héritées" defaultOpen><EnterprisePositionsPanel sectorCode={organization.sectorCode} departments={departments} positions={positions} submitAdminMutation={submitAdminMutation} /></AccordionItem></Accordion>
+          </ModuleSection>
+        </div>
+
+        <div id="enterprise-admin-permissions" className="scroll-mt-24 outline-none">
+          <ModuleSection title="Rôles & permissions" description="Rôles personnalisés tenant-scoped, affectations auditées et simulation sans mutation.">
+            <EnterpriseRolesPermissionsPanel organizationId={organization.id} roles={roles} members={members} modules={visibleModules} />
           </ModuleSection>
         </div>
 
@@ -229,6 +243,12 @@ export function EnterpriseAdministrationModule(
           </ModuleSection>
         </div>
 
+        <div id="enterprise-admin-security" className="scroll-mt-24 outline-none">
+          <ModuleSection title="Sécurité de l’organisation" description="Sessions, invitations, domaines autorisés, MFA disponible et exports sensibles appliqués côté serveur.">
+            <EnterpriseSecurityPolicyPanel organizationId={organization.id} policy={securityPolicy} />
+          </ModuleSection>
+        </div>
+
         <div id="enterprise-admin-audit" className="scroll-mt-24 outline-none">
           <ModuleSection title="Audit & cohérence des modules" count={`${configurationIssues.length}`} description="Incohérences compréhensibles pour les responsables autorisés, sans bruit de log sur les rendus normaux.">
             {configurationIssues.length ? (
@@ -240,6 +260,7 @@ export function EnterpriseAdministrationModule(
             ) : (
               <EmptyState compact title="Configuration cohérente" description="Aucune incohérence de registre, secteur ou dépendance n’a été détectée pour cette organisation." />
             )}
+            <div className="mt-5"><EnterpriseAuditPanel organizationId={organization.id} items={auditItems} /></div>
           </ModuleSection>
         </div>
 

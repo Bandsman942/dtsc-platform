@@ -36,6 +36,9 @@ export type EnterpriseAdminDashboard = {
   activeSuppliersCount: number;
   generatedReportsCount: number;
   publishedReportsCount: number;
+  pendingInvitationsCount: number;
+  securityIncidentsCount: number;
+  recentAdministrativeActionsCount: number;
 };
 
 export type EnterpriseSaasEntitlements = {
@@ -94,6 +97,7 @@ export type EnterpriseDepartmentItem = {
   labelEn: string;
   descriptionFr: string | null;
   responsibleUserId?: string | null;
+  parentDepartmentId?: string | null;
   isActive: boolean;
   sortOrder?: number;
 };
@@ -179,6 +183,58 @@ export type EnterpriseSectorRecordItem = {
   assignedTo: { id: string; name: string; email: string } | null;
 };
 
+export type EnterpriseOrganizationRoleItem = {
+  id: string;
+  code: string;
+  labelFr: string;
+  labelEn: string;
+  descriptionFr?: string | null;
+  descriptionEn?: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+  permissionsJson?: unknown;
+  modulesJson?: unknown;
+  assignments: Array<{ id: string; memberId: string; assignedAt: string }>;
+};
+
+export type EnterpriseSecurityPolicyItem = {
+  id?: string;
+  sessionIdleMinutes: number;
+  invitationExpiryHours: number;
+  maxPendingInvitations: number;
+  requireApprovedDomains: boolean;
+  allowedEmailDomainsJson?: unknown;
+  defaultInvitationRole: string;
+  requireInvitationApproval: boolean;
+  requireMfa: boolean;
+  sensitiveExportApproval: boolean;
+  devicePolicyJson?: unknown;
+  dataExportPolicyJson?: unknown;
+  updatedAt?: string;
+};
+
+export type EnterpriseAuditItem = {
+  id: string;
+  userId: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  result: string;
+  reasonCode: string | null;
+  riskLevel: string | null;
+  requestId: string | null;
+  metadata?: unknown;
+  createdAt: string;
+};
+
+export type EnterpriseConfigurationChecklistItem = {
+  code: string;
+  label: string;
+  complete: boolean;
+  deepLink: string;
+  reasonCode: string;
+};
+
 export type EnterpriseAdminDataset = {
   organization: EnterpriseAdminOrganization;
   dashboard: EnterpriseAdminDashboard;
@@ -186,6 +242,10 @@ export type EnterpriseAdminDataset = {
   modules: EnterpriseModuleItem[];
   departments: EnterpriseDepartmentItem[];
   positions: EnterprisePositionItem[];
+  roles: EnterpriseOrganizationRoleItem[];
+  securityPolicy: EnterpriseSecurityPolicyItem;
+  auditItems: EnterpriseAuditItem[];
+  configurationChecklist: EnterpriseConfigurationChecklistItem[];
   activityBlocks: EnterpriseActivityBlockItem[];
   workflows: EnterpriseWorkflowItem[];
   recentRequests: EnterpriseRequestItem[];

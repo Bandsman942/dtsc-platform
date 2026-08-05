@@ -380,3 +380,7 @@ La PR peut viser `PROFESSIONAL_READY` uniquement après Quality Gates, revue, fu
 ## Itération 05 — Couche IA gouvernée
 
 La couche `lib/ai/` fournit types, catalogue, classification, abstraction fournisseur, orchestration/fallback, erreurs stables, prompts versionnés, registre d’outils, i18n des erreurs, coûts et observabilité. Les routes existantes `/api/chat/v2` et `/api/enterprise/ai/chat` l’utilisent sans recréer leurs historiques. La migration `20260804173000_standard_ai_governance_iteration_05` ajoute les appels modèle et les preuves/transitions de maturité, plus les métadonnées linguistiques de connaissance. La console `/admin/erp-readiness` devient la surface canonique ERP + standards en matrice/Kanban.
+
+## Modules standards — Itération 06 — Gouvernance d’entreprise (2026-08-05)
+
+L’itération 06 professionnalise Budgets, Rapports et Administration entreprise sans dupliquer les moteurs ERP. Les budgets utilisent des versions additives, scénarios, gel, prévisions et alertes ; les métriques communes sont définies dans `lib/enterprise/reporting/metric-registry.ts`. L’administration ajoute rôles d’organisation, simulation de permissions, politiques de sécurité, protection du dernier administrateur, hiérarchie des départements et audit enrichi. La migration `20260805003000_standard_enterprise_governance_iteration_06` est additive. Les guides natifs sont dans `lib/user-guides/iteration06-guides.ts` et la QA agrégée est `pnpm qa:standard-modules-iteration-06`.

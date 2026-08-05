@@ -1,55 +1,121 @@
 model EnterpriseBudget {
-  id              String                    @id @default(cuid())
-  organizationId  String
-  reference       String
-  title           String
-  description     String?
-  status          String                    @default("DRAFT")
-  periodStart     DateTime
-  periodEnd       DateTime
-  currency        String                    @default("USD")
-  departmentId    String?
-  createdByUserId String
-  updatedByUserId String?
-  approvedAt      DateTime?
-  closedAt        DateTime?
-  revision        Int                       @default(1)
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  archivedAt      DateTime?
-  lines           EnterpriseBudgetLine[]
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  reference            String
+  title                String
+  description          String?
+  status               String                    @default("DRAFT")
+  scenarioCode         String                    @default("BASE")
+  versionNumber        Int                       @default(1)
+  parentBudgetId       String?
+  fiscalYearCode       String?
+  periodStart          DateTime
+  periodEnd            DateTime
+  currency             String                    @default("USD")
+  departmentId         String?
+  ownerUserId          String?
+  createdByUserId      String
+  updatedByUserId      String?
+  submittedAt          DateTime?
+  approvedAt           DateTime?
+  frozenAt             DateTime?
+  frozenByUserId       String?
+  closedAt             DateTime?
+  forecastAmount       Decimal?                  @db.Decimal(18, 2)
+  forecastMethod       String?
+  forecastConfidence   Decimal?                  @db.Decimal(5, 2)
+  assumptionsJson      Json?
+  actualFreshnessAt    DateTime?
+  revision             Int                       @default(1)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  archivedAt           DateTime?
+  parentBudget         EnterpriseBudget?         @relation("EnterpriseBudgetVersions", fields: [organizationId, parentBudgetId], references: [organizationId, id], onDelete: Restrict)
+  versions             EnterpriseBudget[]        @relation("EnterpriseBudgetVersions")
+  lines                EnterpriseBudgetLine[]
+  alerts               EnterpriseBudgetAlert[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
+  @@unique([organizationId, parentBudgetId, versionNumber])
   @@index([organizationId, status])
+  @@index([organizationId, scenarioCode, status])
+  @@index([organizationId, fiscalYearCode, periodStart])
   @@index([organizationId, periodStart, periodEnd])
   @@index([organizationId, departmentId])
+  @@index([organizationId, ownerUserId, status])
   @@index([organizationId, currency, status])
   @@index([archivedAt])
 }
 
 model EnterpriseBudgetLine {
-  id             String                       @id @default(cuid())
-  organizationId String
-  budgetId       String
-  code           String?
-  name           String
-  description    String?
-  category       String?
-  departmentId   String?
-  plannedAmount  Decimal                      @db.Decimal(18, 2)
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
-  budget         EnterpriseBudget             @relation(fields: [organizationId, budgetId], references: [organizationId, id], onDelete: Cascade)
-  commitments    EnterpriseBudgetCommitment[]
-  purchases      EnterprisePurchase[]
-  expenses       EnterpriseExpense[]
+  id                String                       @id @default(cuid())
+  organizationId    String
+  budgetId          String
+  code              String?
+  name              String
+  description       String?
+  category          String?
+  accountCode       String?
+  costCenterCode    String?
+  departmentId      String?
+  projectId         String?
+  siteId            String?
+  responsibleUserId String?
+  quantity          Decimal?                     @db.Decimal(18, 4)
+  unitCode          String?
+  hypothesis        String?
+  plannedAmount  Decimal @db.Decimal(18, 2)
+  forecastAmount    Decimal?                     @db.Decimal(18, 2)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  budget            EnterpriseBudget             @relation(fields: [organizationId, budgetId], references: [organizationId, id], onDelete: Cascade)
+  commitments       EnterpriseBudgetCommitment[]
+  purchases         EnterprisePurchase[]
+  expenses          EnterpriseExpense[]
+  alerts            EnterpriseBudgetAlert[]
 
   @@unique([organizationId, id])
   @@index([budgetId])
   @@index([organizationId, budgetId])
   @@index([organizationId, departmentId])
+  @@index([organizationId, projectId])
+  @@index([organizationId, siteId])
+  @@index([organizationId, costCenterCode])
+  @@index([organizationId, responsibleUserId])
   @@index([organizationId, category])
+}
+
+model EnterpriseBudgetAlert {
+  id                String           @id @default(cuid())
+  organizationId    String
+  budgetId          String
+  budgetLineId      String?
+  ruleCode          String
+  thresholdType     String
+  thresholdValue    Decimal          @db.Decimal(18, 4)
+  currentValue      Decimal?         @db.Decimal(18, 4)
+  status            String           @default("OPEN")
+  severity          String           @default("WARNING")
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  responsibleUserId String?
+  recipientIdsJson  Json?
+  deduplicationKey  String
+  triggeredAt       DateTime         @default(now())
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  metadataJson      Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  budget            EnterpriseBudget @relation(fields: [organizationId, budgetId], references: [organizationId, id], onDelete: Cascade)
+  budgetLine        EnterpriseBudgetLine? @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, deduplicationKey])
+  @@index([organizationId, status, severity])
+  @@index([organizationId, budgetId, status])
+  @@index([organizationId, budgetLineId, status])
+  @@index([organizationId, responsibleUserId, status])
 }
 
 model EnterpriseBudgetCommitment {
@@ -126,28 +192,33 @@ model EnterpriseExpense {
 }
 
 model EnterpriseReport {
-  id                String   @id @default(cuid())
-  organizationId    String
-  reference         String
-  title             String
-  description       String?
-  reportType        String
-  status            String   @default("GENERATED")
-  periodStart       DateTime?
-  periodEnd         DateTime?
-  currency          String?
-  generatedByUserId String
-  generatedAt       DateTime @default(now())
-  sourceModule      String?
-  sourceEntityType  String?
-  sourceEntityId    String?
-  schemaVersion     Int      @default(1)
-  filtersJson       Json?
-  snapshotJson      Json
-  revision          Int      @default(1)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  archivedAt        DateTime?
+  id                        String   @id @default(cuid())
+  organizationId            String
+  reference                 String
+  title                     String
+  description               String?
+  reportType                String
+  status                    String   @default("GENERATED")
+  periodStart               DateTime?
+  periodEnd                 DateTime?
+  currency                  String?
+  unitCode                  String?
+  roundingPolicyCode        String   @default("HALF_UP_2")
+  sourcePolicyCode          String?
+  metricDefinitionCodesJson Json?
+  freshnessAt               DateTime?
+  generatedByUserId         String
+  generatedAt               DateTime @default(now())
+  sourceModule              String?
+  sourceEntityType          String?
+  sourceEntityId            String?
+  schemaVersion             Int      @default(1)
+  filtersJson               Json?
+  snapshotJson              Json
+  revision                  Int      @default(1)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  archivedAt                DateTime?
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -155,5 +226,28 @@ model EnterpriseReport {
   @@index([organizationId, status])
   @@index([organizationId, generatedByUserId, generatedAt])
   @@index([organizationId, currency, generatedAt])
+  @@index([organizationId, freshnessAt])
   @@index([archivedAt])
+}
+
+model EnterpriseReportView {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  reportType     String
+  name           String
+  visibility     String   @default("PERSONAL")
+  filtersJson    Json?
+  dimensionsJson Json?
+  sortJson       Json?
+  isDefault      Boolean  @default(false)
+  isFavorite     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  archivedAt     DateTime?
+
+  @@unique([organizationId, userId, reportType, name])
+  @@index([organizationId, userId, archivedAt])
+  @@index([organizationId, reportType, visibility, archivedAt])
+  @@index([organizationId, userId, isFavorite, archivedAt])
 }

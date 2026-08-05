@@ -907,13 +907,14 @@
       "promotionPermissionRequired": "Commercial promotion permission required.",
       "degradationPermissionRequired": "Degradation permission required.",
       "professionalEvidenceRequired": "Professional evidence is incomplete.",
-      "ownerValidationRequired": "Owner validation required.",
+      "ownerValidationRequired": "Explicit owner validation required",
       "incidentEvidenceRequired": "Incident evidence is required.",
       "transitionNotAllowed": "Transition not allowed.",
       "maturityConflict": "Maturity changed. Refresh and try again.",
       "transitionFailed": "The transition could not be recorded.",
       "matrix": "Matrix",
-      "kanban": "Kanban"
+      "kanban": "Kanban",
+      "iteration06": "Iteration 6 — Enterprise governance"
     }
   },
   "userGuides": {
@@ -939,6 +940,62 @@
       "searchPlaceholder": "Search an action, rule or limitation…",
       "noResult": "No guide section matches this search.",
       "limitations": "Conditional features or known limitations"
+    },
+    "enterpriseGovernance": {
+      "budgets": "Budgets and expenses",
+      "reports": "Reports and metrics",
+      "administration": "Enterprise administration",
+      "security": "Enterprise security",
+      "audit": "Audit logs"
     }
+  },
+  "budgets": {
+    "title": "Budgets and expenses",
+    "scenario": "Scenario",
+    "version": "Version",
+    "actual": "Actual",
+    "committed": "Committed",
+    "available": "Available",
+    "forecast": "Forecast",
+    "variance": "Variance",
+    "freshness": "Freshness",
+    "frozen": "Frozen",
+    "alerts": "Budget alerts"
+  },
+  "reports": {
+    "title": "Reports and metrics",
+    "catalog": "Catalog",
+    "source": "Source",
+    "freshness": "Freshness",
+    "unit": "Unit",
+    "filters": "Filters",
+    "savedViews": "Saved views",
+    "favorites": "Favorites",
+    "export": "Export",
+    "noData": "No data is available for this period."
+  },
+  "metrics": {
+    "definition": "Metric definition",
+    "calculation": "Calculation method",
+    "rounding": "Rounding policy",
+    "deepLink": "Open source data"
+  },
+  "enterpriseAdmin": {
+    "title": "Enterprise administration",
+    "overview": "Overview",
+    "collaborators": "Collaborators and positions",
+    "departments": "Departments",
+    "roles": "Roles",
+    "permissions": "Permissions",
+    "modules": "Modules and capabilities",
+    "subscription": "Subscription and limits",
+    "settings": "Settings and branding",
+    "security": "Security",
+    "audit": "Audit and history",
+    "configurationChecklist": "Real configuration checklist",
+    "lastAdminProtected": "The last critical administrator cannot be removed.",
+    "systemRoleProtected": "This system role is protected.",
+    "permissionSimulation": "Permission simulation",
+    "exportApprovalRequired": "Approval is required for this sensitive export."
   }
 }
