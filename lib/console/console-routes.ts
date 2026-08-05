@@ -24,6 +24,39 @@ export const CONSOLE_SECTION_IDS = [
 
 export type ConsoleSectionId = (typeof CONSOLE_SECTION_IDS)[number];
 
+export const CONSOLE_SECTION_GROUPS = [
+  { id: "governance", labelFr: "Pilotage et gouvernance", labelEn: "Steering and governance", descriptionFr: "Vue consolidée, maturité, acquisition et contrôle.", descriptionEn: "Consolidated view, maturity, acquisition and control." },
+  { id: "customers", labelFr: "Clients, revenus et service", labelEn: "Customers, revenue and service", descriptionFr: "Entreprises clientes, abonnements et support.", descriptionEn: "Client organizations, subscriptions and support." },
+  { id: "identity", labelFr: "Identités et accès", labelEn: "Identity and access", descriptionFr: "Comptes, capacités, permissions et sécurité.", descriptionEn: "Accounts, capabilities, permissions and security." },
+  { id: "engagement", labelFr: "Contenus et engagement", labelEn: "Content and engagement", descriptionFr: "Publications, promotions et communication publique.", descriptionEn: "Publications, promotions and public communication." },
+  { id: "platform", labelFr: "Plateforme et technologie", labelEn: "Platform and technology", descriptionFr: "Configuration, feature flags et pilotage technique.", descriptionEn: "Configuration, feature flags and technical steering." },
+  { id: "internal", labelFr: "Opérations internes DTSC", labelEn: "DTSC internal operations", descriptionFr: "Responsabilités métier rattachées aux postes officiels.", descriptionEn: "Business responsibilities attached to official positions." },
+] as const;
+
+export type ConsoleSectionGroupId = (typeof CONSOLE_SECTION_GROUPS)[number]["id"];
+
+export const CONSOLE_SECTION_GROUP: Record<ConsoleSectionId, ConsoleSectionGroupId> = {
+  overview: "governance",
+  "module-maturity": "governance",
+  visits: "governance",
+  "security-audit": "governance",
+  organizations: "customers",
+  subscriptions: "customers",
+  support: "customers",
+  users: "identity",
+  access: "identity",
+  content: "engagement",
+  promotions: "engagement",
+  "platform-settings": "platform",
+  cto: "platform",
+  "hr-cfo": "internal",
+  sco: "internal",
+  coo: "internal",
+  ceo: "internal",
+  mpo: "internal",
+  legal: "internal",
+};
+
 const CANONICAL_SECTION_SET = new Set<string>(CONSOLE_SECTION_IDS);
 
 export const CONSOLE_SECTION_ALIASES: Record<string, ConsoleSectionId> = {

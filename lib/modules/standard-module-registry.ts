@@ -80,8 +80,25 @@ export type StandardModuleDefinition = {
   legacyRoutes?: string[];
 };
 
-export const STANDARD_MODULE_REGISTRY_VERSION = registryData.version;
-export const STANDARD_MODULE_REGISTRY = registryData.modules as StandardModuleDefinition[];
+const EXACT_NATIVE_GUIDE_BY_CODE: Record<string, string> = {
+  SUPPORT: "lib/user-guides/iteration07-guides.ts",
+  CALENDAR: "lib/user-guides/iteration04-guides.ts",
+  DTSC_ACTIVITIES: "lib/user-guides/iteration04-guides.ts",
+  DTSC_AVAILABILITY: "lib/user-guides/iteration04-guides.ts",
+  DTSC_ABSENCES: "lib/user-guides/iteration04-guides.ts",
+  DTSC_PRESTATIONS: "lib/user-guides/iteration04-guides.ts",
+};
+
+export const STANDARD_MODULE_FALLBACK_GUIDE_PATH = "components/user-guides/standard-module-fallback-guide.tsx";
+export const STANDARD_MODULE_REGISTRY_VERSION = `${registryData.version}-guide-coverage-2026-08-05`;
+export const STANDARD_MODULE_REGISTRY = registryData.modules.map((rawDefinition) => {
+  const definition = rawDefinition as StandardModuleDefinition;
+  if (definition.userGuidePath || !definition.routePath) return definition;
+  return {
+    ...definition,
+    userGuidePath: EXACT_NATIVE_GUIDE_BY_CODE[definition.code] || STANDARD_MODULE_FALLBACK_GUIDE_PATH,
+  };
+}) as StandardModuleDefinition[];
 export const STANDARD_MODULE_VISIBLE_STATUSES = new Set<StandardModuleImplementationStatus>(["ACTIVE", "BETA"]);
 
 const definitionByCode = new Map<string, StandardModuleDefinition>();
@@ -155,6 +172,9 @@ export function assertStandardModuleRegistryIntegrity() {
     }
     if (isStandardModuleVisible(definition) && !definition.routePath) {
       failures.push(`${definition.code}: module visible sans route canonique.`);
+    }
+    if (isStandardModuleVisible(definition) && definition.routePath && !definition.userGuidePath) {
+      failures.push(`${definition.code}: module visible sans guide utilisateur natif ni couverture de repli.`);
     }
     for (const alias of definition.aliases || []) {
       const normalized = alias.trim().toUpperCase();
