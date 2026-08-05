@@ -133,14 +133,14 @@ export async function getConsoleOverviewMetrics(input: {
     metric({ code: "AI_USAGE", label: "Consommation IA", value: periodTokens, helper: `${aiCost.toFixed(4)} USD de coût estimé.`, icon: "platform", source: "UsageLog", definition: "Somme des tokens et du coût estimé sur la période.", unit: "tokens", href: getConsoleSectionHref("overview", { period: selectedPeriod }) }),
   ];
 
-  const actionQueue: ConsoleActionItem[] = [
+  const actionQueue = ([
     { id: "past-due", source: "OrganizationSubscription", priority: "HIGH", title: "Abonnements à traiter", detail: "Retards, paiements en attente ou suspensions.", count: pastDueSubscriptions, href: getConsoleSectionHref("subscriptions", { status: "PAST_DUE" }), capability: "CONSOLE_SUBSCRIPTIONS_MANAGE", dueAt: null },
     { id: "failed-payments", source: "Payment", priority: "HIGH", title: "Paiements échoués", detail: "Paiements FAILED sur la période sélectionnée.", count: failedPayments, href: getConsoleSectionHref("subscriptions", { paymentStatus: "FAILED" }), capability: "CONSOLE_SUBSCRIPTIONS_MANAGE", dueAt: null },
     { id: "urgent-tickets", source: "SupportTicket", priority: "CRITICAL", title: "Tickets urgents", detail: "Tickets urgents encore ouverts.", count: criticalTickets, href: getConsoleSectionHref("support", { priority: "URGENT" }), capability: "CONSOLE_SUPPORT_MANAGE", dueAt: null },
     { id: "webhooks", source: "WebhookEvent", priority: "HIGH", title: "Webhooks en échec", detail: "Événements nécessitant diagnostic ou retry contrôlé.", count: webhookFailures, href: getConsoleSectionHref("security-audit", { source: "WEBHOOK", result: "FAILED" }), capability: "CONSOLE_WEBHOOK_RETRY", dueAt: null },
     { id: "incidents", source: "PlatformIncident", priority: "CRITICAL", title: "Incidents ouverts", detail: "Incidents plateforme persistés non résolus.", count: persistedIncidents.length, href: getConsoleSectionHref("overview", { view: "health" }), capability: "CONSOLE_SECURITY_MANAGE", dueAt: null },
     { id: "maturity", source: "CommercialMaturityEvidence", priority: "MEDIUM", title: "Preuves de maturité en attente", detail: "Preuves non validées ou E2E non exécutés.", count: maturityEvidencePending, href: getConsoleSectionHref("module-maturity", { validation: "pending" }), capability: "CONSOLE_MODULE_MATURITY_MANAGE", dueAt: null },
-  ].filter((item) => item.count > 0);
+  ] satisfies ConsoleActionItem[]).filter((item) => item.count > 0);
 
   const healthSignals: ConsoleHealthSignal[] = [
     { code: "APPLICATION", label: "Application", status: apiErrorsInPeriod > 50 ? "DEGRADED" : "OPERATIONAL", source: "ApiLog", detail: `${apiErrorsInPeriod} erreur(s) HTTP sur la période.`, checkedAt: freshness },
@@ -175,21 +175,24 @@ export async function getConsoleOverviewMetrics(input: {
         messages: buildMetricPoints({ rows: messageRows, selectedDate, selectedPeriod }).map((point) => ({ label: point.label, value: point.count })),
         tokens: buildMetricPoints({ rows: tokenRows, selectedDate, selectedPeriod }).map((point) => ({ label: point.label, value: point.count })),
       },
-      breakdowns: {
-        roles: roleBreakdown.map((item) => ({ label: item.role, value: item._count._all })),
-        tickets: ticketBreakdown.map((item) => ({ label: item.status, value: item._count._all })),
-        payments: paymentBreakdown.map((item) => ({ label: item.status, value: item._count._all })),
-      },
-      topModels: topModels.map((item) => ({ model: item.model, count: Number(item.count), tokens: Number(item.tokens) })),
+      roleBreakdown: roleBreakdown.map((row) => ({ label: row.role, value: row._count._all })),
+      ticketBreakdown: ticketBreakdown.map((row) => ({ label: row.status, value: row._count._all })),
+      paymentBreakdown: paymentBreakdown.map((row) => ({ label: row.status, value: row._count._all })),
+      topModels: topModels.map((row) => ({ label: row.model, value: Number(row.count), tokens: Number(row.tokens) })),
     },
-    consoleSaasOverview: {
-      metrics,
-      actionQueue,
-      healthSignals,
-      incidents: incidentEvents,
-      sensitiveAudits: sensitiveAudits.map((event) => ({ id: event.id, title: `${event.action} · ${event.entity}`, detail: event.user ? `${event.user.name} · ${event.user.email}` : "Action système", severity: event.result || classifyAuditSeverity(event.action), createdAt: event.createdAt.toISOString() })),
-      securityEvents: securityEvents.map((event) => ({ id: event.id, title: `${event.action} · ${event.entity}`, detail: event.user ? `${event.user.name} · ${event.user.email}` : "Action système", severity: event.result || classifyAuditSeverity(event.action), createdAt: event.createdAt.toISOString() })),
-      freshness,
-    },
+    metrics,
+    actionQueue,
+    healthSignals,
+    incidentEvents,
+    sensitiveAudits: sensitiveAudits.map((entry) => ({
+      id: entry.id, action: entry.action, entity: entry.entity, entityId: entry.entityId,
+      actor: entry.user?.name || entry.user?.email || entry.userId, severity: classifyAuditSeverity(entry.action, entry.riskLevel),
+      reasonCode: entry.reasonCode, requestId: entry.requestId, createdAt: entry.createdAt.toISOString(),
+    })),
+    securityEvents: securityEvents.map((entry) => ({
+      id: entry.id, action: entry.action, entity: entry.entity, entityId: entry.entityId,
+      actor: entry.user?.name || entry.user?.email || entry.userId, severity: classifyAuditSeverity(entry.action, entry.riskLevel),
+      reasonCode: entry.reasonCode, requestId: entry.requestId, createdAt: entry.createdAt.toISOString(),
+    })),
   };
 }
