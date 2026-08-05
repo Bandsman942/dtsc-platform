@@ -2,8 +2,38 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, placeholder, title, "aria-label": ariaLabel, ...props }: React.ComponentProps<"input">) {
+type InputProps = React.ComponentProps<"input"> & {
+  multiline?: boolean;
+  rows?: number;
+};
+
+function Input({ className, type, placeholder, title, "aria-label": ariaLabel, multiline = false, rows = 3, ...props }: InputProps) {
   const accessibleHint = typeof placeholder === "string" && placeholder.length > 0 ? placeholder : undefined;
+  const commentComposer = typeof placeholder === "string"
+    && /^(ajouter|répondre|votre réponse|écrire|rédiger).*(commentaire|discussion|réponse)/i.test(placeholder.trim());
+  const shouldUseTextarea = multiline || ((!type || type === "text") && commentComposer);
+
+  if (shouldUseTextarea) {
+    const textareaProps = props as unknown as React.ComponentProps<"textarea">;
+    return (
+      <textarea
+        data-slot="input"
+        data-comment-composer={commentComposer ? "true" : undefined}
+        rows={rows}
+        placeholder={placeholder}
+        title={title ?? accessibleHint}
+        aria-label={ariaLabel ?? accessibleHint}
+        className={cn(
+          "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex min-h-24 w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-base leading-6 shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+          "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+          className
+        )}
+        {...textareaProps}
+      />
+    );
+  }
+
   return (
     <input
       type={type}

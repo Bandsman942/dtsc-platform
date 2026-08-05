@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
+import { StandardModuleFallbackGuide } from "@/components/user-guides/standard-module-fallback-guide";
 import { Button } from "@/components/ui/button";
 
 type BeforeInstallPromptEvent = Event & {
@@ -41,10 +42,6 @@ export function PWAInstallPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
   }, []);
 
-  if (!visible || !installEvent) {
-    return null;
-  }
-
   async function installApp() {
     if (!installEvent) {
       return;
@@ -65,38 +62,45 @@ export function PWAInstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-3xl rounded-2xl border border-cyan-400/40 bg-dtsc-surface p-4 shadow-[0_24px_80px_rgba(0,23,54,0.24)] sm:left-auto sm:right-6 sm:max-w-md">
-      <div className="flex items-start gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
-          <Download className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-black text-dtsc-ink">Installer DTSC Platform</p>
-              <p className="mt-1 text-xs leading-5 text-dtsc-muted">
-                Accédez plus vite à votre espace client, vos conversations, documents et tableaux de bord.
-              </p>
+    <>
+      <Suspense fallback={null}>
+        <StandardModuleFallbackGuide />
+      </Suspense>
+      {visible && installEvent ? (
+        <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-3xl rounded-2xl border border-cyan-400/40 bg-dtsc-surface p-4 shadow-[0_24px_80px_rgba(0,23,54,0.24)] sm:left-auto sm:right-6 sm:max-w-md">
+          <div className="flex items-start gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-dtsc-soft text-dtsc-blue">
+              <Download className="h-5 w-5" />
             </div>
-            <button
-              type="button"
-              onClick={dismissPrompt}
-              className="rounded-full p-1 text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-blue"
-              aria-label="Fermer la proposition d'installation"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" onClick={installApp} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-              Installer l&apos;application
-            </Button>
-            <Button type="button" variant="outline" onClick={dismissPrompt} className="rounded-xl">
-              Plus tard
-            </Button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-dtsc-ink">Installer DTSC Platform</p>
+                  <p className="mt-1 text-xs leading-5 text-dtsc-muted">
+                    Accédez plus vite à votre espace client, vos conversations, documents et tableaux de bord.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissPrompt}
+                  className="rounded-full p-1 text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-blue"
+                  aria-label="Fermer la proposition d'installation"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button type="button" onClick={installApp} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+                  Installer l&apos;application
+                </Button>
+                <Button type="button" variant="outline" onClick={dismissPrompt} className="rounded-xl">
+                  Plus tard
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </>
   );
 }
