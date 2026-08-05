@@ -1,0 +1,31 @@
+name: Export iteration 07 E2E remediation source temp
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/export-iteration-07-e2e-remediation-source-temp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create source archive
+        run: |
+          git archive --format=zip --output=dtsc-platform-iteration-07-e2e-remediation-source.zip HEAD
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-platform-iteration-07-e2e-remediation-source
+          path: dtsc-platform-iteration-07-e2e-remediation-source.zip
+          if-no-files-found: error
+          retention-days: 1
