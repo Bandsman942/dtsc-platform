@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 
@@ -49,7 +50,7 @@ export function CeoExecutiveSummary({
                 <input type="date" name="ceoEnd" defaultValue={dateEnd || ""} className="h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/20" />
               </label>
               <button type="submit" className="inline-flex h-11 items-center justify-center rounded-xl bg-dtsc-blue px-4 text-sm font-black text-white transition hover:opacity-90">Filtrer</button>
-              {hasFilters ? <a href="/admin?section=ceo" className="inline-flex h-11 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface px-4 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft">Réinitialiser</a> : null}
+              {hasFilters ? <Link href="/admin?section=ceo" className="inline-flex h-11 items-center justify-center rounded-xl border border-dtsc-border bg-dtsc-surface px-4 text-sm font-black text-dtsc-blue transition hover:bg-dtsc-soft">Réinitialiser</Link> : null}
             </>
           )}
           activeFilters={<span>{hasFilters ? `Période : ${dateStart || "…"} → ${dateEnd || "…"}` : "Aucun filtre actif"}</span>}
