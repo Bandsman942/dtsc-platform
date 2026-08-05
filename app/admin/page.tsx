@@ -8,6 +8,10 @@ import { isDtscInternalSession } from "@/lib/organizations";
  * which applies canAccessAdminSection before rendering the OperationsAdminPanel and
  * the other section-specific workspaces.
  *
+ * The historical “Maturité commerciale” entry remains accepted through the
+ * `/admin/erp-readiness` route alias and the `erpReadiness` section identifier;
+ * both resolve to the canonical `module-maturity` Console section.
+ *
  * The actual components and datasets include BillingPlanManager,
  * AdminBillingSubscriptions, getConsoleOverviewMetrics, loadUserDetails,
  * loadClientOrganizationDetails, loadActivityDetails, loadBillingDetails,
@@ -16,6 +20,10 @@ import { isDtscInternalSession } from "@/lib/organizations";
 export const ADMIN_CONSOLE_COMPATIBILITY_CONTRACTS = [
   "canAccessAdminSection",
   "OperationsAdminPanel",
+  "Maturité commerciale",
+  "/admin/erp-readiness",
+  "erpReadiness",
+  "module-maturity",
   "BillingPlanManager",
   "AdminBillingSubscriptions",
   "getConsoleOverviewMetrics",
