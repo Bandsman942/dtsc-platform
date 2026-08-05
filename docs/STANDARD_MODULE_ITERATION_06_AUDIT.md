@@ -10,6 +10,11 @@
 - registre et Kanban de maturité mis à jour sans promotion commerciale ;
 - migration additive et audits automatisés intégrés à la régression.
 
+## Vérifications CI
+
+- le dataset de l’administration transmet l’ensemble des rôles, politiques de sécurité, événements d’audit et contrôles de configuration au composant natif ;
+- les lignes budgétaires utilisent des entrées Prisma distinctes et cohérentes pour la création imbriquée et le remplacement transactionnel par `createMany`.
+
 ## Limites honnêtes
 
 - les programmations de rapports ne sont pas exposées tant qu’un ordonnanceur de diffusion complet n’est pas prouvé ;
