@@ -3,20 +3,31 @@ import { prisma } from "@/lib/prisma";
 import { formatEnumLabel } from "@/lib/labels";
 import { buildCeoDatasets, buildCooDatasets, buildCtoDatasets, buildHrcfoDatasets, buildLaDatasets, buildMpoDatasets, buildScoDatasets } from "@/lib/admin-operations";
 import { toJsonSafe } from "@/lib/console/console-utils";
+import type { ConsoleSectionId } from "@/lib/console/console-routes";
 
 export async function getConsoleInternalModulesDataset({
   ceoEndDate,
   ceoStartDate,
-  loadInternalOperations,
+  section,
+  pageSize = 60,
   selectedCeoEnd,
   selectedCeoStart,
 }: {
   ceoEndDate?: Date;
   ceoStartDate?: Date;
-  loadInternalOperations: boolean;
+  section: Extract<ConsoleSectionId, "hr-cfo" | "sco" | "coo" | "ceo" | "mpo" | "cto" | "legal">;
+  pageSize?: number;
   selectedCeoEnd?: string;
   selectedCeoStart?: string;
 }) {
+  const boundedTake = Math.min(Math.max(pageSize, 10), 100);
+  const needsPeople = true;
+  const loadHrcfo = section === "hr-cfo" || section === "ceo";
+  const loadSco = section === "sco" || section === "ceo";
+  const loadCoo = section === "coo" || section === "ceo";
+  const loadMpo = section === "mpo" || section === "cto" || section === "legal" || section === "ceo";
+  const loadCto = section === "cto" || section === "legal" || section === "ceo";
+  const loadLegal = section === "legal" || section === "ceo";
   const [
     hrcfoEmployees,
     hrcfoBudgets,
@@ -56,56 +67,56 @@ export async function getConsoleInternalModulesDataset({
     legalRequests,
     legalReports,
   ] = await Promise.all([
-    loadInternalOperations ? prisma.hrcfoEmployee.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.hrcfoBudget.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.hrcfoExpense.findMany({
+    needsPeople ? prisma.hrcfoEmployee.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadHrcfo ? prisma.hrcfoBudget.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadHrcfo ? prisma.hrcfoExpense.findMany({
       orderBy: { updatedAt: "desc" },
       include: { account: true, department: true, budget: true, invoice: true },
-      take: 200,
+      take: boundedTake,
     }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.hrcfoPayroll.findMany({
+    loadHrcfo ? prisma.hrcfoPayroll.findMany({
       orderBy: { updatedAt: "desc" },
       include: { employee: true, account: true, budget: true },
-      take: 200,
+      take: boundedTake,
     }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.department.findMany({ orderBy: { name: "asc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.financialAccount.findMany({ orderBy: { name: "asc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.dtscPosition.findMany({ orderBy: [{ hierarchyLevel: "asc" }, { title: "asc" }], take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.user.findMany({
+    needsPeople ? prisma.department.findMany({ orderBy: { name: "asc" }, take: boundedTake }) : Promise.resolve([]),
+    loadHrcfo ? prisma.financialAccount.findMany({ orderBy: { name: "asc" }, take: boundedTake }) : Promise.resolve([]),
+    needsPeople ? prisma.dtscPosition.findMany({ orderBy: [{ hierarchyLevel: "asc" }, { title: "asc" }], take: boundedTake }) : Promise.resolve([]),
+    needsPeople ? prisma.user.findMany({
       where: { role: { not: UserRole.CLIENT } },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true, role: true, status: true },
-      take: 500,
+      take: boundedTake,
     }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.materialItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.scoVendor.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.scoPurchaseRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.scoInventoryItem.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.scoAsset.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.scoLogisticsEvent.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooOperation.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooRecurringTask.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooDepartmentRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooBlocker.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.collaborationGroup.findMany({ where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { shares: true } } }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.ceoObjective.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.ceoSupervisionLog.findMany({ orderBy: { logDate: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.mpoProject.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.mpoProjectRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { project: { select: { title: true } } }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.ctoTechnicalProject.findMany({ orderBy: { updatedAt: "desc" }, include: { mpoProject: { select: { title: true } } }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.ctoTechnicalRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalCase.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalContract.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalTemplate.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalRisk.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalDocument.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalDispute.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalRequest.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    loadInternalOperations ? prisma.legalReport.findMany({ orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+    loadSco ? prisma.materialItem.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadSco ? prisma.scoVendor.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadSco ? prisma.scoPurchaseRequest.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadSco ? prisma.scoInventoryItem.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadSco ? prisma.scoAsset.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadSco ? prisma.scoLogisticsEvent.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooOperation.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooTask.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooRecurringTask.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooDepartmentRequest.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooBlocker.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooMeeting.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.collaborationGroup.findMany({ where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooWorkflow.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { shares: true } } }, take: boundedTake }) : Promise.resolve([]),
+    loadCoo ? prisma.cooOperationalReport.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    section === "ceo" ? prisma.ceoObjective.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    section === "ceo" ? prisma.ceoSupervisionLog.findMany({ orderBy: { logDate: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadMpo ? prisma.mpoProject.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadMpo ? prisma.mpoProjectRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { project: { select: { title: true } } }, take: boundedTake }) : Promise.resolve([]),
+    loadCto ? prisma.ctoTechnicalProject.findMany({ orderBy: { updatedAt: "desc" }, include: { mpoProject: { select: { title: true } } }, take: boundedTake }) : Promise.resolve([]),
+    loadCto ? prisma.ctoTechnicalRecord.findMany({ orderBy: { updatedAt: "desc" }, include: { technicalProject: { select: { title: true } }, mpoProject: { select: { title: true } } }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalCase.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalContract.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalTemplate.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalRisk.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalDocument.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalDispute.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalRequest.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
+    loadLegal ? prisma.legalReport.findMany({ orderBy: { updatedAt: "desc" }, take: boundedTake }) : Promise.resolve([]),
   ]);
 
   const hrcfoDatasets = buildHrcfoDatasets(toJsonSafe({

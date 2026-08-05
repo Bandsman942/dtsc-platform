@@ -65,6 +65,7 @@ export function AdminSettingsPanel({
       signUpOtpEnabled: form.get("signUpOtpEnabled") === "on",
       signUpOtpExpirationMinutes: form.get("signUpOtpExpirationMinutes"),
       applyLimitsToExistingUsers: form.get("applyLimitsToExistingUsers") === "on",
+      reason: form.get("reason"),
     };
     const response = await fetch("/api/admin/settings", {
       method: "PATCH",
@@ -175,6 +176,9 @@ export function AdminSettingsPanel({
             OTP obligatoire à l&apos;inscription
             <input name="signUpOtpEnabled" type="checkbox" defaultChecked={settings.signUpOtpEnabled} className="h-4 w-4 accent-cyan-500" />
           </label>
+          <Field label="Motif du changement">
+            <Input name="reason" required minLength={3} maxLength={500} placeholder="Motif administratif et impact attendu" />
+          </Field>
           <label className="md:col-span-2 flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
             Appliquer les limites à tous les utilisateurs existants
             <input name="applyLimitsToExistingUsers" type="checkbox" className="h-4 w-4 accent-cyan-500" />

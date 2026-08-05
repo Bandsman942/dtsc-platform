@@ -1,0 +1,76 @@
+import type { ConsoleSectionId } from "@/lib/console/console-routes";
+
+export const CONSOLE_CAPABILITIES = {
+  OVERVIEW_READ: "CONSOLE_OVERVIEW_READ",
+  USERS_READ: "CONSOLE_USERS_READ",
+  USERS_MANAGE: "CONSOLE_USERS_MANAGE",
+  ORGANIZATIONS_READ: "CONSOLE_ORGANIZATIONS_READ",
+  ORGANIZATIONS_MANAGE: "CONSOLE_ORGANIZATIONS_MANAGE",
+  SUBSCRIPTIONS_READ: "CONSOLE_SUBSCRIPTIONS_READ",
+  SUBSCRIPTIONS_MANAGE: "CONSOLE_SUBSCRIPTIONS_MANAGE",
+  SUPPORT_READ: "CONSOLE_SUPPORT_READ",
+  SUPPORT_MANAGE: "CONSOLE_SUPPORT_MANAGE",
+  CONTENT_READ: "CONSOLE_CONTENT_READ",
+  CONTENT_MANAGE: "CONSOLE_CONTENT_MANAGE",
+  SECURITY_READ: "CONSOLE_SECURITY_READ",
+  SECURITY_MANAGE: "CONSOLE_SECURITY_MANAGE",
+  SETTINGS_READ: "CONSOLE_SETTINGS_READ",
+  SETTINGS_MANAGE: "CONSOLE_SETTINGS_MANAGE",
+  AUDIT_EXPORT: "CONSOLE_AUDIT_EXPORT",
+  RECONCILE_BILLING: "CONSOLE_RECONCILE_BILLING",
+  WEBHOOK_RETRY: "CONSOLE_WEBHOOK_RETRY",
+  MODULE_MATURITY_READ: "CONSOLE_MODULE_MATURITY_READ",
+  MODULE_MATURITY_MANAGE: "CONSOLE_MODULE_MATURITY_MANAGE",
+} as const;
+
+export type ConsoleCapability = (typeof CONSOLE_CAPABILITIES)[keyof typeof CONSOLE_CAPABILITIES];
+
+export const CONSOLE_CAPABILITY_SECTIONS: Record<ConsoleCapability, ConsoleSectionId> = {
+  CONSOLE_OVERVIEW_READ: "overview",
+  CONSOLE_USERS_READ: "users",
+  CONSOLE_USERS_MANAGE: "users",
+  CONSOLE_ORGANIZATIONS_READ: "organizations",
+  CONSOLE_ORGANIZATIONS_MANAGE: "organizations",
+  CONSOLE_SUBSCRIPTIONS_READ: "subscriptions",
+  CONSOLE_SUBSCRIPTIONS_MANAGE: "subscriptions",
+  CONSOLE_SUPPORT_READ: "support",
+  CONSOLE_SUPPORT_MANAGE: "support",
+  CONSOLE_CONTENT_READ: "content",
+  CONSOLE_CONTENT_MANAGE: "content",
+  CONSOLE_SECURITY_READ: "security-audit",
+  CONSOLE_SECURITY_MANAGE: "security-audit",
+  CONSOLE_SETTINGS_READ: "platform-settings",
+  CONSOLE_SETTINGS_MANAGE: "platform-settings",
+  CONSOLE_AUDIT_EXPORT: "security-audit",
+  CONSOLE_RECONCILE_BILLING: "subscriptions",
+  CONSOLE_WEBHOOK_RETRY: "security-audit",
+  CONSOLE_MODULE_MATURITY_READ: "module-maturity",
+  CONSOLE_MODULE_MATURITY_MANAGE: "module-maturity",
+};
+
+export const CONSOLE_CAPABILITY_LABELS: Record<ConsoleCapability, { fr: string; en: string; category: string }> = {
+  CONSOLE_OVERVIEW_READ: { fr: "Consulter la vue générale Console", en: "Read the Console overview", category: "Console" },
+  CONSOLE_USERS_READ: { fr: "Consulter les utilisateurs globaux", en: "Read global users", category: "Console · Utilisateurs" },
+  CONSOLE_USERS_MANAGE: { fr: "Administrer les utilisateurs globaux", en: "Manage global users", category: "Console · Utilisateurs" },
+  CONSOLE_ORGANIZATIONS_READ: { fr: "Consulter les entreprises clientes", en: "Read client organizations", category: "Console · Entreprises" },
+  CONSOLE_ORGANIZATIONS_MANAGE: { fr: "Administrer les entreprises clientes", en: "Manage client organizations", category: "Console · Entreprises" },
+  CONSOLE_SUBSCRIPTIONS_READ: { fr: "Consulter abonnements et facturation", en: "Read subscriptions and billing", category: "Console · Facturation" },
+  CONSOLE_SUBSCRIPTIONS_MANAGE: { fr: "Administrer abonnements et facturation", en: "Manage subscriptions and billing", category: "Console · Facturation" },
+  CONSOLE_SUPPORT_READ: { fr: "Consulter le support global", en: "Read global support", category: "Console · Support" },
+  CONSOLE_SUPPORT_MANAGE: { fr: "Traiter le support global", en: "Manage global support", category: "Console · Support" },
+  CONSOLE_CONTENT_READ: { fr: "Consulter les contenus publics", en: "Read public content", category: "Console · Contenu" },
+  CONSOLE_CONTENT_MANAGE: { fr: "Administrer les contenus publics", en: "Manage public content", category: "Console · Contenu" },
+  CONSOLE_SECURITY_READ: { fr: "Consulter sécurité et audit", en: "Read security and audit", category: "Console · Sécurité" },
+  CONSOLE_SECURITY_MANAGE: { fr: "Administrer les opérations de sécurité", en: "Manage security operations", category: "Console · Sécurité" },
+  CONSOLE_SETTINGS_READ: { fr: "Consulter les paramètres plateforme", en: "Read platform settings", category: "Console · Paramètres" },
+  CONSOLE_SETTINGS_MANAGE: { fr: "Modifier les paramètres plateforme", en: "Manage platform settings", category: "Console · Paramètres" },
+  CONSOLE_AUDIT_EXPORT: { fr: "Exporter les audits autorisés", en: "Export authorized audits", category: "Console · Sécurité" },
+  CONSOLE_RECONCILE_BILLING: { fr: "Lancer une réconciliation de facturation", en: "Run billing reconciliation", category: "Console · Facturation" },
+  CONSOLE_WEBHOOK_RETRY: { fr: "Relancer un webhook en échec", en: "Retry a failed webhook", category: "Console · Sécurité" },
+  CONSOLE_MODULE_MATURITY_READ: { fr: "Consulter la maturité des modules", en: "Read module maturity", category: "Console · Maturité" },
+  CONSOLE_MODULE_MATURITY_MANAGE: { fr: "Gérer la maturité des modules", en: "Manage module maturity", category: "Console · Maturité" },
+};
+
+export function consoleCapabilityPermission(capability: ConsoleCapability) {
+  return `console.capability.${capability.toLowerCase()}`;
+}

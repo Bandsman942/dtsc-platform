@@ -7,6 +7,7 @@ import { supportNotificationTarget } from "@/lib/notification-targets";
 import { notifyUsers } from "@/lib/notifications";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { calculateSupportSla } from "@/lib/support-sla";
 import type { SessionPayload } from "@/lib/session";
 import { supportTicketSchema } from "@/lib/validators";
 
@@ -73,6 +74,8 @@ export async function POST(req: Request) {
   const organizationId = await resolveSupportTicketOrganizationId(session);
   let ticket: SupportTicket;
   try {
+    const createdAt = new Date();
+    const sla = calculateSupportSla(body.data.priority, createdAt);
     ticket = await prisma.supportTicket.create({
       data: {
         userId: session.userId,
@@ -80,6 +83,11 @@ export async function POST(req: Request) {
         subject: body.data.subject,
         description: body.data.description,
         priority: body.data.priority,
+        category: "GENERAL",
+        source: session.activeContext === "ORGANIZATION" ? "ORGANIZATION_PORTAL" : "USER_PORTAL",
+        createdAt,
+        slaFirstResponseDueAt: sla.firstResponseDueAt,
+        slaResolutionDueAt: sla.resolutionDueAt,
       },
     });
   } catch (error) {

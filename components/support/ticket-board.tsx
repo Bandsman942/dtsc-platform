@@ -31,11 +31,13 @@ export function TicketBoard({
   canManage = false,
   currentUserId,
   focusTicketId,
+  assignees = [],
 }: {
   tickets: TicketWithUser[];
   canManage?: boolean;
   currentUserId: string;
   focusTicketId?: string | null;
+  assignees?: Array<{ id: string; name: string; email: string; role: UserRole }>;
 }) {
   const router = useRouter();
   const [activeId, setActiveId] = useState("");
@@ -110,17 +112,19 @@ export function TicketBoard({
             </div>
           </div>
           {canManage ? (
-            <form onSubmit={(event) => resolveTicket(event, ticket.id)} className="mt-4 grid min-w-0 gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)_auto]">
+            <form onSubmit={(event) => resolveTicket(event, ticket.id)} className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-4">
               <select name="status" defaultValue={ticket.status} className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
-                <option value="OPEN">{formatEnumLabel("OPEN")}</option>
-                <option value="IN_PROGRESS">{formatEnumLabel("IN_PROGRESS")}</option>
-                <option value="RESOLVED">{formatEnumLabel("RESOLVED")}</option>
-                <option value="CLOSED">{formatEnumLabel("CLOSED")}</option>
+                <option value="OPEN">{formatEnumLabel("OPEN")}</option><option value="IN_PROGRESS">{formatEnumLabel("IN_PROGRESS")}</option><option value="RESOLVED">{formatEnumLabel("RESOLVED")}</option><option value="CLOSED">{formatEnumLabel("CLOSED")}</option>
               </select>
-              <input name="resolution" defaultValue={ticket.resolution || ""} placeholder="Note de résolution visible par l'utilisateur" className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
-              <Button className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] md:w-auto" disabled={activeId === ticket.id}>
-                {activeId === ticket.id ? "Mise à jour..." : "Mettre à jour"}
-              </Button>
+              <select name="priority" defaultValue={ticket.priority} className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+                <option value="LOW">{formatEnumLabel("LOW")}</option><option value="MEDIUM">{formatEnumLabel("MEDIUM")}</option><option value="HIGH">{formatEnumLabel("HIGH")}</option><option value="URGENT">{formatEnumLabel("URGENT")}</option>
+              </select>
+              <select name="assignedToDtscUserId" defaultValue={ticket.assignedToDtscUserId || ""} className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink"><option value="">Non assigné</option>{assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{assignee.name} · {assignee.role}</option>)}</select>
+              <input name="reason" required minLength={3} placeholder="Motif de la mise à jour" className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
+              <input name="resolution" defaultValue={ticket.resolution || ""} placeholder="Note de résolution visible par l'utilisateur" className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink lg:col-span-2" />
+              <input name="escalationReason" defaultValue={ticket.escalationReason || ""} placeholder="Motif d'escalade (optionnel)" className="h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" />
+              <label className="flex h-10 items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">Pause SLA<input name="pauseSla" type="checkbox" defaultChecked={Boolean(ticket.slaPausedAt)} /></label>
+              <Button className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] xl:col-span-4" disabled={activeId === ticket.id}>{activeId === ticket.id ? "Mise à jour..." : "Mettre à jour"}</Button>
             </form>
           ) : null}
         </article>

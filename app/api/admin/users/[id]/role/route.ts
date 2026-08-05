@@ -1,33 +1,27 @@
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { userRoleSchema } from "@/lib/validators";
+import { requireConsoleCapability } from "@/lib/admin-api";
+import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
+import { getProtectedUserMutation } from "@/lib/console/console-user-protection";
+import { writeAuditLog } from "@/lib/audit";
 
-type Params = {
-  params: Promise<{ id: string }>;
-};
+type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
-  const session = await getSession();
-  if (!session || session.role !== UserRole.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
+  const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.USERS_MANAGE);
+  if (access.response) return access.response;
   const body = userRoleSchema.safeParse(await req.json());
-  if (!body.success) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-  }
+  if (!body.success) return NextResponse.json({ error: "Invalid role", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
 
   const { id } = await params;
-  if (id === session.userId && body.data.role !== UserRole.ADMIN) {
-    return NextResponse.json({ error: "Cannot remove your own admin role" }, { status: 400 });
+  const protection = await getProtectedUserMutation({ actorUserId: access.session.userId, targetUserId: id, nextRole: body.data.role });
+  if (!protection.allowed) {
+    await writeAuditLog({ userId: access.session.userId, action: "CONSOLE_USER_ROLE_CHANGE_DENIED", entity: "User", entityId: id, result: "DENIED", reasonCode: protection.reasonCode, riskLevel: "HIGH", request: req });
+    return NextResponse.json({ error: "Protected user mutation", reasonCode: protection.reasonCode }, { status: protection.reasonCode === "NOT_FOUND" ? 404 : 409 });
   }
 
-  await prisma.user.update({
-    where: { id },
-    data: { role: body.data.role },
-  });
-
-  return NextResponse.json({ ok: true });
+  const updated = await prisma.user.update({ where: { id }, data: { role: body.data.role }, select: { id: true, role: true, status: true } });
+  await writeAuditLog({ userId: access.session.userId, action: "CONSOLE_USER_ROLE_UPDATED", entity: "User", entityId: id, before: { role: protection.target.role }, after: { role: updated.role }, reasonCode: access.reasonCode, riskLevel: "HIGH", request: req });
+  return NextResponse.json({ ok: true, user: updated, reasonCode: access.reasonCode });
 }

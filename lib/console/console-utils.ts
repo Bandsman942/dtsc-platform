@@ -7,7 +7,10 @@ export function isUserRole(value: string | undefined): value is UserRole {
   return value === UserRole.ADMIN || value === UserRole.MANAGER || value === UserRole.CLIENT || value === UserRole.SUPPORT;
 }
 
-export function classifyAuditSeverity(action: string) {
+export function classifyAuditSeverity(action: string, riskLevel?: string | null) {
+  if (riskLevel === "CRITICAL" || riskLevel === "HIGH") {
+    return "CRITICAL";
+  }
   if (/delete|access_denied|forbidden|security|secret|unauthorized/i.test(action)) {
     return "CRITICAL";
   }

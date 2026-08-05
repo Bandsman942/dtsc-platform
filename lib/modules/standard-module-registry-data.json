@@ -1,5 +1,5 @@
 {
-  "version": "2026.08.05-standard-iteration-06",
+  "version": "2026.08.05-iteration-07",
   "modules": [
     {
       "code": "DASHBOARD",
@@ -1037,7 +1037,7 @@
       "family": "DTSC_INTERNAL",
       "domain": "ADMINISTRATION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
+      "maturity": "PROFESSIONAL_READY",
       "routePath": "/admin",
       "host": "CONSOLE",
       "iconKey": "shield",
@@ -1051,8 +1051,8 @@
       "requiresActiveSubscription": false,
       "dependencies": [],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [
         "CONSOLE"
       ],
@@ -1068,7 +1068,7 @@
       "domain": "ADMINISTRATION",
       "implementationStatus": "ACTIVE",
       "maturity": "PROFESSIONAL_READY",
-      "routePath": "/admin?section=hr-cfo",
+      "routePath": "/admin/hr-cfo",
       "host": "CONSOLE",
       "iconKey": "badge-dollar-sign",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1083,10 +1083,13 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-payroll-work-integration-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=hr-cfo",
+        "/admin?section=hrCfo"
+      ]
     },
     {
       "code": "DTSC_COO",
@@ -1098,7 +1101,7 @@
       "domain": "WORK_COORDINATION",
       "implementationStatus": "ACTIVE",
       "maturity": "PROFESSIONAL_READY",
-      "routePath": "/admin?section=coo",
+      "routePath": "/admin/coo",
       "host": "CONSOLE",
       "iconKey": "route",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1113,10 +1116,12 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-work-prestations-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=coo"
+      ]
     },
     {
       "code": "DTSC_CEO",
@@ -1127,8 +1132,8 @@
       "family": "DTSC_INTERNAL",
       "domain": "ANALYTICS",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=ceo",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/ceo",
       "host": "CONSOLE",
       "iconKey": "crown",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1143,10 +1148,12 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=ceo"
+      ]
     },
     {
       "code": "DTSC_CTO",
@@ -1157,8 +1164,8 @@
       "family": "DTSC_INTERNAL",
       "domain": "INTELLIGENCE",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=cto",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/cto",
       "host": "CONSOLE",
       "iconKey": "code-2",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1173,10 +1180,12 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=cto"
+      ]
     },
     {
       "code": "DTSC_MPO",
@@ -1187,8 +1196,8 @@
       "family": "DTSC_INTERNAL",
       "domain": "WORK_COORDINATION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=mpo",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/mpo",
       "host": "CONSOLE",
       "iconKey": "kanban-square",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1203,10 +1212,12 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=mpo"
+      ]
     },
     {
       "code": "DTSC_SCO",
@@ -1217,8 +1228,8 @@
       "family": "DTSC_INTERNAL",
       "domain": "WORK_COORDINATION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=sco",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/sco",
       "host": "CONSOLE",
       "iconKey": "truck",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1233,10 +1244,12 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=sco"
+      ]
     },
     {
       "code": "DTSC_LEGAL",
@@ -1247,8 +1260,8 @@
       "family": "DTSC_INTERNAL",
       "domain": "SECURITY",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=legal",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/legal",
       "host": "CONSOLE",
       "iconKey": "scale",
       "navigationGroup": "DTSC_DEPARTMENTS",
@@ -1263,12 +1276,15 @@
         "DTSC_INTERNAL_ADMIN"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [
         "DTSC_LA"
       ],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=legal",
+        "/admin?section=la"
+      ]
     },
     {
       "code": "CONSOLE_OVERVIEW",
@@ -1279,7 +1295,7 @@
       "family": "DTSC_CONSOLE",
       "domain": "ANALYTICS",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
+      "maturity": "PROFESSIONAL_READY",
       "routePath": "/admin",
       "host": "CONSOLE",
       "iconKey": "gauge",
@@ -1293,8 +1309,8 @@
       "requiresActiveSubscription": false,
       "dependencies": [],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
       "legacyRoutes": []
     },
@@ -1308,7 +1324,7 @@
       "domain": "ANALYTICS",
       "implementationStatus": "ACTIVE",
       "maturity": "PROFESSIONAL_READY",
-      "routePath": "/admin/erp-readiness",
+      "routePath": "/admin/module-maturity",
       "host": "CONSOLE",
       "iconKey": "badge-check",
       "navigationGroup": "CONSOLE",
@@ -1324,9 +1340,44 @@
       ],
       "erpDependencies": [],
       "userGuidePath": "lib/user-guides/iteration05-guides.ts",
-      "qaContract": "scripts/audit-standard-commercial-maturity-kanban.mjs",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin/erp-readiness",
+        "/admin?section=erpReadiness"
+      ]
+    },
+    {
+      "code": "CONSOLE_RBAC",
+      "labelFr": "Accès Console",
+      "labelEn": "Console access",
+      "descriptionFr": "Capacités, rôles globaux, postes et permissions individuelles de la Console.",
+      "descriptionEn": "Console capabilities, global roles, positions and individual permissions.",
+      "family": "DTSC_CONSOLE",
+      "domain": "SECURITY",
+      "implementationStatus": "ACTIVE",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/access",
+      "host": "CONSOLE",
+      "iconKey": "key-round",
+      "navigationGroup": "CONSOLE",
+      "navigationOrder": 25,
+      "accessPolicy": "ADMIN_BLOCK",
+      "permissionPrefixes": [
+        "CONSOLE_ACCESS"
+      ],
+      "minimumPlan": null,
+      "requiresActiveSubscription": false,
+      "dependencies": [
+        "CONSOLE_OVERVIEW"
+      ],
+      "erpDependencies": [],
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
+      "aliases": [],
+      "legacyRoutes": [
+        "/admin?section=access"
+      ]
     },
     {
       "code": "CONSOLE_USERS",
@@ -1337,8 +1388,8 @@
       "family": "DTSC_CONSOLE",
       "domain": "ADMINISTRATION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=users",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/users",
       "host": "CONSOLE",
       "iconKey": "users",
       "navigationGroup": "CONSOLE",
@@ -1353,10 +1404,12 @@
         "CONSOLE_OVERVIEW"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=users"
+      ]
     },
     {
       "code": "CONSOLE_CLIENT_ENTERPRISES",
@@ -1367,8 +1420,8 @@
       "family": "DTSC_CONSOLE",
       "domain": "ADMINISTRATION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=organizations",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/organizations",
       "host": "CONSOLE",
       "iconKey": "building-2",
       "navigationGroup": "CONSOLE",
@@ -1383,10 +1436,13 @@
         "CONSOLE_OVERVIEW"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-enterprise-core-v2-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=organizations",
+        "/admin?section=clientOrganizations"
+      ]
     },
     {
       "code": "CONSOLE_SUBSCRIPTIONS",
@@ -1397,8 +1453,8 @@
       "family": "DTSC_CONSOLE",
       "domain": "SUBSCRIPTION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=subscriptions",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/subscriptions",
       "host": "CONSOLE",
       "iconKey": "receipt-text",
       "navigationGroup": "CONSOLE",
@@ -1413,10 +1469,13 @@
         "CONSOLE_OVERVIEW"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=subscriptions",
+        "/admin?section=billing"
+      ]
     },
     {
       "code": "CONSOLE_SUPPORT",
@@ -1428,14 +1487,14 @@
       "domain": "SUPPORT",
       "implementationStatus": "ACTIVE",
       "maturity": "PROFESSIONAL_READY",
-      "routePath": "/support?view=console",
-      "host": "SUPPORT",
+      "routePath": "/admin/support",
+      "host": "CONSOLE",
       "iconKey": "life-buoy",
       "navigationGroup": "CONSOLE",
       "navigationOrder": 60,
-      "accessPolicy": "GLOBAL_ROLE",
+      "accessPolicy": "ADMIN_BLOCK",
       "permissionPrefixes": [
-        "SUPPORT_MANAGE"
+        "CONSOLE_SUPPORT"
       ],
       "minimumPlan": null,
       "requiresActiveSubscription": false,
@@ -1443,10 +1502,14 @@
         "SUPPORT"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-standard-experience-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=support",
+        "/admin?section=activity",
+        "/support?view=console"
+      ]
     },
     {
       "code": "CONSOLE_CONTENT",
@@ -1456,9 +1519,9 @@
       "descriptionEn": "Banners, publications, resources and public content.",
       "family": "DTSC_CONSOLE",
       "domain": "CONTENT",
-      "implementationStatus": "BETA",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=content",
+      "implementationStatus": "ACTIVE",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/content",
       "host": "CONSOLE",
       "iconKey": "newspaper",
       "navigationGroup": "CONSOLE",
@@ -1473,10 +1536,45 @@
         "CONSOLE_OVERVIEW"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=content",
+        "/admin?section=publications"
+      ]
+    },
+    {
+      "code": "CONSOLE_VISITS",
+      "labelFr": "Visites et acquisition",
+      "labelEn": "Visits and acquisition",
+      "descriptionFr": "Visites publiques, pages consultées et conversions définies à partir des données collectées.",
+      "descriptionEn": "Public visits, page views and defined conversions based on collected data.",
+      "family": "DTSC_CONSOLE",
+      "domain": "ANALYTICS",
+      "implementationStatus": "ACTIVE",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/visits",
+      "host": "CONSOLE",
+      "iconKey": "chart-no-axes-combined",
+      "navigationGroup": "CONSOLE",
+      "navigationOrder": 75,
+      "accessPolicy": "ADMIN_BLOCK",
+      "permissionPrefixes": [
+        "CONSOLE_OVERVIEW"
+      ],
+      "minimumPlan": null,
+      "requiresActiveSubscription": false,
+      "dependencies": [
+        "CONSOLE_OVERVIEW"
+      ],
+      "erpDependencies": [],
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
+      "aliases": [],
+      "legacyRoutes": [
+        "/admin?section=visits"
+      ]
     },
     {
       "code": "CONSOLE_SECURITY_AUDIT",
@@ -1487,8 +1585,8 @@
       "family": "DTSC_CONSOLE",
       "domain": "SECURITY",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=security-audit",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/security-audit",
       "host": "CONSOLE",
       "iconKey": "shield-check",
       "navigationGroup": "CONSOLE",
@@ -1504,10 +1602,13 @@
         "CONSOLE_OVERVIEW"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=security-audit",
+        "/admin?section=audits"
+      ]
     },
     {
       "code": "CONSOLE_PLATFORM_SETTINGS",
@@ -1518,8 +1619,8 @@
       "family": "DTSC_CONSOLE",
       "domain": "ADMINISTRATION",
       "implementationStatus": "ACTIVE",
-      "maturity": "OPERATIONAL_UI",
-      "routePath": "/admin?section=platform-settings",
+      "maturity": "PROFESSIONAL_READY",
+      "routePath": "/admin/platform-settings",
       "host": "CONSOLE",
       "iconKey": "sliders-horizontal",
       "navigationGroup": "CONSOLE",
@@ -1534,10 +1635,13 @@
         "CONSOLE_OVERVIEW"
       ],
       "erpDependencies": [],
-      "userGuidePath": null,
-      "qaContract": "scripts/qa-regression-checks.mjs",
+      "userGuidePath": "lib/user-guides/iteration07-guides.ts",
+      "qaContract": "scripts/qa-standard-dtsc-console-checks.mjs",
       "aliases": [],
-      "legacyRoutes": []
+      "legacyRoutes": [
+        "/admin?section=platform-settings",
+        "/admin?section=settings"
+      ]
     },
     {
       "code": "PUBLIC_SITE",

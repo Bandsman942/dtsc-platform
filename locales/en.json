@@ -997,5 +997,109 @@
     "systemRoleProtected": "This system role is protected.",
     "permissionSimulation": "Permission simulation",
     "exportApprovalRequired": "Approval is required for this sensitive export."
+  },
+  "console": {
+    "title": "DTSC Platform control center",
+    "eyebrow": "DTSC SaaS Console",
+    "description": "Manage client organizations, subscriptions, support, security, content and internal modules through separate authorized sections.",
+    "filters": {
+      "search": "Search",
+      "status": "Status",
+      "role": "Role",
+      "source": "Source",
+      "priority": "Priority",
+      "pageSize": "Per page",
+      "apply": "Apply"
+    },
+    "sections": {
+      "overview": {
+        "label": "Overview",
+        "description": "KPIs, health and pending actions"
+      },
+      "module-maturity": {
+        "label": "Commercial maturity",
+        "description": "Modules, evidence and Kanban"
+      },
+      "access": {
+        "label": "RBAC access",
+        "description": "Capabilities and individual permissions"
+      },
+      "platform-settings": {
+        "label": "Platform settings",
+        "description": "Global configuration and feature flags"
+      },
+      "promotions": {
+        "label": "Promotional banners",
+        "description": "Targeted messages and statistics"
+      },
+      "content": {
+        "label": "Publications & content",
+        "description": "Versioned public content"
+      },
+      "users": {
+        "label": "Users & access",
+        "description": "Accounts, roles, status and limits"
+      },
+      "organizations": {
+        "label": "Client organizations",
+        "description": "Lifecycle and isolation"
+      },
+      "subscriptions": {
+        "label": "Subscriptions & billing",
+        "description": "Plans, payments and revenue"
+      },
+      "support": {
+        "label": "Client support",
+        "description": "Tickets, SLA and escalations"
+      },
+      "visits": {
+        "label": "Visits",
+        "description": "Collected audience and acquisition"
+      },
+      "security-audit": {
+        "label": "Security & audit",
+        "description": "Audit, API and webhooks"
+      },
+      "hr-cfo": {
+        "label": "HR & CFO",
+        "description": "HR, finance and control"
+      },
+      "sco": {
+        "label": "SCO",
+        "description": "Procurement, inventory and logistics"
+      },
+      "coo": {
+        "label": "COO",
+        "description": "Operations and coordination"
+      },
+      "ceo": {
+        "label": "CEO",
+        "description": "Executive control"
+      },
+      "mpo": {
+        "label": "MPO",
+        "description": "Projects and deliverables"
+      },
+      "cto": {
+        "label": "CTO",
+        "description": "Technology and quality"
+      },
+      "legal": {
+        "label": "Legal Advisor",
+        "description": "Legal and compliance"
+      }
+    },
+    "errors": {
+      "forbidden": "You are not allowed to access this section.",
+      "unknownSection": "Unknown Console section."
+    },
+    "common": {
+      "freshness": "Last refresh",
+      "source": "Source",
+      "period": "Period",
+      "definition": "Definition",
+      "empty": "No data available.",
+      "guide": "User guide"
+    }
   }
 }

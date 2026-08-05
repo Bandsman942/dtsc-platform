@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -29,10 +32,14 @@ export async function POST(req: Request) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isDtscInternalSession(session) || !canManageClientOrganizations(session.role)) {
+  if (!isDtscInternalSession(session)) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
-    return NextResponse.json({ error: "Forbidden", message: "Seul DTSC peut gérer les entreprises clientes." }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", reasonCode: "NOT_DTSC_INTERNAL" }, { status: 403 });
   }
+  const capability = await requireConsoleCapability(CONSOLE_CAPABILITIES.ORGANIZATIONS_MANAGE);
+  const legacyRoleRecognized = canManageClientOrganizations(session.role);
+  if (!legacyRoleRecognized && capability.response) return capability.response;
+  if (capability.response) return capability.response;
   const limited = await rateLimit(getRateLimitKey(req, `client-organization-create:${session.userId}`), 20, 60 * 60 * 1000);
   if (!limited.ok) {
     await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt });
@@ -99,14 +106,14 @@ export async function POST(req: Request) {
     if (data.adminUserId) {
       await tx.organizationMember.upsert({
         where: { organizationId_userId: { organizationId: created.id, userId: data.adminUserId } },
-        update: { role: "ADMIN_ENTREPRISE", status: "ACTIVE", removedAt: null, joinedAt: new Date() },
+        update: { role: "ADMIN_ENTREPRISE", status: "INVITED", removedAt: null, joinedAt: null, invitedBy: session.userId },
         create: {
           organizationId: created.id,
           userId: data.adminUserId,
           role: "ADMIN_ENTREPRISE",
-          status: "ACTIVE",
+          status: "INVITED",
           invitedBy: session.userId,
-          joinedAt: new Date(),
+          joinedAt: null,
         },
       });
       await tx.organizationAdminGrant.create({
@@ -114,8 +121,8 @@ export async function POST(req: Request) {
           organizationId: created.id,
           userId: data.adminUserId,
           grantedByDtscUserId: session.userId,
-          status: "ACTIVE",
-          reason: "Désignation initiale par DTSC",
+          status: "PENDING",
+          reason: "Désignation initiale en attente d'acceptation",
         },
       });
     }
@@ -136,6 +143,10 @@ export async function POST(req: Request) {
     return created;
   });
 
+  if (data.adminUserId) {
+    await notifyUser({ userId: data.adminUserId, title: `Invitation administrateur · ${organization.name}`, body: "DTSC vous invite à administrer cette entreprise. Acceptez explicitement l'invitation depuis votre espace.", type: "ENTERPRISE_INVITATION", targetUrl: `/enterprise-invitations?organizationId=${encodeURIComponent(organization.id)}`, organizationId: organization.id }).catch(() => null);
+  }
+
   if (sector && data.applySectorTemplate) {
     await applyCanonicalSectorTemplateToOrganization({
       organizationId: organization.id,
@@ -145,7 +156,7 @@ export async function POST(req: Request) {
     });
   }
 
-  await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_CREATED", entity: "Organization", entityId: organization.id, request: req });
+  await writeAuditLog({ userId: session.userId, action: "CLIENT_ORGANIZATION_CREATED", entity: "Organization", entityId: organization.id, reasonCode: capability.reasonCode, metadata: { adminInvitationPending: Boolean(data.adminUserId), planId: data.planId || null, sectorId: sector?.id || null }, request: req });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, organization }, { status: 201 });
 }

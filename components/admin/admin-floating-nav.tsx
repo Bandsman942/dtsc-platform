@@ -30,20 +30,24 @@ type AdminFloatingNavSection = {
 
 const iconMap = {
   overview: BarChart3,
+  "module-maturity": BarChart3,
   access: ShieldCheck,
-  settings: Settings,
-  publications: FileText,
+  "platform-settings": Settings,
+  promotions: Megaphone,
+  content: FileText,
   users: Users,
-  hrCfo: BriefcaseBusiness,
+  organizations: BriefcaseBusiness,
+  subscriptions: BarChart3,
+  support: MessageSquare,
+  visits: BarChart3,
+  "security-audit": Megaphone,
+  "hr-cfo": BriefcaseBusiness,
   sco: PackageCheck,
   coo: BarChart3,
   ceo: Crown,
   mpo: FolderKanban,
   cto: Code2,
-  la: Scale,
-  visits: BarChart3,
-  activity: MessageSquare,
-  audits: Megaphone,
+  legal: Scale,
 } as const;
 
 export function AdminFloatingNav({
