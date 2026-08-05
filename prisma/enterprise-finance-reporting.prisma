@@ -65,7 +65,7 @@ model EnterpriseBudgetLine {
   quantity          Decimal?                     @db.Decimal(18, 4)
   unitCode          String?
   hypothesis        String?
-  plannedAmount     Decimal                      @db.Decimal(18, 2)
+  plannedAmount  Decimal @db.Decimal(18, 2)
   forecastAmount    Decimal?                     @db.Decimal(18, 2)
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt

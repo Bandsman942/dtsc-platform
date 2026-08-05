@@ -145,7 +145,7 @@ export async function updateEnterpriseBudget(organizationId: string, budgetId: s
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseBudget.findFirst({ where: { id: budgetId, organizationId, archivedAt: null } });
     if (!existing) throw new EnterpriseCoreV2Error("Budget introuvable.", 404, "BUDGET_NOT_FOUND");
-    if (!["DRAFT", "PREPARING", "CORRECTION_REQUESTED"].includes(existing.status)) throw new EnterpriseCoreV2Error("Le budget est gelé ou approuvé et doit être révisé avant modification.", 409, "BUDGET_FROZEN");
+    if (existing.status !== "DRAFT") throw new EnterpriseCoreV2Error("Le budget est gelé ou approuvé et doit être révisé avant modification.", 409, "BUDGET_FROZEN");
     const nextStart = input.periodStart ?? existing.periodStart;
     const nextEnd = input.periodEnd ?? existing.periodEnd;
     if (nextEnd < nextStart) throw new EnterpriseCoreV2Error("La période budgétaire est invalide.", 400, "INVALID_BUDGET_PERIOD");
@@ -172,7 +172,7 @@ export async function updateEnterpriseBudget(organizationId: string, budgetId: s
         revision: { increment: 1 },
       },
     });
-    if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le budget a été modifié par un autre utilisateur.", 409, "REVISION_MISMATCH");
+    if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le budget a été modifié par un autre utilisateur.", 409, "REVISION_CONFLICT");
     if (lines) {
       const inUse = await tx.enterpriseBudgetLine.count({ where: { organizationId, budgetId, OR: [{ commitments: { some: {} } }, { purchases: { some: {} } }, { expenses: { some: {} } }] } });
       if (inUse) throw new EnterpriseCoreV2Error("Les lignes déjà utilisées ne peuvent pas être remplacées. Créez une nouvelle version.", 409, "BUDGET_LINES_IN_USE");
@@ -204,14 +204,14 @@ export async function createEnterpriseBudgetApproval({
     if (!budget.lines.length) throw new EnterpriseCoreV2Error("Le budget doit contenir au moins une ligne.", 400, "BUDGET_LINES_REQUIRED");
     await requireActiveEnterpriseMember(tx, organizationId, actorUserId);
     await requireActiveEnterpriseMember(tx, organizationId, approverUserId);
-    if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "VALIDATOR_NOT_ALLOWED");
+    if (budget.createdByUserId === approverUserId) throw new EnterpriseCoreV2Error("Le créateur du budget ne peut pas approuver son propre budget.", 403, "SELF_APPROVAL_DENIED");
     const pending = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseBudget", targetEntityId: budgetId, status: "PENDING", archivedAt: null }, select: { id: true } });
     if (pending) throw new EnterpriseCoreV2Error("Une validation est déjà en attente pour ce budget.", 409, "PENDING_APPROVAL_EXISTS");
     const promoted = await tx.enterpriseBudget.updateMany({
       where: { id: budgetId, organizationId, status: budget.status, revision: budgetRevision ?? budget.revision, archivedAt: null },
       data: { status: "PENDING_APPROVAL", submittedAt: new Date(), updatedByUserId: actorUserId, revision: { increment: 1 } },
     });
-    if (promoted.count !== 1) throw new EnterpriseCoreV2Error("Le budget a changé pendant sa soumission.", 409, "REVISION_MISMATCH");
+    if (promoted.count !== 1) throw new EnterpriseCoreV2Error("Le budget a changé pendant sa soumission.", 409, "REVISION_CONFLICT");
     const approval = await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseBudget", targetEntityId: budgetId, requestedByUserId: budget.createdByUserId, approverUserId, status: "PENDING" } });
     await createEnterpriseLink(tx, { organizationId, sourceModule: "FINANCE_BUDGETS", sourceEntityType: "EnterpriseBudget", sourceEntityId: budgetId, targetModule: "VALIDATIONS", targetEntityType: "EnterpriseApproval", targetEntityId: approval.id, linkType: "REQUIRES_APPROVAL", createdById: actorUserId });
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseBudget", entityId: budgetId, eventType: "ENTERPRISE_BUDGET_SUBMITTED", summary: "Budget soumis pour approbation.", actorUserId, fromStatus: budget.status, toStatus: "PENDING_APPROVAL" });
@@ -244,7 +244,7 @@ export async function decideEnterpriseBudgetApproval({
     if (approval.status !== "PENDING") throw new EnterpriseCoreV2Error("Cette validation a déjà été décidée.", 409, "APPROVAL_ALREADY_DECIDED");
     if (action === "APPROVE" || action === "REJECT") {
       if (approval.approverUserId !== actorUserId) throw new EnterpriseCoreV2Error("Seul l’approbateur désigné peut décider ce budget.", 403, "VALIDATOR_NOT_ALLOWED");
-      if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "VALIDATOR_NOT_ALLOWED");
+      if (approval.requestedByUserId === actorUserId) throw new EnterpriseCoreV2Error("L’auto-approbation est interdite.", 403, "SELF_APPROVAL_DENIED");
     } else if (approval.requestedByUserId !== actorUserId && !canManage) {
       throw new EnterpriseCoreV2Error("Vous ne pouvez pas annuler cette validation.", 403, "APPROVAL_CANCEL_DENIED");
     }
@@ -269,7 +269,7 @@ async function createBudgetRevision(tx: Tx, organizationId: string, budgetId: st
   const existing = await tx.enterpriseBudget.findFirst({ where: { id: budgetId, organizationId, archivedAt: null }, include: { lines: true } });
   if (!existing) throw new EnterpriseCoreV2Error("Budget introuvable.", 404, "BUDGET_NOT_FOUND");
   if (!["ACTIVE", "FROZEN", "CLOSED"].includes(existing.status)) throw new EnterpriseCoreV2Error("Seul un budget approuvé, gelé ou clôturé peut être révisé.", 409, "INVALID_BUDGET_REVISION_STATE");
-  if (existing.revision !== input.revision) throw new EnterpriseCoreV2Error("Le budget a été modifié simultanément.", 409, "REVISION_MISMATCH");
+  if (existing.revision !== input.revision) throw new EnterpriseCoreV2Error("Le budget a été modifié simultanément.", 409, "REVISION_CONFLICT");
   const rootId = existing.parentBudgetId || existing.id;
   const latest = await tx.enterpriseBudget.aggregate({ where: { organizationId, OR: [{ id: rootId }, { parentBudgetId: rootId }] }, _max: { versionNumber: true } });
   const versionNumber = (latest._max.versionNumber || existing.versionNumber) + 1;
@@ -344,7 +344,7 @@ export async function transitionEnterpriseBudget(organizationId: string, budgetI
         revision: { increment: 1 },
       },
     });
-    if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le budget a été modifié simultanément.", 409, "REVISION_MISMATCH");
+    if (updated.count !== 1) throw new EnterpriseCoreV2Error("Le budget a été modifié simultanément.", 409, "REVISION_CONFLICT");
     const eventType = input.action === "FREEZE" ? "ENTERPRISE_BUDGET_FROZEN" : input.action === "CLOSE" ? "ENTERPRISE_BUDGET_CLOSED" : input.action === "CANCEL" ? "ENTERPRISE_BUDGET_CANCELLED" : input.action === "REOPEN" ? "ENTERPRISE_BUDGET_REOPENED" : "ENTERPRISE_BUDGET_ARCHIVED";
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseBudget", entityId: budgetId, eventType, summary: nullable(input.comment) || `Action ${input.action} appliquée au budget.`, actorUserId, fromStatus: existing.status, toStatus: transition.to || existing.status });
     return getBudgetPosition(tx, organizationId, budgetId);
