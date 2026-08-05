@@ -47,11 +47,11 @@ export function StandardModuleFallbackGuide() {
   const searchParams = useSearchParams();
   const guide = useMemo(() => {
     const candidates = registryData.modules
-      .filter((module) => module.routePath && !module.userGuidePath && !EXACT_INTERFACE_GUIDE_CODES.has(module.code))
+      .filter((definition) => definition.routePath && !definition.userGuidePath && !EXACT_INTERFACE_GUIDE_CODES.has(definition.code))
       .sort((left, right) => String(right.routePath).length - String(left.routePath).length);
-    const module = candidates.find((candidate) => routeMatches(String(candidate.routePath), pathname, searchParams));
-    if (!module) return null;
-    return buildFallbackGuide(module);
+    const moduleDefinition = candidates.find((candidate) => routeMatches(String(candidate.routePath), pathname, searchParams));
+    if (!moduleDefinition) return null;
+    return buildFallbackGuide(moduleDefinition);
   }, [pathname, searchParams]);
 
   if (!guide) return null;
@@ -74,21 +74,21 @@ function routeMatches(routePath: string, pathname: string, searchParams: { get(n
   return true;
 }
 
-function buildFallbackGuide(module: (typeof registryData.modules)[number]): Guide {
-  const capabilities = DOMAIN_CAPABILITIES[module.domain] || [
-    `Consulter ${module.labelFr}`,
+function buildFallbackGuide(moduleDefinition: (typeof registryData.modules)[number]): Guide {
+  const capabilities = DOMAIN_CAPABILITIES[moduleDefinition.domain] || [
+    `Consulter ${moduleDefinition.labelFr}`,
     "Utiliser les actions réellement disponibles selon le contexte",
     "Préserver les permissions, l’historique et les données métier",
   ];
-  const dependencyText = [...module.dependencies, ...module.erpDependencies].length
-    ? `Dépendances fonctionnelles : ${[...module.dependencies, ...module.erpDependencies].join(", ")}.`
+  const dependencyText = [...moduleDefinition.dependencies, ...moduleDefinition.erpDependencies].length
+    ? `Dépendances fonctionnelles : ${[...moduleDefinition.dependencies, ...moduleDefinition.erpDependencies].join(", ")}.`
     : "Aucune dépendance fonctionnelle supplémentaire n’est déclarée dans le registre canonique.";
 
   return {
-    code: `NATIVE_${module.code}`,
-    title: `Guide ${module.labelFr}`,
-    summary: module.descriptionFr,
-    audience: ACCESS_AUDIENCES[module.accessPolicy] || "Utilisateurs autorisés",
+    code: `NATIVE_${moduleDefinition.code}`,
+    title: `Guide ${moduleDefinition.labelFr}`,
+    summary: moduleDefinition.descriptionFr,
+    audience: ACCESS_AUDIENCES[moduleDefinition.accessPolicy] || "Utilisateurs autorisés",
     updatedAt: "2026-08-05",
     capabilities: [...capabilities, dependencyText],
     steps: [
@@ -115,8 +115,8 @@ function buildFallbackGuide(module: (typeof registryData.modules)[number]): Guid
       },
     ],
     limitations: [
-      `Accès appliqué : ${module.accessPolicy}.`,
-      module.requiresActiveSubscription ? "Une souscription active et les capacités du plan sont requises." : "Les capacités visibles restent limitées par le contexte et le RBAC.",
+      `Accès appliqué : ${moduleDefinition.accessPolicy}.`,
+      moduleDefinition.requiresActiveSubscription ? "Une souscription active et les capacités du plan sont requises." : "Les capacités visibles restent limitées par le contexte et le RBAC.",
       "Ce guide natif de couverture complète les guides métier spécialisés et doit être remplacé par un guide plus détaillé lorsque le workflow évolue.",
     ],
   };
