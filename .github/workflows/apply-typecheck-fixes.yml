@@ -19,66 +19,40 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply targeted TypeScript fixes
+      - name: Apply remaining targeted fixes
         shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('app/api/toolbox/notes/[id]/route.ts')
-          source = path.read_text()
-          old = '''  const nextStatus = parsed.data.status || existing.status;
-          const note = await prisma.professionalToolNote.update({
-            where: { id: existing.id },
-            data: {
-              ...parsed.data,
-              ...(parsed.data.contentHtml !== undefined ? { contentHtml: sanitizeRichHtml(parsed.data.contentHtml) } : {}),
-              ...(parsed.data.contentText !== undefined ? { contentText: parsed.data.contentText.trim() } : {}),
-              ...(parsed.data.labels !== undefined ? { labels: parsed.data.labels.join(",") } : {}),
-              ...(parsed.data.dueAt !== undefined ? { dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null } : {}),
-              completedAt: nextStatus === "DONE" ? existing.completedAt || new Date() : null,
-              archivedAt: nextStatus === "ARCHIVED" ? existing.archivedAt || new Date() : null,
-            },
-          });
-          '''
-          new = '''  const nextStatus = parsed.data.status || existing.status;
-          const { contentHtml, contentText, labels, dueAt, ...scalarUpdates } = parsed.data;
-          const note = await prisma.professionalToolNote.update({
-            where: { id: existing.id },
-            data: {
-              ...scalarUpdates,
-              ...(contentHtml !== undefined ? { contentHtml: sanitizeRichHtml(contentHtml) } : {}),
-              ...(contentText !== undefined ? { contentText: contentText.trim() } : {}),
-              ...(labels !== undefined ? { labels: labels.join(",") } : {}),
-              ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null } : {}),
-              completedAt: nextStatus === "DONE" ? existing.completedAt || new Date() : null,
-              archivedAt: nextStatus === "ARCHIVED" ? existing.archivedAt || new Date() : null,
-            },
-          });
-          '''
-          if old not in source:
-              raise SystemExit('toolbox note update block not found')
-          path.write_text(source.replace(old, new))
-
           path = Path('components/productivity/professional-toolbox.tsx')
           source = path.read_text()
+          if 'ClipboardCut' not in source:
+              raise SystemExit('ClipboardCut identifier not found')
           source = source.replace('ClipboardCopy, ClipboardCut, ClipboardPaste', 'ClipboardCopy, ClipboardPaste, Scissors')
           source = source.replace('<ClipboardCut ', '<Scissors ')
           path.write_text(source)
 
           path = Path('lib/standard-collaboration.ts')
           source = path.read_text()
-          source = source.replace('select: { requesterId: true, targetUserId: true, acceptedAt: true, updatedAt: true }', 'select: { requesterId: true, targetUserId: true, respondedAt: true, updatedAt: true }')
+          if 'acceptedAt: true' not in source or 'request.acceptedAt' not in source:
+              raise SystemExit('acceptedAt contact fields not found')
+          source = source.replace('acceptedAt: true', 'respondedAt: true')
           source = source.replace('request.acceptedAt || request.updatedAt', 'request.respondedAt || request.updatedAt')
           path.write_text(source)
+
+          route = Path('app/api/toolbox/notes/[id]/route.ts').read_text()
+          if 'const { contentHtml, contentText, labels, dueAt, ...scalarUpdates } = parsed.data;' not in route:
+              raise SystemExit('toolbox route normalization missing')
           PY
           git diff --check
-          git diff -- app/api/toolbox/notes/'[id]'/route.ts components/productivity/professional-toolbox.tsx lib/standard-collaboration.ts
       - name: Commit and push code fixes
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/api/toolbox/notes/'[id]'/route.ts components/productivity/professional-toolbox.tsx lib/standard-collaboration.ts
+          git add components/productivity/professional-toolbox.tsx lib/standard-collaboration.ts
           git commit -m "fix: resolve iteration 07 v3 type errors"
           git push origin HEAD:fix/iteration-07-e2e-remediation-v3-final
