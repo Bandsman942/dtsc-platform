@@ -125,6 +125,7 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
       await tx.subscription.update({ where: { id: subscriptionId }, data: { planId: request.planId, status: SubscriptionStatus.ACTIVE, currentPeriodStart: start, currentPeriodEnd: end, cancelAtPeriodEnd: false } });
     }
     if (!paymentId) {
+      if (!subscriptionId) throw new Error("MANUAL_PAYMENT_SUBSCRIPTION_REQUIRED");
       const payment = await tx.payment.create({ data: { userId: request.userId!, subscriptionId, provider: "MANUAL", reference: `MANUAL-${request.id}`, amount: request.amount, currency: request.currency, status: PaymentStatus.PAID, paidAt: new Date(), checkoutPayload: { method: request.paymentMethod, externalReference: request.externalReference } } });
       paymentId = payment.id;
     }

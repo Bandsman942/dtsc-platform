@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   if (!isMaishaPayConfigured()) return NextResponse.json({ error: "MAISHAPAY_MAINTENANCE", message: "Le paiement en ligne est momentanément indisponible." }, { status: 503 });
   await ensureBillingPlans();
   const [organization, user, plan] = await Promise.all([
-    prisma.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null }, select: { id: true, name: true, phone: true, email: true } }),
+    prisma.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null }, select: { id: true, name: true, email: true } }),
     prisma.user.findUnique({ where: { id: session.userId }, select: { id: true, name: true, phone: true, email: true } }),
     prisma.billingPlan.findFirst({ where: { id: parsed.data.planId, isActive: true, audience: { in: ["ORGANIZATION", "BOTH"] } } }),
   ]);
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const maishaPay = await initiateMaishaPayPayment({ transactionReference: reference, amount: Number(plan.priceUsd), currency: "USD", customerFullName: organization.name, customerPhoneNumber: organization.phone || user.phone, customerEmailAddress: organization.email || user.email, provider: parsed.data.provider, walletId: parsed.data.walletId });
+    const maishaPay = await initiateMaishaPayPayment({ transactionReference: reference, amount: Number(plan.priceUsd), currency: "USD", customerFullName: organization.name, customerPhoneNumber: user.phone, customerEmailAddress: organization.email || user.email, provider: parsed.data.provider, walletId: parsed.data.walletId });
     const providerReference = getMaishaPayProviderReference(maishaPay.data);
     await prisma.payment.update({ where: { id: pending.id }, data: { status: PaymentStatus.ACCEPTED, providerReference, checkoutPayload: JSON.parse(JSON.stringify(maishaPay.data)) } });
     await writeAuditLog({ userId: session.userId, action: "ORGANIZATION_SUBSCRIPTION_CHECKOUT_CREATED", entity: "Payment", entityId: pending.id, request: req, metadata: { organizationId, planId: plan.id, reference } });

@@ -80,7 +80,7 @@ export async function getConsoleBillingDataset(input: {
       slug: plan.slug,
       description: PLAN_COMMERCIAL_PROFILES[planCode].promiseFr,
       audience: PLAN_COMMERCIAL_PROFILES[planCode].audienceFr,
-      audienceCode: plan.audience === "PERSONAL" || plan.audience === "ORGANIZATION" ? plan.audience : "BOTH",
+      audienceCode: (plan.audience === "PERSONAL" || plan.audience === "ORGANIZATION" ? plan.audience : "BOTH") as "PERSONAL" | "ORGANIZATION" | "BOTH",
       priceUsd: Number(plan.priceUsd),
       dailyMessageLimit: plan.dailyMessageLimit,
       dailyTokenLimit: plan.dailyTokenLimit,
