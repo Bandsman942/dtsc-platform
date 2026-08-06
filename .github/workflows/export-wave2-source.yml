@@ -16,9 +16,9 @@ jobs:
       - name: Remove git metadata
         run: rm -rf .git
       - name: Archive source
-        run: tar -czf dtsc-platform-wave2-source.tar.gz --exclude=dtsc-platform-wave2-source.tar.gz .
+        run: tar -C "$GITHUB_WORKSPACE" -czf "$RUNNER_TEMP/dtsc-platform-wave2-source.tar.gz" .
       - uses: actions/upload-artifact@v4
         with:
           name: dtsc-platform-wave2-source
-          path: dtsc-platform-wave2-source.tar.gz
+          path: ${{ runner.temp }}/dtsc-platform-wave2-source.tar.gz
           retention-days: 1
