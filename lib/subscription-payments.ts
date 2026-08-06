@@ -132,6 +132,7 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
     await tx.user.update({ where: { id: request.userId! }, data: { dailyMessageLimit: request.plan.dailyMessageLimit, dailyTokenLimit: request.plan.dailyTokenLimit } });
     await tx.manualSubscriptionPayment.update({ where: { id: request.id }, data: { status: "APPROVED", subscriptionId, paymentId, validatedAt: new Date(), validatedByUserId: actorUserId, validationComment: validationComment || null } });
   });
+  if (!subscriptionId || !paymentId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
   let invoice = await prisma.invoice.findUnique({ where: { manualPaymentId: request.id } });
   if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });
   const income = await createSubscriptionIncomeTransaction(paymentId!);

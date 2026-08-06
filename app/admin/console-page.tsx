@@ -204,7 +204,7 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
             where: { category: "HR_CFO_TRANSACTION" },
             orderBy: { issuedAt: "desc" },
             take: 100,
-            include: { user: { select: { name: true, email: true } }, hrcfoTransaction: { select: { reference: true } } },
+            include: { user: { select: { name: true, email: true } }, hrcfoTransaction: { select: { id: true, title: true } } },
           })
         : Promise.resolve([]),
     ]);
@@ -224,7 +224,7 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
         status: invoice.status,
         issuedAt: invoice.issuedAt.toISOString(),
         beneficiary: invoice.user.name || invoice.user.email,
-        transactionReference: invoice.hrcfoTransaction?.reference || null,
+        transactionReference: invoice.hrcfoTransaction?.title || invoice.hrcfoTransaction?.id || null,
       })),
       Boolean(invoiceReadDecision?.allowed),
     );

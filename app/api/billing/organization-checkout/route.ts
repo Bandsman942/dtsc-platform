@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     }
   }
   if (!pending?.organizationSubscription) return NextResponse.json({ error: "CHECKOUT_STATE_INVALID", message: "État de paiement introuvable." }, { status: 409 });
-  if ([PaymentStatus.ACCEPTED, PaymentStatus.PAID].includes(pending.status)) {
+  if (pending.status === PaymentStatus.ACCEPTED || pending.status === PaymentStatus.PAID) {
     return NextResponse.json({ ok: true, unchanged: true, paymentReference: reference, providerReference: pending.providerReference, status: pending.status, message: pending.status === PaymentStatus.PAID ? "Paiement déjà confirmé." : "Paiement déjà initié. Confirmez-le sur votre téléphone." });
   }
 
