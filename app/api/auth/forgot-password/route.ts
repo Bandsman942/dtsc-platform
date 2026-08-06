@@ -31,9 +31,10 @@ export async function POST(req: Request) {
   const accountBaseUrl = getAccountBaseUrl() || new URL(req.url).origin;
   const resetUrl = new URL("/auth/reset-password", accountBaseUrl);
   resetUrl.searchParams.set("token", token);
+  let deliveryAccepted = false;
 
   try {
-    await sendZohoOutboundMail({
+    const delivery = await sendZohoOutboundMail({
       to: [user.email],
       subject: "Réinitialisation de votre mot de passe DTSC",
       heading: "Lien sécurisé à usage unique",
@@ -41,6 +42,8 @@ export async function POST(req: Request) {
       deliveryMode: "direct",
       source: "account-password-recovery",
     });
+    deliveryAccepted = delivery.sent === true;
+    if (!deliveryAccepted) throw new Error("PASSWORD_RESET_EMAIL_NOT_DELIVERED");
   } catch {
     await prisma.passwordResetToken.updateMany({ where: { tokenHash, usedAt: null }, data: { usedAt: new Date() } });
   }
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
     entity: "User",
     entityId: user.id,
     request: req,
-    metadata: { expiresAt: expiresAt.toISOString() },
+    metadata: { expiresAt: expiresAt.toISOString(), deliveryAccepted },
   });
 
   return NextResponse.json(accepted, { status: 202 });
