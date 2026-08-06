@@ -24,8 +24,22 @@ jobs:
       - name: Reconstruct and apply verified patch
         run: |
           set -euo pipefail
-          # chunk-08 contains one staging-only trailing byte; normalize it to the verified 7,500-byte source chunk.
           truncate -s 7500 .transfer/iteration07/chunk-08
+          cat > /tmp/iteration07-chunks.sha256 <<'CHECKSUMS'
+          7b54da824479ef9fec738bdf4f05e15d21f8864601b80d5094c8bf0f55559646  .transfer/iteration07/chunk-00
+          9dc86c0e594cabc468fc8733abebbc54a9ea882a3cdbbc8c5506a3f401b4ea75  .transfer/iteration07/chunk-01
+          bc7e42883343491b0690ab6fb041cc0fcd0ba748346221ecd11d22355bf21f03  .transfer/iteration07/chunk-02
+          6e3e3816529599a4ea72aefb6cd207d81141f913883d79a6add22808c67c5417  .transfer/iteration07/chunk-03
+          45618254e3c35729fac23d53a65c881b1b3e03abadc7a4e4c220426c6948f171  .transfer/iteration07/chunk-04
+          55cbd7bb0abcd6ef57680dc23185e6dbbbdfbe736692c4e24c46d5ecca122f8d  .transfer/iteration07/chunk-05
+          64acc9c00f3b19fbaab29ac8336bd8e237682abba1535828e6eb154932a433fa  .transfer/iteration07/chunk-06
+          41dcde582402e774e894c47a868884ebd39d4d83e78a0c6bbadf2f5ebd5ad3dc  .transfer/iteration07/chunk-07
+          a1c3d039673dcdfd3f65a98abb4aab1625356e6a9a75498f2a80378dc52e2e3d  .transfer/iteration07/chunk-08
+          fdf16e2b7abbeeee24302a04d1c0fd191fb3b2adace96f0be55bbb29a6ac70a9  .transfer/iteration07/chunk-09
+          8f8080a9fd765bfdf6d839410c8395e605efa3a58be421f6ef92d6f544dee242  .transfer/iteration07/chunk-10
+          4f615c50ce3988ae98c31aac3942303d0c53b8c0aa8ba5391e053994f6e3a2a1  .transfer/iteration07/chunk-11
+          CHECKSUMS
+          sha256sum -c /tmp/iteration07-chunks.sha256
           cat .transfer/iteration07/chunk-* > /tmp/iteration07.patch.gz.b64
           test "$(wc -c < /tmp/iteration07.patch.gz.b64)" -eq 82992
           printf '%s  %s\n' 'fc2ff9314013d8a439bb18c3edaa770c799b74693ab3463982d74bdd59de3cf4' '/tmp/iteration07.patch.gz.b64' | sha256sum -c -
