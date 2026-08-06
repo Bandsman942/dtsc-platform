@@ -34,14 +34,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const existing = await prisma.professionalToolNote.findFirst({ where: { id, userId: session.userId } });
   if (!existing) return NextResponse.json({ error: "NOT_FOUND", message: "Note introuvable." }, { status: 404 });
   const nextStatus = parsed.data.status || existing.status;
+  const { contentHtml, contentText, labels, dueAt, ...scalarUpdates } = parsed.data;
   const note = await prisma.professionalToolNote.update({
     where: { id: existing.id },
     data: {
-      ...parsed.data,
-      ...(parsed.data.contentHtml !== undefined ? { contentHtml: sanitizeRichHtml(parsed.data.contentHtml) } : {}),
-      ...(parsed.data.contentText !== undefined ? { contentText: parsed.data.contentText.trim() } : {}),
-      ...(parsed.data.labels !== undefined ? { labels: parsed.data.labels.join(",") } : {}),
-      ...(parsed.data.dueAt !== undefined ? { dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null } : {}),
+      ...scalarUpdates,
+      ...(contentHtml !== undefined ? { contentHtml: sanitizeRichHtml(contentHtml) } : {}),
+      ...(contentText !== undefined ? { contentText: contentText.trim() } : {}),
+      ...(labels !== undefined ? { labels: labels.join(",") } : {}),
+      ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null } : {}),
       completedAt: nextStatus === "DONE" ? existing.completedAt || new Date() : null,
       archivedAt: nextStatus === "ARCHIVED" ? existing.archivedAt || new Date() : null,
     },
