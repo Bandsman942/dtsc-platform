@@ -1,0 +1,29 @@
+name: Export iteration 07 E2E follow-up source
+
+on:
+  push:
+    branches:
+      - chore/export-iteration-07-e2e-followup-source
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch snapshot
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Archive repository source
+        run: git archive --format=tar.gz --output=dtsc-iteration-07-followup-source.tar.gz HEAD
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-iteration-07-followup-source
+          path: dtsc-iteration-07-followup-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
