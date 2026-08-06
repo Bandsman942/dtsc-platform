@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import registryData from "@/lib/modules/standard-module-registry-data.json";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
+import { BookOpenCheck } from "lucide-react";
+import { useFloatingAction } from "@/components/floating-actions/floating-action-hub";
 import type { ContextualUserGuide as Guide } from "@/lib/user-guides/iteration04-guides";
 
 const EXACT_INTERFACE_GUIDE_CODES = new Set([
@@ -43,6 +45,7 @@ const ACCESS_AUDIENCES: Record<string, string> = {
 };
 
 export function StandardModuleFallbackGuide() {
+  const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const guide = useMemo(() => {
@@ -54,13 +57,17 @@ export function StandardModuleFallbackGuide() {
     return buildFallbackGuide(moduleDefinition);
   }, [pathname, searchParams]);
 
+  useFloatingAction(guide ? {
+    id: `user-guide-${guide.code}`,
+    label: guide.title,
+    icon: BookOpenCheck,
+    order: 30,
+    onSelect: () => setOpen(true),
+  } : null);
+
   if (!guide) return null;
 
-  return (
-    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 lg:bottom-6 lg:right-6" data-standard-module-fallback-guide>
-      <ContextualUserGuide guide={guide} compact />
-    </div>
-  );
+  return <ContextualUserGuide guide={guide} compact open={open} onOpenChange={setOpen} hideTrigger />;
 }
 
 function routeMatches(routePath: string, pathname: string, searchParams: { get(name: string): string | null }) {

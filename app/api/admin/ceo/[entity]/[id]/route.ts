@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { syncDerivedOperationalProgress, validateOperationalClosure } from "@/lib/operational-progress";
 import { prisma } from "@/lib/prisma";
 import { ceoSchemas } from "@/lib/validators";
 
@@ -30,11 +31,19 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   try {
+    const nextStatus = typeof parsed.data.status === "string" ? parsed.data.status : null;
+    const objectType = entity === "objectives" ? "CEO_OBJECTIVE" : "CEO_SUPERVISION";
+    if (nextStatus) {
+      const closureError = await validateOperationalClosure(objectType, id, nextStatus);
+      if (closureError) throw new Error(closureError);
+    }
     const record = await updateRecord(entity, id, parsed.data as Record<string, unknown>);
+    const derived = await syncDerivedOperationalProgress(objectType, id);
+    const synchronizedRecord = entity === "objectives" ? { ...record, progress: derived.progress } : record;
     await notifyCeoRecipients(entity, id, session.userId);
     await writeAuditLog({ userId: session.userId, action: `CEO_${entity.toUpperCase()}_UPDATED`, entity, entityId: id, metadata: JSON.parse(JSON.stringify(parsed.data)), request: req });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity } });
-    return NextResponse.json({ ok: true, record });
+    return NextResponse.json({ ok: true, record: synchronizedRecord });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Mise à jour CEO impossible.";
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { entity, message } });
@@ -88,7 +97,6 @@ async function updateRecord(entity: CeoEntity, id: string, data: Record<string, 
         periodEnd: data.periodEnd as Date | undefined,
         targetValue: data.targetValue as number | undefined,
         currentValue: data.currentValue as number | undefined,
-        progress: data.progress != null && data.progress !== "" ? Number(data.progress) : undefined,
         status: data.status ? String(data.status) : undefined,
         priority: data.priority ? String(data.priority) : undefined,
         comments: data.comments ? String(data.comments) : data.comments === "" ? null : undefined,

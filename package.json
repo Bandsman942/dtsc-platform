@@ -288,7 +288,10 @@
     "qa:standard-commercial-maturity-iteration-06": "node scripts/audit-standard-commercial-maturity-iteration-06.mjs",
     "qa:standard-enterprise-governance": "node scripts/qa-standard-enterprise-governance-checks.mjs",
     "qa:standard-modules-iteration-06": "node scripts/qa-standard-modules-iteration-06.mjs",
-    "qa:iteration-07-owner-e2e-remediation": "node scripts/qa-iteration-07-owner-e2e-remediation.mjs"
+    "qa:iteration-07-owner-e2e-remediation": "node scripts/qa-iteration-07-owner-e2e-remediation.mjs",
+    "qa:user-guide-contract": "node scripts/audit-user-guide-contract.mjs",
+    "qa:iteration-07-i18n-contract": "node scripts/audit-iteration-07-i18n-contract.mjs",
+    "qa:iteration-07-owner-e2e-remediation-v3": "node scripts/qa-iteration-07-owner-e2e-remediation-v3.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

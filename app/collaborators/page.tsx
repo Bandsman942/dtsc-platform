@@ -6,7 +6,7 @@ import { canUseFeature, getOrganizationEntitlements } from "@/lib/billing/entitl
 import { collaborationGroupScopeWhere, touchUserPresence } from "@/lib/collaboration";
 import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
-import { directConversationDisplayName, getAuthorizedCollaborators, getCollaborationPresenceMap } from "@/lib/standard-collaboration";
+import { directConversationDisplayName, getAcceptedCollaborationContacts, getAuthorizedCollaborators, getCollaborationPresenceMap } from "@/lib/standard-collaboration";
 
 export default async function CollaboratorsPage({ searchParams }: { searchParams?: Promise<{ groupId?: string; joinCall?: string; messageId?: string }> }) {
   const user = await requireUser();
@@ -92,7 +92,10 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
       take: 100,
     }),
   ]);
-  const users = await getAuthorizedCollaborators(session, { limit: 100 });
+  const [users, acceptedContacts] = await Promise.all([
+    getAuthorizedCollaborators(session, { limit: 100 }),
+    getAcceptedCollaborationContacts(session, 100),
+  ]);
   const groupIds = groups.map((group) => group.id);
   const unreadMentions = groupIds.length
     ? await prisma.collaborationMessageMention.findMany({
@@ -130,6 +133,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
   }
   const presenceMap = await getCollaborationPresenceMap([
     ...users.map((collaborator) => collaborator.id),
+    ...acceptedContacts.map((contact) => contact.id),
     ...groups.flatMap((group) => group.members.map((member) => member.userId)),
   ]);
   const groupsWithMentionState = groups.map((group) => {
@@ -151,12 +155,17 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
     ...collaborator,
     lastSeenAt: presenceMap.get(collaborator.id) || collaborator.lastSeenAt,
   }));
+  const contactsWithPresence = acceptedContacts.map((contact) => ({
+    ...contact,
+    lastSeenAt: presenceMap.get(contact.id) || contact.lastSeenAt,
+  }));
 
   return (
     <AppShell user={user}>
       <div className="h-full min-h-0 min-w-0 overflow-hidden">
         <CollaboratorsImmersiveConversationShell
           currentUserId={user.id}
+          currentUserRole={user.role}
           initialActiveGroupId={params?.groupId || null}
           initialJoinCallId={params?.joinCall || null}
           initialMessageId={params?.messageId || null}
@@ -164,6 +173,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
           initialGroups={JSON.parse(JSON.stringify(groupsWithMentionState))}
           initialInvitations={JSON.parse(JSON.stringify(invitations))}
           users={JSON.parse(JSON.stringify(usersWithPresence))}
+          initialContacts={JSON.parse(JSON.stringify(contactsWithPresence))}
           conversations={JSON.parse(JSON.stringify(conversations))}
           callPreferences={{
             callSoundsEnabled: user.callSoundsEnabled,

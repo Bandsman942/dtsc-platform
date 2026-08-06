@@ -388,3 +388,21 @@ L’itération 06 professionnalise Budgets, Rapports et Administration entrepris
 ## Console DTSC — professionnalisation Itération 07
 
 La Console globale utilise désormais des routes canoniques sous `/admin`, des datasets paginés dans `lib/console`, des capacités serveur explicites, des guides natifs et des audits dédiés. Les synchronisations financières ont été retirées du rendu. Voir `docs/STANDARD_DTSC_CONSOLE_ARCHITECTURE.md` et les contrats Console associés.
+
+## Remédiation E2E itération 7 v3 — contrats transverses
+
+### Progression opérationnelle
+
+`lib/operational-progress.ts` centralise le calcul de progression et les gardes de clôture. Les routes de statut et de checklist ne font plus confiance à une valeur de progression saisie par le client. Les tâches COO liées à une opération et les éléments `OperationalChecklistItem` sont agrégés dans la même règle déterministe.
+
+### Quotas IA et facturation
+
+`lib/billing/ai-usage-limits.ts` résout le plan actif selon le contexte organisationnel ou personnel. `lib/billing/entitlements.ts` projette les champs administrables du plan vers les limites de l’Assistant IA entreprise. Le catalogue initial est défini une seule fois dans `config/billing-plans.bootstrap.json`; les modifications ultérieures restent versionnées en base.
+
+### Actions flottantes
+
+`FloatingActionHubProvider` fournit un registre client global. Les modules enregistrent une définition d’action au lieu de monter leur propre bouton fixe. Le hub rend une seule commande avec tri, safe area, fermeture avant navigation et actions mobiles conditionnelles.
+
+### Guides et i18n
+
+`scripts/audit-user-guide-contract.mjs` valide la structure et les fonctionnalités documentées. `scripts/audit-iteration-07-i18n-contract.mjs` contrôle les parcours corrigés et compare l’application à `config/i18n-hardcoded-baseline.json`; le nombre de libellés probables codés en dur ne peut plus augmenter sans correction explicite.

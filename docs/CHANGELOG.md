@@ -795,3 +795,14 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - i18n et guides natifs français/anglais ;
 - Kanban de maturité mis à jour, sans promotion automatique vers `COMMERCIAL_READY` ;
 - migration additive et Quality Gates de l’itération 06.
+
+## 2026-08-06 — Itération 7/8, seconde remédiation E2E propriétaire
+
+- Kanban des prestations hebdomadaires par mode ou type de travail, détails plein écran et commentaires journaliers/hebdomadaires.
+- Progression opérationnelle dérivée des tâches et checklists, avec blocage serveur des clôtures incomplètes.
+- Boîte à outils persistante : notes multiples, liste/Kanban, éditeur riche, presse-papiers et calculatrices standard/scientifique/financière.
+- Hub unique d’actions flottantes pour supprimer les chevauchements.
+- Catalogue d’offres individuelles et d’organisation centralisé; quotas Chatbot et Assistant IA dérivés des plans administrés.
+- Annuaire des contacts acceptés, invitation `ADMIN DTSC` et pagination de conversation avec ancrage conservé.
+- Contrat uniforme des guides, inventaire i18n global et nouveaux contrôles CI.
+- Migration additive `20260806110000_iteration_07_e2e_remediation_v3`.

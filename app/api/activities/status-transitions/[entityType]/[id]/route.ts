@@ -6,7 +6,8 @@ import { getActivityStatusTransitions, ACTIVITY_STATUS_REASON_REQUIRED, normaliz
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { DTSC_SPECIAL_PERMISSIONS, hasDtscIndividualPermission } from "@/lib/dtsc-individual-permissions";
 import { notifyUsers } from "@/lib/notifications";
-import { getOperationalActor, resolveOperationalObjectAccess } from "@/lib/operational-access";
+import { getOperationalActor, resolveOperationalObjectAccess, type OperationalObjectType } from "@/lib/operational-access";
+import { syncDerivedOperationalProgress, validateOperationalClosure } from "@/lib/operational-progress";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -96,6 +97,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const changed = await prisma.$transaction(async (tx) => {
     const count = await updateCanonicalStatus(tx, entityType, id, currentStatus, requestedStatus, reason);
     if (count === 0) return false;
+    await syncDerivedOperationalProgress(entityType as OperationalObjectType, id, tx);
     await tx.operationalStatusTransition.create({
       data: {
         objectType: entityType,
@@ -217,10 +219,8 @@ async function resolveTarget({ entityType, id, userId, actor, employeeName, canM
 }
 
 async function validateBusinessRules(entityType: ActivityEntityType, id: string, nextStatus: string) {
-  if (entityType === "OPERATION" && nextStatus === "COMPLETED") {
-    const openTasks = await prisma.cooTask.count({ where: { operationId: id, status: { notIn: ["COMPLETED", "VALIDATED", "CANCELED", "CANCELLED"] } } });
-    if (openTasks > 0) return "Toutes les tâches liées doivent être terminées, validées ou annulées avant de clôturer l’opération.";
-  }
+  const closureError = await validateOperationalClosure(entityType as OperationalObjectType, id, nextStatus);
+  if (closureError) return closureError;
   if (entityType === "MEETING" && nextStatus === "MINUTES_PUBLISHED") {
     const meeting = await prisma.cooMeeting.findUnique({ where: { id }, select: { minutes: true } });
     if (!meeting?.minutes?.trim()) return "Publiez d’abord le compte rendu de la réunion.";
@@ -235,7 +235,7 @@ async function updateCanonicalStatus(tx: Prisma.TransactionClient, entityType: A
   if (entityType === "BLOCKER") return (await tx.cooBlocker.updateMany({ where, data: { status: requestedStatus, resolutionComment: reason || undefined, resolvedAt: requestedStatus === "RESOLVED" ? new Date() : requestedStatus === "IN_PROGRESS" ? null : undefined } })).count;
   if (entityType === "MEETING") return (await tx.cooMeeting.updateMany({ where, data: { status: requestedStatus } })).count;
   if (entityType === "COLLAB_REQUEST") return (await tx.collaboratorRequest.updateMany({ where, data: { status: requestedStatus } })).count;
-  if (entityType === "CEO_OBJECTIVE") return (await tx.ceoObjective.updateMany({ where, data: { status: requestedStatus, progress: requestedStatus === "ACHIEVED" ? 100 : undefined } })).count;
+  if (entityType === "CEO_OBJECTIVE") return (await tx.ceoObjective.updateMany({ where, data: { status: requestedStatus } })).count;
   if (entityType === "CEO_SUPERVISION") return (await tx.ceoSupervisionLog.updateMany({ where, data: { status: requestedStatus } })).count;
   if (entityType === "SCO_PURCHASE_REQUEST") return (await tx.scoPurchaseRequest.updateMany({ where, data: { status: requestedStatus } })).count;
   if (entityType === "SCO_LOGISTICS") return (await tx.scoLogisticsEvent.updateMany({ where, data: { status: requestedStatus } })).count;

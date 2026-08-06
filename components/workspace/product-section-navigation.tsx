@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFloatingAction } from "@/components/floating-actions/floating-action-hub";
 
 export type ProductSectionIcon =
   | "analytics"
@@ -103,6 +104,15 @@ export function ProductSectionNavigation({
     .map((group) => ({ ...group, sections: sections.filter((section) => section.groupId === group.id) }))
     .filter((group) => group.sections.length > 0);
 
+  useFloatingAction({
+    id: `product-navigation-${productLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    label: mobileButtonLabel || `Ouvrir les sections ${productLabel}`,
+    icon: MoreHorizontal,
+    order: 20,
+    mobileOnly: true,
+    onSelect: () => setOpen(true),
+  });
+
   return (
     <div className={cn("dtsc-product-section-navigation min-w-0", className)}>
       <nav className="hidden min-w-0 space-y-5 lg:block" aria-label={`${productLabel} — ${title}`}>
@@ -124,16 +134,6 @@ export function ProductSectionNavigation({
           </section>
         ))}
       </nav>
-
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-14 min-w-14 items-center justify-center rounded-2xl border border-cyan-300/50 bg-[#001736]/95 px-4 text-white shadow-[0_18px_45px_rgba(0,23,54,0.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-[#002b5b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 lg:hidden"
-        aria-label={mobileButtonLabel || `Ouvrir les sections ${productLabel}`}
-        aria-expanded={open}
-      >
-        <MoreHorizontal className="h-6 w-6" aria-hidden="true" />
-      </button>
 
       {open ? (
         <div className="fixed inset-0 z-50 bg-[#001736]/55 p-3 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>

@@ -129,7 +129,6 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
       const payment = await tx.payment.create({ data: { userId: request.userId!, subscriptionId, provider: "MANUAL", reference: `MANUAL-${request.id}`, amount: request.amount, currency: request.currency, status: PaymentStatus.PAID, paidAt: new Date(), checkoutPayload: { method: request.paymentMethod, externalReference: request.externalReference } } });
       paymentId = payment.id;
     }
-    await tx.user.update({ where: { id: request.userId! }, data: { dailyMessageLimit: request.plan.dailyMessageLimit, dailyTokenLimit: request.plan.dailyTokenLimit } });
     await tx.manualSubscriptionPayment.update({ where: { id: request.id }, data: { status: "APPROVED", subscriptionId, paymentId, validatedAt: new Date(), validatedByUserId: actorUserId, validationComment: validationComment || null } });
   });
   if (!subscriptionId || !paymentId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");

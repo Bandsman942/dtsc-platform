@@ -1,4 +1,4 @@
-import { UserStatus } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
@@ -46,7 +46,9 @@ export async function GET(req: Request) {
       id: { notIn: [...excluded] },
       status: UserStatus.ACTIVE,
       ...(emailLookup
-        ? { email: { equals: query.toLowerCase(), mode: "insensitive" } }
+        ? session.role === UserRole.ADMIN
+          ? { email: { equals: query.toLowerCase(), mode: "insensitive" } }
+          : { publicProfileConsent: true, email: { equals: query.toLowerCase(), mode: "insensitive" } }
         : {
             publicProfileConsent: true,
             OR: [
@@ -61,5 +63,5 @@ export async function GET(req: Request) {
     take: 20,
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { resultCount: users.length, emailLookup } });
-  return NextResponse.json({ users: users.map(({ email, ...user }) => ({ ...user, maskedEmail: maskEmail(email) })) });
+  return NextResponse.json({ users: users.map(({ email, ...user }) => ({ ...user, maskedEmail: maskEmail(email), invitationLabel: session.role === UserRole.ADMIN ? "ADMIN DTSC" : null })) });
 }

@@ -18,6 +18,7 @@ import { getCompanyContextForUser } from "@/lib/company-context";
 import { truncate } from "@/lib/format";
 import { DTSC_SYSTEM_PROMPT, type OpenAIInputMessage } from "@/lib/openai";
 import { getActiveOrganizationId } from "@/lib/organizations";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { performPrivateChatActionFromHistory } from "@/lib/private-chat-actions";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
@@ -56,8 +57,6 @@ export async function POST(req: Request) {
       id: true,
       status: true,
       locale: true,
-      dailyMessageLimit: true,
-      dailyTokenLimit: true,
       preferredModel: true,
       chatResponseStyle: true,
       chatResponseLength: true,
@@ -75,16 +74,17 @@ export async function POST(req: Request) {
   today.setHours(0, 0, 0, 0);
   const resetAt = new Date(today);
   resetAt.setDate(resetAt.getDate() + 1);
-  const [messagesToday, tokensToday] = await Promise.all([
+  const [messagesToday, tokensToday, usageLimits] = await Promise.all([
     prisma.message.count({ where: { userId: session.userId, organizationId, role: "user", createdAt: { gte: today } } }),
     prisma.usageLog.aggregate({ where: { userId: session.userId, organizationId, createdAt: { gte: today } }, _sum: { totalTokens: true } }),
+    getCanonicalAiUsageLimits({ userId: session.userId, organizationId }),
   ]);
   const totalTokensToday = tokensToday._sum.totalTokens ?? 0;
-  if (messagesToday >= user.dailyMessageLimit || totalTokensToday >= user.dailyTokenLimit) {
+  if (messagesToday >= usageLimits.dailyMessageLimit || totalTokensToday >= usageLimits.dailyTokenLimit) {
     return NextResponse.json({
       error: "DAILY_LIMIT_REACHED",
       reasonCode: "DAILY_LIMIT_REACHED",
-      usage: { messagesToday, dailyMessageLimit: user.dailyMessageLimit, tokensToday: totalTokensToday, dailyTokenLimit: user.dailyTokenLimit, resetAt: resetAt.toISOString() },
+      usage: { messagesToday, dailyMessageLimit: usageLimits.dailyMessageLimit, tokensToday: totalTokensToday, dailyTokenLimit: usageLimits.dailyTokenLimit, resetAt: resetAt.toISOString() },
     }, { status: 429 });
   }
 

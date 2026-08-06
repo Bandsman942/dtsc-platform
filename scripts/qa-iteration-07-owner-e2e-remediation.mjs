@@ -8,11 +8,11 @@ function requireText(file, needles) { const content = read(file); for (const nee
 function forbidText(file, needles) { const content = read(file); for (const needle of needles) if (content.includes(needle)) failures.push(`${file}: motif interdit: ${needle}`); }
 
 requireText("app/layout.tsx", ["ProfessionalToolbox", "<ProfessionalToolbox />"]);
-requireText("components/productivity/professional-toolbox.tsx", ["dtsc:professional-toolbox:v1", "evaluateArithmetic", "localStorage", "Pense-bête"]);
-forbidText("components/productivity/professional-toolbox.tsx", ["eval(", "new Function("]);
+requireText("components/productivity/professional-toolbox.tsx", ["/api/toolbox/notes", "ScientificExpressionParser", "RichTextEditor", "Pense-bête"]);
+forbidText("components/productivity/professional-toolbox.tsx", ["eval(", "new Function(", "Function(`"]);
 
 requireText("components/activities/activities-dashboard-v3.tsx", ["list", "kanban", "buildColumns", "status-transitions"]);
-requireText("components/activities/work-prestations-panel-v2.tsx", ["groupEntriesByLocation", "groupSubmissionsByStatus", "SubmissionHistoryKanban", "WorkEntryKanban"]);
+requireText("components/activities/work-prestations-panel-v2.tsx", ["weeklyGrouping", "locationMode", "workType", "EntityCommentsThread"]);
 requireText("lib/activity-status-workflow.ts", ["ACTIVITY_STATUS_TRANSITIONS", "ACTIVITY_STATUS_REASON_REQUIRED", "getActivityStatusTransitions"]);
 requireText("app/api/activities/status-transitions/[entityType]/[id]/route.ts", ["isSameOriginRequest", "await rateLimit", "updateMany", "operationalStatusTransition.create", "synchronizedAdminSection", "CONCURRENT_UPDATE"]);
 

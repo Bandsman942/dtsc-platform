@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { notifyUsers } from "@/lib/notifications";
 import { getOperationalActor, operationalChecklistProgress, resolveOperationalObjectAccess } from "@/lib/operational-access";
+import { syncDerivedOperationalProgress, validateOperationalClosure } from "@/lib/operational-progress";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -41,11 +42,9 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const status = parsed.data.status || task.status;
   const checklist = await operationalChecklistProgress("TASK", task.id);
-  if ((status === "COMPLETED" || status === "PENDING_VALIDATION") && checklist.total === 0) {
-    return NextResponse.json({ error: "CHECKLIST_REQUIRED", message: "Ajoutez au moins un résultat à réaliser dans la checklist avant de terminer la tâche." }, { status: 409 });
-  }
-  if ((status === "COMPLETED" || status === "PENDING_VALIDATION") && checklist.progress < 100) {
-    return NextResponse.json({ error: "CHECKLIST_INCOMPLETE", message: "Tous les éléments de la checklist doivent être réalisés avant cette transition." }, { status: 409 });
+  const closureError = await validateOperationalClosure("TASK", task.id, status);
+  if (closureError) {
+    return NextResponse.json({ error: "CHECKLIST_INCOMPLETE", message: closureError }, { status: 409 });
   }
   if (status === "BLOCKED" && !parsed.data.blockerReason?.trim()) {
     return NextResponse.json({ error: "BLOCKER_REASON_REQUIRED", message: "Décrivez le blocage avant de changer le statut." }, { status: 400 });
@@ -62,6 +61,7 @@ export async function PATCH(req: Request, { params }: Params) {
         closedAt: status === "COMPLETED" ? new Date() : task.closedAt,
       },
     });
+    await syncDerivedOperationalProgress("TASK", task.id, tx);
     // OperationalStatusTransition is the append-only record of every task status mutation.
     await tx.operationalStatusTransition.create({
       data: {

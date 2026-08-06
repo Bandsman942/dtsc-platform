@@ -103,6 +103,15 @@ jobs:
       - name: Iteration 07 owner E2E remediation QA
         run: pnpm qa:iteration-07-owner-e2e-remediation
 
+      - name: Iteration 07 owner E2E remediation v3 QA
+        run: pnpm qa:iteration-07-owner-e2e-remediation-v3
+
+      - name: User guide contract QA
+        run: pnpm qa:user-guide-contract
+
+      - name: Iteration 07 i18n contract QA
+        run: pnpm qa:iteration-07-i18n-contract
+
       - name: Standard collaboration E2E fixes QA
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
 
@@ -172,6 +181,15 @@ jobs:
 
       - name: Run iteration 07 owner remediation on clean database
         run: pnpm qa:iteration-07-owner-e2e-remediation
+
+      - name: Run iteration 07 owner remediation v3 on clean database
+        run: pnpm qa:iteration-07-owner-e2e-remediation-v3
+
+      - name: Validate user guide contract
+        run: pnpm qa:user-guide-contract
+
+      - name: Validate iteration 07 i18n contract
+        run: pnpm qa:iteration-07-i18n-contract
 
       - name: Prepare isolated shadow database
         run: |

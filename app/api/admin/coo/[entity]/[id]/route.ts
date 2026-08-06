@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import type { OperationalObjectType } from "@/lib/operational-access";
+import { syncDerivedOperationalProgress, validateOperationalClosure } from "@/lib/operational-progress";
 import { prisma } from "@/lib/prisma";
 import { cooSchemas } from "@/lib/validators";
 
@@ -63,10 +65,18 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   try {
+    const objectType = cooOperationalObjectType(entity);
+    const nextStatus = typeof parsed.data.status === "string" ? parsed.data.status : null;
+    if (objectType && nextStatus) {
+      const closureError = await validateOperationalClosure(objectType, id, nextStatus);
+      if (closureError) throw new Error(closureError);
+    }
     const record = await updateRecord(entity, id, parsed.data as Record<string, unknown>);
+    const derived = objectType ? await syncDerivedOperationalProgress(objectType, id) : null;
+    const synchronizedRecord = derived && (entity === "operations" || entity === "tasks") ? { ...record, progress: derived.progress } : record;
     await writeAuditLog({ userId: session.userId, action: `COO_${entity.toUpperCase()}_UPDATED`, entity, entityId: id, request: req });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity, id } });
-    return NextResponse.json({ ok: true, record });
+    return NextResponse.json({ ok: true, record: synchronizedRecord });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Mise à jour COO impossible.";
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { entity, id, message } });
@@ -101,15 +111,8 @@ export async function DELETE(req: Request, { params }: Params) {
 
 async function updateRecord(entity: CooEntity, id: string, data: Record<string, unknown>) {
   const enriched = await enrichCooData(data);
+  delete enriched.progress;
   if (entity === "operations") {
-    if (enriched.status === "COMPLETED") {
-      const openTasks = await prisma.cooTask.count({
-        where: { operationId: id, status: { notIn: ["COMPLETED", "VALIDATED", "CANCELED"] } },
-      });
-      if (openTasks > 0) {
-        throw new Error("Toutes les tâches obligatoires doivent être terminées ou validées avant de clôturer l'opération.");
-      }
-    }
     return prisma.cooOperation.update({ where: { id }, data: enriched as never });
   }
   if (entity === "tasks") {
@@ -290,4 +293,14 @@ function withClosedAt(data: Record<string, unknown>) {
     return { ...data, closedAt: new Date() };
   }
   return data;
+}
+
+
+function cooOperationalObjectType(entity: CooEntity): OperationalObjectType | null {
+  if (entity === "operations") return "OPERATION";
+  if (entity === "tasks") return "TASK";
+  if (entity === "departmentRequests") return "DEPARTMENT_REQUEST";
+  if (entity === "blockers") return "BLOCKER";
+  if (entity === "meetings") return "MEETING";
+  return null;
 }

@@ -56,8 +56,8 @@ function taskChecks() {
   requireText("app/api/enterprise/[organizationId]/tasks/[id]/coordination/route.ts", ["isSameOriginRequest", "rateLimit", "context.canMutate"]);
   requireText("components/enterprise/core-v2/enterprise-tasks-workspace.tsx", ["collection.meta.currentUserId", "TaskCoordinationPanel"]);
   requireNoText("components/enterprise/core-v2/enterprise-tasks-workspace.tsx", ["|| Boolean(detail.assignedToUserId)"]);
-  requireText("app/api/operations/checklists/route.ts", ["operationalChecklistProgress", "syncDerivedProgress", "OPERATIONAL_CHECKLIST_ITEM_UPDATED"]);
-  requireText("app/api/activities/tasks/[id]/route.ts", ["CHECKLIST_REQUIRED", "CHECKLIST_INCOMPLETE", "OperationalStatusTransition", "Seul le collaborateur assigné ou responsable"]);
+  requireText("app/api/operations/checklists/route.ts", ["operationalChecklistProgress", "syncDerivedOperationalProgress", "OPERATIONAL_CHECKLIST_ITEM_UPDATED"]);
+  requireText("app/api/activities/tasks/[id]/route.ts", ["validateOperationalClosure", "CHECKLIST_INCOMPLETE", "OperationalStatusTransition", "Seul le collaborateur assigné ou responsable"]);
   requireNoText("app/api/activities/tasks/[id]/route.ts", ["progress: z.coerce.number"]);
   requireText("components/activities/activities-dashboard-v3.tsx", ["Vue Kanban transverse", "columnForStatus", "ActivityDetailV2"]);
 }

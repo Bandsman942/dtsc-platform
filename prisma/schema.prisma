@@ -144,6 +144,7 @@ model User {
   managedHrcfoEmployees                 HrcfoEmployee[]                   @relation("EmployeeManager")
   cooComments                           CooComment[]
   cooCommentMentions                    CooCommentMention[]
+  professionalToolNotes                 ProfessionalToolNote[]
   ownedCollaborationGroups              CollaborationGroup[]              @relation("CollaborationGroupOwner")
   collaborationGroupMembers             CollaborationGroupMember[]
   sentCollaborationInvitations          CollaborationGroupInvitation[]    @relation("CollaborationInvitationSender")
@@ -262,6 +263,33 @@ model User {
   @@index([status])
   @@index([createdAt])
   @@index([lastSeenAt])
+}
+
+
+model ProfessionalToolNote {
+  id          String    @id @default(cuid())
+  userId      String
+  moduleKey   String
+  title       String
+  contentHtml String    @default("")
+  contentText String    @default("")
+  noteType    String    @default("NOTE")
+  status      String    @default("DRAFT")
+  priority    String    @default("NORMAL")
+  labels      String?
+  color       String?
+  sortOrder   Int       @default(0)
+  pinned      Boolean   @default(false)
+  dueAt       DateTime?
+  completedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, moduleKey, status, sortOrder])
+  @@index([userId, noteType, dueAt])
+  @@index([userId, updatedAt])
 }
 
 model BillingPlan {

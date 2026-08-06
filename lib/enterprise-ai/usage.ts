@@ -44,6 +44,7 @@ export async function getEnterpriseAiUsageSnapshot(organizationId: string, userI
     },
     limits: {
       monthlyMessages: access.limits.maxEnterpriseAiMonthlyMessages,
+      monthlyTokens: access.limits.maxEnterpriseAiMonthlyTokens,
       knowledgeSources: access.limits.maxEnterpriseAiKnowledgeSources,
       storageMb: access.limits.maxEnterpriseAiStorageMb,
       readToolsEnabled: access.canUseReadTools,
@@ -51,6 +52,7 @@ export async function getEnterpriseAiUsageSnapshot(organizationId: string, userI
     },
     remaining: {
       monthlyMessages: Math.max(access.limits.maxEnterpriseAiMonthlyMessages - usedMessages, 0),
+      monthlyTokens: Math.max(access.limits.maxEnterpriseAiMonthlyTokens - (organizationUsage._sum.totalTokens || 0), 0),
       knowledgeSources: Math.max(access.limits.maxEnterpriseAiKnowledgeSources - sourceCount, 0),
       storageMb: Math.max(access.limits.maxEnterpriseAiStorageMb - usedStorageMb, 0),
     },
@@ -59,7 +61,7 @@ export async function getEnterpriseAiUsageSnapshot(organizationId: string, userI
 
 export async function assertEnterpriseAiMessageQuota(organizationId: string, userId: string, access: EnterpriseAiAccess) {
   const snapshot = await getEnterpriseAiUsageSnapshot(organizationId, userId, access);
-  if (snapshot.remaining.monthlyMessages <= 0) {
+  if (snapshot.remaining.monthlyMessages <= 0 || snapshot.remaining.monthlyTokens <= 0) {
     return { ok: false as const, snapshot };
   }
   return { ok: true as const, snapshot };

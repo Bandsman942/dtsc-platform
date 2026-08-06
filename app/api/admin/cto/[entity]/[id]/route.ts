@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { syncDerivedOperationalProgress, validateOperationalClosure } from "@/lib/operational-progress";
 import { prisma } from "@/lib/prisma";
 import { ctoSchemas } from "@/lib/validators";
 
@@ -29,10 +30,18 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   try {
+    const objectType = entity === "projects" ? "CTO_PROJECT" : "CTO_RECORD";
+    const nextStatus = typeof parsed.data.status === "string" ? parsed.data.status : null;
+    if (nextStatus) {
+      const closureError = await validateOperationalClosure(objectType, id, nextStatus);
+      if (closureError) throw new Error(closureError);
+    }
     const record = await updateRecord(entity, id, parsed.data as Record<string, unknown>);
+    const derived = await syncDerivedOperationalProgress(objectType, id);
+    const synchronizedRecord = entity === "records" ? { ...record, progress: derived.progress } : record;
     await writeAuditLog({ userId: session.userId, action: `CTO_${entity.toUpperCase()}_UPDATED`, entity, entityId: id, request: req });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { entity, id } });
-    return NextResponse.json({ ok: true, record });
+    return NextResponse.json({ ok: true, record: synchronizedRecord });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Mise à jour CTO impossible.";
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt, metadata: { entity, id, message } });
@@ -74,6 +83,7 @@ export async function DELETE(req: Request, { params }: Params) {
 
 async function updateRecord(entity: CtoEntity, id: string, data: Record<string, unknown>) {
   const enriched = await enrichCtoData(data);
+  delete enriched.progress;
   if (entity === "projects") {
     return prisma.ctoTechnicalProject.update({ where: { id }, data: enriched as never });
   }

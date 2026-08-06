@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import { getActiveOrganizationId } from "@/lib/organizations";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { prisma } from "@/lib/prisma";
 
 export default async function ChatPage({
@@ -37,9 +38,10 @@ export default async function ChatPage({
   today.setHours(0, 0, 0, 0);
   const resetAt = new Date(today);
   resetAt.setDate(resetAt.getDate() + 1);
-  const [messagesToday, tokensToday] = await Promise.all([
+  const [messagesToday, tokensToday, usageLimits] = await Promise.all([
     prisma.message.count({ where: { userId: user.id, organizationId: activeOrganizationId, role: "user", createdAt: { gte: today } } }),
     prisma.usageLog.aggregate({ where: { userId: user.id, organizationId: activeOrganizationId, createdAt: { gte: today } }, _sum: { totalTokens: true } }),
+    getCanonicalAiUsageLimits({ userId: user.id, organizationId: activeOrganizationId }),
   ]);
   const models = listCatalogAiModelsForUi({
     context: activeOrganizationId ? "ORGANIZATION" : session?.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : "PERSONAL",
@@ -55,7 +57,7 @@ export default async function ChatPage({
           collaborationGroups={JSON.parse(JSON.stringify(collaborationGroups))}
           initialConversationId={conversationId}
           userPreferences={{ locale: user.locale, timezone: user.timezone, dateFormat: user.dateFormat }}
-          usage={{ messagesToday, dailyMessageLimit: user.dailyMessageLimit, tokensToday: tokensToday._sum.totalTokens ?? 0, dailyTokenLimit: user.dailyTokenLimit, resetAt: resetAt.toISOString() }}
+          usage={{ messagesToday, dailyMessageLimit: usageLimits.dailyMessageLimit, tokensToday: tokensToday._sum.totalTokens ?? 0, dailyTokenLimit: usageLimits.dailyTokenLimit, resetAt: resetAt.toISOString() }}
           models={models}
           assistantDefaults={{ preferredModel: user.preferredModel || null, responseStyle: user.chatResponseStyle || "PROFESSIONAL", responseLength: user.chatResponseLength || "BALANCED" }}
         />

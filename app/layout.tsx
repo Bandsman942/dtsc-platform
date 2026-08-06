@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { PWARegister } from "@/components/pwa/pwa-register";
 import { ProfessionalToolbox } from "@/components/productivity/professional-toolbox";
+import { FloatingActionHubProvider } from "@/components/floating-actions/floating-action-hub";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { dtsc } from "@/lib/dtsc";
 import "./globals.css";
@@ -157,8 +158,10 @@ export default function RootLayout({
         >
           <PWARegister />
           <ToastProvider />
-          {children}
-          <ProfessionalToolbox />
+          <FloatingActionHubProvider>
+            {children}
+            <ProfessionalToolbox />
+          </FloatingActionHubProvider>
         </ThemeProvider>
       </body>
     </html>
