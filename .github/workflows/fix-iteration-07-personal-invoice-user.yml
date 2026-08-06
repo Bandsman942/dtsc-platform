@@ -1,8 +1,9 @@
 name: Fix iteration 07 personal invoice user
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - fix/iteration-07-e2e-remediation-v2
     paths:
       - '.github/workflows/fix-iteration-07-personal-invoice-user.yml'
 
@@ -11,13 +12,12 @@ permissions:
 
 jobs:
   fix:
-    if: github.head_ref == 'fix/iteration-07-e2e-remediation-v2'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: fix/iteration-07-e2e-remediation-v2
           fetch-depth: 0
 
       - name: Tighten personal invoice user id
@@ -40,4 +40,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add lib/subscription-payments.ts
           git commit -m 'fix: require user id for personal subscription invoice'
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin HEAD:fix/iteration-07-e2e-remediation-v2
