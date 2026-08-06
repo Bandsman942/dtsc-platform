@@ -1428,7 +1428,7 @@ function CallHistoryStrip({ group, userPreferences }: { group: Group; userPrefer
   );
 }
 
-function GroupCallRoom({
+export function GroupCallRoom({
   joinedCall,
   group,
   messages,

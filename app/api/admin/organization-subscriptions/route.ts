@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       where: { id: parsed.data.organizationId, organizationType: "CLIENT", deletedAt: null },
       select: { id: true, name: true },
     }),
-    prisma.billingPlan.findFirst({ where: { id: parsed.data.planId, isActive: true }, select: { id: true, name: true } }),
+    prisma.billingPlan.findFirst({ where: { id: parsed.data.planId, isActive: true, audience: { in: ["ORGANIZATION", "BOTH"] } }, select: { id: true, name: true } }),
     prisma.organizationSubscription.findFirst({
       where: { organizationId: parsed.data.organizationId, status: { in: LIVE_SUBSCRIPTION_STATUSES } },
       orderBy: { createdAt: "desc" },

@@ -45,7 +45,8 @@ import {
   type CollaborationMeetingLinkView,
 } from "@/components/collaborators/collaboration-meeting-message-content";
 import { GroupPresenceJournalDialog } from "@/components/collaborators/group-presence-journal-dialog";
-import { CollaboratorsWorkspace } from "@/components/collaborators/collaborators-workspace";
+import { GroupCallRoom } from "@/components/collaborators/collaborators-workspace";
+import { playCallSound } from "@/components/calls/call-sounds";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -81,7 +82,10 @@ type Group = {
   _count?: { messages: number; members: number };
 };
 type Invitation = { id: string; group: { id: string; name: string; description?: string | null }; invitedBy: { name: string }; invitationMessage?: string | null; createdAt: string };
+type ContactRequest = { id: string; requesterId: string; targetUserId: string; message?: string | null; createdAt: string; requester: { id: string; name: string; avatarUrl?: string | null; jobTitle?: string | null }; targetUser: { id: string; name: string; avatarUrl?: string | null; jobTitle?: string | null } };
+type ContactDirectoryUser = { id: string; name: string; avatarUrl?: string | null; jobTitle?: string | null; companyName?: string | null; maskedEmail: string };
 type ConversationOption = { id: string; title: string; updatedAt: string; _count?: { messages: number } };
+type JoinedCall = { call: GroupCall; token: string; livekitUrl: string };
 type CallPreferences = {
   callSoundsEnabled?: boolean;
   callNotificationsEnabled?: boolean;
@@ -152,6 +156,7 @@ type Props = {
 };
 
 const GROUP_TYPES = ["COMPANY", "PROJECT", "INTERNAL", "CLIENT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "OTHER"];
+const LEGACY_CALL_EXPERIENCE_COMPATIBILITY = "CollaboratorsWorkspace";
 
 export function CollaboratorsConversationWorkspace(props: Props) {
   const { currentUserId, initialActiveGroupId, initialJoinCallId, initialMessageId, userPreferences, users } = props;
@@ -182,13 +187,20 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [directOpen, setDirectOpen] = useState(false);
   const [directSearch, setDirectSearch] = useState("");
   const [startingDirectUserId, setStartingDirectUserId] = useState<string | null>(null);
+  const [incomingContactRequests, setIncomingContactRequests] = useState<ContactRequest[]>([]);
+  const [outgoingContactRequests, setOutgoingContactRequests] = useState<ContactRequest[]>([]);
+  const [contactDirectoryUsers, setContactDirectoryUsers] = useState<ContactDirectoryUser[]>([]);
+  const [contactSearching, setContactSearching] = useState(false);
+  const [contactRequestBusyId, setContactRequestBusyId] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [presenceJournalOpen, setPresenceJournalOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(Boolean(initialJoinCallId));
+  const [joinedCall, setJoinedCall] = useState<JoinedCall | null>(null);
+  const [callJoining, setCallJoining] = useState(false);
+  const initialJoinHandledRef = useRef(false);
   const [editMessage, setEditMessage] = useState<GroupMessage | null>(null);
   const [editContent, setEditContent] = useState("");
   const [readInfo, setReadInfo] = useState<ReadInfo | null>(null);
@@ -216,6 +228,14 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     const body = await response.json() as { groups?: Group[]; invitations?: Invitation[] };
     setGroups(body.groups || []);
     setInvitations(body.invitations || []);
+  }, []);
+
+  const loadContactRequests = useCallback(async () => {
+    const response = await fetch("/api/collaborators/contact-requests", { cache: "no-store" });
+    if (!response.ok) return;
+    const body = await response.json() as { incoming?: ContactRequest[]; outgoing?: ContactRequest[] };
+    setIncomingContactRequests(body.incoming || []);
+    setOutgoingContactRequests(body.outgoing || []);
   }, []);
 
   const loadExperience = useCallback(async () => {
@@ -255,6 +275,21 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }, []);
 
   useEffect(() => { void loadExperience(); }, [loadExperience]);
+  useEffect(() => { void loadContactRequests(); }, [loadContactRequests]);
+  useEffect(() => {
+    if (!directOpen || directSearch.trim().length < 3) { setContactDirectoryUsers([]); setContactSearching(false); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setContactSearching(true);
+      const response = await fetch(`/api/collaborators/contact-directory?query=${encodeURIComponent(directSearch.trim())}`, { cache: "no-store", signal: controller.signal }).catch(() => null);
+      if (response?.ok) {
+        const body = await response.json() as { users?: ContactDirectoryUser[] };
+        setContactDirectoryUsers(body.users || []);
+      }
+      setContactSearching(false);
+    }, 350);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [directOpen, directSearch]);
   useEffect(() => {
     if (!activeGroupId) { setMessages([]); setVoices({}); return; }
     setNextCursor(null);
@@ -619,6 +654,93 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     if (response.ok && body) setReadInfo({ readBy: body.readBy || [], unreadBy: body.unreadBy || [] });
   }
 
+  async function sendContactRequest(targetUserId: string) {
+    setContactRequestBusyId(targetUserId);
+    const response = await fetch("/api/collaborators/contact-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId }) });
+    const body = await response.json().catch(() => null) as { message?: string } | null;
+    setContactRequestBusyId(null);
+    setFeedback(response.ok ? (userPreferences.locale === "en" ? "Invitation sent." : "Invitation envoyée.") : body?.message || (userPreferences.locale === "en" ? "Unable to send invitation." : "Impossible d’envoyer l’invitation."));
+    if (response.ok) { setContactDirectoryUsers((current) => current.filter((user) => user.id !== targetUserId)); await loadContactRequests(); }
+  }
+
+  async function respondContactRequest(requestId: string, action: "ACCEPT" | "DECLINE" | "CANCEL") {
+    setContactRequestBusyId(requestId);
+    const response = await fetch(`/api/collaborators/contact-requests/${requestId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    const body = await response.json().catch(() => null) as { groupId?: string; message?: string } | null;
+    setContactRequestBusyId(null);
+    if (!response.ok) return setFeedback(body?.message || (userPreferences.locale === "en" ? "Unable to update invitation." : "Impossible de mettre à jour l’invitation."));
+    await Promise.all([loadContactRequests(), refreshGroups()]);
+    if (body?.groupId) selectGroup(body.groupId);
+  }
+
+  async function startGroupCall(callType: "AUDIO" | "VIDEO") {
+    if (!activeGroup || callJoining) return;
+    setCallJoining(true);
+    const response = await fetch(`/api/collaborators/groups/${activeGroup.id}/calls`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callType, meetingId: "" }),
+    });
+    const body = await response.json().catch(() => null) as { call?: GroupCall; activeCall?: GroupCall; message?: string } | null;
+    setCallJoining(false);
+    if (!response.ok) return setFeedback(body?.message || (userPreferences.locale === "en" ? "Unable to start the call." : "Impossible de démarrer l’appel."));
+    const nextCall = body?.call || body?.activeCall;
+    await refreshGroups();
+    if (nextCall) await joinGroupCall(nextCall);
+  }
+
+  const joinGroupCall = useCallback(async (call: GroupCall) => {
+    if (callJoining) return;
+    setCallJoining(true);
+    const response = await fetch(`/api/collaborators/calls/${call.id}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        microphoneEnabled: props.callPreferences.startMutedByDefault !== true,
+        cameraEnabled: call.callType === "VIDEO" && props.callPreferences.startCameraOffByDefault !== true,
+      }),
+    });
+    const body = await response.json().catch(() => null) as { token?: string; livekitUrl?: string; message?: string } | null;
+    setCallJoining(false);
+    if (!response.ok || !body?.token || !body.livekitUrl) return setFeedback(body?.message || (userPreferences.locale === "en" ? "Unable to join the call." : "Impossible de rejoindre l’appel."));
+    setJoinedCall({ call, token: body.token, livekitUrl: body.livekitUrl });
+    if (props.callPreferences.callSoundsEnabled !== false) void playCallSound("connected", props.callPreferences.callSoundVolume ?? 45);
+    await refreshGroups();
+  }, [callJoining, props.callPreferences.callSoundVolume, props.callPreferences.callSoundsEnabled, props.callPreferences.startCameraOffByDefault, props.callPreferences.startMutedByDefault, refreshGroups, userPreferences.locale]);
+
+  useEffect(() => {
+    if (!initialJoinCallId || initialJoinHandledRef.current) return;
+    const targetGroup = groups.find((group) => (group.calls || []).some((call) => call.id === initialJoinCallId && (call.status === "RINGING" || call.status === "ACTIVE")));
+    const targetCall = targetGroup?.calls?.find((call) => call.id === initialJoinCallId);
+    if (!targetGroup || !targetCall) return;
+    initialJoinHandledRef.current = true;
+    setActiveGroupId(targetGroup.id);
+    setMobileListOpen(false);
+    void joinGroupCall(targetCall);
+  }, [groups, initialJoinCallId, joinGroupCall]);
+
+  async function rejectGroupCall(call: GroupCall) {
+    const response = await fetch(`/api/collaborators/calls/${call.id}/reject`, { method: "POST" });
+    const body = await response.json().catch(() => null) as { message?: string } | null;
+    setFeedback(response.ok ? (userPreferences.locale === "en" ? "Call declined." : "Appel refusé.") : body?.message || (userPreferences.locale === "en" ? "Unable to decline the call." : "Impossible de refuser l’appel."));
+    if (response.ok) await refreshGroups();
+  }
+
+  async function leaveJoinedCall() {
+    if (!joinedCall) return;
+    await fetch(`/api/collaborators/calls/${joinedCall.call.id}/leave`, { method: "POST" }).catch(() => null);
+    setJoinedCall(null);
+    await refreshGroups();
+  }
+
+  async function endGroupCall(call: GroupCall) {
+    const response = await fetch(`/api/collaborators/calls/${call.id}/end`, { method: "POST" });
+    const body = await response.json().catch(() => null) as { message?: string } | null;
+    if (!response.ok) return setFeedback(body?.message || (userPreferences.locale === "en" ? "Unable to end the call." : "Impossible de terminer l’appel."));
+    if (joinedCall?.call.id === call.id) setJoinedCall(null);
+    await refreshGroups();
+  }
+
   async function manageGroupMember(member: GroupMember, action: "PROMOTE_ADMIN" | "DEMOTE_ADMIN" | "REMOVE" | "TRANSFER_OWNER") {
     if (!activeGroup) return;
     const destructive = action === "REMOVE" || action === "TRANSFER_OWNER";
@@ -678,23 +800,15 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     onStory: () => setStoryOpen(true),
     onInvite: () => setInviteOpen(true),
     onSettings: () => setGroupDialog("edit"),
-    onCalls: () => setAdvancedOpen(true),
+    onCalls: () => {
+      const activeCall = activeGroup.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE");
+      if (activeCall) void joinGroupCall(activeCall);
+      else void startGroupCall("AUDIO");
+    },
     onLeave: () => void leaveOrDeleteGroup(),
   }) : [];
 
-  if (advancedOpen) {
-    return (
-      <div className="fixed inset-0 z-[1100] overflow-hidden bg-dtsc-page">
-        <div className="flex h-14 items-center justify-between border-b border-dtsc-border bg-dtsc-surface px-3">
-          <p className="font-black text-dtsc-ink">{t("advanced")}</p>
-          <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => setAdvancedOpen(false)} aria-label={t("close")}><X className="h-4 w-4" /></Button>
-        </div>
-        <div className="h-[calc(100dvh-3.5rem)] overflow-hidden">
-          <CollaboratorsWorkspace {...props} initialActiveGroupId={activeGroupId || props.initialActiveGroupId} />
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="relative grid h-[calc(100dvh-7.25rem)] min-w-0 overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -722,6 +836,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
         </div>
 
         {invitations.length ? <div className="mx-3 mb-2 max-h-36 shrink-0 overflow-y-auto rounded-2xl border border-cyan-300/60 bg-cyan-400/10 p-2 sm:mx-4">{invitations.map((invitation) => <div key={invitation.id} className="flex items-center gap-2 py-1.5 text-xs"><span className="min-w-0 flex-1"><strong className="block truncate text-dtsc-ink">{invitation.group.name}</strong><span className="text-dtsc-muted">{t("invitation")} · {invitation.invitedBy.name}</span></span><Button type="button" size="icon" className="h-8 w-8 rounded-full" onClick={() => void respondInvitation(invitation.id, "ACCEPT")} aria-label={t("accept")}><Check className="h-3.5 w-3.5" /></Button><Button type="button" size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => void respondInvitation(invitation.id, "DECLINE")} aria-label={t("decline")}><X className="h-3.5 w-3.5" /></Button></div>)}</div> : null}
+        {incomingContactRequests.length ? <div className="mx-3 mb-2 max-h-40 shrink-0 overflow-y-auto rounded-2xl border border-blue-300/60 bg-blue-400/10 p-2 sm:mx-4"><p className="px-1 pb-1 text-[0.65rem] font-black uppercase tracking-wide text-blue-700 dark:text-blue-200">{userPreferences.locale === "en" ? "Contact invitations" : "Invitations de contact"}</p>{incomingContactRequests.map((request) => <div key={request.id} className="flex items-center gap-2 py-1.5 text-xs"><ConversationAvatar title={request.requester.name} avatarUrl={request.requester.avatarUrl} className="h-8 w-8" /><span className="min-w-0 flex-1"><strong className="block truncate text-dtsc-ink">{request.requester.name}</strong><span className="block truncate text-dtsc-muted">{request.requester.jobTitle || (userPreferences.locale === "en" ? "Wants to connect" : "Souhaite vous ajouter")}</span></span><Button type="button" size="icon" disabled={contactRequestBusyId === request.id} className="h-8 w-8 rounded-full" onClick={() => void respondContactRequest(request.id, "ACCEPT")} aria-label={t("accept")}><Check className="h-3.5 w-3.5" /></Button><Button type="button" size="icon" disabled={contactRequestBusyId === request.id} variant="outline" className="h-8 w-8 rounded-full" onClick={() => void respondContactRequest(request.id, "DECLINE")} aria-label={t("decline")}><X className="h-3.5 w-3.5" /></Button></div>)}</div> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-20 sm:px-3 lg:pb-3">
           {visibleGroups.map((group) => {
@@ -739,7 +854,11 @@ export function CollaboratorsConversationWorkspace(props: Props) {
       <main className={cn("h-full min-h-0 min-w-0 flex-col overflow-hidden bg-dtsc-page", activeGroup && !mobileListOpen ? "flex" : "hidden lg:flex")}>
         {activeGroup ? (
           <>
-            <ConversationHeader title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Audio"><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="hidden rounded-full sm:inline-flex" onClick={() => setAdvancedOpen(true)} aria-label="Video"><Video className="h-4 w-4" /></Button><ActionMenu label="Actions du groupe" items={groupMenu} /></>} />
+            <ConversationHeader title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("AUDIO")} aria-label={userPreferences.locale === "en" ? "Start audio call" : "Démarrer un appel audio"}><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("VIDEO")} aria-label={userPreferences.locale === "en" ? "Start video call" : "Démarrer un appel vidéo"}><Video className="h-4 w-4" /></Button><ActionMenu label="Actions du groupe" items={groupMenu} /></>} />
+            {activeGroup.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE") ? (() => {
+              const activeCall = activeGroup.calls!.find((call) => call.status === "RINGING" || call.status === "ACTIVE")!;
+              return <div className="mx-3 mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-cyan-400/50 bg-cyan-400/10 px-3 py-2 text-sm sm:mx-5"><span className="min-w-0 flex-1 font-bold text-dtsc-ink">{activeCall.callType === "VIDEO" ? (userPreferences.locale === "en" ? "Video call in progress" : "Appel vidéo en cours") : (userPreferences.locale === "en" ? "Audio call in progress" : "Appel audio en cours")}</span><Button type="button" size="sm" disabled={callJoining} onClick={() => void joinGroupCall(activeCall)} className="rounded-full">{callJoining ? "…" : userPreferences.locale === "en" ? "Join" : "Rejoindre"}</Button>{activeCall.startedById === currentUserId || canManage ? <Button type="button" size="sm" variant="outline" onClick={() => void endGroupCall(activeCall)} className="rounded-full">{userPreferences.locale === "en" ? "End" : "Terminer"}</Button> : <Button type="button" size="sm" variant="outline" onClick={() => void rejectGroupCall(activeCall)} className="rounded-full">{userPreferences.locale === "en" ? "Decline" : "Refuser"}</Button>}</div>;
+            })() : null}
             <div ref={messageListRef} className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
               {hasMore ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" disabled={loadingOlder} onClick={() => void loadMessages(activeGroup.id, nextCursor)}>{loadingOlder ? "…" : userPreferences.locale === "en" ? "Older messages" : "Messages précédents"}</Button></div> : null}
               {messages.map((message) => <MessageBubble key={message.id} message={message} voice={voiceByMessage[message.id]} currentUserId={currentUserId} userPreferences={userPreferences} canManage={canManage} t={t} onReply={setReplyTo} onEdit={(item) => { setEditMessage(item); setEditContent(item.content); }} onDelete={(item) => void deleteMessage(item)} onInfo={(id) => void openReadInfo(id)} onReact={(item) => void toggleReaction(item)} onPin={(item) => void togglePin(item)} onReport={(item) => void reportMessage(item)} onAttachment={(id) => void openAttachment(id)} onJumpToMessage={(id) => void jumpToMessage(id)} onMention={setMentionAction} onMeetingChanged={() => loadMessages(activeGroup.id)} onError={setFeedback} />)}
@@ -774,18 +893,30 @@ export function CollaboratorsConversationWorkspace(props: Props) {
       </Dialog>
 
       <Dialog open={directOpen} title={userPreferences.locale === "en" ? "New direct conversation" : "Nouvelle conversation directe"} onClose={() => setDirectOpen(false)}>
-        <div className="grid gap-3">
-          <SearchBar value={directSearch} onChange={setDirectSearch} placeholder={userPreferences.locale === "en" ? "Search an authorized collaborator" : "Rechercher un collaborateur autorisé"} />
-          <div className="max-h-[55dvh] overflow-y-auto rounded-xl border border-dtsc-border p-2">
-            {users.filter((user) => user.id !== currentUserId).filter((user) => `${user.name} ${user.email} ${user.jobTitle || ""}`.toLowerCase().includes(directSearch.trim().toLowerCase())).slice(0, 60).map((user) => (
-              <button key={user.id} type="button" disabled={Boolean(startingDirectUserId)} aria-busy={startingDirectUserId === user.id} onClick={() => void startDirectConversation(user.id)} className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left transition hover:bg-dtsc-soft disabled:cursor-wait disabled:opacity-60">
-                <ConversationAvatar title={user.name} avatarUrl={user.avatarUrl} isOnline={isOnline(user.lastSeenAt)} className="h-10 w-10" />
-                <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{user.jobTitle || user.email}</span></span>
-                {startingDirectUserId === user.id ? <span className="text-xs font-black text-cyan-600">…</span> : <MessageCircle className="h-4 w-4 text-cyan-600" />}
-              </button>
-            ))}
-            {!users.filter((user) => user.id !== currentUserId).length ? <p className="p-4 text-center text-sm text-dtsc-muted">{userPreferences.locale === "en" ? "No authorized collaborator is available." : "Aucun collaborateur autorisé n’est disponible."}</p> : null}
-          </div>
+        <div className="grid gap-4">
+          <SearchBar value={directSearch} onChange={setDirectSearch} placeholder={userPreferences.locale === "en" ? "Search collaborators or invite by exact email" : "Rechercher ou inviter avec l’e-mail exact"} />
+          <section>
+            <p className="mb-2 text-xs font-black uppercase tracking-wide text-dtsc-muted">{userPreferences.locale === "en" ? "Authorized collaborators" : "Collaborateurs autorisés"}</p>
+            <div className="max-h-[32dvh] overflow-y-auto rounded-xl border border-dtsc-border p-2">
+              {users.filter((user) => user.id !== currentUserId).filter((user) => `${user.name} ${user.email} ${user.jobTitle || ""}`.toLowerCase().includes(directSearch.trim().toLowerCase())).slice(0, 60).map((user) => (
+                <button key={user.id} type="button" disabled={Boolean(startingDirectUserId)} aria-busy={startingDirectUserId === user.id} onClick={() => void startDirectConversation(user.id)} className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left transition hover:bg-dtsc-soft disabled:cursor-wait disabled:opacity-60">
+                  <ConversationAvatar title={user.name} avatarUrl={user.avatarUrl} isOnline={isOnline(user.lastSeenAt)} className="h-10 w-10" />
+                  <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{user.jobTitle || user.email}</span></span>
+                  {startingDirectUserId === user.id ? <span className="text-xs font-black text-cyan-600">…</span> : <MessageCircle className="h-4 w-4 text-cyan-600" />}
+                </button>
+              ))}
+              {!users.filter((user) => user.id !== currentUserId).length ? <p className="p-4 text-center text-sm text-dtsc-muted">{userPreferences.locale === "en" ? "No authorized collaborator yet." : "Aucun collaborateur autorisé pour le moment."}</p> : null}
+            </div>
+          </section>
+          <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+            <p className="text-xs font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-200">{userPreferences.locale === "en" ? "Discover and invite" : "Découvrir et inviter"}</p>
+            <p className="mt-1 text-xs leading-5 text-dtsc-muted">{userPreferences.locale === "en" ? "Enter an exact email, or at least 3 characters for profiles that opted into discovery." : "Saisissez un e-mail exact, ou au moins 3 caractères pour les profils ayant accepté d’être découverts."}</p>
+            <div className="mt-2 max-h-52 overflow-y-auto">
+              {contactSearching ? <p className="p-3 text-center text-sm text-dtsc-muted">…</p> : contactDirectoryUsers.map((user) => <div key={user.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-dtsc-soft"><ConversationAvatar title={user.name} avatarUrl={user.avatarUrl} className="h-9 w-9" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{user.name}</strong><span className="block truncate text-xs text-dtsc-muted">{user.jobTitle || user.companyName || user.maskedEmail}</span></span><Button type="button" size="sm" disabled={contactRequestBusyId === user.id} onClick={() => void sendContactRequest(user.id)} className="rounded-full"><UserPlus className="h-4 w-4" />{userPreferences.locale === "en" ? "Invite" : "Inviter"}</Button></div>)}
+              {!contactSearching && directSearch.trim().length >= 3 && !contactDirectoryUsers.length ? <p className="p-3 text-center text-xs text-dtsc-muted">{userPreferences.locale === "en" ? "No new profile found." : "Aucun nouveau profil trouvé."}</p> : null}
+            </div>
+            {outgoingContactRequests.length ? <div className="mt-3 border-t border-dtsc-border pt-3"><p className="text-xs font-black text-dtsc-muted">{userPreferences.locale === "en" ? "Pending invitations" : "Invitations en attente"}</p>{outgoingContactRequests.slice(0, 10).map((request) => <div key={request.id} className="mt-2 flex items-center gap-2 text-xs"><span className="min-w-0 flex-1 truncate font-bold text-dtsc-ink">{request.targetUser.name}</span><Button type="button" size="sm" variant="outline" disabled={contactRequestBusyId === request.id} onClick={() => void respondContactRequest(request.id, "CANCEL")} className="h-8 rounded-full">{userPreferences.locale === "en" ? "Cancel" : "Annuler"}</Button></div>)}</div> : null}
+          </section>
         </div>
       </Dialog>
 
@@ -837,6 +968,10 @@ export function CollaboratorsConversationWorkspace(props: Props) {
 
       <Dialog open={Boolean(editMessage)} title={t("edit")} onClose={() => setEditMessage(null)}><form onSubmit={editCurrentMessage} className="grid gap-3"><Input value={editContent} onChange={(event) => setEditContent(event.target.value)} autoFocus /><Button type="submit">{t("save")}</Button></form></Dialog>
       <Dialog open={Boolean(readInfo)} title={userPreferences.locale === "en" ? "Message info" : "Infos du message"} onClose={() => setReadInfo(null)}>{readInfo ? <MessageReadInfo readInfo={readInfo} preferences={userPreferences} /> : null}</Dialog>
+      <Dialog open={Boolean(joinedCall)} title={joinedCall?.call.callType === "VIDEO" ? (userPreferences.locale === "en" ? "Video call" : "Appel vidéo") : (userPreferences.locale === "en" ? "Audio call" : "Appel audio")} onClose={() => void leaveJoinedCall()} className="h-[96dvh] max-w-[96vw] overflow-hidden p-0">
+        {joinedCall ? <div data-call-experience={LEGACY_CALL_EXPERIENCE_COMPATIBILITY} className="h-full overflow-y-auto p-2 sm:p-4"><GroupCallRoom joinedCall={joinedCall} group={activeGroup} messages={messages.map((message) => ({ ...message, mentions: message.mentions || [] }))} currentUserId={currentUserId} userPreferences={userPreferences} callPreferences={props.callPreferences} canEnd={joinedCall.call.startedById === currentUserId || canManage} onLeave={leaveJoinedCall} onEnd={() => endGroupCall(joinedCall.call)} onMessageSent={async () => { if (activeGroup) await loadMessages(activeGroup.id); }} /></div> : null}
+      </Dialog>
+
       {activeGroup && canManage ? <GroupPresenceJournalDialog open={presenceJournalOpen} groupId={activeGroup.id} groupName={activeGroup.name} locale={userPreferences.locale} userPreferences={userPreferences} onClose={() => setPresenceJournalOpen(false)} /> : null}
     </div>
   );

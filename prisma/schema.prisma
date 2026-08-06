@@ -148,6 +148,8 @@ model User {
   collaborationGroupMembers             CollaborationGroupMember[]
   sentCollaborationInvitations          CollaborationGroupInvitation[]    @relation("CollaborationInvitationSender")
   receivedCollaborationInvitations      CollaborationGroupInvitation[]    @relation("CollaborationInvitationReceiver")
+  sentCollaborationContactRequests     CollaborationContactRequest[]      @relation("CollaborationContactRequester")
+  receivedCollaborationContactRequests CollaborationContactRequest[]      @relation("CollaborationContactTarget")
   collaborationGroupMessages            CollaborationGroupMessage[]
   collaborationGroupMessageReads        CollaborationGroupMessageRead[]
   collaborationMessageMentions          CollaborationMessageMention[]
@@ -171,6 +173,9 @@ model User {
   updatedOrganizationSubscriptions      OrganizationSubscription[]        @relation("OrganizationSubscriptionUpdatedBy")
   createdOrganizationSubscriptions      OrganizationSubscription[]        @relation("OrganizationSubscriptionCreatedBy")
   organizationBillingRecords            BillingRecord[]
+  requestedManualSubscriptionPayments  ManualSubscriptionPayment[]       @relation("ManualSubscriptionPaymentRequester")
+  validatedManualSubscriptionPayments  ManualSubscriptionPayment[]       @relation("ManualSubscriptionPaymentValidator")
+  beneficiaryManualSubscriptionPayments ManualSubscriptionPayment[]       @relation("ManualSubscriptionPaymentBeneficiary")
   enterpriseActivityRequests            EnterpriseActivityRequest[]
   createdEnterpriseSectorRecords        EnterpriseSectorRecord[]          @relation("EnterpriseSectorRecordCreatedBy")
   updatedEnterpriseSectorRecords        EnterpriseSectorRecord[]          @relation("EnterpriseSectorRecordUpdatedBy")
@@ -264,6 +269,7 @@ model BillingPlan {
   name                      String
   slug                      String                     @unique
   description               String
+  audience                  String                     @default("BOTH")
   priceUsd                  Decimal                    @db.Decimal(10, 2)
   dailyMessageLimit         Int
   dailyTokenLimit           Int
@@ -276,6 +282,7 @@ model BillingPlan {
   organizationSubscriptions OrganizationSubscription[]
   invoices                  Invoice[]
   versions                  BillingPlanVersion[]
+  manualSubscriptionPayments ManualSubscriptionPayment[]
 
   @@index([isActive, sortOrder])
 }
@@ -294,6 +301,7 @@ model Subscription {
   plan               BillingPlan        @relation(fields: [planId], references: [id], onDelete: Restrict)
   payments           Payment[]
   invoices           Invoice[]
+  manualSubscriptionPayments ManualSubscriptionPayment[]
 
   @@index([userId, status])
   @@index([planId])
@@ -304,6 +312,8 @@ model Payment {
   id                String        @id @default(cuid())
   userId            String
   subscriptionId    String?
+  organizationId    String?
+  organizationSubscriptionId String?
   provider          String        @default("MAISHAPAY")
   reference         String        @unique
   providerReference String?
@@ -317,11 +327,16 @@ model Payment {
   updatedAt         DateTime      @updatedAt
   user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationSubscription OrganizationSubscription? @relation(fields: [organizationSubscriptionId], references: [id], onDelete: SetNull)
+  manualSubscriptionPayment ManualSubscriptionPayment?
   invoice           Invoice?
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([providerReference])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationSubscriptionId])
 }
 
 model Invoice {
@@ -331,6 +346,11 @@ model Invoice {
   planId             String?
   subscriptionId     String?
   paymentId          String?       @unique
+  organizationId     String?
+  organizationSubscriptionId String?
+  manualPaymentId    String?       @unique
+  category           String        @default("PERSONAL_SUBSCRIPTION")
+  recipientEmail     String?
   planName           String
   amount             Decimal       @db.Decimal(10, 2)
   currency           String        @default("USD")
@@ -345,11 +365,16 @@ model Invoice {
   plan               BillingPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
   subscription       Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   payment            Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationSubscription OrganizationSubscription? @relation(fields: [organizationSubscriptionId], references: [id], onDelete: SetNull)
+  manualPayment      ManualSubscriptionPayment? @relation(fields: [manualPaymentId], references: [id], onDelete: SetNull)
   hrcfoTransactionId String?       @unique
   hrcfoTransaction   HrcfoExpense? @relation(fields: [hrcfoTransactionId], references: [id], onDelete: SetNull)
 
   @@index([userId, issuedAt])
   @@index([status, issuedAt])
+  @@index([category, issuedAt])
+  @@index([organizationId, category, issuedAt])
 }
 
 model KnowledgeDocument {
@@ -809,6 +834,9 @@ model Organization {
   adminGrants                  OrganizationAdminGrant[]
   subscriptions                OrganizationSubscription[]
   billingRecords               BillingRecord[]
+  subscriptionPayments         Payment[]
+  subscriptionInvoices         Invoice[]
+  manualSubscriptionPayments   ManualSubscriptionPayment[]
   knowledgeDocuments           KnowledgeDocument[]
   companyProfiles              CompanyProfile[]
   companyActivities            CompanyActivity[]
@@ -4926,6 +4954,9 @@ model OrganizationSubscription {
   createdByDtscUser   User?           @relation("OrganizationSubscriptionCreatedBy", fields: [createdByDtscUserId], references: [id], onDelete: SetNull)
   updatedByDtscUser   User?           @relation("OrganizationSubscriptionUpdatedBy", fields: [updatedByDtscUserId], references: [id], onDelete: SetNull)
   billingRecords      BillingRecord[]
+  payments            Payment[]
+  invoices            Invoice[]
+  manualSubscriptionPayments ManualSubscriptionPayment[]
 
   @@index([organizationId, status])
   @@index([planId])
@@ -5391,6 +5422,7 @@ model BillingPlanVersion {
   version              Int
   name                 String
   description          String
+  audience             String      @default("BOTH")
   priceUsd             Decimal     @db.Decimal(10, 2)
   dailyMessageLimit    Int
   dailyTokenLimit      Int
@@ -7238,4 +7270,62 @@ model DtscWorkSubmissionReview {
 
   @@index([submissionId, createdAt])
   @@index([actorEmployeeId, createdAt])
+}
+
+model CollaborationContactRequest {
+  id           String   @id @default(cuid())
+  requesterId  String
+  targetUserId String
+  status       String   @default("PENDING")
+  message      String?
+  respondedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  requester    User     @relation("CollaborationContactRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetUser   User     @relation("CollaborationContactTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, targetUserId])
+  @@index([targetUserId, status, createdAt])
+  @@index([requesterId, status, createdAt])
+}
+
+model ManualSubscriptionPayment {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String   @unique
+  scope                      String
+  userId                     String?
+  organizationId             String?
+  planId                     String
+  subscriptionId             String?
+  organizationSubscriptionId String?
+  paymentId                  String?  @unique
+  amount                     Decimal  @db.Decimal(10, 2)
+  currency                   String   @default("USD")
+  paymentMethod              String
+  externalReference          String?
+  status                     String   @default("PENDING_VALIDATION")
+  requestedByUserId          String
+  validatorUserId            String
+  validatedByUserId          String?
+  requestedAt                DateTime @default(now())
+  validatedAt                DateTime?
+  rejectedAt                 DateTime?
+  reason                     String
+  validationComment          String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  user                       User?    @relation("ManualSubscriptionPaymentBeneficiary", fields: [userId], references: [id], onDelete: SetNull)
+  organization               Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  plan                       BillingPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  subscription               Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  organizationSubscription   OrganizationSubscription? @relation(fields: [organizationSubscriptionId], references: [id], onDelete: SetNull)
+  payment                    Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  requestedBy                User     @relation("ManualSubscriptionPaymentRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  validator                  User     @relation("ManualSubscriptionPaymentValidator", fields: [validatorUserId], references: [id], onDelete: Restrict)
+  invoice                    Invoice?
+
+  @@index([scope, status, requestedAt])
+  @@index([userId, status, requestedAt])
+  @@index([organizationId, status, requestedAt])
+  @@index([validatorUserId, status, requestedAt])
 }

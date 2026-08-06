@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckCircle2, CircleAlert, Clock3, Eye, FileText, Send } from "lucide-react";
+import { ArrowRightCircle, CheckCircle2, CircleAlert, Clock3, Eye, FileText, Send } from "lucide-react";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { BusinessListItem } from "@/components/workspace/business-list";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
+import { getQuickActivityStatusTransitions } from "@/lib/activity-status-workflow";
 import { formatEnumLabel } from "@/lib/labels";
 import type { ActivityItem } from "./activity-types";
 
@@ -12,11 +13,13 @@ export function ActivityBusinessItem({
   onOpen,
   onCreateRelatedRequest,
   onTaskStatus,
+  onStatusTransition,
 }: {
   item: ActivityItem;
   onOpen: () => void;
   onCreateRelatedRequest: () => void;
   onTaskStatus: (status: "IN_PROGRESS" | "COMPLETED") => void;
+  onStatusTransition?: (status: string) => void;
 }) {
   const actions: BusinessContextAction[] = [
     { id: "open", label: "Ouvrir", icon: Eye, onSelect: onOpen },
@@ -40,6 +43,11 @@ export function ActivityBusinessItem({
   }
   if (item.entityType === "TASK" && !taskIsTerminal) {
     actions.push({ id: "task-complete", label: "Marquer terminée", icon: CheckCircle2, onSelect: () => onTaskStatus("COMPLETED") });
+  }
+  if (item.entityType !== "TASK" && onStatusTransition) {
+    for (const status of getQuickActivityStatusTransitions(item.entityType, item.status)) {
+      actions.push({ id: `transition-${status}`, label: `Passer à ${formatEnumLabel(status)}`, icon: ArrowRightCircle, onSelect: () => onStatusTransition(status) });
+    }
   }
 
   return (

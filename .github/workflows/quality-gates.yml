@@ -100,6 +100,9 @@ jobs:
       - name: Standard modules iteration 07 Console QA
         run: pnpm qa:standard-modules-iteration-07
 
+      - name: Iteration 07 owner E2E remediation QA
+        run: pnpm qa:iteration-07-owner-e2e-remediation
+
       - name: Standard collaboration E2E fixes QA
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
 
@@ -111,6 +114,8 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
   migration:
     runs-on: ubuntu-latest
@@ -164,6 +169,9 @@ jobs:
 
       - name: Run standard modules iteration 07 on clean database
         run: pnpm qa:standard-modules-iteration-07
+
+      - name: Run iteration 07 owner remediation on clean database
+        run: pnpm qa:iteration-07-owner-e2e-remediation
 
       - name: Prepare isolated shadow database
         run: |
@@ -235,6 +243,8 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Seed isolated authenticated ERP acceptance
         run: node scripts/seed-erp-professional-e2e.mjs

@@ -22,6 +22,7 @@ export type ManagedBillingPlan = {
   slug: string;
   description: string;
   audience?: string;
+  audienceCode: "PERSONAL" | "ORGANIZATION" | "BOTH";
   priceUsd: number;
   dailyMessageLimit: number;
   dailyTokenLimit: number;
@@ -67,6 +68,7 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
     if (!editingPlan) return;
     const formData = new FormData(event.currentTarget);
     const payload = {
+      audience: String(formData.get("audience") || "BOTH"),
       name: String(formData.get("name") || ""),
       description: String(formData.get("description") || ""),
       priceUsd: String(formData.get("priceUsd") || ""),
@@ -188,6 +190,13 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
             <p className="rounded-lg border border-cyan-300/40 bg-cyan-400/10 p-4 text-sm font-semibold leading-6 text-dtsc-ink md:col-span-2">
               {english ? "The technical identifier and included module level remain governed by the DTSC catalog." : "L’identifiant technique et le niveau des modules inclus restent gouvernés par le catalogue DTSC."}
             </p>
+            <FormField label={english ? "Offer type" : "Type d’abonnement"}>
+              <select name="audience" defaultValue={editingPlan.audienceCode} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+                <option value="PERSONAL">{english ? "Personal" : "Personnel"}</option>
+                <option value="ORGANIZATION">{english ? "Company" : "Entreprise"}</option>
+                <option value="BOTH">{english ? "Personal and company" : "Personnel et entreprise"}</option>
+              </select>
+            </FormField>
             <FormField label={english ? "Commercial name" : "Nom commercial"}><Input name="name" defaultValue={editingPlan.name} minLength={2} maxLength={120} required /></FormField>
             <FormField label={english ? "Monthly price in USD" : "Prix mensuel en USD"}>
               <Input name="priceUsd" type="number" min="0" max="1000000" step="0.01" defaultValue={editingPlan.priceUsd} readOnly={editingPlan.id === "freemium"} required />
