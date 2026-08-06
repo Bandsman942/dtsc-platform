@@ -25,7 +25,7 @@ export function SupportProductShell({ children, authenticated = false, isDtscInt
       <header className="sticky top-0 z-[85] border-b border-dtsc-border bg-dtsc-surface/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[92rem] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-4">
-            <Link href={getPublicUrl("/")} className="min-w-0" aria-label="DTSC"><DtscLogo /></Link>
+            <div className="min-w-0"><DtscLogo href={getPublicUrl("/")} /></div>
             <span className="hidden h-8 w-px bg-dtsc-border sm:block" aria-hidden="true" />
             <div className="hidden sm:block">
               <p className="text-sm font-semibold text-dtsc-ink">Support DTSC</p>

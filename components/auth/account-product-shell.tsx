@@ -35,9 +35,7 @@ export function AccountProductShell({
     <main className="min-h-screen bg-dtsc-page text-dtsc-ink">
       <header className="border-b border-dtsc-border bg-dtsc-surface/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <Link href={getPublicUrl("/")} aria-label="Retour au site public DTSC" className="min-w-0">
-            <DtscLogo />
-          </Link>
+          <div className="min-w-0"><DtscLogo href={getPublicUrl("/")} /></div>
           <div className="flex items-center gap-2">
             <Link href={getSupportUrl("/support")} className="hidden items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-dtsc-muted transition hover:bg-dtsc-soft hover:text-dtsc-blue sm:inline-flex">
               <HelpCircle className="h-4 w-4" /> Aide
