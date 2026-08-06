@@ -32,8 +32,29 @@ requireText("app/api/activities/status-transitions/[entityType]/[id]/route.ts", 
 requireText("app/api/operations/checklists/route.ts", ["syncDerivedOperationalProgress"]);
 forbidText("lib/validators.ts", ["progress: z.coerce.number().int().min(0).max(100).optional()"]);
 
-requireText("components/floating-actions/floating-action-hub.tsx", ["FloatingActionHubProvider", "useFloatingAction", "Actions rapides", "safe-area-inset-bottom"]);
-requireText("app/layout.tsx", ["FloatingActionHubProvider", "ProfessionalToolbox"]);
+requireText("components/floating-actions/floating-action-hub.tsx", [
+  "FloatingActionHubProvider",
+  "useFloatingAction",
+  "Actions rapides",
+  "safe-area-inset-bottom",
+  "const registry = useMemo<FloatingActionRegistry>",
+  "isFloatingActionHostEnabled",
+  "getCurrentHostType(window.location.host)",
+  'hostType === "app"',
+  'hostType === "console"',
+  'hostType === "support"',
+]);
+forbidText("components/floating-actions/floating-action-hub.tsx", ["<FloatingActionContext.Provider value={{ register }}>"]);
+requireText("components/productivity/product-scoped-professional-toolbox.tsx", [
+  "ProductScopedProfessionalToolbox",
+  "getCurrentHostType(window.location.host)",
+  'hostType === "app"',
+  'hostType === "console"',
+  'hostType === "support"',
+  "ssr: false",
+]);
+requireText("app/layout.tsx", ["FloatingActionHubProvider", "ProductScopedProfessionalToolbox"]);
+forbidText("app/layout.tsx", ['import { ProfessionalToolbox } from "@/components/productivity/professional-toolbox"', "<ProfessionalToolbox />"]);
 requireText("components/user-guides/standard-module-fallback-guide.tsx", ["useFloatingAction", "hideTrigger"]);
 
 requireText("lib/billing.ts", ["billing-plans.bootstrap.json", "createMany"]);
