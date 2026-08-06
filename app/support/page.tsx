@@ -32,7 +32,7 @@ export default async function SupportPage({ searchParams }: PageProps) {
   if (!user || !session) return <SupportProductShell locale={locale}><SupportGuestEntry /></SupportProductShell>;
 
   const canManageTickets = canManageSupportTickets(session);
-  const baseWhere = supportTicketVisibilityWhere(session);
+  const baseWhere: Prisma.SupportTicketWhereInput = supportTicketVisibilityWhere(session) || {};
   const page = positivePage(params.page);
   const status = statuses.has(params.status as TicketStatus) ? params.status as TicketStatus : undefined;
   const priority = priorities.has(params.priority as TicketPriority) ? params.priority as TicketPriority : undefined;
