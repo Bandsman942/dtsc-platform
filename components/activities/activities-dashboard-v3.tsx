@@ -30,6 +30,8 @@ type GroupingKey = "status" | "priority" | "entityType" | "progress";
 
 type GroupingOption = { key: GroupingKey; label: string };
 
+const TRANSVERSE_KANBAN_LABEL = "Vue Kanban transverse";
+
 const GROUPING_LABELS: Record<GroupingKey, string> = {
   status: "Statut",
   priority: "Priorité",
@@ -170,7 +172,7 @@ export function ActivitiesDashboardV3({
           <>
             <label className="grid min-w-[9rem] gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted">Début<Input type="date" value={dateStart} onChange={(event) => { setDateStart(event.target.value); smartList.setPage(1); }} className="h-11 rounded-xl bg-dtsc-surface" /></label>
             <label className="grid min-w-[9rem] gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted">Fin<Input type="date" value={dateEnd} onChange={(event) => { setDateEnd(event.target.value); smartList.setPage(1); }} className="h-11 rounded-xl bg-dtsc-surface" /></label>
-            <div className="flex rounded-xl border border-dtsc-border bg-dtsc-surface p-1" aria-label="Vue par défaut des blocs">
+            <div className="flex rounded-xl border border-dtsc-border bg-dtsc-surface p-1" aria-label={`${TRANSVERSE_KANBAN_LABEL} · vue par défaut des blocs`}>
               <button type="button" onClick={() => applyDefaultView("list")} className={cn("inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-black", defaultViewMode === "list" ? "bg-cyan-400 text-[#001736]" : "text-dtsc-muted")}><List className="h-4 w-4" /> Tout en liste</button>
               <button type="button" onClick={() => applyDefaultView("kanban")} className={cn("inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-black", defaultViewMode === "kanban" ? "bg-cyan-400 text-[#001736]" : "text-dtsc-muted")}><Columns3 className="h-4 w-4" /> Tout en Kanban</button>
             </div>
@@ -354,7 +356,11 @@ function groupValue(item: ActivityItem, grouping: GroupingKey) {
     if (progress >= 25) return "EN_COURS_25_74";
     return "DEMARRAGE_0_24";
   }
-  return normalizeStatus(item.status) || "SANS_STATUT";
+  return columnForStatus(item.status);
+}
+
+function columnForStatus(status: string) {
+  return normalizeStatus(status) || "SANS_STATUT";
 }
 
 function columnOrder(grouping: GroupingKey, value: string) {
