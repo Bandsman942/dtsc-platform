@@ -34,7 +34,8 @@ jobs:
             .github/patches/iteration07-v3.part01a
             .github/patches/iteration07-v3.part01b
             .github/patches/iteration07-v3.part02
-            .github/patches/iteration07-v3.part03a0
+            .github/patches/iteration07-v3.part03a00
+            .github/patches/iteration07-v3.part03a01
             .github/patches/iteration07-v3.part03a1
             .github/patches/iteration07-v3.part03b
             .github/patches/iteration07-v3.part04
