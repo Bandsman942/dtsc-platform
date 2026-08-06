@@ -1,0 +1,50 @@
+name: Standard modules iteration 08 QA
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  iteration-08:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_iteration08
+        ports: [5432:5432]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_iteration08
+      AUTH_SECRET: iteration-08-ci-auth-secret-with-more-than-thirty-two-characters
+      APP_URL: http://localhost:3000
+      NODE_OPTIONS: --max-old-space-size=6144
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm prisma:deploy
+      - name: Standard modules iteration 08 QA
+        run: node scripts/qa-standard-modules-iteration-08.mjs
+      - run: pnpm type-check
+      - run: pnpm lint
+      - run: pnpm build
+      - run: git diff --check
