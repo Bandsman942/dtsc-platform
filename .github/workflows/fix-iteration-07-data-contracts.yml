@@ -48,13 +48,8 @@ jobs:
 
           path = Path('lib/subscription-payments.ts')
           text = path.read_text()
-          before = '''  });
-  let invoice = await prisma.invoice.findUnique({ where: { manualPaymentId: request.id } });
-  if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });'''
-          after = '''  });
-  if (!subscriptionId || !paymentId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
-  let invoice = await prisma.invoice.findUnique({ where: { manualPaymentId: request.id } });
-  if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });'''
+          before = '  });\n  let invoice = await prisma.invoice.findUnique({ where: { manualPaymentId: request.id } });\n  if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });'
+          after = '  });\n  if (!subscriptionId || !paymentId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");\n  let invoice = await prisma.invoice.findUnique({ where: { manualPaymentId: request.id } });\n  if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });'
           if before not in text:
               raise SystemExit('personal manual payment invoice target not found')
           path.write_text(text.replace(before, after))
