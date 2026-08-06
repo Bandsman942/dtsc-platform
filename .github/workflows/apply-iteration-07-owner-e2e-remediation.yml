@@ -52,8 +52,9 @@ jobs:
           base64 -d /tmp/iteration07.patch.gz.b64 > /tmp/iteration07.patch.gz
           gzip -dc /tmp/iteration07.patch.gz > /tmp/iteration07.patch
           git apply --index --whitespace=error /tmp/iteration07.patch
+          # GitHub Actions ne possède pas la permission workflows. Le Quality Gate sera appliqué ensuite via l'API GitHub autorisée.
+          git restore --source=HEAD --staged --worktree .github/workflows/quality-gates.yml
           rm -rf .transfer
-          rm -f .github/workflows/apply-iteration-07-owner-e2e-remediation.yml
           git add -A
           git diff --cached --check
 
