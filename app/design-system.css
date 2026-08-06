@@ -1,0 +1,141 @@
+:root {
+  --dtsc-brand-primary: #001736;
+  --dtsc-brand-primary-hover: #002b5b;
+  --dtsc-brand-primary-active: #001229;
+  --dtsc-brand-secondary: #0057b8;
+  --dtsc-brand-secondary-hover: #004a9e;
+  --dtsc-brand-accent: #00c2ff;
+  --dtsc-brand-accent-subtle: #e8f7ff;
+  --dtsc-background: #f6f8fb;
+  --dtsc-surface: #ffffff;
+  --dtsc-surface-elevated: #ffffff;
+  --dtsc-text-primary: #071427;
+  --dtsc-text-secondary: #60708a;
+  --dtsc-border: #dbe4ef;
+  --dtsc-focus: #00a8e8;
+  --dtsc-success: #16875a;
+  --dtsc-success-subtle: #e8f7f0;
+  --dtsc-warning: #a85f00;
+  --dtsc-warning-subtle: #fff4dc;
+  --dtsc-danger: #c43c3c;
+  --dtsc-danger-subtle: #fff0f0;
+  --dtsc-info: #0057b8;
+  --dtsc-info-subtle: #e8f3ff;
+  --dtsc-control-radius: 0.75rem;
+  --dtsc-card-radius: 1rem;
+  --dtsc-panel-radius: 1.25rem;
+  --dtsc-modal-radius: 1.5rem;
+  --dtsc-hero-radius: 1.75rem;
+  --dtsc-pill-radius: 999px;
+  --dtsc-shadow-sm: 0 1px 2px rgba(0, 23, 54, 0.06);
+  --dtsc-shadow-md: 0 12px 32px rgba(0, 43, 91, 0.1);
+  --dtsc-shadow-lg: 0 24px 70px rgba(0, 23, 54, 0.16);
+  --dtsc-shadow-focus: 0 0 0 3px rgba(0, 194, 255, 0.24);
+  --dtsc-shadow-floating: 0 28px 90px rgba(0, 23, 54, 0.2);
+  --dtsc-motion-fast: 140ms;
+  --dtsc-motion-normal: 220ms;
+  --dtsc-motion-slow: 360ms;
+  --dtsc-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dtsc-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --dtsc-product-accent: var(--dtsc-brand-secondary);
+}
+
+.dark {
+  --dtsc-brand-primary: #edf6ff;
+  --dtsc-brand-primary-hover: #ffffff;
+  --dtsc-brand-primary-active: #d7eaff;
+  --dtsc-brand-secondary: #4da3ff;
+  --dtsc-brand-secondary-hover: #77b9ff;
+  --dtsc-brand-accent: #43d9ff;
+  --dtsc-brand-accent-subtle: #0f2741;
+  --dtsc-background: #06111f;
+  --dtsc-surface: #0b1728;
+  --dtsc-surface-elevated: #101f33;
+  --dtsc-text-primary: #edf6ff;
+  --dtsc-text-secondary: #9fb1c8;
+  --dtsc-border: #203450;
+  --dtsc-focus: #43d9ff;
+  --dtsc-success: #55d49a;
+  --dtsc-success-subtle: #0d2c23;
+  --dtsc-warning: #ffc46b;
+  --dtsc-warning-subtle: #33230d;
+  --dtsc-danger: #ff8c8c;
+  --dtsc-danger-subtle: #351719;
+  --dtsc-info: #77b9ff;
+  --dtsc-info-subtle: #102844;
+  --dtsc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --dtsc-shadow-md: 0 14px 38px rgba(0, 0, 0, 0.26);
+  --dtsc-shadow-lg: 0 28px 76px rgba(0, 0, 0, 0.34);
+  --dtsc-shadow-focus: 0 0 0 3px rgba(67, 217, 255, 0.22);
+  --dtsc-shadow-floating: 0 30px 96px rgba(0, 0, 0, 0.42);
+}
+
+html[data-dtsc-product="public"] { --dtsc-product-accent: #0057b8; }
+html[data-dtsc-product="account"] { --dtsc-product-accent: #00a8e8; }
+html[data-dtsc-product="app"] { --dtsc-product-accent: #0057b8; }
+html[data-dtsc-product="console"] { --dtsc-product-accent: #4154c8; }
+html[data-dtsc-product="support"] { --dtsc-product-accent: #16875a; }
+
+.dtsc-display {
+  font-size: clamp(2.6rem, 7vw, 5.7rem);
+  font-weight: 780;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.dtsc-h1 {
+  font-size: clamp(2.15rem, 5vw, 4.2rem);
+  font-weight: 760;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.dtsc-h2 {
+  font-size: clamp(1.75rem, 3.8vw, 3rem);
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.dtsc-h3 {
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.14;
+}
+
+.dtsc-body-lg { font-size: 1.125rem; line-height: 1.75; }
+.dtsc-body { font-size: 1rem; line-height: 1.65; }
+.dtsc-body-sm { font-size: 0.875rem; line-height: 1.55; }
+.dtsc-label { font-size: 0.75rem; font-weight: 720; letter-spacing: 0.08em; text-transform: uppercase; }
+.dtsc-caption { font-size: 0.75rem; line-height: 1.45; }
+
+.dtsc-focus-ring:focus-visible,
+[data-dtsc-focus-ring]:focus-visible {
+  outline: 2px solid var(--dtsc-focus);
+  outline-offset: 3px;
+  box-shadow: var(--dtsc-shadow-focus);
+}
+
+.dtsc-product-surface {
+  border: 1px solid var(--dtsc-border);
+  border-radius: var(--dtsc-panel-radius);
+  background: var(--dtsc-surface);
+  color: var(--dtsc-text-primary);
+  box-shadow: var(--dtsc-shadow-sm);
+}
+
+.dtsc-product-accent {
+  color: var(--dtsc-product-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

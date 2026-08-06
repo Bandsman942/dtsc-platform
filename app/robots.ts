@@ -1,8 +1,18 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
+import { getCurrentHostType, getPublicBaseUrl } from "@/lib/domains";
 
-const appUrl = process.env.APP_URL || "https://dtsc-platform.com";
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const requestHeaders = await headers();
+  const hostType = getCurrentHostType(requestHeaders.get("host"));
+  const publicBaseUrl = getPublicBaseUrl() || "https://dtsc-platform.com";
 
-export default function robots(): MetadataRoute.Robots {
+  if (hostType !== "public" && hostType !== "local" && hostType !== "unknown") {
+    return {
+      rules: [{ userAgent: "*", disallow: "/" }],
+    };
+  }
+
   return {
     rules: [
       {
@@ -11,6 +21,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin", "/dashboard", "/chat", "/support", "/notifications", "/announcements", "/profile", "/settings", "/api"],
       },
     ],
-    sitemap: new URL("/sitemap.xml", appUrl).toString(),
+    sitemap: new URL("/sitemap.xml", publicBaseUrl).toString(),
+    host: publicBaseUrl,
   };
 }
