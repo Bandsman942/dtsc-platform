@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
       - run: pnpm prisma:deploy
       - name: Standard modules iteration 08 QA
