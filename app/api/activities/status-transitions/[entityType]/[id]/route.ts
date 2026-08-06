@@ -4,7 +4,6 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { getActivityStatusTransitions, ACTIVITY_STATUS_REASON_REQUIRED, normalizeActivityStatus } from "@/lib/activity-status-workflow";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { normalizePositionCode } from "@/lib/business-roles";
 import { DTSC_SPECIAL_PERMISSIONS, hasDtscIndividualPermission } from "@/lib/dtsc-individual-permissions";
 import { notifyUsers } from "@/lib/notifications";
 import { getOperationalActor, resolveOperationalObjectAccess } from "@/lib/operational-access";
