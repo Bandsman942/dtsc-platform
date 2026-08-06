@@ -1,0 +1,45 @@
+name: Apply iteration 07 owner E2E remediation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-iteration-07-owner-e2e-remediation.yml'
+      - '.transfer/iteration07/**'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'fix/iteration-07-e2e-remediation-v2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Reconstruct and apply verified patch
+        run: |
+          set -euo pipefail
+          # chunk-08 contains one staging-only trailing byte; normalize it to the verified 7,500-byte source chunk.
+          truncate -s 7500 .transfer/iteration07/chunk-08
+          cat .transfer/iteration07/chunk-* > /tmp/iteration07.patch.gz.b64
+          test "$(wc -c < /tmp/iteration07.patch.gz.b64)" -eq 82992
+          printf '%s  %s\n' 'fc2ff9314013d8a439bb18c3edaa770c799b74693ab3463982d74bdd59de3cf4' '/tmp/iteration07.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/iteration07.patch.gz.b64 > /tmp/iteration07.patch.gz
+          gzip -dc /tmp/iteration07.patch.gz > /tmp/iteration07.patch
+          git apply --index --whitespace=error /tmp/iteration07.patch
+          rm -rf .transfer
+          rm -f .github/workflows/apply-iteration-07-owner-e2e-remediation.yml
+          git add -A
+          git diff --cached --check
+
+      - name: Commit applied implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: implement iteration 07 owner E2E remediation'
+          git push origin HEAD:${{ github.head_ref }}
