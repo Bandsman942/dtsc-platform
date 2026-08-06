@@ -156,6 +156,7 @@ type Props = {
 };
 
 const GROUP_TYPES = ["COMPANY", "PROJECT", "INTERNAL", "CLIENT", "CROSS_ORGANIZATION", "PRIVATE_NETWORK", "OTHER"];
+const LEGACY_CALL_EXPERIENCE_COMPATIBILITY = "CollaboratorsWorkspace";
 
 export function CollaboratorsConversationWorkspace(props: Props) {
   const { currentUserId, initialActiveGroupId, initialJoinCallId, initialMessageId, userPreferences, users } = props;
@@ -968,7 +969,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
       <Dialog open={Boolean(editMessage)} title={t("edit")} onClose={() => setEditMessage(null)}><form onSubmit={editCurrentMessage} className="grid gap-3"><Input value={editContent} onChange={(event) => setEditContent(event.target.value)} autoFocus /><Button type="submit">{t("save")}</Button></form></Dialog>
       <Dialog open={Boolean(readInfo)} title={userPreferences.locale === "en" ? "Message info" : "Infos du message"} onClose={() => setReadInfo(null)}>{readInfo ? <MessageReadInfo readInfo={readInfo} preferences={userPreferences} /> : null}</Dialog>
       <Dialog open={Boolean(joinedCall)} title={joinedCall?.call.callType === "VIDEO" ? (userPreferences.locale === "en" ? "Video call" : "Appel vidéo") : (userPreferences.locale === "en" ? "Audio call" : "Appel audio")} onClose={() => void leaveJoinedCall()} className="h-[96dvh] max-w-[96vw] overflow-hidden p-0">
-        {joinedCall ? <div className="h-full overflow-y-auto p-2 sm:p-4"><GroupCallRoom joinedCall={joinedCall} group={activeGroup} messages={messages.map((message) => ({ ...message, mentions: message.mentions || [] }))} currentUserId={currentUserId} userPreferences={userPreferences} callPreferences={props.callPreferences} canEnd={joinedCall.call.startedById === currentUserId || canManage} onLeave={leaveJoinedCall} onEnd={() => endGroupCall(joinedCall.call)} onMessageSent={async () => { if (activeGroup) await loadMessages(activeGroup.id); }} /></div> : null}
+        {joinedCall ? <div data-call-experience={LEGACY_CALL_EXPERIENCE_COMPATIBILITY} className="h-full overflow-y-auto p-2 sm:p-4"><GroupCallRoom joinedCall={joinedCall} group={activeGroup} messages={messages.map((message) => ({ ...message, mentions: message.mentions || [] }))} currentUserId={currentUserId} userPreferences={userPreferences} callPreferences={props.callPreferences} canEnd={joinedCall.call.startedById === currentUserId || canManage} onLeave={leaveJoinedCall} onEnd={() => endGroupCall(joinedCall.call)} onMessageSent={async () => { if (activeGroup) await loadMessages(activeGroup.id); }} /></div> : null}
       </Dialog>
 
       {activeGroup && canManage ? <GroupPresenceJournalDialog open={presenceJournalOpen} groupId={activeGroup.id} groupName={activeGroup.name} locale={userPreferences.locale} userPreferences={userPreferences} onClose={() => setPresenceJournalOpen(false)} /> : null}
