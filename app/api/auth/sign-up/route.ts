@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { SubscriptionStatus, UserRole } from "@prisma/client";
+import {
+  ACCOUNT_CONSENT_TYPE,
+  ACCOUNT_LEGAL_DOCUMENT_VERSION,
+  buildAccountConsentStatement,
+  digestAccountConsentStatement,
+  resolveAccountConsentLocale,
+} from "@/lib/account-consent";
 import { passwordPolicyError } from "@/lib/account-recovery";
 import { prisma } from "@/lib/prisma";
 import { signUpSchema } from "@/lib/validators";
@@ -62,26 +69,51 @@ export async function POST(req: Request) {
 
   const plans = await ensureBillingPlans();
   const freemium = plans.find((plan) => plan.id === "freemium");
-  const user = await prisma.user.create({
-    data: {
-      name: verifiedPendingRegistration?.name || body.data.name,
-      email: verifiedPendingRegistration?.email || body.data.email,
-      passwordHash: verifiedPendingRegistration?.passwordHash || hashPassword(body.data.password),
-      companyName: verifiedPendingRegistration?.companyName || body.data.companyName || null,
-      phone: verifiedPendingRegistration?.phone || body.data.phone || null,
-      role: verifiedPendingRegistration?.role || role,
-      dailyMessageLimit: freemium?.dailyMessageLimit || settings.defaultDailyMessageLimit,
-      dailyTokenLimit: freemium?.dailyTokenLimit || settings.defaultDailyTokenLimit,
-    },
+  const { start, end } = getNextBillingPeriod();
+  const locale = resolveAccountConsentLocale(req.headers.get("accept-language"));
+  const consentStatement = buildAccountConsentStatement(locale);
+  const user = await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: {
+        name: verifiedPendingRegistration?.name || body.data.name,
+        email: verifiedPendingRegistration?.email || body.data.email,
+        passwordHash: verifiedPendingRegistration?.passwordHash || hashPassword(body.data.password),
+        companyName: verifiedPendingRegistration?.companyName || body.data.companyName || null,
+        phone: verifiedPendingRegistration?.phone || body.data.phone || null,
+        role: verifiedPendingRegistration?.role || role,
+        dailyMessageLimit: freemium?.dailyMessageLimit || settings.defaultDailyMessageLimit,
+        dailyTokenLimit: freemium?.dailyTokenLimit || settings.defaultDailyTokenLimit,
+      },
+    });
+    await tx.accountConsentRecord.create({
+      data: {
+        userId: createdUser.id,
+        consentType: ACCOUNT_CONSENT_TYPE,
+        documentVersion: ACCOUNT_LEGAL_DOCUMENT_VERSION,
+        locale,
+        statementDigest: digestAccountConsentStatement(consentStatement),
+        source: "ACCOUNT_SIGN_UP",
+        metadataJson: { termsPath: "/conditions-utilisation", privacyPath: "/politique-confidentialite" },
+      },
+    });
+    if (freemium) {
+      await tx.subscription.create({
+        data: { userId: createdUser.id, planId: freemium.id, status: SubscriptionStatus.ACTIVE, currentPeriodStart: start, currentPeriodEnd: end },
+      });
+    }
+    return createdUser;
   });
 
-  if (freemium) {
-    const { start, end } = getNextBillingPeriod();
-    await prisma.subscription.create({ data: { userId: user.id, planId: freemium.id, status: SubscriptionStatus.ACTIVE, currentPeriodStart: start, currentPeriodEnd: end } });
-  }
   if (settings.signUpOtpEnabled) await prisma.pendingRegistration.delete({ where: { email: body.data.email } }).catch(() => null);
 
-  await writeAuditLog({ userId: user.id, action: settings.signUpOtpEnabled ? "SIGNUP_COMPLETED_WITH_OTP" : "SIGNUP_COMPLETED", entity: "User", entityId: user.id, metadata: { role: user.role, legalConsent: true }, request: req });
+  await writeAuditLog({
+    userId: user.id,
+    action: settings.signUpOtpEnabled ? "SIGNUP_COMPLETED_WITH_OTP" : "SIGNUP_COMPLETED",
+    entity: "User",
+    entityId: user.id,
+    metadata: { role: user.role, legalConsent: true, legalDocumentVersion: ACCOUNT_LEGAL_DOCUMENT_VERSION },
+    request: req,
+  });
   await setSessionCookie(user);
   return NextResponse.json({ ok: true });
 }

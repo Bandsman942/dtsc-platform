@@ -1,0 +1,15 @@
+model AccountConsentRecord {
+  id              String   @id @default(cuid())
+  userId          String
+  consentType     String
+  documentVersion String
+  locale          String   @default("fr")
+  statementDigest String
+  source          String
+  acceptedAt      DateTime @default(now())
+  metadataJson    Json?
+
+  @@unique([userId, consentType, documentVersion], map: "AccountConsentRecord_user_type_version_key")
+  @@index([userId, acceptedAt], map: "AccountConsentRecord_user_accepted_idx")
+  @@index([consentType, documentVersion, acceptedAt], map: "AccountConsentRecord_type_version_accepted_idx")
+}
