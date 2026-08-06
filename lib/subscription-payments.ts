@@ -134,7 +134,7 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
   });
   if (!subscriptionId || !paymentId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
   let invoice = await prisma.invoice.findUnique({ where: { manualPaymentId: request.id } });
-  if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });
+  if (!invoice) invoice = await prisma.invoice.create({ data: { number: buildInvoiceNumber(), userId: request.userId!, planId: request.planId, subscriptionId, paymentId, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });
   const income = await createSubscriptionIncomeTransaction(paymentId!);
   if (income && !invoice.hrcfoTransactionId) invoice = await prisma.invoice.update({ where: { id: invoice.id }, data: { hrcfoTransactionId: income.id } });
   const mail = await sendInvoiceEmail(invoice.id).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Invoice email failed" }));
