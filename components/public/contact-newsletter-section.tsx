@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-export function ContactNewsletterSection({ contactEmail }: { contactEmail: string }) {
+export function ContactNewsletterSection({ contactEmail = "contact@dtsc-platform.com" }: { contactEmail?: string }) {
   const [contactMessage, setContactMessage] = useState("");
   const [newsletterMessage, setNewsletterMessage] = useState("");
   const [isContactPending, setIsContactPending] = useState(false);
