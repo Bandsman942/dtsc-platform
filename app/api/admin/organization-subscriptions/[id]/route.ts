@@ -70,7 +70,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Missing trial end", message: "Indiquez une date de fin d’essai valide." }, { status: 400 });
   }
   const planId = data.planId || current.planId;
-  const plan = await prisma.billingPlan.findFirst({ where: { id: planId, isActive: true }, select: { id: true, name: true } });
+  const plan = await prisma.billingPlan.findFirst({ where: { id: planId, isActive: true, audience: { in: ["ORGANIZATION", "BOTH"] } }, select: { id: true, name: true } });
   if (!plan) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Invalid plan", message: "L’offre sélectionnée est introuvable ou n’est plus commercialisée." }, { status: 400 });

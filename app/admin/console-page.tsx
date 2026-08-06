@@ -6,6 +6,7 @@ import { PaymentStatus, TicketPriority, TicketStatus, UserRole, UserStatus } fro
 import { AdminAccessPanel } from "@/components/admin/admin-access-panel";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
 import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
+import { ManualSubscriptionPaymentsAdmin } from "@/components/admin/manual-subscription-payments-admin";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
 import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
 import { AdminOverviewMetrics } from "@/components/admin/admin-overview-metrics";
@@ -20,6 +21,7 @@ import { ConsoleSaasOverview } from "@/components/admin/console-saas-overview";
 import { ConsoleServerPagination } from "@/components/admin/console-server-pagination";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { FeatureFlagManager } from "@/components/admin/feature-flag-manager";
+import { HrcfoInvoiceList } from "@/components/admin/hrcfo-invoice-list";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
@@ -171,7 +173,7 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
       getConsoleBillingDataset({ page, paymentPage: stringParams.paymentPage, pageSize, search, status: stringParams.status, planId: stringParams.planId, paymentStatus }),
       getConsoleAccessDecision({ user, capability: CONSOLE_CAPABILITIES.RECONCILE_BILLING, adminRoleAccess }),
     ]);
-    content = <div className="space-y-4"><ConsoleFilterBar action={pathname} search={search} hidden={{ pageSize }}><ConsoleSelectFilter name="status" label={t("console.filters.status")} value={stringParams.status} options={["ACTIVE", "TRIAL", "PAST_DUE", "PENDING_PAYMENT", "SUSPENDED", "CANCELED", "EXPIRED"].map((value) => ({ value, label: value }))} /><ConsoleSelectFilter name="paymentStatus" label={locale === "en" ? "Payment" : "Paiement"} value={paymentStatus} options={Object.values(PaymentStatus).map((value) => ({ value, label: value }))} /></ConsoleFilterBar><ConsoleExportLinks locale={locale} links={[{ href: `/api/admin/exports/payments?status=${encodeURIComponent(paymentStatus || "")}`, label: locale === "en" ? "Export payments" : "Exporter les paiements" }]} /><BillingReconciliationControl canReconcile={reconcileDecision.allowed} locale={locale} /><Accordion><AccordionItem title={t("console.sections.subscriptions.label")} defaultOpen><div className="space-y-6"><BillingPlanManager plans={dataset.billingPlans} canManage={canManage} locale={user.locale} /><AdminBillingSubscriptions subscriptions={dataset.organizationSubscriptionItems} plans={dataset.billingPlanOptions} summary={dataset.billingSummary} payments={dataset.paymentAuditItems} /></div></AccordionItem></Accordion><ConsoleServerPagination pagination={dataset.organizationPagination} pathname={pathname} searchParams={{ search, status: stringParams.status, planId: stringParams.planId, paymentStatus, pageSize }} /></div>;
+    content = <div className="space-y-4"><ConsoleFilterBar action={pathname} search={search} hidden={{ pageSize }}><ConsoleSelectFilter name="status" label={t("console.filters.status")} value={stringParams.status} options={["ACTIVE", "TRIAL", "PAST_DUE", "PENDING_PAYMENT", "SUSPENDED", "CANCELED", "EXPIRED"].map((value) => ({ value, label: value }))} /><ConsoleSelectFilter name="paymentStatus" label={locale === "en" ? "Payment" : "Paiement"} value={paymentStatus} options={Object.values(PaymentStatus).map((value) => ({ value, label: value }))} /></ConsoleFilterBar><ConsoleExportLinks locale={locale} links={[{ href: `/api/admin/exports/payments?status=${encodeURIComponent(paymentStatus || "")}`, label: locale === "en" ? "Export payments" : "Exporter les paiements" }]} /><BillingReconciliationControl canReconcile={reconcileDecision.allowed} locale={locale} /><Accordion><AccordionItem title={t("console.sections.subscriptions.label")} defaultOpen><div className="space-y-6"><BillingPlanManager plans={dataset.billingPlans} canManage={canManage} locale={user.locale} /><ManualSubscriptionPaymentsAdmin canManage={canManage} currentUserId={user.id} /><AdminBillingSubscriptions subscriptions={dataset.organizationSubscriptionItems} plans={dataset.billingPlanOptions} summary={dataset.billingSummary} payments={dataset.paymentAuditItems} /></div></AccordionItem></Accordion><ConsoleServerPagination pagination={dataset.organizationPagination} pathname={pathname} searchParams={{ search, status: stringParams.status, planId: stringParams.planId, paymentStatus, pageSize }} /></div>;
   } else if (activeSection === "support") {
     const status = isEnumValue(TicketStatus, stringParams.status) ? stringParams.status as TicketStatus : undefined;
     const priority = isEnumValue(TicketPriority, stringParams.priority) ? stringParams.priority as TicketPriority : undefined;
@@ -192,8 +194,40 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
   } else if (isInternalSection(activeSection)) {
     const ceoStart = validDate(stringParams.ceoStart) ? stringParams.ceoStart : undefined;
     const ceoEnd = validDate(stringParams.ceoEnd) ? stringParams.ceoEnd : undefined;
-    const internal = await getConsoleInternalModulesDataset({ section: activeSection, pageSize: Number(pageSize || 60), selectedCeoStart: ceoStart, selectedCeoEnd: ceoEnd, ceoStartDate: ceoStart ? new Date(`${ceoStart}T00:00:00`) : undefined, ceoEndDate: ceoEnd ? new Date(`${ceoEnd}T23:59:59.999`) : undefined });
-    content = renderInternalSection(activeSection, internal, canManage, user.locale, ceoStart, ceoEnd);
+    const invoiceReadDecision = activeSection === "hr-cfo"
+      ? await getConsoleAccessDecision({ user, capability: CONSOLE_CAPABILITIES.HR_CFO_INVOICES_READ, adminRoleAccess })
+      : null;
+    const [internal, hrcfoInvoices] = await Promise.all([
+      getConsoleInternalModulesDataset({ section: activeSection, pageSize: Number(pageSize || 60), selectedCeoStart: ceoStart, selectedCeoEnd: ceoEnd, ceoStartDate: ceoStart ? new Date(`${ceoStart}T00:00:00`) : undefined, ceoEndDate: ceoEnd ? new Date(`${ceoEnd}T23:59:59.999`) : undefined }),
+      activeSection === "hr-cfo" && invoiceReadDecision?.allowed
+        ? prisma.invoice.findMany({
+            where: { category: "HR_CFO_TRANSACTION" },
+            orderBy: { issuedAt: "desc" },
+            take: 100,
+            include: { user: { select: { name: true, email: true } }, hrcfoTransaction: { select: { reference: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+    content = renderInternalSection(
+      activeSection,
+      internal,
+      canManage,
+      user.locale,
+      ceoStart,
+      ceoEnd,
+      hrcfoInvoices.map((invoice) => ({
+        id: invoice.id,
+        number: invoice.number,
+        planName: invoice.planName,
+        amount: Number(invoice.amount),
+        currency: invoice.currency,
+        status: invoice.status,
+        issuedAt: invoice.issuedAt.toISOString(),
+        beneficiary: invoice.user.name || invoice.user.email,
+        transactionReference: invoice.hrcfoTransaction?.reference || null,
+      })),
+      Boolean(invoiceReadDecision?.allowed),
+    );
   }
 
   return (
@@ -226,8 +260,17 @@ function simplePagination(total: number, page: number, pageSize: number) { const
 
 function SupportSummary({ summary }: { summary: { open: number; urgent: number; overdue: number; averageResolutionHours: number | null } }) { return <div className="max-w-full overflow-x-auto pb-2"><div className="flex min-w-max gap-3 lg:grid lg:min-w-0 lg:grid-cols-4">{[["Ouverts", summary.open], ["Urgents", summary.urgent], ["SLA dépassé", summary.overdue], ["Résolution moyenne", summary.averageResolutionHours === null ? "—" : `${summary.averageResolutionHours} h`]].map(([label, value]) => <div key={String(label)} className="dtsc-card w-56 shrink-0 p-4 lg:w-auto"><p className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{value}</p></div>)}</div></div>; }
 
-function renderInternalSection(section: Extract<ConsoleSectionId, "hr-cfo" | "sco" | "coo" | "ceo" | "mpo" | "cto" | "legal">, data: Awaited<ReturnType<typeof getConsoleInternalModulesDataset>>, canManage: boolean, locale: string, ceoStart?: string, ceoEnd?: string) {
-  if (section === "hr-cfo") return <div className="space-y-5"><PayrollWorkflowPanel locale={locale} /><OperationsAdminPanel eyebrow="Gestion interne" title="Opérations HR & CFO" description="Dossiers RH, budgets, dépenses, comptes et contrôles depuis les moteurs canoniques." playbook={["Dossier RH", "Budget", "Dépense", "Validation", "Paiement", "Audit"]} datasets={data.hrcfoDatasets.filter((item) => item.id !== "payrolls")} canEdit={canManage} /></div>;
+function renderInternalSection(
+  section: Extract<ConsoleSectionId, "hr-cfo" | "sco" | "coo" | "ceo" | "mpo" | "cto" | "legal">,
+  data: Awaited<ReturnType<typeof getConsoleInternalModulesDataset>>,
+  canManage: boolean,
+  locale: string,
+  ceoStart?: string,
+  ceoEnd?: string,
+  hrcfoInvoices: Array<{ id: string; number: string; planName: string; amount: number; currency: string; status: string; issuedAt: string; beneficiary: string; transactionReference: string | null }> = [],
+  canReadHrcfoInvoices = false,
+) {
+  if (section === "hr-cfo") return <div className="space-y-5"><PayrollWorkflowPanel locale={locale} /><HrcfoInvoiceList invoices={hrcfoInvoices} canRead={canReadHrcfoInvoices} /><OperationsAdminPanel eyebrow="Gestion interne" title="Opérations HR & CFO" description="Dossiers RH, budgets, dépenses, comptes et contrôles depuis les moteurs canoniques." playbook={["Dossier RH", "Budget", "Dépense", "Validation", "Paiement", "Audit"]} datasets={data.hrcfoDatasets.filter((item) => item.id !== "payrolls")} canEdit={canManage} /></div>;
   if (section === "sco") return <OperationsAdminPanel eyebrow="Supply Chain Operations" title="Opérations SCO" description="Fournisseurs, achats, stocks, actifs et logistique." playbook={["Besoin", "Budget", "Fournisseur", "Commande", "Réception", "Audit"]} datasets={data.scoDatasets} canEdit={canManage} />;
   if (section === "coo") return <div className="space-y-5"><PayrollApprovalPanel approverRole="COO" locale={locale} /><WorkSubmissionReviewPanel reviewerRole="COO" locale={locale} /><OperationsAdminPanel eyebrow="Chief Operating Officer" title="Pilotage COO" description="Opérations, tâches, demandes, blocages, réunions et rapports." playbook={["Cadrage", "Assignation", "Coordination", "Validation", "Rapport"]} datasets={data.cooDatasets} canEdit={canManage} /></div>;
   if (section === "ceo") return <div className="space-y-5"><CeoExecutiveSummary groups={data.ceoExecutiveGroups} dateStart={ceoStart} dateEnd={ceoEnd} /><PayrollApprovalPanel approverRole="CEO" locale={locale} /><WorkSubmissionReviewPanel reviewerRole="CEO" locale={locale} /><OperationsAdminPanel eyebrow="Chief Executive Officer" title="Supervision CEO" description="Objectifs, décisions, risques et indicateurs réels consolidés." playbook={["Synthèse", "Alerte", "Décision", "Arbitrage", "Suivi"]} datasets={data.ceoDatasets} canEdit={canManage} /></div>;

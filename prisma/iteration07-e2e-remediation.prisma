@@ -1,0 +1,57 @@
+model CollaborationContactRequest {
+  id          String   @id @default(cuid())
+  requesterId String
+  targetUserId String
+  status      String   @default("PENDING")
+  message     String?
+  respondedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  requester   User     @relation("CollaborationContactRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetUser  User     @relation("CollaborationContactTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, targetUserId])
+  @@index([targetUserId, status, createdAt])
+  @@index([requesterId, status, createdAt])
+}
+
+model ManualSubscriptionPayment {
+  id                         String   @id @default(cuid())
+  idempotencyKey             String   @unique
+  scope                      String
+  userId                     String?
+  organizationId             String?
+  planId                     String
+  subscriptionId             String?
+  organizationSubscriptionId String?
+  paymentId                  String?  @unique
+  amount                     Decimal  @db.Decimal(10, 2)
+  currency                   String   @default("USD")
+  paymentMethod              String
+  externalReference          String?
+  status                     String   @default("PENDING_VALIDATION")
+  requestedByUserId          String
+  validatorUserId            String
+  validatedByUserId          String?
+  requestedAt                DateTime @default(now())
+  validatedAt                DateTime?
+  rejectedAt                 DateTime?
+  reason                     String
+  validationComment          String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  user                       User?    @relation("ManualSubscriptionPaymentBeneficiary", fields: [userId], references: [id], onDelete: SetNull)
+  organization               Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  plan                       BillingPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  subscription               Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  organizationSubscription   OrganizationSubscription? @relation(fields: [organizationSubscriptionId], references: [id], onDelete: SetNull)
+  payment                    Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  requestedBy                User     @relation("ManualSubscriptionPaymentRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  validator                  User     @relation("ManualSubscriptionPaymentValidator", fields: [validatorUserId], references: [id], onDelete: Restrict)
+  invoice                    Invoice?
+
+  @@index([scope, status, requestedAt])
+  @@index([userId, status, requestedAt])
+  @@index([organizationId, status, requestedAt])
+  @@index([validatorUserId, status, requestedAt])
+}

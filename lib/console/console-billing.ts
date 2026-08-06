@@ -59,7 +59,7 @@ export async function getConsoleBillingDataset(input: {
     prisma.billingPlan.findMany({
       orderBy: [{ sortOrder: "asc" }, { priceUsd: "asc" }],
       select: {
-        id: true, name: true, slug: true, description: true, priceUsd: true, dailyMessageLimit: true, dailyTokenLimit: true,
+        id: true, name: true, slug: true, description: true, audience: true, priceUsd: true, dailyMessageLimit: true, dailyTokenLimit: true,
         maxDocuments: true, isActive: true, sortOrder: true, updatedAt: true,
         _count: { select: { subscriptions: true, organizationSubscriptions: true, versions: true } },
         versions: { orderBy: { version: "desc" }, take: 5 },
@@ -80,6 +80,7 @@ export async function getConsoleBillingDataset(input: {
       slug: plan.slug,
       description: PLAN_COMMERCIAL_PROFILES[planCode].promiseFr,
       audience: PLAN_COMMERCIAL_PROFILES[planCode].audienceFr,
+      audienceCode: plan.audience === "PERSONAL" || plan.audience === "ORGANIZATION" ? plan.audience : "BOTH",
       priceUsd: Number(plan.priceUsd),
       dailyMessageLimit: plan.dailyMessageLimit,
       dailyTokenLimit: plan.dailyTokenLimit,
@@ -134,7 +135,7 @@ export async function getConsoleBillingDataset(input: {
   return {
     payments,
     billingPlans,
-    billingPlanOptions: billingPlans.filter((plan) => activePlanIds.has(plan.id)).map(({ id, name, slug, priceUsd, planCode, limits, moduleCatalog }) => ({ id, name, slug, priceUsd, planCode, limits, moduleCatalog })),
+    billingPlanOptions: billingPlans.filter((plan) => activePlanIds.has(plan.id) && (plan.audienceCode === "ORGANIZATION" || plan.audienceCode === "BOTH")).map(({ id, name, slug, priceUsd, planCode, limits, moduleCatalog }) => ({ id, name, slug, priceUsd, planCode, limits, moduleCatalog })),
     organizationSubscriptionItems,
     billingSummary: {
       organizations: organizationTotal,

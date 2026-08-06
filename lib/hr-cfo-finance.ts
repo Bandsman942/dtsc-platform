@@ -432,6 +432,7 @@ async function createOperationalInvoice(
       amount: input.amount,
       currency: input.currency,
       status: input.paidAt ? InvoiceStatus.PAID : InvoiceStatus.ISSUED,
+      category: "HR_CFO_TRANSACTION",
       paidAt: input.paidAt || null,
       hrcfoTransactionId: transactionId,
     },

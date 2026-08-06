@@ -180,6 +180,7 @@ export const organizationSubscriptionUpdateSchema = z.object({
 });
 
 export const billingPlanUpdateSchema = z.object({
+  audience: z.enum(["PERSONAL", "ORGANIZATION", "BOTH"]),
   name: z.string().trim().min(2).max(120),
   description: z.string().trim().min(10).max(1000),
   priceUsd: z.coerce.number().min(0).max(1_000_000).refine((value) => Math.round(value * 100) / 100 === value, "Le prix accepte au maximum deux décimales."),

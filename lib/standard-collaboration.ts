@@ -70,7 +70,7 @@ async function authorizedOrganizationIds(session: SessionPayload) {
 export async function authorizedCollaboratorIds(session: SessionPayload) {
   const organizationIds = await authorizedOrganizationIds(session);
   const scopedGroupFilter = collaborationGroupScopeWhere(session);
-  const [memberships, identityLinks, sharedGroupMembers, blocks] = await Promise.all([
+  const [memberships, identityLinks, sharedGroupMembers, acceptedContacts, blocks] = await Promise.all([
     organizationIds.length
       ? prisma.organizationMember.findMany({
           where: {
@@ -107,6 +107,14 @@ export async function authorizedCollaboratorIds(session: SessionPayload) {
       select: { userId: true },
       take: 2_000,
     }),
+    prisma.collaborationContactRequest.findMany({
+      where: {
+        status: "ACCEPTED",
+        OR: [{ requesterId: session.userId }, { targetUserId: session.userId }],
+      },
+      select: { requesterId: true, targetUserId: true },
+      take: 2_000,
+    }),
     prisma.collaborationUserBlock.findMany({
       where: { revokedAt: null, OR: [{ blockerId: session.userId }, { blockedId: session.userId }] },
       select: { blockerId: true, blockedId: true },
@@ -114,11 +122,12 @@ export async function authorizedCollaboratorIds(session: SessionPayload) {
     }),
   ]);
 
-  const blockedIds = new Set(blocks.map((item) => item.blockerId === session.userId ? item.blockedId : item.blockerId));
+  const blockedIds = new Set<string>(blocks.map((item) => item.blockerId === session.userId ? item.blockedId : item.blockerId));
   const ids = new Set<string>();
   for (const item of memberships) ids.add(item.userId);
   for (const item of identityLinks) if (item.userId) ids.add(item.userId);
   for (const item of sharedGroupMembers) ids.add(item.userId);
+  for (const item of acceptedContacts) ids.add(item.requesterId === session.userId ? item.targetUserId : item.requesterId);
   ids.delete(session.userId);
   for (const blockedId of blockedIds) ids.delete(blockedId);
   return [...ids];

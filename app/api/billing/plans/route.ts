@@ -4,7 +4,7 @@ import { ensureBillingPlans } from "@/lib/billing";
 export async function GET() {
   const plans = await ensureBillingPlans();
   return NextResponse.json({
-    plans: plans.map((plan) => ({
+    plans: plans.filter((plan) => plan.audience === "PERSONAL" || plan.audience === "BOTH").map((plan) => ({
       id: plan.id,
       name: plan.name,
       slug: plan.slug,

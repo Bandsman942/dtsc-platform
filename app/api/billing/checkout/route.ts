@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     prisma.billingPlan.findUnique({ where: { id: body.data.planId } }),
   ]);
 
-  if (!user || !plan || !plan.isActive) {
+  if (!user || !plan || !plan.isActive || !["PERSONAL", "BOTH"].includes(plan.audience)) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt, metadata: { planId: body.data.planId } });
     return NextResponse.json({ error: "Plan unavailable" }, { status: 404 });
   }

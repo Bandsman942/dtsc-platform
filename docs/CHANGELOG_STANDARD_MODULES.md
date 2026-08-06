@@ -130,3 +130,17 @@ Les modules `COLLABORATORS` et `ANNOUNCEMENTS` disposent désormais d’une acce
 - SLA Support, incidents, feature flags, webhooks idempotents et exports audités ;
 - i18n, guides natifs et cartes Kanban `STANDARD-07` ;
 - statut E2E : `NON_EXÉCUTÉ`.
+
+## 2026-08-06 — Correctifs E2E propriétaire de l’itération 07
+
+- vues Liste/Kanban indépendantes pour les blocs Activités DTSC ;
+- Kanban des prestations par mode de travail et historique par statut ;
+- transitions canoniques idempotentes synchronisées avec Administration DTSC ;
+- boîte à outils globale : notes, calculatrice sûre et pense-bêtes ;
+- plans personnels et entreprises séparés ;
+- checkout entreprise, paiements manuels avec validateur, factures et revenus DTSC ;
+- séparation des factures SaaS et HR/CFO avec permissions dédiées ;
+- invitations de contact entre utilisateurs autorisés ;
+- interface de conversation conservée pendant les appels audio et vidéo ;
+- migration additive, documentation et QA dédiée ;
+- aucune promotion automatique vers `COMMERCIAL_READY`.

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Copy, Download, Eye, FileText, MessageCircle, Pencil, Send, Trash2 } from "lucide-react";
+import { ArrowRightCircle, Copy, Download, Eye, FileText, MessageCircle, Pencil, Send, Trash2 } from "lucide-react";
 import { ProfessionalMentionActions } from "@/components/people/professional-mention-actions";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { CollapsibleThread } from "@/components/workspace/collapsible-thread";
+import { ACTIVITY_STATUS_REASON_REQUIRED, getActivityStatusTransitions } from "@/lib/activity-status-workflow";
 import { formatEnumLabel } from "@/lib/labels";
 import type { ActivityAttachment, ActivityComment, ActivityItem, CollaboratorOption } from "./activity-types";
 
@@ -37,6 +38,8 @@ export function ActivityDetail({
   const [requestResponse, setRequestResponse] = useState("");
   const [visibleRequestResponse, setVisibleRequestResponse] = useState(item.requestResponse || "");
   const [statusMessage, setStatusMessage] = useState("");
+  const [transitionReason, setTransitionReason] = useState("");
+  const [transitioningStatus, setTransitioningStatus] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<ActivityComment | null>(null);
   const [editingComment, setEditingComment] = useState<ActivityComment | null>(null);
   const [deletingComment, setDeletingComment] = useState<ActivityComment | null>(null);
@@ -121,6 +124,27 @@ export function ActivityDetail({
     if (response.ok) onChanged?.();
   }
 
+  async function updateOperationalStatus(status: string) {
+    const needsReason = ACTIVITY_STATUS_REASON_REQUIRED.has(status);
+    if (needsReason && !transitionReason.trim()) {
+      setStatusMessage("Ajoutez un motif professionnel avant cette transition.");
+      return;
+    }
+    setTransitioningStatus(status);
+    const response = await fetch(`/api/activities/status-transitions/${item.entityType}/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, reason: transitionReason }),
+    });
+    const body = (await response.json().catch(() => null)) as { message?: string; unchanged?: boolean } | null;
+    setStatusMessage(response.ok ? (body?.unchanged ? "Cette opération était déjà à ce statut." : "Opération mise à jour dans Activités DTSC et Administration DTSC.") : body?.message || "Transition impossible.");
+    if (response.ok) {
+      setTransitionReason("");
+      onChanged?.();
+    }
+    setTransitioningStatus(null);
+  }
+
   async function updateCollaboratorRequest(status: string) {
     const response = await fetch(`/api/activities/requests/${item.id}`, {
       method: "PATCH",
@@ -143,6 +167,8 @@ export function ActivityDetail({
   }
 
   const isMutableTask = item.entityType === "TASK" && !TERMINAL_TASK_STATUSES.has(item.status);
+  const operationalTransitions = item.entityType === "TASK" || item.entityType === "COLLAB_REQUEST" ? [] : getActivityStatusTransitions(item.entityType, item.status);
+  const hasSensitiveTransition = operationalTransitions.some((status) => ACTIVITY_STATUS_REASON_REQUIRED.has(status));
 
   return (
     <div className="min-w-0 space-y-5">
@@ -168,6 +194,39 @@ export function ActivityDetail({
           {item.status !== "IN_PROGRESS" ? <Button type="button" onClick={() => void updateTask("IN_PROGRESS")} className="rounded-xl bg-dtsc-blue text-white">Marquer en cours</Button> : null}
           <Button type="button" onClick={() => void updateTask("COMPLETED")} className="rounded-xl bg-cyan-500 text-[#001736]">Marquer terminée</Button>
         </div>
+      ) : null}
+
+      {operationalTransitions.length ? (
+        <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4" aria-label="Faire évoluer l’opération">
+          <h4 className="font-black text-dtsc-ink">Faire évoluer l’opération</h4>
+          <p className="mt-1 text-xs font-bold text-dtsc-muted">La transition est idempotente, auditée et actualise la même donnée canonique dans Administration DTSC.</p>
+          {hasSensitiveTransition ? (
+            <textarea
+              value={transitionReason}
+              onChange={(event) => setTransitionReason(event.target.value)}
+              placeholder="Motif requis pour bloquer, rejeter, annuler, escalader ou déclarer un échec…"
+              className="mt-3 min-h-20 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink"
+            />
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {operationalTransitions.map((status) => {
+              const reasonRequired = ACTIVITY_STATUS_REASON_REQUIRED.has(status);
+              return (
+                <Button
+                  key={status}
+                  type="button"
+                  variant={reasonRequired ? "outline" : "default"}
+                  disabled={Boolean(transitioningStatus) || (reasonRequired && !transitionReason.trim())}
+                  onClick={() => void updateOperationalStatus(status)}
+                  className={reasonRequired ? "rounded-xl border-amber-300 text-amber-700 dark:text-amber-200" : "rounded-xl bg-dtsc-blue text-white"}
+                >
+                  <ArrowRightCircle className="h-4 w-4" />
+                  {transitioningStatus === status ? "Mise à jour…" : formatEnumLabel(status)}
+                </Button>
+              );
+            })}
+          </div>
+        </section>
       ) : null}
 
       {item.entityType === "COLLAB_REQUEST" && item.canRespond ? (

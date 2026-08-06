@@ -1,4 +1,7 @@
+import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { getConsoleAccessDecision, CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
+import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,12 +22,29 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const invoice = await prisma.invoice.findFirst({
-    where: session.role === "ADMIN" ? { id } : { id, userId: session.userId },
+  const invoice = await prisma.invoice.findUnique({
+    where: { id },
     include: { user: true, payment: true, hrcfoTransaction: { include: { account: true, department: true, budget: true } } },
   });
 
   if (!invoice) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  let allowed = session.role === UserRole.ADMIN || invoice.userId === session.userId;
+  if (!allowed && invoice.organizationId) {
+    allowed = Boolean(await prisma.organizationMember.findFirst({
+      where: { organizationId: invoice.organizationId, userId: session.userId, status: "ACTIVE", removedAt: null, role: { in: ["OWNER", "ADMIN"] } },
+      select: { id: true },
+    }));
+  }
+  if (!allowed && invoice.category === "HR_CFO_TRANSACTION" && isDtscInternalSession(session)) {
+    allowed = (await getConsoleAccessDecision({
+      user: { id: session.userId, role: session.role },
+      capability: CONSOLE_CAPABILITIES.HR_CFO_INVOICES_READ,
+    })).allowed;
+  }
+  if (!allowed) {
     return new Response("Not found", { status: 404 });
   }
 

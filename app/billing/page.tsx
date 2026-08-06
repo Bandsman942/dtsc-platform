@@ -2,6 +2,7 @@ import { CreditCard, ReceiptText, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { BillingPlans } from "@/components/billing/billing-plans";
+import { OrganizationBillingPlans } from "@/components/billing/organization-billing-plans";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -27,7 +28,7 @@ export default async function BillingPage() {
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, organizationBillingRecords, usageToday, documentCount] = await Promise.all([
+  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, organizationBillingRecords, organizationInvoices, organizationSubscription, organizationMembership, usageToday, documentCount] = await Promise.all([
     ensureBillingPlans(),
     prisma.subscription.findFirst({
       where: { userId: user.id },
@@ -35,12 +36,12 @@ export default async function BillingPage() {
       include: { plan: true },
     }),
     prisma.invoice.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, category: "PERSONAL_SUBSCRIPTION" },
       orderBy: { issuedAt: "desc" },
       take: 10,
     }),
     prisma.payment.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, organizationId: null },
       orderBy: { createdAt: "desc" },
       take: 10,
       select: { id: true, reference: true, providerReference: true, provider: true, amount: true, currency: true, status: true, paidAt: true, createdAt: true },
@@ -51,6 +52,20 @@ export default async function BillingPage() {
       orderBy: { createdAt: "desc" },
       take: 10,
     }) : [],
+    activeOrganizationId ? prisma.invoice.findMany({
+      where: { organizationId: activeOrganizationId, category: "ORGANIZATION_SUBSCRIPTION" },
+      orderBy: { issuedAt: "desc" },
+      take: 10,
+    }) : [],
+    activeOrganizationId ? prisma.organizationSubscription.findFirst({
+      where: { organizationId: activeOrganizationId, status: { in: ["ACTIVE", "TRIAL", "PENDING_PAYMENT"] } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, planId: true, status: true },
+    }) : null,
+    activeOrganizationId ? prisma.organizationMember.findFirst({
+      where: { organizationId: activeOrganizationId, userId: user.id, status: "ACTIVE", removedAt: null },
+      select: { role: true },
+    }) : null,
     prisma.usageLog.aggregate({
       where: {
         userId: user.id,
@@ -63,6 +78,9 @@ export default async function BillingPage() {
     prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
   ]);
 
+  const personalPlans = plans.filter((plan) => plan.audience === "PERSONAL" || plan.audience === "BOTH");
+  const organizationPlans = plans.filter((plan) => plan.audience === "ORGANIZATION" || plan.audience === "BOTH");
+  const canManageOrganizationSubscription = organizationMembership?.role === "OWNER" || organizationMembership?.role === "ADMIN";
   const activePlan = latestSubscription?.plan;
   const subscriptionActive = latestSubscription?.status === "ACTIVE";
   const contextualPlanLabel = organizationEntitlements && !organizationEntitlements.isDtscInternal
@@ -95,7 +113,7 @@ export default async function BillingPage() {
           <ModuleMetric label="Messages aujourd’hui" value={usageToday._count._all} hint={activePlan ? `Limite ${activePlan.dailyMessageLimit}` : "Usage réel"} />
           <ModuleMetric label="Tokens aujourd’hui" value={usageToday._sum.totalTokens || 0} hint={activePlan ? `Limite ${activePlan.dailyTokenLimit}` : "Usage réel"} />
           <ModuleMetric label="Documents" value={documentCount} hint={activePlan ? `Limite ${activePlan.maxDocuments}` : "Contexte actif"} />
-          <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationBillingRecords.length} hint="Historique récent" />
+          <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationInvoices.length} hint="Historique récent" />
         </ModuleMetrics>
         <ModuleContent>
           <ModuleSection title="Source de vérité commerciale" description="Le catalogue de plans, l’abonnement, les entitlements et les limites serveur déterminent les capacités disponibles.">
@@ -110,7 +128,7 @@ export default async function BillingPage() {
             <BillingPlans
               activePlanId={latestSubscription?.status === "ACTIVE" ? latestSubscription.planId : undefined}
               paymentAvailable={paymentAvailable}
-              plans={plans.map((plan) => ({
+              plans={personalPlans.map((plan) => ({
                 id: plan.id,
                 name: plan.name,
                 description: plan.description,
@@ -136,7 +154,21 @@ export default async function BillingPage() {
 
             {organizationEntitlements && !organizationEntitlements.isDtscInternal ? (
               <AccordionItem title="Abonnement de l’organisation active">
-                <div className="min-w-0 space-y-4">
+                <div className="min-w-0 space-y-6">
+                  <OrganizationBillingPlans
+                    activePlanId={organizationSubscription?.status === "ACTIVE" || organizationSubscription?.status === "TRIAL" ? organizationSubscription.planId : undefined}
+                    canManage={canManageOrganizationSubscription}
+                    paymentAvailable={paymentAvailable}
+                    plans={organizationPlans.map((plan) => ({
+                      id: plan.id,
+                      name: plan.name,
+                      description: plan.description,
+                      priceUsd: Number(plan.priceUsd),
+                      dailyMessageLimit: plan.dailyMessageLimit,
+                      dailyTokenLimit: plan.dailyTokenLimit,
+                      maxDocuments: plan.maxDocuments,
+                    }))}
+                  />
                   <BusinessList ariaLabel="Limites de l’abonnement organisation">
                     {[
                       ["Plan", organizationEntitlements.planLabel],
@@ -151,8 +183,22 @@ export default async function BillingPage() {
                       ["Fin d’essai", dateLabel(organizationEntitlements.trialEndsAt)],
                     ].map(([label, value]) => <BusinessListItem key={label} title={label} status={<StatusBadge>{value}</StatusBadge>} />)}
                   </BusinessList>
+                  {organizationInvoices.length ? (
+                    <BusinessList ariaLabel="Factures SaaS de l’organisation">
+                      {organizationInvoices.map((invoice) => (
+                        <BusinessListItem
+                          key={invoice.id}
+                          title={invoice.number}
+                          description={`${invoice.planName} · ${Number(invoice.amount).toFixed(2)} ${invoice.currency}`}
+                          meta={`Émise le ${invoice.issuedAt.toLocaleDateString("fr-FR")}${invoice.emailSentAt ? " · E-mail envoyé" : " · Envoi e-mail à vérifier"}`}
+                          status={<StatusBadge>{formatEnumLabel(invoice.status)}</StatusBadge>}
+                          actions={<Link href={`/api/invoices/${invoice.id}/pdf`} target="_blank" className="inline-flex min-h-11 items-center rounded-xl bg-[#002b5b] px-3 text-xs font-black text-white hover:bg-[#001736]">Télécharger</Link>}
+                        />
+                      ))}
+                    </BusinessList>
+                  ) : <EmptyState compact title="Aucune facture entreprise" />}
                   {organizationBillingRecords.length ? (
-                    <BusinessList ariaLabel="Facturation SaaS de l’organisation">
+                    <BusinessList ariaLabel="Paiements SaaS de l’organisation">
                       {organizationBillingRecords.map((record) => (
                         <BusinessListItem
                           key={record.id}

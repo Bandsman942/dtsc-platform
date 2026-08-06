@@ -88,10 +88,13 @@ export const ITERATION04_USER_GUIDES = {
     title: "Guide Activités DTSC",
     summary: "Consulter, exécuter et commenter les tâches, opérations, demandes, réunions, rapports et prestations qui concernent le collaborateur connecté.",
     audience: "Collaborateurs internes DTSC",
-    updatedAt: "2026-08-04",
+    updatedAt: "2026-08-06",
     capabilities: [
-      "Listes et vues Kanban pour les objets dont le statut évolue",
-      "Changement de statut réservé au destinataire explicite ou au responsable",
+      "Bascule Liste/Kanban indépendante pour chaque bloc à cycle évolutif",
+      "Prestations hebdomadaires regroupées par mode de travail et historique par statut",
+      "Colonnes Kanban filtrables par statut, priorité, entité ou progression",
+      "Changement de statut idempotent réservé aux personnes impliquées ou autorisées",
+      "Synchronisation avec les mêmes objets canoniques dans Administration DTSC",
       "Checklists calculant automatiquement la progression",
       "Commentaires CRUD, réponses et mentions cliquables",
       "CRUD des événements créés par le collaborateur",
@@ -102,11 +105,12 @@ export const ITERATION04_USER_GUIDES = {
     steps: [
       {
         title: "Trouver une activité",
-        description: "Utilisez la recherche, la période et le mode Liste/Kanban.",
+        description: "Utilisez la recherche, la période et le mode Liste/Kanban propre à chaque bloc.",
         actions: [
           "Filtrer par texte, statut, responsable ou période",
           "Ouvrir une carte pour afficher son détail complet",
-          "Utiliser le Kanban pour comprendre les éléments à faire, en cours, bloqués et terminés",
+          "Choisir les colonnes du Kanban selon le statut, la priorité, le type ou la progression",
+          "Consulter les prestations de la semaine par mode de travail et l’historique par statut",
         ],
       },
       {
@@ -117,6 +121,8 @@ export const ITERATION04_USER_GUIDES = {
           "Laisser le système recalculer la progression",
           "Ajouter un commentaire ou signaler un blocage",
           "Changer le statut uniquement lorsqu'une transition est autorisée",
+          "Vérifier la même évolution dans le bloc Administration DTSC correspondant",
+          "Rejouer une action sans créer un doublon grâce à l’idempotence serveur",
         ],
       },
       {
