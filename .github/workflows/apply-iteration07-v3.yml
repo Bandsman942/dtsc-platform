@@ -29,18 +29,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat \
-            .github/patches/iteration07-v3.part00 \
-            .github/patches/iteration07-v3.part01a \
-            .github/patches/iteration07-v3.part01b \
-            .github/patches/iteration07-v3.part02 \
-            .github/patches/iteration07-v3.part03a0 \
-            .github/patches/iteration07-v3.part03a1 \
-            .github/patches/iteration07-v3.part03b \
-            .github/patches/iteration07-v3.part04 \
-            .github/patches/iteration07-v3.part05 \
-            .github/patches/iteration07-v3.part06 \
-            > /tmp/iteration07-v3.patch.gz.b64
+          files=(
+            .github/patches/iteration07-v3.part00
+            .github/patches/iteration07-v3.part01a
+            .github/patches/iteration07-v3.part01b
+            .github/patches/iteration07-v3.part02
+            .github/patches/iteration07-v3.part03a0
+            .github/patches/iteration07-v3.part03a1
+            .github/patches/iteration07-v3.part03b
+            .github/patches/iteration07-v3.part04
+            .github/patches/iteration07-v3.part05
+            .github/patches/iteration07-v3.part06
+          )
+          wc -c "${files[@]}"
+          git hash-object "${files[@]}"
+          cat "${files[@]}" > /tmp/iteration07-v3.patch.gz.b64
+          sha256sum /tmp/iteration07-v3.patch.gz.b64
           echo "5eea4d37b9b5340156e2ec640c56478148a35e783eba5726061d7bdd8ffcb060  /tmp/iteration07-v3.patch.gz.b64" | sha256sum --check
           base64 --decode /tmp/iteration07-v3.patch.gz.b64 | gzip --decompress > /tmp/iteration07-v3.patch
           git apply --check --whitespace=error-all /tmp/iteration07-v3.patch
