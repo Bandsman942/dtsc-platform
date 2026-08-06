@@ -1,0 +1,65 @@
+name: Fix iteration 07 TypeScript
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-iteration-07-typescript.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.head_ref == 'fix/iteration-07-e2e-remediation-v2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply targeted TypeScript fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/console/console-billing.ts')
+          text = path.read_text()
+          before = 'audienceCode: plan.audience === "PERSONAL" || plan.audience === "ORGANIZATION" ? plan.audience : "BOTH",'
+          after = 'audienceCode: (plan.audience === "PERSONAL" || plan.audience === "ORGANIZATION" ? plan.audience : "BOTH") as "PERSONAL" | "ORGANIZATION" | "BOTH",'
+          if before not in text:
+              raise SystemExit('console billing target not found')
+          path.write_text(text.replace(before, after))
+
+          path = Path('app/api/billing/organization-checkout/route.ts')
+          text = path.read_text()
+          before = 'prisma.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null }, select: { id: true, name: true, phone: true, email: true } })'
+          after = 'prisma.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null }, select: { id: true, name: true, email: true } })'
+          if before not in text:
+              raise SystemExit('organization checkout select target not found')
+          text = text.replace(before, after)
+          before = 'customerPhoneNumber: organization.phone || user.phone'
+          after = 'customerPhoneNumber: user.phone'
+          if before not in text:
+              raise SystemExit('organization checkout phone target not found')
+          path.write_text(text.replace(before, after))
+
+          path = Path('lib/subscription-payments.ts')
+          text = path.read_text()
+          before = '''    if (!paymentId) {\n      const payment = await tx.payment.create({ data: { userId: request.userId!, subscriptionId, provider: "MANUAL", reference: `MANUAL-${request.id}`, amount: request.amount, currency: request.currency, status: PaymentStatus.PAID, paidAt: new Date(), checkoutPayload: { method: request.paymentMethod, externalReference: request.externalReference } } });'''
+          after = '''    if (!paymentId) {\n      if (!subscriptionId) throw new Error("MANUAL_PAYMENT_SUBSCRIPTION_REQUIRED");\n      const payment = await tx.payment.create({ data: { userId: request.userId!, subscriptionId, provider: "MANUAL", reference: `MANUAL-${request.id}`, amount: request.amount, currency: request.currency, status: PaymentStatus.PAID, paidAt: new Date(), checkoutPayload: { method: request.paymentMethod, externalReference: request.externalReference } } });'''
+          if before not in text:
+              raise SystemExit('subscription payment target not found')
+          path.write_text(text.replace(before, after))
+          PY
+          git diff --check
+
+      - name: Commit fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/api/billing/organization-checkout/route.ts lib/console/console-billing.ts lib/subscription-payments.ts
+          git commit -m 'fix: resolve iteration 07 TypeScript contracts'
+          git push origin HEAD:${{ github.head_ref }}
