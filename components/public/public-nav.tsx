@@ -3,68 +3,49 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ProductPreferencesControls } from "@/components/layout/product-preferences-controls";
+import { PublicSearchDialog } from "@/components/public/public-search-dialog";
 import { publicLinks } from "@/components/public/public-links";
 import { getSignInUrl } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 
-function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
-}
+function isActive(pathname: string, href: string) { return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`); }
 
 export function PublicNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent) { if (event.key === "Escape") setOpen(false); }
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", onKeyDown); };
+  }, [open]);
 
   return (
-    <div className="relative z-[120] min-w-0 max-w-full lg:flex lg:items-center lg:gap-3">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm font-semibold text-dtsc-blue shadow-sm transition hover:border-cyan-300 lg:hidden"
-        aria-expanded={open}
-      >
-        {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        Menu
-      </button>
-
-      {open && (
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-[115] bg-[#001736]/88 backdrop-blur-2xl lg:hidden"
-          aria-label="Fermer le menu public"
-        />
-      )}
-
-      <nav className={cn("fixed left-3 right-3 top-[8.25rem] z-[125] grid max-h-[min(72dvh,32rem)] w-auto max-w-[calc(100vw-1.5rem)] min-w-0 gap-1.5 overflow-x-hidden overflow-y-auto rounded-[1.35rem] border border-cyan-300/35 bg-[#071427] p-3 text-white shadow-[0_28px_90px_rgba(0,0,0,0.48)] ring-1 ring-white/10 overscroll-contain lg:static lg:left-auto lg:right-auto lg:top-auto lg:mt-0 lg:flex lg:max-h-none lg:w-auto lg:max-w-none lg:items-center lg:gap-1 lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0 lg:text-inherit lg:shadow-none lg:ring-0", !open && "hidden lg:flex")}>
-        {publicLinks.map((link) => {
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="hidden items-center gap-1 xl:flex">
+        {publicLinks.filter((link) => link.href !== "/").map((link) => {
           const active = isActive(pathname, link.href);
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setOpen(false)}
-              className={cn(
-                "min-w-0 rounded-xl px-3 py-2 text-sm transition",
-                active
-                  ? "bg-white/10 font-semibold text-white ring-1 ring-cyan-300/20 lg:bg-dtsc-soft lg:text-[#003b7a] lg:ring-0 dark:lg:bg-dtsc-soft dark:lg:text-white"
-                  : "font-medium text-slate-200 hover:bg-white/10 hover:text-white lg:text-[#1f3654] lg:hover:bg-[#e8f3ff] lg:hover:text-[#002b5b] dark:lg:text-slate-200 dark:lg:hover:bg-white/10 dark:lg:hover:text-white"
-              )}
-              aria-current={active ? "page" : undefined}
-            >
-              {link.label}
-            </Link>
-          );
+          return <Link key={link.href} href={link.href} className={cn("rounded-xl px-3 py-2 text-sm font-semibold transition", active ? "bg-dtsc-soft text-dtsc-blue" : "text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-blue")} aria-current={active ? "page" : undefined}>{link.label}</Link>;
         })}
-        <Link
-          href={getSignInUrl("/dashboard")}
-          onClick={() => setOpen(false)}
-          className="mt-1 inline-flex min-w-0 items-center justify-center rounded-xl bg-dtsc-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#004a9e] lg:ml-1 lg:mt-0"
-        >
-          Espace client
-        </Link>
-      </nav>
+      </div>
+      <div className="hidden items-center gap-2 xl:flex"><PublicSearchDialog compact /><ProductPreferencesControls /><Link href={getSignInUrl("/dashboard")} className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-semibold text-dtsc-blue transition hover:bg-dtsc-soft">Accès client</Link><Link href="/contact" className="rounded-xl bg-dtsc-blue px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--dtsc-brand-secondary-hover)]">Consultation</Link></div>
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-blue shadow-sm xl:hidden" aria-expanded={open} aria-controls="public-mobile-navigation"><Menu className="h-4 w-4" /> Menu</button>
+      {open ? (
+        <div id="public-mobile-navigation" className="fixed inset-0 z-[180] overflow-y-auto bg-dtsc-surface p-4" role="dialog" aria-modal="true" aria-label="Navigation publique DTSC">
+          <div className="mx-auto flex min-h-full max-w-xl flex-col">
+            <div className="flex items-center justify-between border-b border-dtsc-border pb-4"><p className="text-lg font-semibold text-dtsc-ink">Menu DTSC</p><button ref={closeRef} type="button" onClick={() => setOpen(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-dtsc-border text-dtsc-muted" aria-label="Fermer le menu"><X className="h-5 w-5" /></button></div>
+            <nav className="grid gap-2 py-6">{publicLinks.map((link) => { const active = isActive(pathname, link.href); return <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className={cn("rounded-xl border px-4 py-3 text-base font-semibold transition", active ? "border-cyan-400 bg-dtsc-soft text-dtsc-blue" : "border-dtsc-border text-dtsc-ink hover:bg-dtsc-soft")}>{link.label}</Link>; })}</nav>
+            <div className="mt-auto space-y-4 border-t border-dtsc-border py-5"><PublicSearchDialog /><ProductPreferencesControls /><div className="grid gap-3 sm:grid-cols-2"><Link href={getSignInUrl("/dashboard")} onClick={() => setOpen(false)} className="rounded-xl border border-dtsc-border px-4 py-3 text-center font-semibold text-dtsc-blue">Accès client</Link><Link href="/contact" onClick={() => setOpen(false)} className="rounded-xl bg-dtsc-blue px-4 py-3 text-center font-semibold text-white">Demander une consultation</Link></div></div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

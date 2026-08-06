@@ -1,7 +1,6 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
-
-const appUrl = process.env.APP_URL || "https://dtsc-platform.com";
+import { getPublicBaseUrl } from "@/lib/domains";
 
 const publicRoutes = [
   { path: "/", priority: 1 },
@@ -21,9 +20,10 @@ const publicRoutes = [
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const publicBaseUrl = getPublicBaseUrl() || "https://dtsc-platform.com";
   const now = new Date();
   const staticEntries = publicRoutes.map((route) => ({
-    url: new URL(route.path, appUrl).toString(),
+    url: new URL(route.path, publicBaseUrl).toString(),
     lastModified: now,
     changeFrequency: route.path === "/" ? ("weekly" as const) : ("monthly" as const),
     priority: route.priority,
@@ -34,13 +34,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       where: { published: true },
       select: { slug: true, updatedAt: true },
       orderBy: { updatedAt: "desc" },
-      take: 200,
+      take: 500,
     });
-
     return [
       ...staticEntries,
       ...publications.map((publication) => ({
-        url: new URL(`/ressources/${publication.slug}`, appUrl).toString(),
+        url: new URL(`/ressources/${publication.slug}`, publicBaseUrl).toString(),
         lastModified: publication.updatedAt,
         changeFrequency: "monthly" as const,
         priority: 0.72,

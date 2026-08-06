@@ -26,41 +26,13 @@ export const dtsc = {
   businessModel:
     "Un accompagnement flexible autour des 7 leviers numériques officiels, avec cadrage, exécution, formation et suivi des gains mesurables.",
   organizationRoles: [
-    {
-      title: "Chief Executive Officer — CEO",
-      mission:
-        "Définit la vision stratégique, représente DTSC auprès des partenaires et supervise les objectifs commerciaux, financiers et opérationnels.",
-    },
-    {
-      title: "Chief Operations Officer — COO",
-      mission:
-        "Transforme la stratégie en actions concrètes, coordonne l'exécution des projets et veille à la discipline opérationnelle.",
-    },
-    {
-      title: "Chief Technical Officer — CTO",
-      mission:
-        "Pilote la stratégie technologique, l'architecture, la qualité, la sécurité et l'évolutivité des solutions digitales, data et IA.",
-    },
-    {
-      title: "Human Resources and Chief Financial Officer — HR & CFO",
-      mission:
-        "Assure la gestion administrative, financière et humaine: budgets, dépenses, factures, dossiers RH et stabilité interne.",
-    },
-    {
-      title: "Legal Advisor — LA",
-      mission:
-        "Sécurise les contrats, accompagne la conformité, protège les intérêts juridiques et réduit les risques administratifs.",
-    },
-    {
-      title: "Management & Projects Officer — MPO",
-      mission:
-        "Pilote le portefeuille des projets numériques, cadre les besoins, suit les cahiers de charges, livrables, risques et coordinations avec CTO, COO, HR & CFO, SCO et CEO.",
-    },
-    {
-      title: "Supply Chain Officer — SCO",
-      mission:
-        "Gère les achats, ressources matérielles, fournisseurs, stocks, inventaire et logistique des formations, missions et événements.",
-    },
+    { title: "Chief Executive Officer — CEO", mission: "Définit la vision stratégique, représente DTSC et supervise les objectifs globaux." },
+    { title: "Chief Operations Officer — COO", mission: "Transforme la stratégie en actions concrètes et coordonne l'exécution." },
+    { title: "Chief Technical Officer — CTO", mission: "Pilote la stratégie technologique, la sécurité et l'évolutivité des solutions." },
+    { title: "Human Resources and Chief Financial Officer — HR & CFO", mission: "Assure la gestion administrative, financière et humaine." },
+    { title: "Legal Advisor — LA", mission: "Sécurise les contrats, la conformité et les engagements de DTSC." },
+    { title: "Management & Projects Officer — MPO", mission: "Cadre, suit et coordonne les projets numériques." },
+    { title: "Supply Chain Officer — SCO", mission: "Gère les achats, fournisseurs, stocks, actifs et besoins logistiques." },
   ],
   advantages: [
     "Décisions guidées par des indicateurs fiables",
@@ -72,6 +44,6 @@ export const dtsc = {
 };
 
 export const defaultAdmin = {
-  email: process.env.DEFAULT_ADMIN_EMAIL || process.env.ADMIN_EMAIL || "admin@dtsc-platform.com",
-  password: process.env.DEFAULT_ADMIN_PASSWORD || "DtscAdmin2026!",
+  email: process.env.DEFAULT_ADMIN_EMAIL || process.env.ADMIN_EMAIL,
+  password: process.env.DEFAULT_ADMIN_PASSWORD,
 };
