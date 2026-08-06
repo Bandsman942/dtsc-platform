@@ -3,6 +3,7 @@ import { ArrowUpRight, Mail, MapPin, MessageCircleMore, Sparkles } from "lucide-
 import { VisitTracker } from "@/components/analytics/visit-tracker";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { PublicNav } from "@/components/public/public-nav";
+import { PublicScrollAnimator } from "@/components/public/public-scroll-animator";
 import { dtsc } from "@/lib/dtsc";
 
 const columns = [
@@ -14,6 +15,7 @@ const columns = [
 export function PublicHeader() {
   return (
     <header className="dtsc-public-header sticky top-0 z-[90] border-b border-dtsc-border/80 backdrop-blur-2xl">
+      <PublicScrollAnimator />
       <VisitTracker />
       <div className="mx-auto flex min-h-[4.75rem] max-w-[92rem] items-center justify-between gap-3 px-4 py-3 sm:gap-5 sm:px-6 lg:px-8">
         <div className="min-w-0 max-w-[min(68vw,19rem)] sm:max-w-sm">
@@ -36,6 +38,9 @@ export function PublicFooter() {
         <div>
           <DtscLogo href="/" />
           <p className="mt-5 max-w-md text-sm leading-7 text-dtsc-muted">{dtsc.summary}</p>
+          <p className="mt-3 max-w-md text-sm leading-7 text-dtsc-muted">
+            DTSC Platform est notre produit numérique : il prolonge les prestations DTSC en centralisant les interactions, les processus, les modules métier, les données et le suivi quotidien.
+          </p>
           <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-dtsc-border bg-dtsc-page px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-dtsc-blue">
             <Sparkles className="h-4 w-4 text-cyan-500" />
             {dtsc.slogan}
