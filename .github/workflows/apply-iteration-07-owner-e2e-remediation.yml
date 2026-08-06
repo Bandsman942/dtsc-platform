@@ -33,7 +33,11 @@ jobs:
           45618254e3c35729fac23d53a65c881b1b3e03abadc7a4e4c220426c6948f171  .transfer/iteration07/chunk-04
           55cbd7bb0abcd6ef57680dc23185e6dbbbdfbe736692c4e24c46d5ecca122f8d  .transfer/iteration07/chunk-05
           7261f27f725bbbbef99e1dac343e0ea174c91d85ac0ae8c52de3a963140057f3  .transfer/iteration07/chunk-06a
-          f0d2441fb3fec1e1798fb48bfaabe7c66c9fde3935136dcdfd1ae888cdfb4b32  .transfer/iteration07/chunk-06b
+          eec8432141c54c368d379b732d6fe3d38298af090df7b44a9eb9582477a71f96  .transfer/iteration07/chunk-06b1
+          77a0ef2c55ca0d094909677ca735a42b9100be5df28a2f73483f7db62121a300  .transfer/iteration07/chunk-06b2
+          de0bc69170d5896e96a7f831aee00434ca6171cb59c32aa63d0c91969f5be979  .transfer/iteration07/chunk-06b3
+          bf0dd8149127054b7c05922aceb40300bc33c7eb6b21103df6c9e15d23581861  .transfer/iteration07/chunk-06b4
+          33ade00d7efd8a0581b3cb2a1e76a6b774f7ab38d3c4c3f60e6821da43cbe991  .transfer/iteration07/chunk-06b5
           e76badfe55c82267c84126fa14098264375fb60a3130cb906cdbaa4295ca4444  .transfer/iteration07/chunk-06c
           41dcde582402e774e894c47a868884ebd39d4d83e78a0c6bbadf2f5ebd5ad3dc  .transfer/iteration07/chunk-07
           a1c3d039673dcdfd3f65a98abb4aab1625356e6a9a75498f2a80378dc52e2e3d  .transfer/iteration07/chunk-08
