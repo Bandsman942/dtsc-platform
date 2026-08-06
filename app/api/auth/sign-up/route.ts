@@ -33,11 +33,6 @@ export async function POST(req: Request) {
   const policyError = passwordPolicyError(body.data.password);
   if (policyError) return NextResponse.json({ error: policyError, reason: "PASSWORD_POLICY_FAILED" }, { status: 400 });
 
-  const existingUser = await prisma.user.findUnique({ where: { email: body.data.email }, select: { id: true } });
-  if (existingUser) {
-    return NextResponse.json({ error: "Impossible de créer ce compte avec les informations fournies.", reason: "REGISTRATION_UNAVAILABLE" }, { status: 409 });
-  }
-
   const role = process.env.ADMIN_EMAIL?.toLowerCase() === body.data.email ? UserRole.ADMIN : UserRole.CLIENT;
   const settings = await getAppSettings();
 
@@ -65,6 +60,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Code de vérification invalide ou expiré.", reason: verification.reason }, { status });
     }
     verifiedPendingRegistration = verification.pendingRegistration;
+  }
+
+  const existingUser = await prisma.user.findUnique({ where: { email: body.data.email }, select: { id: true } });
+  if (existingUser) {
+    if (settings.signUpOtpEnabled) await prisma.pendingRegistration.delete({ where: { email: body.data.email } }).catch(() => null);
+    return NextResponse.json({ error: "Impossible de créer ce compte avec les informations fournies.", reason: "REGISTRATION_UNAVAILABLE" }, { status: 409 });
   }
 
   const plans = await ensureBillingPlans();
