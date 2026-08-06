@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { PWARegister } from "@/components/pwa/pwa-register";
-import { ProfessionalToolbox } from "@/components/productivity/professional-toolbox";
+import { ProductScopedProfessionalToolbox } from "@/components/productivity/product-scoped-professional-toolbox";
 import { FloatingActionHubProvider } from "@/components/floating-actions/floating-action-hub";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { dtsc } from "@/lib/dtsc";
@@ -160,7 +160,7 @@ export default function RootLayout({
           <ToastProvider />
           <FloatingActionHubProvider>
             {children}
-            <ProfessionalToolbox />
+            <ProductScopedProfessionalToolbox />
           </FloatingActionHubProvider>
         </ThemeProvider>
       </body>

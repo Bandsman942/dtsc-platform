@@ -7,7 +7,9 @@ function read(file) { const target = path.join(root, file); if (!fs.existsSync(t
 function requireText(file, needles) { const content = read(file); for (const needle of needles) if (!content.includes(needle)) failures.push(`${file}: contrat absent: ${needle}`); }
 function forbidText(file, needles) { const content = read(file); for (const needle of needles) if (content.includes(needle)) failures.push(`${file}: motif interdit: ${needle}`); }
 
-requireText("app/layout.tsx", ["ProfessionalToolbox", "<ProfessionalToolbox />"]);
+requireText("app/layout.tsx", ["FloatingActionHubProvider", "ProductScopedProfessionalToolbox", "<ProductScopedProfessionalToolbox />"]);
+requireText("components/productivity/product-scoped-professional-toolbox.tsx", ["ProfessionalToolbox", "getCurrentHostType", "isToolboxHostEnabled"]);
+forbidText("app/layout.tsx", ["<ProfessionalToolbox />"]);
 requireText("components/productivity/professional-toolbox.tsx", ["/api/toolbox/notes", "ScientificExpressionParser", "RichTextEditor", "Pense-bête"]);
 forbidText("components/productivity/professional-toolbox.tsx", ["eval(", "new Function(", "Function(`"]);
 

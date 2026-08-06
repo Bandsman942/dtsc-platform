@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MoreVertical, X, type LucideIcon } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { getCurrentHostType, type HostType } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 
 export type FloatingActionDefinition = {
@@ -20,9 +21,14 @@ type FloatingActionRegistry = {
 
 const FloatingActionContext = createContext<FloatingActionRegistry | null>(null);
 
+function isFloatingActionHostEnabled(hostType: HostType | null) {
+  return hostType === "app" || hostType === "console" || hostType === "support" || hostType === "local";
+}
+
 export function FloatingActionHubProvider({ children }: { children: ReactNode }) {
   const [actions, setActions] = useState<Record<string, FloatingActionDefinition>>({});
   const [open, setOpen] = useState(false);
+  const [hostType, setHostType] = useState<HostType | null>(null);
   const locale = useAppLocale() || "fr";
 
   const register = useCallback((action: FloatingActionDefinition) => {
@@ -37,22 +43,34 @@ export function FloatingActionHubProvider({ children }: { children: ReactNode })
     };
   }, []);
 
+  // The context value must remain referentially stable. An inline object here
+  // makes every registered action unsubscribe and subscribe again after each
+  // state update, which creates a render loop and can freeze the application.
+  const registry = useMemo<FloatingActionRegistry>(() => ({ register }), [register]);
+
   const sortedActions = useMemo(
     () => Object.values(actions).sort((left, right) => (left.order || 100) - (right.order || 100) || left.label.localeCompare(right.label)),
     [actions],
   );
 
   useEffect(() => {
-    if (!sortedActions.length) setOpen(false);
-  }, [sortedActions.length]);
+    setHostType(getCurrentHostType(window.location.host));
+  }, []);
+
+  useEffect(() => {
+    if (!sortedActions.length || !isFloatingActionHostEnabled(hostType)) setOpen(false);
+  }, [hostType, sortedActions.length]);
+
+  const hubEnabled = isFloatingActionHostEnabled(hostType);
 
   return (
-    <FloatingActionContext.Provider value={{ register }}>
+    <FloatingActionContext.Provider value={registry}>
       {children}
-      {sortedActions.length ? (
+      {hubEnabled && sortedActions.length ? (
         <div
           className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[950] flex max-h-[min(72dvh,38rem)] flex-col items-end gap-2 sm:right-6"
           data-floating-action-hub
+          data-product-host={hostType}
         >
           {open ? (
             <div className="flex max-h-[calc(72dvh-4rem)] flex-col items-end gap-2 overflow-y-auto overscroll-contain pb-1 pr-1" role="menu" aria-label={locale === "en" ? "Quick actions" : "Actions rapides"}>
