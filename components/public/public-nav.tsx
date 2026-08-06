@@ -64,6 +64,7 @@ export function PublicNav() {
   useEffect(() => {
     if (!open) return;
 
+    const triggerElement = triggerRef.current;
     const previousOverflow = document.body.style.overflow;
     const previousOverscroll = document.body.style.overscrollBehavior;
     document.body.style.overflow = "hidden";
@@ -97,7 +98,7 @@ export function PublicNav() {
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscroll;
       document.removeEventListener("keydown", onKeyDown);
-      triggerRef.current?.focus();
+      triggerElement?.focus();
     };
   }, [open]);
 
