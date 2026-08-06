@@ -1,0 +1,61 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const failures = [];
+const read = (file) => {
+  const target = path.join(root, file);
+  if (!fs.existsSync(target)) { failures.push(`Fichier absent: ${file}`); return ""; }
+  return fs.readFileSync(target, "utf8");
+};
+const requireText = (file, needles) => {
+  const content = read(file);
+  for (const needle of needles) if (!content.includes(needle)) failures.push(`${file}: contrat absent: ${needle}`);
+};
+const forbidText = (file, needles) => {
+  const content = read(file);
+  for (const needle of needles) if (content.includes(needle)) failures.push(`${file}: motif interdit: ${needle}`);
+};
+
+requireText("prisma/schema.prisma", ["model ProfessionalToolNote", "professionalToolNotes"]);
+requireText("prisma/migrations/20260806110000_iteration_07_e2e_remediation_v3/migration.sql", ["CREATE TABLE \"ProfessionalToolNote\"", "ProfessionalToolNote_userId_fkey"]);
+requireText("app/api/toolbox/notes/route.ts", ["isSameOriginRequest", "await rateLimit", "professionalToolNote", "writeAuditLog"]);
+requireText("app/api/toolbox/notes/[id]/route.ts", ["userId: session.userId", "archivedAt", "writeAuditLog"]);
+requireText("components/productivity/professional-toolbox.tsx", ["RichTextEditor", "NoteView", "Grouping", "ScientificExpressionParser", "calculateFinance", "useFloatingAction"]);
+forbidText("components/productivity/professional-toolbox.tsx", ["localStorage", "eval(", "new Function(", "Function(`"]);
+
+requireText("components/activities/work-prestations-panel-v2.tsx", ["weeklyGrouping", '"workType"', '"locationMode"', "EntityCommentsThread"]);
+requireText("components/activities/entity-comments-thread.tsx", ["WORK_ENTRY", "WORK_SUBMISSION", "/api/activities/comments"]);
+requireText("app/api/activities/comments/route.ts", ["WORK_ENTRY", "WORK_SUBMISSION", "reviewerEmployeeId"]);
+requireText("lib/operational-progress.ts", ["calculateDerivedOperationalProgress", "validateOperationalClosure", "syncDerivedOperationalProgress", "openLinkedTasks"]);
+requireText("app/api/activities/status-transitions/[entityType]/[id]/route.ts", ["validateOperationalClosure", "syncDerivedOperationalProgress"]);
+requireText("app/api/operations/checklists/route.ts", ["syncDerivedOperationalProgress"]);
+forbidText("lib/validators.ts", ["progress: z.coerce.number().int().min(0).max(100).optional()"]);
+
+requireText("components/floating-actions/floating-action-hub.tsx", ["FloatingActionHubProvider", "useFloatingAction", "Actions rapides", "safe-area-inset-bottom"]);
+requireText("app/layout.tsx", ["FloatingActionHubProvider", "ProfessionalToolbox"]);
+requireText("components/user-guides/standard-module-fallback-guide.tsx", ["useFloatingAction", "hideTrigger"]);
+
+requireText("lib/billing.ts", ["billing-plans.bootstrap.json", "createMany"]);
+requireText("lib/billing/ai-usage-limits.ts", ["getCanonicalAiUsageLimits", "ORGANIZATION_SUBSCRIPTION", "PERSONAL_SUBSCRIPTION"]);
+requireText("lib/billing/entitlements.ts", ["resolveOrganizationUsageLimits", "dailyMessageLimit", "maxEnterpriseAiMonthlyTokens"]);
+requireText("components/admin/billing-plan-manager.tsx", ["Offres individuelles", "Offres d’organisation", "offerGroup.code", "audienceCode"]);
+requireText("app/api/chat/route.ts", ["getCanonicalAiUsageLimits"]);
+requireText("app/api/chat/v2/route.ts", ["getCanonicalAiUsageLimits"]);
+
+requireText("lib/standard-collaboration.ts", ["getAcceptedCollaborationContacts", "contactSince"]);
+requireText("components/collaborators/collaborators-conversation-workspace.tsx", ["initialContacts", "Mes contacts", "historyExpandedRef", "previousHeight"]);
+requireText("app/api/collaborators/contact-requests/route.ts", ["ADMIN DTSC", "session.role === UserRole.ADMIN"]);
+
+requireText("scripts/audit-user-guide-contract.mjs", ["Contrat de guide DTSC v2", "PROFESSIONAL_TOOLBOX.md"]);
+requireText("scripts/audit-iteration-07-i18n-contract.mjs", ["i18n-hardcoded-baseline.json", "bilingualContracts"]);
+requireText(".github/workflows/quality-gates.yml", ["User guide contract QA", "Iteration 07 i18n contract QA", "Iteration 07 owner E2E remediation v3 QA"]);
+requireText("docs/user-guides/PROFESSIONAL_TOOLBOX.md", ["plusieurs notes", "Kanban", "Scientifique", "Financière"]);
+
+if (fs.existsSync(path.join(root, ".github/workflows/export-source-artifact.yml"))) failures.push("Le workflow temporaire d’export source doit être retiré avant fusion.");
+
+if (failures.length) {
+  console.error(failures.map((failure) => `✗ ${failure}`).join("\n"));
+  process.exit(1);
+}
+console.log("✓ Correctifs E2E propriétaire v3 de l’itération 07 couverts");

@@ -10,10 +10,15 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { translate } from "@/lib/i18n";
 import type { ContextualUserGuide } from "@/lib/user-guides/iteration04-guides";
 
-export function ContextualUserGuide({ guide, compact = false }: { guide: ContextualUserGuide; compact?: boolean }) {
+export function ContextualUserGuide({ guide, compact = false, open: controlledOpen, onOpenChange, hideTrigger = false }: { guide: ContextualUserGuide; compact?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
   const locale = useAppLocale() || "fr";
   const t = (key: string) => translate(locale, key);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleSteps = useMemo(() => {
@@ -28,16 +33,18 @@ export function ContextualUserGuide({ guide, compact = false }: { guide: Context
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => setOpen(true)}
-        className="shrink-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"
-        aria-label={`${t("userGuides.common.open")} ${guide.title}`}
-      >
-        <BookOpenCheck className="h-4 w-4" />
-        {compact ? t("userGuides.common.guide") : t("userGuides.common.userGuide")}
-      </Button>
+      {!hideTrigger ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setOpen(true)}
+          className="shrink-0 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"
+          aria-label={`${t("userGuides.common.open")} ${guide.title}`}
+        >
+          <BookOpenCheck className="h-4 w-4" />
+          {compact ? t("userGuides.common.guide") : t("userGuides.common.userGuide")}
+        </Button>
+      ) : null}
 
       <Dialog
         open={open}

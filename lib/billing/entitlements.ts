@@ -162,6 +162,25 @@ function registryDecision({
   };
 }
 
+
+function resolveOrganizationUsageLimits(
+  planCode: SaasPlanCode,
+  plan?: { dailyMessageLimit?: number | null; dailyTokenLimit?: number | null; maxDocuments?: number | null } | null,
+): OrganizationUsageLimits {
+  const defaults = getPlanUsageLimits(planCode);
+  if (!plan) return defaults;
+  const dailyMessages = Math.max(1, plan.dailyMessageLimit || Math.ceil(defaults.maxEnterpriseAiMonthlyMessages / 30));
+  const dailyTokens = Math.max(1, plan.dailyTokenLimit || defaults.maxEnterpriseAiMonthlyTokens / 30);
+  const documents = Math.max(0, plan.maxDocuments ?? defaults.maxDocuments);
+  return {
+    ...defaults,
+    maxDocuments: documents,
+    maxEnterpriseAiMonthlyMessages: dailyMessages * 30,
+    maxEnterpriseAiMonthlyTokens: dailyTokens * 30,
+    maxEnterpriseAiKnowledgeSources: documents,
+  };
+}
+
 export async function getOrganizationEntitlements(organizationId: string | null | undefined): Promise<OrganizationEntitlements | null> {
   if (!organizationId) {
     return null;
@@ -197,7 +216,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
       subscriptions: {
         orderBy: [{ createdAt: "desc" }],
         take: 1,
-        include: { plan: { select: { id: true, slug: true, name: true } } },
+        include: { plan: { select: { id: true, slug: true, name: true, dailyMessageLimit: true, dailyTokenLimit: true, maxDocuments: true } } },
       },
       enterpriseModules: {
         select: { id: true, moduleCode: true, isEnabled: true, isCore: true, requiresPlanLevel: true },
@@ -212,7 +231,7 @@ export async function getOrganizationEntitlements(organizationId: string | null 
   const subscription = organization.subscriptions[0] || null;
   const planCode = resolveSaasPlanCode(subscription?.plan);
   const subscriptionActive = organization.status === "ACTIVE" && subscriptionDateValid(subscription);
-  const limits = getPlanUsageLimits(planCode);
+  const limits = resolveOrganizationUsageLimits(planCode, subscription?.plan);
   const modules = organization.enterpriseModules.map((enterpriseModule) => {
     const configuredPlan = normalizePlanRequirement(enterpriseModule.requiresPlanLevel);
     const registry = registryDecision({

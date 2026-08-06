@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
+import { OperationalChecklistPanel } from "@/components/operations/operational-checklist-panel";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
@@ -16,6 +17,7 @@ import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import type { OperationDataset, OperationField, OperationRecord } from "@/lib/admin-operations-types";
 import { formatEnumLabel } from "@/lib/labels";
+import type { OperationalObjectType } from "@/lib/operational-access";
 
 const maxOperationFileSize = 6_000_000;
 const medicalProjectFieldNames = new Set([
@@ -27,6 +29,24 @@ const medicalProjectFieldNames = new Set([
   "healthValidation",
   "ethicalCompliance",
 ]);
+
+function resolveAdminChecklistType(dataset: OperationDataset): OperationalObjectType | null {
+  const endpoint = dataset.endpoint.toLowerCase();
+  if (endpoint.includes("/admin/coo/operations")) return "OPERATION";
+  if (endpoint.includes("/admin/coo/tasks")) return "TASK";
+  if (endpoint.includes("/admin/coo/departmentrequests")) return "DEPARTMENT_REQUEST";
+  if (endpoint.includes("/admin/coo/blockers")) return "BLOCKER";
+  if (endpoint.includes("/admin/coo/meetings")) return "MEETING";
+  if (endpoint.includes("/admin/ceo/objectives")) return "CEO_OBJECTIVE";
+  if (endpoint.includes("/admin/ceo/supervisionlogs")) return "CEO_SUPERVISION";
+  if (endpoint.includes("/admin/sco/purchaserequests")) return "SCO_PURCHASE_REQUEST";
+  if (endpoint.includes("/admin/sco/logistics")) return "SCO_LOGISTICS";
+  if (endpoint.includes("/admin/mpo/projects")) return "MPO_PROJECT";
+  if (endpoint.includes("/admin/mpo/records")) return "MPO_RECORD";
+  if (endpoint.includes("/admin/cto/projects")) return "CTO_PROJECT";
+  if (endpoint.includes("/admin/cto/records")) return "CTO_RECORD";
+  return null;
+}
 
 export function OperationsAdminPanel({
   eyebrow,
@@ -371,6 +391,7 @@ function RecordRow({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const attachmentHref = typeof record.href === "string" && record.href.length > 0 ? record.href : undefined;
+  const checklistType = resolveAdminChecklistType(dataset);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -400,7 +421,16 @@ function RecordRow({
       />
       {attachmentHref ? <FileAttachmentPreview href={attachmentHref} label={record.hrefLabel || "Document joint"} compact /> : null}
       <Dialog open={editOpen} title={`Modifier: ${record.title}`} description="Mettez à jour les informations de l'opération puis envoyez la modification au serveur." onClose={() => setEditOpen(false)} className="h-[92dvh] max-w-5xl">
-        <OperationForm fields={dataset.fields} defaults={{ ...(record.values || {}), status: record.status, notes: record.notes || "" }} disabled={!canEdit} onSubmit={submit} submitLabel="Enregistrer les modifications" submitIcon="save" />
+        <div className="space-y-5">
+          {checklistType ? (
+            <OperationalChecklistPanel
+              objectType={checklistType}
+              objectId={record.id}
+              title="Tâches et résultats qui gouvernent la progression"
+            />
+          ) : null}
+          <OperationForm fields={dataset.fields} defaults={{ ...(record.values || {}), status: record.status, notes: record.notes || "" }} disabled={!canEdit} onSubmit={submit} submitLabel="Enregistrer les modifications" submitIcon="save" />
+        </div>
       </Dialog>
       <Dialog
         open={confirmDelete}

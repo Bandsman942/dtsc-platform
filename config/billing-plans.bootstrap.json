@@ -1,0 +1,86 @@
+[
+  {
+    "id": "freemium",
+    "name": "Découverte individuelle",
+    "slug": "freemium",
+    "description": "Accès individuel gratuit et limité pour découvrir DTSC Platform.",
+    "audience": "PERSONAL",
+    "priceUsd": 0,
+    "dailyMessageLimit": 5,
+    "dailyTokenLimit": 15000,
+    "maxDocuments": 1,
+    "sortOrder": 1
+  },
+  {
+    "id": "starter",
+    "name": "Individuel Essentiel",
+    "slug": "starter",
+    "description": "Usage individuel léger pour indépendants et premiers besoins professionnels.",
+    "audience": "PERSONAL",
+    "priceUsd": 2,
+    "dailyMessageLimit": 40,
+    "dailyTokenLimit": 120000,
+    "maxDocuments": 2,
+    "sortOrder": 2
+  },
+  {
+    "id": "growth",
+    "name": "Individuel Professionnel",
+    "slug": "growth",
+    "description": "Usage individuel régulier avec capacités étendues d’analyse et de documentation.",
+    "audience": "PERSONAL",
+    "priceUsd": 15,
+    "dailyMessageLimit": 200,
+    "dailyTokenLimit": 750000,
+    "maxDocuments": 20,
+    "sortOrder": 3
+  },
+  {
+    "id": "premium",
+    "name": "Individuel Premium",
+    "slug": "premium",
+    "description": "Usage individuel intensif avec capacité documentaire renforcée et support prioritaire.",
+    "audience": "PERSONAL",
+    "priceUsd": 50,
+    "dailyMessageLimit": 1000,
+    "dailyTokenLimit": 3000000,
+    "maxDocuments": 100,
+    "sortOrder": 4
+  },
+  {
+    "id": "org-starter",
+    "name": "Organisation Essentielle",
+    "slug": "org-starter",
+    "description": "Socle professionnel pour une petite organisation et ses premiers modules DTSC.",
+    "audience": "ORGANIZATION",
+    "priceUsd": 25,
+    "dailyMessageLimit": 500,
+    "dailyTokenLimit": 1500000,
+    "maxDocuments": 50,
+    "sortOrder": 10
+  },
+  {
+    "id": "org-growth",
+    "name": "Organisation Croissance",
+    "slug": "org-growth",
+    "description": "Capacités étendues pour une organisation en croissance, ses équipes et ses opérations.",
+    "audience": "ORGANIZATION",
+    "priceUsd": 75,
+    "dailyMessageLimit": 2000,
+    "dailyTokenLimit": 6000000,
+    "maxDocuments": 250,
+    "sortOrder": 11
+  },
+  {
+    "id": "org-premium",
+    "name": "Organisation Premium",
+    "slug": "org-premium",
+    "description": "Offre avancée pour organisations avec capacités renforcées, gouvernance et support prioritaire.",
+    "audience": "ORGANIZATION",
+    "priceUsd": 180,
+    "dailyMessageLimit": 10000,
+    "dailyTokenLimit": 30000000,
+    "maxDocuments": 1000,
+    "sortOrder": 12
+  }
+]

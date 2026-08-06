@@ -16,6 +16,7 @@ import { getCompanyContextForUser } from "@/lib/company-context";
 import { performPrivateChatActionFromHistory } from "@/lib/private-chat-actions";
 import { writeApiLog } from "@/lib/audit";
 import { getActiveOrganizationId } from "@/lib/organizations";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
 export const maxDuration = 60;
 
@@ -94,8 +95,6 @@ export async function POST(req: Request) {
     select: {
       id: true,
       status: true,
-      dailyMessageLimit: true,
-      dailyTokenLimit: true,
       preferredModel: true,
       chatResponseStyle: true,
       chatResponseLength: true,
@@ -117,7 +116,7 @@ export async function POST(req: Request) {
   today.setHours(0, 0, 0, 0);
   const resetAt = new Date(today);
   resetAt.setDate(resetAt.getDate() + 1);
-  const [messagesToday, tokensToday] = await Promise.all([
+  const [messagesToday, tokensToday, usageLimits] = await Promise.all([
     prisma.message.count({
       where: { userId: session.userId, organizationId, role: "user", createdAt: { gte: today } },
     }),
@@ -125,10 +124,11 @@ export async function POST(req: Request) {
       where: { userId: session.userId, organizationId, createdAt: { gte: today } },
       _sum: { totalTokens: true },
     }),
+    getCanonicalAiUsageLimits({ userId: session.userId, organizationId }),
   ]);
 
   const totalTokensToday = tokensToday._sum.totalTokens ?? 0;
-  if (messagesToday >= user.dailyMessageLimit || totalTokensToday >= user.dailyTokenLimit) {
+  if (messagesToday >= usageLimits.dailyMessageLimit || totalTokensToday >= usageLimits.dailyTokenLimit) {
     await writeApiLog({ request: req, statusCode: 429, userId: session.userId, startedAt, metadata: { code: "DAILY_LIMIT_REACHED" } });
     return NextResponse.json(
       {
@@ -136,9 +136,9 @@ export async function POST(req: Request) {
         code: "DAILY_LIMIT_REACHED",
         usage: {
           messagesToday,
-          dailyMessageLimit: user.dailyMessageLimit,
+          dailyMessageLimit: usageLimits.dailyMessageLimit,
           tokensToday: totalTokensToday,
-          dailyTokenLimit: user.dailyTokenLimit,
+          dailyTokenLimit: usageLimits.dailyTokenLimit,
           resetAt: resetAt.toISOString(),
         },
       },

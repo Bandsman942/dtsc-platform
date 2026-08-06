@@ -22,6 +22,9 @@ type ChecklistState = {
   total: number;
   progress: number;
   canManage: boolean;
+  derivedTotal?: number;
+  derivedCompleted?: number;
+  openLinkedTasks?: number;
 };
 
 export function OperationalChecklistPanel({
@@ -129,7 +132,10 @@ export function OperationalChecklistPanel({
             <ListChecks className="h-5 w-5 text-cyan-600" />
             <h4 className="font-black text-dtsc-ink">{title}</h4>
           </div>
-          <p className="mt-1 text-xs leading-5 text-dtsc-muted">La progression est calculée automatiquement : {state.completed}/{state.total} élément(s) réalisé(s).</p>
+          <p className="mt-1 text-xs leading-5 text-dtsc-muted">
+            La progression est calculée automatiquement : {state.derivedCompleted ?? state.completed}/{state.derivedTotal ?? state.total} tâche(s) ou résultat(s) réalisé(s).
+            {state.openLinkedTasks ? ` ${state.openLinkedTasks} tâche(s) liée(s) restent ouvertes.` : ""}
+          </p>
         </div>
         <span className="shrink-0 rounded-full bg-cyan-400/15 px-3 py-1.5 text-sm font-black text-cyan-700">{state.progress}%</span>
       </div>

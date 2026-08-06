@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     hasDtscIndividualPermission(session.userId, DTSC_SPECIAL_PERMISSIONS.SUBMIT_PAST_WORK_PERIOD),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ ...state, capabilities: { canSubmitPastPeriods } });
+  return NextResponse.json({ ...state, capabilities: { canSubmitPastPeriods }, viewer: { id: session.userId, role: session.role } });
 }
 
 export async function POST(req: Request) {

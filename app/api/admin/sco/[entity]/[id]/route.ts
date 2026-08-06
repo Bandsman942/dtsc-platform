@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { syncDerivedOperationalProgress, validateOperationalClosure } from "@/lib/operational-progress";
 import { scoSchemas } from "@/lib/validators";
 
 type Params = { params: Promise<{ entity: string; id: string }> };
@@ -50,7 +51,14 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   try {
-    const record = await updateRecord(entity, id, body.data as Record<string, unknown>);
+    const updateData = body.data as Record<string, unknown>;
+    const checklistType = entity === "purchaseRequests" ? "SCO_PURCHASE_REQUEST" : entity === "logistics" ? "SCO_LOGISTICS" : null;
+    if (checklistType && typeof updateData.status === "string") {
+      const closureError = await validateOperationalClosure(checklistType, id, updateData.status);
+      if (closureError) throw new Error(closureError);
+    }
+    const record = await updateRecord(entity, id, updateData);
+    if (checklistType) await syncDerivedOperationalProgress(checklistType, id);
     await notifyScoFlow(entity, id, session.userId);
     await writeAuditLog({
       userId: session.userId,

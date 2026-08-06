@@ -10,6 +10,14 @@ const CHECKLIST_OBJECT_TYPES: Partial<Record<ActivityItem["entityType"], Operati
   BLOCKER: "BLOCKER",
   MEETING: "MEETING",
   COLLAB_REQUEST: "COLLAB_REQUEST",
+  CEO_OBJECTIVE: "CEO_OBJECTIVE",
+  CEO_SUPERVISION: "CEO_SUPERVISION",
+  SCO_PURCHASE_REQUEST: "SCO_PURCHASE_REQUEST",
+  SCO_LOGISTICS: "SCO_LOGISTICS",
+  MPO_PROJECT: "MPO_PROJECT",
+  MPO_RECORD: "MPO_RECORD",
+  CTO_PROJECT: "CTO_PROJECT",
+  CTO_RECORD: "CTO_RECORD",
 };
 
 export function ActivityDetailV2({
@@ -32,7 +40,7 @@ export function ActivityDetailV2({
         <OperationalChecklistPanel
           objectType={checklistObjectType}
           objectId={item.id}
-          title="Résultats à réaliser"
+          title="Tâches et résultats à réaliser"
         />
       ) : null}
       <ActivityDetail

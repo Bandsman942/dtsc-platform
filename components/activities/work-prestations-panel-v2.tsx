@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { AlertTriangle, CheckCircle2, Clock3, Columns3, Eye, List, Pencil, Plus, Search, Send, SlidersHorizontal, Trash2 } from "lucide-react";
+import { EntityCommentsThread } from "@/components/activities/entity-comments-thread";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
@@ -59,6 +60,7 @@ type WorkState = {
   currentSubmission: WorkSubmission;
   submissions: WorkSubmission[];
   capabilities?: { canSubmitPastPeriods?: boolean };
+  viewer?: { id: string; role: string };
 };
 
 type EntryForm = {
@@ -79,10 +81,12 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
   const [message, setMessage] = useState("");
   const [entryDialog, setEntryDialog] = useState<{ open: boolean; entry?: WorkEntry; submission?: WorkSubmission }>({ open: false });
   const [selectedSubmission, setSelectedSubmission] = useState<WorkSubmission | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<{ entry: WorkEntry; submission: WorkSubmission } | null>(null);
   const [submitTarget, setSubmitTarget] = useState<WorkSubmission | null>(null);
   const [conflictMessage, setConflictMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [weeklyView, setWeeklyView] = useState<"list" | "kanban">("kanban");
+  const [weeklyGrouping, setWeeklyGrouping] = useState<"locationMode" | "workType">("locationMode");
   const [historyView, setHistoryView] = useState<"list" | "kanban">("kanban");
   const [historyStatus, setHistoryStatus] = useState("ALL");
   const [historyQuery, setHistoryQuery] = useState("");
@@ -109,7 +113,7 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
   const currentEditable = Boolean(current && isEditable(current));
   const workedDays = useMemo(() => new Set((current?.entries || []).map((entry) => entry.workDate)).size, [current?.entries]);
   const scheduleIssues = useMemo(() => (current?.entries || []).filter(hasScheduleIssue).length, [current?.entries]);
-  const weeklyLocationColumns = useMemo(() => groupEntriesByLocation(current?.entries || []), [current?.entries]);
+  const weeklyColumns = useMemo(() => groupEntries(current?.entries || [], weeklyGrouping, english), [current?.entries, english, weeklyGrouping]);
   const filteredHistory = useMemo(() => {
     const query = historyQuery.trim().toLocaleLowerCase();
     return (state?.submissions || []).filter((submission) => {
@@ -203,7 +207,7 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
                 <button type="button" onClick={() => setWeeklyView("list")} className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black ${weeklyView === "list" ? "border-cyan-400 bg-cyan-400/15 text-cyan-800 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted"}`}><List className="h-4 w-4" /> {english ? "Compact list" : "Liste compacte"}</button>
                 <button type="button" onClick={() => setWeeklyView("kanban")} className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black ${weeklyView === "kanban" ? "border-cyan-400 bg-cyan-400/15 text-cyan-800 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted"}`}><Columns3 className="h-4 w-4" /> Kanban</button>
               </div>
-              <p className="inline-flex items-center gap-2 text-xs font-bold text-dtsc-muted"><SlidersHorizontal className="h-4 w-4" /> {english ? "Kanban grouped by work mode" : "Kanban organisé par mode de travail"}</p>
+              <label className="inline-flex items-center gap-2 text-xs font-bold text-dtsc-muted"><SlidersHorizontal className="h-4 w-4" /><span>{english ? "Kanban grouping" : "Organisation du Kanban"}</span><select value={weeklyGrouping} onChange={(event) => setWeeklyGrouping(event.target.value as "locationMode" | "workType")} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-xs font-black text-dtsc-ink" aria-label={english ? "Group weekly entries" : "Organiser les prestations hebdomadaires"}><option value="locationMode">{english ? "Work mode" : "Mode de travail"}</option><option value="workType">{english ? "Work type" : "Type de travail"}</option></select></label>
             </div>
 
             {weeklyView === "list" ? (
@@ -212,19 +216,22 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
                 locale={locale}
                 editable={currentEditable}
                 saving={saving}
+                onOpen={(entry) => setSelectedEntry({ entry, submission: current })}
                 onEdit={(entry) => setEntryDialog({ open: true, entry, submission: current })}
                 onDelete={(entry) => void removeEntry(entry, current)}
               />
             ) : (
               <WorkEntryKanban
-                columns={weeklyLocationColumns}
+                columns={weeklyColumns}
                 locale={locale}
                 editable={currentEditable}
                 saving={saving}
+                onOpen={(entry) => setSelectedEntry({ entry, submission: current })}
                 onEdit={(entry) => setEntryDialog({ open: true, entry, submission: current })}
                 onDelete={(entry) => void removeEntry(entry, current)}
               />
             )}
+            {!current.id.startsWith("unsaved-") && state.viewer ? <EntityCommentsThread entityType="WORK_SUBMISSION" entityId={current.id} currentUserId={state.viewer.id} currentUserRole={state.viewer.role} locale={locale} title={english ? "Global comments before and after submission" : "Commentaires globaux avant et après la soumission"} /> : null}
           </div>
         ) : (
           <EmptyState compact title={english ? "Unavailable" : "Indisponible"} description={english ? "Unable to load this week's submission." : "Impossible de charger la période courante."} />
@@ -297,6 +304,7 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
               locale={locale}
               editable={isEditable(selectedSubmission)}
               saving={saving}
+              onOpen={(entry) => setSelectedEntry({ entry, submission: selectedSubmission })}
               onEdit={(entry) => setEntryDialog({ open: true, entry, submission: selectedSubmission })}
               onDelete={(entry) => void removeEntry(entry, selectedSubmission)}
             />
@@ -309,6 +317,10 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
             </section>
           </div>
         ) : null}
+      </Dialog>
+
+      <Dialog open={Boolean(selectedEntry)} title={selectedEntry?.entry.summary || (english ? "Work entry" : "Prestation journalière")} description={selectedEntry ? `${formatDate(selectedEntry.entry.workDate, locale)} · ${selectedEntry.entry.startTime} → ${selectedEntry.entry.endTime}` : ""} onClose={() => setSelectedEntry(null)} className="h-[96dvh] max-w-5xl">
+        {selectedEntry ? <div className="min-w-0 space-y-5"><div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3"><Detail label={english ? "Work type" : "Type de travail"} value={workTypeLabel(selectedEntry.entry.workType, english)} /><Detail label={english ? "Work mode" : "Mode de travail"} value={selectedEntry.entry.locationMode || (english ? "Undefined" : "Non défini")} /><Detail label={english ? "Worked time" : "Temps travaillé"} value={formatMinutes(selectedEntry.entry.workedMinutes)} /><Detail label={english ? "Break" : "Pause"} value={`${selectedEntry.entry.breakMinutes} min`} /><Detail label={english ? "Created" : "Créée le"} value={formatTimestamp(selectedEntry.entry.createdAt, locale)} /><Detail label={english ? "Last update" : "Dernière modification"} value={formatTimestamp(selectedEntry.entry.updatedAt, locale)} /></div><section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4"><h3 className="font-black text-dtsc-ink">{english ? "Work summary" : "Résumé de la prestation"}</h3><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-dtsc-muted">{selectedEntry.entry.details || (english ? "No additional detail." : "Aucun détail supplémentaire.")}</p></section>{state?.viewer ? <EntityCommentsThread entityType="WORK_ENTRY" entityId={selectedEntry.entry.id} currentUserId={state.viewer.id} currentUserRole={state.viewer.role} locale={locale} title={english ? "Submitter and validator discussion" : "Échanges entre le déclarant et le validateur"} /> : null}{isEditable(selectedEntry.submission) ? <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setSelectedEntry(null); setEntryDialog({ open: true, entry: selectedEntry.entry, submission: selectedEntry.submission }); }} className="rounded-xl"><Pencil className="h-4 w-4" />{english ? "Edit" : "Modifier"}</Button></div> : null}</div> : null}
       </Dialog>
 
       <Dialog
@@ -333,7 +345,7 @@ export function WorkPrestationsPanelV2({ locale }: { locale?: string | null }) {
 }
 
 
-function WorkEntryKanban({ columns, locale, editable, saving, onEdit, onDelete }: { columns: Array<{ id: string; label: string; entries: WorkEntry[] }>; locale?: string | null; editable: boolean; saving: boolean; onEdit: (entry: WorkEntry) => void; onDelete: (entry: WorkEntry) => void }) {
+function WorkEntryKanban({ columns, locale, editable, saving, onOpen, onEdit, onDelete }: { columns: Array<{ id: string; label: string; entries: WorkEntry[] }>; locale?: string | null; editable: boolean; saving: boolean; onOpen: (entry: WorkEntry) => void; onEdit: (entry: WorkEntry) => void; onDelete: (entry: WorkEntry) => void }) {
   return columns.length ? (
     <div className="flex min-w-0 gap-4 overflow-x-auto pb-3" aria-label="Kanban des prestations par mode de travail">
       {columns.map((column) => (
@@ -342,10 +354,12 @@ function WorkEntryKanban({ columns, locale, editable, saving, onEdit, onDelete }
           <div className="mt-3 max-h-[62dvh] space-y-3 overflow-y-auto pr-1">
             {column.entries.map((entry) => (
               <article key={entry.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
+                <button type="button" onClick={() => onOpen(entry)} className="block w-full min-w-0 text-left">
                 <div className="flex flex-wrap items-center gap-2"><StatusBadge>{workTypeLabel(entry.workType)}</StatusBadge>{entry.scheduleBlockingCount > 0 ? <StatusBadge tone="danger">Conflit absence</StatusBadge> : entry.scheduleOutsideAvailability ? <StatusBadge tone="warning">Hors disponibilité</StatusBadge> : <StatusBadge tone="success">Cohérent</StatusBadge>}</div>
                 <h4 className="mt-3 break-words font-black text-dtsc-ink">{entry.summary}</h4>
                 <p className="mt-1 text-xs font-bold text-dtsc-muted">{formatDate(entry.workDate, locale)} · {entry.startTime} → {entry.endTime} · {formatMinutes(entry.workedMinutes)}</p>
                 {entry.details ? <p className="mt-2 line-clamp-3 text-xs leading-5 text-dtsc-muted">{entry.details}</p> : null}
+                </button>
                 {editable ? <div className="mt-3 border-t border-dtsc-border pt-3"><ContextActions label="Actions prestation" actions={[{ id: "edit", label: "Modifier", icon: Pencil, onSelect: () => onEdit(entry) }, { id: "delete", label: "Supprimer", icon: Trash2, destructive: true, separatorBefore: true, disabled: saving, onSelect: () => onDelete(entry) }]} /></div> : null}
               </article>
             ))}
@@ -365,13 +379,13 @@ function SubmissionHistoryKanban({ columns, locale, english, canSubmitSubmission
   return <div className="flex min-w-0 gap-4 overflow-x-auto pb-3" aria-label={english ? "Submission history Kanban by status" : "Kanban de l’historique par statut"}>{columns.map((column) => <section key={column.id} className="w-[min(86vw,22rem)] shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3"><div className="flex items-center justify-between gap-3"><h3 className="font-black text-dtsc-ink">{column.label}</h3><span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-xs font-black text-cyan-700 dark:text-cyan-200">{column.submissions.length}</span></div><div className="mt-3 max-h-[62dvh] space-y-3 overflow-y-auto pr-1">{column.submissions.map((submission) => <article key={submission.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><button type="button" onClick={() => onOpen(submission)} className="block w-full text-left"><p className="font-black text-dtsc-ink">{formatDate(submission.periodStart, locale)} → {formatDate(submission.periodEnd, locale)}</p><p className="mt-2 text-xs font-bold text-dtsc-muted">{formatMinutes(submission.declaredMinutes)} · {submission.entries.length} prestation(s) · révision {submission.revision}</p>{submission.reviewComment ? <p className="mt-2 line-clamp-3 text-xs leading-5 text-amber-700 dark:text-amber-300">{submission.reviewComment}</p> : null}</button><div className="mt-3 flex gap-2 border-t border-dtsc-border pt-3"><Button type="button" size="sm" variant="outline" onClick={() => onOpen(submission)} className="rounded-xl"><Eye className="h-4 w-4" /> {english ? "Open" : "Ouvrir"}</Button>{canSubmitSubmission(submission) ? <Button type="button" size="sm" onClick={() => onSubmit(submission)} className="rounded-xl bg-dtsc-blue text-white"><Send className="h-4 w-4" /> {english ? "Submit" : "Soumettre"}</Button> : null}</div></article>)}</div></section>)}</div>;
 }
 
-function groupEntriesByLocation(entries: WorkEntry[]) {
+function groupEntries(entries: WorkEntry[], grouping: "locationMode" | "workType", english: boolean) {
   const map = new Map<string, WorkEntry[]>();
   for (const entry of entries) {
-    const key = entry.locationMode?.trim() || "Non défini";
+    const key = grouping === "workType" ? entry.workType : entry.locationMode?.trim() || "UNDEFINED";
     map.set(key, [...(map.get(key) || []), entry]);
   }
-  return [...map.entries()].sort(([left], [right]) => left.localeCompare(right, "fr")).map(([id, grouped]) => ({ id, label: id, entries: grouped }));
+  return [...map.entries()].sort(([left], [right]) => left.localeCompare(right, english ? "en" : "fr")).map(([id, grouped]) => ({ id, label: grouping === "workType" ? workTypeLabel(id, english) : id === "UNDEFINED" ? (english ? "Undefined" : "Non défini") : id, entries: grouped }));
 }
 
 function groupSubmissionsByStatus(submissions: WorkSubmission[], english: boolean) {
@@ -381,13 +395,15 @@ function groupSubmissionsByStatus(submissions: WorkSubmission[], english: boolea
   return [...map.entries()].sort(([left], [right]) => order.indexOf(left) - order.indexOf(right)).map(([id, grouped]) => ({ id, label: statusLabel(id, english), submissions: grouped }));
 }
 
-function SubmissionEntries({ submission, locale, editable, saving, onEdit, onDelete }: { submission: WorkSubmission; locale?: string | null; editable: boolean; saving: boolean; onEdit: (entry: WorkEntry) => void; onDelete: (entry: WorkEntry) => void }) {
+function SubmissionEntries({ submission, locale, editable, saving, onOpen, onEdit, onDelete }: { submission: WorkSubmission; locale?: string | null; editable: boolean; saving: boolean; onOpen: (entry: WorkEntry) => void; onEdit: (entry: WorkEntry) => void; onDelete: (entry: WorkEntry) => void }) {
   return submission.entries.length ? (
     <BusinessList ariaLabel="Prestations">
       {submission.entries.map((entry) => (
         <BusinessListItem
           key={entry.id}
           title={entry.summary}
+          onOpen={() => onOpen(entry)}
+          openLabel={`Ouvrir ${entry.summary}`}
           meta={`${formatDate(entry.workDate, locale)} · ${entry.startTime} → ${entry.endTime} · ${formatMinutes(entry.workedMinutes)}`}
           description={`${workTypeLabel(entry.workType)} · ${entry.locationMode || "Lieu non défini"}${entry.breakMinutes ? ` · pause ${entry.breakMinutes} min` : ""}${entry.details ? ` · ${entry.details}` : ""}`}
           status={entry.scheduleBlockingCount > 0 ? <StatusBadge tone="danger">Conflit absence</StatusBadge> : entry.scheduleOutsideAvailability ? <StatusBadge tone="warning">Hors disponibilité</StatusBadge> : entry.scheduleWarningCount > 0 ? <StatusBadge tone="info">Avertissement</StatusBadge> : <StatusBadge tone="success">Planning cohérent</StatusBadge>}
@@ -451,5 +467,5 @@ function formatDate(value: string, locale?: string | null) { return new Intl.Dat
 function formatTimestamp(value: string | null | undefined, locale?: string | null) { return value ? new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 function statusTone(status: string): StatusBadgeTone { if (["APPROVED", "COMPLETED", "VALIDATED"].includes(status)) return "success"; if (["REJECTED", "CANCELLED"].includes(status)) return "danger"; if (["CHANGES_REQUESTED", "BLOCKED"].includes(status)) return "warning"; if (["SUBMITTED", "IN_PROGRESS"].includes(status)) return "info"; return "neutral"; }
 function statusLabel(status: string, english: boolean) { const labels: Record<string, string> = { DRAFT: english ? "Draft" : "Brouillon", SUBMITTED: english ? "Submitted" : "Soumise", RESUBMITTED: english ? "Submitted again" : "Resoumise", CHANGES_REQUESTED: english ? "Changes requested" : "Correction demandée", APPROVED: english ? "Approved" : "Validée", REJECTED: english ? "Rejected" : "Refusée", CANCELLED: english ? "Cancelled" : "Annulée" }; return labels[status] || status.replaceAll("_", " "); }
-function workTypeLabel(value: string) { const labels: Record<string, string> = { NORMAL_WORK: "Travail normal", MEETING: "Réunion", MISSION: "Mission", PROJECT_WORK: "Travail projet", SUPPORT: "Support", TRAINING: "Formation", ADMINISTRATIVE: "Administratif", OTHER: "Autre" }; return labels[value] || value; }
+function workTypeLabel(value: string, english = false) { const labels: Record<string, [string, string]> = { NORMAL_WORK: ["Travail normal", "Normal work"], MEETING: ["Réunion", "Meeting"], MISSION: ["Mission", "Mission"], PROJECT_WORK: ["Travail projet", "Project work"], SUPPORT: ["Support", "Support"], TRAINING: ["Formation", "Training"], ADMINISTRATIVE: ["Administratif", "Administrative"], OTHER: ["Autre", "Other"] }; return labels[value]?.[english ? 1 : 0] || value; }
 function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">{label}</p><p className="mt-1 break-words text-sm font-bold text-dtsc-ink">{value}</p></div>; }

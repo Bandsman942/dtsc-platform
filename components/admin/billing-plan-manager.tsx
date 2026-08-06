@@ -120,8 +120,18 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
           {t("pricingAdminOnly")}
         </p>
       )}
-      <div className="mt-5 grid gap-3 xl:grid-cols-3">
-        {plans.map((plan) => (
+      <div className="mt-5 space-y-8">
+        {([
+          { code: "PERSONAL", title: english ? "Individual offers" : "Offres individuelles", description: english ? "Plans billed to one DTSC Platform user." : "Abonnements facturés à un utilisateur DTSC Platform." },
+          { code: "ORGANIZATION", title: english ? "Organization offers" : "Offres d’organisation", description: english ? "Plans billed to a client organization and shared by its authorized teams." : "Abonnements facturés à une organisation cliente et partagés par ses équipes autorisées." },
+        ] as const).map((offerGroup) => (
+          <section key={offerGroup.code} className="min-w-0 space-y-3" aria-labelledby={`billing-offer-group-${offerGroup.code}`}>
+            <div className="border-b border-dtsc-border pb-3">
+              <h3 id={`billing-offer-group-${offerGroup.code}`} className="text-lg font-black text-dtsc-ink">{offerGroup.title}</h3>
+              <p className="mt-1 text-sm leading-6 text-dtsc-muted">{offerGroup.description}</p>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-3">
+              {plans.filter((plan) => plan.audienceCode === offerGroup.code || plan.audienceCode === "BOTH").map((plan) => (
           <article key={plan.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -178,9 +188,12 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
             </div>
 
             <p className="mt-3 text-xs font-semibold text-dtsc-muted">
-              {english ? "Organizations on this offer" : "Entreprises sur cette offre"} : {plan.organizationSubscriptionCount}
+              {plan.audienceCode === "PERSONAL" ? (english ? "Individual subscriptions" : "Abonnements individuels") : (english ? "Organization subscriptions" : "Abonnements d’organisation")} : {plan.audienceCode === "PERSONAL" ? plan.userSubscriptionCount : plan.organizationSubscriptionCount}
             </p>
           </article>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 
@@ -192,9 +205,9 @@ export function BillingPlanManager({ plans, canManage, locale }: { plans: Manage
             </p>
             <FormField label={english ? "Offer type" : "Type d’abonnement"}>
               <select name="audience" defaultValue={editingPlan.audienceCode} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-                <option value="PERSONAL">{english ? "Personal" : "Personnel"}</option>
-                <option value="ORGANIZATION">{english ? "Company" : "Entreprise"}</option>
-                <option value="BOTH">{english ? "Personal and company" : "Personnel et entreprise"}</option>
+                <option value="PERSONAL">{english ? "Individual" : "Individuel"}</option>
+                <option value="ORGANIZATION">{english ? "Organization" : "Organisation"}</option>
+                <option value="BOTH">{english ? "Individual and organization" : "Individuel et organisation"}</option>
               </select>
             </FormField>
             <FormField label={english ? "Commercial name" : "Nom commercial"}><Input name="name" defaultValue={editingPlan.name} minLength={2} maxLength={120} required /></FormField>

@@ -133,6 +133,37 @@ export async function authorizedCollaboratorIds(session: SessionPayload) {
   return [...ids];
 }
 
+export async function getAcceptedCollaborationContacts(session: SessionPayload, limit = 100) {
+  const requests = await prisma.collaborationContactRequest.findMany({
+    where: {
+      status: "ACCEPTED",
+      OR: [{ requesterId: session.userId }, { targetUserId: session.userId }],
+    },
+    select: { requesterId: true, targetUserId: true, acceptedAt: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+    take: Math.min(Math.max(limit, 1), 200),
+  });
+  const contactMetadata = new Map<string, Date>();
+  for (const request of requests) {
+    const contactId = request.requesterId === session.userId ? request.targetUserId : request.requesterId;
+    if (!contactMetadata.has(contactId)) contactMetadata.set(contactId, request.acceptedAt || request.updatedAt);
+  }
+  const blocked = await prisma.collaborationUserBlock.findMany({
+    where: { revokedAt: null, OR: [{ blockerId: session.userId }, { blockedId: session.userId }] },
+    select: { blockerId: true, blockedId: true },
+  });
+  for (const item of blocked) contactMetadata.delete(item.blockerId === session.userId ? item.blockedId : item.blockerId);
+  const ids = [...contactMetadata.keys()];
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids }, status: UserStatus.ACTIVE },
+    select: { id: true, name: true, email: true, avatarUrl: true, jobTitle: true, role: true, lastSeenAt: true },
+  });
+  return users
+    .map((user) => ({ ...user, contactSince: contactMetadata.get(user.id) || null }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export async function getAuthorizedCollaborators(session: SessionPayload, options: { query?: string; limit?: number } = {}) {
   const ids = await authorizedCollaboratorIds(session);
   if (!ids.length) return [] as AuthorizedCollaborator[];

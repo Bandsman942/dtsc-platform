@@ -2,99 +2,13 @@ import { InvoiceStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client
 import { prisma } from "@/lib/prisma";
 import { createSubscriptionIncomeTransaction } from "@/lib/hr-cfo-finance";
 import { sendZohoOutboundMail } from "@/lib/zoho-mail";
+import billingPlanBootstrap from "@/config/billing-plans.bootstrap.json";
 
 export const defaultPlanIds = ["freemium", "starter", "growth", "premium"] as const;
 
 export async function ensureBillingPlans() {
-  const plans = [
-    {
-      id: "freemium",
-      name: "Découverte",
-      slug: "freemium",
-      description: "Accès gratuit très limité pour tester DTSC Chatbot.",
-      audience: "PERSONAL",
-      priceUsd: 0,
-      dailyMessageLimit: 5,
-      dailyTokenLimit: 15000,
-      maxDocuments: 1,
-      sortOrder: 1,
-    },
-    {
-      id: "starter",
-      name: "Essentiel",
-      slug: "starter",
-      description: "Usage léger pour indépendants et petits besoins de cadrage.",
-      audience: "PERSONAL",
-      priceUsd: 2,
-      dailyMessageLimit: 40,
-      dailyTokenLimit: 120000,
-      maxDocuments: 2,
-      sortOrder: 2,
-    },
-    {
-      id: "growth",
-      name: "Professionnel",
-      slug: "growth",
-      description: "Usage régulier pour équipes PME, support et analyse métier.",
-      audience: "PERSONAL",
-      priceUsd: 15,
-      dailyMessageLimit: 200,
-      dailyTokenLimit: 750000,
-      maxDocuments: 20,
-      sortOrder: 3,
-    },
-    {
-      id: "premium",
-      name: "Entreprise personnelle",
-      slug: "premium",
-      description: "Usage intensif individuel avec plus de capacité documentaire et support prioritaire.",
-      audience: "PERSONAL",
-      priceUsd: 50,
-      dailyMessageLimit: 1000,
-      dailyTokenLimit: 3000000,
-      maxDocuments: 100,
-      sortOrder: 4,
-    },
-    {
-      id: "org-starter",
-      name: "Entreprise Essentielle",
-      slug: "org-starter",
-      description: "Socle professionnel pour une petite entreprise et ses premiers modules DTSC.",
-      audience: "ORGANIZATION",
-      priceUsd: 25,
-      dailyMessageLimit: 500,
-      dailyTokenLimit: 1500000,
-      maxDocuments: 50,
-      sortOrder: 10,
-    },
-    {
-      id: "org-growth",
-      name: "Entreprise Croissance",
-      slug: "org-growth",
-      description: "Capacités étendues pour une entreprise en croissance, ses équipes et ses opérations.",
-      audience: "ORGANIZATION",
-      priceUsd: 75,
-      dailyMessageLimit: 2000,
-      dailyTokenLimit: 6000000,
-      maxDocuments: 250,
-      sortOrder: 11,
-    },
-    {
-      id: "org-premium",
-      name: "Entreprise Premium",
-      slug: "org-premium",
-      description: "Offre organisation avancée avec capacités renforcées, gouvernance et support prioritaire.",
-      audience: "ORGANIZATION",
-      priceUsd: 180,
-      dailyMessageLimit: 10000,
-      dailyTokenLimit: 30000000,
-      maxDocuments: 1000,
-      sortOrder: 12,
-    },
-  ];
-
   await prisma.billingPlan.createMany({
-    data: plans,
+    data: billingPlanBootstrap,
     skipDuplicates: true,
   });
 
@@ -160,12 +74,6 @@ export async function activateSubscriptionFromPayment(paymentReference: string, 
         status: SubscriptionStatus.ACTIVE,
         currentPeriodStart: start,
         currentPeriodEnd: end,
-        user: {
-          update: {
-            dailyMessageLimit: payment.subscription.plan.dailyMessageLimit,
-            dailyTokenLimit: payment.subscription.plan.dailyTokenLimit,
-          },
-        },
       },
       include: { plan: true, user: true },
     }),

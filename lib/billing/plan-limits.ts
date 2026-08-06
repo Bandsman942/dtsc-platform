@@ -7,6 +7,7 @@ export type OrganizationUsageLimits = {
   maxActiveModules: number;
   maxDocuments: number;
   maxEnterpriseAiMonthlyMessages: number;
+  maxEnterpriseAiMonthlyTokens: number;
   maxEnterpriseAiKnowledgeSources: number;
   maxEnterpriseAiStorageMb: number;
   enterpriseAiReadToolsEnabled: boolean;
@@ -22,6 +23,7 @@ export const SAAS_PLAN_LIMITS: Record<SaasPlanCode, OrganizationUsageLimits> = {
     maxActiveModules: 12,
     maxDocuments: 1_000,
     maxEnterpriseAiMonthlyMessages: 1_000,
+    maxEnterpriseAiMonthlyTokens: 3_000_000,
     maxEnterpriseAiKnowledgeSources: 50,
     maxEnterpriseAiStorageMb: 1_024,
     enterpriseAiReadToolsEnabled: true,
@@ -35,6 +37,7 @@ export const SAAS_PLAN_LIMITS: Record<SaasPlanCode, OrganizationUsageLimits> = {
     maxActiveModules: 60,
     maxDocuments: 20_000,
     maxEnterpriseAiMonthlyMessages: 10_000,
+    maxEnterpriseAiMonthlyTokens: 30_000_000,
     maxEnterpriseAiKnowledgeSources: 500,
     maxEnterpriseAiStorageMb: 20_480,
     enterpriseAiReadToolsEnabled: true,
@@ -48,6 +51,7 @@ export const SAAS_PLAN_LIMITS: Record<SaasPlanCode, OrganizationUsageLimits> = {
     maxActiveModules: 250,
     maxDocuments: 250_000,
     maxEnterpriseAiMonthlyMessages: 100_000,
+    maxEnterpriseAiMonthlyTokens: 300_000_000,
     maxEnterpriseAiKnowledgeSources: 10_000,
     maxEnterpriseAiStorageMb: 204_800,
     enterpriseAiReadToolsEnabled: true,

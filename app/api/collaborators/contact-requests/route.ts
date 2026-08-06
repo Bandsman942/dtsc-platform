@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserStatus } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   if (!limited.ok) return NextResponse.json({ error: "RATE_LIMITED", message: "Limite quotidienne d’invitations atteinte." }, { status: 429 });
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success || parsed.data.targetUserId === session.userId) return NextResponse.json({ error: "VALIDATION_ERROR", message: "Destinataire invalide." }, { status: 400 });
-  const target = await prisma.user.findFirst({ where: { id: parsed.data.targetUserId, status: UserStatus.ACTIVE }, select: { id: true, name: true } });
+  const target = await prisma.user.findFirst({ where: { id: parsed.data.targetUserId, status: UserStatus.ACTIVE, ...(session.role === UserRole.ADMIN ? {} : { publicProfileConsent: true }) }, select: { id: true, name: true } });
   if (!target) return NextResponse.json({ error: "NOT_FOUND", message: "Utilisateur introuvable." }, { status: 404 });
   if (await isCollaborationBlocked(session.userId, target.id)) return NextResponse.json({ error: "BLOCKED", message: "Cette invitation ne peut pas être envoyée." }, { status: 403 });
   const existing = await prisma.collaborationContactRequest.findFirst({
@@ -48,18 +48,20 @@ export async function POST(req: Request) {
   });
   if (existing?.status === "ACCEPTED") return NextResponse.json({ error: "ALREADY_CONNECTED", message: "Vous êtes déjà en relation." }, { status: 409 });
   if (existing?.status === "PENDING") return NextResponse.json({ error: "ALREADY_PENDING", message: "Une invitation est déjà en attente." }, { status: 409 });
+  const invitationLabel = session.role === UserRole.ADMIN ? "ADMIN DTSC" : null;
+  const invitationMessage = invitationLabel ? `${invitationLabel}${parsed.data.message ? ` — ${parsed.data.message}` : ""}` : parsed.data.message || null;
   const contactRequest = existing
-    ? await prisma.collaborationContactRequest.update({ where: { id: existing.id }, data: { requesterId: session.userId, targetUserId: target.id, status: "PENDING", message: parsed.data.message || null, respondedAt: null } })
-    : await prisma.collaborationContactRequest.create({ data: { requesterId: session.userId, targetUserId: target.id, message: parsed.data.message || null } });
+    ? await prisma.collaborationContactRequest.update({ where: { id: existing.id }, data: { requesterId: session.userId, targetUserId: target.id, status: "PENDING", message: invitationMessage, respondedAt: null } })
+    : await prisma.collaborationContactRequest.create({ data: { requesterId: session.userId, targetUserId: target.id, message: invitationMessage } });
   await notifyUser({
     userId: target.id,
-    title: "Invitation de contact",
+    title: invitationLabel ? "Invitation de contact · ADMIN DTSC" : "Invitation de contact",
     body: `${session.name} souhaite vous ajouter à ses collaborateurs.`,
     type: "COLLABORATION",
     targetUrl: "/collaborators",
     idempotencyKey: `collaboration:contact-request:${contactRequest.id}:${contactRequest.updatedAt.toISOString()}`,
   });
-  await writeAuditLog({ userId: session.userId, action: "COLLABORATION_CONTACT_REQUEST_SENT", entity: "CollaborationContactRequest", entityId: contactRequest.id, request: req, metadata: { targetUserId: target.id } });
+  await writeAuditLog({ userId: session.userId, action: "COLLABORATION_CONTACT_REQUEST_SENT", entity: "CollaborationContactRequest", entityId: contactRequest.id, request: req, metadata: { targetUserId: target.id, invitationLabel } });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
   return NextResponse.json({ ok: true, request: contactRequest }, { status: 201 });
 }

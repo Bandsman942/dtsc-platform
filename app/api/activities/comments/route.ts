@@ -9,7 +9,7 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const commentSchema = z.object({
-  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "COLLAB_REQUEST", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD", "LEGAL_CASE", "LEGAL_CONTRACT", "LEGAL_TEMPLATE", "LEGAL_RISK", "LEGAL_DOCUMENT", "LEGAL_DISPUTE", "LEGAL_REQUEST", "LEGAL_REPORT"]),
+  entityType: z.enum(["TASK", "OPERATION", "DEPARTMENT_REQUEST", "BLOCKER", "MEETING", "REPORT", "WORKFLOW", "PAYROLL", "CEO_OBJECTIVE", "CEO_SUPERVISION", "COLLAB_REQUEST", "SCO_PURCHASE_REQUEST", "SCO_VENDOR", "SCO_MATERIAL", "SCO_INVENTORY", "SCO_ASSET", "SCO_LOGISTICS", "MPO_PROJECT", "MPO_RECORD", "CTO_PROJECT", "CTO_RECORD", "LEGAL_CASE", "LEGAL_CONTRACT", "LEGAL_TEMPLATE", "LEGAL_RISK", "LEGAL_DOCUMENT", "LEGAL_DISPUTE", "LEGAL_REQUEST", "LEGAL_REPORT", "WORK_ENTRY", "WORK_SUBMISSION"]),
   entityId: z.string().min(5),
   content: z.string().min(2).max(2000),
   mentionedUserIds: z.array(z.string().min(5)).max(30).default([]),
@@ -201,6 +201,12 @@ async function canAccessEntity(user: { id: string; role: UserRole }, entityType:
   if (entityType === "COLLAB_REQUEST") {
     return Boolean(await prisma.collaboratorRequest.findFirst({ where: { id: entityId, OR: [{ requesterEmployeeId: employee.id }, { targetEmployeeId: employee.id }] }, select: { id: true } }));
   }
+  if (entityType === "WORK_ENTRY") {
+    return Boolean(await prisma.dtscWorkEntry.findFirst({ where: { id: entityId, OR: [{ employeeId: employee.id }, { submission: { reviewerEmployeeId: employee.id } }] }, select: { id: true } }));
+  }
+  if (entityType === "WORK_SUBMISSION") {
+    return Boolean(await prisma.dtscWorkSubmission.findFirst({ where: { id: entityId, OR: [{ employeeId: employee.id }, { reviewerEmployeeId: employee.id }] }, select: { id: true } }));
+  }
   if (positionCode === "CEO") {
     return true;
   }
@@ -358,6 +364,14 @@ async function relatedUserIds(entityType: string, entityId: string) {
   if (entityType === "COLLAB_REQUEST") {
     const request = await prisma.collaboratorRequest.findUnique({ where: { id: entityId }, select: { requesterUserId: true, targetUserId: true, createdById: true } });
     return uniqueUserIds([request?.requesterUserId, request?.targetUserId, request?.createdById]);
+  }
+  if (entityType === "WORK_ENTRY") {
+    const entry = await prisma.dtscWorkEntry.findUnique({ where: { id: entityId }, select: { createdById: true, employee: { select: { userId: true } }, submission: { select: { reviewer: { select: { userId: true } } } } } });
+    return uniqueUserIds([entry?.employee.userId, entry?.submission?.reviewer?.userId, entry?.createdById]);
+  }
+  if (entityType === "WORK_SUBMISSION") {
+    const submission = await prisma.dtscWorkSubmission.findUnique({ where: { id: entityId }, select: { createdById: true, employee: { select: { userId: true } }, reviewer: { select: { userId: true } } } });
+    return uniqueUserIds([submission?.employee.userId, submission?.reviewer?.userId, submission?.createdById]);
   }
   if (entityType === "WORKFLOW") {
     const shares = await prisma.cooWorkflowShare.findMany({ where: { workflowId: entityId }, select: { userId: true, createdById: true } });

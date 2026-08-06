@@ -66,7 +66,7 @@ async function createRecord(entity: CeoEntity, data: Record<string, unknown>, cr
         periodEnd: data.periodEnd as Date | undefined,
         targetValue: data.targetValue as number | undefined,
         currentValue: data.currentValue as number | undefined,
-        progress: Number(data.progress || 0),
+        progress: 0,
         status: String(data.status || "PLANNED"),
         priority: String(data.priority || "NORMAL"),
         comments: textOrNull(data.comments),

@@ -84,6 +84,7 @@ export async function POST(req: Request, { params }: Params) {
 
 async function createRecord(entity: CooEntity, data: Record<string, unknown>) {
   const enriched = await enrichCooData(entity, data);
+  delete enriched.progress;
   if (entity === "operations") {
     return prisma.cooOperation.create({ data: enriched as never });
   }
