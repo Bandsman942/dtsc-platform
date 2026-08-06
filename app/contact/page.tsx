@@ -1,57 +1,130 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BarChart3, Bot, ClipboardCheck, FileText, GraduationCap, Layers3, Megaphone } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  Bot,
+  CheckCircle2,
+  ClipboardCheck,
+  FileText,
+  Gauge,
+  GraduationCap,
+  Layers3,
+  Megaphone,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import { ContactNewsletterSection } from "@/components/public/contact-newsletter-section";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { dtsc } from "@/lib/dtsc";
-import { PublicSectionWatermark } from "@/components/public/public-section-watermark";
 
 export const metadata: Metadata = {
-  title: "Contact DTSC — cadrer votre besoin et choisir le bon levier",
-  description: "Contactez DTSC pour qualifier votre besoin client et choisir le bon levier numérique: Data & BI, IA, Solutions digitales, audit, formations, marketing ou imprimerie.",
+  title: "Contact DTSC — transformer un besoin en résultat mesurable",
+  description:
+    "Présentez votre contexte à DTSC. Nous identifions le levier numérique prioritaire, le premier livrable utile et le résultat à mesurer.",
   alternates: { canonical: "/contact" },
 };
 
 const qualificationCards = [
-  { title: "Je veux mieux piloter mon entreprise", lever: "Data & BI", icon: BarChart3 },
-  { title: "Je veux intégrer l'IA", lever: "Intelligence artificielle", icon: Bot },
-  { title: "Je veux créer une solution digitale", lever: "Solutions digitales", icon: Layers3 },
-  { title: "Je veux auditer mes processus", lever: "Audit & optimisation", icon: ClipboardCheck },
-  { title: "Je veux former mon équipe", lever: "Formations", icon: GraduationCap },
-  { title: "Je veux améliorer ma visibilité", lever: "Marketing digital", icon: Megaphone },
-  { title: "Je veux des supports imprimés professionnels", lever: "Imprimerie numérique", icon: FileText },
+  {
+    title: "Mieux piloter mes décisions",
+    text: "Structurer les données, KPI et tableaux de bord utiles aux décisions.",
+    lever: "Data & BI",
+    icon: BarChart3,
+    accent: "from-sky-500 to-cyan-400",
+    iconClass: "bg-sky-500/12 text-sky-600",
+  },
+  {
+    title: "Intégrer l’IA avec contrôle",
+    text: "Identifier un usage concret, mesurable et validé par les équipes.",
+    lever: "Intelligence artificielle",
+    icon: Bot,
+    accent: "from-violet-500 to-fuchsia-400",
+    iconClass: "bg-violet-500/12 text-violet-600",
+  },
+  {
+    title: "Digitaliser un processus",
+    text: "Créer une application, un portail, un ERP ou un workflow cohérent.",
+    lever: "Solutions digitales",
+    icon: Layers3,
+    accent: "from-indigo-500 to-blue-400",
+    iconClass: "bg-indigo-500/12 text-indigo-600",
+  },
+  {
+    title: "Réduire les pertes et lenteurs",
+    text: "Auditer les processus avant d’investir dans une nouvelle solution.",
+    lever: "Audit & optimisation",
+    icon: ClipboardCheck,
+    accent: "from-emerald-500 to-teal-400",
+    iconClass: "bg-emerald-500/12 text-emerald-600",
+  },
+  {
+    title: "Faire monter l’équipe en compétence",
+    text: "Former sur la data, les KPI, l’IA et l’adoption des outils.",
+    lever: "Formations",
+    icon: GraduationCap,
+    accent: "from-amber-500 to-yellow-300",
+    iconClass: "bg-amber-500/12 text-amber-600",
+  },
+  {
+    title: "Développer ma visibilité",
+    text: "Relier stratégie de contenu, acquisition et image de marque.",
+    lever: "Marketing digital",
+    icon: Megaphone,
+    accent: "from-pink-500 to-rose-400",
+    iconClass: "bg-pink-500/12 text-pink-600",
+  },
+  {
+    title: "Créer des supports professionnels",
+    text: "Aligner supports imprimés, communication et parcours commercial.",
+    lever: "Imprimerie numérique",
+    icon: FileText,
+    accent: "from-orange-500 to-amber-400",
+    iconClass: "bg-orange-500/12 text-orange-600",
+  },
 ];
 
 const contactSteps = [
-  "Vous décrivez le besoin",
-  "DTSC analyse le contexte",
-  "DTSC propose le levier prioritaire",
-  "DTSC recommande une première action",
-  "DTSC accompagne l'exécution",
+  {
+    title: "Vous décrivez le contexte",
+    text: "Objectif, contraintes, urgence, utilisateurs concernés et situation actuelle.",
+  },
+  {
+    title: "Nous isolons le vrai problème",
+    text: "DTSC distingue le besoin métier de la solution supposée.",
+  },
+  {
+    title: "Nous choisissons le levier prioritaire",
+    text: "Un levier principal, puis uniquement les capacités complémentaires utiles.",
+  },
+  {
+    title: "Nous cadrons le premier résultat",
+    text: "Livrable, délai, responsabilités, risques et indicateur de réussite.",
+  },
 ];
 
 const contactFaqs = [
   {
-    question: "Que faut-il préparer avant de contacter DTSC ?",
+    question: "Que préparer avant de contacter DTSC ?",
     answer:
-      "Préparez votre objectif, vos contraintes, les processus ou données concernés, les personnes impliquées et le résultat que vous voulez mesurer.",
+      "Préparez votre objectif, les difficultés observées, les personnes impliquées, les données ou processus concernés et le résultat que vous souhaitez mesurer.",
   },
   {
-    question: "Peut-on demander seulement un audit ?",
+    question: "Dois-je déjà connaître la solution dont j’ai besoin ?",
     answer:
-      "Oui. Un audit peut être le premier livrable pour identifier les pertes, coûts, anomalies et leviers prioritaires avant toute solution.",
+      "Non. Décrivez d’abord le problème. DTSC vous aide à déterminer si le bon point de départ est un audit, une formation, une solution digitale, un travail data, un usage IA ou un autre levier.",
   },
   {
-    question: "Peut-on commencer par une formation ?",
+    question: "Peut-on commencer par une intervention limitée ?",
     answer:
-      "Oui. Une formation peut être pertinente si vos équipes doivent comprendre la data, les KPI, l'IA ou l'adoption d'un nouvel outil.",
+      "Oui. Le cadrage peut déboucher sur un premier livrable court et mesurable avant un programme plus large.",
   },
   {
-    question: "DTSC accompagne-t-il les petites structures ?",
+    question: "DTSC accompagne-t-il les PME et les organisations en croissance ?",
     answer:
-      "Oui. DTSC peut proposer un cadrage progressif avec un premier livrable limité, utile et mesurable pour les PME et organisations en croissance.",
+      "Oui. Le parcours est conçu pour adapter la profondeur du diagnostic, le rythme et le premier investissement à la maturité réelle de l’organisation.",
   },
 ];
 
@@ -59,70 +132,116 @@ export default function ContactPage() {
   return (
     <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
-      <section className="relative overflow-hidden border-b border-dtsc-border bg-gradient-to-br from-[#001736] via-[#002b5b] to-[#00a7c7] text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.18),transparent_30%)]" />
-        <div className="dtsc-premium-reveal relative mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-          <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-200">Contact professionnel</p>
-          <h1 className="dtsc-text-shimmer mt-4 max-w-4xl text-4xl font-black leading-tight sm:text-6xl">Parlez-nous de votre besoin autour des 7 leviers DTSC.</h1>
-          <p className="dtsc-premium-reveal-delay mt-5 max-w-3xl text-lg leading-8 text-blue-50">
-            DTSC qualifie les demandes avec une logique conseil: contexte, objectifs, contraintes, urgence et prochaines étapes. Les échanges commerciaux ou stratégiques restent validés par l&apos;équipe humaine.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg" className="rounded-xl bg-cyan-400 text-[#001736] hover:bg-cyan-300">
-              <Link href="#contact-form">
-                Décrire mon besoin
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/15">
-              <Link href="/services">Comparer les 7 leviers</Link>
-            </Button>
+
+      <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#041326] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_14%,rgba(34,211,238,0.24),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(139,92,246,0.28),transparent_32%),radial-gradient(circle_at_72%_82%,rgba(236,72,153,0.18),transparent_28%),radial-gradient(circle_at_18%_90%,rgba(245,158,11,0.16),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.1] [background-image:linear-gradient(rgba(255,255,255,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.16)_1px,transparent_1px)] [background-size:36px_36px]" />
+        <div className="dtsc-pulse-ring pointer-events-none absolute -right-28 top-12 h-72 w-72 rounded-full border border-cyan-300/30" />
+        <div className="dtsc-floating-visual pointer-events-none absolute -left-16 bottom-10 h-44 w-44 rounded-[3rem] border border-violet-300/20 bg-violet-400/10 blur-sm" />
+
+        <div className="relative mx-auto grid w-full max-w-[92rem] items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,.95fr)] lg:px-8 lg:py-24">
+          <div className="dtsc-premium-reveal min-w-0">
+            <p className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-xl">
+              <Sparkles className="h-4 w-4" />
+              Votre prochain avantage commence ici
+            </p>
+            <h1 className="dtsc-display mt-7 max-w-5xl text-white">
+              Transformons votre besoin en <span className="dtsc-text-shimmer">résultat mesurable.</span>
+            </h1>
+            <p className="dtsc-premium-reveal-delay dtsc-body-lg mt-7 max-w-3xl text-slate-200">
+              Décrivez votre contexte. DTSC identifie le levier numérique prioritaire, le premier livrable utile et l’indicateur qui permettra de vérifier le progrès.
+            </p>
+
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="dtsc-animated-gradient min-h-12 rounded-2xl border-0 px-6 font-black text-[#001736] shadow-[0_20px_60px_rgba(34,211,238,.24)] hover:-translate-y-0.5">
+                <Link href="#contact-form">
+                  Parler à un expert DTSC
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="min-h-12 rounded-2xl border-white/20 bg-white/10 px-6 font-black text-white backdrop-blur-xl hover:-translate-y-0.5 hover:bg-white/16">
+                <Link href="/services">Explorer les 7 leviers</Link>
+              </Button>
+            </div>
+
+            <div className="mt-9 grid gap-3 sm:grid-cols-3">
+              {[
+                [Target, "Un besoin clarifié", "Nous partons du problème réel."],
+                [Gauge, "Un résultat défini", "Le succès devient mesurable."],
+                [CheckCircle2, "Une décision humaine", "La recommandation reste validée."],
+              ].map(([Icon, title, text]) => {
+                const ItemIcon = Icon as typeof Target;
+                return (
+                  <div key={String(title)} className="rounded-2xl border border-white/10 bg-white/8 p-4 backdrop-blur-xl">
+                    <ItemIcon className="h-5 w-5 text-cyan-300" />
+                    <p className="mt-3 font-black text-white">{String(title)}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-300">{String(text)}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="mt-8 grid min-w-0 gap-4 sm:grid-cols-3">
-            {[
-              ["Email", dtsc.email],
-              ["WhatsApp", dtsc.whatsapp],
-              ["Réseaux", dtsc.socialHandle],
-            ].map(([label, value]) => (
-              <div key={label} className="min-w-0 rounded-2xl border border-white/15 bg-white/10 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">{label}</p>
-                <p className="mt-2 break-words font-black text-white">{value}</p>
+
+          <div className="dtsc-floating-visual relative min-w-0">
+            <div className="absolute -inset-5 rounded-[2.5rem] bg-gradient-to-br from-cyan-400/20 via-violet-500/20 to-pink-500/20 blur-3xl" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-[0_32px_100px_rgba(0,0,0,.34)] backdrop-blur-2xl sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Diagnostic express</p>
+                  <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-white">Quel résultat recherchez-vous ?</h2>
+                </div>
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-cyan-200"><Target className="h-6 w-6" /></span>
               </div>
-            ))}
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                {qualificationCards.map((item, index) => (
+                  <Link
+                    key={item.lever}
+                    href="#contact-form"
+                    className="dtsc-premium-reveal group relative overflow-hidden rounded-2xl border border-white/10 bg-[#071427]/55 p-4 transition hover:-translate-y-1 hover:border-white/25 hover:bg-[#071427]/75"
+                    style={{ animationDelay: `${index * 65}ms` }}
+                  >
+                    <span className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.accent}`} />
+                    <item.icon className="h-5 w-5 text-cyan-200" />
+                    <p className="mt-3 text-sm font-black text-white">{item.lever}</p>
+                    <ArrowRight className="absolute bottom-4 right-4 h-4 w-4 text-slate-500 transition group-hover:translate-x-1 group-hover:text-white" />
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="relative overflow-hidden border-b border-dtsc-border dtsc-public-band-light">
-        <PublicSectionWatermark
-          position="right"
-          image="/watermarks/dtsc-7-leviers-watermark.jpg"
-          className="opacity-[0.04]"
-        />
-        <div className="relative z-10 mx-auto w-full max-w-7xl min-w-0 px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mb-8 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-            <div className="min-w-0">
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Avant de nous écrire</p>
-              <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Choisissez le besoin qui ressemble le plus à votre situation.</h2>
+      <section className="dtsc-public-band-light border-b border-dtsc-border">
+        <div className="mx-auto w-full max-w-[92rem] px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,.75fr)_minmax(0,1.25fr)] lg:items-end">
+            <div>
+              <p className="dtsc-label text-cyan-600">Votre priorité</p>
+              <h2 className="dtsc-h2 mt-3 text-dtsc-ink">Commencez par le résultat, pas par l’outil.</h2>
             </div>
-            <p className="leading-7 text-dtsc-muted">
-              Ces cartes ne remplacent pas le formulaire: elles vous aident à formuler votre demande avec le bon levier DTSC et à obtenir une réponse plus exploitable.
+            <p className="max-w-3xl text-base leading-8 text-dtsc-muted">
+              Choisissez la situation qui vous ressemble. Elle préremplit votre réflexion, mais le cadrage final relie toujours le besoin, le levier DTSC, le livrable et la mesure du résultat.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {qualificationCards.map((item, index) => (
               <Link
                 key={item.title}
                 href="#contact-form"
-                className={`${index % 2 === 0 ? "dtsc-card" : "dtsc-card-alt"} dtsc-card-hover dtsc-premium-reveal p-6`}
+                className="dtsc-card-hover dtsc-premium-reveal group relative overflow-hidden rounded-[1.5rem] border border-dtsc-border bg-dtsc-surface p-6 shadow-[var(--dtsc-shadow-md)]"
                 style={{ animationDelay: `${index * 60}ms` }}
               >
-                <item.icon className="h-6 w-6 text-cyan-500" />
-                <h3 className="mt-5 text-xl font-black text-dtsc-ink">{item.title}</h3>
-                <p className="mt-3 rounded-xl bg-dtsc-soft px-3 py-2 text-sm font-black text-dtsc-blue">{item.lever}</p>
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue underline underline-offset-4">
+                <span className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${item.accent}`} />
+                <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${item.iconClass}`}>
+                  <item.icon className="h-6 w-6" />
+                </span>
+                <h3 className="mt-5 text-xl font-black tracking-[-0.03em] text-dtsc-ink">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-dtsc-muted">{item.text}</p>
+                <p className="mt-5 text-xs font-black uppercase tracking-[0.14em] text-dtsc-blue">{item.lever}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-dtsc-blue">
                   Préparer ma demande
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                 </span>
               </Link>
             ))}
@@ -130,35 +249,49 @@ export default function ContactPage() {
         </div>
       </section>
 
-      <section className="border-b border-dtsc-border dtsc-public-band-cyan">
-        <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
-          <div className="min-w-0">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Mini-parcours</p>
-            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">De votre message à une action prioritaire.</h2>
-            <p className="mt-4 leading-7 text-dtsc-muted">
-              DTSC transforme une demande générale en cadrage exploitable: problème, levier, livrable, résultat à mesurer et prochaine étape.
+      <section className="dtsc-public-band-cyan border-b border-dtsc-border">
+        <div className="mx-auto grid w-full max-w-[92rem] gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)] lg:px-8 lg:py-20">
+          <div>
+            <p className="dtsc-label text-violet-600">Méthode de qualification</p>
+            <h2 className="dtsc-h2 mt-3 text-dtsc-ink">De votre message à une décision exploitable.</h2>
+            <p className="mt-5 max-w-xl leading-8 text-dtsc-muted">
+              Une demande utile ne se résume pas à « je veux une application » ou « je veux de l’IA ». Nous reconstruisons le lien entre le problème, la décision et la valeur attendue.
             </p>
           </div>
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {contactSteps.map((step, index) => (
-              <div key={step} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_12px_34px_rgba(0,43,91,0.08)]">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Étape {String(index + 1).padStart(2, "0")}</p>
-                <p className="mt-2 font-black text-dtsc-ink">{step}</p>
-              </div>
+              <article key={step.title} className="dtsc-card-hover rounded-[1.35rem] border border-dtsc-border bg-dtsc-surface p-5 shadow-[var(--dtsc-shadow-md)]">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="dtsc-animated-gradient flex h-10 w-10 items-center justify-center rounded-xl text-sm font-black text-[#001736]">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="h-px flex-1 bg-gradient-to-r from-cyan-400 via-violet-400 to-transparent" />
+                </div>
+                <h3 className="mt-5 text-lg font-black tracking-[-0.025em] text-dtsc-ink">{step.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-dtsc-muted">{step.text}</p>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="contact-form" className="dtsc-public-band-light pt-16">
+      <section id="contact-form" className="dtsc-public-band-light pt-16 lg:pt-20">
+        <div className="mx-auto mb-9 max-w-4xl px-4 text-center sm:px-6">
+          <p className="dtsc-label text-pink-600">Passer à l’action</p>
+          <h2 className="dtsc-h2 mt-3 text-dtsc-ink">Décrivez le contexte. Nous structurerons la prochaine étape.</h2>
+          <p className="mx-auto mt-4 max-w-2xl leading-7 text-dtsc-muted">
+            Plus votre message relie objectif, difficulté actuelle et résultat attendu, plus la première réponse sera précise.
+          </p>
+        </div>
         <ContactNewsletterSection contactEmail={dtsc.email} />
       </section>
 
-      <section className="border-t border-dtsc-border dtsc-public-band-soft">
-        <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
-          <div className="min-w-0">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Questions contact</p>
-            <h2 className="mt-2 text-3xl font-black text-dtsc-ink">Clarifier votre demande avant l&apos;envoi.</h2>
+      <section className="dtsc-public-band-soft border-t border-dtsc-border">
+        <div className="mx-auto grid w-full max-w-[92rem] gap-9 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)] lg:px-8 lg:py-20">
+          <div>
+            <p className="dtsc-label text-emerald-600">Questions avant contact</p>
+            <h2 className="dtsc-h2 mt-3 text-dtsc-ink">Clarifier sans ralentir votre décision.</h2>
+            <p className="mt-4 max-w-xl leading-7 text-dtsc-muted">
+              Vous n’avez pas besoin d’un cahier des charges parfait. Un contexte honnête et un objectif clair suffisent pour commencer le cadrage.
+            </p>
           </div>
           <Accordion>
             {contactFaqs.map((item, index) => (
@@ -169,6 +302,7 @@ export default function ContactPage() {
           </Accordion>
         </div>
       </section>
+
       <PublicFooter />
     </main>
   );
