@@ -1,0 +1,65 @@
+name: Apply Iteration 07 V3 Patch
+
+on:
+  push:
+    branches:
+      - fix/iteration-07-e2e-remediation-v3-final
+    paths:
+      - ".github/workflows/apply-iteration07-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-iteration07-v3-final
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            .github/patches/iteration07-v3.part00 \
+            .github/patches/iteration07-v3.part01a \
+            .github/patches/iteration07-v3.part01b \
+            .github/patches/iteration07-v3.part02 \
+            .github/patches/iteration07-v3.part03a0 \
+            .github/patches/iteration07-v3.part03a1 \
+            .github/patches/iteration07-v3.part03b \
+            .github/patches/iteration07-v3.part04 \
+            .github/patches/iteration07-v3.part05 \
+            .github/patches/iteration07-v3.part06 \
+            > /tmp/iteration07-v3.patch.gz.b64
+          echo "5eea4d37b9b5340156e2ec640c56478148a35e783eba5726061d7bdd8ffcb060  /tmp/iteration07-v3.patch.gz.b64" | sha256sum --check
+          base64 --decode /tmp/iteration07-v3.patch.gz.b64 | gzip --decompress > /tmp/iteration07-v3.patch
+          git apply --check --whitespace=error-all /tmp/iteration07-v3.patch
+
+      - name: Apply patch and remove transfer artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --index --whitespace=error-all /tmp/iteration07-v3.patch
+          git rm -rf .github/patches
+          git rm -f .github/workflows/apply-iteration07-v3.yml
+          git rm -f .github/workflows/export-source-artifact.yml || true
+          git diff --cached --check
+
+      - name: Commit functional remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: implement iteration 07 E2E remediation v3"
+          git push origin HEAD:fix/iteration-07-e2e-remediation-v3-final
