@@ -100,6 +100,9 @@ jobs:
       - name: Standard modules iteration 07 Console QA
         run: pnpm qa:standard-modules-iteration-07
 
+      - name: Iteration 07 owner E2E remediation QA
+        run: pnpm qa:iteration-07-owner-e2e-remediation
+
       - name: Standard collaboration E2E fixes QA
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
 
@@ -164,6 +167,9 @@ jobs:
 
       - name: Run standard modules iteration 07 on clean database
         run: pnpm qa:standard-modules-iteration-07
+
+      - name: Run iteration 07 owner remediation on clean database
+        run: pnpm qa:iteration-07-owner-e2e-remediation
 
       - name: Prepare isolated shadow database
         run: |
