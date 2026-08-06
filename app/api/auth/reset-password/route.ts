@@ -7,10 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/security";
 
-const schema = z.object({
-  token: z.string().min(32).max(256),
-  password: z.string().min(12).max(256),
-});
+const schema = z.object({ token: z.string().min(32).max(256), password: z.string().min(12).max(256) });
 
 export async function POST(req: Request) {
   const limited = await rateLimit(getRateLimitKey(req, "auth:reset-password"), 8, 15 * 60 * 1000);
@@ -25,25 +22,31 @@ export async function POST(req: Request) {
   const tokenRecord = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
   const now = new Date();
   if (!tokenRecord || tokenRecord.usedAt || tokenRecord.expiresAt <= now) {
-    return NextResponse.json({ error: "Ce lien est invalide, expiré ou déjà utilisé.", reason: tokenRecord?.usedAt ? "RESET_TOKEN_ALREADY_USED" : "RESET_TOKEN_INVALID" }, { status: 400 });
+    const reason = tokenRecord?.usedAt ? "RESET_TOKEN_ALREADY_USED" : tokenRecord ? "RESET_TOKEN_EXPIRED" : "RESET_TOKEN_INVALID";
+    return NextResponse.json({ error: "Ce lien est invalide, expiré ou déjà utilisé.", reason }, { status: 400 });
   }
 
   const user = await prisma.user.findUnique({ where: { id: tokenRecord.userId }, select: { id: true, status: true } });
   if (!user || user.status !== "ACTIVE") return NextResponse.json({ error: "Ce lien ne peut plus être utilisé.", reason: "RESET_TOKEN_INVALID" }, { status: 400 });
 
   const passwordHash = hashPassword(parsed.data.password);
-  await prisma.$transaction(async (tx) => {
-    const consumed = await tx.passwordResetToken.updateMany({
-      where: { id: tokenRecord.id, tokenHash, usedAt: null, expiresAt: { gt: now } },
-      data: { usedAt: now },
+  let completed = false;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const consumed = await tx.passwordResetToken.updateMany({
+        where: { id: tokenRecord.id, tokenHash, usedAt: null, expiresAt: { gt: now } },
+        data: { usedAt: now },
+      });
+      if (consumed.count !== 1) throw new Error("RESET_TOKEN_CONSUMED");
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+      await tx.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: now } });
     });
-    if (consumed.count !== 1) throw new Error("RESET_TOKEN_CONSUMED");
-    await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
-    await tx.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: now } });
-  }).catch(() => null);
+    completed = true;
+  } catch {
+    completed = false;
+  }
 
-  const refreshed = await prisma.user.findUnique({ where: { id: user.id }, select: { passwordHash: true } });
-  if (!refreshed || refreshed.passwordHash !== passwordHash) {
+  if (!completed) {
     return NextResponse.json({ error: "Ce lien est invalide, expiré ou déjà utilisé.", reason: "RESET_TOKEN_ALREADY_USED" }, { status: 400 });
   }
 
@@ -54,7 +57,7 @@ export async function POST(req: Request) {
     entity: "User",
     entityId: user.id,
     request: req,
-    metadata: { sessionsRevoked: "cookie-session" },
+    metadata: { sessionsRevoked: "current-cookie-session" },
   });
   return NextResponse.json({ ok: true, reason: "PASSWORD_RESET_COMPLETED" });
 }

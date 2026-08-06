@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { SubscriptionStatus, UserRole } from "@prisma/client";
+import { passwordPolicyError } from "@/lib/account-recovery";
 import { prisma } from "@/lib/prisma";
 import { signUpSchema } from "@/lib/validators";
 import { hashPassword } from "@/lib/security";
@@ -18,30 +19,33 @@ export async function POST(req: Request) {
   const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-up"), 5, 30 * 60 * 1000);
   if (!limiter.ok) {
     return NextResponse.json(
-      { error: "Too many registration attempts", resetAt: new Date(limiter.resetAt).toISOString() },
-      { status: 429 }
+      { error: "Trop de tentatives. Réessayez plus tard.", reason: "RATE_LIMITED", resetAt: new Date(limiter.resetAt).toISOString() },
+      { status: 429 },
     );
   }
 
-  const body = signUpSchema.safeParse(await req.json());
-  if (!body.success) {
-    return NextResponse.json({ error: "Invalid registration data" }, { status: 400 });
+  const rawBody = await req.json().catch(() => null);
+  const body = signUpSchema.safeParse(rawBody);
+  if (!body.success || rawBody?.legalConsent !== true) {
+    return NextResponse.json({ error: "Les informations d’inscription sont incomplètes.", reason: "VALIDATION_ERROR" }, { status: 400 });
+  }
+  const policyError = passwordPolicyError(body.data.password);
+  if (policyError) {
+    return NextResponse.json({ error: policyError, reason: "PASSWORD_POLICY_FAILED" }, { status: 400 });
   }
 
   const existingUser = await prisma.user.findUnique({
     where: { email: body.data.email },
     select: { id: true },
   });
-
   if (existingUser) {
-    return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Impossible de créer ce compte avec les informations fournies.", reason: "REGISTRATION_UNAVAILABLE" },
+      { status: 409 },
+    );
   }
 
-  const role =
-    process.env.ADMIN_EMAIL?.toLowerCase() === body.data.email
-      ? UserRole.ADMIN
-      : UserRole.CLIENT;
-
+  const role = process.env.ADMIN_EMAIL?.toLowerCase() === body.data.email ? UserRole.ADMIN : UserRole.CLIENT;
   const settings = await getAppSettings();
 
   if (settings.signUpOtpEnabled && !body.data.otp) {
@@ -67,8 +71,8 @@ export async function POST(req: Request) {
 
     if (!mail.sent) {
       return NextResponse.json(
-        { error: "Unable to send verification code", reason: "OTP_EMAIL_FAILED" },
-        { status: 502 }
+        { error: "Le code de vérification n’a pas pu être envoyé.", reason: "OTP_EMAIL_FAILED" },
+        { status: 502 },
       );
     }
 
@@ -80,12 +84,7 @@ export async function POST(req: Request) {
       request: req,
     });
 
-    return NextResponse.json({
-      ok: true,
-      otpRequired: true,
-      email: body.data.email,
-      expiresAt: expiresAt.toISOString(),
-    });
+    return NextResponse.json({ ok: true, otpRequired: true, email: body.data.email, expiresAt: expiresAt.toISOString() });
   }
 
   let verifiedPendingRegistration: {
@@ -102,8 +101,8 @@ export async function POST(req: Request) {
     if (!verification.ok) {
       const status = verification.reason === "EXPIRED" || verification.reason === "LOCKED" ? 410 : 400;
       return NextResponse.json(
-        { error: "Invalid or expired verification code", reason: verification.reason },
-        { status }
+        { error: "Code de vérification invalide ou expiré.", reason: verification.reason },
+        { status },
       );
     }
     verifiedPendingRegistration = verification.pendingRegistration;
@@ -127,13 +126,7 @@ export async function POST(req: Request) {
   if (freemium) {
     const { start, end } = getNextBillingPeriod();
     await prisma.subscription.create({
-      data: {
-        userId: user.id,
-        planId: freemium.id,
-        status: SubscriptionStatus.ACTIVE,
-        currentPeriodStart: start,
-        currentPeriodEnd: end,
-      },
+      data: { userId: user.id, planId: freemium.id, status: SubscriptionStatus.ACTIVE, currentPeriodStart: start, currentPeriodEnd: end },
     });
   }
 
@@ -146,11 +139,10 @@ export async function POST(req: Request) {
     action: settings.signUpOtpEnabled ? "SIGNUP_COMPLETED_WITH_OTP" : "SIGNUP_COMPLETED",
     entity: "User",
     entityId: user.id,
-    metadata: { role: user.role },
+    metadata: { role: user.role, legalConsent: true },
     request: req,
   });
 
   await setSessionCookie(user);
-
   return NextResponse.json({ ok: true });
 }
