@@ -139,14 +139,14 @@ export async function getAcceptedCollaborationContacts(session: SessionPayload, 
       status: "ACCEPTED",
       OR: [{ requesterId: session.userId }, { targetUserId: session.userId }],
     },
-    select: { requesterId: true, targetUserId: true, acceptedAt: true, updatedAt: true },
+    select: { requesterId: true, targetUserId: true, respondedAt: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
     take: Math.min(Math.max(limit, 1), 200),
   });
   const contactMetadata = new Map<string, Date>();
   for (const request of requests) {
     const contactId = request.requesterId === session.userId ? request.targetUserId : request.requesterId;
-    if (!contactMetadata.has(contactId)) contactMetadata.set(contactId, request.acceptedAt || request.updatedAt);
+    if (!contactMetadata.has(contactId)) contactMetadata.set(contactId, request.respondedAt || request.updatedAt);
   }
   const blocked = await prisma.collaborationUserBlock.findMany({
     where: { revokedAt: null, OR: [{ blockerId: session.userId }, { blockedId: session.userId }] },
