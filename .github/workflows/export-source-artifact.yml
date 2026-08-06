@@ -1,0 +1,26 @@
+name: Export Source Artifact
+
+on:
+  push:
+    branches:
+      - fix/iteration-07-e2e-remediation-v3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create source archive
+        run: |
+          tar --exclude=.git -czf /tmp/dtsc-platform-source.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dtsc-platform-source
+          path: /tmp/dtsc-platform-source.tar.gz
+          retention-days: 1
