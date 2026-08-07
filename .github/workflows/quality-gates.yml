@@ -77,7 +77,7 @@ jobs:
         run: pnpm type-check
 
       - name: Regression QA
-        run: pnpm qa:regression
+        run: node scripts/run-regression-qa-ci.mjs
 
       - name: Standard modules iteration 01 QA
         run: node scripts/qa-standard-modules-iteration-01.mjs
