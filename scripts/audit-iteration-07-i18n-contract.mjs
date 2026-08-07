@@ -40,11 +40,21 @@ else {
   }
 }
 
-if (failures.length) { console.error(failures.map((failure) => `✗ ${failure}`).join("\n")); process.exit(1); }
+if (failures.length) {
+  console.error(failures.map((failure) => `✗ ${failure}`).join("\n"));
+  if (process.env.GITHUB_ACTIONS === "true") {
+    for (const failure of failures.slice(0, 20)) console.error(`::error title=Contrat i18n itération 07::${escapeAnnotation(failure)}`);
+  }
+  process.exit(1);
+}
 console.log("✓ Contrat i18n itération 07 et budget global de non-régression validés.");
 
 function countLikelyHardcodedLabels(content) {
   const jsxText = [...content.matchAll(/>([^<{\n][^<{]*?)</g)].map((match) => match[1].trim()).filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));
   const attributes = [...content.matchAll(/(?:placeholder|title|aria-label)="([^"]*[A-Za-zÀ-ÿ][^"]*)"/g)].map((match) => match[1]);
   return jsxText.length + attributes.length;
+}
+
+function escapeAnnotation(value) {
+  return String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 }
