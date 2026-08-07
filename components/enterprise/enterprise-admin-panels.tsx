@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Ban, Building2, CalendarDays, Edit3, ExternalLink, MailPlus, Plus, RotateCcw, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, Trash2, UserCog } from "lucide-react";
 import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
 import { PharmacyAdminWorkspace } from "@/components/enterprise/pharmacy-admin-workspace";
@@ -188,6 +189,23 @@ const workflowCategories = [
   "Urgence",
   "Administration",
 ];
+
+const settingsPanelCopy = {
+  fr: {
+    settingsTitle: "Paramètres entreprise",
+    settingsDescription: "Modifiez les paramètres généraux et sectoriels persistés pour cette entreprise.",
+    generalSettings: "Paramètres généraux",
+    shopSettings: "Paramètres Shop",
+    shopSettingsDescription: "Les sites, dépôts, caisses, wallets Mobile Money et opérateurs Télécom sont configurés dans leurs modules ERP dédiés. Cette page conserve uniquement l’identité et les paramètres généraux de l’entreprise.",
+  },
+  en: {
+    settingsTitle: "Company settings",
+    settingsDescription: "Edit the persistent general and sector-specific settings for this company.",
+    generalSettings: "General settings",
+    shopSettings: "Shop settings",
+    shopSettingsDescription: "Sites, warehouses, tills, Mobile Money wallets and telecom operators are configured in their dedicated ERP modules. This page only keeps the company identity and general settings.",
+  },
+} as const;
 
 type AdminMutationHandler = (event: FormEvent<HTMLFormElement>, successMessage: string) => void | Promise<void>;
 type InviteMemberHandler = (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
@@ -816,18 +834,20 @@ export function EnterpriseBrandingSettingsPanel({
   organization: EnterpriseAdminOrganization;
   submitAdminMutation: AdminMutationHandler;
 }) {
+  const locale = useAppLocale() === "en" ? "en" : "fr";
+  const settingsText = settingsPanelCopy[locale];
   const settings = jsonObject(organization.settingsJson);
   const healthSettings = jsonObject(settings.health);
   const pharmacySettings = jsonObject(settings.pharmacy);
   const branding = jsonObject(organization.brandingJson);
 
   return (
-    <AccordionItem title="Paramètres entreprise">
-      <EnterpriseFormDialogCard title="Paramètres entreprise" description="Modifiez les paramètres généraux et sectoriels persistés pour cette entreprise." buttonLabel="Ouvrir les paramètres entreprise" icon={<SlidersHorizontal className="h-4 w-4" />}>
+    <AccordionItem title={settingsText.settingsTitle}>
+      <EnterpriseFormDialogCard title={settingsText.settingsTitle} description={settingsText.settingsDescription} buttonLabel="Ouvrir les paramètres entreprise" icon={<SlidersHorizontal className="h-4 w-4" />}>
         <form onSubmit={(event) => void submitAdminMutation(event, "Paramètres entreprise enregistrés.")} className="grid gap-4">
           <input type="hidden" name="entityType" value="settings" />
           <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
-            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-600 md:col-span-2">Paramètres généraux</h3>
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-600 md:col-span-2">{settingsText.generalSettings}</h3>
             <Input name="displayName" defaultValue={organization.name} placeholder="Nom affiché" required />
             <Input name="logoUrl" defaultValue={organization.logoUrl || ""} placeholder="URL logo" />
             <Input name="primaryColor" defaultValue={nestedJsonText(branding, "primaryColor")} placeholder="Couleur principale" />
@@ -876,8 +896,8 @@ export function EnterpriseBrandingSettingsPanel({
             <input type="hidden" name="enhancedMedicalPrivacy" value="off" />
             <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="enhancedMedicalPrivacy" type="checkbox" defaultChecked={healthSettings.enhancedMedicalPrivacy !== false} /> Confidentialité médicale renforcée</label>
           </section> : sectorCode === "COMMERCE_RETAIL" ? <section className="rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-4">
-            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-700">Paramètres Shop</h3>
-            <p className="mt-2 text-sm font-semibold leading-6 text-dtsc-muted">Les sites, dépôts, caisses, wallets Mobile Money et opérateurs Télécom sont configurés dans leurs modules ERP dédiés. Cette page conserve uniquement l’identité et les paramètres généraux de l’entreprise.</p>
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-700">{settingsText.shopSettings}</h3>
+            <p className="mt-2 text-sm font-semibold leading-6 text-dtsc-muted">{settingsText.shopSettingsDescription}</p>
           </section> : null}
           <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <SlidersHorizontal className="h-4 w-4" />
