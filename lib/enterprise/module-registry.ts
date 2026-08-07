@@ -1,6 +1,7 @@
 import registryData from "@/lib/enterprise/module-registry-data.json";
 import commonDomainRegistryData from "@/lib/enterprise/module-registry-common-domains.json";
 import financeRegistryData from "@/lib/enterprise/module-registry-finance.json";
+import retailRegistryData from "@/lib/enterprise/module-registry-retail.json";
 import sectorConvergenceRegistryData from "@/lib/enterprise/module-registry-sector-convergence.json";
 import finalCleanupRegistryData from "@/lib/enterprise/module-registry-final-cleanup.json";
 import commercialRegistryData from "@/lib/enterprise/module-registry-commercial-overrides.json";
@@ -83,6 +84,7 @@ export const ENTERPRISE_MODULE_REGISTRY_VERSION = Math.max(
   registryData.version,
   commonDomainRegistryData.version,
   financeRegistryData.version,
+  retailRegistryData.version,
   sectorConvergenceRegistryData.version,
   finalCleanupRegistryData.version,
   commercialRegistryData.version,
@@ -135,6 +137,7 @@ export const ENTERPRISE_MODULE_REGISTRY = [
   ...registryData.modules,
   ...commonDomainRegistryData.modules,
   ...financeRegistryData.modules,
+  ...retailRegistryData.modules,
 ].map((definition) =>
   applyCommercialOverride(
     applyFinalCleanupOverride(
