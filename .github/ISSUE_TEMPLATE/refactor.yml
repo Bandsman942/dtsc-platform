@@ -1,0 +1,33 @@
+name: Refactor
+description: Réduire une dette sans changer le comportement attendu
+title: "[REFACTOR] "
+labels: ["type:refactor"]
+body:
+  - type: textarea
+    id: debt
+    attributes: { label: Dette / problème actuel }
+    validations: { required: true }
+  - type: textarea
+    id: reason
+    attributes: { label: Raison du refactor }
+    validations: { required: true }
+  - type: textarea
+    id: stable
+    attributes: { label: Comportement devant rester identique }
+    validations: { required: true }
+  - type: textarea
+    id: zones
+    attributes: { label: Zones touchées }
+  - type: textarea
+    id: risks
+    attributes: { label: Risques de régression }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Critères d’acceptation }
+    validations: { required: true }
+  - type: textarea
+    id: qa
+    attributes: { label: QA requise }
+  - type: textarea
+    id: rollback
+    attributes: { label: Stratégie de rollback }

@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-  push:
-    branches:
-      - main
-      - "feat/**"
-      - "fix/**"
 
 permissions:
   contents: read
@@ -18,7 +13,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  governance:
+    name: Delivery governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Validate PR governance
+        run: node scripts/github/validate-pr-governance.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate commits
+        run: node scripts/github/validate-commits.mjs
+      - name: Test governance contract
+        run: node scripts/qa-delivery-governance.mjs
+
   quality:
+    name: Quality
+    needs: governance
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -43,101 +66,77 @@ jobs:
       DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
       - name: Diff checks
         run: |
           git fetch origin main
           git diff --check origin/main...HEAD
           git diff --cached --check
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
-
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Generate Prisma client
         run: pnpm prisma:generate
-
       - name: Apply migrations for quality checks
         run: pnpm prisma:deploy
-
       - name: Type check
         run: pnpm type-check
-
       - name: Regression QA
         run: node scripts/run-regression-qa-ci.mjs
-
       - name: Standard modules iteration 01 QA
         run: node scripts/qa-standard-modules-iteration-01.mjs
-
       - name: Standard modules iteration 02 QA
         run: node scripts/qa-standard-modules-iteration-02.mjs
-
       - name: Standard modules iteration 03 QA
         run: node scripts/qa-standard-modules-iteration-03.mjs
-
       - name: Standard modules iteration 04 QA
         run: node scripts/qa-standard-work-coordination-checks.mjs all
-
       - name: Standard modules iteration 05 QA
         run: node scripts/qa-standard-modules-iteration-05.mjs
-
       - name: Standard modules iteration 06 QA
         run: node scripts/qa-standard-modules-iteration-06.mjs
-
       - name: Standard modules iteration 07 Console QA
         run: node scripts/run-iteration07-qa-ci.mjs
-
       - name: Iteration 07 owner E2E remediation QA
         run: pnpm qa:iteration-07-owner-e2e-remediation
-
       - name: Iteration 07 owner E2E remediation v3 QA
         run: pnpm qa:iteration-07-owner-e2e-remediation-v3
-
       - name: User guide contract QA
         run: pnpm qa:user-guide-contract
-
       - name: Iteration 07 i18n contract QA
         run: pnpm qa:iteration-07-i18n-contract
-
       - name: Retail Telco Mobile Money QA
         run: node scripts/qa-retail-telco-mobile-money.mjs
-
       - name: Sector onboarding commercial readiness QA
         run: node scripts/qa-sector-onboarding-commercial-readiness.mjs
-
       - name: Standard modules iteration 08 QA
         run: node scripts/qa-standard-modules-iteration-08.mjs
-
       - name: Standard collaboration E2E fixes QA
         run: node scripts/audit-standard-collaboration-e2e-fixes.mjs
-
       - name: Standard collaboration commercial readiness QA
         run: node scripts/audit-standard-collaboration-commercial-readiness.mjs
-
       - name: Lint
         run: pnpm lint
-
       - name: Build
         run: pnpm build
         env:
           NODE_OPTIONS: --max-old-space-size=6144
 
   migration:
+    name: Migration
+    needs: governance
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -158,68 +157,53 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v7
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
-
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Generate Prisma client
         run: pnpm prisma:generate
-
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
-
       - name: Run Retail Telco Mobile Money migration contract
         run: node scripts/qa-retail-telco-mobile-money.mjs
-
       - name: Run sector onboarding commercial readiness on clean database
         run: node scripts/qa-sector-onboarding-commercial-readiness.mjs
-
       - name: Run standard modules iteration 08 on clean database
         run: node scripts/qa-standard-modules-iteration-08.mjs
-
       - name: Run final ERP audits on clean database
         run: |
           pnpm audit:erp-cutover -- --dry-run --json
           pnpm audit:financial-integrity -- --json
-
       - name: Run standard modules iteration 07 on clean database
         run: node scripts/run-iteration07-qa-ci.mjs
-
       - name: Run iteration 07 owner remediation on clean database
         run: pnpm qa:iteration-07-owner-e2e-remediation
-
       - name: Run iteration 07 owner remediation v3 on clean database
         run: pnpm qa:iteration-07-owner-e2e-remediation-v3
-
       - name: Validate user guide contract
         run: pnpm qa:user-guide-contract
-
       - name: Validate iteration 07 i18n contract
         run: pnpm qa:iteration-07-i18n-contract
-
       - name: Prepare isolated shadow database
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
           DROP DATABASE IF EXISTS dtsc_shadow_test;
           CREATE DATABASE dtsc_shadow_test;
           SQL
-
       - name: Verify Finance migration schema parity
         run: node scripts/qa-enterprise-finance-migration-parity.mjs
 
   authenticated-browser-acceptance:
+    name: Authenticated browser acceptance
     if: github.event_name == 'workflow_dispatch'
     needs: [quality, migration]
     runs-on: ubuntu-latest
@@ -255,39 +239,30 @@ jobs:
       DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v7
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
-
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Generate Prisma client
         run: pnpm prisma:generate
-
       - name: Apply migrations
         run: pnpm prisma:deploy
-
       - name: Build
         run: pnpm build
         env:
           NODE_OPTIONS: --max-old-space-size=6144
-
       - name: Seed isolated authenticated ERP acceptance
         run: node scripts/seed-erp-professional-e2e.mjs
-
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
-
       - name: Start application for browser acceptance
         run: |
           nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-next.log 2>&1 &
@@ -300,17 +275,14 @@ jobs:
           done
           cat /tmp/dtsc-next.log
           exit 1
-
       - name: Authenticated ERP browser acceptance
         run: pnpm e2e:erp-professional
-
       - name: Stop application
         if: always()
         run: |
           if [ -f /tmp/dtsc-next.pid ]; then
             kill "$(cat /tmp/dtsc-next.pid)" || true
           fi
-
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

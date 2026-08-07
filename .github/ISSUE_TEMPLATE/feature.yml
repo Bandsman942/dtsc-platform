@@ -1,0 +1,48 @@
+name: Feature
+description: Proposer une évolution produit structurée
+title: "[FEATURE] "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: need
+    attributes: { label: Besoin métier }
+    validations: { required: true }
+  - type: textarea
+    id: problem
+    attributes: { label: Problème à résoudre }
+    validations: { required: true }
+  - type: textarea
+    id: objective
+    attributes: { label: Objectif }
+    validations: { required: true }
+  - type: input
+    id: users
+    attributes: { label: Utilisateurs concernés }
+  - type: textarea
+    id: scope
+    attributes: { label: Scope }
+    validations: { required: true }
+  - type: textarea
+    id: outscope
+    attributes: { label: Hors scope }
+  - type: dropdown
+    id: impact
+    attributes: { label: Impact livraison, options: [High, Medium, Low] }
+    validations: { required: true }
+  - type: input
+    id: area
+    attributes: { label: Area }
+    validations: { required: true }
+  - type: textarea
+    id: dependencies
+    attributes: { label: Dépendances }
+  - type: textarea
+    id: impacts
+    attributes: { label: Impacts DB / RBAC / multi-tenant / API / mobile / i18n }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Critères d’acceptation }
+    validations: { required: true }
+  - type: textarea
+    id: qa
+    attributes: { label: QA attendue et E2E attendu ou non }

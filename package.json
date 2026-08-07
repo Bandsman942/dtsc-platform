@@ -291,7 +291,12 @@
     "qa:iteration-07-owner-e2e-remediation": "node scripts/qa-iteration-07-owner-e2e-remediation.mjs",
     "qa:user-guide-contract": "node scripts/audit-user-guide-contract.mjs",
     "qa:iteration-07-i18n-contract": "node scripts/audit-iteration-07-i18n-contract.mjs",
-    "qa:iteration-07-owner-e2e-remediation-v3": "node scripts/qa-iteration-07-owner-e2e-remediation-v3.mjs"
+    "qa:iteration-07-owner-e2e-remediation-v3": "node scripts/qa-iteration-07-owner-e2e-remediation-v3.mjs",
+    "delivery:governance:check": "node scripts/github/sync-delivery-governance.mjs",
+    "delivery:governance:sync": "node scripts/github/sync-delivery-governance.mjs",
+    "delivery:pr:validate": "node scripts/github/validate-pr-governance.mjs",
+    "delivery:commits:validate": "node scripts/github/validate-commits.mjs",
+    "qa:delivery-governance": "node scripts/qa-delivery-governance.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

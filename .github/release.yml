@@ -1,0 +1,20 @@
+changelog:
+  categories:
+    - title: Features
+      labels: ["type:feature"]
+    - title: Bug fixes
+      labels: ["type:bug"]
+    - title: Security
+      labels: ["type:security"]
+    - title: ERP
+      labels: ["area:erp"]
+    - title: Health / Pharmacy
+      labels: ["area:health", "area:pharmacy"]
+    - title: AI
+      labels: ["area:ai"]
+    - title: Infrastructure / CI
+      labels: ["area:infra-ci"]
+    - title: Documentation
+      labels: ["type:docs"]
+    - title: Other changes
+      labels: ["*"]
