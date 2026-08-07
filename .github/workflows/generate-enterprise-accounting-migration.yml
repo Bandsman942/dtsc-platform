@@ -11,31 +11,43 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: accounting-migration-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   migration-diff:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: Checkout PR
+        uses: actions/checkout@v7
+      - name: Checkout main baseline
+        uses: actions/checkout@v7
         with:
           ref: main
           path: base-main
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           run_install: false
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm prisma:generate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
       - name: Generate additive SQL from main to branch
         run: >-
           pnpm exec prisma migrate diff
           --from-schema-datamodel base-main/prisma
           --to-schema-datamodel prisma
           --script > enterprise-accounting-migration.sql
-      - uses: actions/upload-artifact@v4
+      - name: Upload migration artifact
+        uses: actions/upload-artifact@v4
         with:
           name: enterprise-accounting-migration
           path: enterprise-accounting-migration.sql
