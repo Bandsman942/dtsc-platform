@@ -41,6 +41,18 @@ export const retailSaleCreateSchema = z.object({
     amount: positiveMoney,
     reference: z.string().trim().max(160).optional().nullable(),
   })).min(1).max(8),
+}).superRefine((input, ctx) => {
+  const seenAccounts = new Set<string>();
+  input.tenders.forEach((tender, index) => {
+    if (seenAccounts.has(tender.financialAccountId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Utilisez une seule ligne de paiement par compte financier.",
+        path: ["tenders", index, "financialAccountId"],
+      });
+    }
+    seenAccounts.add(tender.financialAccountId);
+  });
 });
 
 export const retailSaleReverseSchema = z.object({
