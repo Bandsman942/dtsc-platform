@@ -67,7 +67,15 @@ if (failures.length) {
 console.log("✓ Contrat i18n itération 07 validé: aucun nouveau dépassement par rapport à la cible historique ou à la branche de base.");
 
 function ensureMainRef() {
-  if (process.env.GITHUB_REF_NAME === "main") return;
+  if (process.env.GITHUB_REF_NAME === "main") {
+    const parentProbe = spawnSync("git", ["rev-parse", "--verify", "HEAD^"], { cwd: root, stdio: "ignore" });
+    if (parentProbe.status === 0) return;
+    // The migration job intentionally uses a shallow checkout. Deepen only enough
+    // to recover the parent commit so the non-regression gate compares main to
+    // its actual previous state instead of falling back to the historical ceiling.
+    spawnSync("git", ["fetch", "origin", "main", "--depth=2"], { cwd: root, stdio: "ignore" });
+    return;
+  }
   const probe = spawnSync("git", ["rev-parse", "--verify", "origin/main"], { cwd: root, stdio: "ignore" });
   if (probe.status === 0) return;
   spawnSync("git", ["fetch", "origin", "main", "--depth=1"], { cwd: root, stdio: "ignore" });
