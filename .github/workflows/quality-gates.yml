@@ -112,6 +112,9 @@ jobs:
       - name: Iteration 07 i18n contract QA
         run: pnpm qa:iteration-07-i18n-contract
 
+      - name: Retail Telco Mobile Money QA
+        run: node scripts/qa-retail-telco-mobile-money.mjs
+
       - name: Standard modules iteration 08 QA
         run: node scripts/qa-standard-modules-iteration-08.mjs
 
@@ -173,6 +176,9 @@ jobs:
 
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
+
+      - name: Run Retail Telco Mobile Money migration contract
+        run: node scripts/qa-retail-telco-mobile-money.mjs
 
       - name: Run standard modules iteration 08 on clean database
         run: node scripts/qa-standard-modules-iteration-08.mjs
