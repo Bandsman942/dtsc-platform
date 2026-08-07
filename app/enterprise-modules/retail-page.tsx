@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { EnterpriseRetailOperationsWorkspace } from "@/components/enterprise/professional/enterprise-retail-operations-workspace";
+import { EnterpriseRetailShopWorkspace } from "@/components/enterprise/professional/enterprise-retail-shop-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -26,7 +26,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
 
   return (
     <AppShell user={user}>
-      <EnterpriseRetailOperationsWorkspace
+      <EnterpriseRetailShopWorkspace
         organizationId={organizationId}
         organizationName={organization.name}
         definition={access.definition}
