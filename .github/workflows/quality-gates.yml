@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -242,38 +240,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Generate Prisma client
         run: pnpm prisma:generate
-
       - name: Apply migrations
         run: pnpm prisma:deploy
-
       - name: Build
         run: pnpm build
         env:
           NODE_OPTIONS: --max-old-space-size=6144
-
       - name: Seed isolated authenticated ERP acceptance
         run: node scripts/seed-erp-professional-e2e.mjs
-
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
-
       - name: Start application for browser acceptance
         run: |
           nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-next.log 2>&1 &
@@ -286,17 +275,14 @@ jobs:
           done
           cat /tmp/dtsc-next.log
           exit 1
-
       - name: Authenticated ERP browser acceptance
         run: pnpm e2e:erp-professional
-
       - name: Stop application
         if: always()
         run: |
           if [ -f /tmp/dtsc-next.pid ]; then
             kill "$(cat /tmp/dtsc-next.pid)" || true
           fi
-
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
