@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: delivery-governance-bootstrap
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   bootstrap:
@@ -44,26 +44,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Materialize governance implementation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/github/bootstrap-delivery-governance.mjs
-
       - name: Repair bootstrap-only literal assertion
         run: |
           node - <<'NODE'
@@ -76,33 +71,24 @@ jobs:
           );
           fs.writeFileSync(path, source);
           NODE
-
       - name: Diff validation
         run: git diff --check
-
       - name: Prisma generate
         run: pnpm prisma:generate
-
       - name: Type check
         run: pnpm type-check
-
       - name: Lint
         run: pnpm lint
-
       - name: Delivery governance QA
         run: pnpm qa:delivery-governance
-
       - name: Regression QA
         run: pnpm qa:regression
-
       - name: Production build
         run: pnpm build
-
       - name: Stage and validate generated diff
         run: |
           git add -A
           git diff --cached --check
-
       - name: Commit and push validated governance
         run: |
           git config user.name "github-actions[bot]"
