@@ -66,14 +66,16 @@ AND "providerCode" IN ('MPESA', 'ORANGE_MONEY', 'AIRTEL_MONEY', 'AFRIMONEY');
 -- ---------------------------------------------------------------------------
 -- 2. External provider references are unique for operations created by the
 -- Release Candidate. Legacy rows remain immutable and are not rewritten.
+-- createdAt is TIMESTAMP (without time zone), so use an immutable TIMESTAMP
+-- literal in the partial-index predicate.
 -- ---------------------------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseMobileMoneyTransaction_rc1_external_ref_key"
 ON "EnterpriseMobileMoneyTransaction"("organizationId", "providerCode", "externalReference")
-WHERE "externalReference" IS NOT NULL AND "createdAt" >= TIMESTAMPTZ '2026-08-07 08:40:00+00';
+WHERE "externalReference" IS NOT NULL AND "createdAt" >= TIMESTAMP '2026-08-07 08:40:00';
 
 CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseTelcoTopup_rc1_external_ref_key"
 ON "EnterpriseTelcoTopup"("organizationId", "providerCode", "externalReference")
-WHERE "externalReference" IS NOT NULL AND "createdAt" >= TIMESTAMPTZ '2026-08-07 08:40:00+00';
+WHERE "externalReference" IS NOT NULL AND "createdAt" >= TIMESTAMP '2026-08-07 08:40:00';
 
 -- ---------------------------------------------------------------------------
 -- 3. Purchase Manager must actually manage suppliers and purchases.
