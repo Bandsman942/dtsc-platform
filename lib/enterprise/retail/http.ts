@@ -50,8 +50,8 @@ export async function authorizeRetailRequest(
   if (options?.mutation && !isSameOriginRequest(req)) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   const session = await getSession();
   if (!session) return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  const access = await getEnterpriseCommonDomainAccess(session, organizationId, moduleCode, action);
-  if (!access.ok) return { ok: false as const, response: access.response };
+  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action });
+  if (!access) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   if (options?.mutation) {
     const limited = await rateLimit(getRateLimitKey(req, `retail:${moduleCode}:${organizationId}:${session.userId}`), options.limit || 120, 60 * 60 * 1000);
     if (!limited.ok) return { ok: false as const, response: NextResponse.json({ error: "Too many requests", message: "Trop d’opérations sur une courte période." }, { status: 429 }) };
