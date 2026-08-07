@@ -406,3 +406,7 @@ La Console globale utilise désormais des routes canoniques sous `/admin`, des d
 ### Guides et i18n
 
 `scripts/audit-user-guide-contract.mjs` valide la structure et les fonctionnalités documentées. `scripts/audit-iteration-07-i18n-contract.mjs` contrôle les parcours corrigés et compare l’application à `config/i18n-hardcoded-baseline.json`; le nombre de libellés probables codés en dur ne peut plus augmenter sans correction explicite.
+
+## Delivery Governance v1
+
+Le workflow officiel est défini dans `docs/DELIVERY_GOVERNANCE.md`. Les agents suivent `docs/AGENT_DELIVERY_RUNBOOK.md`; le rapport du vendredi suit `docs/WEEKLY_DELIVERY_REPORT_CONTRACT.md`. Les checks canoniques requis sont `Delivery governance`, `Quality` et `Migration`. Vercel publie nativement le statut `Production` sur GitHub ; seule sa réussite autorise la GitHub Release.

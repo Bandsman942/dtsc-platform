@@ -1,0 +1,67 @@
+name: Bug
+description: Signaler une anomalie reproductible
+title: "[BUG] "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes: { label: Résumé }
+    validations: { required: true }
+  - type: textarea
+    id: observed
+    attributes: { label: Comportement observé }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Comportement attendu }
+    validations: { required: true }
+  - type: input
+    id: environment
+    attributes: { label: Environnement }
+    validations: { required: true }
+  - type: dropdown
+    id: impact
+    attributes: { label: Impact livraison, options: [High, Medium, Low] }
+    validations: { required: true }
+  - type: input
+    id: area
+    attributes: { label: Module / area }
+    validations: { required: true }
+  - type: dropdown
+    id: reproducibility
+    attributes: { label: Reproductibilité, options: [Toujours, Souvent, Intermittent, Une fois] }
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes: { label: Étapes de reproduction }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs utiles sans secrets }
+  - type: dropdown
+    id: regression
+    attributes: { label: Régression, options: [Oui, Non, Inconnu] }
+    validations: { required: true }
+  - type: dropdown
+    id: database
+    attributes: { label: Impact base de données, options: [Oui, Non, Inconnu] }
+    validations: { required: true }
+  - type: dropdown
+    id: tenant
+    attributes: { label: Impact multi-tenant, options: [Oui, Non, Inconnu] }
+    validations: { required: true }
+  - type: dropdown
+    id: security
+    attributes: { label: Impact sécurité, options: [Oui, Non, Inconnu] }
+    validations: { required: true }
+  - type: dropdown
+    id: production
+    attributes: { label: Impact Production, options: [Oui, Non, Inconnu] }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Critères d’acceptation }
+    validations: { required: true }
+  - type: textarea
+    id: rollback
+    attributes: { label: Rollback si pertinent }

@@ -364,3 +364,20 @@ These rules are durable for every common or sector ERP change:
 23. Les interfaces restent utilisables à 320 px et toute action drag-and-drop possède une alternative clavier.
 24. Node 22 et les protections de build ne sont pas retirés sans preuve.
 25. Aucune QA historique n’est supprimée et aucun déploiement Production manuel depuis une branche n’est autorisé.
+
+## DTSC DELIVERY GOVERNANCE
+
+Pour tout changement matériel :
+1. partir du dernier `origin/main` vérifié ;
+2. Issue obligatoire avec labels structurés ;
+3. milestone obligatoire pour impact matériel ;
+4. branche dédiée liée à l’Issue ;
+5. Conventional Commits ;
+6. PR liée à l’Issue ;
+7. Delivery governance + Quality + Migration vertes ;
+8. Review réelle et conversations résolues ;
+9. merge uniquement après validation, normalement par squash ;
+10. Production uniquement depuis `main` ;
+11. GitHub Release uniquement après Production Vercel READY prouvée par le statut de déploiement natif.
+
+**Un commit n’est pas une livraison. Une PR mergée n’est pas encore une livraison Production. Une livraison DTSC n’est considérée réussie que lorsque son SHA a passé les contrôles requis, a été mergé dans "main", déployé avec succès sur Vercel Production et enregistré dans une GitHub Release traçable.**

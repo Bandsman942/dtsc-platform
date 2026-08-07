@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: DTSC Support
+    url: https://dtsc-platform.com
+    about: Utiliser le support DTSC pour les demandes qui ne sont pas des travaux de repository.

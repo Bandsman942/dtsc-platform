@@ -1,0 +1,35 @@
+name: Delivery task
+description: CI/CD, migration, infrastructure, observabilité, sécurité, release ou Production
+title: "[CHORE] "
+labels: ["type:chore", "area:infra-ci"]
+body:
+  - type: dropdown
+    id: kind
+    attributes: { label: Type de livraison, options: [CI/CD, Migration, Infrastructure, Observabilité, Sécurité, Release, Production] }
+    validations: { required: true }
+  - type: textarea
+    id: objective
+    attributes: { label: Objectif }
+    validations: { required: true }
+  - type: dropdown
+    id: impact
+    attributes: { label: Impact livraison, options: [High, Medium, Low] }
+    validations: { required: true }
+  - type: textarea
+    id: current
+    attributes: { label: État actuel / problème }
+  - type: textarea
+    id: changes
+    attributes: { label: Changements prévus }
+    validations: { required: true }
+  - type: textarea
+    id: production
+    attributes: { label: Impact Production / Vercel / secrets }
+  - type: textarea
+    id: rollback
+    attributes: { label: Rollback }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Critères d’acceptation }
+    validations: { required: true }
