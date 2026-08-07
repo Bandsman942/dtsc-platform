@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Banknote, CheckCircle2, ClipboardCheck, Minus, Plus, Printer, RadioTower, RefreshCw, RotateCcw, Search, Settings2, Share2, ShoppingCart, Smartphone, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Banknote, CheckCircle2, ClipboardCheck, Printer, RadioTower, RefreshCw, RotateCcw, Search, Settings2, Share2, ShoppingCart, Smartphone, XCircle } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalLoading, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
