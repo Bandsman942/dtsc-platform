@@ -23,12 +23,14 @@ export async function GET(req: Request, { params }: Params) {
     access: { canWrite: auth.access.canWrite, canManage: auth.access.canAdminister },
     range: dashboard.range,
   };
+  const mobileMoneyRecent = dashboard.recent.mobileMoney.map(({ customerPhone: _customerPhone, ...item }) => item);
+  const topupRecent = dashboard.recent.topups.map(({ destinationPhone: _destinationPhone, ...item }) => item);
   const scoped = moduleCode === "RETAIL_POS"
     ? { ...common, warehouses: dashboard.warehouses, catalogItems: dashboard.catalogItems, inventoryItems: dashboard.inventoryItems, metrics: { salesCount: dashboard.metrics.salesCount, salesRevenue: dashboard.metrics.salesRevenue }, recent: { sales: dashboard.recent.sales } }
     : moduleCode === "MOBILE_MONEY_AGENCY"
-      ? { ...common, providers: dashboard.providers.filter((item) => ["MOBILE_MONEY", "BOTH"].includes(item.providerType)), metrics: { mobileMoneyDeposits: dashboard.metrics.mobileMoneyDeposits, mobileMoneyWithdrawals: dashboard.metrics.mobileMoneyWithdrawals, mobileMoneyCommission: dashboard.metrics.mobileMoneyCommission }, recent: { mobileMoney: dashboard.recent.mobileMoney } }
+      ? { ...common, providers: dashboard.providers.filter((item) => ["MOBILE_MONEY", "BOTH"].includes(item.providerType)), metrics: { mobileMoneyDeposits: dashboard.metrics.mobileMoneyDeposits, mobileMoneyWithdrawals: dashboard.metrics.mobileMoneyWithdrawals, mobileMoneyCommission: dashboard.metrics.mobileMoneyCommission }, recent: { mobileMoney: mobileMoneyRecent } }
       : moduleCode === "TELCO_TOPUPS"
-        ? { ...common, providers: dashboard.providers.filter((item) => ["TELCO", "BOTH"].includes(item.providerType)), catalogItems: dashboard.catalogItems, metrics: { topupRevenue: dashboard.metrics.topupRevenue, topupMargin: dashboard.metrics.topupMargin }, recent: { topups: dashboard.recent.topups } }
+        ? { ...common, providers: dashboard.providers.filter((item) => ["TELCO", "BOTH"].includes(item.providerType)), catalogItems: dashboard.catalogItems, metrics: { topupRevenue: dashboard.metrics.topupRevenue, topupMargin: dashboard.metrics.topupMargin }, recent: { topups: topupRecent } }
         : { ...common, metrics: { pendingCloses: dashboard.metrics.pendingCloses }, recent: { closes: dashboard.recent.closes } };
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-dashboard", moduleCode } });
   return NextResponse.json(scoped);
