@@ -28,7 +28,9 @@ export async function POST(req: Request) {
     getPendingOrganizationInvitationsForEmail(parsed.data.email),
   ]);
   return NextResponse.json({
-    organizations: memberships.map((membership) => ({ id: membership.organization.id, name: membership.organization.name, role: membership.role })),
+    organizations: memberships
+      .filter((membership) => membership.organization.status === "ACTIVE")
+      .map((membership) => ({ id: membership.organization.id, name: membership.organization.name, role: membership.role })),
     pendingInvitations: pendingInvitations.map((invitation) => ({ id: invitation.id, organizationId: invitation.organization.id, name: invitation.organization.name, role: invitation.role })),
   });
 }
