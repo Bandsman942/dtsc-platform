@@ -1,0 +1,98 @@
+name: Delivery governance bootstrap
+
+on:
+  push:
+    branches:
+      - chore/120-delivery-governance-v1
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: delivery-governance-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_delivery_bootstrap
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d dtsc_delivery_bootstrap"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_delivery_bootstrap?schema=public
+      AUTH_SECRET: bootstrap-auth-secret-with-more-than-thirty-two-characters-2026
+      APP_URL: http://127.0.0.1:3000
+      CRON_SECRET: bootstrap-cron-secret-with-more-than-twenty-four-characters
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Checkout governance branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Materialize governance implementation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/github/bootstrap-delivery-governance.mjs
+
+      - name: Diff validation
+        run: git diff --check
+
+      - name: Prisma generate
+        run: pnpm prisma:generate
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Delivery governance QA
+        run: pnpm qa:delivery-governance
+
+      - name: Regression QA
+        run: pnpm qa:regression
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Stage and validate generated diff
+        run: |
+          git add -A
+          git diff --cached --check
+
+      - name: Commit and push validated governance
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci(delivery): establish delivery governance v1"
+          git push origin HEAD:chore/120-delivery-governance-v1
