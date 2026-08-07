@@ -64,7 +64,14 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   ],
   STOCK_KEEPER: ["enterprise.inventory.read", "enterprise.inventory.create", "enterprise.catalog.read", "enterprise.sites.read"],
   STOCK_MANAGER: ["enterprise.inventory.manage", "enterprise.catalog.update", "enterprise.sites.update", "enterprise.retail.pos.read"],
-  PURCHASE_MANAGER: ["enterprise.inventory.read", "enterprise.catalog.update", "enterprise.sites.read"],
+  PURCHASE_MANAGER: [
+    "enterprise.inventory.read",
+    "enterprise.catalog.update",
+    "enterprise.sites.read",
+    "enterprise.suppliers.view",
+    "enterprise.suppliers.manage",
+    "enterprise.purchases.manage",
+  ],
   RETAIL_CONTROLLER: [
     "enterprise.retail.pos.read",
     "enterprise.retail.mobile_money.read",

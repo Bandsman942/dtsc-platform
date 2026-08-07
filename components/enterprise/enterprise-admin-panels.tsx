@@ -22,6 +22,7 @@ import type {
   EnterpriseSectorRecordItem,
   EnterpriseWorkflowItem,
 } from "@/lib/enterprise/enterprise-admin-types";
+import { RETAIL_PERMISSION_CATALOG } from "@/lib/enterprise/retail/constants";
 import { translate } from "@/lib/i18n";
 
 export const healthcareModuleCodes = new Set([
@@ -119,6 +120,22 @@ const permissionLabels: Record<string, string> = {
   "enterprise.ai.tools.read": "Utiliser les outils IA en lecture",
   "enterprise.ai.usage.view": "Voir l'usage IA",
   "enterprise.ai.settings.manage": "Gérer les paramètres IA",
+  "enterprise.retail.pos.read": "Consulter le point de vente",
+  "enterprise.retail.pos.create": "Encaisser au point de vente",
+  "enterprise.retail.pos.manage": "Superviser le point de vente et les dérogations",
+  "enterprise.retail.mobile_money.read": "Consulter Mobile Money",
+  "enterprise.retail.mobile_money.create": "Effectuer les opérations Mobile Money",
+  "enterprise.retail.mobile_money.manage": "Superviser Mobile Money",
+  "enterprise.retail.telco.read": "Consulter les opérations Télécom",
+  "enterprise.retail.telco.create": "Effectuer les recharges Télécom",
+  "enterprise.retail.telco.manage": "Superviser les opérations Télécom",
+  "enterprise.retail.close.read": "Consulter les clôtures Shop",
+  "enterprise.retail.close.submit": "Soumettre une clôture Shop",
+  "enterprise.retail.close.validate": "Valider indépendamment une clôture Shop",
+  "enterprise.retail.close.manage": "Administrer les clôtures Shop",
+  "enterprise.suppliers.view": "Consulter les fournisseurs",
+  "enterprise.suppliers.manage": "Gérer les fournisseurs",
+  "enterprise.purchases.manage": "Gérer les achats et réapprovisionnements",
 };
 
 function humanizeCode(value: string | null | undefined) {
@@ -149,7 +166,14 @@ function permissionsForSector(sectorCode?: string | null) {
     "enterprise.activities.manage",
     "enterprise.activities.submit",
   ];
-  return [...base, ...(sectorCode === "PHARMACY" ? pharmacyPermissions : healthcarePermissions)];
+  const sectorPermissions = sectorCode === "COMMERCE_RETAIL"
+    ? RETAIL_PERMISSION_CATALOG
+    : sectorCode === "PHARMACY"
+      ? pharmacyPermissions
+      : sectorCode === "HEALTH_CARE"
+        ? healthcarePermissions
+        : [];
+  return Array.from(new Set([...base, ...sectorPermissions]));
 }
 
 const workflowCategories = [
@@ -210,7 +234,7 @@ export function EnterpriseDashboardSummary({
           <span className="rounded-full bg-cyan-400/14 px-3 py-1 text-xs font-black text-cyan-600">{organization.businessSector?.labelFr || organization.sector || "Secteur à préciser"}</span>
           <span className="rounded-full bg-dtsc-page px-3 py-1 text-xs font-black text-dtsc-muted">{organization.sectorCode || "NO_SECTOR"}</span>
           <span className="rounded-full bg-dtsc-page px-3 py-1 text-xs font-black text-dtsc-muted">Plan {entitlements.planLabel}</span>
-          <span className={`rounded-full px-3 py-1 text-xs font-black ${entitlements.subscriptionActive ? "bg-emerald-400/14 text-emerald-600" : "bg-amber-400/18 text-amber-700"}`}>
+          <span className={`rounded-full px-2 py-1 text-xs font-black ${entitlements.subscriptionActive ? "bg-emerald-400/14 text-emerald-600" : "bg-amber-400/18 text-amber-700"}`}>
             {entitlements.subscriptionActive ? "Abonnement actif" : `Statut ${entitlements.subscriptionStatus}`}
           </span>
         </div>
@@ -730,6 +754,11 @@ export function EnterpriseWorkflowsPanel({
   activeMembers: EnterpriseMemberItem[];
   submitAdminMutation: AdminMutationHandler;
 }) {
+  const categories = sectorCode === "PHARMACY"
+    ? ["Vente comptoir", "Réception stock", "Inventaire", "Gestion péremptions", "Réapprovisionnement", "Gestion retour client", "Gestion rappel de lot", "Caisse", "Incident qualité", "Ordonnance / prescription", "Conservation / stockage", "Administration"]
+    : sectorCode === "COMMERCE_RETAIL"
+      ? ["Vente comptoir", "Mobile Money", "Télécom & forfaits", "Stock", "Réapprovisionnement", "Achats", "Caisse", "Clôture", "Contrôle", "Administration"]
+      : workflowCategories;
   return (
     <AccordionItem title="Workflows / Procédures">
       <EnterpriseFormDialogCard title="Workflows / Procédures" description="Créez une procédure interne, assignez des responsables et partagez-la aux collaborateurs concernés." buttonLabel="Ouvrir le formulaire workflow" icon={<Route className="h-4 w-4" />}>
@@ -739,7 +768,7 @@ export function EnterpriseWorkflowsPanel({
           <Input name="labelFr" placeholder="Titre de la procédure" required />
           <Input name="labelEn" placeholder="Procedure title" required />
           <select name="category" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-            {(sectorCode === "PHARMACY" ? ["Vente comptoir", "Réception stock", "Inventaire", "Gestion péremptions", "Réapprovisionnement", "Gestion retour client", "Gestion rappel de lot", "Caisse", "Incident qualité", "Ordonnance / prescription", "Conservation / stockage", "Administration"] : workflowCategories).map((category) => <option key={category} value={category}>{category}</option>)}
+            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
           <select name="departmentId" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
             <option value="">Département concerné</option>
@@ -794,7 +823,7 @@ export function EnterpriseBrandingSettingsPanel({
 
   return (
     <AccordionItem title="Paramètres entreprise">
-      <EnterpriseFormDialogCard title="Paramètres entreprise" description="Modifiez les paramètres généraux et santé persistés pour cette entreprise." buttonLabel="Ouvrir les paramètres entreprise" icon={<SlidersHorizontal className="h-4 w-4" />}>
+      <EnterpriseFormDialogCard title="Paramètres entreprise" description="Modifiez les paramètres généraux et sectoriels persistés pour cette entreprise." buttonLabel="Ouvrir les paramètres entreprise" icon={<SlidersHorizontal className="h-4 w-4" />}>
         <form onSubmit={(event) => void submitAdminMutation(event, "Paramètres entreprise enregistrés.")} className="grid gap-4">
           <input type="hidden" name="entityType" value="settings" />
           <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
@@ -825,7 +854,7 @@ export function EnterpriseBrandingSettingsPanel({
             <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="pharmacyFefoEnabled" type="checkbox" defaultChecked={pharmacySettings.fefoEnabled !== false} /> Rotation FEFO activée</label>
             <input type="hidden" name="pharmacyNegativeStockBlocked" value="off" />
             <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="pharmacyNegativeStockBlocked" type="checkbox" defaultChecked={pharmacySettings.negativeStockBlocked !== false} /> Bloquer le stock négatif</label>
-          </section> : <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+          </section> : sectorCode === "HEALTH_CARE" ? <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
             <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-600 md:col-span-2">Paramètres santé</h3>
             <select name="establishmentType" defaultValue={nestedJsonText(healthSettings, "establishmentType") || "CLINIC"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
               <option value="CABINET">Cabinet</option>
@@ -846,7 +875,10 @@ export function EnterpriseBrandingSettingsPanel({
             <Input name="criticalIncidentOptions" defaultValue={nestedJsonText(healthSettings, "criticalIncidentOptions")} placeholder="Incidents critiques" />
             <input type="hidden" name="enhancedMedicalPrivacy" value="off" />
             <label className="flex items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="enhancedMedicalPrivacy" type="checkbox" defaultChecked={healthSettings.enhancedMedicalPrivacy !== false} /> Confidentialité médicale renforcée</label>
-          </section>}
+          </section> : sectorCode === "COMMERCE_RETAIL" ? <section className="rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-4">
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-cyan-700">Paramètres Shop</h3>
+            <p className="mt-2 text-sm font-semibold leading-6 text-dtsc-muted">Les sites, dépôts, caisses, wallets Mobile Money et opérateurs Télécom sont configurés dans leurs modules ERP dédiés. Cette page conserve uniquement l’identité et les paramètres généraux de l’entreprise.</p>
+          </section> : null}
           <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
             <SlidersHorizontal className="h-4 w-4" />
             Enregistrer les paramètres

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates.",
+  "genericCriteria": [
+    "ACTIVE_SECTOR",
+    "ACTIVE_TEMPLATE",
+    "CANONICAL_MODULES",
+    "PLAN_ENTITLEMENTS",
+    "DEPARTMENTS",
+    "POSITIONS_AND_RBAC",
+    "RUNTIME_PROVISIONING",
+    "USER_GUIDES",
+    "SECURE_MUTATIONS",
+    "IDEMPOTENCY",
+    "RESPONSIVE_UX",
+    "COMMERCIAL_ACCEPTANCE_PATH"
+  ],
+  "profiles": [
+    {
+      "sectorCode": "COMMERCE_RETAIL",
+      "templateVersion": 2,
+      "businessProfileCode": "RETAIL_TELCO_MOBILE_MONEY",
+      "commercializationStatus": "RELEASE_CANDIDATE",
+      "enforce": true,
+      "minimumOperationalPlan": "BUSINESS",
+      "requiredModules": [
+        "CRM_CUSTOMERS",
+        "CATALOG",
+        "SITES_WAREHOUSES",
+        "INVENTORY_LOGISTICS",
+        "SUPPLIERS_PURCHASES",
+        "FINANCE_OVERVIEW",
+        "FINANCE_ACCOUNTING",
+        "FINANCE_TREASURY",
+        "FINANCE_CASH",
+        "RETAIL_POS",
+        "MOBILE_MONEY_AGENCY",
+        "TELCO_TOPUPS",
+        "RETAIL_DAILY_CLOSE",
+        "REPORTS",
+        "DOCUMENTS"
+      ],
+      "requiredDepartments": ["DIRECTION", "SALES_TELCO", "MOBILE_MONEY_CASH", "STOCK_PURCHASES", "FINANCE_CONTROL"],
+      "requiredPositions": ["STORE_MANAGER", "SALES_MANAGER", "SELLER", "CASHIER", "MOBILE_MONEY_AGENT", "STOCK_KEEPER", "STOCK_MANAGER", "PURCHASE_MANAGER", "RETAIL_CONTROLLER"],
+      "requiredOperationalModules": ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"],
+      "requiredGuideCodes": ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"],
+      "releaseCriteria": [
+        "MULTI_ITEM_POS",
+        "SERVER_PRICE_GUARD",
+        "WALLET_NETWORK_SEPARATION",
+        "UNIQUE_PROVIDER_REFERENCE",
+        "PHONE_NORMALIZATION_AND_CONFIRMATION",
+        "AUTOMATIC_CASH_AND_FLOAT_RESOLUTION",
+        "VISIBLE_CASH_SESSION",
+        "RETAIL_RBAC_CATALOG",
+        "MULTI_CURRENCY_REPORTING",
+        "ONBOARDING_READINESS_CHECKLIST"
+      ]
+    }
+  ]
+}
