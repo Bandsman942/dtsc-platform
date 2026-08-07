@@ -2,8 +2,10 @@
 
 ## Statut
 
-Profil métier : `RETAIL_TELCO_MOBILE_MONEY`  
-Secteur parent : `COMMERCE_RETAIL`  
+Profil métier : `RETAIL_TELCO_MOBILE_MONEY`
+
+Secteur parent : `COMMERCE_RETAIL`
+
 Plan minimal opérationnel : `BUSINESS`
 
 Ce profil remplace le vieux template Commerce centré sur des codes sectoriels génériques par les sources de vérité ERP Core de DTSC Platform.
