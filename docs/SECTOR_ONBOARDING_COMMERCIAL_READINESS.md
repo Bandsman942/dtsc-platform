@@ -2,7 +2,7 @@
 
 ## Objet
 
-Tout template sectoriel DTSC peut exister techniquement sans être commercialisable. La commercialisation exige désormais un contrat QA explicite, versionné et exécuté dans la CI/CD.
+Tout template sectoriel DTSC peut exister techniquement sans être commercialisable. La commercialisation exige un contrat QA explicite, versionné et exécuté dans la CI/CD.
 
 Le manifeste canonique est `lib/enterprise/sector-onboarding-readiness.json`. Le contrôle exécutable est `scripts/qa-sector-onboarding-commercial-readiness.mjs`.
 
@@ -10,7 +10,7 @@ Le manifeste canonique est `lib/enterprise/sector-onboarding-readiness.json`. Le
 
 - `NOT_DECLARED` : le template actif est contrôlé structurellement mais DTSC ne revendique pas sa commercialisation.
 - `RELEASE_CANDIDATE` : le secteur est prioritaire et sa CI bloque si un critère obligatoire d’onboarding ou d’exploitation n’est plus satisfait.
-- `COMMERCIAL_READY` : état réservé à une validation produit explicite. Un script ne peut pas l’activer automatiquement.
+- `COMMERCIAL_READY` : état activé uniquement après validation produit explicite et parcours d’acceptation réel.
 
 ## Contrat générique obligatoire
 
@@ -32,7 +32,7 @@ Un template actif non déclaré continue d’être observé par la QA, mais ses 
 
 ## Gate Shop 1.0
 
-`COMMERCE_RETAIL` version 2 est actuellement le seul secteur sous gate strict `RELEASE_CANDIDATE`.
+`COMMERCE_RETAIL` version 2 est désormais sous gate strict `COMMERCIAL_READY` après validation métier explicite du parcours E2E propriétaire.
 
 En plus du contrat générique, la CI exige :
 
@@ -44,8 +44,12 @@ En plus du contrat générique, la CI exige :
 - caisse active et floats résolus automatiquement depuis la configuration ;
 - état de la session de caisse visible ;
 - catalogue de permissions Retail dans l’administration et permissions fournisseurs/achats pour le responsable achats ;
-- rapports strictement séparés par devise ;
-- checklist persistante de mise en service du Shop.
+- agrégats natifs strictement séparés par devise ;
+- gouvernance Finance des taux de change avec historique, date d’effet, source et résolution directe/inverse ;
+- consolidation Shop réalisée opération par opération au taux historique ;
+- refus d’un total consolidé partiel lorsqu’un taux obligatoire manque ;
+- checklist persistante de mise en service du Shop ;
+- document d’onboarding canonique et onboarding intégré au guide utilisateur de l’application.
 
 ## Règle CI/CD
 
@@ -56,6 +60,8 @@ Le gate est exécuté :
 
 Il est interdit de retirer, ignorer ou rendre non bloquant le gate d’un secteur déclaré `enforce: true` pour faire passer une release.
 
-## Limite de l’automatisation
+## Acceptation propriétaire et validation navigateur
 
-La QA prouve la présence des contrats techniques et métier automatisables. Elle ne remplace pas l’acceptation propriétaire réelle sur un tenant : onboarding, première vente, opération Mobile Money, recharge Télécom, clôture indépendante et viewport mobile doivent être exécutés avant la déclaration manuelle `COMMERCIAL_READY`.
+Le statut `COMMERCIAL_READY` reflète une validation produit explicite du parcours métier. Il ne doit pas être confondu avec le job automatisé `authenticated-browser-acceptance`, qui reste déclenché manuellement par `workflow_dispatch` dans la CI actuelle.
+
+La CI prouve les contrats automatisables ; l’acceptation propriétaire confirme le fonctionnement réel du parcours Shop en conditions d’utilisation.

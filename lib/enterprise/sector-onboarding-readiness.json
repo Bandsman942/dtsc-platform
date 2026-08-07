@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates.",
   "genericCriteria": [
     "ACTIVE_SECTOR",
@@ -20,7 +20,7 @@
       "sectorCode": "COMMERCE_RETAIL",
       "templateVersion": 2,
       "businessProfileCode": "RETAIL_TELCO_MOBILE_MONEY",
-      "commercializationStatus": "RELEASE_CANDIDATE",
+      "commercializationStatus": "COMMERCIAL_READY",
       "enforce": true,
       "minimumOperationalPlan": "BUSINESS",
       "requiredModules": [
@@ -54,7 +54,10 @@
         "VISIBLE_CASH_SESSION",
         "RETAIL_RBAC_CATALOG",
         "MULTI_CURRENCY_REPORTING",
-        "ONBOARDING_READINESS_CHECKLIST"
+        "ONBOARDING_READINESS_CHECKLIST",
+        "FX_RATE_GOVERNANCE",
+        "HISTORICAL_FX_CONSOLIDATION",
+        "IN_APP_ONBOARDING_GUIDE"
       ]
     }
   ]

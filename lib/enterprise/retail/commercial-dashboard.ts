@@ -1,4 +1,5 @@
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
+import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
 import { prisma } from "@/lib/prisma";
 
 function phoneForList(value: string) {
@@ -10,7 +11,7 @@ export async function getCommercialRetailDashboard(organizationId: string, userI
   const dateFrom = from || new Date(new Date().setHours(0, 0, 0, 0));
   const dateTo = to || new Date();
   const dateFilter = { gte: dateFrom, lte: dateTo };
-  const [configuration, providers, accounts, warehouses, catalogItems, inventoryItems, sales, mobileMoney, topups, closes, cashSession, metricsByCurrency, positionCounts] = await Promise.all([
+  const [configuration, providers, accounts, warehouses, catalogItems, inventoryItems, sales, mobileMoney, topups, closes, cashSession, metricsByCurrency, positionCounts, fxReadiness] = await Promise.all([
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
     prisma.enterpriseRetailProvider.findMany({ where: { organizationId, isActive: true }, orderBy: [{ providerType: "asc" }, { label: "asc" }] }),
     prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: { in: ["CASH", "MOBILE_MONEY", "BANK", "CLEARING"] } }, orderBy: [{ accountType: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, accountType: true, currencyCode: true, operationalBalance: true, siteId: true } }),
@@ -24,6 +25,7 @@ export async function getCommercialRetailDashboard(organizationId: string, userI
     prisma.enterpriseCashSession.findFirst({ where: { organizationId, cashierUserId: userId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } }, orderBy: { openedAt: "desc" }, include: { financialAccount: { select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } } }),
     getRetailMetricsByCurrency(organizationId, dateFrom, dateTo),
     prisma.enterprisePosition.groupBy({ by: ["positionCode"], where: { organizationId, isActive: true, positionCode: { in: ["STORE_MANAGER", "CASHIER", "MOBILE_MONEY_AGENT", "RETAIL_CONTROLLER"] } }, _count: { _all: true } }),
+    getRetailExchangeRateReadiness(organizationId, dateTo),
   ]);
 
   const mobileWallets = providers.filter((provider) => provider.providerType === "MOBILE_MONEY");
@@ -33,6 +35,7 @@ export async function getCommercialRetailDashboard(organizationId: string, userI
     { code: "WAREHOUSE", label: "Site et dépôt opérationnels", complete: warehouses.length > 0, deepLink: "/enterprise-modules/SITES_WAREHOUSES" },
     { code: "CATALOG", label: "Catalogue de vente renseigné", complete: catalogItems.length > 0, deepLink: "/enterprise-modules/CATALOG" },
     { code: "CASH", label: "Compte de caisse configuré", complete: accounts.some((account) => account.accountType === "CASH"), deepLink: "/enterprise-modules/FINANCE_TREASURY" },
+    { code: "FX", label: `Consolidation multi-devise${fxReadiness.targetCurrencyCode ? ` · ${fxReadiness.targetCurrencyCode}` : ""}`, complete: fxReadiness.complete, deepLink: "/enterprise-modules/RETAIL_POS/consolidated-report" },
     { code: "MOBILE_FLOAT", label: "Au moins un wallet Mobile Money relié à son float", complete: mobileWallets.some((provider) => Boolean(provider.mobileMoneyFloatAccountId)), deepLink: "/enterprise-modules/MOBILE_MONEY_AGENCY" },
     { code: "TELCO_FLOAT", label: "Au moins un opérateur Télécom relié à son float", complete: telcoNetworks.some((provider) => Boolean(provider.telcoFloatAccountId)), deepLink: "/enterprise-modules/TELCO_TOPUPS" },
     { code: "CONTROL", label: "Rôles de caisse et contrôle disponibles", complete: ["CASHIER", "RETAIL_CONTROLLER"].every((code) => positionCounts.some((position) => position.positionCode === code && position._count._all > 0)), deepLink: "/enterprise-admin?section=positions" },
@@ -47,6 +50,7 @@ export async function getCommercialRetailDashboard(organizationId: string, userI
     inventoryItems,
     cashSession,
     metricsByCurrency,
+    fxReadiness,
     readiness: { items: readiness, completed: readiness.filter((item) => item.complete).length, total: readiness.length, readyForFirstSale: readiness.filter((item) => ["PROFILE", "WAREHOUSE", "CATALOG", "CASH"].includes(item.code)).every((item) => item.complete), readyForMobileMoney: readiness.filter((item) => ["PROFILE", "CASH", "MOBILE_FLOAT"].includes(item.code)).every((item) => item.complete), readyForTelco: readiness.filter((item) => ["PROFILE", "TELCO_FLOAT"].includes(item.code)).every((item) => item.complete) },
     recent: {
       sales,
