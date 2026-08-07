@@ -45,6 +45,17 @@ function staticShopReleaseChecks() {
   const templateApplication = read("lib/enterprise/sector-template-application.ts");
   const http = read("lib/enterprise/retail/http.ts");
   const schemas = read("lib/enterprise/retail/schemas.ts");
+  const currency = read("lib/enterprise/accounting/currency.ts");
+  const fxService = read("lib/enterprise/accounting/exchange-rate-service.ts");
+  const fxSchemas = read("lib/enterprise/accounting/exchange-rate-schemas.ts");
+  const fxRoute = read("app/api/enterprise/[organizationId]/exchange-rates/route.ts");
+  const fxDeactivateRoute = read("app/api/enterprise/[organizationId]/exchange-rates/[rateId]/route.ts");
+  const fxWorkspace = read("components/enterprise/professional/enterprise-exchange-rates-workspace.tsx");
+  const fxReporting = read("lib/enterprise/retail/fx-reporting.ts");
+  const consolidatedReport = read("app/enterprise-modules/RETAIL_POS/consolidated-report/page.tsx");
+  const financeModulePage = read("components/enterprise/enterprise-finance-module-page.tsx");
+  const onboardingDoc = read("docs/SHOP_ONBOARDING.md");
+  const fxDoc = read("docs/ENTERPRISE_EXCHANGE_RATES.md");
 
   const checks = [
     [workspace.includes("setCart") && workspace.includes("cart.map") && workspace.includes("Basket"), "MULTI_ITEM_POS"],
@@ -56,7 +67,10 @@ function staticShopReleaseChecks() {
     [workspace.includes("CashSessionBar") && workspace.includes("No active till") && workspace.includes("Fonds d’ouverture"), "VISIBLE_CASH_SESSION"],
     [adminPanels.includes("RETAIL_PERMISSION_CATALOG") && adminPanels.includes('sectorCode === "COMMERCE_RETAIL"') && constants.includes("enterprise.purchases.manage"), "RETAIL_RBAC_CATALOG"],
     [guardrails.includes("getRetailMetricsByCurrency") && dashboard.includes("metricsByCurrency") && dashboardRoute.includes("getCommercialRetailDashboard") && !dashboardRoute.includes("getRetailDashboard("), "MULTI_CURRENCY_REPORTING"],
-    [dashboard.includes("readyForFirstSale") && workspace.includes("ShopReadiness") && workspace.includes("Mise en service du Shop"), "ONBOARDING_READINESS_CHECKLIST"],
+    [dashboard.includes("readyForFirstSale") && dashboard.includes('code: "FX"') && workspace.includes("ShopReadiness") && workspace.includes("Mise en service du Shop"), "ONBOARDING_READINESS_CHECKLIST"],
+    [currency.includes("resolveExchangeRateDetails") && currency.includes('direction: "INVERSE"') && currency.includes("snapshotExchangeRate") && fxService.includes("createEnterpriseExchangeRate") && fxService.includes("deactivateEnterpriseExchangeRate") && fxSchemas.includes("CENTRAL_BANK") && fxRoute.includes("authorizeFinanceRequest") && fxDeactivateRoute.includes("writeAuditLog") && financeModulePage.includes("FINANCE_TREASURY/exchange-rates") && fxWorkspace.includes("1 {rate.sourceCurrencyCode}"), "FX_RATE_GOVERNANCE"],
+    [fxReporting.includes("getRetailFunctionalCurrencySummary") && fxReporting.includes("resolveFromTimeline") && fxReporting.includes("missingRates") && fxReporting.includes("presentationCurrencyCode") && consolidatedReport.includes("ratesUsed") && consolidatedReport.includes("INCOMPLETE"), "HISTORICAL_FX_CONSOLIDATION"],
+    [exists("docs/SHOP_ONBOARDING.md") && onboardingDoc.includes("STARTER — Shop Essentials") && onboardingDoc.includes("BUSINESS — Shop Operations") && onboardingDoc.includes("ENTERPRISE — Shop Scale") && onboardingDoc.includes("Taux de change") && guides.includes("Guide d’onboarding Shop") && guides.includes("Consolidation multi-devise") && fxDoc.includes("Gouvernance des taux de change"), "IN_APP_ONBOARDING_GUIDE"],
   ];
   for (const [ok, code] of checks) check(Boolean(ok), `COMMERCE_RETAIL release criterion failed: ${code}`);
 
@@ -79,6 +93,8 @@ try {
     WHERE t."isActive" = true
     ORDER BY s."code", t."version" DESC
   `);
+  await prisma.enterpriseExchangeRate.count();
+  await prisma.enterpriseExchangeRateSnapshot.count();
 
   for (const template of activeTemplates) {
     const declaration = manifest.profiles.find((profile) => profile.sectorCode === template.sectorCode && Number(profile.templateVersion) === Number(template.version));
@@ -122,6 +138,7 @@ try {
 
   const shop = manifest.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL" && profile.enforce);
   check(Boolean(shop), "COMMERCE_RETAIL must have an enforced commercialization declaration while Shop is the product priority.");
+  check(shop?.commercializationStatus === "COMMERCIAL_READY", "COMMERCE_RETAIL must remain COMMERCIAL_READY after explicit owner acceptance.");
   staticShopReleaseChecks();
 } catch (error) {
   failures.push(`Readiness QA execution failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -137,4 +154,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced Release Candidate onboarding contract.");
+console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract.");
