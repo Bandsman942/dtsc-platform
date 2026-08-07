@@ -64,6 +64,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/github/bootstrap-delivery-governance.mjs
 
+      - name: Repair bootstrap-only literal assertion
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = 'scripts/qa-delivery-governance.mjs';
+          let source = fs.readFileSync(path, 'utf8');
+          source = source.replace(
+            "assert.match(release,/vercel[bot]/);",
+            "assert.equal(release.includes('vercel[bot]'), true);"
+          );
+          fs.writeFileSync(path, source);
+          NODE
+
       - name: Diff validation
         run: git diff --check
 
