@@ -9,6 +9,7 @@ import {
   isEnterpriseModuleSectorCompatible,
   normalizeEnterpriseModuleCode,
 } from "@/lib/enterprise/module-registry";
+import { syncRetailOnboardingProvisioning } from "@/lib/enterprise/retail/provisioning";
 import { prisma } from "@/lib/prisma";
 
 export async function applyCanonicalSectorTemplateToOrganization({
@@ -23,6 +24,11 @@ export async function applyCanonicalSectorTemplateToOrganization({
   mode?: ApplySectorTemplateMode;
 }) {
   const result = await applySectorTemplateToOrganization({ organizationId, sectorId, actorUserId, mode });
+  const retailProvisioning = await syncRetailOnboardingProvisioning({
+    organizationId,
+    sectorCode: result.sectorCode,
+    actorUserId,
+  });
   const commonModules = await ensureCanonicalCommonModulesForOrganization({ organizationId });
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, deletedAt: null },
@@ -37,7 +43,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
     },
   });
   if (!organization) {
-    return { ...result, commonModuleCount: commonModules.length };
+    return { ...result, commonModuleCount: commonModules.length, retailProvisioning };
   }
 
   const moduleIdsToDisable = new Set<string>();
@@ -94,6 +100,7 @@ export async function applyCanonicalSectorTemplateToOrganization({
   return {
     ...result,
     commonModuleCount: commonModules.length,
+    retailProvisioning,
     registryNormalization: {
       disabledModuleCount: moduleIdsToDisable.size,
       disabledActivityBlockCount: activityBlockIdsToDisable.size,

@@ -10,6 +10,62 @@ Plan minimal opérationnel : `BUSINESS`
 
 Ce profil remplace le vieux template Commerce centré sur des codes sectoriels génériques par les sources de vérité ERP Core de DTSC Platform.
 
+`EnterpriseRetailConfiguration` est le contrat 1:1 du profil métier Retail d’une organisation : `profileCode` identifie le profil, `status` indique s’il est actif et les champs `defaultSiteId`, `defaultWarehouseId`, `defaultStorageLocationId` et `baseCurrencyCode` portent sa configuration opérationnelle. DTSC n’introduit pas une deuxième table de profil qui concurrencerait cette source de vérité.
+
+## Provisionnement automatique du Shop
+
+L’application du template canonique `COMMERCE_RETAIL` synchronise désormais automatiquement le profil `RETAIL_TELCO_MOBILE_MONEY`.
+
+Pour une nouvelle entreprise Shop, DTSC :
+
+1. applique le template Commerce Retail v2 ;
+2. crée ou réactive `EnterpriseRetailConfiguration` de manière idempotente ;
+3. provisionne M-Pesa, Orange Money, Airtel Money et Afrimoney dans `EnterpriseRetailProvider` ;
+4. conserve les quatre providers en type `BOTH` afin qu’ils puissent servir Mobile Money et Télécom lorsque le tenant les utilise ;
+5. ne crée aucun faux compte financier, aucun float et aucun solde ;
+6. laisse `mobileMoneyFloatAccountId` et `telcoFloatAccountId` non renseignés jusqu’à ce que l’entreprise lie ses vrais comptes ;
+7. si l’organisation quitte `COMMERCE_RETAIL` lors d’un changement de template, désactive la configuration Retail et les providers sans supprimer l’historique.
+
+Le provisionnement est relançable sans duplication. Une migration additive de convergence couvre aussi les organisations Commerce éventuellement créées entre le premier déploiement Retail et l’activation du provisionnement runtime.
+
+## Offres et onboarding Shop
+
+Les noms commerciaux recommandés n’altèrent pas les codes de facturation existants :
+
+- `STARTER` — **Shop Essentials** ;
+- `BUSINESS` — **Shop Operations** ;
+- `ENTERPRISE` — **Shop Scale**.
+
+### Starter — Shop Essentials
+
+Le profil Shop et les providers peuvent être préparés, mais les opérations Retail restent verrouillées par les entitlements. Les modules utilisables dès Starter dans le template sont principalement :
+
+- `CRM_CUSTOMERS` ;
+- `CATALOG` ;
+- `DOCUMENTS`.
+
+Starter sert à préparer la clientèle, le catalogue, les offres et les documents. Il ne doit pas être vendu comme un POS complet : `RETAIL_POS`, `MOBILE_MONEY_AGENCY`, `TELCO_TOPUPS` et `RETAIL_DAILY_CLOSE` exigent tous `BUSINESS` au minimum.
+
+### Business — Shop Operations
+
+Business est le minimum recommandé pour exploiter réellement un Shop. Il débloque, sous réserve des permissions et dépendances :
+
+- sites et dépôts ;
+- stock et logistique ;
+- fournisseurs et achats ;
+- Finance, Trésorerie et Caisse ;
+- `RETAIL_POS` ;
+- `MOBILE_MONEY_AGENCY` ;
+- `TELCO_TOPUPS` ;
+- `RETAIL_DAILY_CLOSE` ;
+- rapports.
+
+Avant la première opération, l’administrateur doit encore renseigner les données réelles du tenant : site, entrepôt, stock initial, comptes CASH, comptes MOBILE_MONEY/float, éventuels comptes TELCO/CLEARING, soldes d’ouverture et mappings provider → comptes.
+
+### Enterprise — Shop Scale
+
+Enterprise reprend tout le parcours Business et ajoute la capacité du plan Enterprise pour une organisation plus large. Les quatre modules Retail ne nécessitent pas Enterprise : leur minimum reste Business. Enterprise se justifie par la croissance, la gouvernance, le nombre d’utilisateurs, le multisite et l’accès aux autres capacités Enterprise éligibles.
+
 ## Convergence canonique
 
 | Ancien code Commerce | Source de vérité actuelle | Décision |
@@ -101,7 +157,7 @@ Les rôles globaux `OWNER` / administrateurs conservent les règles centrales de
 - Stock & Achats ;
 - Finance & Contrôle.
 
-La migration met à jour les postes existants par `organizationId + positionCode` afin de conserver leurs IDs et les affectations des collaborateurs.
+La migration initiale met à jour les postes existants par `organizationId + positionCode` afin de conserver leurs IDs et les affectations des collaborateurs.
 
 ## Données financières
 
@@ -133,6 +189,6 @@ Les numéros clients sont masqués dans les payloads de liste/dashboard. Les ann
 
 ## Mise en production
 
-La migration `20260807050000_retail_telco_mobile_money` est additive. La production reste pilotée par la CI/CD du dépôt : PR vers `main`, Quality Gates, merge, puis `prisma migrate deploy` avant le build Vercel.
+Les migrations `20260807050000_retail_telco_mobile_money` et `20260807060000_shop_onboarding_retail_provisioning` sont additives. La production reste pilotée par la CI/CD du dépôt : PR vers `main`, Quality Gates, merge, puis `prisma migrate deploy` avant le build Vercel.
 
 L’E2E métier réel du shop et la confirmation finale en production restent à faire par le propriétaire après déploiement ; ils ne sont pas auto-déclarés comme validés par le code.

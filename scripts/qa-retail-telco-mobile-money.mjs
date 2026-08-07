@@ -53,6 +53,26 @@ check(service.includes("RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN"), "Daily close m
 check(service.includes("Prisma.TransactionIsolationLevel.Serializable"), "Sensitive Retail operations must use serializable transactions");
 check(!service.includes("EnterpriseCoreRecord"), "Retail must never write EnterpriseCoreRecord");
 
+const provisioning = read("lib/enterprise/retail/provisioning.ts");
+for (const marker of [
+  "RETAIL_PROFILE_CODE",
+  "RETAIL_SECTOR_CODE",
+  "RETAIL_DEFAULT_PROVIDERS",
+  'providerCode: "MPESA"',
+  'providerCode: "ORANGE_MONEY"',
+  'providerCode: "AIRTEL_MONEY"',
+  'providerCode: "AFRIMONEY"',
+  "enterpriseRetailConfiguration.upsert",
+  "enterpriseRetailProvider.upsert",
+  "Prisma.TransactionIsolationLevel.Serializable",
+]) check(provisioning.includes(marker), `Retail onboarding provisioning missing ${marker}`);
+check(!provisioning.includes("mobileMoneyFloatAccountId:"), "Onboarding must never invent a Mobile Money float account mapping");
+check(!provisioning.includes("telcoFloatAccountId:"), "Onboarding must never invent a Telco float account mapping");
+
+const templateApplication = read("lib/enterprise/sector-template-application.ts");
+check(templateApplication.includes("syncRetailOnboardingProvisioning"), "Canonical sector-template application must provision the Retail business profile");
+check(templateApplication.includes("sectorCode: result.sectorCode"), "Retail provisioning must follow the canonical sector selected by the template");
+
 const schemas = read("lib/enterprise/retail/schemas.ts");
 check(schemas.includes("RETAIL_TENDER_METHODS"), "POS tender methods must be schema validated");
 check(schemas.includes("MOBILE_MONEY_TRANSACTION_TYPES"), "Mobile Money operation type must be schema validated");
@@ -97,8 +117,16 @@ for (const marker of [
 check(migration.includes('"permissionsJson" = EXCLUDED."permissionsJson"'), "Migration must backfill position RBAC");
 check(migration.includes('"version" = 2'), "Commerce template v2 must be active");
 
+const onboardingMigration = read("prisma/migrations/20260807060000_shop_onboarding_retail_provisioning/migration.sql");
+for (const marker of ["RETAIL_TELCO_MOBILE_MONEY", "COMMERCE_RETAIL", "createdByDtscUserId", "MPESA", "ORANGE_MONEY", "AIRTEL_MONEY", "AFRIMONEY"]) {
+  check(onboardingMigration.includes(marker), `Shop onboarding migration missing ${marker}`);
+}
+check(!onboardingMigration.includes('"mobileMoneyFloatAccountId"'), "Shop onboarding migration must leave Mobile Money account mapping tenant-configured");
+check(!onboardingMigration.includes('"telcoFloatAccountId"'), "Shop onboarding migration must leave Telco account mapping tenant-configured");
+
 const architecture = read("docs/ERP_RETAIL_TELCO_MOBILE_MONEY.md");
 check(architecture.includes("PROMOTIONS"), "Architecture doc must explicitly state the legacy promotions decision");
+check(architecture.includes("Provisionnement automatique du Shop"), "Architecture doc must document automatic Shop onboarding provisioning");
 check(architecture.includes("L’E2E métier réel"), "Architecture doc must not claim owner production E2E is already validated");
 
 if (failures.length) {
