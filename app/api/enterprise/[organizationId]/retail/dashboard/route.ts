@@ -23,8 +23,16 @@ export async function GET(req: Request, { params }: Params) {
     access: { canWrite: auth.access.canWrite, canManage: auth.access.canAdminister },
     range: dashboard.range,
   };
-  const mobileMoneyRecent = dashboard.recent.mobileMoney.map(({ customerPhone: _customerPhone, ...item }) => item);
-  const topupRecent = dashboard.recent.topups.map(({ destinationPhone: _destinationPhone, ...item }) => item);
+  const mobileMoneyRecent = dashboard.recent.mobileMoney.map((entry) => {
+    const item = { ...entry };
+    Reflect.deleteProperty(item, "customerPhone");
+    return item;
+  });
+  const topupRecent = dashboard.recent.topups.map((entry) => {
+    const item = { ...entry };
+    Reflect.deleteProperty(item, "destinationPhone");
+    return item;
+  });
   const scoped = moduleCode === "RETAIL_POS"
     ? { ...common, warehouses: dashboard.warehouses, catalogItems: dashboard.catalogItems, inventoryItems: dashboard.inventoryItems, metrics: { salesCount: dashboard.metrics.salesCount, salesRevenue: dashboard.metrics.salesRevenue }, recent: { sales: dashboard.recent.sales } }
     : moduleCode === "MOBILE_MONEY_AGENCY"
