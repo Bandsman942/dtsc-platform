@@ -1,0 +1,234 @@
+model EnterpriseRetailConfiguration {
+  id                       String   @id @default(cuid())
+  organizationId           String   @unique
+  profileCode              String   @default("RETAIL_TELCO_MOBILE_MONEY")
+  defaultSiteId            String?
+  defaultWarehouseId       String?
+  defaultStorageLocationId String?
+  baseCurrencyCode         String   @default("CDF")
+  status                   String   @default("ACTIVE")
+  settingsJson             Json?
+  createdByUserId          String
+  updatedByUserId          String?
+  revision                 Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([profileCode, status])
+}
+
+model EnterpriseRetailProvider {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  providerCode             String
+  label                    String
+  providerType             String
+  mobileMoneyFloatAccountId String?
+  telcoFloatAccountId      String?
+  settingsJson             Json?
+  isActive                 Boolean  @default(true)
+  revision                 Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, providerCode])
+  @@index([organizationId, providerType, isActive])
+}
+
+model EnterpriseRetailSale {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  number                  String
+  status                  String   @default("COMPLETED")
+  customerBusinessPartyId String?
+  siteId                  String?
+  warehouseId             String
+  storageLocationId       String?
+  currencyCode            String
+  subtotal                Decimal  @db.Decimal(20, 6)
+  discountTotal           Decimal  @default(0) @db.Decimal(20, 6)
+  taxTotal                Decimal  @default(0) @db.Decimal(20, 6)
+  grandTotal              Decimal  @db.Decimal(20, 6)
+  soldAt                  DateTime @default(now())
+  cashierUserId           String
+  idempotencyKey          String
+  reversalReason          String?
+  reversedAt              DateTime?
+  reversedByUserId        String?
+  revision                Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  lines                    EnterpriseRetailSaleLine[]
+  tenders                  EnterpriseRetailTender[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, soldAt])
+  @@index([organizationId, cashierUserId, soldAt])
+  @@index([organizationId, customerBusinessPartyId])
+}
+
+model EnterpriseRetailSaleLine {
+  id                String   @id @default(cuid())
+  organizationId    String
+  saleId            String
+  catalogItemId     String
+  inventoryItemId   String?
+  stockLotId        String?
+  description       String
+  quantity          Decimal  @db.Decimal(20, 6)
+  unitPrice         Decimal  @db.Decimal(20, 6)
+  discountAmount    Decimal  @default(0) @db.Decimal(20, 6)
+  taxAmount         Decimal  @default(0) @db.Decimal(20, 6)
+  lineTotal         Decimal  @db.Decimal(20, 6)
+  trackInventory    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  sale              EnterpriseRetailSale @relation(fields: [organizationId, saleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, saleId])
+  @@index([organizationId, catalogItemId])
+  @@index([organizationId, inventoryItemId])
+}
+
+model EnterpriseRetailTender {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  saleId             String
+  methodType         String
+  financialAccountId String
+  currencyCode       String
+  amount             Decimal  @db.Decimal(20, 6)
+  reference          String?
+  status             String   @default("CONFIRMED")
+  createdAt          DateTime @default(now())
+  sale               EnterpriseRetailSale @relation(fields: [organizationId, saleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, saleId])
+  @@index([organizationId, financialAccountId, createdAt])
+}
+
+model EnterpriseMobileMoneyTransaction {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  number                   String
+  providerCode             String
+  transactionType          String
+  customerPhone            String
+  currencyCode             String
+  principalAmount          Decimal  @db.Decimal(20, 6)
+  customerFeeAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  providerCommissionAmount Decimal  @default(0) @db.Decimal(20, 6)
+  feeCollectionMode        String   @default("NONE")
+  cashAccountId            String
+  floatAccountId           String
+  cashEffectAmount         Decimal  @db.Decimal(20, 6)
+  floatEffectAmount        Decimal  @db.Decimal(20, 6)
+  externalReference        String?
+  status                   String   @default("CONFIRMED")
+  occurredAt               DateTime @default(now())
+  agentUserId              String
+  idempotencyKey           String
+  reversalReason           String?
+  reversedAt               DateTime?
+  reversedByUserId         String?
+  revision                 Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, providerCode, occurredAt])
+  @@index([organizationId, transactionType, status, occurredAt])
+  @@index([organizationId, agentUserId, occurredAt])
+}
+
+model EnterpriseTelcoTopup {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  number                 String
+  providerCode           String
+  destinationPhone       String
+  catalogItemId          String?
+  offerLabel             String
+  currencyCode           String
+  saleAmount             Decimal  @db.Decimal(20, 6)
+  operatorCost           Decimal  @db.Decimal(20, 6)
+  marginAmount           Decimal  @db.Decimal(20, 6)
+  tenderFinancialAccountId String
+  operatorFloatAccountId String
+  externalReference      String?
+  status                 String   @default("SUCCESS")
+  occurredAt             DateTime @default(now())
+  agentUserId            String
+  idempotencyKey         String
+  failureReason          String?
+  reversalReason         String?
+  reversedAt             DateTime?
+  reversedByUserId       String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, providerCode, status, occurredAt])
+  @@index([organizationId, agentUserId, occurredAt])
+  @@index([organizationId, catalogItemId])
+}
+
+model EnterpriseRetailDailyClose {
+  id                String   @id @default(cuid())
+  organizationId    String
+  number            String
+  businessDate      DateTime
+  siteId            String?
+  status            String   @default("SUBMITTED")
+  submittedByUserId String
+  validatedByUserId String?
+  submittedAt       DateTime @default(now())
+  validatedAt       DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  notes             String?
+  idempotencyKey    String
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lines              EnterpriseRetailDailyCloseLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, businessDate, status])
+  @@index([organizationId, submittedByUserId, businessDate])
+}
+
+model EnterpriseRetailDailyCloseLine {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  dailyCloseId         String
+  financialAccountId   String
+  accountType          String
+  currencyCode         String
+  cashSessionId        String?
+  systemClosingBalance Decimal  @db.Decimal(20, 6)
+  declaredBalance      Decimal  @db.Decimal(20, 6)
+  differenceAmount     Decimal  @db.Decimal(20, 6)
+  varianceReason       String?
+  countDetailsJson     Json?
+  createdAt            DateTime @default(now())
+  dailyClose            EnterpriseRetailDailyClose @relation(fields: [organizationId, dailyCloseId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, dailyCloseId, financialAccountId])
+  @@index([organizationId, dailyCloseId])
+  @@index([organizationId, financialAccountId])
+  @@index([organizationId, cashSessionId])
+}

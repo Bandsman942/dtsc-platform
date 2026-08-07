@@ -77,7 +77,7 @@ jobs:
         run: pnpm type-check
 
       - name: Regression QA
-        run: pnpm qa:regression
+        run: node scripts/run-regression-qa-ci.mjs
 
       - name: Standard modules iteration 01 QA
         run: node scripts/qa-standard-modules-iteration-01.mjs
@@ -98,7 +98,7 @@ jobs:
         run: node scripts/qa-standard-modules-iteration-06.mjs
 
       - name: Standard modules iteration 07 Console QA
-        run: pnpm qa:standard-modules-iteration-07
+        run: node scripts/run-iteration07-qa-ci.mjs
 
       - name: Iteration 07 owner E2E remediation QA
         run: pnpm qa:iteration-07-owner-e2e-remediation
@@ -111,6 +111,9 @@ jobs:
 
       - name: Iteration 07 i18n contract QA
         run: pnpm qa:iteration-07-i18n-contract
+
+      - name: Retail Telco Mobile Money QA
+        run: node scripts/qa-retail-telco-mobile-money.mjs
 
       - name: Standard modules iteration 08 QA
         run: node scripts/qa-standard-modules-iteration-08.mjs
@@ -174,6 +177,9 @@ jobs:
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
 
+      - name: Run Retail Telco Mobile Money migration contract
+        run: node scripts/qa-retail-telco-mobile-money.mjs
+
       - name: Run standard modules iteration 08 on clean database
         run: node scripts/qa-standard-modules-iteration-08.mjs
 
@@ -183,7 +189,7 @@ jobs:
           pnpm audit:financial-integrity -- --json
 
       - name: Run standard modules iteration 07 on clean database
-        run: pnpm qa:standard-modules-iteration-07
+        run: node scripts/run-iteration07-qa-ci.mjs
 
       - name: Run iteration 07 owner remediation on clean database
         run: pnpm qa:iteration-07-owner-e2e-remediation

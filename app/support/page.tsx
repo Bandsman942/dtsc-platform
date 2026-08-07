@@ -8,6 +8,7 @@ import { TicketBoard } from "@/components/support/ticket-board";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ProductSectionNavigation, type ProductSectionNavigationGroup, type ProductSectionNavigationItem } from "@/components/workspace/product-section-navigation";
 import { getCurrentUser, getSession } from "@/lib/auth";
 import { getPublicUrl } from "@/lib/domains";
 import { isDtscInternalSession } from "@/lib/organizations";
@@ -23,6 +24,43 @@ const priorities = new Set<TicketPriority>(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 function positivePage(value: string | undefined) {
   const page = Number(value || 1);
   return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
+function supportNavigation(locale: "fr" | "en") {
+  const groups: ProductSectionNavigationGroup[] = [
+    {
+      id: "support",
+      label: locale === "en" ? "Support workflow" : "Parcours Support",
+      description: locale === "en" ? "Create, follow and resolve requests without losing context." : "Créer, suivre et résoudre les demandes sans perdre le contexte.",
+    },
+  ];
+  const sections: ProductSectionNavigationItem[] = [
+    {
+      id: "new-ticket",
+      label: locale === "en" ? "New request" : "Nouvelle demande",
+      description: locale === "en" ? "Describe a new issue or service request." : "Décrire un nouvel incident ou besoin d’assistance.",
+      href: "/support#new-ticket",
+      groupId: "support",
+      icon: "create",
+    },
+    {
+      id: "tickets",
+      label: locale === "en" ? "Tickets" : "Tickets",
+      description: locale === "en" ? "Filter and follow authorized support tickets." : "Filtrer et suivre les tickets accessibles à votre périmètre.",
+      href: "/support#tickets",
+      groupId: "support",
+      icon: "support",
+    },
+    {
+      id: "support-guide",
+      label: locale === "en" ? "Guides & resources" : "Guides & ressources",
+      description: locale === "en" ? "Open native help and useful DTSC resources." : "Ouvrir l’aide native et les ressources DTSC utiles.",
+      href: "/support#support-guide",
+      groupId: "support",
+      icon: "help",
+    },
+  ];
+  return { groups, sections };
 }
 
 export default async function SupportPage({ searchParams }: PageProps) {
@@ -62,11 +100,13 @@ export default async function SupportPage({ searchParams }: PageProps) {
   ]);
   const pageCount = Math.max(1, Math.ceil(ticketCount / PAGE_SIZE));
   const guide = getIteration07UserGuide("CONSOLE_SUPPORT", locale);
+  const productNavigation = supportNavigation(locale);
 
   return (
     <SupportProductShell authenticated isDtscInternal={isDtscInternal} locale={locale}>
       <ModuleWorkspace>
         <ModuleHeader eyebrow={locale === "en" ? "Assistance" : "Assistance"} title="Support DTSC" count={`${ticketCount} ticket${ticketCount > 1 ? "s" : ""}`} description="Créez, filtrez et suivez vos demandes dans un produit Support distinct. Les données restent limitées à votre périmètre autorisé." secondaryActions={<ContextualUserGuide guide={guide} />} />
+        <ProductSectionNavigation productLabel="Support DTSC" title={locale === "en" ? "Support sections" : "Sections Support"} groups={productNavigation.groups} sections={productNavigation.sections} activeSection={params.ticketId || page > 1 || status || priority || q ? "tickets" : "new-ticket"} mobileButtonLabel={locale === "en" ? "Open Support sections" : "Ouvrir les sections Support"} />
         <ModuleMetrics label="Indicateurs du support"><ModuleMetric label="Résultats" value={ticketCount} hint="Filtres actifs" /><ModuleMetric label="Ouverts" value={openCount} hint="À prendre en charge" /><ModuleMetric label="En traitement" value={inProgressCount} hint="Suivi actif" /><ModuleMetric label="Résolus / clos" value={completedCount} hint="Traitement terminé" /></ModuleMetrics>
         <ModuleContent>
           <ModuleSection id="new-ticket" title="Nouvelle demande" description="Décrivez le contexte, l’impact, les étapes déjà testées et les contraintes connues."><SupportForm /></ModuleSection>

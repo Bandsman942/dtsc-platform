@@ -35,7 +35,7 @@ const mobileChrome = read("components/layout/private-mobile-chrome-controller.ts
 const mobileShell = read("components/dtsc/mobile-shell.tsx");
 const serviceWorker = read("public/sw.js");
 const pwaRegister = read("components/pwa/pwa-register.tsx");
-const manifest = read("app/manifest.ts");
+const manifest = read("app/manifest.webmanifest/route.ts");
 
 check(
   "viewport Next.js active les safe areas iOS",
@@ -99,7 +99,7 @@ check(
 
 check(
   "service worker rafraîchit les assets stables en arrière-plan",
-  containsAll(serviceWorker, ["event.waitUntil(networkResponse", "cache.put(request, responseClone)", "return cachedResponse", "dtsc-static-v8-20260728"])
+  containsAll(serviceWorker, ["event.waitUntil(networkResponse", "cache.put(request, responseClone)", "return cachedResponse", "dtsc-static-v9-20260806"])
 );
 
 check(
@@ -108,8 +108,8 @@ check(
 );
 
 check(
-  "manifest PWA conserve standalone et les icônes essentielles",
-  containsAll(manifest, ['display: "standalone"', 'src: "/icons/icon-192x192.png"', 'src: "/icons/icon-512x512.png"'])
+  "manifest PWA dynamique conserve standalone et les icônes essentielles",
+  containsAll(manifest, ['product.pwa === "disabled" ? "browser" : "standalone"', 'src: "/icons/icon-192x192.png"', 'src: "/icons/icon-512x512.png"', '"Content-Type": "application/manifest+json; charset=utf-8"', '"Vary": "Host"'])
 );
 
 if (failures.length > 0) {

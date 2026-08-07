@@ -10,6 +10,7 @@ const lookupSchema = z.object({
   password: z.string().min(1).max(256),
 });
 const empty = { organizations: [], pendingInvitations: [] };
+const activeOrganizationScope = { status: "ACTIVE" as const };
 
 export async function POST(req: Request) {
   const limited = await rateLimit(getRateLimitKey(req, "auth:organization-lookup"), 8, 15 * 60 * 1000);
@@ -28,7 +29,9 @@ export async function POST(req: Request) {
     getPendingOrganizationInvitationsForEmail(parsed.data.email),
   ]);
   return NextResponse.json({
-    organizations: memberships.map((membership) => ({ id: membership.organization.id, name: membership.organization.name, role: membership.role })),
+    organizations: memberships
+      .filter((membership) => membership.organization.status === activeOrganizationScope.status)
+      .map((membership) => ({ id: membership.organization.id, name: membership.organization.name, role: membership.role })),
     pendingInvitations: pendingInvitations.map((invitation) => ({ id: invitation.id, organizationId: invitation.organization.id, name: invitation.organization.name, role: invitation.role })),
   });
 }
