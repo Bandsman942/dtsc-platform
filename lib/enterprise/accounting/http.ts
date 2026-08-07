@@ -22,6 +22,12 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   ASSET_DEPRECIATION_NOT_ELIGIBLE: "Cette échéance d’amortissement n’est pas éligible à la comptabilisation.",
   FINANCIAL_CLOSE_BLOCKED: "La période contient encore des blocages. Corrigez-les avant la clôture.",
   FINANCIAL_CLOSE_SELF_APPROVAL_FORBIDDEN: "La clôture doit être approuvée par une autre personne autorisée.",
+  FINANCE_EXCHANGE_RATE_REQUIRED: "Aucun taux de change applicable n’existe pour cette paire et cette date. Configurez un taux avant la conversion.",
+  FINANCE_EXCHANGE_RATE_INVALID: "Le taux de change doit être strictement positif.",
+  FINANCE_EXCHANGE_RATE_PAIR_INVALID: "La devise source et la devise cible doivent être différentes.",
+  FINANCE_EXCHANGE_RATE_ACTIVE_VERSION_EXISTS: "Un taux actif existe déjà pour cette paire à cette date. Désactivez-le avec un motif avant de publier une correction.",
+  FINANCE_EXCHANGE_RATE_NOT_FOUND: "Ce taux de change n’existe pas dans cette entreprise.",
+  FINANCE_EXCHANGE_RATE_CONFLICT: "Le taux a changé pendant l’opération. Rechargez l’historique avant de recommencer.",
   FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise.",
 };
 
