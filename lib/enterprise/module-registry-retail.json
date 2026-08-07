@@ -21,7 +21,6 @@
       "requiresActiveSubscription": true,
       "applicableSectors": ["COMMERCE_RETAIL"],
       "dependencies": ["CATALOG", "SITES_WAREHOUSES", "INVENTORY_LOGISTICS"],
-      "legacyCodes": ["SALES"],
       "qaContract": "enterprise-retail-telco-mobile-money"
     },
     {
