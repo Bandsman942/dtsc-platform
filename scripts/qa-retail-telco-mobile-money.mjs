@@ -143,7 +143,7 @@ for (const marker of ["VODACOM", "ORANGE", "AIRTEL", "AFRICELL", "EnterpriseMobi
 const readinessManifest = read("lib/enterprise/sector-onboarding-readiness.json");
 check(readinessManifest.includes('"sectorCode": "COMMERCE_RETAIL"'), "Sector onboarding readiness must declare Commerce Retail");
 check(readinessManifest.includes('"enforce": true'), "Shop onboarding readiness must be enforced in CI");
-check(readinessManifest.includes('"commercializationStatus": "RELEASE_CANDIDATE"'), "Shop must remain Release Candidate until manual commercial acceptance");
+check(readinessManifest.includes('"commercializationStatus": "COMMERCIAL_READY"'), "Shop must remain COMMERCIAL_READY after explicit owner acceptance");
 check(exists("scripts/qa-sector-onboarding-commercial-readiness.mjs"), "Generic sector onboarding readiness QA is missing");
 check(exists("docs/SECTOR_ONBOARDING_COMMERCIAL_READINESS.md"), "Generic sector onboarding readiness documentation is missing");
 
@@ -153,4 +153,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Retail Telco/Mobile Money QA passed (${expectedCodes.length} canonical modules, Shop Release Candidate 1.0 guardrails present).`);
+console.log(`Retail Telco/Mobile Money QA passed (${expectedCodes.length} canonical modules, Shop COMMERCIAL_READY guardrails present).`);
