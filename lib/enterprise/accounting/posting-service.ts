@@ -90,7 +90,6 @@ async function prepareFunctionalLines(
     const debit = money(debitTransaction.times(rate));
     const credit = money(creditTransaction.times(rate));
     prepared.push({
-      organizationId: input.organizationId,
       ledgerAccountId: account.id,
       businessPartyId: line.businessPartyId || null,
       projectId: line.projectId || null,
