@@ -40,8 +40,8 @@ export async function POST(req: Request, { params }: Params) {
     signatureVerified: verification.verified,
     payloadHash: createHash("sha256").update(rawBody).digest("hex"),
     safePayloadJson: verification.safePayload || null,
-    providerOperationId: null,
-    paymentTransactionId: null,
+    providerOperationId: verification.providerOperationId || null,
+    paymentTransactionId: verification.paymentTransactionId || null,
     providerOperationStatus: verification.providerOperationStatus || null,
     paymentStatus: verification.paymentStatus || null,
     providerReference: verification.externalReference || null,
@@ -51,7 +51,7 @@ export async function POST(req: Request, { params }: Params) {
     try {
       await processRetailWebhookEvent(organizationId, parsed.data);
     } catch {
-      // Do not leak verification internals to untrusted callers.
+      // Never leak verification internals to an untrusted webhook caller.
     }
     return NextResponse.json({ error: "RETAIL_PROVIDER_WEBHOOK_SIGNATURE_INVALID" }, { status: 401 });
   }
