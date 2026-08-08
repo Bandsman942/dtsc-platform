@@ -23,6 +23,7 @@ export async function GET(req: Request, { params }: Params) {
     auth.session.userId,
     from && !Number.isNaN(from.getTime()) ? from : undefined,
     to && !Number.isNaN(to.getTime()) ? to : undefined,
+    moduleCode,
   );
 
   const common = {
