@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prepareCommercialMobileMoney } from "@/lib/enterprise/retail/commercial-guardrails";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
+import { createConnectedMobileMoneyOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { mobileMoneyCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createMobileMoneyTransaction } from "@/lib/enterprise/retail/service";
 import { prisma } from "@/lib/prisma";
@@ -40,10 +41,35 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Opération Mobile Money invalide." }, { status: 400 });
   try {
     const guarded = await prepareCommercialMobileMoney(organizationId, parsed.data);
+    const connected = await createConnectedMobileMoneyOperation(organizationId, auth.session.userId, guarded);
+    if (connected) {
+      const finalized = connected.finalized?.kind === "MOBILE_MONEY" ? connected.finalized.transaction : null;
+      const statusCode = connected.idempotent ? 200 : finalized ? 201 : connected.operation.status === "FAILED" ? 200 : 202;
+      await writeAuditLog({
+        userId: auth.session.userId,
+        action: `ENTERPRISE_MOBILE_MONEY_PROVIDER_${connected.operation.status}`,
+        entity: "EnterpriseRetailProviderOperation",
+        entityId: connected.operation.id,
+        request: req,
+        metadata: {
+          organizationId,
+          providerCode: guarded.providerCode,
+          transactionType: guarded.transactionType,
+          amount: String(guarded.principalAmount),
+          currency: guarded.currencyCode,
+          providerStatus: connected.operation.status,
+          businessTransactionId: finalized?.id || null,
+          idempotent: connected.idempotent,
+        },
+      });
+      await writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "provider-initiate", providerStatus: connected.operation.status, finalized: Boolean(finalized) } });
+      return NextResponse.json({ ok: connected.operation.status !== "FAILED", mode: "CONNECTED", operation: connected.operation, transaction: finalized, idempotent: connected.idempotent }, { status: statusCode });
+    }
+
     const result = await createMobileMoneyTransaction(organizationId, auth.session.userId, guarded);
-    await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_MOBILE_MONEY_CONFIRMED", entity: "EnterpriseMobileMoneyTransaction", entityId: result.transaction.id, request: req, metadata: { organizationId, number: result.transaction.number, providerCode: result.transaction.providerCode, transactionType: result.transaction.transactionType, amount: result.transaction.principalAmount.toFixed(), currency: result.transaction.currencyCode, externalReference: result.transaction.externalReference, idempotent: result.idempotent } });
-    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "create" } });
-    return NextResponse.json({ ok: true, ...result }, { status: result.idempotent ? 200 : 201 });
+    await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_MOBILE_MONEY_CONFIRMED", entity: "EnterpriseMobileMoneyTransaction", entityId: result.transaction.id, request: req, metadata: { organizationId, number: result.transaction.number, providerCode: result.transaction.providerCode, transactionType: result.transaction.transactionType, amount: result.transaction.principalAmount.toFixed(), currency: result.transaction.currencyCode, externalReference: result.transaction.externalReference, idempotent: result.idempotent, mode: "MANUAL" } });
+    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "create", mode: "MANUAL" } });
+    return NextResponse.json({ ok: true, mode: "MANUAL", ...result }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "MOBILE_MONEY_CREATE_FAILED");
   }
