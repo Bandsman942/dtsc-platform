@@ -253,8 +253,8 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
         soldAt: input.soldAt || new Date(),
         cashierUserId: actorUserId,
         idempotencyKey: input.idempotencyKey,
-        lines: { create: preparedLines.map((line) => ({ organizationId, ...line })) },
-        tenders: { create: input.tenders.map((tender) => ({ organizationId, methodType: tender.methodType, financialAccountId: tender.financialAccountId, currencyCode: input.currencyCode, amount: decimal(tender.amount), reference: tender.reference || null })) },
+        lines: { create: preparedLines },
+        tenders: { create: input.tenders.map((tender) => ({ methodType: tender.methodType, financialAccountId: tender.financialAccountId, currencyCode: input.currencyCode, amount: decimal(tender.amount), reference: tender.reference || null })) },
       },
       include: { lines: true, tenders: true },
     });
@@ -469,7 +469,7 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         preparedLines.push({ financialAccountId: account.id, accountType: account.accountType, currencyCode: account.currencyCode, cashSessionId: null, systemClosingBalance: expected, declaredBalance: declared, differenceAmount: difference, varianceReason: line.varianceReason || null });
       }
     }
-    const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || null, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines.map((line) => ({ organizationId, ...line })) } }, include: { lines: true } });
+    const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || null, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines } }, include: { lines: true } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseRetailDailyClose", entityId: close.id, eventType: "RETAIL_DAILY_CLOSE_SUBMITTED", summary: `Clôture ${close.number} soumise`, actorUserId, toStatus: "SUBMITTED", metadataJson: { businessDate: close.businessDate.toISOString(), lineCount: close.lines.length, totalVariance: money(sumDecimals(close.lines.map((line) => line.differenceAmount.abs()))).toFixed() } });
     return { close, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
