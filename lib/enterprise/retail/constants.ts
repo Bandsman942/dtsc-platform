@@ -10,6 +10,37 @@ export const MOBILE_MONEY_FEE_COLLECTION_MODES = ["NONE", "CASH", "PROVIDER"] as
 export const TELCO_TOPUP_STATUSES = ["SUCCESS", "FAILED"] as const;
 export const RETAIL_CLOSE_ACCOUNT_TYPES = ["CASH", "MOBILE_MONEY", "CLEARING"] as const;
 
+export const RETAIL_LOYALTY_PROGRAM_STATUSES = ["DRAFT", "ACTIVE", "PAUSED", "ENDED"] as const;
+export const RETAIL_LOYALTY_ACCOUNT_STATUSES = ["ACTIVE", "SUSPENDED", "CLOSED"] as const;
+export const RETAIL_LOYALTY_ENTRY_TYPES = ["EARN", "REDEEM", "REVERSAL", "EXPIRY", "ADJUSTMENT"] as const;
+export const RETAIL_STORED_VALUE_ACCOUNT_TYPES = ["GIFT_CARD", "STORE_CREDIT"] as const;
+export const RETAIL_STORED_VALUE_STATUSES = ["ACTIVE", "SUSPENDED", "EXHAUSTED", "EXPIRED", "CLOSED"] as const;
+export const RETAIL_STORED_VALUE_ENTRY_TYPES = ["ISSUE", "REDEEM", "REFUND", "REVERSAL", "ADJUSTMENT", "EXPIRY"] as const;
+export const RETAIL_PAYMENT_STATUSES = ["INITIATED", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED"] as const;
+export const RETAIL_PROVIDER_OPERATION_STATUSES = ["INITIATED", "PENDING_PROVIDER", "CONFIRMED", "FAILED", "UNKNOWN", "RECONCILED"] as const;
+export const RETAIL_PROVIDER_INTEGRATION_MODES = ["MANUAL", "CONNECTED"] as const;
+export const RETAIL_PROVIDER_CONNECTION_STATUSES = ["NOT_CONFIGURED", "DISCONNECTED", "CONNECTED", "DEGRADED"] as const;
+export const RETAIL_DEVICE_TYPES = ["BARCODE_SCANNER", "RECEIPT_PRINTER", "CASH_DRAWER", "PAYMENT_TERMINAL", "CUSTOMER_DISPLAY", "SCALE"] as const;
+export const RETAIL_DEVICE_CONNECTION_MODES = ["BROWSER", "WEBUSB", "WEBBLUETOOTH", "WEBSERIAL", "NETWORK", "NATIVE_BRIDGE", "MANUAL"] as const;
+
+export const RETAIL_PAYMENT_TRANSITIONS: Record<string, readonly string[]> = {
+  INITIATED: ["AUTHORIZED", "CAPTURED", "FAILED", "VOIDED"],
+  AUTHORIZED: ["CAPTURED", "FAILED", "VOIDED"],
+  CAPTURED: ["REFUNDED"],
+  FAILED: [],
+  VOIDED: [],
+  REFUNDED: [],
+};
+
+export const RETAIL_PROVIDER_OPERATION_TRANSITIONS: Record<string, readonly string[]> = {
+  INITIATED: ["PENDING_PROVIDER", "CONFIRMED", "FAILED", "UNKNOWN"],
+  PENDING_PROVIDER: ["CONFIRMED", "FAILED", "UNKNOWN"],
+  UNKNOWN: ["CONFIRMED", "FAILED", "RECONCILED"],
+  CONFIRMED: ["RECONCILED"],
+  FAILED: ["RECONCILED"],
+  RECONCILED: [],
+};
+
 const RETAIL_COMMERCIAL_MANAGER_PERMISSIONS = [
   "enterprise.retail.pos.pricing.manage",
   "enterprise.retail.pos.price_override.manage",
@@ -20,6 +51,22 @@ const RETAIL_COMMERCIAL_MANAGER_PERMISSIONS = [
   "enterprise.retail.pos.refunds.manage",
 ] as const;
 
+const RETAIL_CUSTOMER_PAYMENT_MANAGER_PERMISSIONS = [
+  "enterprise.retail.customer.read",
+  "enterprise.retail.customer.create",
+  "enterprise.retail.customer.manage",
+  "enterprise.retail.loyalty.manage",
+  "enterprise.retail.loyalty.redeem",
+  "enterprise.retail.stored_value.issue",
+  "enterprise.retail.stored_value.redeem",
+  "enterprise.retail.stored_value.refund",
+  "enterprise.retail.payments.manage",
+  "enterprise.retail.payments.refund",
+  "enterprise.retail.providers.manage",
+  "enterprise.retail.providers.reconcile",
+  "enterprise.retail.devices.manage",
+] as const;
+
 export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   STORE_MANAGER: [
     "enterprise.admin.manage",
@@ -27,6 +74,7 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
     "enterprise.activities.manage",
     "enterprise.retail.pos.manage",
     ...RETAIL_COMMERCIAL_MANAGER_PERMISSIONS,
+    ...RETAIL_CUSTOMER_PAYMENT_MANAGER_PERMISSIONS,
     "enterprise.retail.mobile_money.manage",
     "enterprise.retail.telco.manage",
     "enterprise.retail.close.manage",
@@ -44,6 +92,14 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
     "enterprise.retail.pos.discount_override.manage",
     "enterprise.retail.pos.promotions.manage",
     "enterprise.retail.pos.returns.create",
+    "enterprise.retail.customer.read",
+    "enterprise.retail.customer.create",
+    "enterprise.retail.customer.manage",
+    "enterprise.retail.loyalty.manage",
+    "enterprise.retail.loyalty.redeem",
+    "enterprise.retail.stored_value.issue",
+    "enterprise.retail.stored_value.redeem",
+    "enterprise.retail.payments.manage",
     "enterprise.retail.telco.manage",
     "enterprise.retail.mobile_money.read",
     "enterprise.retail.close.read",
@@ -55,6 +111,10 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
     "enterprise.retail.pos.read",
     "enterprise.retail.pos.create",
     "enterprise.retail.pos.returns.create",
+    "enterprise.retail.customer.read",
+    "enterprise.retail.loyalty.redeem",
+    "enterprise.retail.stored_value.redeem",
+    "enterprise.retail.payments.manage",
     "enterprise.retail.telco.read",
     "enterprise.retail.telco.create",
     "enterprise.catalog.read",
@@ -65,6 +125,10 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
     "enterprise.retail.pos.read",
     "enterprise.retail.pos.create",
     "enterprise.retail.pos.returns.create",
+    "enterprise.retail.customer.read",
+    "enterprise.retail.loyalty.redeem",
+    "enterprise.retail.stored_value.redeem",
+    "enterprise.retail.payments.manage",
     "enterprise.retail.mobile_money.read",
     "enterprise.retail.mobile_money.create",
     "enterprise.retail.close.read",
@@ -76,6 +140,8 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
     "enterprise.retail.mobile_money.create",
     "enterprise.retail.telco.read",
     "enterprise.retail.telco.create",
+    "enterprise.retail.payments.manage",
+    "enterprise.retail.providers.reconcile",
     "enterprise.retail.close.read",
     "enterprise.retail.close.submit",
     "enterprise.finance.treasury.read",
@@ -94,6 +160,11 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
     "enterprise.retail.pos.read",
     "enterprise.retail.pos.tax_override.manage",
     "enterprise.retail.pos.refunds.manage",
+    "enterprise.retail.customer.read",
+    "enterprise.retail.loyalty.manage",
+    "enterprise.retail.stored_value.refund",
+    "enterprise.retail.payments.refund",
+    "enterprise.retail.providers.reconcile",
     "enterprise.retail.mobile_money.read",
     "enterprise.retail.telco.read",
     "enterprise.retail.close.read",

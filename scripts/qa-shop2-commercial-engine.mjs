@@ -56,7 +56,7 @@ for (const marker of [
 
 const schemas = read("lib/enterprise/retail/commercial-schemas.ts");
 for (const marker of ["PERCENTAGE", "FIXED_AMOUNT", "QUANTITY_BREAK", "BUY_X_GET_Y", "BUNDLE", "retailReturnDecisionSchema", "retailReturnProductConditions"]) check(schemas.includes(marker), `Shop 2 commercial schema missing ${marker}`);
-check(!schemas.includes('"STORE_CREDIT"'), "Store credit must remain iteration 3 until a spendable balance domain exists");
+check(!schemas.includes('"STORE_CREDIT"'), "Store credit must remain outside the iteration 2 commercial schema; later iterations may add a dedicated spendable-balance domain");
 
 const permissions = read("lib/enterprise/retail/permissions.ts");
 for (const marker of ["canManagePricing", "canOverridePrice", "canOverrideDiscount", "canOverrideTax", "canManagePromotions", "canCreateReturns", "canManageRefunds"]) check(permissions.includes(marker), `Granular Retail permission missing ${marker}`);
@@ -95,7 +95,8 @@ check(decisionRoute.includes("finalizeRetailReturnAccounting"), "Return approval
 
 const readiness = JSON.parse(read("lib/enterprise/sector-onboarding-readiness.json"));
 const retail = readiness.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL");
-check(retail?.shop2ProgramStatus === "ITERATION_2_IN_PROGRESS", "Shop 2 readiness must reflect iteration 2 in progress");
+const iteration2OrLater = new Set(["ITERATION_2_IN_PROGRESS", "ITERATION_3_IN_PROGRESS", "ITERATION_4_IN_PROGRESS", "COMMERCIAL_READY_GLOBAL"]);
+check(iteration2OrLater.has(retail?.shop2ProgramStatus), "Shop 2 readiness must remain at iteration 2 or later after the commercial engine ships");
 
 if (failures.length) {
   console.error("Shop 2 commercial engine QA failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));

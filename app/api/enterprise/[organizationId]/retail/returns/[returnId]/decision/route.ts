@@ -3,6 +3,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { finalizeRetailReturnAccounting } from "@/lib/enterprise/retail/accounting";
 import { retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { reverseRetailLoyaltyForCompletedReturn } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { decideRetailReturn } from "@/lib/enterprise/retail/returns";
 
@@ -23,6 +24,9 @@ export async function POST(req: Request, { params }: Params) {
     const accounting = parsed.data.decision === "APPROVE"
       ? await finalizeRetailReturnAccounting(organizationId, auth.session.userId, result.retailReturn.id)
       : null;
+    const loyalty = parsed.data.decision === "APPROVE"
+      ? await reverseRetailLoyaltyForCompletedReturn(organizationId, auth.session.userId, result.retailReturn.id)
+      : null;
     await writeAuditLog({
       userId: auth.session.userId,
       action: parsed.data.decision === "APPROVE" ? "ENTERPRISE_RETAIL_RETURN_APPROVED" : "ENTERPRISE_RETAIL_RETURN_REJECTED",
@@ -35,12 +39,13 @@ export async function POST(req: Request, { params }: Params) {
         decision: parsed.data.decision,
         reason: parsed.data.reason || null,
         idempotent: result.idempotent,
+        loyaltyReversalEntryIds: loyalty?.applied.map((entry) => entry.entryId) || [],
         returnJournalEntryId: accounting?.returnJournalEntryId || null,
         inventoryReturnCount: accounting?.inventoryReturnPostings.length || 0,
       },
     });
-    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-returns", action: parsed.data.decision.toLowerCase(), accountingPosted: Boolean(accounting) } });
-    return NextResponse.json({ ok: true, ...result, accounting });
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-returns", action: parsed.data.decision.toLowerCase(), loyaltyReversed: loyalty?.applied.length || 0, accountingPosted: Boolean(accounting) } });
+    return NextResponse.json({ ok: true, ...result, accounting, loyalty });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_RETURN_DECISION_FAILED");
   }
