@@ -8,7 +8,12 @@ export default async function RetailCommercialControlPage() {
   if (!session) redirect("/auth/sign-in?next=/enterprise-modules/RETAIL_POS/commercial");
   const organizationId = session.activeOrganizationId;
   if (!organizationId || session.activeContext !== "ORGANIZATION") redirect("/dashboard");
-  const access = await resolveEnterpriseModuleAccess(session, organizationId, "RETAIL_POS", "read");
-  if (!access) redirect("/enterprise-modules/RETAIL_POS");
+  const access = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: "RETAIL_POS",
+    action: "read",
+  });
+  if (!access.allowed) redirect("/enterprise-modules/RETAIL_POS");
   return <RetailCommercialWorkspace organizationId={organizationId} />;
 }
