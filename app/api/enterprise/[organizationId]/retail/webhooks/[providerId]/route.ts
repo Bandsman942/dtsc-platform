@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { processRetailWebhookEvent } from "@/lib/enterprise/retail/customer-payments";
 import { retailWebhookEventSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import {
+  finalizeConfirmedRetailOperatorOperation,
+  resolveRetailProviderOperationForWebhook,
+} from "@/lib/enterprise/retail/operator-orchestration";
 import { getRetailPaymentProviderAdapter } from "@/lib/enterprise/retail/payment-provider-adapter";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -33,6 +37,13 @@ export async function POST(req: Request, { params }: Params) {
     settings: integration.settingsJson && typeof integration.settingsJson === "object" && !Array.isArray(integration.settingsJson) ? integration.settingsJson as Record<string, unknown> : {},
   }, req, rawBody);
 
+  const resolvedOperation = await resolveRetailProviderOperationForWebhook(
+    organizationId,
+    providerId,
+    verification.providerOperationId,
+    verification.externalReference,
+  );
+
   const parsed = retailWebhookEventSchema.safeParse({
     providerId,
     externalEventId: verification.externalEventId || `unverified-${createHash("sha256").update(rawBody).digest("hex").slice(0, 32)}`,
@@ -40,7 +51,7 @@ export async function POST(req: Request, { params }: Params) {
     signatureVerified: verification.verified,
     payloadHash: createHash("sha256").update(rawBody).digest("hex"),
     safePayloadJson: verification.safePayload || null,
-    providerOperationId: verification.providerOperationId || null,
+    providerOperationId: resolvedOperation?.id || null,
     paymentTransactionId: verification.paymentTransactionId || null,
     providerOperationStatus: verification.providerOperationStatus || null,
     paymentStatus: verification.paymentStatus || null,
@@ -58,7 +69,10 @@ export async function POST(req: Request, { params }: Params) {
 
   try {
     const result = await processRetailWebhookEvent(organizationId, parsed.data);
-    return NextResponse.json({ ok: true, idempotent: result.idempotent, applied: result.applied });
+    const finalized = parsed.data.providerOperationId
+      ? await finalizeConfirmedRetailOperatorOperation(organizationId, parsed.data.providerOperationId)
+      : null;
+    return NextResponse.json({ ok: true, idempotent: result.idempotent, applied: result.applied, finalized: Boolean(finalized) });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_PROVIDER_WEBHOOK_FAILED");
   }
