@@ -22,10 +22,12 @@ for (const model of [
   "EnterpriseRetailDeviceProfile",
 ]) check(schema.includes(`model ${model}`), `Missing Shop 2 iteration 3 model ${model}`);
 check(exists("prisma/migrations/20260808190000_shop2_customer_loyalty_payments/migration.sql"), "Iteration 3 additive migration is missing");
+check(exists("prisma/migrations/20260808203000_shop2_async_operator_payload/migration.sql"), "Async operator payload migration is missing");
 check(schema.includes("businessPartyId"), "Retail customer profile must reference the canonical business party");
 check(!schema.includes("model EnterpriseRetailCustomerMaster"), "Retail must not create a duplicate customer master");
 check(schema.includes("lookupHash"), "Stored value must persist a lookup hash");
 check(!schema.includes("bearerCode"), "Stored value bearer codes must never be stored in plaintext");
+check(schema.includes("requestPayloadJson"), "Async provider operations must preserve a safe server-side request payload until confirmation");
 for (const marker of ["@@unique([organizationId, idempotencyKey])", "@@unique([organizationId, providerId, externalEventId])"]) check(schema.includes(marker), `Tenant-scoped idempotency contract missing ${marker}`);
 
 const service = read("lib/enterprise/retail/customer-payments.ts");
@@ -46,12 +48,38 @@ check(!service.includes("credentialValue"), "Provider credentials must not be st
 check(!service.includes("webhookSecretValue"), "Webhook secrets must not be stored as raw values");
 
 const adapter = read("lib/enterprise/retail/payment-provider-adapter.ts");
-for (const marker of ["RetailPaymentProviderAdapter", "verifyWebhook", "registerRetailPaymentProviderAdapter", 'code: "MANUAL"']) check(adapter.includes(marker), `Provider-neutral adapter contract missing ${marker}`);
+for (const marker of ["RetailPaymentProviderAdapter", "verifyWebhook", "reconcile?", "registerRetailPaymentProviderAdapter", 'code: "MANUAL"']) check(adapter.includes(marker), `Provider-neutral adapter contract missing ${marker}`);
 check(!adapter.includes("MOCK_PROVIDER"), "Production provider registry must not ship a fake provider");
 
+const orchestration = read("lib/enterprise/retail/operator-orchestration.ts");
+for (const marker of [
+  "PENDING_MOBILE_MONEY",
+  "PENDING_TELCO_TOPUP",
+  "createConnectedMobileMoneyOperation",
+  "createConnectedTelcoTopupOperation",
+  "finalizeConfirmedRetailOperatorOperation",
+  "reconcileRetailProviderOperations",
+  "PROVIDER_TIMEOUT",
+  "requestPayloadJson",
+  "adapter.initiate",
+  "adapter.reconcile",
+]) check(orchestration.includes(marker), `Async operator orchestration missing ${marker}`);
+check(orchestration.includes('operation.status !== "CONFIRMED"'), "Business effects must remain blocked before provider confirmation");
+check(orchestration.includes('status: "SUCCESS"'), "Telco success must only be materialized by the confirmed-operation finalizer");
+
 const webhook = read("app/api/enterprise/[organizationId]/retail/webhooks/[providerId]/route.ts");
-for (const marker of ["req.text()", "adapter.verifyWebhook", "createHash(\"sha256\")", "processRetailWebhookEvent"]) check(webhook.includes(marker), `Webhook route missing ${marker}`);
+for (const marker of ["req.text()", "adapter.verifyWebhook", "createHash(\"sha256\")", "processRetailWebhookEvent", "resolveRetailProviderOperationForWebhook", "finalizeConfirmedRetailOperatorOperation"]) check(webhook.includes(marker), `Webhook route missing ${marker}`);
 check(!webhook.includes("await req.json()"), "Webhook verification must use the raw request body");
+
+const mobileMoneyRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/route.ts");
+for (const marker of ["createConnectedMobileMoneyOperation", 'mode: "CONNECTED"', 'mode: "MANUAL"']) check(mobileMoneyRoute.includes(marker), `Mobile Money connected/manual split missing ${marker}`);
+const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts");
+for (const marker of ["createConnectedTelcoTopupOperation", 'mode: "CONNECTED"', 'mode: "MANUAL"']) check(telcoRoute.includes(marker), `Telco connected/manual split missing ${marker}`);
+const providerDecisionRoute = read("app/api/enterprise/[organizationId]/retail/provider-operations/[operationId]/route.ts");
+check(providerDecisionRoute.includes("finalizeConfirmedRetailOperatorOperation"), "Authorized provider confirmation must materialize its business effect exactly once");
+check(exists("app/api/enterprise/[organizationId]/retail/provider-operations/reconcile/route.ts"), "Provider reconciliation endpoint is missing");
+const reconciliationRoute = read("app/api/enterprise/[organizationId]/retail/provider-operations/reconcile/route.ts");
+for (const marker of ["canReconcileProviders", "reconcileRetailProviderOperations", "ENTERPRISE_RETAIL_PROVIDER_RECONCILIATION_RUN"]) check(reconciliationRoute.includes(marker), `Provider reconciliation route missing ${marker}`);
 
 const activeCustomer = read("app/api/enterprise/[organizationId]/retail/active-customer/route.ts");
 const customerBar = read("components/enterprise/professional/retail-active-customer-bar.tsx");
@@ -93,6 +121,7 @@ for (const route of [
   "app/api/enterprise/[organizationId]/retail/payments/route.ts",
   "app/api/enterprise/[organizationId]/retail/provider-integrations/route.ts",
   "app/api/enterprise/[organizationId]/retail/provider-operations/route.ts",
+  "app/api/enterprise/[organizationId]/retail/provider-operations/reconcile/route.ts",
   "app/api/enterprise/[organizationId]/retail/devices/route.ts",
   "app/api/enterprise/[organizationId]/retail/webhooks/[providerId]/route.ts",
 ]) check(exists(route), `Missing iteration 3 route ${route}`);
