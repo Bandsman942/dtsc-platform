@@ -1,3 +1,4 @@
+import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { getRetailExchangeRateReadiness } from "@/lib/enterprise/retail/fx-reporting";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
@@ -42,6 +43,7 @@ export async function getCommercialRetailDashboard(
     metricsByCurrency,
     positionCounts,
     fxReadiness,
+    accountingReadiness,
   ] = await Promise.all([
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } }),
     prisma.enterpriseRetailProvider.findMany({ where: { organizationId, isActive: true }, orderBy: [{ providerType: "asc" }, { label: "asc" }] }),
@@ -73,6 +75,7 @@ export async function getCommercialRetailDashboard(
     getRetailMetricsByCurrency(organizationId, dateFrom, dateTo, moduleCode),
     prisma.enterprisePosition.groupBy({ by: ["positionCode"], where: { organizationId, isActive: true, positionCode: { in: ["STORE_MANAGER", "CASHIER", "MOBILE_MONEY_AGENT", "RETAIL_CONTROLLER"] } }, _count: { _all: true } }),
     getRetailExchangeRateReadiness(organizationId, dateTo),
+    includePos ? getRetailAccountingReadiness(organizationId, dateTo) : Promise.resolve(null),
   ]);
 
   const mobileWallets = providers.filter((provider) => provider.providerType === "MOBILE_MONEY");
@@ -83,6 +86,7 @@ export async function getCommercialRetailDashboard(
     { code: "WAREHOUSE", label: "Site et dépôt opérationnels", complete: Boolean(warehouseExists), deepLink: "/enterprise-modules/SITES_WAREHOUSES" },
     { code: "CATALOG", label: "Catalogue de vente renseigné", complete: Boolean(catalogExists), deepLink: "/enterprise-modules/CATALOG" },
     { code: "CASH", label: "Compte de caisse configuré", complete: accounts.some((account) => account.accountType === "CASH"), deepLink: "/enterprise-modules/FINANCE_TREASURY" },
+    ...(includePos ? [{ code: "ACCOUNTING", label: "Comptabilité POS prête (journaux, période et mappings)", complete: Boolean(accountingReadiness?.ready), deepLink: "/enterprise-modules/FINANCE_ACCOUNTING" }] : []),
     { code: "FX", label: `Consolidation multi-devise${fxReadiness.targetCurrencyCode ? ` · ${fxReadiness.targetCurrencyCode}` : ""}`, complete: fxReadiness.complete, deepLink: "/enterprise-modules/RETAIL_POS/consolidated-report" },
     { code: "MOBILE_FLOAT", label: "Au moins un wallet Mobile Money relié à son float", complete: mobileWallets.some((provider) => Boolean(provider.mobileMoneyFloatAccountId)), deepLink: "/enterprise-modules/MOBILE_MONEY_AGENCY" },
     { code: "TELCO_FLOAT", label: "Au moins un opérateur Télécom relié à son float", complete: telcoNetworks.some((provider) => Boolean(provider.telcoFloatAccountId)), deepLink: "/enterprise-modules/TELCO_TOPUPS" },
@@ -99,11 +103,12 @@ export async function getCommercialRetailDashboard(
     cashSession,
     metricsByCurrency,
     fxReadiness,
+    accountingReadiness,
     readiness: {
       items: readiness,
       completed: readiness.filter((item) => item.complete).length,
       total: readiness.length,
-      readyForFirstSale: readiness.filter((item) => ["PROFILE", "WAREHOUSE", "CATALOG", "CASH"].includes(item.code)).every((item) => item.complete),
+      readyForFirstSale: readiness.filter((item) => ["PROFILE", "WAREHOUSE", "CATALOG", "CASH", "ACCOUNTING"].includes(item.code)).every((item) => item.complete),
       readyForMobileMoney: readiness.filter((item) => ["PROFILE", "CASH", "MOBILE_FLOAT"].includes(item.code)).every((item) => item.complete),
       readyForTelco: readiness.filter((item) => ["PROFILE", "TELCO_FLOAT"].includes(item.code)).every((item) => item.complete),
     },
