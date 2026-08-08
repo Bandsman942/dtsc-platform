@@ -41,7 +41,7 @@ async function main() {
     data: { sectorCode: "COMMERCE_RETAIL", sector: "COMMERCE_RETAIL", status: "ACTIVE", deletedAt: null },
   });
 
-  for (const [index, moduleCode] of ["RETAIL_POS", "RETAIL_DAILY_CLOSE", "CATALOG", "SITES_WAREHOUSES", "INVENTORY", "FINANCE_ACCOUNTING", "FINANCE_INVENTORY", "FINANCE_CASH"].entries()) {
+  for (const [index, moduleCode] of ["RETAIL_POS", "RETAIL_DAILY_CLOSE", "CATALOG", "SITES_WAREHOUSES", "INVENTORY_LOGISTICS", "FINANCE_ACCOUNTING", "FINANCE_INVENTORY", "FINANCE_CASH"].entries()) {
     await prisma.enterpriseModule.upsert({
       where: { organizationId_moduleCode: { organizationId, moduleCode } },
       update: { isEnabled: true },
