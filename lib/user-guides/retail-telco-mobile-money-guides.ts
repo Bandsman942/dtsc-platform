@@ -10,6 +10,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
     audience: "Administrateur entreprise, gérant, responsable ventes, vendeur, caissier et contrôleur",
     updatedAt: "2026-08-08",
     capabilities: [
+      "Guide d’onboarding Shop",
       "Onboarding STARTER / BUSINESS / ENTERPRISE",
       "Profil RETAIL_CORE par défaut avec extensions optionnelles Mobile Money et Télécom",
       "Recherche catalogue/SKU paginée côté serveur",
@@ -27,6 +28,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
       "Sortie de stock atomique et valorisation COGS / INVENTORY",
       "Comptabilité POS en partie double",
       "Taux de change Finance datés et consolidation historique",
+      "Consolidation multi-devise",
       "Annulation complète auditée et comptabilisée",
     ],
     steps: [
