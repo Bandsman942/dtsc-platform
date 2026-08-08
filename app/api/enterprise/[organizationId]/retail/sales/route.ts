@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { finalizeRetailSaleAccounting } from "@/lib/enterprise/retail/accounting";
-import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2 } from "@/lib/enterprise/retail/commercial-engine";
+import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2, previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
 import { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
@@ -55,7 +55,39 @@ export async function POST(req: Request, { params }: Params) {
   if (!commercialContext.success) return NextResponse.json({ error: "Invalid commercial context", message: commercialContext.error.issues[0]?.message || "Contexte commercial invalide." }, { status: 400 });
   try {
     const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
-    const guarded = await prepareCommercialRetailSaleV2(organizationId, parsed.data, commercialContext.data, permissions);
+    let pricingInput = parsed.data;
+    if (!commercialContext.data.overrideReason) {
+      const preview = await previewRetailCommercialPricing(
+        organizationId,
+        {
+          siteId: parsed.data.siteId,
+          customerBusinessPartyId: parsed.data.customerBusinessPartyId,
+          currencyCode: parsed.data.currencyCode,
+          soldAt: parsed.data.soldAt,
+          lines: parsed.data.lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })),
+        },
+        {
+          couponCode: commercialContext.data.couponCode,
+          customerSegmentCode: commercialContext.data.customerSegmentCode,
+          channelCode: commercialContext.data.channelCode,
+        },
+      );
+      const previewByItem = new Map(preview.lines.map((line) => [line.catalogItemId, line]));
+      pricingInput = {
+        ...parsed.data,
+        lines: parsed.data.lines.map((line) => {
+          const resolved = previewByItem.get(line.catalogItemId);
+          if (!resolved) return line;
+          return {
+            ...line,
+            unitPrice: Number(resolved.resolvedUnitPrice),
+            discountAmount: Number(resolved.discountAmount),
+            taxAmount: Number(resolved.taxAmount),
+          };
+        }),
+      };
+    }
+    const guarded = await prepareCommercialRetailSaleV2(organizationId, pricingInput, commercialContext.data, permissions);
     const result = await withRetailTransactionRetry(
       () => createRetailSale(organizationId, auth.session.userId, guarded.input),
       { maxAttempts: 3, baseDelayMs: 20 },
