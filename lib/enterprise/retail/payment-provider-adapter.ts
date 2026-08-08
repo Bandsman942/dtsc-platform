@@ -31,6 +31,8 @@ export type RetailWebhookVerification = {
   externalEventId: string | null;
   eventType: string | null;
   externalReference: string | null;
+  providerOperationId?: string | null;
+  paymentTransactionId?: string | null;
   paymentStatus?: "AUTHORIZED" | "CAPTURED" | "FAILED" | "VOIDED" | "REFUNDED" | null;
   providerOperationStatus?: "PENDING_PROVIDER" | "CONFIRMED" | "FAILED" | "UNKNOWN" | "RECONCILED" | null;
   safePayload?: Record<string, unknown> | null;
