@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "purpose": "Opposable onboarding and commercialization gate for DTSC sector templates.",
   "genericCriteria": [
     "ACTIVE_SECTOR",
@@ -19,8 +19,10 @@
     {
       "sectorCode": "COMMERCE_RETAIL",
       "templateVersion": 2,
-      "businessProfileCode": "RETAIL_TELCO_MOBILE_MONEY",
+      "businessProfileCode": "RETAIL_CORE",
+      "compatibleExistingProfiles": ["RETAIL_TELCO_MOBILE_MONEY"],
       "commercializationStatus": "COMMERCIAL_READY",
+      "shop2ProgramStatus": "ITERATION_1_IN_PROGRESS",
       "enforce": true,
       "minimumOperationalPlan": "BUSINESS",
       "requiredModules": [
@@ -34,19 +36,31 @@
         "FINANCE_TREASURY",
         "FINANCE_CASH",
         "RETAIL_POS",
-        "MOBILE_MONEY_AGENCY",
-        "TELCO_TOPUPS",
         "RETAIL_DAILY_CLOSE",
         "REPORTS",
         "DOCUMENTS"
       ],
-      "requiredDepartments": ["DIRECTION", "SALES_TELCO", "MOBILE_MONEY_CASH", "STOCK_PURCHASES", "FINANCE_CONTROL"],
-      "requiredPositions": ["STORE_MANAGER", "SALES_MANAGER", "SELLER", "CASHIER", "MOBILE_MONEY_AGENT", "STOCK_KEEPER", "STOCK_MANAGER", "PURCHASE_MANAGER", "RETAIL_CONTROLLER"],
-      "requiredOperationalModules": ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"],
-      "requiredGuideCodes": ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"],
+      "requiredDepartments": ["DIRECTION", "STOCK_PURCHASES", "FINANCE_CONTROL"],
+      "requiredPositions": ["STORE_MANAGER", "SALES_MANAGER", "SELLER", "CASHIER", "STOCK_KEEPER", "STOCK_MANAGER", "PURCHASE_MANAGER", "RETAIL_CONTROLLER"],
+      "requiredOperationalModules": ["RETAIL_POS", "RETAIL_DAILY_CLOSE"],
+      "requiredGuideCodes": ["RETAIL_POS", "RETAIL_DAILY_CLOSE"],
+      "optionalExtensions": [
+        {
+          "code": "RETAIL_TELCO_MOBILE_MONEY",
+          "modules": ["MOBILE_MONEY_AGENCY", "TELCO_TOPUPS"],
+          "positions": ["MOBILE_MONEY_AGENT"],
+          "guideCodes": ["MOBILE_MONEY_AGENCY", "TELCO_TOPUPS"]
+        }
+      ],
       "releaseCriteria": [
+        "RETAIL_CORE_DECOUPLING",
         "MULTI_ITEM_POS",
         "SERVER_PRICE_GUARD",
+        "POS_SERVER_SEARCH",
+        "BATCHED_SALE_DEPENDENCIES",
+        "POS_DOUBLE_ENTRY_ACCOUNTING",
+        "POS_INVENTORY_VALUATION",
+        "POS_ACCOUNTING_READINESS",
         "WALLET_NETWORK_SEPARATION",
         "UNIQUE_PROVIDER_REFERENCE",
         "PHONE_NORMALIZATION_AND_CONFIRMATION",
