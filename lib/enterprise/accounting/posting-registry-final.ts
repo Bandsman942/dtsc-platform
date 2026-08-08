@@ -23,6 +23,7 @@ import {
 } from "@/lib/enterprise/accounting/domain-posting-builders";
 import { buildHealthWriteOffPosting } from "@/lib/enterprise/accounting/sector-adapters/health";
 import { buildPharmacySectorInventoryPosting } from "@/lib/enterprise/accounting/sector-adapters/pharmacy";
+import { buildRetailPosReturnPosting } from "@/lib/enterprise/accounting/sector-adapters/retail-return";
 import {
   buildRetailInventoryReturnPosting,
   buildRetailPosSalePosting,
@@ -49,6 +50,7 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   OPENING_BALANCE_POSTED: buildOpeningBalancePosting,
   RETAIL_POS_SALE_POSTED: buildRetailPosSalePosting,
   RETAIL_POS_SALE_REVERSED: buildRetailPosSaleReversalPosting,
+  RETAIL_POS_RETURN_POSTED: buildRetailPosReturnPosting,
   RETAIL_POS_INVENTORY_RETURN: buildRetailInventoryReturnPosting,
   PHARMACY_CUSTOMER_RETURN: buildPharmacySectorInventoryPosting,
   PHARMACY_SUPPLIER_RETURN: buildPharmacySectorInventoryPosting,
