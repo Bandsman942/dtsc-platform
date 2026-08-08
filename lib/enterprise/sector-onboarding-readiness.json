@@ -22,7 +22,7 @@
       "businessProfileCode": "RETAIL_CORE",
       "compatibleExistingProfiles": ["RETAIL_TELCO_MOBILE_MONEY"],
       "commercializationStatus": "COMMERCIAL_READY",
-      "shop2ProgramStatus": "ITERATION_3_IN_PROGRESS",
+      "shop2ProgramStatus": "ITERATION_4_IN_PROGRESS",
       "enforce": true,
       "minimumOperationalPlan": "BUSINESS",
       "requiredModules": [
