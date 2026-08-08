@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { prepareCommercialMobileMoney } from "@/lib/enterprise/retail/commercial-guardrails";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { createConnectedMobileMoneyOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { mobileMoneyCreateSchema } from "@/lib/enterprise/retail/schemas";
@@ -40,9 +41,10 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = mobileMoneyCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Opération Mobile Money invalide." }, { status: 400 });
   try {
-    const guarded = await prepareCommercialMobileMoney(organizationId, parsed.data);
-    const connected = await createConnectedMobileMoneyOperation(organizationId, auth.session.userId, guarded);
-    if (connected) {
+    const prepared = await prepareCommercialMobileMoney(organizationId, parsed.data);
+    if (prepared.executionMode === "CONNECTED") {
+      const connected = await createConnectedMobileMoneyOperation(organizationId, auth.session.userId, prepared.input);
+      if (!connected) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_CONNECTED", 409, { providerCode: prepared.input.providerCode });
       const finalized = connected.finalized?.kind === "MOBILE_MONEY" ? connected.finalized.transaction : null;
       const statusCode = connected.idempotent ? 200 : finalized ? 201 : connected.operation.status === "FAILED" ? 200 : 202;
       await writeAuditLog({
@@ -53,10 +55,10 @@ export async function POST(req: Request, { params }: Params) {
         request: req,
         metadata: {
           organizationId,
-          providerCode: guarded.providerCode,
-          transactionType: guarded.transactionType,
-          amount: String(guarded.principalAmount),
-          currency: guarded.currencyCode,
+          providerCode: prepared.input.providerCode,
+          transactionType: prepared.input.transactionType,
+          amount: String(prepared.input.principalAmount),
+          currency: prepared.input.currencyCode,
           providerStatus: connected.operation.status,
           businessTransactionId: finalized?.id || null,
           idempotent: connected.idempotent,
@@ -66,7 +68,7 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ ok: connected.operation.status !== "FAILED", mode: "CONNECTED", operation: connected.operation, transaction: finalized, idempotent: connected.idempotent }, { status: statusCode });
     }
 
-    const result = await createMobileMoneyTransaction(organizationId, auth.session.userId, guarded);
+    const result = await createMobileMoneyTransaction(organizationId, auth.session.userId, prepared.input);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_MOBILE_MONEY_CONFIRMED", entity: "EnterpriseMobileMoneyTransaction", entityId: result.transaction.id, request: req, metadata: { organizationId, number: result.transaction.number, providerCode: result.transaction.providerCode, transactionType: result.transaction.transactionType, amount: result.transaction.principalAmount.toFixed(), currency: result.transaction.currencyCode, externalReference: result.transaction.externalReference, idempotent: result.idempotent, mode: "MANUAL" } });
     await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", action: "create", mode: "MANUAL" } });
     return NextResponse.json({ ok: true, mode: "MANUAL", ...result }, { status: result.idempotent ? 200 : 201 });
