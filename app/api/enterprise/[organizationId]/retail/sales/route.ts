@@ -26,7 +26,14 @@ export async function GET(req: Request, { params }: Params) {
     organizationId,
     ...(status ? { status } : {}),
     ...(from || to ? { soldAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
-    ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { lines: { some: { description: { contains: search, mode: "insensitive" } } }] } : {}),
+    ...(search
+      ? {
+          OR: [
+            { number: { contains: search, mode: "insensitive" } },
+            { lines: { some: { description: { contains: search, mode: "insensitive" } } } },
+          ],
+        }
+      : {}),
   };
   const metricFrom = from || new Date(new Date().setHours(0, 0, 0, 0));
   const metricTo = to || new Date();
@@ -51,7 +58,7 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "submit", { mutation: true, limit: 300 });
   if (!auth.ok) return auth.response;
   const originalRaw = await req.json().catch(() => null);
-  const rawObject = originalRaw && typeof originalRaw === "object" && !Array.isArray(originalRaw) ? originalRaw as Record<string, unknown> : null;
+  const rawObject = originalRaw && typeof originalRaw === "object" && !Array.isArray(originalRaw) ? (originalRaw as Record<string, unknown>) : null;
   const explicitCustomerId = typeof rawObject?.customerBusinessPartyId === "string" && rawObject.customerBusinessPartyId.trim() ? rawObject.customerBusinessPartyId.trim() : null;
   const activeCustomerId = getRetailActiveCustomerIdFromCookieHeader(req.headers.get("cookie"), organizationId);
   const raw = rawObject ? { ...rawObject, ...(explicitCustomerId || activeCustomerId ? { customerBusinessPartyId: explicitCustomerId || activeCustomerId } : {}) } : originalRaw;
