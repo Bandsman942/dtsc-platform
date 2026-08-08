@@ -241,7 +241,6 @@ async function prepareRetailFixture() {
 
 async function signIn(page) {
   await page.goto(`/auth/sign-in?next=${encodeURIComponent("/enterprise-modules/RETAIL_POS")}`);
-  await page.waitForLoadState("networkidle");
 
   const emailInput = page.locator('input[name="email"], input[type="email"]').first();
   const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
@@ -249,11 +248,14 @@ async function signIn(page) {
 
   await expect(emailInput).toBeEditable();
   await expect(passwordInput).toBeEditable();
-  await emailInput.fill(adminEmail);
-  await passwordInput.fill(adminPassword);
-  await expect(emailInput).toHaveValue(adminEmail);
-  await expect(passwordInput).toHaveValue(adminPassword);
-  await expect(loadContextButton).toBeEnabled();
+  await expect(async () => {
+    await emailInput.fill(adminEmail);
+    await passwordInput.fill(adminPassword);
+    await page.waitForTimeout(300);
+    await expect(emailInput).toHaveValue(adminEmail);
+    await expect(passwordInput).toHaveValue(adminPassword);
+    await expect(loadContextButton).toBeEnabled();
+  }).toPass({ timeout: 10_000, intervals: [250, 500, 1_000] });
 
   const lookupPromise = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/organizations") && response.request().method() === "POST",
