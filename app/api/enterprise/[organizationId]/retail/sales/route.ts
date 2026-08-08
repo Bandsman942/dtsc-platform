@@ -2,8 +2,11 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { finalizeRetailSaleAccounting } from "@/lib/enterprise/retail/accounting";
-import { getRetailMetricsByCurrency, prepareCommercialRetailSale } from "@/lib/enterprise/retail/commercial-guardrails";
+import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2 } from "@/lib/enterprise/retail/commercial-engine";
+import { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
+import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
+import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createRetailSale } from "@/lib/enterprise/retail/service";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
@@ -26,7 +29,13 @@ export async function GET(req: Request, { params }: Params) {
   const metricFrom = from || new Date(new Date().setHours(0, 0, 0, 0));
   const metricTo = to || new Date();
   const [items, total, metrics] = await Promise.all([
-    prisma.enterpriseRetailSale.findMany({ where, orderBy: { soldAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { lines: true, tenders: true } }),
+    prisma.enterpriseRetailSale.findMany({
+      where,
+      orderBy: { soldAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { lines: true, tenders: true, pricingDecisions: true, promotionRedemptions: true, returns: { include: { lines: true, refunds: true } } },
+    }),
     prisma.enterpriseRetailSale.count({ where }),
     getRetailMetricsByCurrency(organizationId, metricFrom, metricTo, "RETAIL_POS"),
   ]);
@@ -42,14 +51,24 @@ export async function POST(req: Request, { params }: Params) {
   const raw = await req.json().catch(() => null);
   const parsed = retailSaleCreateSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Ticket invalide." }, { status: 400 });
-  const overrideReason = raw && typeof raw === "object" && "overrideReason" in raw && typeof (raw as { overrideReason?: unknown }).overrideReason === "string" ? (raw as { overrideReason: string }).overrideReason : null;
+  const commercialContext = retailCommercialContextSchema.safeParse(raw);
+  if (!commercialContext.success) return NextResponse.json({ error: "Invalid commercial context", message: commercialContext.error.issues[0]?.message || "Contexte commercial invalide." }, { status: 400 });
   try {
-    const guarded = await prepareCommercialRetailSale(organizationId, parsed.data, { allowOverride: Boolean(auth.access.canAdminister), overrideReason });
+    const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
+    const guarded = await prepareCommercialRetailSaleV2(organizationId, parsed.data, commercialContext.data, permissions);
     const result = await withRetailTransactionRetry(
       () => createRetailSale(organizationId, auth.session.userId, guarded.input),
       { maxAttempts: 3, baseDelayMs: 20 },
     );
+    await persistRetailCommercialDecisions(
+      organizationId,
+      result.sale.id,
+      result.sale.customerBusinessPartyId,
+      result.sale.currencyCode,
+      guarded.decisions,
+    );
     const accounting = await finalizeRetailSaleAccounting(organizationId, auth.session.userId, result.sale.id);
+    const promotionCount = new Set(guarded.decisions.flatMap((decision) => decision.promotionIds)).size;
     await writeAuditLog({
       userId: auth.session.userId,
       action: "ENTERPRISE_RETAIL_SALE_COMPLETED",
@@ -64,14 +83,15 @@ export async function POST(req: Request, { params }: Params) {
         idempotent: result.idempotent,
         priceOverrideApplied: guarded.overrideApplied,
         overrideReason: guarded.overrideReason,
-        overrideCount: guarded.overrides.length,
+        pricingDecisionCount: guarded.decisions.length,
+        promotionCount,
         saleJournalEntryId: accounting.saleJournalEntryId,
         inventoryValuationCount: accounting.inventoryPostings.length,
         inventoryJournalEntryIds: accounting.inventoryPostings.map((item) => item.journalEntryId),
       },
     });
-    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", overrideApplied: guarded.overrideApplied, accountingPosted: true } });
-    return NextResponse.json({ ok: true, ...result, accounting }, { status: result.idempotent ? 200 : 201 });
+    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", overrideApplied: guarded.overrideApplied, promotionCount, accountingPosted: true } });
+    return NextResponse.json({ ok: true, ...result, accounting, commercial: { promotionCount, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SALE_CREATE_FAILED");
   }
