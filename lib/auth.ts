@@ -6,6 +6,7 @@ import { getAuthCookieDomain, getSignInUrl, getDashboardUrl } from "@/lib/domain
 import { requireEnv } from "@/lib/env";
 import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
 import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
+import { shouldUseSecureSessionCookie } from "@/lib/session-cookie-security";
 import {
   createSessionToken,
   SESSION_COOKIE,
@@ -150,7 +151,7 @@ export async function setSessionCookie(
   cookieStore.set(SESSION_COOKIE, created.token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureSessionCookie(),
     path: "/",
     maxAge: sessionCookieMaxAgeSeconds(created.session.exp),
     ...(cookieDomain ? { domain: cookieDomain } : {}),
@@ -165,7 +166,7 @@ export async function clearSessionCookie() {
   const baseOptions = {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureSessionCookie(),
     path: "/",
     maxAge: 0,
   } as const;
