@@ -89,7 +89,15 @@ for (const route of [
 ]) check(exists(route), `Missing Shop 2 iteration 2 API route ${route}`);
 
 const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
-for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) check(salesRoute.includes(marker), `POS sale route missing authoritative commercial marker ${marker}`);
+const saleExecution = read("lib/enterprise/retail/sale-execution.ts");
+check(salesRoute.includes("executeCanonicalRetailSale"), "POS sale route must delegate authoritative commercial execution to the canonical sale service");
+for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) {
+  check(saleExecution.includes(marker), `Canonical POS sale service missing authoritative commercial marker ${marker}`);
+}
+const prepareIndex = saleExecution.indexOf("prepareCommercialRetailSaleV2");
+const persistIndex = saleExecution.indexOf("persistRetailCommercialDecisions");
+const accountingIndex = saleExecution.indexOf("finalizeRetailSaleAccounting");
+check(prepareIndex >= 0 && persistIndex > prepareIndex && accountingIndex > persistIndex, "Canonical POS sale service must prepare pricing, persist decisions and finalize accounting in order");
 const decisionRoute = read("app/api/enterprise/[organizationId]/retail/returns/[returnId]/decision/route.ts");
 check(decisionRoute.includes("finalizeRetailReturnAccounting"), "Return approval must post common accounting before successful response");
 
