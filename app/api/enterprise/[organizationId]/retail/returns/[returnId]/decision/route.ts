@@ -11,7 +11,8 @@ type Params = { params: Promise<{ organizationId: string; returnId: string }> };
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId, returnId } = await params;
-  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, limit: 80 });
+  // Module visibility/read remains the broad gate; the exact refund permission below is the mutation authority.
+  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read", { mutation: true, limit: 80 });
   if (!auth.ok) return auth.response;
   const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageRefunds) return NextResponse.json({ error: "Forbidden", message: "Vous n’êtes pas autorisé à valider les remboursements Retail." }, { status: 403 });
