@@ -1,0 +1,290 @@
+model EnterpriseRetailCustomerProfile {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  businessPartyId       String
+  customerNumber        String
+  segmentCode           String?
+  priceListCode         String?
+  preferredLocale       String?
+  preferredCurrencyCode String?
+  status                String   @default("ACTIVE")
+  notes                 String?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  archivedAt            DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, businessPartyId])
+  @@unique([organizationId, customerNumber])
+  @@index([organizationId, segmentCode, status])
+  @@index([organizationId, priceListCode, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseRetailLoyaltyProgram {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  code                     String
+  nameFr                   String
+  nameEn                   String
+  currencyCode             String
+  earnPointsPerCurrencyUnit Decimal @default(0) @db.Decimal(20, 6)
+  redeemValuePerPoint      Decimal  @default(0) @db.Decimal(20, 6)
+  minimumRedeemPoints      Decimal  @default(0) @db.Decimal(20, 6)
+  status                   String   @default("DRAFT")
+  startsAt                 DateTime?
+  endsAt                   DateTime?
+  settingsJson             Json?
+  createdByUserId          String
+  updatedByUserId          String?
+  revision                 Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  archivedAt               DateTime?
+  accounts                 EnterpriseRetailLoyaltyAccount[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, startsAt, endsAt])
+  @@index([archivedAt])
+}
+
+model EnterpriseRetailLoyaltyAccount {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  programId               String
+  customerBusinessPartyId String
+  pointsBalance           Decimal  @default(0) @db.Decimal(20, 6)
+  lifetimeEarned          Decimal  @default(0) @db.Decimal(20, 6)
+  lifetimeRedeemed        Decimal  @default(0) @db.Decimal(20, 6)
+  tierCode                String?
+  status                  String   @default("ACTIVE")
+  revision                Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  program                 EnterpriseRetailLoyaltyProgram @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Restrict)
+  entries                 EnterpriseRetailLoyaltyEntry[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, programId, customerBusinessPartyId])
+  @@index([organizationId, customerBusinessPartyId, status])
+  @@index([organizationId, tierCode, status])
+}
+
+model EnterpriseRetailLoyaltyEntry {
+  id              String   @id @default(cuid())
+  organizationId  String
+  accountId       String
+  entryType       String
+  points          Decimal  @db.Decimal(20, 6)
+  monetaryAmount  Decimal? @db.Decimal(20, 6)
+  currencyCode    String?
+  saleId          String?
+  returnId        String?
+  reason          String?
+  idempotencyKey  String
+  expiresAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  account         EnterpriseRetailLoyaltyAccount @relation(fields: [organizationId, accountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, accountId, createdAt])
+  @@index([organizationId, saleId])
+  @@index([organizationId, returnId])
+  @@index([organizationId, expiresAt])
+}
+
+model EnterpriseRetailStoredValueAccount {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  accountType             String
+  lookupHash              String
+  displayCode             String
+  customerBusinessPartyId String?
+  currencyCode            String
+  initialValue            Decimal  @db.Decimal(20, 6)
+  balance                 Decimal  @db.Decimal(20, 6)
+  status                  String   @default("ACTIVE")
+  expiresAt               DateTime?
+  createdByUserId         String
+  revision                Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  archivedAt              DateTime?
+  entries                 EnterpriseRetailStoredValueEntry[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, lookupHash])
+  @@index([organizationId, customerBusinessPartyId, status])
+  @@index([organizationId, accountType, status])
+  @@index([organizationId, expiresAt, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseRetailStoredValueEntry {
+  id              String   @id @default(cuid())
+  organizationId  String
+  accountId       String
+  entryType       String
+  amount          Decimal  @db.Decimal(20, 6)
+  saleId          String?
+  returnId        String?
+  reason          String?
+  idempotencyKey  String
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  account         EnterpriseRetailStoredValueAccount @relation(fields: [organizationId, accountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, accountId, createdAt])
+  @@index([organizationId, saleId])
+  @@index([organizationId, returnId])
+}
+
+model EnterpriseRetailProviderIntegration {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  providerId            String
+  integrationMode       String   @default("MANUAL")
+  adapterCode           String?
+  credentialReference   String?
+  webhookSecretReference String?
+  connectionStatus      String   @default("NOT_CONFIGURED")
+  settingsJson          Json?
+  lastHealthCheckAt     DateTime?
+  lastSuccessfulSyncAt  DateTime?
+  createdByUserId       String
+  updatedByUserId       String?
+  revision              Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  archivedAt            DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, providerId])
+  @@index([organizationId, integrationMode, connectionStatus])
+  @@index([organizationId, adapterCode, connectionStatus])
+  @@index([archivedAt])
+}
+
+model EnterpriseRetailProviderOperation {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  providerId         String
+  operationType      String
+  sourceEntityType   String
+  sourceEntityId     String
+  currencyCode       String?
+  amount             Decimal? @db.Decimal(20, 6)
+  status             String   @default("INITIATED")
+  externalReference  String?
+  idempotencyKey     String
+  retryCount         Int      @default(0)
+  timeoutAt          DateTime?
+  nextRetryAt        DateTime?
+  lastErrorCode      String?
+  lastErrorMessage   String?
+  confirmedAt        DateTime?
+  reconciledAt       DateTime?
+  createdByUserId    String
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, providerId, externalReference])
+  @@index([organizationId, providerId, status, createdAt])
+  @@index([organizationId, sourceEntityType, sourceEntityId])
+  @@index([organizationId, nextRetryAt, status])
+}
+
+model EnterpriseRetailPaymentTransaction {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  providerId         String?
+  saleId             String?
+  returnId           String?
+  methodType         String
+  currencyCode       String
+  amount             Decimal  @db.Decimal(20, 6)
+  status             String   @default("INITIATED")
+  providerReference  String?
+  clientReference    String
+  idempotencyKey     String
+  failureCode        String?
+  failureMessage     String?
+  authorizedAt       DateTime?
+  capturedAt         DateTime?
+  failedAt           DateTime?
+  voidedAt           DateTime?
+  refundedAt         DateTime?
+  createdByUserId    String
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, providerId, providerReference])
+  @@index([organizationId, saleId, status])
+  @@index([organizationId, returnId, status])
+  @@index([organizationId, providerId, status, createdAt])
+  @@index([organizationId, clientReference])
+}
+
+model EnterpriseRetailWebhookEvent {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  providerId         String
+  externalEventId    String
+  eventType          String
+  status             String   @default("RECEIVED")
+  signatureVerified  Boolean  @default(false)
+  payloadHash        String
+  safePayloadJson    Json?
+  providerOperationId String?
+  paymentTransactionId String?
+  receivedAt         DateTime @default(now())
+  processedAt        DateTime?
+  failureCode        String?
+  failureMessage     String?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, providerId, externalEventId])
+  @@index([organizationId, providerId, status, receivedAt])
+  @@index([organizationId, providerOperationId])
+  @@index([organizationId, paymentTransactionId])
+}
+
+model EnterpriseRetailDeviceProfile {
+  id              String   @id @default(cuid())
+  organizationId  String
+  siteId          String?
+  code            String
+  name            String
+  deviceType      String
+  connectionMode  String
+  capabilitiesJson Json?
+  settingsJson    Json?
+  status          String   @default("ACTIVE")
+  lastSeenAt      DateTime?
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, siteId, deviceType, status])
+  @@index([organizationId, deviceType, connectionMode, status])
+  @@index([archivedAt])
+}
