@@ -40,6 +40,28 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_ORGANIZATION_NOT_FOUND: "L’entreprise Retail est introuvable.",
 };
 
+type RetailMutationRateLimitPolicy = {
+  limit: number;
+  windowMs: number;
+};
+
+export function getRetailMutationRateLimitPolicy(
+  moduleCode: RetailModuleCode,
+  action: EnterpriseModuleAction,
+  requestedLimit?: number,
+): RetailMutationRateLimitPolicy {
+  if (moduleCode === "RETAIL_POS" && action === "submit") {
+    return { limit: requestedLimit || 300, windowMs: 5 * 60 * 1000 };
+  }
+  if ((moduleCode === "MOBILE_MONEY_AGENCY" || moduleCode === "TELCO_TOPUPS") && action === "submit") {
+    return { limit: requestedLimit || 300, windowMs: 15 * 60 * 1000 };
+  }
+  if (moduleCode === "RETAIL_DAILY_CLOSE") {
+    return { limit: requestedLimit || 60, windowMs: 60 * 60 * 1000 };
+  }
+  return { limit: requestedLimit || 120, windowMs: 60 * 60 * 1000 };
+}
+
 export async function authorizeRetailRequest(
   req: Request,
   organizationId: string,
@@ -53,7 +75,9 @@ export async function authorizeRetailRequest(
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action });
   if (!access) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   if (options?.mutation) {
-    const limited = await rateLimit(getRateLimitKey(req, `retail:${moduleCode}:${organizationId}:${session.userId}`), options.limit || 120, 60 * 60 * 1000);
+    const policy = getRetailMutationRateLimitPolicy(moduleCode, action, options.limit);
+    const key = getRateLimitKey(req, `retail:${moduleCode}:${action}:${organizationId}:${session.userId}`);
+    const limited = await rateLimit(key, policy.limit, policy.windowMs);
     if (!limited.ok) return { ok: false as const, response: NextResponse.json({ error: "Too many requests", message: "Trop d’opérations sur une courte période." }, { status: 429 }) };
   }
   return { ok: true as const, session, access };
