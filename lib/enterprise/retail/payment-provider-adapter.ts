@@ -44,6 +44,7 @@ export interface RetailPaymentProviderAdapter {
   initiate(context: RetailProviderContext, intent: RetailPaymentIntent): Promise<RetailProviderResult>;
   capture?(context: RetailProviderContext, intent: RetailPaymentIntent): Promise<RetailProviderResult>;
   refund?(context: RetailProviderContext, intent: RetailPaymentIntent): Promise<RetailProviderResult>;
+  reconcile?(context: RetailProviderContext, intent: RetailPaymentIntent): Promise<RetailProviderResult>;
   verifyWebhook?(context: RetailProviderContext, request: Request, rawBody: string): Promise<RetailWebhookVerification>;
 }
 
@@ -51,6 +52,9 @@ const manualAdapter: RetailPaymentProviderAdapter = {
   code: "MANUAL",
   async initiate() {
     return { status: "UNKNOWN", externalReference: null, errorCode: "MANUAL_CONFIRMATION_REQUIRED", errorMessage: "Manual provider operations require explicit reconciliation." };
+  },
+  async reconcile() {
+    return { status: "UNKNOWN", externalReference: null, errorCode: "MANUAL_CONFIRMATION_REQUIRED", errorMessage: "Manual provider operations remain unknown until an authorized operator reconciles them." };
   },
 };
 
