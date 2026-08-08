@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "modules": [
     {
       "code": "RETAIL_POS",
@@ -27,8 +27,8 @@
       "code": "MOBILE_MONEY_AGENCY",
       "labelFr": "Agence Mobile Money",
       "labelEn": "Mobile Money agency",
-      "descriptionFr": "Dépôts, retraits, frais, commissions, cash et float opérateur avec traçabilité et annulation contrôlée.",
-      "descriptionEn": "Deposits, withdrawals, fees, commissions, cash and operator float with traceability and controlled reversal.",
+      "descriptionFr": "Extension Retail optionnelle : dépôts, retraits, frais, commissions, cash et float opérateur avec traçabilité et annulation contrôlée.",
+      "descriptionEn": "Optional Retail extension for deposits, withdrawals, fees, commissions, cash and operator float with traceability and controlled reversal.",
       "domain": "FINANCE",
       "implementationStatus": "ACTIVE",
       "navigationGroup": "FINANCE",
@@ -49,8 +49,8 @@
       "code": "TELCO_TOPUPS",
       "labelFr": "Télécom & forfaits",
       "labelEn": "Telco & top-ups",
-      "descriptionFr": "Vente de crédit, forfaits internet et recharges opérateur avec coût, marge, référence fournisseur et statut d’exécution.",
-      "descriptionEn": "Airtime, internet bundles and operator top-ups with cost, margin, provider reference and execution status.",
+      "descriptionFr": "Extension Retail optionnelle : vente de crédit, forfaits internet et recharges opérateur avec coût, marge, référence fournisseur et statut d’exécution.",
+      "descriptionEn": "Optional Retail extension for airtime, internet bundles and operator top-ups with cost, margin, provider reference and execution status.",
       "domain": "COMMERCIAL",
       "implementationStatus": "ACTIVE",
       "navigationGroup": "COMMERCIAL",
@@ -69,10 +69,10 @@
     },
     {
       "code": "RETAIL_DAILY_CLOSE",
-      "labelFr": "Clôture cash & float",
-      "labelEn": "Cash & float close",
-      "descriptionFr": "Clôture journalière des caisses et floats opérateurs, comptage, écarts, justification et validation indépendante.",
-      "descriptionEn": "Daily cash and operator float close, counts, variances, explanations and independent validation.",
+      "labelFr": "Clôture magasin",
+      "labelEn": "Store close",
+      "descriptionFr": "Clôture journalière des caisses et, lorsque les extensions sont actives, des floats opérateurs ; comptage, écarts, justification et validation indépendante.",
+      "descriptionEn": "Daily close for tills and, when extensions are enabled, operator floats; counts, variances, explanations and independent validation.",
       "domain": "FINANCE",
       "implementationStatus": "ACTIVE",
       "navigationGroup": "FINANCE",
@@ -86,7 +86,7 @@
       "minimumPlan": "BUSINESS",
       "requiresActiveSubscription": true,
       "applicableSectors": ["COMMERCE_RETAIL"],
-      "dependencies": ["RETAIL_POS", "MOBILE_MONEY_AGENCY"],
+      "dependencies": ["RETAIL_POS"],
       "qaContract": "enterprise-retail-telco-mobile-money"
     }
   ]
