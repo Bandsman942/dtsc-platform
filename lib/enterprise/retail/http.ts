@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import type { EnterpriseModuleAction } from "@/lib/enterprise/module-access";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
@@ -85,6 +86,13 @@ export async function authorizeRetailRequest(
 
 export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION_FAILED") {
   if (error instanceof EnterpriseRetailError) return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.code, details: error.details }, { status: error.status });
+  if (error instanceof EnterpriseAccountingError) {
+    return NextResponse.json({
+      error: error.code,
+      message: "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
+      details: error.details,
+    }, { status: error.status });
+  }
   if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002") {
     return NextResponse.json({ error: "RETAIL_DUPLICATE", message: "Cette opération existe déjà ou sa référence est déjà utilisée." }, { status: 409 });
   }
