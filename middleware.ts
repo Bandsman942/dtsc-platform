@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildUrlForHostType, getAuthCookieDomain, getCurrentHostType, getDashboardUrl, getSignInUrl, type HostType } from "@/lib/domains";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { SESSION_HEARTBEAT_THROTTLE_MS } from "@/lib/session-config";
 import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
@@ -25,15 +26,6 @@ function isStaticAsset(pathname: string) {
   return staticAssetPaths.includes(pathname) ||
     staticAssetPrefixes.some((prefix) => pathname.startsWith(prefix)) ||
     (/\/[^/]+\.[a-zA-Z0-9]{2,8}$/.test(pathname) && !pathname.startsWith("/api/"));
-}
-
-function isAllowedOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  if (!origin) {
-    return true;
-  }
-
-  return origin === request.nextUrl.origin;
 }
 
 function hasDtscInternalContext(session: Awaited<ReturnType<typeof verifySessionToken>>) {
@@ -167,7 +159,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const isMutatingApiRequest = pathname.startsWith("/api/") && !safeMethods.includes(request.method);
-  if (isMutatingApiRequest && !isPathMatch(pathname, externalWebhookRoutes) && !isAllowedOrigin(request)) {
+  if (isMutatingApiRequest && !isPathMatch(pathname, externalWebhookRoutes) && !isSameOriginRequest(request)) {
     return NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
   }
 
