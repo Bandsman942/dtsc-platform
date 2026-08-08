@@ -3,6 +3,7 @@ import { buildUrlForHostType, getAuthCookieDomain, getCurrentHostType, getDashbo
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { SESSION_HEARTBEAT_THROTTLE_MS } from "@/lib/session-config";
+import { shouldUseSecureSessionCookie } from "@/lib/session-cookie-security";
 import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
@@ -238,7 +239,7 @@ export async function middleware(request: NextRequest) {
       response.cookies.set(SESSION_COOKIE, created.token, {
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: shouldUseSecureSessionCookie(),
         path: "/",
         maxAge: sessionCookieMaxAgeSeconds(created.session.exp, nowSeconds),
         ...(cookieDomain ? { domain: cookieDomain } : {}),
