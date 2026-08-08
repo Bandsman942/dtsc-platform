@@ -3,9 +3,15 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { inventoryReservationCreateSchema } from "@/lib/enterprise/inventory/reservation-schemas";
+import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { prisma } from "@/lib/prisma";
 
 type ReservationCreateInput = z.infer<typeof inventoryReservationCreateSchema>;
+
+export type EnterpriseInventoryReservationFulfillmentItem = {
+  salesOrderItemId: string;
+  quantityFulfilled: number;
+};
 
 type AvailabilityRow = {
   warehouseId: string;
@@ -203,6 +209,82 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     });
     return { reservation, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
+}
+
+export async function consumeEnterpriseInventoryReservationsTx(
+  tx: Prisma.TransactionClient,
+  args: {
+    organizationId: string;
+    salesOrderId: string;
+    warehouseId: string;
+    fulfillmentId: string;
+    actorUserId: string;
+    items: EnterpriseInventoryReservationFulfillmentItem[];
+  },
+) {
+  const now = new Date();
+  const consumed: Array<{ reservationId: string; salesOrderItemId: string; quantity: string; movementId: string }> = [];
+
+  for (const item of args.items) {
+    let remainingToFulfill = decimal(item.quantityFulfilled);
+    const reservations = await tx.enterpriseInventoryReservation.findMany({
+      where: {
+        organizationId: args.organizationId,
+        salesOrderId: args.salesOrderId,
+        salesOrderItemId: item.salesOrderItemId,
+        warehouseId: args.warehouseId,
+        status: "ACTIVE",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    const reservable = reservations.reduce((sum, reservation) => sum.plus(decimal(reservation.quantity).minus(reservation.fulfilledQuantity)), decimal());
+    if (reservable.lt(remainingToFulfill)) {
+      throw new EnterpriseDomainError(
+        "INVENTORY_RESERVATION_FULFILLMENT_EXCEEDED",
+        409,
+        `Réservation insuffisante pour livrer ${remainingToFulfill.toFixed()} unité(s).`,
+      );
+    }
+
+    for (const reservation of reservations) {
+      if (remainingToFulfill.lte(0)) break;
+      const reservationRemaining = decimal(reservation.quantity).minus(reservation.fulfilledQuantity);
+      if (reservationRemaining.lte(0)) continue;
+      const consumeQuantity = Prisma.Decimal.min(reservationRemaining, remainingToFulfill);
+      const movement = await applyStockMovementTx(tx, args.organizationId, args.actorUserId, {
+        inventoryItemId: reservation.inventoryItemId,
+        warehouseId: reservation.warehouseId,
+        storageLocationId: reservation.storageLocationId,
+        stockLotId: null,
+        movementType: "SALE_FULFILLMENT",
+        direction: "OUT",
+        quantity: Number(consumeQuantity.toString()),
+        sourceEntityType: "EnterpriseFulfillment",
+        sourceEntityId: args.fulfillmentId,
+        sourceLineId: item.salesOrderItemId,
+        idempotencyKey: `fulfillment:${args.fulfillmentId}:reservation:${reservation.id}`,
+        reason: "Consommation de réservation lors du fulfillment de commande",
+      });
+      const nextFulfilled = decimal(reservation.fulfilledQuantity).plus(consumeQuantity);
+      const fullyConsumed = nextFulfilled.gte(reservation.quantity);
+      const updated = await tx.enterpriseInventoryReservation.updateMany({
+        where: { id: reservation.id, organizationId: args.organizationId, revision: reservation.revision, status: "ACTIVE" },
+        data: {
+          fulfilledQuantity: nextFulfilled,
+          status: fullyConsumed ? "FULFILLED" : "ACTIVE",
+          fulfilledByUserId: args.actorUserId,
+          fulfilledAt: fullyConsumed ? now : null,
+          revision: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) throw new EnterpriseDomainConflictError("INVENTORY_RESERVATION_CONFLICT");
+      consumed.push({ reservationId: reservation.id, salesOrderItemId: item.salesOrderItemId, quantity: consumeQuantity.toFixed(), movementId: movement.movement.id });
+      remainingToFulfill = remainingToFulfill.minus(consumeQuantity);
+    }
+  }
+
+  return consumed;
 }
 
 export async function releaseEnterpriseInventoryReservation(organizationId: string, reservationId: string, actorUserId: string, reason: string) {
