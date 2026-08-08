@@ -51,6 +51,11 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_shop2_behavioral?schema=public
       AUTH_SECRET: shop2-auth-secret-with-more-than-thirty-two-characters-2026
       APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_PUBLIC_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_CONSOLE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_ACCOUNT_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPPORT_URL: http://127.0.0.1:3000
       CRON_SECRET: shop2-cron-secret-with-more-than-twenty-four-characters
       E2E_BASE_URL: http://127.0.0.1:3000
       E2E_ORGANIZATION_ID: e2e-erp-professional-org
