@@ -124,7 +124,7 @@ test.describe.serial("Shop 2.0 commercial engine acceptance", () => {
     expect(asNumber(preview.body?.customerDiscountTotal)).toBeCloseTo(23.2, 5);
     expect(asNumber(preview.body?.taxTotal)).toBeCloseTo(28.8, 5);
     expect(asNumber(preview.body?.grandTotal)).toBeCloseTo(208.8, 5);
-    expect(preview.body?.lines?.[0]?.resolvedUnitPrice).toBe("116.000000");
+    expect(asNumber(preview.body?.lines?.[0]?.resolvedUnitPrice)).toBeCloseTo(116, 5);
     expect(preview.body?.lines?.[0]?.taxIncluded).toBe(true);
     expect(preview.body?.lines?.[0]?.promotions?.some((promotion) => promotion.code === "SHOP2-E2E-10PCT")).toBe(true);
 
