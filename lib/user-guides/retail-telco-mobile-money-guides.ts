@@ -11,7 +11,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
     updatedAt: "2026-08-08",
     capabilities: [
       "Onboarding STARTER / BUSINESS / ENTERPRISE",
-      "Profil RETAIL_CORE par défaut",
+      "Profil RETAIL_CORE par défaut avec extensions optionnelles Mobile Money et Télécom",
       "Recherche catalogue/SKU paginée côté serveur",
       "Panier multi-articles et paiement fractionné",
       "Prix catalogue et fiscalité protégés côté serveur",
@@ -30,7 +30,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
       "Annulation complète auditée et comptabilisée",
     ],
     steps: [
-      { title: "Préparer le tenant Retail", description: "Créez l’organisation COMMERCE_RETAIL, appliquez le template, affectez les postes et activez uniquement les modules autorisés par le plan.", cautions: ["BUSINESS reste le minimum opérationnel recommandé pour POS + stock + Finance + clôture."] },
+      { title: "Préparer le tenant Retail", description: "Créez l’organisation COMMERCE_RETAIL, appliquez le template RETAIL_CORE, affectez les postes et activez uniquement les modules autorisés par le plan. Mobile Money et Télécom restent des extensions optionnelles et ne font pas partie du noyau obligatoire.", cautions: ["BUSINESS reste le minimum opérationnel recommandé pour POS + stock + Finance + clôture."] },
       { title: "Créer site, dépôt, catalogue et stock", description: "Le POS réutilise les référentiels ERP communs. Créez les articles, SKU, prix, dépôts et stock valorisé avant la première vente." },
       { title: "Rendre Finance READY", description: "Configurez devise fonctionnelle, comptes réels, journaux SALES/INVENTORY, période de posting et mappings SALES_REVENUE, TAX_PAYABLE, COST_OF_SALES et INVENTORY." },
       { title: "Configurer tarification, taxes et promotions", description: "Les règles commerciales utilisent le Catalogue et les références fiscales communes. Une dérogation de prix/remise/taxe exige permission et motif." },
@@ -57,7 +57,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
     updatedAt: "2026-08-08",
     capabilities: ["Extension Retail optionnelle", "Wallets configurables", "Cash et float séparés", "Dépôts/retraits", "Frais et commissions", "Mode MANUAL ou CONNECTED", "INITIATED/PENDING_PROVIDER/CONFIRMED/FAILED/UNKNOWN/RECONCILED", "Webhooks signés idempotents", "Timeout et rapprochement", "Annulation contrôlée"],
     steps: [
-      { title: "Configurer wallet et comptes", description: "Reliez chaque provider au vrai compte de float et gardez une caisse ouverte pour les effets cash." },
+      { title: "Configurer wallet et comptes", description: "Reliez chaque provider au vrai compte de float et gardez une caisse ouverte pour les effets cash. Un wallet Mobile Money comme M-Pesa est distinct du réseau Télécom Vodacom : ne mélangez jamais leurs références, comptes ou opérations." },
       { title: "Choisir le mode d’intégration", description: "MANUAL conserve la confirmation opérateur contrôlée. CONNECTED exige un adaptateur réel et une intégration active.", cautions: ["Le navigateur ne déclare jamais lui-même CONFIRMED en mode connecté."] },
       { title: "Préparer l’opération", description: "Choisissez dépôt/retrait, wallet, téléphone, montant, frais et référence. Le numéro est normalisé côté serveur." },
       { title: "Suivre le provider", description: "Une opération CONNECTED peut rester PENDING_PROVIDER ou devenir UNKNOWN. Aucun effet définitif cash/float n’est créé avant confirmation provider." },
@@ -73,7 +73,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
     updatedAt: "2026-08-08",
     capabilities: ["Extension Retail optionnelle", "Réseaux configurables", "Séparation réseau/wallet", "Coût et marge", "Mode MANUAL ou CONNECTED", "États provider asynchrones", "Webhooks signés idempotents", "Timeout/UNKNOWN/RECONCILED", "Annulation auditée"],
     steps: [
-      { title: "Configurer le réseau et le float", description: "Reliez chaque opérateur au compte réel de float/clearing et vérifiez la devise." },
+      { title: "Configurer le réseau et le float", description: "Reliez chaque opérateur au compte réel de float/clearing et vérifiez la devise. Le réseau Télécom Vodacom reste distinct du wallet Mobile Money M-Pesa, même lorsqu’ils appartiennent au même écosystème commercial." },
       { title: "Préparer les offres", description: "Les offres fréquentes peuvent être des services du Catalogue avec prix et coût indicatifs." },
       { title: "Choisir MANUAL ou CONNECTED", description: "CONNECTED exige un adaptateur réel. Le statut SUCCESS métier n’est matérialisé qu’après confirmation provider." },
       { title: "Exécuter et suivre", description: "Saisissez numéro, offre, prix et coût. Une opération connectée peut rester pending ou unknown sans toucher prématurément au float." },
@@ -104,9 +104,9 @@ const en: Record<RetailGuideCode, ContextualUserGuide> = {
     summary: "Bring a Retail Core Shop into operation with catalog, inventory, Finance, pricing, returns, canonical CRM clienteling, loyalty, gift cards/store credit, payments, receipts and POS devices.",
     audience: "Company administrator, store manager, sales manager, seller, cashier and controller",
     updatedAt: "2026-08-08",
-    capabilities: ["STARTER / BUSINESS / ENTERPRISE onboarding", "RETAIL_CORE default profile", "Paginated server-side catalog/SKU search", "Multi-item basket and split payment", "Server-protected pricing and taxes", "Audited promotions/coupons/overrides", "Partial returns, exchanges and controlled refunds", "Canonical CRM customer at POS", "Purchase/return history without a second customer master", "Transactional loyalty ledger", "Double-spend protected gift cards/store credit", "Provider-neutral payment states", "Consent-aware JSON/printable receipt", "Graceful POS device readiness", "Atomic inventory issue", "POS double-entry accounting", "COGS / INVENTORY valuation", "Historical FX consolidation", "Audited full reversal"],
+    capabilities: ["STARTER / BUSINESS / ENTERPRISE onboarding", "RETAIL_CORE default profile with optional Mobile Money and Telco extensions", "Paginated server-side catalog/SKU search", "Multi-item basket and split payment", "Server-protected pricing and taxes", "Audited promotions/coupons/overrides", "Partial returns, exchanges and controlled refunds", "Canonical CRM customer at POS", "Purchase/return history without a second customer master", "Transactional loyalty ledger", "Double-spend protected gift cards/store credit", "Provider-neutral payment states", "Consent-aware JSON/printable receipt", "Graceful POS device readiness", "Atomic inventory issue", "POS double-entry accounting", "COGS / INVENTORY valuation", "Historical FX consolidation", "Audited full reversal"],
     steps: [
-      { title: "Prepare the Retail tenant", description: "Create the COMMERCE_RETAIL organization, apply the template, assign roles and enable only plan-entitled modules.", cautions: ["BUSINESS remains the recommended operational minimum for POS + inventory + Finance + close."] },
+      { title: "Prepare the Retail tenant", description: "Create the COMMERCE_RETAIL organization, apply the RETAIL_CORE template, assign roles and enable only plan-entitled modules. Mobile Money and Telco remain optional extensions rather than Retail Core requirements.", cautions: ["BUSINESS remains the recommended operational minimum for POS + inventory + Finance + close."] },
       { title: "Create site, warehouse, catalog and stock", description: "Use the common ERP sources for products, SKU, prices, warehouses and valued opening stock." },
       { title: "Make Finance READY", description: "Configure functional currency, real tender accounts, SALES/INVENTORY journals, an open period and the required accounting mappings." },
       { title: "Configure pricing, tax and promotions", description: "Commercial rules reuse the common Catalog and tax references. Price/discount/tax overrides require permission and a reason." },
@@ -129,7 +129,7 @@ const en: Record<RetailGuideCode, ContextualUserGuide> = {
     updatedAt: "2026-08-08",
     capabilities: ["Optional Retail extension", "Configurable wallets", "Separated cash and float", "Deposits/withdrawals", "Fees/commissions", "MANUAL or CONNECTED mode", "INITIATED/PENDING_PROVIDER/CONFIRMED/FAILED/UNKNOWN/RECONCILED", "Signed idempotent webhooks", "Timeout and reconciliation", "Controlled reversal"],
     steps: [
-      { title: "Configure wallet and accounts", description: "Link each provider to the real float account and keep a cash session open when the operation has a cash effect." },
+      { title: "Configure wallet and accounts", description: "Link each provider to the real float account and keep a cash session open when the operation has a cash effect. A Mobile Money wallet such as M-Pesa is distinct from the Vodacom Telco network and must keep separate references and accounts." },
       { title: "Choose integration mode", description: "MANUAL keeps controlled operator entry. CONNECTED requires a real registered adapter and active integration.", cautions: ["The browser never declares CONFIRMED by itself in connected mode."] },
       { title: "Prepare the operation", description: "Choose deposit/withdrawal, wallet, phone, amount and fees. Phone normalization remains server-side." },
       { title: "Follow provider state", description: "A connected operation may stay PENDING_PROVIDER or become UNKNOWN. No definitive cash/float business effect is created before provider confirmation." },
@@ -145,7 +145,7 @@ const en: Record<RetailGuideCode, ContextualUserGuide> = {
     updatedAt: "2026-08-08",
     capabilities: ["Optional Retail extension", "Configurable networks", "Network/wallet separation", "Cost and margin", "MANUAL or CONNECTED mode", "Asynchronous provider states", "Signed idempotent webhooks", "Timeout/UNKNOWN/RECONCILED", "Audited reversal"],
     steps: [
-      { title: "Configure network and float", description: "Link each operator to its real float/clearing account and verify currency." },
+      { title: "Configure network and float", description: "Link each operator to its real float/clearing account and verify currency. The Vodacom Telco network remains distinct from the M-Pesa Mobile Money wallet." },
       { title: "Prepare offers", description: "Recurring bundles can be stored as Catalog services with indicative price and cost." },
       { title: "Choose MANUAL or CONNECTED", description: "CONNECTED requires a real adapter. Business SUCCESS is materialized only after provider confirmation." },
       { title: "Execute and follow", description: "Enter destination, offer, price and cost. Pending/unknown operations do not prematurely change float." },
