@@ -10,10 +10,18 @@ type SessionCookieEnvironment = {
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
+function normalizeHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+  if (normalized.startsWith("[") && normalized.endsWith("]")) {
+    return normalized.slice(1, -1);
+  }
+  return normalized;
+}
+
 function isHttpLoopbackUrl(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
+    return url.protocol === "http:" && LOOPBACK_HOSTS.has(normalizeHostname(url.hostname));
   } catch {
     return false;
   }
