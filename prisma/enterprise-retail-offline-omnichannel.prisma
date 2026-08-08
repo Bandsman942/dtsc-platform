@@ -92,3 +92,30 @@ model EnterpriseRetailOnboardingRun {
   @@index([organizationId, countryCode, status])
   @@index([archivedAt])
 }
+
+// Retail only stores channel orchestration metadata here. The order, its lines, amounts and
+// fulfillment status remain canonical in EnterpriseSalesOrder / EnterpriseFulfillment.
+model EnterpriseRetailOrderOrchestration {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  salesOrderId           String
+  idempotencyKey         String
+  channelCode            String   @default("POS")
+  fulfillmentMode        String
+  sourceSiteId           String
+  fulfillmentWarehouseId String
+  pickupSiteId           String?
+  status                 String   @default("RESERVED")
+  createdByUserId        String
+  updatedByUserId        String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  archivedAt             DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, salesOrderId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, fulfillmentMode, status, createdAt])
+  @@index([organizationId, sourceSiteId, fulfillmentWarehouseId])
+  @@index([archivedAt])
+}
