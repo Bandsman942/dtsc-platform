@@ -7,6 +7,7 @@ import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2, previe
 import { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
+import { autoEarnRetailLoyaltyForSale } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createRetailSale } from "@/lib/enterprise/retail/service";
@@ -105,6 +106,7 @@ export async function POST(req: Request, { params }: Params) {
       guarded.decisions,
     );
     const accounting = await finalizeRetailSaleAccounting(organizationId, auth.session.userId, result.sale.id);
+    const loyalty = await autoEarnRetailLoyaltyForSale(organizationId, auth.session.userId, result.sale.id);
     const promotionCount = new Set(guarded.decisions.flatMap((decision) => decision.promotionIds)).size;
     await writeAuditLog({
       userId: auth.session.userId,
@@ -119,6 +121,7 @@ export async function POST(req: Request, { params }: Params) {
         currency: result.sale.currencyCode,
         customerBusinessPartyId: result.sale.customerBusinessPartyId,
         customerContextSource: explicitCustomerId ? "REQUEST" : activeCustomerId ? "ACTIVE_POS_CONTEXT" : "WALK_IN",
+        loyaltyEntryIds: loyalty.applied.map((entry) => entry.entryId),
         idempotent: result.idempotent,
         priceOverrideApplied: guarded.overrideApplied,
         overrideReason: guarded.overrideReason,
@@ -129,8 +132,8 @@ export async function POST(req: Request, { params }: Params) {
         inventoryJournalEntryIds: accounting.inventoryPostings.map((item) => item.journalEntryId),
       },
     });
-    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", customerAttached: Boolean(result.sale.customerBusinessPartyId), overrideApplied: guarded.overrideApplied, promotionCount, accountingPosted: true } });
-    return NextResponse.json({ ok: true, ...result, accounting, commercial: { promotionCount, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
+    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", customerAttached: Boolean(result.sale.customerBusinessPartyId), loyaltyApplied: loyalty.applied.length, overrideApplied: guarded.overrideApplied, promotionCount, accountingPosted: true } });
+    return NextResponse.json({ ok: true, ...result, accounting, loyalty, commercial: { promotionCount, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SALE_CREATE_FAILED");
   }
