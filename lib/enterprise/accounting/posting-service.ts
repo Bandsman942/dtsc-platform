@@ -57,8 +57,14 @@ async function prepareFunctionalLines(
     const account = await resolvePostingAccount(tx, input.organizationId, line.accountMappingKey);
     const debitTransaction = new Prisma.Decimal(line.debit || 0);
     const creditTransaction = new Prisma.Decimal(line.credit || 0);
-    if (debitTransaction.isNegative() || creditTransaction.isNegative() || (debitTransaction.isPositive() && creditTransaction.isPositive()) || (!debitTransaction.isPositive() && !creditTransaction.isPositive())) {
-      throw new EnterpriseAccountingError("POSTING_LINE_INVALID", 409, { mappingKey: line.accountMappingKey });
+    const debitPositive = debitTransaction.gt(0);
+    const creditPositive = creditTransaction.gt(0);
+    if (debitTransaction.lt(0) || creditTransaction.lt(0) || debitPositive === creditPositive) {
+      throw new EnterpriseAccountingError("POSTING_LINE_INVALID", 409, {
+        mappingKey: line.accountMappingKey,
+        debit: debitTransaction.toFixed(),
+        credit: creditTransaction.toFixed(),
+      });
     }
     const currencyPair = `${line.transactionCurrencyCode}:${input.functionalCurrencyCode}`;
     let rate = cache.get(currencyPair);
@@ -84,7 +90,6 @@ async function prepareFunctionalLines(
     const debit = money(debitTransaction.times(rate));
     const credit = money(creditTransaction.times(rate));
     prepared.push({
-      organizationId: input.organizationId,
       ledgerAccountId: account.id,
       businessPartyId: line.businessPartyId || null,
       projectId: line.projectId || null,
@@ -98,7 +103,7 @@ async function prepareFunctionalLines(
       transactionCurrencyCode: line.transactionCurrencyCode,
       transactionAmount: new Prisma.Decimal(line.transactionAmount),
       exchangeRate: rate,
-      functionalAmount: debit.isPositive() ? debit : credit,
+      functionalAmount: debit.gt(0) ? debit : credit,
     });
   }
   const totalDebit = money(sumDecimals(prepared.map((line) => line.debit)));

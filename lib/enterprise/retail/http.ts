@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import type { EnterpriseModuleAction } from "@/lib/enterprise/module-access";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -38,7 +40,31 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_PRICE_OVERRIDE_FORBIDDEN: "Ce prix, cette remise ou cette taxe diffère du catalogue. Un responsable autorisé doit valider cette dérogation.",
   RETAIL_PRICE_OVERRIDE_REASON_REQUIRED: "Précisez le motif de la dérogation de prix, remise ou taxe.",
   RETAIL_ORGANIZATION_NOT_FOUND: "L’entreprise Retail est introuvable.",
+  NEGATIVE_STOCK_FORBIDDEN: "Le stock disponible est insuffisant pour terminer cette vente.",
+  INVENTORY_BALANCE_CONFLICT: "Le stock a changé pendant l’opération. Actualisez les disponibilités et réessayez.",
 };
+
+type RetailMutationRateLimitPolicy = {
+  limit: number;
+  windowMs: number;
+};
+
+export function getRetailMutationRateLimitPolicy(
+  moduleCode: RetailModuleCode,
+  action: EnterpriseModuleAction,
+  requestedLimit?: number,
+): RetailMutationRateLimitPolicy {
+  if (moduleCode === "RETAIL_POS" && action === "submit") {
+    return { limit: requestedLimit || 300, windowMs: 5 * 60 * 1000 };
+  }
+  if ((moduleCode === "MOBILE_MONEY_AGENCY" || moduleCode === "TELCO_TOPUPS") && action === "submit") {
+    return { limit: requestedLimit || 300, windowMs: 15 * 60 * 1000 };
+  }
+  if (moduleCode === "RETAIL_DAILY_CLOSE") {
+    return { limit: requestedLimit || 60, windowMs: 60 * 60 * 1000 };
+  }
+  return { limit: requestedLimit || 120, windowMs: 60 * 60 * 1000 };
+}
 
 export async function authorizeRetailRequest(
   req: Request,
@@ -53,7 +79,9 @@ export async function authorizeRetailRequest(
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action });
   if (!access) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   if (options?.mutation) {
-    const limited = await rateLimit(getRateLimitKey(req, `retail:${moduleCode}:${organizationId}:${session.userId}`), options.limit || 120, 60 * 60 * 1000);
+    const policy = getRetailMutationRateLimitPolicy(moduleCode, action, options.limit);
+    const key = getRateLimitKey(req, `retail:${moduleCode}:${action}:${organizationId}:${session.userId}`);
+    const limited = await rateLimit(key, policy.limit, policy.windowMs);
     if (!limited.ok) return { ok: false as const, response: NextResponse.json({ error: "Too many requests", message: "Trop d’opérations sur une courte période." }, { status: 429 }) };
   }
   return { ok: true as const, session, access };
@@ -61,6 +89,16 @@ export async function authorizeRetailRequest(
 
 export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION_FAILED") {
   if (error instanceof EnterpriseRetailError) return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.code, details: error.details }, { status: error.status });
+  if (error instanceof EnterpriseAccountingError) {
+    return NextResponse.json({
+      error: error.code,
+      message: "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
+      details: error.details,
+    }, { status: error.status });
+  }
+  if (error instanceof EnterpriseDomainError) {
+    return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.message || error.code }, { status: error.status });
+  }
   if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002") {
     return NextResponse.json({ error: "RETAIL_DUPLICATE", message: "Cette opération existe déjà ou sa référence est déjà utilisée." }, { status: 409 });
   }

@@ -117,6 +117,8 @@ jobs:
         run: pnpm qa:iteration-07-i18n-contract
       - name: Retail Telco Mobile Money QA
         run: node scripts/qa-retail-telco-mobile-money.mjs
+      - name: Shop 2 Retail frontend QA
+        run: node scripts/qa-shop2-retail-frontend-contract.mjs
       - name: Sector onboarding commercial readiness QA
         run: node scripts/qa-sector-onboarding-commercial-readiness.mjs
       - name: Standard modules iteration 08 QA
