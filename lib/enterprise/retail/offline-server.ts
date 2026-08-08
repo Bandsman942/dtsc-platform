@@ -23,6 +23,29 @@ function decimal(value: Prisma.Decimal.Value = 0) {
   return new Prisma.Decimal(value);
 }
 
+function money(value: Prisma.Decimal.Value) {
+  return decimal(value).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+type PreviewLine = Awaited<ReturnType<typeof previewRetailCommercialPricing>>["lines"][number];
+
+function serviceValuesFromPreview(line: PreviewLine) {
+  const resolvedUnitPrice = decimal(line.resolvedUnitPrice);
+  const customerDiscountAmount = decimal(line.discountAmount);
+  const taxRate = decimal(line.taxRate);
+  if (line.taxIncluded && taxRate.gt(0)) {
+    const divisor = decimal(1).plus(taxRate);
+    return {
+      serviceUnitPrice: money(resolvedUnitPrice.div(divisor)),
+      serviceDiscountAmount: money(customerDiscountAmount.div(divisor)),
+    };
+  }
+  return {
+    serviceUnitPrice: money(resolvedUnitPrice),
+    serviceDiscountAmount: money(customerDiscountAmount),
+  };
+}
+
 function activePromotionWhere(organizationId: string, at: Date): Prisma.EnterpriseRetailPromotionWhereInput {
   return {
     organizationId,
@@ -150,6 +173,7 @@ export async function buildRetailOfflineSnapshot(args: {
         )
       : decimal();
     const unitPrice = pricing?.resolvedUnitPrice ?? item.indicativeSalePrice?.toFixed() ?? null;
+    const serviceValues = pricing ? serviceValuesFromPreview(pricing) : null;
     return {
       catalogItemId: item.id,
       inventoryItemId,
@@ -160,11 +184,15 @@ export async function buildRetailOfflineSnapshot(args: {
       itemType: item.itemType,
       currencyCode: args.currencyCode,
       unitPrice,
+      serviceUnitPrice: serviceValues?.serviceUnitPrice.toFixed() ?? null,
+      customerUnitDiscountAmount: pricing?.discountAmount ?? null,
+      serviceUnitDiscountAmount: serviceValues?.serviceDiscountAmount.toFixed() ?? null,
       taxCode: item.taxCode,
       taxCodeId: pricing?.taxCodeId ?? null,
       taxRate: pricing?.taxRate ?? null,
       taxIncluded: pricing?.taxIncluded ?? false,
       unitTaxAmount: pricing?.taxAmount ?? null,
+      unitLineTotal: pricing?.lineTotal ?? null,
       trackInventory: item.trackInventory,
       quantityAvailable: available.toFixed(),
       updatedAt: item.updatedAt.toISOString(),
@@ -317,8 +345,9 @@ export async function syncRetailOfflineSale(args: {
       .filter((line) => {
         const current = currentByItem.get(line.catalogItemId);
         if (!current) return true;
-        return !decimal(line.unitPrice).equals(current.resolvedUnitPrice)
-          || !decimal(line.discountAmount || 0).equals(current.discountAmount)
+        const serviceValues = serviceValuesFromPreview(current);
+        return !decimal(line.unitPrice).equals(serviceValues.serviceUnitPrice)
+          || !decimal(line.discountAmount || 0).equals(serviceValues.serviceDiscountAmount)
           || !decimal(line.taxAmount || 0).equals(current.taxAmount);
       })
       .map((line) => line.catalogItemId);
