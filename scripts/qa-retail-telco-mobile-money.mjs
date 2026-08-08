@@ -105,8 +105,12 @@ check(guardrails.includes("floatAccountId: null"), "Mobile Money operation route
 check(guardrails.includes("operatorFloatAccountId: null"), "Telco route guard must force provider-mapped float");
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
-for (const marker of ["metricsByCurrency", "readyForFirstSale", "readyForMobileMoney", "readyForTelco", "cashSession", "includePos", "includeMobileMoney", "includeTelco", "includeClose", "isRetailBusinessProfileCode"]) {
+for (const marker of ["metricsByCurrency", "readyForFirstSale", "readyForMobileMoney", "readyForTelco", "cashSession", "includePos", "includeMobileMoney", "includeTelco", "includeClose", "isRetailBusinessProfileCode", "accountingReadiness", 'code: "ACCOUNTING"']) {
   check(dashboard.includes(marker), `Commercial dashboard missing ${marker}`);
+}
+const accountingReadiness = read("lib/enterprise/retail/accounting-readiness.ts");
+for (const marker of ["SALES_REVENUE", "TAX_PAYABLE", "COST_OF_SALES", "INVENTORY", "SALES", "INVENTORY", "postingPeriodAvailable"]) {
+  check(accountingReadiness.includes(marker), `POS accounting readiness contract missing ${marker}`);
 }
 
 const schemas = read("lib/enterprise/retail/schemas.ts");
@@ -183,7 +187,8 @@ for (const permission of ["enterprise.suppliers.view", "enterprise.suppliers.man
 const guides = read("lib/user-guides/retail-telco-mobile-money-guides.ts");
 for (const code of expectedCodes) check(guides.includes(`${code}:`), `Native user guide missing ${code}`);
 check(guides.includes("Vodacom") && guides.includes("M-Pesa"), "Guides must distinguish telecom networks from Mobile Money wallets");
-check(guides.includes("2026-08-07"), "Retail guides must carry explicit update date");
+check(guides.includes("2026-08-08"), "Retail guides must carry the current Shop 2.0 update date");
+check(guides.includes("RETAIL_CORE") && guides.includes("extensions optionnelles"), "Retail in-app onboarding guide must explain Retail Core and optional extensions");
 
 const initialMigration = read("prisma/migrations/20260807050000_retail_telco_mobile_money/migration.sql");
 for (const marker of ["RETAIL_TELCO_MOBILE_MONEY", "Commerce Retail — Télécom & Mobile Money", "MOBILE_MONEY_AGENT", "RETAIL_CONTROLLER", "PROMOTIONS"]) check(initialMigration.includes(marker), `Initial Retail migration missing ${marker}`);
@@ -199,6 +204,9 @@ for (const marker of ["VODACOM", "ORANGE", "AIRTEL", "AFRICELL", "EnterpriseMobi
 
 const readinessManifest = read("lib/enterprise/sector-onboarding-readiness.json");
 check(readinessManifest.includes('"sectorCode": "COMMERCE_RETAIL"'), "Sector onboarding readiness must declare Commerce Retail");
+check(readinessManifest.includes('"businessProfileCode": "RETAIL_CORE"'), "Shop onboarding readiness must use RETAIL_CORE as the new-tenant profile");
+check(readinessManifest.includes('"compatibleExistingProfiles": ["RETAIL_TELCO_MOBILE_MONEY"]'), "Shop onboarding readiness must preserve the specialized existing profile");
+check(readinessManifest.includes('"optionalExtensions"'), "Shop onboarding readiness must declare optional Retail extensions");
 check(readinessManifest.includes('"enforce": true'), "Shop onboarding readiness must be enforced in CI");
 check(readinessManifest.includes('"commercializationStatus": "COMMERCIAL_READY"'), "Shop must remain COMMERCIAL_READY after explicit owner acceptance");
 check(exists("scripts/qa-sector-onboarding-commercial-readiness.mjs"), "Generic sector onboarding readiness QA is missing");
@@ -210,4 +218,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Retail / Shop 2.0 QA passed (${expectedCodes.length} canonical modules, Retail Core compatibility, batched POS dependencies and accounting contracts present).`);
+console.log(`Retail / Shop 2.0 QA passed (${expectedCodes.length} canonical modules, Retail Core compatibility, batched POS dependencies, accounting readiness and posting contracts present).`);
