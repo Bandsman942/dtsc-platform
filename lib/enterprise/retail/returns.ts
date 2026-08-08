@@ -208,7 +208,7 @@ export async function createRetailReturnRequest(
     const grandTotal = money(prepared.reduce((sum, line) => sum.plus(line.lineTotal), decimal(0)));
     if (!grandTotal.isPositive()) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
 
-    const created = await tx.enterpriseRetailReturn.create({
+    const createdReturn = await tx.enterpriseRetailReturn.create({
       data: {
         organizationId,
         number: retailReturnReference(),
@@ -225,21 +225,25 @@ export async function createRetailReturnRequest(
         refundFinancialAccountId: input.refundFinancialAccountId || null,
         requestedByUserId: actorUserId,
         idempotencyKey: input.idempotencyKey,
-        lines: {
-          create: prepared.map((line) => ({
-            organizationId,
-            saleLineId: line.source.id,
-            catalogItemId: line.source.catalogItemId,
-            inventoryItemId: line.source.inventoryItemId,
-            quantity: line.quantity,
-            unitPrice: line.source.unitPrice,
-            discountAmount: line.discountAmount,
-            taxAmount: line.taxAmount,
-            lineTotal: line.lineTotal,
-            stockDisposition: line.requested.stockDisposition,
-          })),
-        },
       },
+    });
+    await tx.enterpriseRetailReturnLine.createMany({
+      data: prepared.map((line) => ({
+        organizationId,
+        returnId: createdReturn.id,
+        saleLineId: line.source.id,
+        catalogItemId: line.source.catalogItemId,
+        inventoryItemId: line.source.inventoryItemId,
+        quantity: line.quantity,
+        unitPrice: line.source.unitPrice,
+        discountAmount: line.discountAmount,
+        taxAmount: line.taxAmount,
+        lineTotal: line.lineTotal,
+        stockDisposition: line.requested.stockDisposition,
+      })),
+    });
+    const created = await tx.enterpriseRetailReturn.findFirstOrThrow({
+      where: { id: createdReturn.id, organizationId },
       include: { lines: true, refunds: true },
     });
     await publishEnterpriseEvent(tx, {
