@@ -24,7 +24,7 @@ export async function getCommercialRetailDashboard(
   const includeMobileMoney = !moduleCode || moduleCode === "MOBILE_MONEY_AGENCY";
   const includeTelco = !moduleCode || moduleCode === "TELCO_TOPUPS";
   const includeClose = !moduleCode || moduleCode === "RETAIL_DAILY_CLOSE";
-  const includeCatalog = includePos || includeTelco;
+  const includeCatalog = includeTelco;
 
   const [
     configuration,
@@ -56,9 +56,7 @@ export async function getCommercialRetailDashboard(
     includeCatalog
       ? prisma.enterpriseCatalogItem.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, take: 400, select: { id: true, code: true, sku: true, name: true, itemType: true, indicativeSalePrice: true, indicativeCost: true, currency: true, trackInventory: true } })
       : Promise.resolve([]),
-    includePos
-      ? prisma.enterpriseInventoryItem.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, catalogItemId: true, balances: { select: { warehouseId: true, storageLocationId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true } } } })
-      : Promise.resolve([]),
+    Promise.resolve([]),
     includePos
       ? prisma.enterpriseRetailSale.findMany({ where: { organizationId, soldAt: dateFilter }, orderBy: { soldAt: "desc" }, take: 100, include: { lines: true, tenders: true } })
       : Promise.resolve([]),
