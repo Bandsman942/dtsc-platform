@@ -242,23 +242,26 @@ async function prepareRetailFixture() {
 async function signIn(page) {
   await page.goto(`/auth/sign-in?next=${encodeURIComponent("/enterprise-modules/RETAIL_POS")}`);
   const emailInput = page.locator('input[name="email"], input[type="email"]').first();
+  const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
   await emailInput.fill(adminEmail);
+  await passwordInput.fill(adminPassword);
 
   const lookupPromise = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/organizations") && response.request().method() === "POST",
     { timeout: 15_000 },
-  ).catch(() => null);
-  await emailInput.blur();
-  await lookupPromise;
+  );
+  await page.getByRole("button", { name: /^Charger$/i }).click();
+  const lookupResponse = await lookupPromise;
+  expect(lookupResponse.ok(), `Organization context lookup failed with ${lookupResponse.status()}`).toBeTruthy();
 
   const organizationSelect = page.locator('select[name="organizationId"]');
-  if (await organizationSelect.count()) {
-    await expect(organizationSelect.locator(`option[value="${organizationId}"]`)).toHaveCount(1);
-    await organizationSelect.selectOption(organizationId);
-  }
+  await expect(organizationSelect).toHaveCount(1);
+  await expect(organizationSelect.locator(`option[value="${organizationId}"]`)).toHaveCount(1);
+  await organizationSelect.selectOption(organizationId);
 
-  await page.locator('input[name="password"], input[type="password"]').first().fill(adminPassword);
-  await page.locator('button[type="submit"]').first().click();
+  await expect(emailInput).toHaveValue(adminEmail);
+  await expect(passwordInput).toHaveValue(adminPassword);
+  await page.getByRole("button", { name: /^Se connecter$/i }).click();
   await page.waitForURL((url) => !url.pathname.includes("/auth/sign-in"), { timeout: 30_000 });
 }
 
