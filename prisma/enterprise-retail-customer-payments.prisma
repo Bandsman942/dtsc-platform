@@ -11,10 +11,10 @@ model EnterpriseRetailCustomerProfile {
   notes                 String?
   createdByUserId       String
   updatedByUserId       String?
-  revision              Int      @default(1)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  archivedAt            DateTime?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  archivedAt             DateTime?
 
   @@unique([organizationId, id])
   @@unique([organizationId, businessPartyId])
@@ -25,26 +25,26 @@ model EnterpriseRetailCustomerProfile {
 }
 
 model EnterpriseRetailLoyaltyProgram {
-  id                       String   @id @default(cuid())
-  organizationId           String
-  code                     String
-  nameFr                   String
-  nameEn                   String
-  currencyCode             String
-  earnPointsPerCurrencyUnit Decimal @default(0) @db.Decimal(20, 6)
-  redeemValuePerPoint      Decimal  @default(0) @db.Decimal(20, 6)
-  minimumRedeemPoints      Decimal  @default(0) @db.Decimal(20, 6)
-  status                   String   @default("DRAFT")
-  startsAt                 DateTime?
-  endsAt                   DateTime?
-  settingsJson             Json?
-  createdByUserId          String
-  updatedByUserId          String?
-  revision                 Int      @default(1)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-  archivedAt               DateTime?
-  accounts                 EnterpriseRetailLoyaltyAccount[]
+  id                        String   @id @default(cuid())
+  organizationId            String
+  code                      String
+  nameFr                    String
+  nameEn                    String
+  currencyCode              String
+  earnPointsPerCurrencyUnit Decimal  @default(0) @db.Decimal(20, 6)
+  redeemValuePerPoint       Decimal  @default(0) @db.Decimal(20, 6)
+  minimumRedeemPoints       Decimal  @default(0) @db.Decimal(20, 6)
+  status                    String   @default("DRAFT")
+  startsAt                  DateTime?
+  endsAt                    DateTime?
+  settingsJson              Json?
+  createdByUserId           String
+  updatedByUserId           String?
+  revision                  Int      @default(1)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  archivedAt                DateTime?
+  accounts                  EnterpriseRetailLoyaltyAccount[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -148,23 +148,23 @@ model EnterpriseRetailStoredValueEntry {
 }
 
 model EnterpriseRetailProviderIntegration {
-  id                    String   @id @default(cuid())
-  organizationId        String
-  providerId            String
-  integrationMode       String   @default("MANUAL")
-  adapterCode           String?
-  credentialReference   String?
+  id                     String   @id @default(cuid())
+  organizationId         String
+  providerId             String
+  integrationMode        String   @default("MANUAL")
+  adapterCode            String?
+  credentialReference    String?
   webhookSecretReference String?
-  connectionStatus      String   @default("NOT_CONFIGURED")
-  settingsJson          Json?
-  lastHealthCheckAt     DateTime?
-  lastSuccessfulSyncAt  DateTime?
-  createdByUserId       String
-  updatedByUserId       String?
-  revision              Int      @default(1)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  archivedAt            DateTime?
+  connectionStatus       String   @default("NOT_CONFIGURED")
+  settingsJson           Json?
+  lastHealthCheckAt      DateTime?
+  lastSuccessfulSyncAt   DateTime?
+  createdByUserId        String
+  updatedByUserId        String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  archivedAt             DateTime?
 
   @@unique([organizationId, id])
   @@unique([organizationId, providerId])
@@ -180,6 +180,7 @@ model EnterpriseRetailProviderOperation {
   operationType      String
   sourceEntityType   String
   sourceEntityId     String
+  requestPayloadJson Json?
   currencyCode       String?
   amount             Decimal? @db.Decimal(20, 6)
   status             String   @default("INITIATED")
@@ -240,21 +241,21 @@ model EnterpriseRetailPaymentTransaction {
 }
 
 model EnterpriseRetailWebhookEvent {
-  id                 String   @id @default(cuid())
-  organizationId     String
-  providerId         String
-  externalEventId    String
-  eventType          String
-  status             String   @default("RECEIVED")
-  signatureVerified  Boolean  @default(false)
-  payloadHash        String
-  safePayloadJson    Json?
-  providerOperationId String?
+  id                   String   @id @default(cuid())
+  organizationId       String
+  providerId           String
+  externalEventId      String
+  eventType            String
+  status               String   @default("RECEIVED")
+  signatureVerified    Boolean  @default(false)
+  payloadHash          String
+  safePayloadJson      Json?
+  providerOperationId  String?
   paymentTransactionId String?
-  receivedAt         DateTime @default(now())
-  processedAt        DateTime?
-  failureCode        String?
-  failureMessage     String?
+  receivedAt           DateTime @default(now())
+  processedAt          DateTime?
+  failureCode          String?
+  failureMessage       String?
 
   @@unique([organizationId, id])
   @@unique([organizationId, providerId, externalEventId])
@@ -264,23 +265,23 @@ model EnterpriseRetailWebhookEvent {
 }
 
 model EnterpriseRetailDeviceProfile {
-  id              String   @id @default(cuid())
-  organizationId  String
-  siteId          String?
-  code            String
-  name            String
-  deviceType      String
-  connectionMode  String
+  id               String   @id @default(cuid())
+  organizationId   String
+  siteId           String?
+  code             String
+  name             String
+  deviceType       String
+  connectionMode   String
   capabilitiesJson Json?
-  settingsJson    Json?
-  status          String   @default("ACTIVE")
-  lastSeenAt      DateTime?
-  createdByUserId String
-  updatedByUserId String?
-  revision        Int      @default(1)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  archivedAt      DateTime?
+  settingsJson     Json?
+  status           String   @default("ACTIVE")
+  lastSeenAt       DateTime?
+  createdByUserId  String
+  updatedByUserId  String?
+  revision         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  archivedAt       DateTime?
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
