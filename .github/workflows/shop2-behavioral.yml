@@ -6,7 +6,9 @@ on:
     branches: [main]
     paths:
       - "app/api/enterprise/**/retail/**"
+      - "app/enterprise-modules/retail-page.tsx"
       - "components/enterprise/professional/enterprise-retail-shop-workspace.tsx"
+      - "components/enterprise/professional/retail-active-customer-bar.tsx"
       - "lib/enterprise/retail/**"
       - "lib/enterprise/accounting/**"
       - "lib/enterprise/module-registry-retail.json"
@@ -14,17 +16,20 @@ on:
       - "lib/session-cookie-security.ts"
       - "middleware.ts"
       - "prisma/enterprise-retail.prisma"
+      - "prisma/enterprise-retail-customer-payments.prisma"
       - "prisma/enterprise-accounting.prisma"
       - "prisma/enterprise-inventory.prisma"
       - "prisma/migrations/**"
       - "tests/e2e/shop2-retail.spec.mjs"
       - "tests/e2e/shop2-commercial.spec.mjs"
+      - "tests/e2e/shop2-customer-payments.spec.mjs"
       - "playwright.config.mjs"
       - "scripts/seed-shop2-behavioral-e2e.mjs"
       - "scripts/seed-shop2-commercial-e2e.mjs"
       - "scripts/qa-shop2-inventory-schema-parity.mjs"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
+      - "scripts/qa-shop2-customer-payments.mjs"
       - "scripts/qa-session-cookie-security.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
@@ -37,9 +42,9 @@ concurrency:
 
 jobs:
   behavioral:
-    name: Retail POS accounting & concurrency
+    name: Retail POS accounting, concurrency & customer payments
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -106,6 +111,7 @@ jobs:
           node scripts/qa-retail-telco-mobile-money.mjs
           node scripts/qa-shop2-retail-frontend-contract.mjs
           node scripts/qa-shop2-commercial-engine.mjs
+          node scripts/qa-shop2-customer-payments.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
       - name: Build production application
         run: pnpm build
@@ -126,7 +132,7 @@ jobs:
           cat /tmp/dtsc-shop2-next.log
           exit 1
       - name: Shop 2 POS behavioral acceptance
-        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs
+        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs
       - name: Stop application
         if: always()
         run: |
