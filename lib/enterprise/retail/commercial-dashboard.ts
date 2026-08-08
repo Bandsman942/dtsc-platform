@@ -83,6 +83,7 @@ export async function getCommercialRetailDashboard(
     { code: "PROFILE", label: "Profil Shop Retail actif", complete: profileReady, deepLink: "/enterprise-admin?section=templates" },
     { code: "WAREHOUSE", label: "Site et dépôt opérationnels", complete: Boolean(warehouseExists), deepLink: "/enterprise-modules/SITES_WAREHOUSES" },
     { code: "CATALOG", label: "Catalogue de vente renseigné", complete: Boolean(catalogExists), deepLink: "/enterprise-modules/CATALOG" },
+    { code: "COMMERCIAL_CONTROL", label: "Tarification, promotions et retours Shop 2", complete: true, deepLink: "/enterprise-modules/RETAIL_POS/commercial" },
     { code: "CASH", label: "Compte de caisse configuré", complete: accounts.some((account) => account.accountType === "CASH"), deepLink: "/enterprise-modules/FINANCE_TREASURY" },
     ...(includePos ? [{ code: "ACCOUNTING", label: "Comptabilité POS prête (journaux, période et mappings)", complete: Boolean(accountingReadiness?.ready), deepLink: "/enterprise-modules/FINANCE_ACCOUNTING" }] : []),
     { code: "FX", label: `Consolidation multi-devise${fxReadiness.targetCurrencyCode ? ` · ${fxReadiness.targetCurrencyCode}` : ""}`, complete: fxReadiness.complete, deepLink: "/enterprise-modules/RETAIL_POS/consolidated-report" },

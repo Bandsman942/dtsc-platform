@@ -19,18 +19,18 @@ model EnterpriseRetailConfiguration {
 }
 
 model EnterpriseRetailProvider {
-  id                       String   @id @default(cuid())
-  organizationId           String
-  providerCode             String
-  label                    String
-  providerType             String
+  id                        String   @id @default(cuid())
+  organizationId            String
+  providerCode              String
+  label                     String
+  providerType              String
   mobileMoneyFloatAccountId String?
-  telcoFloatAccountId      String?
-  settingsJson             Json?
-  isActive                 Boolean  @default(true)
-  revision                 Int      @default(1)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  telcoFloatAccountId       String?
+  settingsJson              Json?
+  isActive                  Boolean  @default(true)
+  revision                  Int      @default(1)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, providerCode])
@@ -62,6 +62,9 @@ model EnterpriseRetailSale {
   updatedAt               DateTime @updatedAt
   lines                    EnterpriseRetailSaleLine[]
   tenders                  EnterpriseRetailTender[]
+  pricingDecisions         EnterpriseRetailPricingDecision[]
+  promotionRedemptions     EnterpriseRetailPromotionRedemption[]
+  returns                  EnterpriseRetailReturn[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -87,6 +90,7 @@ model EnterpriseRetailSaleLine {
   trackInventory    Boolean  @default(false)
   createdAt         DateTime @default(now())
   sale              EnterpriseRetailSale @relation(fields: [organizationId, saleId], references: [organizationId, id], onDelete: Restrict)
+  returnLines       EnterpriseRetailReturnLine[]
 
   @@unique([organizationId, id])
   @@index([organizationId, saleId])
@@ -149,31 +153,31 @@ model EnterpriseMobileMoneyTransaction {
 }
 
 model EnterpriseTelcoTopup {
-  id                     String   @id @default(cuid())
-  organizationId         String
-  number                 String
-  providerCode           String
-  destinationPhone       String
-  catalogItemId          String?
-  offerLabel             String
-  currencyCode           String
-  saleAmount             Decimal  @db.Decimal(20, 6)
-  operatorCost           Decimal  @db.Decimal(20, 6)
-  marginAmount           Decimal  @db.Decimal(20, 6)
+  id                       String   @id @default(cuid())
+  organizationId           String
+  number                   String
+  providerCode             String
+  destinationPhone         String
+  catalogItemId            String?
+  offerLabel               String
+  currencyCode             String
+  saleAmount               Decimal  @db.Decimal(20, 6)
+  operatorCost             Decimal  @db.Decimal(20, 6)
+  marginAmount             Decimal  @db.Decimal(20, 6)
   tenderFinancialAccountId String
-  operatorFloatAccountId String
-  externalReference      String?
-  status                 String   @default("SUCCESS")
-  occurredAt             DateTime @default(now())
-  agentUserId            String
-  idempotencyKey         String
-  failureReason          String?
-  reversalReason         String?
-  reversedAt             DateTime?
-  reversedByUserId       String?
-  revision               Int      @default(1)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  operatorFloatAccountId   String
+  externalReference        String?
+  status                   String   @default("SUCCESS")
+  occurredAt               DateTime @default(now())
+  agentUserId              String
+  idempotencyKey           String
+  failureReason            String?
+  reversalReason           String?
+  reversedAt               DateTime?
+  reversedByUserId         String?
+  revision                 Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -201,7 +205,7 @@ model EnterpriseRetailDailyClose {
   revision          Int      @default(1)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  lines              EnterpriseRetailDailyCloseLine[]
+  lines             EnterpriseRetailDailyCloseLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -231,4 +235,189 @@ model EnterpriseRetailDailyCloseLine {
   @@index([organizationId, dailyCloseId])
   @@index([organizationId, financialAccountId])
   @@index([organizationId, cashSessionId])
+}
+
+model EnterpriseRetailPriceCondition {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  catalogPriceId          String
+  siteId                  String?
+  customerBusinessPartyId String?
+  customerSegmentCode     String?
+  minQuantity             Decimal? @db.Decimal(20, 6)
+  maxQuantity             Decimal? @db.Decimal(20, 6)
+  channelCode             String   @default("POS")
+  priority                Int      @default(0)
+  isActive                Boolean  @default(true)
+  createdByUserId         String
+  revision                Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId, catalogPriceId, isActive])
+  @@index([organizationId, siteId, channelCode, isActive])
+  @@index([organizationId, customerBusinessPartyId, isActive])
+  @@index([organizationId, customerSegmentCode, isActive])
+}
+
+model EnterpriseRetailPromotion {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  code                String
+  nameFr              String
+  nameEn              String
+  promotionType       String
+  status              String   @default("DRAFT")
+  priority            Int      @default(0)
+  stackMode           String   @default("EXCLUSIVE")
+  couponCode          String?
+  siteId              String?
+  customerSegmentCode String?
+  currencyCode        String?
+  startsAt            DateTime
+  endsAt              DateTime?
+  conditionsJson      Json?
+  actionJson          Json
+  usageLimit          Int?
+  perCustomerLimit    Int?
+  createdByUserId     String
+  updatedByUserId     String?
+  revision            Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  archivedAt          DateTime?
+  redemptions         EnterpriseRetailPromotionRedemption[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, startsAt, endsAt])
+  @@index([organizationId, couponCode, status])
+  @@index([organizationId, siteId, status])
+}
+
+model EnterpriseRetailPromotionRedemption {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  promotionId             String
+  saleId                  String
+  customerBusinessPartyId String?
+  couponCode              String?
+  discountAmount          Decimal  @db.Decimal(20, 6)
+  currencyCode            String
+  idempotencyKey          String
+  createdAt               DateTime @default(now())
+  promotion               EnterpriseRetailPromotion @relation(fields: [organizationId, promotionId], references: [organizationId, id], onDelete: Restrict)
+  sale                    EnterpriseRetailSale @relation(fields: [organizationId, saleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, promotionId, createdAt])
+  @@index([organizationId, saleId])
+  @@index([organizationId, customerBusinessPartyId, createdAt])
+}
+
+model EnterpriseRetailPricingDecision {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  saleId                  String
+  catalogItemId           String
+  catalogPriceId          String?
+  quantity                Decimal  @db.Decimal(20, 6)
+  baseUnitPrice           Decimal  @db.Decimal(20, 6)
+  resolvedUnitPrice       Decimal  @db.Decimal(20, 6)
+  discountAmount          Decimal  @default(0) @db.Decimal(20, 6)
+  taxCodeId               String?
+  taxRate                 Decimal  @default(0) @db.Decimal(12, 8)
+  taxIncluded             Boolean  @default(false)
+  taxAmount               Decimal  @default(0) @db.Decimal(20, 6)
+  lineTotal               Decimal  @db.Decimal(20, 6)
+  pricingSource           String
+  promotionIdsJson        Json?
+  contextJson             Json?
+  createdAt               DateTime @default(now())
+  sale                    EnterpriseRetailSale @relation(fields: [organizationId, saleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, saleId, catalogItemId])
+  @@index([organizationId, catalogPriceId, createdAt])
+  @@index([organizationId, catalogItemId, createdAt])
+}
+
+model EnterpriseRetailReturn {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  number                   String
+  saleId                   String
+  returnType               String   @default("RETURN")
+  status                   String   @default("COMPLETED")
+  reason                   String
+  currencyCode             String
+  subtotal                 Decimal  @db.Decimal(20, 6)
+  discountTotal            Decimal  @default(0) @db.Decimal(20, 6)
+  taxTotal                 Decimal  @default(0) @db.Decimal(20, 6)
+  grandTotal               Decimal  @db.Decimal(20, 6)
+  refundMethod             String
+  refundFinancialAccountId String?
+  requestedByUserId        String
+  approvedByUserId         String?
+  completedAt              DateTime?
+  idempotencyKey           String
+  revision                 Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  sale                     EnterpriseRetailSale @relation(fields: [organizationId, saleId], references: [organizationId, id], onDelete: Restrict)
+  lines                    EnterpriseRetailReturnLine[]
+  refunds                  EnterpriseRetailRefund[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, saleId, status])
+  @@index([organizationId, createdAt, status])
+}
+
+model EnterpriseRetailReturnLine {
+  id               String   @id @default(cuid())
+  organizationId   String
+  returnId         String
+  saleLineId       String
+  catalogItemId    String
+  inventoryItemId  String?
+  quantity         Decimal  @db.Decimal(20, 6)
+  unitPrice        Decimal  @db.Decimal(20, 6)
+  discountAmount   Decimal  @default(0) @db.Decimal(20, 6)
+  taxAmount        Decimal  @default(0) @db.Decimal(20, 6)
+  lineTotal        Decimal  @db.Decimal(20, 6)
+  stockDisposition String   @default("RESTOCK")
+  stockMovementId  String?
+  createdAt        DateTime @default(now())
+  return           EnterpriseRetailReturn @relation(fields: [organizationId, returnId], references: [organizationId, id], onDelete: Restrict)
+  saleLine         EnterpriseRetailSaleLine @relation(fields: [organizationId, saleLineId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, returnId, saleLineId])
+  @@index([organizationId, saleLineId])
+  @@index([organizationId, catalogItemId])
+}
+
+model EnterpriseRetailRefund {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  returnId           String
+  methodType         String
+  financialAccountId String?
+  currencyCode       String
+  amount             Decimal  @db.Decimal(20, 6)
+  status             String   @default("CONFIRMED")
+  reference          String?
+  idempotencyKey     String
+  createdByUserId    String
+  createdAt          DateTime @default(now())
+  return             EnterpriseRetailReturn @relation(fields: [organizationId, returnId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, returnId, status])
+  @@index([organizationId, financialAccountId, createdAt])
 }
