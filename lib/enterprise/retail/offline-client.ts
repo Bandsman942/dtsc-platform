@@ -98,14 +98,16 @@ async function openRetailOfflineDb() {
 
 async function getOrCreateOrganizationKey(db: IDBDatabase, organizationId: string): Promise<CryptoKey> {
   const transaction = db.transaction(KEY_STORE, "readonly");
+  const done = transactionDone(transaction);
   const existing = await requestResult(transaction.objectStore(KEY_STORE).get(organizationId) as IDBRequest<{ id: string; key: CryptoKey } | undefined>);
-  await transactionDone(transaction);
+  await done;
   if (existing?.key) return existing.key;
 
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   const write = db.transaction(KEY_STORE, "readwrite");
+  const writeDone = transactionDone(write);
   write.objectStore(KEY_STORE).put({ id: organizationId, key, createdAt: new Date().toISOString() });
-  await transactionDone(write);
+  await writeDone;
   return key;
 }
 
@@ -131,9 +133,10 @@ export async function saveRetailOfflineSnapshot(organizationId: string, snapshot
     const key = await getOrCreateOrganizationKey(db, organizationId);
     const encrypted = await encryptJson(key, snapshot);
     const transaction = db.transaction(SNAPSHOT_STORE, "readwrite");
+    const done = transactionDone(transaction);
     const stored: StoredSnapshot = { id: snapshotKey(organizationId), organizationId, version: snapshot.version, validUntil: snapshot.validUntil, updatedAt: new Date().toISOString(), encrypted };
     transaction.objectStore(SNAPSHOT_STORE).put(stored);
-    await transactionDone(transaction);
+    await done;
   } finally {
     db.close();
   }
@@ -144,8 +147,9 @@ export async function loadRetailOfflineSnapshot(organizationId: string): Promise
   try {
     const key = await getOrCreateOrganizationKey(db, organizationId);
     const transaction = db.transaction(SNAPSHOT_STORE, "readonly");
+    const done = transactionDone(transaction);
     const stored = await requestResult(transaction.objectStore(SNAPSHOT_STORE).get(snapshotKey(organizationId)) as IDBRequest<StoredSnapshot | undefined>);
-    await transactionDone(transaction);
+    await done;
     if (!stored) return null;
     return decryptJson<RetailOfflineSnapshotEnvelope>(key, stored.encrypted);
   } finally {
@@ -175,8 +179,9 @@ export async function enqueueRetailOfflineSale<T>(args: { organizationId: string
       encrypted,
     };
     const transaction = db.transaction(QUEUE_STORE, "readwrite");
+    const done = transactionDone(transaction);
     transaction.objectStore(QUEUE_STORE).put(stored);
-    await transactionDone(transaction);
+    await done;
     return operationUuid;
   } finally {
     db.close();
@@ -188,8 +193,9 @@ export async function listRetailOfflineQueue<T = unknown>(organizationId: string
   try {
     const key = await getOrCreateOrganizationKey(db, organizationId);
     const transaction = db.transaction(QUEUE_STORE, "readonly");
+    const done = transactionDone(transaction);
     const all = await requestResult(transaction.objectStore(QUEUE_STORE).getAll() as IDBRequest<StoredQueueEntry[]>);
-    await transactionDone(transaction);
+    await done;
     const organizationRows = all.filter((row) => row.organizationId === organizationId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     return Promise.all(organizationRows.map(async (row) => ({
       id: row.id,
@@ -215,10 +221,11 @@ export async function updateRetailOfflineQueueResult(organizationId: string, ope
   try {
     const id = `${organizationId}:${operationUuid}`;
     const transaction = db.transaction(QUEUE_STORE, "readwrite");
+    const done = transactionDone(transaction);
     const store = transaction.objectStore(QUEUE_STORE);
     const row = await requestResult(store.get(id) as IDBRequest<StoredQueueEntry | undefined>);
     if (row) store.put({ ...row, status: result.status, conflictCode: result.conflictCode ?? null, serverEntityId: result.serverEntityId ?? null, updatedAt: new Date().toISOString() });
-    await transactionDone(transaction);
+    await done;
   } finally {
     db.close();
   }
@@ -228,12 +235,13 @@ export async function clearRetailOfflineOrganization(organizationId: string) {
   const db = await openRetailOfflineDb();
   try {
     const transaction = db.transaction([SNAPSHOT_STORE, QUEUE_STORE, KEY_STORE], "readwrite");
+    const done = transactionDone(transaction);
     transaction.objectStore(SNAPSHOT_STORE).delete(snapshotKey(organizationId));
-    transaction.objectStore(KEY_STORE).delete(organizationId);
     const queueStore = transaction.objectStore(QUEUE_STORE);
     const rows = await requestResult(queueStore.getAll() as IDBRequest<StoredQueueEntry[]>);
     for (const row of rows) if (row.organizationId === organizationId) queueStore.delete(row.id);
-    await transactionDone(transaction);
+    transaction.objectStore(KEY_STORE).delete(organizationId);
+    await done;
   } finally {
     db.close();
   }
