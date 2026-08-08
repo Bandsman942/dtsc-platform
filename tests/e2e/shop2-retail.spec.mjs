@@ -241,16 +241,25 @@ async function prepareRetailFixture() {
 
 async function signIn(page) {
   await page.goto(`/auth/sign-in?next=${encodeURIComponent("/enterprise-modules/RETAIL_POS")}`);
+  await page.waitForLoadState("networkidle");
+
   const emailInput = page.locator('input[name="email"], input[type="email"]').first();
   const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
+  const loadContextButton = page.getByRole("button", { name: /^Charger$/i });
+
+  await expect(emailInput).toBeEditable();
+  await expect(passwordInput).toBeEditable();
   await emailInput.fill(adminEmail);
   await passwordInput.fill(adminPassword);
+  await expect(emailInput).toHaveValue(adminEmail);
+  await expect(passwordInput).toHaveValue(adminPassword);
+  await expect(loadContextButton).toBeEnabled();
 
   const lookupPromise = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/organizations") && response.request().method() === "POST",
     { timeout: 15_000 },
   );
-  await page.getByRole("button", { name: /^Charger$/i }).click();
+  await loadContextButton.click();
   const lookupResponse = await lookupPromise;
   expect(lookupResponse.ok(), `Organization context lookup failed with ${lookupResponse.status()}`).toBeTruthy();
 
