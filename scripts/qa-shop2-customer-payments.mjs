@@ -91,6 +91,26 @@ check(customerBar.includes("/retail/customers?search="), "POS customer search mu
 check(retailPage.includes("RetailActiveCustomerBar"), "POS page must visibly render the active customer context");
 check(salesRoute.includes("customerContextSource"), "Sale audit must record the customer context source");
 
+const customerHistoryPath = "app/api/enterprise/[organizationId]/retail/customers/[businessPartyId]/route.ts";
+check(exists(customerHistoryPath), "Retail customer purchase/return history route is missing");
+const customerHistory = exists(customerHistoryPath) ? read(customerHistoryPath) : "";
+for (const marker of ["EnterpriseBusinessParty", "enterpriseRetailSale", "enterpriseRetailReturn", "enterpriseRetailLoyaltyAccount", "enterpriseRetailStoredValueAccount"]) check(customerHistory.includes(marker) || customerHistory.toLowerCase().includes(marker.toLowerCase()), `Customer history route missing ${marker}`);
+
+const receiptPath = "app/api/enterprise/[organizationId]/retail/sales/[saleId]/receipt/route.ts";
+check(exists(receiptPath), "Consent-aware digital receipt route is missing");
+const receipt = exists(receiptPath) ? read(receiptPath) : "";
+for (const marker of ["RETAIL_RECEIPT_CONTACT", 'format !== "html"', "window.print()", "providerSecretsDisclosed: false", "enterpriseRetailLoyaltyEntry", "enterpriseRetailStoredValueEntry", "promotionRedemptions"]) check(receipt.includes(marker), `Retail receipt contract missing ${marker}`);
+check(!receipt.includes("credentialReference"), "Receipt must never expose provider credential references");
+check(!receipt.includes("webhookSecretReference"), "Receipt must never expose webhook secret references");
+
+const deviceCapabilitiesPath = "lib/enterprise/retail/device-capabilities.ts";
+const deviceReadinessPath = "components/enterprise/professional/retail-device-readiness.tsx";
+check(exists(deviceCapabilitiesPath), "POS device capability layer is missing");
+check(exists(deviceReadinessPath), "POS device readiness UI is missing");
+const deviceCapabilities = exists(deviceCapabilitiesPath) ? read(deviceCapabilitiesPath) : "";
+for (const marker of ["WEBUSB", "WEBBLUETOOTH", "WEBSERIAL", "MANUAL_FALLBACK", "BROWSER_API_UNAVAILABLE"]) check(deviceCapabilities.toUpperCase().includes(marker), `Device capability layer missing ${marker}`);
+check(retailPage.includes("RetailDeviceReadiness"), "POS page must surface device readiness without blocking checkout");
+
 const loyaltyHooks = read("lib/enterprise/retail/loyalty-sale-hooks.ts");
 for (const marker of ["autoEarn === true", "loyalty:auto-earn:", "loyalty:return-reversal:", "REVERSAL", "FOR UPDATE"]) check(loyaltyHooks.includes(marker), `Loyalty sale lifecycle missing ${marker}`);
 
@@ -105,6 +125,10 @@ const cashierBlock = constants.slice(constants.indexOf("CASHIER:"), constants.in
 check(!sellerBlock.includes("enterprise.retail.customer.create"), "SELLER must not see quick customer creation without canonical CRM write authority");
 check(!cashierBlock.includes("enterprise.retail.customer.create"), "CASHIER must not see quick customer creation without canonical CRM write authority");
 
+const nativeGuide = read("lib/user-guides/retail-telco-mobile-money-guides.ts");
+for (const marker of ["Client CRM canonique au POS", "Fidélité transactionnelle", "Cartes-cadeaux et avoirs", "Mode MANUAL ou CONNECTED", "UNKNOWN n’est jamais assimilé à un succès", "Consent-aware JSON/printable receipt"]) check(nativeGuide.includes(marker), `Native Retail user guide missing iteration 3 marker: ${marker}`);
+for (const doc of ["docs/SHOP_2_0_ITERATION_3_ARCHITECTURE.md", "docs/SHOP_2_0_CUSTOMER_PAYMENTS_USER_GUIDE_FR.md", "docs/SHOP_2_0_CUSTOMER_PAYMENTS_USER_GUIDE_EN.md"]) check(exists(doc), `Iteration 3 documentation missing ${doc}`);
+
 const readiness = JSON.parse(read("lib/enterprise/sector-onboarding-readiness.json"));
 const retail = readiness.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL");
 check(retail?.shop2ProgramStatus === "ITERATION_3_IN_PROGRESS", "Shop 2 readiness must identify iteration 3 while this branch is under development");
@@ -112,6 +136,7 @@ check(retail?.commercializationStatus === "COMMERCIAL_READY", "Iteration 3 must 
 
 for (const route of [
   "app/api/enterprise/[organizationId]/retail/customers/route.ts",
+  customerHistoryPath,
   "app/api/enterprise/[organizationId]/retail/loyalty/programs/route.ts",
   "app/api/enterprise/[organizationId]/retail/loyalty/earn/route.ts",
   "app/api/enterprise/[organizationId]/retail/loyalty/redeem/route.ts",
@@ -124,6 +149,7 @@ for (const route of [
   "app/api/enterprise/[organizationId]/retail/provider-operations/reconcile/route.ts",
   "app/api/enterprise/[organizationId]/retail/devices/route.ts",
   "app/api/enterprise/[organizationId]/retail/webhooks/[providerId]/route.ts",
+  receiptPath,
 ]) check(exists(route), `Missing iteration 3 route ${route}`);
 
 if (failures.length) {
