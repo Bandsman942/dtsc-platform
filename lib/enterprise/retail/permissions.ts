@@ -51,6 +51,7 @@ export async function hasRetailPermission(userId: string, organizationId: string
 
 export async function getRetailCommercialPermissions(userId: string, organizationId: string) {
   const checks = await Promise.all([
+    hasRetailPermission(userId, organizationId, "enterprise.retail.pos.pricing.manage"),
     hasRetailPermission(userId, organizationId, "enterprise.retail.pos.price_override.manage"),
     hasRetailPermission(userId, organizationId, "enterprise.retail.pos.discount_override.manage"),
     hasRetailPermission(userId, organizationId, "enterprise.retail.pos.tax_override.manage"),
@@ -59,11 +60,12 @@ export async function getRetailCommercialPermissions(userId: string, organizatio
     hasRetailPermission(userId, organizationId, "enterprise.retail.pos.refunds.manage"),
   ]);
   return {
-    canOverridePrice: checks[0],
-    canOverrideDiscount: checks[1],
-    canOverrideTax: checks[2],
-    canManagePromotions: checks[3],
-    canCreateReturns: checks[4],
-    canManageRefunds: checks[5],
+    canManagePricing: checks[0],
+    canOverridePrice: checks[1],
+    canOverrideDiscount: checks[2],
+    canOverrideTax: checks[3],
+    canManagePromotions: checks[4],
+    canCreateReturns: checks[5],
+    canManageRefunds: checks[6],
   };
 }
