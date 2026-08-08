@@ -3,6 +3,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { transitionRetailProviderOperation } from "@/lib/enterprise/retail/customer-payments";
 import { retailProviderOperationTransitionSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { finalizeConfirmedRetailOperatorOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
 
 type Params = { params: Promise<{ organizationId: string; operationId: string }> };
@@ -21,9 +22,12 @@ export async function POST(req: Request, { params }: Params) {
   }
   try {
     const operation = await transitionRetailProviderOperation(organizationId, operationId, parsed.data);
-    await writeAuditLog({ userId: auth.session.userId, action: `ENTERPRISE_RETAIL_PROVIDER_OPERATION_${operation.status}`, entity: "EnterpriseRetailProviderOperation", entityId: operation.id, request: req, metadata: { organizationId, providerId: operation.providerId, status: operation.status, externalReference: operation.externalReference, revision: operation.revision } });
-    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-provider-operations", action: "transition", status: operation.status } });
-    return NextResponse.json({ ok: true, operation });
+    const finalized = operation.status === "CONFIRMED"
+      ? await finalizeConfirmedRetailOperatorOperation(organizationId, operation.id)
+      : null;
+    await writeAuditLog({ userId: auth.session.userId, action: `ENTERPRISE_RETAIL_PROVIDER_OPERATION_${operation.status}`, entity: "EnterpriseRetailProviderOperation", entityId: operation.id, request: req, metadata: { organizationId, providerId: operation.providerId, status: operation.status, externalReference: operation.externalReference, revision: operation.revision, businessEffectFinalized: Boolean(finalized) } });
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-provider-operations", action: "transition", status: operation.status, businessEffectFinalized: Boolean(finalized) } });
+    return NextResponse.json({ ok: true, operation, finalized });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_PROVIDER_OPERATION_TRANSITION_FAILED");
   }
