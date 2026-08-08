@@ -1,7 +1,7 @@
 model EnterpriseRetailConfiguration {
   id                       String   @id @default(cuid())
   organizationId           String   @unique
-  profileCode              String   @default("RETAIL_TELCO_MOBILE_MONEY")
+  profileCode              String   @default("RETAIL_CORE")
   defaultSiteId            String?
   defaultWarehouseId       String?
   defaultStorageLocationId String?
