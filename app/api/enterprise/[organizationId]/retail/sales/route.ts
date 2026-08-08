@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { getRetailActiveCustomerIdFromCookieHeader } from "@/lib/enterprise/retail/active-customer";
 import { finalizeRetailSaleAccounting } from "@/lib/enterprise/retail/accounting";
 import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2, previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
 import { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
@@ -24,7 +25,7 @@ export async function GET(req: Request, { params }: Params) {
     organizationId,
     ...(status ? { status } : {}),
     ...(from || to ? { soldAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
-    ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { lines: { some: { description: { contains: search, mode: "insensitive" } } } }] } : {}),
+    ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { lines: { some: { description: { contains: search, mode: "insensitive" } } }] } : {}),
   };
   const metricFrom = from || new Date(new Date().setHours(0, 0, 0, 0));
   const metricTo = to || new Date();
@@ -48,7 +49,11 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "submit", { mutation: true, limit: 300 });
   if (!auth.ok) return auth.response;
-  const raw = await req.json().catch(() => null);
+  const originalRaw = await req.json().catch(() => null);
+  const rawObject = originalRaw && typeof originalRaw === "object" && !Array.isArray(originalRaw) ? originalRaw as Record<string, unknown> : null;
+  const explicitCustomerId = typeof rawObject?.customerBusinessPartyId === "string" && rawObject.customerBusinessPartyId.trim() ? rawObject.customerBusinessPartyId.trim() : null;
+  const activeCustomerId = getRetailActiveCustomerIdFromCookieHeader(req.headers.get("cookie"), organizationId);
+  const raw = rawObject ? { ...rawObject, ...(explicitCustomerId || activeCustomerId ? { customerBusinessPartyId: explicitCustomerId || activeCustomerId } : {}) } : originalRaw;
   const parsed = retailSaleCreateSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Ticket invalide." }, { status: 400 });
   const commercialContext = retailCommercialContextSchema.safeParse(raw);
@@ -112,6 +117,8 @@ export async function POST(req: Request, { params }: Params) {
         number: result.sale.number,
         total: result.sale.grandTotal.toFixed(),
         currency: result.sale.currencyCode,
+        customerBusinessPartyId: result.sale.customerBusinessPartyId,
+        customerContextSource: explicitCustomerId ? "REQUEST" : activeCustomerId ? "ACTIVE_POS_CONTEXT" : "WALK_IN",
         idempotent: result.idempotent,
         priceOverrideApplied: guarded.overrideApplied,
         overrideReason: guarded.overrideReason,
@@ -122,7 +129,7 @@ export async function POST(req: Request, { params }: Params) {
         inventoryJournalEntryIds: accounting.inventoryPostings.map((item) => item.journalEntryId),
       },
     });
-    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", overrideApplied: guarded.overrideApplied, promotionCount, accountingPosted: true } });
+    await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", action: "create", customerAttached: Boolean(result.sale.customerBusinessPartyId), overrideApplied: guarded.overrideApplied, promotionCount, accountingPosted: true } });
     return NextResponse.json({ ok: true, ...result, accounting, commercial: { promotionCount, pricingDecisionCount: guarded.decisions.length, overrideApplied: guarded.overrideApplied } }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SALE_CREATE_FAILED");
