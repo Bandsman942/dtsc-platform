@@ -12,6 +12,7 @@ export const retailPromotionTypes = ["PERCENTAGE", "FIXED_AMOUNT", "QUANTITY_BRE
 export const retailPromotionStackModes = ["EXCLUSIVE", "STACKABLE"] as const;
 export const retailReturnTypes = ["RETURN", "EXCHANGE"] as const;
 export const retailReturnStockDispositions = ["RESTOCK", "SCRAP", "NO_STOCK"] as const;
+export const retailReturnProductConditions = ["SELLABLE", "OPENED", "DAMAGED", "DEFECTIVE", "EXPIRED", "OTHER"] as const;
 // STORE_CREDIT belongs to Shop 2 iteration 3, where it will have a spendable balance domain.
 export const retailRefundMethods = ["ORIGINAL_TENDER", "CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD"] as const;
 
@@ -89,24 +90,37 @@ export const retailPricingPreviewSchema = retailCommercialContextSchema.extend({
 
 export const retailReturnCreateSchema = z.object({
   returnType: z.enum(retailReturnTypes).default("RETURN"),
+  exchangeSaleId: id.optional().nullable(),
   reason: z.string().trim().min(3).max(1200),
   refundMethod: z.enum(retailRefundMethods),
   refundFinancialAccountId: id.optional().nullable(),
-  refundReference: z.string().trim().max(160).optional().nullable(),
-  idempotencyKey,
   lines: z.array(z.object({
     saleLineId: id,
     quantity: positiveQuantity,
+    productCondition: z.enum(retailReturnProductConditions).default("SELLABLE"),
     stockDisposition: z.enum(retailReturnStockDispositions).default("RESTOCK"),
   })).min(1).max(200),
+  idempotencyKey,
 }).superRefine((input, ctx) => {
   const seen = new Set<string>();
   input.lines.forEach((line, index) => {
     if (seen.has(line.saleLineId)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Une ligne du ticket ne peut être retournée qu’une fois par demande.", path: ["lines", index, "saleLineId"] });
     seen.add(line.saleLineId);
   });
-  if (input.refundMethod !== "ORIGINAL_TENDER" && !input.refundFinancialAccountId) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Sélectionnez le compte financier utilisé pour le remboursement.", path: ["refundFinancialAccountId"] });
+  if (input.returnType === "EXCHANGE" && !input.exchangeSaleId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un échange doit être lié au ticket de remplacement.", path: ["exchangeSaleId"] });
+  }
+});
+
+export const retailReturnDecisionSchema = z.object({
+  revision: z.coerce.number().int().positive(),
+  decision: z.enum(["APPROVE", "REJECT"]),
+  reason: z.string().trim().max(1200).optional().nullable(),
+  refundFinancialAccountId: id.optional().nullable(),
+  refundReference: z.string().trim().max(160).optional().nullable(),
+}).superRefine((input, ctx) => {
+  if (input.decision === "REJECT" && (!input.reason || input.reason.length < 3)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Précisez le motif du refus.", path: ["reason"] });
   }
 });
 
