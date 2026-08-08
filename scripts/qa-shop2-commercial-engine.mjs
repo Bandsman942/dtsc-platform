@@ -94,10 +94,17 @@ check(salesRoute.includes("executeCanonicalRetailSale"), "POS sale route must de
 for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) {
   check(saleExecution.includes(marker), `Canonical POS sale service missing authoritative commercial marker ${marker}`);
 }
-const prepareIndex = saleExecution.indexOf("prepareCommercialRetailSaleV2");
-const persistIndex = saleExecution.indexOf("persistRetailCommercialDecisions");
-const accountingIndex = saleExecution.indexOf("finalizeRetailSaleAccounting");
-check(prepareIndex >= 0 && persistIndex > prepareIndex && accountingIndex > persistIndex, "Canonical POS sale service must prepare pricing, persist decisions and finalize accounting in order");
+const executeStart = saleExecution.indexOf("export async function executeCanonicalRetailSale");
+const executeBlock = executeStart >= 0 ? saleExecution.slice(executeStart) : "";
+const prepareIndex = executeBlock.indexOf("await prepareCommercialRetailSaleV2");
+const createIndex = executeBlock.indexOf("createRetailSale(args.organizationId");
+const persistIndex = executeBlock.indexOf("await persistRetailCommercialDecisions");
+const accountingIndex = executeBlock.indexOf("await finalizeRetailSaleAccounting");
+const loyaltyIndex = executeBlock.indexOf("await autoEarnRetailLoyaltyForSale");
+check(
+  prepareIndex >= 0 && createIndex > prepareIndex && persistIndex > createIndex && accountingIndex > persistIndex && loyaltyIndex > accountingIndex,
+  "Canonical POS sale service must prepare pricing, create the sale, persist decisions, finalize accounting and apply loyalty before returning",
+);
 const decisionRoute = read("app/api/enterprise/[organizationId]/retail/returns/[returnId]/decision/route.ts");
 check(decisionRoute.includes("finalizeRetailReturnAccounting"), "Return approval must post common accounting before successful response");
 
