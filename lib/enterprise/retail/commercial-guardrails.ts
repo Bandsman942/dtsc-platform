@@ -8,6 +8,7 @@ import type { z } from "zod";
 type RetailSaleInput = z.infer<typeof retailSaleCreateSchema>;
 type MobileMoneyInput = z.infer<typeof mobileMoneyCreateSchema>;
 type TelcoTopupInput = z.infer<typeof telcoTopupCreateSchema>;
+export type RetailProviderExecutionMode = "MANUAL" | "CONNECTED";
 
 const DRC_COUNTRY_MARKERS = new Set(["CD", "COD", "RDC", "DRC", "CONGO RDC", "CONGO-KINSHASA", "DEMOCRATIC REPUBLIC OF THE CONGO"]);
 
@@ -92,22 +93,61 @@ async function assertExternalReferenceAvailable(
   if (existing) throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_DUPLICATE", 409, { providerCode });
 }
 
+async function resolveRetailProviderExecutionMode(
+  organizationId: string,
+  providerCode: string,
+  allowedTypes: readonly string[],
+): Promise<RetailProviderExecutionMode> {
+  const provider = await prisma.enterpriseRetailProvider.findFirst({
+    where: { organizationId, providerCode, isActive: true, providerType: { in: [...allowedTypes] } },
+    select: { id: true },
+  });
+  if (!provider) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode });
+  const integration = await prisma.enterpriseRetailProviderIntegration.findFirst({
+    where: { organizationId, providerId: provider.id, archivedAt: null },
+    select: { integrationMode: true },
+  });
+  return integration?.integrationMode === "CONNECTED" ? "CONNECTED" : "MANUAL";
+}
+
 export async function prepareCommercialMobileMoney(organizationId: string, input: MobileMoneyInput) {
-  const externalReference = input.externalReference?.trim();
-  if (!externalReference) throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_REQUIRED", 400);
+  const executionMode = await resolveRetailProviderExecutionMode(organizationId, input.providerCode, ["MOBILE_MONEY", "BOTH"]);
+  const requestedExternalReference = input.externalReference?.trim() || null;
+  if (executionMode === "MANUAL" && !requestedExternalReference) throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_REQUIRED", 400);
   const country = await organizationCountry(organizationId);
   const customerPhone = normalizeRetailPhone(input.customerPhone, country);
-  await assertExternalReferenceAvailable(organizationId, "MOBILE_MONEY", input.providerCode, externalReference);
-  return { ...input, customerPhone, externalReference, floatAccountId: null };
+  if (executionMode === "MANUAL" && requestedExternalReference) {
+    await assertExternalReferenceAvailable(organizationId, "MOBILE_MONEY", input.providerCode, requestedExternalReference);
+  }
+  return {
+    executionMode,
+    input: {
+      ...input,
+      customerPhone,
+      externalReference: executionMode === "CONNECTED" ? null : requestedExternalReference,
+      floatAccountId: null,
+    },
+  };
 }
 
 export async function prepareCommercialTelcoTopup(organizationId: string, input: TelcoTopupInput) {
-  const externalReference = input.externalReference?.trim() || null;
-  if (input.status === "SUCCESS" && !externalReference) throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_REQUIRED", 400);
+  const executionMode = await resolveRetailProviderExecutionMode(organizationId, input.providerCode, ["TELCO", "BOTH"]);
+  const requestedExternalReference = input.externalReference?.trim() || null;
+  if (executionMode === "MANUAL" && input.status === "SUCCESS" && !requestedExternalReference) throw new EnterpriseRetailError("RETAIL_EXTERNAL_REFERENCE_REQUIRED", 400);
   const country = await organizationCountry(organizationId);
   const destinationPhone = normalizeRetailPhone(input.destinationPhone, country);
-  if (externalReference) await assertExternalReferenceAvailable(organizationId, "TELCO", input.providerCode, externalReference);
-  return { ...input, destinationPhone, externalReference, operatorFloatAccountId: null };
+  if (executionMode === "MANUAL" && requestedExternalReference) {
+    await assertExternalReferenceAvailable(organizationId, "TELCO", input.providerCode, requestedExternalReference);
+  }
+  return {
+    executionMode,
+    input: {
+      ...input,
+      destinationPhone,
+      externalReference: executionMode === "CONNECTED" ? null : requestedExternalReference,
+      operatorFloatAccountId: null,
+    },
+  };
 }
 
 type CurrencyMetric = { currencyCode: string; count: number; amount: string };
