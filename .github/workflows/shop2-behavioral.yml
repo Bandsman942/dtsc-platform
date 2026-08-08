@@ -16,6 +16,7 @@ on:
       - "prisma/migrations/**"
       - "tests/e2e/shop2-retail.spec.mjs"
       - "playwright.config.mjs"
+      - "scripts/seed-shop2-behavioral-e2e.mjs"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
@@ -81,6 +82,8 @@ jobs:
         run: pnpm prisma:deploy
       - name: Seed canonical ERP acceptance tenant
         run: node scripts/seed-erp-professional-e2e.mjs
+      - name: Seed canonical Shop 2 behavioral tenant
+        run: node scripts/seed-shop2-behavioral-e2e.mjs
       - name: Validate Shop 2 static contracts
         run: |
           node scripts/qa-retail-telco-mobile-money.mjs
