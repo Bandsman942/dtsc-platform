@@ -18,8 +18,10 @@ on:
       - "prisma/enterprise-inventory.prisma"
       - "prisma/migrations/**"
       - "tests/e2e/shop2-retail.spec.mjs"
+      - "tests/e2e/shop2-commercial.spec.mjs"
       - "playwright.config.mjs"
       - "scripts/seed-shop2-behavioral-e2e.mjs"
+      - "scripts/seed-shop2-commercial-e2e.mjs"
       - "scripts/qa-shop2-inventory-schema-parity.mjs"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
@@ -97,6 +99,8 @@ jobs:
         run: node scripts/seed-erp-professional-e2e.mjs
       - name: Seed canonical Shop 2 behavioral tenant
         run: node scripts/seed-shop2-behavioral-e2e.mjs
+      - name: Seed Shop 2 commercial acceptance data
+        run: node scripts/seed-shop2-commercial-e2e.mjs
       - name: Validate Shop 2 static contracts
         run: |
           node scripts/qa-retail-telco-mobile-money.mjs
@@ -122,7 +126,7 @@ jobs:
           cat /tmp/dtsc-shop2-next.log
           exit 1
       - name: Shop 2 POS behavioral acceptance
-        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs
+        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs
       - name: Stop application
         if: always()
         run: |
