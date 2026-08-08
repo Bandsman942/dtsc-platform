@@ -43,8 +43,17 @@ async function assertRetailOrganization(tx: Prisma.TransactionClient, organizati
 async function ensureRetailConfigurationTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string) {
   const existing = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId } });
   if (existing) return existing;
+  const financeConfiguration = await tx.enterpriseFinanceConfiguration.findUnique({
+    where: { organizationId },
+    select: { functionalCurrencyCode: true },
+  });
   return tx.enterpriseRetailConfiguration.create({
-    data: { organizationId, profileCode: RETAIL_PROFILE_CODE, baseCurrencyCode: "CDF", createdByUserId: actorUserId },
+    data: {
+      organizationId,
+      profileCode: RETAIL_PROFILE_CODE,
+      baseCurrencyCode: financeConfiguration?.functionalCurrencyCode || "CDF",
+      createdByUserId: actorUserId,
+    },
   });
 }
 
@@ -146,28 +155,47 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
     const existing = await tx.enterpriseRetailSale.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true, tenders: true } });
     if (existing) return { sale: existing, idempotent: true };
 
-    const [warehouse, site, location, customer] = await Promise.all([
+    const catalogItemIds = Array.from(new Set(input.lines.map((line) => line.catalogItemId)));
+    const tenderAccountIds = Array.from(new Set(input.tenders.map((tender) => tender.financialAccountId)));
+    const [warehouse, site, location, customer, catalogItems, inventoryItems, financialAccounts] = await Promise.all([
       tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, siteId: true } }),
       input.siteId ? tx.enterpriseSite.findFirst({ where: { id: input.siteId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }) : Promise.resolve(null),
       input.storageLocationId ? tx.enterpriseStorageLocation.findFirst({ where: { id: input.storageLocationId, organizationId, warehouseId: input.warehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } }) : Promise.resolve(null),
       input.customerBusinessPartyId ? tx.enterpriseBusinessParty.findFirst({ where: { id: input.customerBusinessPartyId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }) : Promise.resolve(null),
+      tx.enterpriseCatalogItem.findMany({
+        where: { id: { in: catalogItemIds }, organizationId, status: "ACTIVE", archivedAt: null },
+        select: { id: true, name: true, currency: true, trackInventory: true },
+      }),
+      tx.enterpriseInventoryItem.findMany({
+        where: { organizationId, catalogItemId: { in: catalogItemIds }, status: "ACTIVE", archivedAt: null },
+        select: { id: true, catalogItemId: true },
+      }),
+      tx.enterpriseFinancialAccount.findMany({
+        where: { organizationId, id: { in: tenderAccountIds }, status: "ACTIVE", archivedAt: null },
+      }),
     ]);
     if (!warehouse || (input.siteId && !site) || (input.storageLocationId && !location) || (input.customerBusinessPartyId && !customer)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
     if (input.siteId && warehouse.siteId !== input.siteId) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409, { field: "siteId" });
+    if (catalogItems.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
+    if (financialAccounts.length !== tenderAccountIds.length) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
+
+    const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+    const inventoryByCatalogId = new Map(inventoryItems.map((item) => [item.catalogItemId, item]));
+    const accountById = new Map(financialAccounts.map((account) => [account.id, account]));
 
     const preparedLines: Array<{
       catalogItemId: string; inventoryItemId: string | null; stockLotId: string | null; description: string; quantity: Prisma.Decimal; unitPrice: Prisma.Decimal; discountAmount: Prisma.Decimal; taxAmount: Prisma.Decimal; lineTotal: Prisma.Decimal; trackInventory: boolean;
     }> = [];
     for (const line of input.lines) {
-      const catalogItem = await tx.enterpriseCatalogItem.findFirst({ where: { id: line.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null } });
+      const catalogItem = catalogById.get(line.catalogItemId);
       if (!catalogItem) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409, { catalogItemId: line.catalogItemId });
       if (catalogItem.currency && catalogItem.currency !== input.currencyCode) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: line.catalogItemId });
       let inventoryItemId: string | null = null;
       if (catalogItem.trackInventory) {
-        const inventoryItem = line.inventoryItemId
-          ? await tx.enterpriseInventoryItem.findFirst({ where: { id: line.inventoryItemId, organizationId, catalogItemId: catalogItem.id, status: "ACTIVE", archivedAt: null } })
-          : await tx.enterpriseInventoryItem.findFirst({ where: { organizationId, catalogItemId: catalogItem.id, status: "ACTIVE", archivedAt: null } });
-        if (!inventoryItem) throw new EnterpriseRetailError("RETAIL_INVENTORY_ITEM_REQUIRED", 409, { catalogItemId: catalogItem.id });
+        const inventoryItem = inventoryByCatalogId.get(catalogItem.id);
+        if (!inventoryItem || (line.inventoryItemId && line.inventoryItemId !== inventoryItem.id)) {
+          throw new EnterpriseRetailError("RETAIL_INVENTORY_ITEM_REQUIRED", 409, { catalogItemId: catalogItem.id });
+        }
         inventoryItemId = inventoryItem.id;
       }
       const quantity = decimal(line.quantity);
@@ -185,6 +213,29 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
     const grandTotal = money(subtotal.minus(discountTotal).plus(taxTotal));
     const tenderTotal = money(sumDecimals(input.tenders.map((tender) => decimal(tender.amount))));
     if (!tenderTotal.equals(grandTotal)) throw new EnterpriseRetailError("RETAIL_TENDER_TOTAL_MISMATCH", 409, { tenderTotal: tenderTotal.toFixed(), grandTotal: grandTotal.toFixed() });
+
+    const cashAccountIds: string[] = [];
+    for (const tender of input.tenders) {
+      const account = accountById.get(tender.financialAccountId);
+      const expectedTypes = tender.methodType === "CASH" ? ["CASH"] : tender.methodType === "MOBILE_MONEY" ? ["MOBILE_MONEY"] : ["BANK", "CLEARING"];
+      if (!account || account.currencyCode !== input.currencyCode || !expectedTypes.includes(account.accountType)) {
+        throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { accountId: tender.financialAccountId, currencyCode: input.currencyCode, allowedTypes: expectedTypes });
+      }
+      if (account.accountType === "CASH") cashAccountIds.push(account.id);
+    }
+    const openCashSessions = cashAccountIds.length
+      ? await tx.enterpriseCashSession.findMany({
+          where: { organizationId, financialAccountId: { in: cashAccountIds }, cashierUserId: actorUserId, status: "OPEN" },
+          orderBy: { openedAt: "desc" },
+        })
+      : [];
+    const cashSessionByAccountId = new Map<string, (typeof openCashSessions)[number]>();
+    for (const session of openCashSessions) {
+      if (!cashSessionByAccountId.has(session.financialAccountId)) cashSessionByAccountId.set(session.financialAccountId, session);
+    }
+    for (const accountId of cashAccountIds) {
+      if (!cashSessionByAccountId.has(accountId)) throw new EnterpriseRetailError("RETAIL_OPEN_CASH_SESSION_REQUIRED", 409, { financialAccountId: accountId });
+    }
 
     const sale = await tx.enterpriseRetailSale.create({
       data: {
@@ -227,9 +278,9 @@ export async function createRetailSale(organizationId: string, actorUserId: stri
     }
 
     for (const tender of sale.tenders) {
-      const expectedTypes = tender.methodType === "CASH" ? ["CASH"] : tender.methodType === "MOBILE_MONEY" ? ["MOBILE_MONEY"] : ["BANK", "CLEARING"];
-      const account = await assertFinancialAccount(tx, organizationId, tender.financialAccountId, sale.currencyCode, expectedTypes);
-      const cashSession = account.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, account.id, actorUserId) : null;
+      const account = accountById.get(tender.financialAccountId);
+      if (!account) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { accountId: tender.financialAccountId });
+      const cashSession = account.accountType === "CASH" ? cashSessionByAccountId.get(account.id) || null : null;
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount, transactionType: "RETAIL_POS_SALE", reference: sale.number, transactionDate: sale.soldAt, cashSessionId: cashSession?.id, cashReason: `Vente ${sale.number}` });
     }
 
