@@ -69,6 +69,62 @@ async function main() {
     create: { organizationId, userId: user.id, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
   });
 
+  const bankLedgerAccount = await prisma.enterpriseLedgerAccount.upsert({
+    where: { organizationId_code: { organizationId, code: "SHOP2-BANK" } },
+    update: {
+      chartId: taxLedgerAccount.chartId,
+      nameFr: "Banque Shop 2",
+      nameEn: "Shop 2 bank",
+      accountType: "ASSET",
+      currencyCode,
+      isActive: true,
+      archivedAt: null,
+      allowDirectPosting: true,
+    },
+    create: {
+      organizationId,
+      chartId: taxLedgerAccount.chartId,
+      code: "SHOP2-BANK",
+      nameFr: "Banque Shop 2",
+      nameEn: "Shop 2 bank",
+      accountType: "ASSET",
+      currencyCode,
+      isActive: true,
+      allowDirectPosting: true,
+    },
+  });
+  const refundBankAccount = await prisma.enterpriseFinancialAccount.upsert({
+    where: { organizationId_code: { organizationId, code: "SHOP2-E2E-BANK" } },
+    update: {
+      name: "Shop 2 E2E Bank",
+      accountType: "BANK",
+      currencyCode,
+      ledgerAccountId: bankLedgerAccount.id,
+      siteId: site.id,
+      status: "ACTIVE",
+      archivedAt: null,
+      openingBalance: 1000,
+      operationalBalance: 1000,
+      reconciledBalance: 1000,
+      availableBalance: 1000,
+    },
+    create: {
+      organizationId,
+      code: "SHOP2-E2E-BANK",
+      name: "Shop 2 E2E Bank",
+      accountType: "BANK",
+      currencyCode,
+      openingBalance: 1000,
+      operationalBalance: 1000,
+      reconciledBalance: 1000,
+      availableBalance: 1000,
+      ledgerAccountId: bankLedgerAccount.id,
+      siteId: site.id,
+      responsibleUserId: admin.id,
+      status: "ACTIVE",
+    },
+  });
+
   const zeroTax = await prisma.enterpriseTaxCode.upsert({
     where: { organizationId_code: { organizationId, code: "SHOP2-ZERO" } },
     update: {
@@ -224,6 +280,7 @@ async function main() {
     currencyCode,
     siteId: site.id,
     cashAccountId: cashAccount.id,
+    refundBankAccountId: refundBankAccount.id,
     zeroTaxCode: zeroTax.code,
     commercialTaxCode: vat.code,
     commercialCatalogItemId: commercialProduct.id,
