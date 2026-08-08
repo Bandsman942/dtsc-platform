@@ -17,7 +17,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
       "Prix catalogue et fiscalité protégés côté serveur",
       "Promotions, coupons et dérogations auditables",
       "Retours partiels, échanges et remboursements contrôlés",
-      "Client CRM canonique sélectionnable au POS",
+      "Client CRM canonique au POS",
       "Historique achats/retours sans second référentiel client",
       "Fidélité transactionnelle avec ledger et idempotence",
       "Cartes-cadeaux et avoirs avec protection anti-double-spend",
