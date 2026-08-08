@@ -58,6 +58,18 @@ check(service.includes("RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN"), "Daily close m
 check(service.includes("Prisma.TransactionIsolationLevel.Serializable"), "Sensitive Retail operations must use serializable transactions");
 check(!service.includes("EnterpriseCoreRecord"), "Retail must never write EnterpriseCoreRecord");
 
+const createSaleStart = service.indexOf("export async function createRetailSale");
+const createSaleEnd = service.indexOf("export async function reverseRetailSale");
+const createRetailSaleBlock = createSaleStart >= 0 && createSaleEnd > createSaleStart ? service.slice(createSaleStart, createSaleEnd) : "";
+check(Boolean(createRetailSaleBlock), "POS sale implementation block must be discoverable for performance QA");
+for (const marker of ["catalogItemIds", "tenderAccountIds", "catalogById", "inventoryByCatalogId", "accountById", "enterpriseCashSession.findMany"]) {
+  check(createRetailSaleBlock.includes(marker), `POS sale batch-loading contract missing ${marker}`);
+}
+check(!createRetailSaleBlock.includes("enterpriseCatalogItem.findFirst"), "POS sale must not perform per-line catalog lookups inside the transaction");
+check(!createRetailSaleBlock.includes("enterpriseInventoryItem.findFirst"), "POS sale must not perform per-line inventory lookups inside the transaction");
+check(!createRetailSaleBlock.includes("assertFinancialAccount("), "POS sale must not perform per-tender account lookups after batch loading");
+check(!createRetailSaleBlock.includes("assertOpenCashSession("), "POS sale must not perform per-tender cash-session lookups after batch loading");
+
 const provisioning = read("lib/enterprise/retail/provisioning.ts");
 const providerContracts = [
   ['providerCode: "MPESA"', 'providerType: "MOBILE_MONEY"'],
@@ -141,7 +153,7 @@ const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups
 check(telcoRoute.includes("prepareCommercialTelcoTopup"), "Telco route must enforce phone/reference guardrails");
 
 const retailAccounting = read("lib/enterprise/retail/accounting.ts");
-for (const marker of ["finalizeRetailSaleAccounting", "valueInventoryIssue", "RETAIL_POS_SALE_POSTED", "finalizeRetailSaleReversalAccounting", "RETAIL_POS_SALE_REVERSED", "RETAIL_POS_INVENTORY_RETURN", "RETAIL_RETURN", "EnterpriseInventoryCostLayer"]) {
+for (const marker of ["finalizeRetailSaleAccounting", "valueInventoryIssue", "RETAIL_POS_SALE_POSTED", "finalizeRetailSaleReversalAccounting", "RETAIL_POS_SALE_REVERSED", "RETAIL_POS_INVENTORY_RETURN", "RETAIL_RETURN", "enterpriseInventoryCostLayer"]) {
   check(retailAccounting.includes(marker), `Shop 2 accounting orchestration missing ${marker}`);
 }
 const postingRegistry = read("lib/enterprise/accounting/posting-registry-final.ts");
@@ -198,4 +210,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Retail / Shop 2.0 QA passed (${expectedCodes.length} canonical modules, Retail Core compatibility and accounting contracts present).`);
+console.log(`Retail / Shop 2.0 QA passed (${expectedCodes.length} canonical modules, Retail Core compatibility, batched POS dependencies and accounting contracts present).`);
