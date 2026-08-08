@@ -6,6 +6,7 @@ import { getRetailMetricsByCurrency, prepareCommercialRetailSale } from "@/lib/e
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createRetailSale } from "@/lib/enterprise/retail/service";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -44,7 +45,10 @@ export async function POST(req: Request, { params }: Params) {
   const overrideReason = raw && typeof raw === "object" && "overrideReason" in raw && typeof (raw as { overrideReason?: unknown }).overrideReason === "string" ? (raw as { overrideReason: string }).overrideReason : null;
   try {
     const guarded = await prepareCommercialRetailSale(organizationId, parsed.data, { allowOverride: Boolean(auth.access.canAdminister), overrideReason });
-    const result = await createRetailSale(organizationId, auth.session.userId, guarded.input);
+    const result = await withRetailTransactionRetry(
+      () => createRetailSale(organizationId, auth.session.userId, guarded.input),
+      { maxAttempts: 3, baseDelayMs: 20 },
+    );
     const accounting = await finalizeRetailSaleAccounting(organizationId, auth.session.userId, result.sale.id);
     await writeAuditLog({
       userId: auth.session.userId,
