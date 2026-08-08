@@ -10,12 +10,23 @@ export const MOBILE_MONEY_FEE_COLLECTION_MODES = ["NONE", "CASH", "PROVIDER"] as
 export const TELCO_TOPUP_STATUSES = ["SUCCESS", "FAILED"] as const;
 export const RETAIL_CLOSE_ACCOUNT_TYPES = ["CASH", "MOBILE_MONEY", "CLEARING"] as const;
 
+const RETAIL_COMMERCIAL_MANAGER_PERMISSIONS = [
+  "enterprise.retail.pos.pricing.manage",
+  "enterprise.retail.pos.price_override.manage",
+  "enterprise.retail.pos.discount_override.manage",
+  "enterprise.retail.pos.tax_override.manage",
+  "enterprise.retail.pos.promotions.manage",
+  "enterprise.retail.pos.returns.create",
+  "enterprise.retail.pos.refunds.manage",
+] as const;
+
 export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   STORE_MANAGER: [
     "enterprise.admin.manage",
     "enterprise.admin.members.manage",
     "enterprise.activities.manage",
     "enterprise.retail.pos.manage",
+    ...RETAIL_COMMERCIAL_MANAGER_PERMISSIONS,
     "enterprise.retail.mobile_money.manage",
     "enterprise.retail.telco.manage",
     "enterprise.retail.close.manage",
@@ -28,6 +39,11 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   ],
   SALES_MANAGER: [
     "enterprise.retail.pos.manage",
+    "enterprise.retail.pos.pricing.manage",
+    "enterprise.retail.pos.price_override.manage",
+    "enterprise.retail.pos.discount_override.manage",
+    "enterprise.retail.pos.promotions.manage",
+    "enterprise.retail.pos.returns.create",
     "enterprise.retail.telco.manage",
     "enterprise.retail.mobile_money.read",
     "enterprise.retail.close.read",
@@ -38,6 +54,7 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   SELLER: [
     "enterprise.retail.pos.read",
     "enterprise.retail.pos.create",
+    "enterprise.retail.pos.returns.create",
     "enterprise.retail.telco.read",
     "enterprise.retail.telco.create",
     "enterprise.catalog.read",
@@ -47,6 +64,7 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   CASHIER: [
     "enterprise.retail.pos.read",
     "enterprise.retail.pos.create",
+    "enterprise.retail.pos.returns.create",
     "enterprise.retail.mobile_money.read",
     "enterprise.retail.mobile_money.create",
     "enterprise.retail.close.read",
@@ -74,6 +92,8 @@ export const RETAIL_POSITION_PERMISSIONS: Record<string, string[]> = {
   ],
   RETAIL_CONTROLLER: [
     "enterprise.retail.pos.read",
+    "enterprise.retail.pos.tax_override.manage",
+    "enterprise.retail.pos.refunds.manage",
     "enterprise.retail.mobile_money.read",
     "enterprise.retail.telco.read",
     "enterprise.retail.close.read",

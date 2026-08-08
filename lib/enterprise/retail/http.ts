@@ -11,7 +11,7 @@ import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_SECTOR_REQUIRED: "Cette entreprise doit utiliser le profil Commerce Retail pour accéder à cette opération.",
-  RETAIL_REFERENCE_INVALID: "Un site, dépôt, emplacement ou client sélectionné n’appartient pas à cette entreprise.",
+  RETAIL_REFERENCE_INVALID: "Une référence sélectionnée n’appartient pas à cette entreprise ou n’est plus active.",
   RETAIL_CATALOG_ITEM_INVALID: "Un article du ticket est introuvable ou inactif.",
   RETAIL_INVENTORY_ITEM_REQUIRED: "Un article suivi en stock doit disposer d’un article d’inventaire actif.",
   RETAIL_CURRENCY_MISMATCH: "La devise du produit ne correspond pas à la devise de l’opération.",
@@ -23,6 +23,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_PROVIDER_NOT_FOUND: "L’opérateur sélectionné n’est pas actif pour ce type d’opération.",
   RETAIL_FLOAT_ACCOUNT_REQUIRED: "L’opérateur doit être lié à un vrai compte de float avant la première opération.",
   RETAIL_SALE_NOT_FOUND: "Le ticket demandé est introuvable.",
+  RETAIL_SALE_NOT_RETURNABLE: "Ce ticket ne peut plus faire l’objet d’un retour.",
   RETAIL_SALE_ALREADY_REVERSED: "Ce ticket a déjà été annulé ou a été modifié depuis votre dernière lecture.",
   RETAIL_TRANSACTION_NOT_FOUND: "L’opération Mobile Money est introuvable.",
   RETAIL_TRANSACTION_CONFLICT: "Cette opération Mobile Money a déjà changé d’état.",
@@ -34,11 +35,28 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_CASH_COUNT_TOTAL_MISMATCH: "Le total des coupures doit correspondre au montant de caisse déclaré.",
   RETAIL_VARIANCE_REASON_REQUIRED: "Tout écart de caisse ou de float doit être justifié avant soumission.",
   RETAIL_DUPLICATE: "Une même référence ne peut apparaître deux fois dans cette opération.",
-  RETAIL_PHONE_INVALID: "Saisissez un numéro international valide, par exemple +243xxxxxxxxx.",
+  RETAIL_PHONE_INVALID: "Saisissez un numéro au format international avec l’indicatif du pays.",
   RETAIL_EXTERNAL_REFERENCE_REQUIRED: "La référence opérateur est obligatoire pour confirmer cette opération.",
   RETAIL_EXTERNAL_REFERENCE_DUPLICATE: "Cette référence opérateur a déjà été enregistrée pour cet opérateur.",
-  RETAIL_PRICE_OVERRIDE_FORBIDDEN: "Ce prix, cette remise ou cette taxe diffère du catalogue. Un responsable autorisé doit valider cette dérogation.",
+  RETAIL_PRICE_NOT_CONFIGURED: "Aucun prix de vente applicable n’est configuré pour un article du ticket.",
+  RETAIL_TAX_CONFIGURATION_REQUIRED: "Un article taxable n’est pas correctement relié au référentiel fiscal de l’entreprise.",
+  RETAIL_TAX_RATE_REQUIRED: "Aucun taux fiscal actif n’est applicable à la date de l’opération.",
+  RETAIL_PRICE_OVERRIDE_FORBIDDEN: "Vous n’êtes pas autorisé à déroger au prix résolu par le moteur Retail.",
+  RETAIL_DISCOUNT_OVERRIDE_FORBIDDEN: "Vous n’êtes pas autorisé à modifier manuellement la remise calculée.",
+  RETAIL_TAX_OVERRIDE_FORBIDDEN: "Vous n’êtes pas autorisé à modifier manuellement la taxe calculée.",
+  RETAIL_TAX_INCLUDED_OVERRIDE_FORBIDDEN: "Une taxe incluse dans le prix ne peut pas être modifiée manuellement sur ce ticket.",
   RETAIL_PRICE_OVERRIDE_REASON_REQUIRED: "Précisez le motif de la dérogation de prix, remise ou taxe.",
+  RETAIL_RETURN_LINE_INVALID: "Une ligne sélectionnée n’appartient pas au ticket d’origine.",
+  RETAIL_RETURN_QUANTITY_EXCEEDED: "La quantité demandée dépasse la quantité encore disponible pour retour.",
+  RETAIL_RETURN_STOCK_DISPOSITION_INVALID: "Cette ligne ne peut pas être réintégrée en stock avec la disposition choisie.",
+  RETAIL_RETURN_NOT_FOUND: "La demande de retour est introuvable.",
+  RETAIL_RETURN_CONFLICT: "La demande de retour a déjà changé d’état. Actualisez-la avant de réessayer.",
+  RETAIL_RETURN_SELF_APPROVAL_FORBIDDEN: "La personne qui demande le retour ne peut pas approuver elle-même le remboursement.",
+  RETAIL_EXCHANGE_SALE_INVALID: "Le ticket de remplacement choisi n’est pas compatible avec cet échange.",
+  RETAIL_REFUND_ACCOUNT_INVALID: "Le compte choisi ne peut pas être utilisé pour ce remboursement ou cette devise.",
+  RETAIL_REFUND_AMOUNT_INVALID: "Le montant du remboursement doit être positif et cohérent avec le retour.",
+  RETAIL_REFUND_TOTAL_MISMATCH: "Le total remboursé ne correspond pas au montant validé du retour.",
+  RETAIL_RETURN_PRODUCT_CONDITION_INVALID: "L’état du produit retourné n’est pas reconnu.",
   RETAIL_ORGANIZATION_NOT_FOUND: "L’entreprise Retail est introuvable.",
   NEGATIVE_STOCK_FORBIDDEN: "Le stock disponible est insuffisant pour terminer cette vente.",
   INVENTORY_BALANCE_CONFLICT: "Le stock a changé pendant l’opération. Actualisez les disponibilités et réessayez.",
@@ -88,7 +106,7 @@ export async function authorizeRetailRequest(
 }
 
 export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION_FAILED") {
-  if (error instanceof EnterpriseRetailError) return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.code, details: error.details }, { status: error.status });
+  if (error instanceof EnterpriseRetailError) return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || "L’opération Retail n’a pas pu être terminée.", details: error.details }, { status: error.status });
   if (error instanceof EnterpriseAccountingError) {
     return NextResponse.json({
       error: error.code,
@@ -97,7 +115,7 @@ export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION
     }, { status: error.status });
   }
   if (error instanceof EnterpriseDomainError) {
-    return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.message || error.code }, { status: error.status });
+    return NextResponse.json({ error: error.code, message: ERROR_MESSAGES[error.code] || error.message || "L’opération métier n’a pas pu être terminée." }, { status: error.status });
   }
   if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002") {
     return NextResponse.json({ error: "RETAIL_DUPLICATE", message: "Cette opération existe déjà ou sa référence est déjà utilisée." }, { status: 409 });

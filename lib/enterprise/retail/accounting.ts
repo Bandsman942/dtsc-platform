@@ -91,7 +91,7 @@ export async function finalizeRetailSaleAccounting(
   };
 }
 
-async function valueRetailInventoryReturn(
+export async function valueRetailInventoryReturn(
   organizationId: string,
   stockMovementId: string,
   actorUserId: string,
@@ -208,6 +208,42 @@ async function valueRetailInventoryReturn(
     data: { status: "POSTED", journalEntryId: posting.entry.id },
   });
   return { event: updated, posting };
+}
+
+export async function finalizeRetailReturnAccounting(
+  organizationId: string,
+  actorUserId: string,
+  returnId: string,
+) {
+  const retailReturn = await prisma.enterpriseRetailReturn.findFirst({
+    where: { id: returnId, organizationId, status: "COMPLETED" },
+    include: { lines: true },
+  });
+  if (!retailReturn) throw new EnterpriseAccountingError("RETAIL_POS_RETURN_ACCOUNTING_SOURCE_INVALID", 409);
+  const returnPosting = await postBusinessEvent(organizationId, actorUserId, {
+    postingEvent: "RETAIL_POS_RETURN_POSTED",
+    sourceEntityType: "EnterpriseRetailReturn",
+    sourceEntityId: retailReturn.id,
+  });
+  const inventoryReturnPostings = [];
+  for (const line of retailReturn.lines) {
+    if (!line.stockMovementId) continue;
+    const valuation = await valueRetailInventoryReturn(organizationId, line.stockMovementId, actorUserId);
+    inventoryReturnPostings.push({
+      returnLineId: line.id,
+      stockMovementId: line.stockMovementId,
+      valuationEventId: valuation.event.id,
+      journalEntryId: valuation.posting.entry.id,
+      idempotent: valuation.posting.idempotent,
+    });
+  }
+  return {
+    returnId: retailReturn.id,
+    returnNumber: retailReturn.number,
+    returnJournalEntryId: returnPosting.entry.id,
+    returnPostingIdempotent: returnPosting.idempotent,
+    inventoryReturnPostings,
+  };
 }
 
 export async function finalizeRetailSaleReversalAccounting(
