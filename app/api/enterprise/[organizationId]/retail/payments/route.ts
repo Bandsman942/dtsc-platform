@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { createRetailPaymentTransaction } from "@/lib/enterprise/retail/customer-payments";
@@ -16,7 +17,7 @@ export async function GET(req: Request, { params }: Params) {
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManagePayments && !permissions.canRefundPayments) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { page, pageSize, status } = retailListParams(req);
-  const where = { organizationId, ...(status ? { status } : {}) };
+  const where: Prisma.EnterpriseRetailPaymentTransactionWhereInput = { organizationId, ...(status ? { status } : {}) };
   const [items, total] = await Promise.all([
     prisma.enterpriseRetailPaymentTransaction.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseRetailPaymentTransaction.count({ where }),
