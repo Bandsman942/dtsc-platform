@@ -25,6 +25,7 @@ const sessionConfig = read("lib/session-config.ts");
 const sessionPolicy = read("lib/session-policy.ts");
 const session = read("lib/session.ts");
 const auth = read("lib/auth.ts");
+const sessionCookieSecurity = read("lib/session-cookie-security.ts");
 const preference = read("lib/session-preference.ts");
 const middleware = read("middleware.ts");
 const heartbeat = read("app/api/auth/heartbeat/route.ts");
@@ -56,7 +57,12 @@ check("5 minutes n'est plus la politique globale", !sessionConfig.includes("SESS
 check("durées idle autorisées et défaut 30 minutes", all(sessionConfig, ["15, 30, 60, 240, 480, 1440, 10080, 43200", "SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES", "= 30"]));
 check("durée absolue bornée à 30 jours", sessionConfig.includes("30 * 24 * 60 * 60") && all(sessionPolicy, ["authTime", "absoluteExp", "Math.min"]));
 check("token signé transporte la politique et reste compatible legacy", all(session, ["authTime?: number", "idleTimeoutMinutes?", "absoluteExp?: number", "constantTimeEqual", "verifySessionToken"]));
-check("cookie garde les flags et domaine SSO", all(auth, ['httpOnly: true', 'sameSite: "lax"', 'secure: process.env.NODE_ENV === "production"', "getAuthCookieDomain"]));
+check(
+  "cookie garde les flags, domaine SSO et politique Secure fail-safe",
+  all(auth, ['httpOnly: true', 'sameSite: "lax"', 'secure: shouldUseSecureSessionCookie()', "getAuthCookieDomain", "shouldUseSecureSessionCookie"]) &&
+    all(middleware, ['secure: shouldUseSecureSessionCookie()', "shouldUseSecureSessionCookie", "getAuthCookieDomain"]) &&
+    all(sessionCookieSecurity, ['NODE_ENV !== "production"', "LOOPBACK_HOSTS", "configuredRuntimeUrls.every(isHttpLoopbackUrl)", "if (!configuredRuntimeUrls.length) return true"]),
+);
 check("préférence de session utilise un modèle Prisma dédié", all(sessionSchema, ["model UserSessionPreference", "sessionIdleTimeoutMinutes", "@default(30)"]) && all(preference, ["prisma.userSessionPreference.findUnique", "prisma.userSessionPreference.upsert"]));
 check("lecture de préférence ne peut pas casser le login", all(preference, ["try {", "catch {", "return resolveSessionIdleTimeoutMinutes(undefined)"]));
 check("migration session crée table, défaut et whitelist SQL", all(migration, ['CREATE TABLE "UserSessionPreference"', "DEFAULT 30", "CHECK", 'CONSTRAINT "UserSessionPreference_pkey"', "43200"]));
