@@ -7,11 +7,18 @@ const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
 
 const page = read("app/enterprise-modules/RETAIL_POS/commercial/page.tsx");
-const ui = read("components/enterprise/professional/retail-commercial-control.tsx");
+const ui = read("components/enterprise/professional/retail-commercial-workspace.tsx");
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
 
-check(page.includes('resolveEnterpriseModuleAccess(session, organizationId, "RETAIL_POS", "read")'), "Commercial control page must enforce server module access");
-check(page.includes("RetailCommercialControl"), "Commercial control page must render the active structured workspace");
+check(page.includes("resolveEnterpriseModuleAccess({"), "Commercial control page must use the canonical server module access contract");
+for (const marker of [
+  "userId: session.userId",
+  "organizationId,",
+  'moduleCode: "RETAIL_POS"',
+  'action: "read"',
+  "if (!access.allowed)",
+]) check(page.includes(marker), `Commercial control page missing module access guard ${marker}`);
+check(page.includes("RetailCommercialWorkspace"), "Commercial control page must render the active structured workspace");
 check(dashboard.includes('/enterprise-modules/RETAIL_POS/commercial'), "Shop readiness must expose the commercial control deep link");
 for (const marker of [
   "commercial-permissions",
