@@ -69,3 +69,37 @@ export async function getRetailCommercialPermissions(userId: string, organizatio
     canManageRefunds: checks[6],
   };
 }
+
+export async function getRetailCustomerPaymentPermissions(userId: string, organizationId: string) {
+  const permissions = [
+    "enterprise.retail.customer.read",
+    "enterprise.retail.customer.create",
+    "enterprise.retail.customer.manage",
+    "enterprise.retail.loyalty.manage",
+    "enterprise.retail.loyalty.redeem",
+    "enterprise.retail.stored_value.issue",
+    "enterprise.retail.stored_value.redeem",
+    "enterprise.retail.stored_value.refund",
+    "enterprise.retail.payments.manage",
+    "enterprise.retail.payments.refund",
+    "enterprise.retail.providers.manage",
+    "enterprise.retail.providers.reconcile",
+    "enterprise.retail.devices.manage",
+  ] as const;
+  const checks = await Promise.all(permissions.map((permission) => hasRetailPermission(userId, organizationId, permission)));
+  return {
+    canReadCustomers: checks[0],
+    canCreateCustomers: checks[1],
+    canManageCustomers: checks[2],
+    canManageLoyalty: checks[3],
+    canRedeemLoyalty: checks[4],
+    canIssueStoredValue: checks[5],
+    canRedeemStoredValue: checks[6],
+    canRefundStoredValue: checks[7],
+    canManagePayments: checks[8],
+    canRefundPayments: checks[9],
+    canManageProviders: checks[10],
+    canReconcileProviders: checks[11],
+    canManageDevices: checks[12],
+  };
+}
