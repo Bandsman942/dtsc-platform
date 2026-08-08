@@ -17,6 +17,7 @@ on:
       - "tests/e2e/shop2-retail.spec.mjs"
       - "playwright.config.mjs"
       - "scripts/seed-shop2-behavioral-e2e.mjs"
+      - "scripts/qa-shop2-inventory-schema-parity.mjs"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
@@ -80,6 +81,8 @@ jobs:
         run: pnpm prisma:generate
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
+      - name: Verify Shop 2 inventory schema parity
+        run: node scripts/qa-shop2-inventory-schema-parity.mjs
       - name: Seed canonical ERP acceptance tenant
         run: node scripts/seed-erp-professional-e2e.mjs
       - name: Seed canonical Shop 2 behavioral tenant
