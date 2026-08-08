@@ -24,7 +24,7 @@ for (const marker of [
   "enterpriseCatalogPrice.findMany",
   "enterpriseTaxCode.findMany",
   "enterpriseTaxRate.findMany",
-  "EnterpriseRetailPriceCondition",
+  "enterpriseRetailPriceCondition.findMany",
   "enterpriseRetailPromotion.findMany",
   "enterpriseRetailPricingDecision.createMany",
   "enterpriseRetailPromotionRedemption.upsert",
