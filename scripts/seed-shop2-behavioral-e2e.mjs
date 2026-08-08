@@ -230,19 +230,32 @@ async function main() {
     update: { status: "ACTIVE", allowNegativeStock: false, archivedAt: null },
     create: { organizationId, catalogItemId: catalogItem.id, status: "ACTIVE", allowNegativeStock: false, createdByUserId: admin.id },
   });
-  await prisma.enterpriseInventoryBalance.upsert({
+
+  const existingBalance = await prisma.enterpriseInventoryBalance.findFirst({
     where: {
-      organizationId_inventoryItemId_warehouseId_storageLocationId_stockLotId: {
+      organizationId,
+      inventoryItemId: inventoryItem.id,
+      warehouseId: warehouse.id,
+      storageLocationId: null,
+      stockLotId: null,
+    },
+  });
+  if (existingBalance) {
+    await prisma.enterpriseInventoryBalance.update({
+      where: { id: existingBalance.id },
+      data: { quantityOnHand: 50, quantityReserved: 0 },
+    });
+  } else {
+    await prisma.enterpriseInventoryBalance.create({
+      data: {
         organizationId,
         inventoryItemId: inventoryItem.id,
         warehouseId: warehouse.id,
-        storageLocationId: null,
-        stockLotId: null,
+        quantityOnHand: 50,
+        quantityReserved: 0,
       },
-    },
-    update: { quantityOnHand: 50, quantityReserved: 0 },
-    create: { organizationId, inventoryItemId: inventoryItem.id, warehouseId: warehouse.id, quantityOnHand: 50, quantityReserved: 0 },
-  });
+    });
+  }
 
   const cashAccount = await prisma.enterpriseFinancialAccount.upsert({
     where: { organizationId_code: { organizationId, code: "SHOP2-E2E-CASH" } },
