@@ -1,0 +1,94 @@
+model EnterpriseRetailOfflineSnapshot {
+  id              String   @id @default(cuid())
+  organizationId  String
+  version         String
+  siteId          String
+  warehouseId     String
+  currencyCode    String
+  payloadHash     String
+  itemCount       Int
+  validFrom       DateTime
+  validUntil      DateTime
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, version])
+  @@index([organizationId, siteId, warehouseId, validUntil])
+  @@index([organizationId, createdAt])
+}
+
+model EnterpriseRetailOfflineSyncOperation {
+  id               String   @id @default(cuid())
+  organizationId   String
+  operationUuid    String
+  operationType    String
+  siteId            String
+  warehouseId       String
+  snapshotVersion   String
+  payloadHash       String
+  status            String   @default("RECEIVED")
+  serverEntityType  String?
+  serverEntityId    String?
+  conflictCode      String?
+  conflictJson      Json?
+  receivedByUserId  String
+  receivedAt        DateTime @default(now())
+  syncedAt          DateTime?
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, operationUuid])
+  @@index([organizationId, status, receivedAt])
+  @@index([organizationId, snapshotVersion])
+  @@index([organizationId, serverEntityType, serverEntityId])
+}
+
+model EnterpriseRetailCountryPackActivation {
+  id                String   @id @default(cuid())
+  organizationId    String
+  packCode          String
+  countryCode       String
+  packVersion       Int
+  status            String   @default("DRAFT")
+  capabilitiesJson  Json
+  configurationJson Json?
+  evidenceJson      Json?
+  activatedByUserId String
+  updatedByUserId   String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, packCode])
+  @@index([organizationId, countryCode, status])
+  @@index([archivedAt])
+}
+
+model EnterpriseRetailOnboardingRun {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  status                 String   @default("IN_PROGRESS")
+  currentStep            String   @default("COUNTRY")
+  countryCode            String?
+  currencyCode           String?
+  siteId                 String?
+  warehouseId            String?
+  cashFinancialAccountId String?
+  readinessJson          Json?
+  blockedReason          String?
+  createdByUserId        String
+  updatedByUserId        String?
+  revision               Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  completedAt            DateTime?
+  archivedAt             DateTime?
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, countryCode, status])
+  @@index([archivedAt])
+}
