@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { enterpriseReference, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { fulfillmentCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
+import { consumeEnterpriseInventoryReservationsTx } from "@/lib/enterprise/inventory/reservations";
 import { prisma } from "@/lib/prisma";
 
 type FulfillmentCreateInput = z.infer<typeof fulfillmentCreateSchema>;
@@ -14,15 +16,23 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
     });
     if (existing) return existing;
 
-    const order = await tx.enterpriseSalesOrder.findFirst({
-      where: { id: salesOrderId, organizationId, archivedAt: null },
-      include: { items: true },
-    });
+    const [order, retailOrchestration] = await Promise.all([
+      tx.enterpriseSalesOrder.findFirst({
+        where: { id: salesOrderId, organizationId, archivedAt: null },
+        include: { items: { include: { catalogItem: { select: { trackInventory: true } } } } },
+      }),
+      tx.enterpriseRetailOrderOrchestration.findFirst({
+        where: { organizationId, salesOrderId, archivedAt: null },
+      }),
+    ]);
     if (!order) throw new EnterpriseDomainError("SALES_ORDER_NOT_FOUND", 404);
     if (!["CONFIRMED", "IN_FULFILLMENT", "PARTIALLY_FULFILLED"].includes(order.status)) {
       throw new EnterpriseDomainError("SALES_ORDER_NOT_FULFILLABLE", 409);
     }
     if (order.revision !== input.revision) throw new EnterpriseDomainConflictError();
+    if (retailOrchestration && input.fulfillmentType === "PRODUCT_DELIVERY" && input.warehouseId !== retailOrchestration.fulfillmentWarehouseId) {
+      throw new EnterpriseDomainError("RETAIL_FULFILLMENT_WAREHOUSE_MISMATCH", 409);
+    }
 
     const requestedByItem = new Map(input.items.map((item) => [item.salesOrderItemId, item]));
     if (requestedByItem.size !== input.items.length) throw new EnterpriseDomainError("FULFILLMENT_ITEM_DUPLICATE");
@@ -63,6 +73,24 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       include: { items: true },
     });
 
+    if (retailOrchestration && input.fulfillmentType === "PRODUCT_DELIVERY") {
+      const trackedItems = input.items.filter((requestItem) => {
+        const orderItem = order.items.find((item) => item.id === requestItem.salesOrderItemId);
+        return Boolean(orderItem?.catalogItem?.trackInventory);
+      });
+      if (trackedItems.length) {
+        if (!input.warehouseId) throw new EnterpriseDomainError("RETAIL_FULFILLMENT_WAREHOUSE_REQUIRED", 409);
+        await consumeEnterpriseInventoryReservationsTx(tx, {
+          organizationId,
+          salesOrderId: order.id,
+          warehouseId: input.warehouseId,
+          fulfillmentId: fulfillment.id,
+          actorUserId,
+          items: trackedItems.map((item) => ({ salesOrderItemId: item.salesOrderItemId, quantityFulfilled: item.quantityFulfilled })),
+        });
+      }
+    }
+
     for (const item of input.items) {
       await tx.enterpriseSalesOrderItem.update({
         where: { id: item.salesOrderItemId },
@@ -87,6 +115,16 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
 
+    if (retailOrchestration) {
+      await tx.enterpriseRetailOrderOrchestration.updateMany({
+        where: { id: retailOrchestration.id, organizationId, archivedAt: null },
+        data: {
+          status: fullyFulfilled ? "FULFILLED" : partiallyFulfilled ? "PARTIALLY_FULFILLED" : retailOrchestration.status,
+          updatedByUserId: actorUserId,
+        },
+      });
+    }
+
     await publishEnterpriseEvent(tx, {
       organizationId,
       entityType: "EnterpriseSalesOrder",
@@ -96,8 +134,8 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       actorUserId,
       fromStatus: order.status,
       toStatus: targetStatus,
-      metadataJson: { fulfillmentId: fulfillment.id },
+      metadataJson: { fulfillmentId: fulfillment.id, retailOrchestrationId: retailOrchestration?.id || null },
     });
     return fulfillment;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
