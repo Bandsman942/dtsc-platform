@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { prisma } from "@/lib/prisma";
 import type { mobileMoneyCreateSchema, retailSaleCreateSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import type { z } from "zod";
@@ -111,26 +112,41 @@ export async function prepareCommercialTelcoTopup(organizationId: string, input:
 
 type CurrencyMetric = { currencyCode: string; count: number; amount: string };
 
-export async function getRetailMetricsByCurrency(organizationId: string, from: Date, to: Date) {
+export async function getRetailMetricsByCurrency(
+  organizationId: string,
+  from: Date,
+  to: Date,
+  moduleCode?: RetailModuleCode,
+) {
+  const includeSales = !moduleCode || moduleCode === "RETAIL_POS";
+  const includeMobileMoney = !moduleCode || moduleCode === "MOBILE_MONEY_AGENCY";
+  const includeTelco = !moduleCode || moduleCode === "TELCO_TOPUPS";
+
   const [sales, mobileMoney, topups] = await Promise.all([
-    prisma.enterpriseRetailSale.groupBy({
-      by: ["currencyCode"],
-      where: { organizationId, status: "COMPLETED", soldAt: { gte: from, lte: to } },
-      _count: { _all: true },
-      _sum: { grandTotal: true },
-    }),
-    prisma.enterpriseMobileMoneyTransaction.groupBy({
-      by: ["currencyCode", "transactionType"],
-      where: { organizationId, status: "CONFIRMED", occurredAt: { gte: from, lte: to } },
-      _count: { _all: true },
-      _sum: { principalAmount: true, providerCommissionAmount: true },
-    }),
-    prisma.enterpriseTelcoTopup.groupBy({
-      by: ["currencyCode"],
-      where: { organizationId, status: "SUCCESS", occurredAt: { gte: from, lte: to } },
-      _count: { _all: true },
-      _sum: { saleAmount: true, marginAmount: true },
-    }),
+    includeSales
+      ? prisma.enterpriseRetailSale.groupBy({
+          by: ["currencyCode"],
+          where: { organizationId, status: "COMPLETED", soldAt: { gte: from, lte: to } },
+          _count: { _all: true },
+          _sum: { grandTotal: true },
+        })
+      : Promise.resolve([]),
+    includeMobileMoney
+      ? prisma.enterpriseMobileMoneyTransaction.groupBy({
+          by: ["currencyCode", "transactionType"],
+          where: { organizationId, status: "CONFIRMED", occurredAt: { gte: from, lte: to } },
+          _count: { _all: true },
+          _sum: { principalAmount: true, providerCommissionAmount: true },
+        })
+      : Promise.resolve([]),
+    includeTelco
+      ? prisma.enterpriseTelcoTopup.groupBy({
+          by: ["currencyCode"],
+          where: { organizationId, status: "SUCCESS", occurredAt: { gte: from, lte: to } },
+          _count: { _all: true },
+          _sum: { saleAmount: true, marginAmount: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const saleMetrics: CurrencyMetric[] = sales.map((row) => ({ currencyCode: row.currencyCode, count: row._count._all, amount: (row._sum.grandTotal || new Prisma.Decimal(0)).toFixed() }));
