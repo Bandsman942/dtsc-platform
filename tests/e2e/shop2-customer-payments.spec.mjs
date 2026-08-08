@@ -60,7 +60,7 @@ test.describe.serial("Shop 2.0 customer, loyalty, stored value and payment accep
     await prisma.$disconnect();
   });
 
-  test("attaches canonical CRM customer to POS and protects balances under concurrency", async ({ browser }) => {
+  test("attaches canonical CRM customer and protects retail value under concurrency", async ({ browser }) => {
     const context = await browser.newContext({ baseURL: baseUrl });
     const page = await context.newPage();
     await signIn(page);
@@ -128,6 +128,28 @@ test.describe.serial("Shop 2.0 customer, loyalty, stored value and payment accep
     expect(sale.body.sale.customerBusinessPartyId).toBe(customer.id);
     expect(sale.body.loyalty.applied.length).toBeGreaterThan(0);
 
+    const history = await get(page, `/api/enterprise/${organizationId}/retail/customers/${customer.id}`);
+    expect(history.response.ok(), JSON.stringify(history.body)).toBeTruthy();
+    expect(history.body.customer.id).toBe(customer.id);
+    expect(history.body.sales.some((item) => item.id === sale.body.sale.id)).toBe(true);
+
+    const receiptJson = await get(page, `/api/enterprise/${organizationId}/retail/sales/${sale.body.sale.id}/receipt?lang=fr`);
+    expect(receiptJson.response.ok(), JSON.stringify(receiptJson.body)).toBeTruthy();
+    expect(receiptJson.body.ticket.number).toBe(sale.body.sale.number);
+    expect(receiptJson.body.customer.id).toBe(customer.id);
+    expect(receiptJson.body.privacy.providerSecretsDisclosed).toBe(false);
+    expect(receiptJson.body.customer.contactConsent).toBe(false);
+    expect(receiptJson.body.customer.email).toBeNull();
+    expect(receiptJson.body.customer.phone).toBeNull();
+
+    const receiptHtmlResponse = await page.context().request.get(`/api/enterprise/${organizationId}/retail/sales/${sale.body.sale.id}/receipt?format=html&lang=fr`);
+    expect(receiptHtmlResponse.ok()).toBeTruthy();
+    expect(receiptHtmlResponse.headers()["content-type"]).toContain("text/html");
+    const receiptHtml = await receiptHtmlResponse.text();
+    expect(receiptHtml).toContain(sale.body.sale.number);
+    if (customer.primaryEmail) expect(receiptHtml).not.toContain(customer.primaryEmail);
+    if (customer.primaryPhone) expect(receiptHtml).not.toContain(customer.primaryPhone);
+
     const loyaltyAccount = await prisma.enterpriseRetailLoyaltyAccount.findFirstOrThrow({ where: { organizationId, programId, customerBusinessPartyId: customer.id } });
     expect(asNumber(loyaltyAccount.pointsBalance)).toBeCloseTo(total, 5);
     const redeemEach = Math.max(10, Math.floor(total * 0.75 * 100) / 100);
@@ -169,6 +191,26 @@ test.describe.serial("Shop 2.0 customer, loyalty, stored value and payment accep
     const invalidTransition = await post(page, `/api/enterprise/${organizationId}/retail/payments/${payment.body.payment.id}`, { revision: captured.body.payment.revision, status: "AUTHORIZED", providerReference: "SHOP2-I3-INVALID" });
     expect(invalidTransition.response.status()).toBe(409);
     expect(invalidTransition.body.error).toBe("RETAIL_PAYMENT_TRANSITION_INVALID");
+    const refunded = await post(page, `/api/enterprise/${organizationId}/retail/payments/${payment.body.payment.id}`, { revision: captured.body.payment.revision, status: "REFUNDED", providerReference: "SHOP2-I3-REFUNDED" });
+    expect(refunded.response.ok(), JSON.stringify(refunded.body)).toBeTruthy();
+    expect(refunded.body.payment.status).toBe("REFUNDED");
+
+    const deviceCode = `I3-MANUAL-${Date.now()}`;
+    const device = await post(page, `/api/enterprise/${organizationId}/retail/devices`, {
+      siteId: site.id,
+      code: deviceCode,
+      name: "Imprimante manuelle E2E",
+      deviceType: "RECEIPT_PRINTER",
+      connectionMode: "MANUAL",
+      capabilitiesJson: { receipt: true },
+      settingsJson: null,
+      status: "ACTIVE",
+    });
+    expect(device.response.ok(), JSON.stringify(device.body)).toBeTruthy();
+    await page.goto("/enterprise-modules/RETAIL_POS");
+    await expect(page.getByText("Périphériques POS")).toBeVisible();
+    await expect(page.getByText("Imprimante manuelle E2E")).toBeVisible();
+    await expect(page.getByText("Mode manuel")).toBeVisible();
 
     const crossTenant = await get(page, `/api/enterprise/not-this-tenant/retail/customers?search=${encodeURIComponent(customer.legalName)}`);
     expect([401, 403, 404]).toContain(crossTenant.response.status());
