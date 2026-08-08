@@ -24,7 +24,11 @@ function decimal(value: Prisma.Decimal.Value = 0) {
   return new Prisma.Decimal(value);
 }
 
-function activeReservationWhere(organizationId: string, inventoryItemId: string, warehouseId?: string) {
+function activeReservationWhere(
+  organizationId: string,
+  inventoryItemId: string,
+  warehouseId?: string,
+): Prisma.EnterpriseInventoryReservationWhereInput {
   const now = new Date();
   return {
     organizationId,
@@ -32,7 +36,7 @@ function activeReservationWhere(organizationId: string, inventoryItemId: string,
     status: "ACTIVE",
     ...(warehouseId ? { warehouseId } : {}),
     OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-  } as const;
+  };
 }
 
 async function reservationRetry<T>(work: () => Promise<T>, maxAttempts = 3): Promise<T> {
@@ -130,6 +134,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
         : Promise.resolve(null),
     ]);
     if (!orderItem) throw new EnterpriseDomainError("SALES_ORDER_ITEM_NOT_FOUND", 404);
+    if (!orderItem.catalogItemId) throw new EnterpriseDomainError("SALES_ORDER_ITEM_CATALOG_REQUIRED", 409);
     if (!["CONFIRMED", "PROCESSING"].includes(orderItem.salesOrder.status)) throw new EnterpriseDomainError("SALES_ORDER_NOT_RESERVABLE", 409);
     if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
     if (input.storageLocationId && !storageLocation) throw new EnterpriseDomainError("STORAGE_LOCATION_NOT_FOUND", 404);
@@ -137,8 +142,9 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     const remainingOrderQuantity = decimal(orderItem.quantityOrdered).minus(orderItem.quantityFulfilled);
     if (decimal(input.quantity).gt(remainingOrderQuantity)) throw new EnterpriseDomainError("RESERVATION_EXCEEDS_ORDER_REMAINING", 409);
 
+    const catalogItemId = orderItem.catalogItemId;
     const inventoryItem = await tx.enterpriseInventoryItem.findFirst({
-      where: { organizationId, catalogItemId: orderItem.catalogItemId, status: "ACTIVE", archivedAt: null },
+      where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null },
       select: { id: true },
     });
     if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
@@ -165,7 +171,11 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
       .reduce((sum, row) => sum.plus(decimal(row.quantity).minus(row.fulfilledQuantity)), decimal());
     const available = onHand.minus(legacyReserved).minus(reserved);
     if (decimal(input.quantity).gt(available)) {
-      throw new EnterpriseDomainError("INVENTORY_RESERVATION_INSUFFICIENT", 409, { available: available.toFixed(), requested: String(input.quantity) });
+      throw new EnterpriseDomainError(
+        "INVENTORY_RESERVATION_INSUFFICIENT",
+        409,
+        `Stock disponible insuffisant: ${available.toFixed()} disponible(s), ${String(input.quantity)} demandé(s).`,
+      );
     }
 
     const reservation = await tx.enterpriseInventoryReservation.create({
