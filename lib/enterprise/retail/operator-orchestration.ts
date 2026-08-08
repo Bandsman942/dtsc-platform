@@ -280,23 +280,22 @@ export async function createConnectedMobileMoneyOperation(organizationId: string
     timeoutMs: providerTimeoutMs(connected.integration.settingsJson),
     retryMs: providerRetryMs(connected.integration.settingsJson),
   });
-  let operation = pending.operation;
-  if (!pending.idempotent) {
-    operation = await initiateProviderOperation({
-      connected,
-      operation,
-      amount: input.principalAmount,
-      currencyCode: input.currencyCode,
-      clientReference: `mobile-money:${input.idempotencyKey}`,
-      metadata: {
-        kind: "MOBILE_MONEY",
-        transactionType: input.transactionType,
-        customerPhone: input.customerPhone,
-        customerFeeAmount: input.customerFeeAmount,
-        feeCollectionMode: input.feeCollectionMode,
-      },
-    });
-  }
+  const operation = pending.idempotent
+    ? pending.operation
+    : await initiateProviderOperation({
+        connected,
+        operation: pending.operation,
+        amount: input.principalAmount,
+        currencyCode: input.currencyCode,
+        clientReference: `mobile-money:${input.idempotencyKey}`,
+        metadata: {
+          kind: "MOBILE_MONEY",
+          transactionType: input.transactionType,
+          customerPhone: input.customerPhone,
+          customerFeeAmount: input.customerFeeAmount,
+          feeCollectionMode: input.feeCollectionMode,
+        },
+      });
   const finalized = await finalizeConfirmedRetailOperatorOperation(organizationId, operation.id);
   return { mode: "CONNECTED" as const, operation, finalized, idempotent: pending.idempotent };
 }
@@ -323,22 +322,21 @@ export async function createConnectedTelcoTopupOperation(organizationId: string,
     timeoutMs: providerTimeoutMs(connected.integration.settingsJson),
     retryMs: providerRetryMs(connected.integration.settingsJson),
   });
-  let operation = pending.operation;
-  if (!pending.idempotent) {
-    operation = await initiateProviderOperation({
-      connected,
-      operation,
-      amount: input.saleAmount,
-      currencyCode: input.currencyCode,
-      clientReference: `telco-topup:${input.idempotencyKey}`,
-      metadata: {
-        kind: "TELCO_TOPUP",
-        destinationPhone: input.destinationPhone,
-        offerLabel: input.offerLabel,
-        operatorCost: input.operatorCost,
-      },
-    });
-  }
+  const operation = pending.idempotent
+    ? pending.operation
+    : await initiateProviderOperation({
+        connected,
+        operation: pending.operation,
+        amount: input.saleAmount,
+        currencyCode: input.currencyCode,
+        clientReference: `telco-topup:${input.idempotencyKey}`,
+        metadata: {
+          kind: "TELCO_TOPUP",
+          destinationPhone: input.destinationPhone,
+          offerLabel: input.offerLabel,
+          operatorCost: input.operatorCost,
+        },
+      });
   const finalized = await finalizeConfirmedRetailOperatorOperation(organizationId, operation.id);
   return { mode: "CONNECTED" as const, operation, finalized, idempotent: pending.idempotent };
 }
