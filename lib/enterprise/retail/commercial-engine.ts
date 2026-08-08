@@ -35,7 +35,9 @@ type PricingDecision = {
   quantity: Prisma.Decimal;
   baseUnitPrice: Prisma.Decimal;
   resolvedUnitPrice: Prisma.Decimal;
+  serviceUnitPrice: Prisma.Decimal;
   discountAmount: Prisma.Decimal;
+  serviceDiscountAmount: Prisma.Decimal;
   taxCodeId: string | null;
   taxRate: Prisma.Decimal;
   taxIncluded: boolean;
@@ -155,30 +157,41 @@ function promotionDiscount(
   return decimal(0);
 }
 
-async function resolveTax(
+async function resolveTaxByItem(
   organizationId: string,
-  item: { taxable: boolean; taxCode: string | null },
+  items: Array<{ id: string; taxable: boolean; taxCode: string | null }>,
   effectiveAt: Date,
 ) {
-  if (!item.taxable) return { taxCodeId: null as string | null, taxRate: decimal(0) };
-  if (!item.taxCode) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
-  const taxCode = await prisma.enterpriseTaxCode.findFirst({
-    where: { organizationId, code: item.taxCode, isActive: true },
-    select: { id: true },
-  });
-  if (!taxCode) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409, { taxCode: item.taxCode });
-  const rate = await prisma.enterpriseTaxRate.findFirst({
+  const requiredCodes = Array.from(new Set(items.filter((item) => item.taxable).map((item) => item.taxCode).filter((value): value is string => Boolean(value))));
+  if (items.some((item) => item.taxable && !item.taxCode)) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
+  if (!requiredCodes.length) return new Map(items.map((item) => [item.id, { taxCodeId: null as string | null, taxRate: decimal(0) }]));
+  const taxCodes = await prisma.enterpriseTaxCode.findMany({ where: { organizationId, code: { in: requiredCodes }, isActive: true }, select: { id: true, code: true } });
+  if (taxCodes.length !== requiredCodes.length) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
+  const rates = await prisma.enterpriseTaxRate.findMany({
     where: {
       organizationId,
-      taxCodeId: taxCode.id,
+      taxCodeId: { in: taxCodes.map((taxCode) => taxCode.id) },
       status: "ACTIVE",
       effectiveFrom: { lte: effectiveAt },
       OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveAt } }],
     },
     orderBy: { effectiveFrom: "desc" },
   });
-  if (!rate) throw new EnterpriseRetailError("RETAIL_TAX_RATE_REQUIRED", 409, { taxCode: item.taxCode });
-  return { taxCodeId: taxCode.id, taxRate: rate.rate };
+  const latestRateByCodeId = new Map<string, (typeof rates)[number]>();
+  for (const rate of rates) if (!latestRateByCodeId.has(rate.taxCodeId)) latestRateByCodeId.set(rate.taxCodeId, rate);
+  const taxCodeByCode = new Map(taxCodes.map((taxCode) => [taxCode.code, taxCode]));
+  const result = new Map<string, { taxCodeId: string | null; taxRate: Prisma.Decimal }>();
+  for (const item of items) {
+    if (!item.taxable) {
+      result.set(item.id, { taxCodeId: null, taxRate: decimal(0) });
+      continue;
+    }
+    const taxCode = item.taxCode ? taxCodeByCode.get(item.taxCode) : null;
+    const rate = taxCode ? latestRateByCodeId.get(taxCode.id) : null;
+    if (!taxCode || !rate) throw new EnterpriseRetailError("RETAIL_TAX_RATE_REQUIRED", 409, { taxCode: item.taxCode });
+    result.set(item.id, { taxCodeId: taxCode.id, taxRate: rate.rate });
+  }
+  return result;
 }
 
 async function resolvePricingDecisions(
@@ -204,6 +217,7 @@ async function resolvePricingDecisions(
   });
   if (items.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
   const itemById = new Map(items.map((item) => [item.id, item]));
+  const taxByItemId = await resolveTaxByItem(organizationId, items, effectiveAt);
 
   const prices = await prisma.enterpriseCatalogPrice.findMany({
     where: {
@@ -335,25 +349,34 @@ async function resolvePricingDecisions(
     }
     if (discountAmount.greaterThan(base.gross)) throw new EnterpriseRetailError("RETAIL_LINE_TOTAL_INVALID", 409, { catalogItemId: base.item.id });
 
-    const tax = await resolveTax(organizationId, base.item, effectiveAt);
+    const tax = taxByItemId.get(base.item.id) || { taxCodeId: null, taxRate: decimal(0) };
     const taxIncluded = Boolean(base.selected?.taxIncluded);
-    const afterDiscount = money(base.gross.minus(discountAmount));
+    const afterDiscountCustomerTotal = money(base.gross.minus(discountAmount));
+    const divisor = decimal(1).plus(tax.taxRate);
+    let serviceUnitPrice = base.resolvedUnitPrice;
+    let serviceDiscountAmount = discountAmount;
     let computedTax = decimal(0);
-    let lineTotal = afterDiscount;
-    if (tax.taxRate.gt(0)) {
-      if (taxIncluded) computedTax = money(afterDiscount.times(tax.taxRate).div(decimal(1).plus(tax.taxRate)));
-      else {
-        computedTax = money(afterDiscount.times(tax.taxRate));
-        lineTotal = money(afterDiscount.plus(computedTax));
-      }
+    let lineTotal = afterDiscountCustomerTotal;
+
+    if (tax.taxRate.gt(0) && taxIncluded) {
+      serviceUnitPrice = money(base.resolvedUnitPrice.div(divisor));
+      serviceDiscountAmount = money(discountAmount.div(divisor));
+      const netAfterDiscount = money(base.quantity.times(serviceUnitPrice).minus(serviceDiscountAmount));
+      computedTax = money(afterDiscountCustomerTotal.minus(netAfterDiscount));
+      lineTotal = afterDiscountCustomerTotal;
+    } else if (tax.taxRate.gt(0)) {
+      computedTax = money(afterDiscountCustomerTotal.times(tax.taxRate));
+      lineTotal = money(afterDiscountCustomerTotal.plus(computedTax));
     }
+
     const requestedTax = decimal(base.line.requestedTaxAmount || 0);
     let taxAmount = computedTax;
     let taxOverride = false;
     if (!requestedTax.isZero() && !requestedTax.equals(computedTax)) {
       if (!permissions.canOverrideTax) throw new EnterpriseRetailError("RETAIL_TAX_OVERRIDE_FORBIDDEN", 403, { catalogItemId: base.item.id });
+      if (taxIncluded) throw new EnterpriseRetailError("RETAIL_TAX_INCLUDED_OVERRIDE_FORBIDDEN", 409, { catalogItemId: base.item.id });
       taxAmount = requestedTax;
-      lineTotal = taxIncluded ? afterDiscount : money(afterDiscount.plus(taxAmount));
+      lineTotal = money(afterDiscountCustomerTotal.plus(taxAmount));
       taxOverride = true;
     }
     if (base.priceOverride || discountOverride || taxOverride) anyOverride = true;
@@ -363,7 +386,9 @@ async function resolvePricingDecisions(
       quantity: base.quantity,
       baseUnitPrice: base.baseUnitPrice,
       resolvedUnitPrice: base.resolvedUnitPrice,
+      serviceUnitPrice,
       discountAmount,
+      serviceDiscountAmount,
       taxCodeId: tax.taxCodeId,
       taxRate: tax.taxRate,
       taxIncluded,
@@ -429,8 +454,8 @@ export async function prepareCommercialRetailSaleV2(
         if (!decision) throw new EnterpriseRetailError("RETAIL_PRICE_NOT_CONFIGURED", 409, { catalogItemId: line.catalogItemId });
         return {
           ...line,
-          unitPrice: Number(decision.resolvedUnitPrice.toString()),
-          discountAmount: Number(decision.discountAmount.toString()),
+          unitPrice: Number(decision.serviceUnitPrice.toString()),
+          discountAmount: Number(decision.serviceDiscountAmount.toString()),
           taxAmount: Number(decision.taxAmount.toString()),
         };
       }),
@@ -468,10 +493,11 @@ export async function previewRetailCommercialPricing(
       pricingSource: decision.pricingSource,
       promotions: decision.promotions.map((promotion) => ({ ...promotion, discountAmount: promotion.discountAmount.toFixed() })),
     })),
-    subtotal: money(decisions.reduce((sum, decision) => sum.plus(decision.quantity.times(decision.resolvedUnitPrice)), decimal(0))).toFixed(),
-    discountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.discountAmount), decimal(0))).toFixed(),
+    subtotal: money(decisions.reduce((sum, decision) => sum.plus(decision.quantity.times(decision.serviceUnitPrice)), decimal(0))).toFixed(),
+    discountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.serviceDiscountAmount), decimal(0))).toFixed(),
     taxTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.taxAmount), decimal(0))).toFixed(),
     grandTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), decimal(0))).toFixed(),
+    customerDiscountTotal: money(decisions.reduce((sum, decision) => sum.plus(decision.discountAmount), decimal(0))).toFixed(),
     currencyCode: input.currencyCode,
   };
 }
