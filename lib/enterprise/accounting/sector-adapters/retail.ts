@@ -63,9 +63,9 @@ function retailTenderLines(
 export const buildRetailPosSalePosting: PostingBuilder = async (tx, input) => {
   const { sale, accountById } = await loadRetailSaleForPosting(tx, input, ["COMPLETED", "REVERSED"]);
   const revenue = sale.subtotal.minus(sale.discountTotal);
-  if (revenue.isNegative()) throw new EnterpriseAccountingError("RETAIL_POS_REVENUE_INVALID", 409);
+  if (revenue.lt(0)) throw new EnterpriseAccountingError("RETAIL_POS_REVENUE_INVALID", 409);
   const lines: PostingLineDraft[] = retailTenderLines(sale, accountById, "DEBIT");
-  if (revenue.isPositive()) {
+  if (revenue.gt(0)) {
     lines.push({
       accountMappingKey: "SALES_REVENUE",
       description: `Retail revenue ${sale.number}`,
@@ -76,7 +76,7 @@ export const buildRetailPosSalePosting: PostingBuilder = async (tx, input) => {
       siteId: sale.siteId,
     });
   }
-  if (sale.taxTotal.isPositive()) {
+  if (sale.taxTotal.gt(0)) {
     lines.push({
       accountMappingKey: "TAX_PAYABLE",
       description: `Retail output tax ${sale.number}`,
@@ -106,7 +106,7 @@ export const buildRetailPosSaleReversalPosting: PostingBuilder = async (tx, inpu
   const { sale, accountById } = await loadRetailSaleForPosting(tx, input, ["REVERSED"]);
   const revenue = sale.subtotal.minus(sale.discountTotal);
   const lines: PostingLineDraft[] = [];
-  if (revenue.isPositive()) {
+  if (revenue.gt(0)) {
     lines.push({
       accountMappingKey: "SALES_REVENUE",
       description: `Retail revenue reversal ${sale.number}`,
@@ -117,7 +117,7 @@ export const buildRetailPosSaleReversalPosting: PostingBuilder = async (tx, inpu
       siteId: sale.siteId,
     });
   }
-  if (sale.taxTotal.isPositive()) {
+  if (sale.taxTotal.gt(0)) {
     lines.push({
       accountMappingKey: "TAX_PAYABLE",
       description: `Retail output tax reversal ${sale.number}`,
@@ -154,7 +154,7 @@ export const buildRetailInventoryReturnPosting: PostingBuilder = async (tx, inpu
       status: { in: ["APPROVED", "POSTED"] },
     },
   });
-  if (!event || !event.totalCost.isPositive()) throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_NOT_POSTABLE", 409);
+  if (!event || !event.totalCost.gt(0)) throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_NOT_POSTABLE", 409);
   return {
     organizationId: input.organizationId,
     journalType: "INVENTORY",
