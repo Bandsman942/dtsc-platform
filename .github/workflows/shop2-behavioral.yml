@@ -22,6 +22,7 @@ on:
       - "scripts/seed-shop2-behavioral-e2e.mjs"
       - "scripts/qa-shop2-inventory-schema-parity.mjs"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
+      - "scripts/qa-shop2-commercial-engine.mjs"
       - "scripts/qa-session-cookie-security.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
@@ -100,6 +101,7 @@ jobs:
         run: |
           node scripts/qa-retail-telco-mobile-money.mjs
           node scripts/qa-shop2-retail-frontend-contract.mjs
+          node scripts/qa-shop2-commercial-engine.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
       - name: Build production application
         run: pnpm build
