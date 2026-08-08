@@ -4,6 +4,7 @@ import { getRetailActiveCustomerIdFromCookieHeader, RETAIL_ACTIVE_CUSTOMER_COOKI
 import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
 import { prisma } from "@/lib/prisma";
+import { shouldUseSecureSessionCookie } from "@/lib/session-cookie-security";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -22,7 +23,7 @@ async function getCustomer(organizationId: string, customerId: string | null) {
 }
 
 function clearCookie(response: NextResponse) {
-  response.cookies.set(RETAIL_ACTIVE_CUSTOMER_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
+  response.cookies.set(RETAIL_ACTIVE_CUSTOMER_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: shouldUseSecureSessionCookie(), path: "/", maxAge: 0 });
   return response;
 }
 
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: Params) {
   const customer = await getCustomer(organizationId, customerId);
   if (!customer) return NextResponse.json({ error: "RETAIL_CUSTOMER_INVALID", message: "Le client sélectionné n’est pas actif dans cette entreprise." }, { status: 409 });
   const response = NextResponse.json({ ok: true, customer });
-  response.cookies.set(RETAIL_ACTIVE_CUSTOMER_COOKIE, retailActiveCustomerCookieValue(organizationId, customer.id), { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 8 * 60 * 60 });
+  response.cookies.set(RETAIL_ACTIVE_CUSTOMER_COOKIE, retailActiveCustomerCookieValue(organizationId, customer.id), { httpOnly: true, sameSite: "lax", secure: shouldUseSecureSessionCookie(), path: "/", maxAge: 8 * 60 * 60 });
   await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_ACTIVE_CUSTOMER_SELECTED", entity: "EnterpriseBusinessParty", entityId: customer.id, request: req, metadata: { organizationId } });
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-active-customer", action: "select" } });
   return response;
