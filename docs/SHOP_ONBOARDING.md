@@ -6,12 +6,16 @@ Ce document décrit le parcours canonique d’onboarding d’une entreprise clie
 
 - secteur : `COMMERCE_RETAIL` ;
 - template : Commerce Retail v2 ;
-- profil métier : `RETAIL_TELCO_MOBILE_MONEY` ;
-- modules opérationnels Shop : `RETAIL_POS`, `MOBILE_MONEY_AGENCY`, `TELCO_TOPUPS`, `RETAIL_DAILY_CLOSE`.
+- profil métier par défaut : `RETAIL_CORE` ;
+- profil spécialisé rétrocompatible : `RETAIL_TELCO_MOBILE_MONEY` ;
+- cœur opérationnel Shop : `RETAIL_POS` et `RETAIL_DAILY_CLOSE` ;
+- extensions optionnelles : `MOBILE_MONEY_AGENCY` et `TELCO_TOPUPS`.
 
 Il couvre l’onboarding jusqu’à la première journée d’exploitation contrôlée.
 
-Le provisioning d’une entreprise cliente reste actuellement piloté par DTSC depuis la Console interne. Ce document ne décrit donc pas un parcours public de création d’organisation en libre-service.
+Le provisioning d’une entreprise cliente reste actuellement piloté par DTSC depuis la Console interne. Ce document ne décrit donc pas encore un parcours public de création d’organisation en libre-service.
+
+Le produit Shop déjà accepté conserve son statut `COMMERCIAL_READY`. Le programme Shop 2.0 est une évolution en quatre itérations et ne doit pas être présenté comme une certification globale achevée.
 
 ---
 
@@ -19,7 +23,7 @@ Le provisioning d’une entreprise cliente reste actuellement piloté par DTSC d
 
 ### STARTER — Shop Essentials
 
-Objectif : préparer la digitalisation sans exploiter encore le Shop complet.
+Objectif : préparer la digitalisation sans exploiter encore le POS complet.
 
 Capacités principales :
 
@@ -29,31 +33,34 @@ Capacités principales :
 - documents ;
 - données de préparation conservées pour une future montée de plan.
 
-Les quatre modules opérationnels Retail exigent au minimum `BUSINESS`. STARTER ne doit donc pas être vendu comme un POS complet.
-
-Parcours conseillé : créer l’entreprise, appliquer le template Shop, préparer l’identité, le catalogue, les clients et les documents, puis passer à BUSINESS avant le démarrage opérationnel.
+Les modules Retail opérationnels exigent au minimum `BUSINESS`. STARTER ne doit donc pas être vendu comme un POS complet.
 
 ### BUSINESS — Shop Operations
 
 Offre opérationnelle recommandée pour un Shop réel.
 
-Elle permet, selon les permissions et dépendances :
+Socle :
 
 - sites et dépôts ;
 - inventaire et logistique ;
 - fournisseurs et achats ;
-- Finance, Trésorerie et caisse ;
+- Finance, Trésorerie, comptabilité et caisse ;
 - POS ;
-- Mobile Money ;
-- Télécom et forfaits ;
 - clôture journalière ;
 - reporting par devise et consolidation FX.
 
+Extensions activables selon le commerce :
+
+- Mobile Money ;
+- Télécom et forfaits.
+
+Un commerce standard n’a pas à activer ces extensions pour utiliser Shop.
+
 ### ENTERPRISE — Shop Scale
 
-Reprend le même cœur opérationnel Shop que BUSINESS et ajoute la capacité de montée en échelle, de gouvernance et les autres capacités Enterprise éligibles.
+Reprend le cœur opérationnel BUSINESS et ajoute la capacité de montée en échelle, la gouvernance et les autres capacités Enterprise éligibles.
 
-Les quatre modules Retail ne deviennent pas meilleurs simplement parce que le plan est ENTERPRISE : le différentiel commercial porte sur l’échelle, la gouvernance et les capacités transverses du plan.
+Les évolutions offline, multi-store avancées et omnicanales font partie de Shop 2.0 itération 4 et ne doivent pas être promises comme terminées avant leur certification.
 
 ---
 
@@ -62,20 +69,22 @@ Les quatre modules Retail ne deviennent pas meilleurs simplement parce que le pl
 Depuis la Console DTSC :
 
 1. créer une organisation de type `CLIENT` ;
-2. renseigner le nom, le pays, la ville, les contacts et le fuseau horaire ;
-3. sélectionner le secteur `COMMERCE_RETAIL` ;
+2. renseigner nom, pays, ville, contacts et fuseau horaire ;
+3. sélectionner `COMMERCE_RETAIL` ;
 4. choisir STARTER, BUSINESS ou ENTERPRISE ;
 5. désigner l’administrateur entreprise ;
-6. activer l’application du template sectoriel.
+6. appliquer le template sectoriel.
 
-Résultat attendu :
+Résultat attendu pour un nouveau tenant :
 
 - organisation créée ;
 - abonnement créé si un plan est renseigné ;
 - administrateur invité ;
 - template Retail appliqué ;
-- profil `RETAIL_TELCO_MOBILE_MONEY` provisionné ;
-- providers Retail provisionnés.
+- profil `RETAIL_CORE` actif ;
+- aucun compte, float, solde ou provider réglementé inventé.
+
+Si un tenant existant utilise déjà `RETAIL_TELCO_MOBILE_MONEY`, son profil reconnu et ses providers restent préservés pour éviter toute régression.
 
 L’administrateur doit accepter son invitation avant de gérer réellement l’entreprise.
 
@@ -87,93 +96,89 @@ Dans l’entreprise :
 
 1. confirmer que le secteur affiché est Commerce Retail ;
 2. confirmer que le profil Retail est actif ;
-3. vérifier que les modules autorisés correspondent au plan ;
+3. vérifier les modules autorisés par le plan ;
 4. utiliser le bloc `Mise en service du Shop` comme checklist persistante.
 
-Les wallets pré-provisionnés sont :
+Pour `RETAIL_CORE`, Mobile Money et Télécom ne sont pas des prérequis.
+
+Si le client achète l’extension spécialisée, les wallets et réseaux configurables restent distincts :
+
+### Wallets Mobile Money
 
 - M-Pesa ;
 - Orange Money ;
 - Airtel Money ;
 - Afrimoney.
 
-Les réseaux Télécom pré-provisionnés sont :
+### Réseaux Télécom
 
 - Vodacom ;
 - Orange ;
 - Airtel ;
 - Africell.
 
-Wallet et réseau sont deux concepts distincts.
+Wallet et réseau sont deux concepts différents.
 
 ---
 
-## 5. Étape 3 — Organiser les collaborateurs et les responsabilités
+## 5. Étape 3 — Organiser les collaborateurs et responsabilités
 
-Le template Shop prévoit notamment :
+Postes du cœur Retail :
 
 - `STORE_MANAGER` ;
 - `SALES_MANAGER` ;
 - `SELLER` ;
 - `CASHIER` ;
-- `MOBILE_MONEY_AGENT` ;
 - `STOCK_KEEPER` ;
 - `STOCK_MANAGER` ;
 - `PURCHASE_MANAGER` ;
 - `RETAIL_CONTROLLER`.
 
-Départements canoniques :
+Poste d’extension :
+
+- `MOBILE_MONEY_AGENT` lorsque Mobile Money est activé.
+
+Départements fondamentaux :
 
 - Direction ;
-- Ventes / Télécom ;
-- Mobile Money / Caisse ;
 - Stock / Achats ;
 - Finance / Contrôle.
 
-Règle : attribuer les postes avant l’exploitation et ne donner que les permissions nécessaires.
+Les départements Ventes/Télécom et Mobile Money/Caisse peuvent être utilisés lorsque les extensions et l’organisation le nécessitent.
 
-Le contrôleur doit rester distinct de l’initiateur lorsqu’une validation indépendante est requise.
+Règle : attribuer les postes avant l’exploitation et ne donner que les permissions nécessaires. Le contrôleur doit rester distinct de l’initiateur lorsqu’une validation indépendante est requise.
 
 ---
 
-## 6. Étape 4 — Créer les sites, dépôts et emplacements
+## 6. Étape 4 — Créer sites, dépôts et emplacements
 
 Dans `Sites & Entrepôts` :
 
 1. créer le site physique du Shop ;
-2. créer au moins un dépôt/entrepôt ;
-3. créer les emplacements de stockage si nécessaire ;
-4. vérifier que les articles suivis en stock peuvent être rattachés au dépôt réel.
+2. créer au moins un dépôt ;
+3. créer les emplacements nécessaires ;
+4. vérifier que les articles suivis en stock sont rattachés au dépôt réel.
 
-Le POS utilise ces référentiels canoniques. Il ne crée pas de dépôt parallèle.
+Le POS réutilise ces référentiels canoniques et ne crée pas de stock parallèle.
 
 ---
 
 ## 7. Étape 5 — Préparer le catalogue
 
-Dans `Catalogue` :
-
-Pour chaque produit ou service, renseigner au minimum :
+Dans `Catalogue`, renseigner au minimum :
 
 - code ;
 - SKU si utilisé ;
 - libellé ;
 - type produit/service ;
 - prix de vente indicatif ;
-- coût indicatif si pertinent ;
+- coût/valorisation lorsque pertinent ;
 - devise ;
 - suivi de stock oui/non.
 
-Exemples :
+Exemples : téléphone, coque, chargeur, accessoires, service technique et forfait Télécom si l’extension est utilisée.
 
-- téléphone ;
-- coque ;
-- chargeur ;
-- accessoires ;
-- service technique ;
-- forfait Télécom fréquent.
-
-Le POS protège le prix catalogue côté serveur. Une modification de prix/remise/taxe est une dérogation réservée à un responsable autorisé et doit être motivée.
+Le POS actuel protège le prix catalogue côté serveur. Une modification manuelle de prix/remise/taxe est une dérogation réservée à un responsable autorisé et doit être motivée. Le Pricing & Tax Engine complet appartient à Shop 2.0 itération 2.
 
 ---
 
@@ -182,45 +187,56 @@ Le POS protège le prix catalogue côté serveur. Une modification de prix/remis
 Dans `Inventaire & Logistique` :
 
 1. créer/rattacher les articles d’inventaire ;
-2. effectuer l’entrée de stock initiale via le mouvement métier approprié ;
+2. effectuer l’entrée initiale via le mouvement métier approprié ;
 3. vérifier les quantités disponibles par dépôt ;
-4. ne pas contourner l’inventaire en modifiant directement des soldes calculés.
+4. vérifier la valorisation Finance Inventory ;
+5. ne jamais modifier directement des soldes calculés.
 
-Avant la première vente, le POS doit afficher une disponibilité cohérente pour les articles suivis en stock.
+Avant la première vente, les articles suivis en stock doivent disposer de couches de coût compatibles avec la valorisation commune lorsque le COGS doit être posté.
 
 ---
 
-## 9. Étape 7 — Configurer Finance
+## 9. Étape 7 — Configurer Finance et la comptabilité POS
 
 ### 9.1 Devise fonctionnelle
 
-Configurer la devise fonctionnelle de l’entreprise dans Finance.
+Configurer la devise fonctionnelle dans Finance. Le provisioning Retail la réutilise en priorité comme devise de base.
 
-Une fois des écritures comptables postées, le changement de devise fonctionnelle est verrouillé par le moteur Finance.
+Une fois des écritures comptables postées, le moteur Finance protège le changement de devise fonctionnelle.
 
 ### 9.2 Devise de présentation
 
-Si l’entreprise souhaite afficher ses rapports consolidés dans une autre devise, renseigner `presentationCurrencyCode`.
+Si l’entreprise souhaite consolider ses rapports dans une autre devise, renseigner `presentationCurrencyCode`.
 
-La cible de reporting est :
+### 9.3 Plan comptable et mappings obligatoires
 
-1. devise de présentation si configurée ;
-2. sinon devise fonctionnelle.
+Avant la première vente, Finance doit être `READY` et les mappings suivants doivent être actifs :
 
-### 9.3 Comptes financiers
+- `SALES_REVENUE` ;
+- `TAX_PAYABLE` ;
+- `COST_OF_SALES` ;
+- `INVENTORY`.
+
+Les journaux actifs suivants sont requis :
+
+- `SALES` ;
+- `INVENTORY`.
+
+Une période comptable couvrant la date de vente doit être ouverte ou soft-closed selon les règles Finance.
+
+### 9.4 Comptes financiers
 
 Créer les vrais comptes nécessaires :
 
-- `CASH` pour chaque caisse/devise ;
-- `MOBILE_MONEY` pour les floats wallets ;
-- `CLEARING` ou autre compte autorisé pour les floats Télécom selon l’organisation ;
-- `BANK` si nécessaire.
+- `CASH` pour les caisses ;
+- `BANK` / `CLEARING` selon les encaissements ;
+- `MOBILE_MONEY` uniquement si l’extension l’exige.
 
-DTSC ne doit jamais inventer un compte, un mapping ou un solde initial.
+Chaque compte de tender doit être lié à son compte ledger. DTSC ne doit jamais inventer un compte, un mapping ou un solde initial.
 
 ---
 
-## 10. Étape 8 — Configurer les taux de change
+## 10. Étape 8 — Configurer les Taux de change
 
 Chemin :
 
@@ -232,225 +248,240 @@ Pour chaque paire nécessaire :
 2. choisir la devise cible ;
 3. saisir la convention `1 SOURCE = RATE TARGET` ;
 4. choisir la date d’effet ;
-5. renseigner la source du taux ;
+5. renseigner la source ;
 6. enregistrer.
 
-Exemple :
+Exemple : `1 USD = 2 850 CDF`.
 
-`1 USD = 2 850 CDF`
+Sources supportées : MANUAL, CENTRAL_BANK, COMMERCIAL_BANK, PROVIDER, CONTRACTUAL, IMPORTED.
 
-Sources disponibles :
-
-- MANUAL ;
-- CENTRAL_BANK ;
-- COMMERCIAL_BANK ;
-- PROVIDER ;
-- CONTRACTUAL ;
-- IMPORTED.
-
-Le système n’appelle pas automatiquement une banque centrale dans cette version : la source décrit la provenance du taux configuré.
-
-Un taux publié est historique. Pour le corriger : désactiver avec motif puis créer une nouvelle version datée.
-
-DTSC résout d’abord la paire directe et peut utiliser l’inverse lorsqu’elle seule existe.
+Le système n’invente jamais un taux. Un taux publié reste historique ; pour le corriger, désactiver avec motif puis créer une nouvelle version datée.
 
 ---
 
-## 11. Étape 9 — Mapper les wallets Mobile Money
+## 11. Étape 9 — Ouvrir la première session de caisse
 
-Dans `Agence Mobile Money > Configuration` :
-
-1. vérifier les wallets utilisés ;
-2. créer auparavant leurs vrais comptes financiers `MOBILE_MONEY` ;
-3. mapper chaque wallet vers son compte de float ;
-4. vérifier la devise de chaque compte.
-
-Exemple :
-
-`M-Pesa → Float M-Pesa CDF`
-
-L’agent ne sélectionne plus ce compte pendant chaque opération : le backend le résout depuis la configuration.
-
----
-
-## 12. Étape 10 — Mapper les réseaux Télécom
-
-Dans `Télécom & forfaits > Configuration` :
-
-1. vérifier Vodacom, Orange, Airtel et Africell ;
-2. créer les vrais comptes de float/clearing nécessaires ;
-3. mapper chaque réseau vers son compte ;
-4. vérifier la devise.
-
-Exemple :
-
-`Vodacom → Float Télécom Vodacom CDF`
-
-M-Pesa ne remplace pas Vodacom et Orange Money ne remplace pas Orange réseau.
-
----
-
-## 13. Étape 11 — Ouvrir la première session de caisse
-
-Avant un encaissement cash ou une opération Mobile Money :
+Avant un encaissement cash :
 
 1. le caissier choisit sa vraie caisse ;
 2. il compte le fonds d’ouverture ;
 3. il ouvre la session.
 
-Le Shop affiche ensuite clairement l’état de la caisse.
-
-Le cash des opérations utilise automatiquement la session ouverte du collaborateur.
+Le Shop affiche ensuite l’état de la caisse. Une session `PENDING_VALIDATION` n’est pas une caisse utilisable.
 
 ---
 
-## 14. Étape 12 — Effectuer la première vente POS
+## 12. Étape 10 — Effectuer la première vente POS
 
 Scénario recommandé :
 
 1. rechercher plusieurs articles par nom/SKU/code ;
-2. ajouter au même panier ;
-3. vérifier le dépôt et les quantités ;
-4. contrôler le total ;
+2. ajouter plusieurs lignes au panier ;
+3. vérifier dépôt et quantités ;
+4. contrôler total et devise ;
 5. encaisser en cash ou avec un autre compte autorisé ;
-6. tester éventuellement un paiement fractionné ;
-7. imprimer ou partager le ticket ;
-8. vérifier la sortie de stock et les effets financiers.
+6. tester un paiement fractionné si pertinent ;
+7. finaliser le ticket ;
+8. vérifier la sortie de stock ;
+9. vérifier les effets de trésorerie ;
+10. vérifier les écritures comptables.
 
-Test de contrôle : un vendeur ordinaire ne doit pas pouvoir imposer un autre prix catalogue. Un responsable autorisé peut le faire uniquement avec un motif.
+### Preuve comptable attendue
 
----
+Pour une vente :
 
-## 15. Étape 13 — Tester Mobile Money
+- débit du/des comptes de tender ;
+- crédit `SALES_REVENUE` ;
+- crédit `TAX_PAYABLE` lorsqu’une taxe existe ;
+- débit `COST_OF_SALES` ;
+- crédit `INVENTORY`.
 
-### Dépôt
+Les débits et crédits doivent être équilibrés.
 
-1. sélectionner le wallet ;
-2. saisir le numéro client ;
-3. saisir le principal, frais et commission ;
-4. saisir la référence opérateur ;
-5. vérifier l’écran de confirmation ;
-6. confirmer.
+Le retry avec la même clé d’idempotence ne doit ni recréer le ticket ni dupliquer le posting.
 
-Effet attendu : selon le modèle de dépôt, le cash et le float évoluent dans les sens définis par le service Retail.
+### Performance
 
-### Retrait
+Le chemin serveur batch-load les produits, articles d’inventaire, comptes de tender et sessions de caisse nécessaires au ticket. Un ticket pouvant contenir jusqu’à 200 lignes ne doit pas déclencher une recherche catalogue/inventaire par ligne.
 
-Rejouer le même contrôle avec `WITHDRAWAL`.
-
-### Anti-doublon
-
-Réutiliser volontairement la même référence opérateur : la seconde opération doit être refusée.
-
-### Limite actuelle
-
-DTSC enregistre, sécurise, comptabilise et rapproche l’opération. L’exécution sur le réseau opérateur reste externe tant qu’une intégration partenaire n’est pas connectée.
+L’API de recherche POS serveur paginée existe dans Shop 2.0. Son raccordement complet au workspace actif reste un critère de clôture de l’itération 1.
 
 ---
 
-## 16. Étape 14 — Tester Télécom
+## 13. Étape 11 — Tester l’annulation complète
+
+Pour un ticket test :
+
+1. annuler avec un motif ;
+2. vérifier le statut `REVERSED` ;
+3. vérifier le retour physique du stock ;
+4. vérifier l’inversion des tenders ;
+5. vérifier l’inversion revenu/taxe ;
+6. vérifier la restauration du coût original : `Dr INVENTORY / Cr COST_OF_SALES` ;
+7. rejouer la requête pour contrôler l’idempotence.
+
+Les retours partiels, échanges, store credit et remboursements avancés appartiennent à l’itération 2.
+
+---
+
+## 14. Extension optionnelle — Mobile Money
+
+Cette section ne s’applique que si le service est vendu et activé.
+
+### Mapping
+
+Dans `Agence Mobile Money > Configuration` :
+
+1. sélectionner les wallets réellement utilisés ;
+2. créer leurs vrais comptes financiers `MOBILE_MONEY` ;
+3. mapper chaque wallet vers son compte de float ;
+4. vérifier la devise.
+
+Exemple : `M-Pesa → Float M-Pesa CDF`.
+
+### Test dépôt/retrait
+
+Tester `DEPOSIT` puis `WITHDRAWAL` avec :
+
+- téléphone ;
+- principal ;
+- frais/commission ;
+- référence opérateur ;
+- confirmation ;
+- effets cash/float ;
+- anti-doublon de référence.
+
+DTSC enregistre et rapproche actuellement l’opération ; l’exécution provider asynchrone appartient à l’itération 3.
+
+---
+
+## 15. Extension optionnelle — Télécom & forfaits
+
+Cette section ne s’applique que si le service est vendu et activé.
+
+### Mapping
+
+Dans `Télécom & forfaits > Configuration` :
+
+1. activer uniquement les réseaux utilisés ;
+2. créer les vrais comptes float/clearing ;
+3. mapper chaque réseau ;
+4. vérifier la devise.
+
+### Test
 
 Tester :
 
 - une recharge `SUCCESS` avec référence fournisseur ;
 - une recharge `FAILED` ;
-- une annulation contrôlée si nécessaire.
+- une annulation contrôlée si nécessaire ;
+- prix de vente, coût opérateur et marge ;
+- compte d’encaissement et float ;
+- anti-doublon.
 
-Vérifier :
-
-- numéro normalisé ;
-- confirmation avant validation ;
-- prix de vente ;
-- coût opérateur ;
-- marge ;
-- float réseau ;
-- compte d’encaissement ;
-- anti-doublon de référence.
-
-L’exécution de la recharge reste externe tant qu’une API opérateur n’est pas connectée.
+L’exécution de la recharge sur le réseau opérateur reste externe tant qu’un adaptateur provider n’est pas connecté.
 
 ---
 
-## 17. Étape 15 — Vérifier le reporting multi-devise
+## 16. Étape 12 — Vérifier le reporting multi-devise
 
-Le rapport consolidé Shop est accessible depuis la checklist de mise en service et sur :
-
-`/enterprise-modules/RETAIL_POS/consolidated-report`
+Rapport : `/enterprise-modules/RETAIL_POS/consolidated-report`.
 
 Tester au minimum :
 
-1. une opération CDF ;
-2. une opération USD ;
-3. le rapport natif par devise ;
-4. le rapport consolidé dans la devise cible ;
-5. la liste des taux utilisés.
+1. une opération dans chaque devise réellement utilisée ;
+2. le rapport natif par devise ;
+3. la consolidation dans la devise cible ;
+4. la liste des taux utilisés.
 
-DTSC convertit chaque opération avec le taux applicable à sa date.
-
-Si un taux manque, le rapport doit afficher `INCOMPLETE` et ne doit pas présenter un total partiel.
+Si un taux nécessaire manque, le rapport doit rester `INCOMPLETE` plutôt que publier un total partiel trompeur.
 
 ---
 
-## 18. Étape 16 — Effectuer la clôture journalière
+## 17. Étape 13 — Effectuer la clôture journalière
 
-Dans `Clôture cash & float` :
+Dans `Clôture magasin` :
 
 1. terminer les opérations ;
-2. compter les coupures de caisse ;
+2. compter les coupures ;
 3. déclarer les soldes cash ;
-4. déclarer les floats ;
+4. déclarer les floats uniquement pour les extensions utilisées ;
 5. vérifier les écarts par devise ;
 6. justifier chaque écart ;
-7. soumettre la clôture.
-
-Une autre personne autorisée doit ensuite approuver ou refuser la clôture.
+7. soumettre la clôture ;
+8. faire approuver/refuser par une autre personne autorisée.
 
 Le soumissionnaire ne valide pas sa propre clôture lorsque la séparation des rôles est exigée.
 
+`RETAIL_DAILY_CLOSE` dépend du Retail Core et ne requiert plus Mobile Money.
+
 ---
 
-## 19. Critères de mise en service
+## 18. Critères de mise en service d’un tenant Retail Core
 
-Avant exploitation réelle, le bloc `Mise en service du Shop` doit permettre de vérifier :
+Le bloc `Mise en service du Shop` doit confirmer :
 
 - profil Shop Retail actif ;
 - site et dépôt opérationnels ;
-- catalogue de vente renseigné ;
-- compte de caisse configuré ;
+- catalogue renseigné ;
+- compte de caisse réel ;
+- Finance `READY` ;
+- mappings `SALES_REVENUE`, `TAX_PAYABLE`, `COST_OF_SALES`, `INVENTORY` ;
+- journaux Sales/Inventory ;
+- période de posting disponible ;
 - consolidation FX disponible pour les devises opérationnelles ;
-- au moins un wallet Mobile Money mappé si le service est vendu ;
-- au moins un réseau Télécom mappé si le service est vendu ;
 - rôles caisse/contrôle disponibles.
+
+Pour les extensions :
+
+- wallet Mobile Money mappé uniquement si Mobile Money est vendu ;
+- réseau Télécom mappé uniquement si Télécom est vendu.
 
 ---
 
-## 20. Checklist propriétaire d’acceptation
+## 19. Checklist propriétaire d’acceptation du tenant
 
-Avant de considérer un nouveau tenant comme exploitable :
+### Retail Core
 
 - [ ] invitation administrateur acceptée ;
 - [ ] structure et postes assignés ;
 - [ ] site/dépôt ;
 - [ ] catalogue ;
-- [ ] stock initial ;
-- [ ] Finance et comptes réels ;
+- [ ] stock initial et valorisation ;
+- [ ] Finance `READY` ;
+- [ ] mappings comptables POS ;
+- [ ] journaux et période comptable ;
+- [ ] comptes financiers réels ;
 - [ ] devise fonctionnelle/de présentation ;
-- [ ] taux de change nécessaires ;
-- [ ] mappings Mobile Money ;
-- [ ] mappings Télécom ;
+- [ ] Taux de change nécessaires ;
 - [ ] caisse ouverte ;
 - [ ] vente multi-articles ;
 - [ ] paiement fractionné si utilisé ;
 - [ ] contrôle des dérogations de prix ;
-- [ ] dépôt Mobile Money ;
-- [ ] retrait Mobile Money ;
-- [ ] anti-doublon ;
-- [ ] recharge SUCCESS ;
-- [ ] recharge FAILED ;
-- [ ] rapport CDF/USD ;
+- [ ] posting vente équilibré ;
+- [ ] COGS/Inventory équilibré ;
+- [ ] retry idempotent ;
+- [ ] annulation complète et posting miroir ;
+- [ ] rapport multi-devise ;
 - [ ] consolidation FX complète ;
 - [ ] clôture ;
 - [ ] validation indépendante ;
 - [ ] contrôle mobile et desktop.
 
-Lorsque cette checklist métier est validée et que les gates CI restent verts, le profil peut être déclaré `COMMERCIAL_READY` par décision explicite DTSC.
+### Extension Mobile Money si vendue
+
+- [ ] wallet(s) mappé(s) ;
+- [ ] dépôt ;
+- [ ] retrait ;
+- [ ] anti-doublon ;
+- [ ] rapprochement cash/float.
+
+### Extension Télécom si vendue
+
+- [ ] réseau(x) mappé(s) ;
+- [ ] recharge SUCCESS ;
+- [ ] recharge FAILED ;
+- [ ] marge et float cohérents ;
+- [ ] anti-doublon.
+
+La validation de cette checklist signifie qu’un **tenant** est prêt à exploiter le périmètre activé. Elle ne change pas automatiquement le statut commercial du produit. Toute nouvelle promotion de maturité Shop 2.0 reste une décision explicite DTSC après preuves CI/E2E.
