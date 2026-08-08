@@ -319,7 +319,7 @@ export async function decideRetailReturn(
           idempotencyKey: `retail-return:${retailReturn.id}:${source.id}:restock`,
           reason: retailReturn.reason,
         });
-        await tx.enterpriseRetailReturnLine.update({ where: { id: line.id }, data: { stockMovementId: movement.id } });
+        await tx.enterpriseRetailReturnLine.update({ where: { id: line.id }, data: { stockMovementId: movement.movement.id } });
       }
     }
 
