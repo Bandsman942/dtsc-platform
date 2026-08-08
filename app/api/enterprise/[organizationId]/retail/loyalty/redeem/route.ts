@@ -4,6 +4,7 @@ import { redeemRetailLoyaltyPoints } from "@/lib/enterprise/retail/customer-paym
 import { retailLoyaltyRedeemSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -17,7 +18,7 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = retailLoyaltyRedeemSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Utilisation de points invalide." }, { status: 400 });
   try {
-    const result = await redeemRetailLoyaltyPoints(organizationId, auth.session.userId, parsed.data);
+    const result = await withRetailTransactionRetry(() => redeemRetailLoyaltyPoints(organizationId, auth.session.userId, parsed.data), { maxAttempts: 3, baseDelayMs: 20 });
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_LOYALTY_REDEEMED", entity: "EnterpriseRetailLoyaltyEntry", entityId: result.entry.id, request: req, metadata: { organizationId, accountId: result.account.id, points: result.entry.points.toString(), idempotent: result.idempotent } });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-loyalty", action: "redeem", idempotent: result.idempotent } });
     return NextResponse.json(result);
