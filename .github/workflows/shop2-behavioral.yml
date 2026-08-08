@@ -30,6 +30,7 @@ on:
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
       - "scripts/qa-shop2-customer-payments.mjs"
+      - "scripts/qa-shop2-active-customer-cookie.mjs"
       - "scripts/qa-session-cookie-security.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
@@ -112,6 +113,7 @@ jobs:
           node scripts/qa-shop2-retail-frontend-contract.mjs
           node scripts/qa-shop2-commercial-engine.mjs
           node scripts/qa-shop2-customer-payments.mjs
+          node scripts/qa-shop2-active-customer-cookie.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
       - name: Build production application
         run: pnpm build
