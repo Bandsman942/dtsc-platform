@@ -12,7 +12,8 @@ export const retailPromotionTypes = ["PERCENTAGE", "FIXED_AMOUNT", "QUANTITY_BRE
 export const retailPromotionStackModes = ["EXCLUSIVE", "STACKABLE"] as const;
 export const retailReturnTypes = ["RETURN", "EXCHANGE"] as const;
 export const retailReturnStockDispositions = ["RESTOCK", "SCRAP", "NO_STOCK"] as const;
-export const retailRefundMethods = ["ORIGINAL_TENDER", "CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD", "STORE_CREDIT"] as const;
+// STORE_CREDIT belongs to Shop 2 iteration 3, where it will have a spendable balance domain.
+export const retailRefundMethods = ["ORIGINAL_TENDER", "CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD"] as const;
 
 export const retailPriceConditionUpsertSchema = z.object({
   catalogPriceId: id,
@@ -104,7 +105,7 @@ export const retailReturnCreateSchema = z.object({
     if (seen.has(line.saleLineId)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Une ligne du ticket ne peut être retournée qu’une fois par demande.", path: ["lines", index, "saleLineId"] });
     seen.add(line.saleLineId);
   });
-  if (!["ORIGINAL_TENDER", "STORE_CREDIT"].includes(input.refundMethod) && !input.refundFinancialAccountId) {
+  if (input.refundMethod !== "ORIGINAL_TENDER" && !input.refundFinancialAccountId) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Sélectionnez le compte financier utilisé pour le remboursement.", path: ["refundFinancialAccountId"] });
   }
 });
