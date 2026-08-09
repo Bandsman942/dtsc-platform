@@ -129,14 +129,14 @@ test.describe.serial("Shop 2.0 customer value and payment follow-up UI", () => {
     const benefits = page.locator("details").filter({ hasText: "Fidélité & avoirs client" }).first();
     await expect(benefits).toBeVisible();
     await benefits.locator("summary").click();
-    await expect(page.getByText("Avantages client E2E", { exact: true })).toBeVisible();
-    await expect(page.getByText("Carte-cadeau", { exact: true })).toBeVisible();
-    await expect(page.getByText(/25.*points disponibles/i)).toBeVisible();
+    await expect(benefits.getByText("Avantages client E2E", { exact: true })).toBeVisible();
+    await expect(benefits.getByText("Carte-cadeau", { exact: true }).first()).toBeVisible();
+    await expect(benefits.getByText(/25.*points disponibles/i).first()).toBeVisible();
 
     const paymentFollowup = page.locator("details").filter({ hasText: "Suivi des paiements" }).first();
     await expect(paymentFollowup).toBeVisible();
     await paymentFollowup.locator("summary").click();
-    await expect(page.getByText(clientReference, { exact: true })).toBeVisible();
+    await expect(paymentFollowup.getByText(clientReference, { exact: true })).toBeVisible();
     await expect(paymentFollowup.getByText("Carte", { exact: true }).first()).toBeVisible();
     await expect(paymentFollowup.getByText("Remboursé", { exact: true }).first()).toBeVisible();
 
