@@ -109,11 +109,11 @@ for (const marker of ["RetailOfflineContinuity", "RetailOmnichannelPanel", "Reta
 
 const readiness = JSON.parse(read("lib/enterprise/sector-onboarding-readiness.json"));
 const retail = readiness.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL");
-check(retail?.shop2ProgramStatus === "ITERATION_4_IN_PROGRESS", "Iteration 4 branch must declare ITERATION_4_IN_PROGRESS");
-check(retail?.commercializationStatus === "COMMERCIAL_READY", "Global commercial certification must not be promoted before final evidence");
+check(retail?.shop2ProgramStatus === "COMPLETE", "Completed Shop 2 program must declare COMPLETE after production certification evidence");
+check(retail?.commercializationStatus === "COMMERCIAL_READY", "Technical completion must not silently promote global commercial certification");
 
 if (failures.length) {
   console.error("Shop 2 iteration 4 global readiness QA failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("Shop 2 iteration 4 global readiness QA passed: offline continuity, common Inventory reservations, canonical Sales/Fulfillment omnichannel, evidence-gated country packs and self-service onboarding are structurally present without global certification promotion.");
+console.log("Shop 2 global readiness QA passed: the 4/4 technical program is complete, Retail remains COMMERCIAL_READY, and global commercial claims stay evidence-gated by country.");
