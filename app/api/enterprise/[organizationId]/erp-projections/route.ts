@@ -8,6 +8,15 @@ export const runtime = "nodejs";
 type Params = { params: Promise<{ organizationId: string }> };
 const STATUSES = new Set(["PENDING", "PROCESSING", "COMPLETED", "FAILED", "DEAD"]);
 
+function clientSafeProjectionMessage(code: string | null, status: string) {
+  if (status === "COMPLETED") return null;
+  if (status === "PENDING" || status === "PROCESSING") return "La synchronisation inter-module est en cours.";
+  if (code === "PROJECTION_DEFINITION_NOT_FOUND") return "Cette synchronisation ne peut plus être traitée automatiquement.";
+  if (code?.endsWith("_NOT_FOUND") || code?.endsWith("_MISSING")) return "Une donnée métier nécessaire à la synchronisation est indisponible.";
+  if (status === "DEAD") return "La synchronisation a épuisé ses tentatives automatiques et nécessite une relance contrôlée par un utilisateur autorisé.";
+  return "La synchronisation inter-module a échoué et peut être relancée par un utilisateur autorisé.";
+}
+
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
@@ -21,6 +30,25 @@ export async function GET(req: Request, { params }: Params) {
   const eventType = url.searchParams.get("eventType")?.trim().slice(0, 120) || undefined;
   try {
     const result = await listCrossModuleProjections(organizationId, { page, pageSize, status, eventType });
+    const clientResult = {
+      ...result,
+      items: result.items.map((item) => ({
+        id: item.id,
+        eventType: item.eventType,
+        sourceEntityType: item.sourceEntityType,
+        sourceEntityId: item.sourceEntityId,
+        targetModule: item.targetModule,
+        targetEntityType: item.targetEntityType,
+        targetEntityId: item.targetEntityId,
+        status: item.status,
+        attemptCount: item.attemptCount,
+        updatedAt: item.updatedAt,
+        lastErrorMessage: clientSafeProjectionMessage(item.lastErrorCode, item.status),
+        sourceDeepLink: item.sourceDeepLink,
+        targetDeepLink: item.targetDeepLink,
+        retryable: item.status === "FAILED" || item.status === "DEAD",
+      })),
+    };
     await writeApiLog({
       request: req,
       statusCode: 200,
@@ -28,7 +56,7 @@ export async function GET(req: Request, { params }: Params) {
       startedAt,
       metadata: { organizationId, domain: "erp-cross-module-projections", page, status: status || "ALL" },
     });
-    return NextResponse.json(result);
+    return NextResponse.json(clientResult);
   } catch (error) {
     return financeErrorResponse(error, "ERP_CROSS_MODULE_PROJECTIONS_READ_FAILED");
   }
