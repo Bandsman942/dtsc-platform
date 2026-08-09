@@ -39,26 +39,72 @@ model AiModelCall {
 }
 
 model AiProviderAttempt {
-  id             String   @id @default(cuid())
-  routeRequestId String
-  userId         String
-  organizationId String?
-  contextCode    String
-  taskType       String
-  providerCode   String
-  modelCode      String
+  id              String   @id @default(cuid())
+  routeRequestId  String
+  userId          String
+  organizationId  String?
+  contextCode     String
+  taskType        String
+  providerCode    String
+  modelCode       String
   providerModelId String
-  attemptIndex   Int
-  status         String   @default("STARTED")
-  reasonCode     String?
-  durationMs     Int?
-  startedAt      DateTime @default(now())
-  completedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  attemptIndex    Int
+  status          String   @default("STARTED")
+  reasonCode      String?
+  durationMs      Int?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([routeRequestId, attemptIndex])
   @@index([organizationId, providerCode, modelCode, createdAt])
+  @@index([status, reasonCode, createdAt])
+}
+
+model AiToolConfirmation {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String?
+  conversationId String?
+  turnId         String?
+  toolCode       String
+  argumentsHash  String
+  status         String   @default("PENDING")
+  expiresAt      DateTime
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+  consumedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, organizationId, toolCode, status, createdAt])
+  @@index([conversationId, turnId, createdAt])
+  @@index([expiresAt, status])
+}
+
+model AiToolExecution {
+  id                  String   @id @default(cuid())
+  userId              String
+  organizationId      String?
+  conversationId      String?
+  turnId              String?
+  toolCode            String
+  toolMode            String
+  argumentsHash       String
+  confirmationId      String?
+  idempotencyScopeKey String   @unique
+  status              String   @default("STARTED")
+  reasonCode          String?
+  resultJson          Json?
+  auditLevel          String   @default("STANDARD")
+  startedAt           DateTime @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([userId, organizationId, toolCode, createdAt])
+  @@index([conversationId, turnId, createdAt])
   @@index([status, reasonCode, createdAt])
 }
 
