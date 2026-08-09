@@ -83,6 +83,7 @@ function buildSelection(request: AiRouteRequest, candidate: RankedCandidate): Ai
       preferenceScore: candidate.score.preferenceScore,
       healthScore: candidate.score.healthScore,
       costScore: candidate.score.costScore,
+      latencyScore: candidate.score.latencyScore,
       healthStatus: candidate.health.status,
       reasonParts: candidate.score.reasonParts,
     },
@@ -184,7 +185,14 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       attemptIndex: index,
     });
     try {
-      const providerStream = await createProviderEventStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
+      const providerStream = await createProviderEventStream({
+        provider,
+        model,
+        messages: effectiveRequest.messages,
+        instructions: effectiveRequest.instructions,
+        routingConstraints: effectiveRequest.routingConstraints,
+        signal: effectiveRequest.signal,
+      });
       const stream = observeProviderEventStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
       const requestedBypassed = Boolean(effectiveRequest.requestedModel && effectiveRequest.requestedModel !== model.code && effectiveRequest.requestedModel !== model.providerModelId);
