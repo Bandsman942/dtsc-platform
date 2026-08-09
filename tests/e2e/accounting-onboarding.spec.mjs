@@ -183,7 +183,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     const onboarding = page.locator('section[aria-labelledby="accounting-onboarding-title"]');
     await expect(onboarding.getByText("Accounting onboarding")).toBeVisible();
     await expect(onboarding.getByText(/official default chart of accounts in DTSC Platform/i)).toBeVisible();
-    await expect(onboarding.getByText("Financial statements")).toBeVisible();
+    await expect(onboarding.getByRole("heading", { name: "Financial statements", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2)).toBeFalsy();
   });
 });
