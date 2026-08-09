@@ -3,6 +3,7 @@ import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { createProviderResponseStream } from "@/lib/ai/provider";
 import type { AiModelDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
 function selectCandidates(request: AiRouteRequest) {
   const available = listAvailableAiModels({
@@ -52,8 +53,19 @@ function buildSelection(request: AiRouteRequest, model: AiModelDefinition): AiRo
   };
 }
 
+async function resolveServerPlanCode(request: AiRouteRequest) {
+  if (request.context === "DTSC_INTERNAL") return "ENTERPRISE" as const;
+  const limits = await getCanonicalAiUsageLimits({ userId: request.userId, organizationId: request.organizationId });
+  return limits.planCode;
+}
+
 export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamResult> {
-  const candidates = selectCandidates(request);
+  // Plan entitlement is always resolved on the server. A caller-provided planCode is never authoritative.
+  const effectiveRequest: AiRouteRequest = {
+    ...request,
+    planCode: await resolveServerPlanCode(request),
+  };
+  const candidates = selectCandidates(effectiveRequest);
   if (!candidates.length) {
     throw new AiProviderError({ reasonCode: "MODEL_UNAVAILABLE", message: "No policy-allowed AI model is configured", statusCode: 503 });
   }
@@ -64,11 +76,11 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
     const provider = getAiProviderDefinition(model.providerCode);
     if (!provider || provider.status === "DISABLED") continue;
     try {
-      const stream = await createProviderResponseStream({ provider, model, messages: request.messages, instructions: request.instructions, signal: request.signal });
+      const stream = await createProviderResponseStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
       return {
         stream,
-        selection: buildSelection(request, model),
+        selection: buildSelection(effectiveRequest, model),
         providerCode: provider.code,
         modelCode: model.code,
         providerModelId: model.providerModelId,
