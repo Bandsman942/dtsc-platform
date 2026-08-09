@@ -7,6 +7,66 @@ function jsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+export async function startAiProviderAttempt({
+  routeRequestId,
+  userId,
+  organizationId,
+  contextCode,
+  taskType,
+  providerCode,
+  modelCode,
+  providerModelId,
+  attemptIndex,
+}: {
+  routeRequestId: string;
+  userId: string;
+  organizationId?: string | null;
+  contextCode: string;
+  taskType: string;
+  providerCode: string;
+  modelCode: string;
+  providerModelId: string;
+  attemptIndex: number;
+}) {
+  return prisma.aiProviderAttempt.create({
+    data: {
+      routeRequestId,
+      userId,
+      organizationId: organizationId || null,
+      contextCode,
+      taskType,
+      providerCode,
+      modelCode,
+      providerModelId,
+      attemptIndex,
+    },
+    select: { id: true, startedAt: true },
+  }).catch(() => null);
+}
+
+export async function completeAiProviderAttempt({
+  attemptId,
+  status,
+  reasonCode,
+  durationMs,
+}: {
+  attemptId?: string | null;
+  status: "SUCCESS" | "FAILED" | "CANCELLED";
+  reasonCode?: string | null;
+  durationMs: number;
+}) {
+  if (!attemptId) return null;
+  return prisma.aiProviderAttempt.update({
+    where: { id: attemptId },
+    data: {
+      status,
+      reasonCode: reasonCode || null,
+      durationMs,
+      completedAt: new Date(),
+    },
+  }).catch(() => null);
+}
+
 export async function startAiModelCall({
   userId,
   organizationId,
