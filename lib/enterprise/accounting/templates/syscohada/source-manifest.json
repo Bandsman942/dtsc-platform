@@ -33,6 +33,15 @@
     "verifiedAt": null,
     "verifiedBy": null
   },
+  "datasetPipeline": {
+    "schemaVersion": "1.0.0",
+    "schemaPath": "lib/enterprise/accounting/templates/syscohada/dataset-schema.v1.json",
+    "builderPath": "scripts/accounting/build-syscohada-dataset.mjs",
+    "normalizedDatasetPath": "lib/enterprise/accounting/templates/syscohada/syscohada.reviewed.v1.json",
+    "draftTemplatePath": "lib/enterprise/accounting/templates/syscohada/ohada-syscohada.v1.draft.json",
+    "requiresSourceVerification": true,
+    "publicationRequiresDatasetVerification": true
+  },
   "canonicalDataset": {
     "path": null,
     "sha256": null,
@@ -44,6 +53,7 @@
   "notes": [
     "The OHADA act page confirms that the revised SYSCOHADA annex contains the OHADA general chart of accounts and the consolidated/combined accounting framework.",
     "The official digital-library notice lists two digital documents but does not expose a direct download URL in the crawlable catalog content.",
-    "No SYSCOHADA account dataset may be published until an official or legally exploitable source file is verified and fingerprinted."
+    "No SYSCOHADA account dataset may be published until an official or legally exploitable source file is verified and fingerprinted.",
+    "The deterministic dataset pipeline contains no regulatory account data and only accepts reviewed input linked to the verified source SHA-256."
   ]
 }

@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dtsc-platform.com/schemas/accounting/syscohada-dataset-v1.json",
+  "title": "DTSC reviewed SYSCOHADA source dataset",
+  "description": "Schema for manually reviewed structured data derived from a verified official or legally exploitable SYSCOHADA source. This schema contains no regulatory account data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "frameworkCode",
+    "templateCode",
+    "templateVersion",
+    "source",
+    "scope",
+    "groups",
+    "accounts"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "frameworkCode": { "const": "OHADA_AUDCIF" },
+    "templateCode": { "const": "OHADA_SYSCOHADA" },
+    "templateVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileName", "sha256", "reviewedAt", "reviewedBy"],
+      "properties": {
+        "fileName": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "reviewedBy": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effectiveFrom", "countryScope", "entityTypes", "languages"],
+      "properties": {
+        "effectiveFrom": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "effectiveTo": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "countryScope": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "entityTypes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "languages": { "type": "array", "items": { "type": "string", "minLength": 2 }, "uniqueItems": true }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "nameFrOfficial", "nameEnDtsc", "translationStatus", "accountType", "sortOrder", "sourceLocator"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "nameFrOfficial": { "type": "string", "minLength": 1 },
+          "nameEnDtsc": { "type": "string" },
+          "translationStatus": { "enum": ["PENDING", "REVIEWED"] },
+          "accountType": { "enum": ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"] },
+          "parentGroupCode": { "type": "string", "minLength": 1 },
+          "sortOrder": { "type": "integer", "minimum": 0 },
+          "sourceLocator": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "nameFrOfficial",
+          "nameEnDtsc",
+          "translationStatus",
+          "accountType",
+          "level",
+          "isControlAccount",
+          "isSystemAccount",
+          "allowDirectPosting",
+          "sourceLocator"
+        ],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "nameFrOfficial": { "type": "string", "minLength": 1 },
+          "nameEnDtsc": { "type": "string" },
+          "translationStatus": { "enum": ["PENDING", "REVIEWED"] },
+          "accountType": { "enum": ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"] },
+          "accountSubtype": {
+            "enum": [
+              "CASH",
+              "BANK",
+              "MOBILE_MONEY",
+              "ACCOUNTS_RECEIVABLE",
+              "ACCOUNTS_PAYABLE",
+              "INVENTORY",
+              "FIXED_ASSET",
+              "ACCUMULATED_DEPRECIATION",
+              "TAX_RECEIVABLE",
+              "TAX_PAYABLE",
+              "PAYROLL_PAYABLE",
+              "REVENUE",
+              "COST_OF_SALES",
+              "OPERATING_EXPENSE",
+              "RETAINED_EARNINGS",
+              "CLEARING"
+            ]
+          },
+          "parentCode": { "type": "string", "minLength": 1 },
+          "groupCode": { "type": "string", "minLength": 1 },
+          "level": { "type": "integer", "minimum": 1 },
+          "currencyCode": { "type": "string", "minLength": 3, "maxLength": 3 },
+          "isControlAccount": { "type": "boolean" },
+          "isSystemAccount": { "type": "boolean" },
+          "allowDirectPosting": { "type": "boolean" },
+          "sourceLocator": { "type": "string", "minLength": 1 },
+          "reviewNotes": { "type": "string" }
+        }
+      }
+    }
+  }
+}
