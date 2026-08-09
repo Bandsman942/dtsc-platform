@@ -4,6 +4,7 @@ import "./qa-syscohada-dataset-pipeline.mjs";
 import "./qa-accounting-program-150-155.mjs";
 import "./qa-accounting-acceptance-contract.mjs";
 import "./qa-finance-client-ux.mjs";
+import "./qa-erp-stabilization-finance-readiness.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([
@@ -16,6 +17,7 @@ requirePaths([
   "lib/enterprise/accounting/semantic-account-registry.ts",
   "lib/enterprise/accounting/semantic-account-resolver.ts",
   "lib/enterprise/accounting/chart-lifecycle-service.ts",
+  "lib/enterprise/accounting/finance-readiness-service.ts",
   "lib/enterprise/accounting/journal-template-registry.ts",
   "lib/enterprise/accounting/country-accounting-overlays.ts",
   "lib/enterprise/accounting/regulatory-statements-service.ts",
@@ -28,6 +30,7 @@ requirePaths([
   "scripts/accounting/build-syscohada-dataset.mjs",
   "lib/enterprise/module-registry-finance.json",
   "scripts/qa-finance-client-ux.mjs",
+  "scripts/qa-erp-stabilization-finance-readiness.mjs",
 ]);
 requireTokens("lib/enterprise/accounting/posting-service.ts", ["Prisma.Decimal", "POSTING_NOT_BALANCED", "pg_advisory_xact_lock", "TransactionIsolationLevel.Serializable", "idempotencyKey", "status: \"POSTED\"", "resolveSemanticPostingAccount"]);
 requireTokens("lib/enterprise/accounting/journal-service.ts", ["POSTED_ENTRY_IMMUTABLE", "JOURNAL_ENTRY_UNBALANCED", "assertPeriodMatchesEntry", "JOURNAL_ENTRY_SELF_APPROVAL_FORBIDDEN"]);
