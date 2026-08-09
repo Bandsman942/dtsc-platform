@@ -93,6 +93,30 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "Les prix de certains articles doivent être vérifiés en ligne avant l’encaissement.",
     en: "Some product prices must be verified online before checkout.",
   },
+  RETAIL_RETURN_SELF_APPROVAL_FORBIDDEN: {
+    fr: "La personne qui demande un retour ne peut pas valider elle-même le remboursement. Demandez une validation à un autre responsable autorisé.",
+    en: "The person requesting a return cannot approve the refund. Ask another authorized manager to review it.",
+  },
+  RETAIL_RETURN_QUANTITY_EXCEEDED: {
+    fr: "La quantité demandée dépasse ce qui peut encore être retourné pour cette vente.",
+    en: "The requested quantity exceeds what can still be returned for this sale.",
+  },
+  RETAIL_RETURN_NOT_FOUND: {
+    fr: "Ce retour n’est plus disponible ou ne peut plus être traité.",
+    en: "This return is no longer available or can no longer be processed.",
+  },
+  RETAIL_RETURN_TRANSITION_INVALID: {
+    fr: "Ce retour a déjà évolué et cette action n’est plus disponible. Actualisez la liste avant de continuer.",
+    en: "This return has already moved forward and this action is no longer available. Refresh the list before continuing.",
+  },
+  RETAIL_REFUND_ACCOUNT_REQUIRED: {
+    fr: "Sélectionnez un compte compatible avec le mode et la devise du remboursement.",
+    en: "Select an account compatible with the refund method and currency.",
+  },
+  RETAIL_PAYMENT_TRANSITION_INVALID: {
+    fr: "L’état de ce paiement a changé et cette action n’est plus disponible.",
+    en: "This payment status has changed and this action is no longer available.",
+  },
 };
 
 const STATUS_LABELS: Record<string, Bilingual> = {
@@ -113,6 +137,7 @@ const STATUS_LABELS: Record<string, Bilingual> = {
   APPROVED: { fr: "Approuvée", en: "Approved" },
   SUBMITTED: { fr: "Soumise", en: "Submitted" },
   PENDING: { fr: "En attente", en: "Pending" },
+  PENDING_APPROVAL: { fr: "En attente de validation", en: "Pending approval" },
   PROCESSING: { fr: "En cours", en: "In progress" },
   RESERVING: { fr: "Réservation en cours", en: "Reserving stock" },
   RESERVED: { fr: "Stock réservé", en: "Stock reserved" },
@@ -121,7 +146,7 @@ const STATUS_LABELS: Record<string, Bilingual> = {
   CLOSING: { fr: "Clôture en cours", en: "Closing" },
   REVERSED: { fr: "Annulée", en: "Reversed" },
   FAILED: { fr: "Échec", en: "Failed" },
-  REJECTED: { fr: "À vérifier", en: "Needs review" },
+  REJECTED: { fr: "Refusée", en: "Rejected" },
   PENDING_SYNC: { fr: "À synchroniser", en: "Waiting to sync" },
   SYNCED: { fr: "Synchronisée", en: "Synced" },
   CONFLICT: { fr: "À vérifier", en: "Needs review" },
@@ -160,10 +185,70 @@ const FULFILLMENT_MODE_LABELS: Record<string, Bilingual> = {
   CUSTOMER_DELIVERY: { fr: "Livraison client", en: "Customer delivery" },
 };
 
+const PROMOTION_TYPE_LABELS: Record<string, Bilingual> = {
+  PERCENTAGE: { fr: "Remise en pourcentage", en: "Percentage discount" },
+  FIXED_AMOUNT: { fr: "Remise d’un montant fixe", en: "Fixed amount discount" },
+  QUANTITY_BREAK: { fr: "Prix selon la quantité", en: "Quantity-based price" },
+  BUY_X_GET_Y: { fr: "Articles achetés + articles offerts", en: "Buy items + get items free" },
+  BUNDLE: { fr: "Offre groupée", en: "Bundle offer" },
+};
+
+const PROMOTION_STACK_LABELS: Record<string, Bilingual> = {
+  EXCLUSIVE: { fr: "Non cumulable", en: "Not combinable" },
+  STACKABLE: { fr: "Cumulable", en: "Combinable" },
+};
+
+const SALES_CHANNEL_LABELS: Record<string, Bilingual> = {
+  POS: { fr: "Vente en caisse", en: "Checkout sale" },
+  ONLINE: { fr: "Vente en ligne", en: "Online sale" },
+  OMNICHANNEL: { fr: "Commande client", en: "Customer order" },
+};
+
+const RETURN_TYPE_LABELS: Record<string, Bilingual> = {
+  RETURN: { fr: "Retour", en: "Return" },
+  EXCHANGE: { fr: "Échange", en: "Exchange" },
+};
+
+const PRODUCT_CONDITION_LABELS: Record<string, Bilingual> = {
+  SELLABLE: { fr: "Revendable", en: "Resellable" },
+  OPENED: { fr: "Ouvert", en: "Opened" },
+  DAMAGED: { fr: "Endommagé", en: "Damaged" },
+  DEFECTIVE: { fr: "Défectueux", en: "Defective" },
+  EXPIRED: { fr: "Périmé", en: "Expired" },
+  OTHER: { fr: "Autre", en: "Other" },
+};
+
+const STOCK_DISPOSITION_LABELS: Record<string, Bilingual> = {
+  RESTOCK: { fr: "Remettre en stock", en: "Return to stock" },
+  SCRAP: { fr: "Sortir du stock / rebut", en: "Remove from stock / scrap" },
+  NO_STOCK: { fr: "Aucun mouvement de stock", en: "No stock movement" },
+};
+
+const REFUND_METHOD_LABELS: Record<string, Bilingual> = {
+  ORIGINAL_TENDER: { fr: "Moyen de paiement d’origine", en: "Original payment method" },
+  CASH: { fr: "Espèces", en: "Cash" },
+  MOBILE_MONEY: { fr: "Mobile Money", en: "Mobile Money" },
+  BANK_TRANSFER: { fr: "Virement bancaire", en: "Bank transfer" },
+  CARD: { fr: "Carte", en: "Card" },
+  STORE_CREDIT: { fr: "Avoir client", en: "Store credit" },
+};
+
+const FINANCIAL_ACCOUNT_TYPE_LABELS: Record<string, Bilingual> = {
+  CASH: { fr: "Caisse", en: "Cash account" },
+  BANK: { fr: "Banque", en: "Bank account" },
+  MOBILE_MONEY: { fr: "Compte Mobile Money", en: "Mobile Money account" },
+  CARD_CLEARING: { fr: "Encaissements carte", en: "Card clearing account" },
+};
+
 const TECHNICAL_PATTERN = /(^[A-Z0-9]+(?:_[A-Z0-9]+)+$)|\b(prisma|tenant|idempot|webhook|adapter|payload|snapshot|canonical|server|posting|stack trace|http\s?\d{3}|\/api\/)\b/i;
 
 function pick(value: Bilingual, locale: CustomerFacingLocale) {
   return value[locale];
+}
+
+function labelFrom(map: Record<string, Bilingual>, code: string | null | undefined, locale: CustomerFacingLocale, fallback: Bilingual) {
+  const normalized = code?.trim().toUpperCase() || "";
+  return map[normalized] ? pick(map[normalized], locale) : pick(fallback, locale);
 }
 
 function extractKnownCode(raw: string) {
@@ -181,21 +266,51 @@ export function customerFacingError(error: unknown, locale: CustomerFacingLocale
 }
 
 export function customerFacingStatusLabel(status: string | null | undefined, locale: CustomerFacingLocale) {
-  if (!status) return locale === "en" ? "Not available" : "Non disponible";
-  const normalized = status.trim().toUpperCase();
-  return STATUS_LABELS[normalized] ? pick(STATUS_LABELS[normalized], locale) : (locale === "en" ? "In progress" : "En cours");
+  return labelFrom(STATUS_LABELS, status, locale, { fr: "En cours", en: "In progress" });
 }
 
 export function customerFacingCapabilityLabel(code: string, locale: CustomerFacingLocale) {
-  return CAPABILITY_LABELS[code] ? pick(CAPABILITY_LABELS[code], locale) : (locale === "en" ? "Shop capability" : "Fonctionnalité du Shop");
+  return labelFrom(CAPABILITY_LABELS, code, locale, { fr: "Fonctionnalité du Shop", en: "Shop capability" });
 }
 
 export function customerFacingDeviceType(code: string, locale: CustomerFacingLocale) {
-  return DEVICE_TYPE_LABELS[code] ? pick(DEVICE_TYPE_LABELS[code], locale) : (locale === "en" ? "POS equipment" : "Équipement du point de vente");
+  return labelFrom(DEVICE_TYPE_LABELS, code, locale, { fr: "Équipement du point de vente", en: "POS equipment" });
 }
 
 export function customerFacingFulfillmentMode(code: string, locale: CustomerFacingLocale) {
-  return FULFILLMENT_MODE_LABELS[code] ? pick(FULFILLMENT_MODE_LABELS[code], locale) : (locale === "en" ? "Customer order" : "Commande client");
+  return labelFrom(FULFILLMENT_MODE_LABELS, code, locale, { fr: "Commande client", en: "Customer order" });
+}
+
+export function customerFacingPromotionType(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(PROMOTION_TYPE_LABELS, code, locale, { fr: "Offre promotionnelle", en: "Promotional offer" });
+}
+
+export function customerFacingPromotionStackMode(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(PROMOTION_STACK_LABELS, code, locale, { fr: "Règle de cumul", en: "Combination rule" });
+}
+
+export function customerFacingSalesChannel(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(SALES_CHANNEL_LABELS, code, locale, { fr: "Canal de vente", en: "Sales channel" });
+}
+
+export function customerFacingReturnType(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(RETURN_TYPE_LABELS, code, locale, { fr: "Retour client", en: "Customer return" });
+}
+
+export function customerFacingProductCondition(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(PRODUCT_CONDITION_LABELS, code, locale, { fr: "État à vérifier", en: "Condition to review" });
+}
+
+export function customerFacingStockDisposition(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(STOCK_DISPOSITION_LABELS, code, locale, { fr: "Traitement du stock", en: "Stock handling" });
+}
+
+export function customerFacingRefundMethod(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(REFUND_METHOD_LABELS, code, locale, { fr: "Mode de remboursement", en: "Refund method" });
+}
+
+export function customerFacingFinancialAccountType(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(FINANCIAL_ACCOUNT_TYPE_LABELS, code, locale, { fr: "Compte financier", en: "Financial account" });
 }
 
 export function customerFacingReadinessDetail(detail: unknown, complete: boolean, locale: CustomerFacingLocale) {
