@@ -1,3 +1,5 @@
+import { assertMcpToolBindingIntegrity, listMcpAiToolDefinitions } from "@/lib/ai/mcp/bindings";
+
 export type AiToolMode = "READ" | "PREPARE" | "MUTATE" | "SENSITIVE_MUTATE";
 
 export type AiToolDefinition = {
@@ -42,7 +44,7 @@ function pharmacyReadTool({ code, label, description, modules }: { code: string;
   };
 }
 
-export const AI_TOOL_REGISTRY: AiToolDefinition[] = [
+const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
   pharmacyReadTool({ code: "PHARMACY_DASHBOARD_READ", label: "ai.tools.pharmacyDashboard.label", description: "ai.tools.pharmacyDashboard.description", modules: ["AI_ASSISTANT"] }),
   pharmacyReadTool({ code: "PHARMACY_LOW_STOCK_READ", label: "ai.tools.pharmacyLowStock.label", description: "ai.tools.pharmacyLowStock.description", modules: ["ALERTS_EXPIRY_LOW_STOCK"] }),
   pharmacyReadTool({ code: "PHARMACY_EXPIRY_READ", label: "ai.tools.pharmacyExpiry.label", description: "ai.tools.pharmacyExpiry.description", modules: ["BATCH_EXPIRY"] }),
@@ -97,12 +99,14 @@ export const AI_TOOL_REGISTRY: AiToolDefinition[] = [
   },
 ];
 
+export const AI_TOOL_REGISTRY: AiToolDefinition[] = [...STATIC_AI_TOOL_REGISTRY, ...listMcpAiToolDefinitions()];
+
 export function getAiToolDefinition(code: string) {
   return AI_TOOL_REGISTRY.find((tool) => tool.code === code) || null;
 }
 
 export function assertAiToolRegistryIntegrity() {
-  const failures: string[] = [];
+  const failures: string[] = [...assertMcpToolBindingIntegrity()];
   const codes = new Set<string>();
   for (const tool of AI_TOOL_REGISTRY) {
     if (codes.has(tool.code)) failures.push(`Duplicate AI tool: ${tool.code}`);
