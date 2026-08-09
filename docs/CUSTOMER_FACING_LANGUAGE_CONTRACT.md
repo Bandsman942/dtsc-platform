@@ -30,8 +30,10 @@ Sauf nécessité métier explicite, ne pas afficher directement :
 - enums techniques avec underscores ;
 - identifiants internes sans valeur métier ;
 - `tenant`, `canonical`, `idempotency`, `webhook`, `adapter`, `payload`, `snapshot`, `server reconciliation`, `posting` ;
-- codes tels que `PENDING_PROVIDER`, `PENDING_SYNC`, `UNKNOWN`, `ACTIVE_CORE`, `TENANT_CONFIGURATION_REQUIRED` sans traduction métier ;
+- codes tels que `PENDING_PROVIDER`, `PENDING_SYNC`, `UNKNOWN`, `ACTIVE_CORE`, `TENANT_CONFIGURATION_REQUIRED`, `PERCENTAGE`, `STACKABLE`, `SELLABLE`, `RESTOCK` ou `ORIGINAL_TENDER` sans traduction métier ;
 - noms d’entités comme `EnterpriseBusinessParty`, `EnterpriseInventoryReservation` ou équivalent.
+
+Les codes restent autorisés comme **valeurs internes** de formulaires, payloads, logs, audits et tests lorsqu’ils ne sont pas rendus comme texte client.
 
 ## 4. Vocabulaire Retail recommandé
 
@@ -41,7 +43,7 @@ Sauf nécessité métier explicite, ne pas afficher directement :
 | Snapshot offline | Préparation des ventes hors connexion | Offline sales preparation |
 | PENDING_SYNC | À synchroniser | Waiting to sync |
 | SYNCED | Synchronisée | Synced |
-| CONFLICT / REJECTED | À vérifier | Needs review |
+| CONFLICT | À vérifier | Needs review |
 | PENDING_PROVIDER | Paiement en attente de confirmation | Payment awaiting confirmation |
 | UNKNOWN provider state | Confirmation en cours | Confirmation in progress |
 | Country pack | Configuration pays | Country configuration |
@@ -51,6 +53,22 @@ Sauf nécessité métier explicite, ne pas afficher directement :
 | Canonical CRM customer | Client | Customer |
 | Server repricing | Prix vérifié automatiquement | Price checked automatically |
 | Inventory reservation | Stock réservé | Reserved stock |
+| PERCENTAGE | Remise en pourcentage | Percentage discount |
+| FIXED_AMOUNT | Remise d’un montant fixe | Fixed amount discount |
+| QUANTITY_BREAK | Prix selon la quantité | Quantity-based price |
+| BUY_X_GET_Y | Articles achetés + articles offerts | Buy items + get items free |
+| BUNDLE | Offre groupée | Bundle offer |
+| EXCLUSIVE | Non cumulable | Not combinable |
+| STACKABLE | Cumulable | Combinable |
+| POS channel | Vente en caisse | Checkout sale |
+| RETURN | Retour | Return |
+| EXCHANGE | Échange | Exchange |
+| SELLABLE | Revendable | Resellable |
+| RESTOCK | Remettre en stock | Return to stock |
+| SCRAP | Sortir du stock / rebut | Remove from stock / scrap |
+| NO_STOCK | Aucun mouvement de stock | No stock movement |
+| ORIGINAL_TENDER | Moyen de paiement d’origine | Original payment method |
+| STORE_CREDIT | Avoir client | Store credit |
 | Posting | Comptabilisation | Accounting entry / posting only when needed |
 | Reconciliation | Vérification / rapprochement | Verification / reconciliation only when understood by the role |
 
@@ -88,6 +106,8 @@ Le frontend doit convertir ces codes en messages localisés avant affichage. Le 
 
 Il ne doit pas être injecté tel quel dans un toast, une alerte ou une carte cliente.
 
+Une erreur backend déjà formulée pour un humain peut être conservée lorsqu’elle ne contient aucun détail d’implémentation. Une erreur technique inconnue doit obligatoirement passer par le fallback client.
+
 ## 7. Fallback obligatoire
 
 Lorsqu’un code n’a pas encore de traduction dédiée, utiliser un message humain générique plutôt que le code brut.
@@ -102,13 +122,28 @@ Toute nouvelle formulation cliente doit être disponible au minimum en français
 
 Les traductions doivent être naturelles et orientées métier, pas une traduction littérale de l’architecture interne.
 
-## 9. Responsabilité produit
+Une valeur d’enum peut rester identique dans le payload technique, mais chaque option rendue dans un sélecteur, badge, liste, tableau ou carte doit utiliser le mapping localisé.
+
+## 9. Liens vers les sources de vérité
+
+Lorsqu’une information est administrée dans un autre module ERP, le texte client ne doit pas expliquer la propriété technique de l’entité. L’interface doit plutôt proposer un lien métier vers l’espace où l’utilisateur peut agir.
+
+Exemples Retail :
+
+- prix produit → Catalogue ;
+- compte de remboursement → Trésorerie ;
+- stock disponible → Stock & logistique ;
+- client → Clients / CRM lorsque la gestion détaillée est nécessaire.
+
+Ces liens ne créent aucun second CRUD et ne changent pas la source de vérité.
+
+## 10. Responsabilité produit
 
 Une fonctionnalité ne doit pas être présentée comme certifiée, conforme ou connectée si la preuve correspondante n’existe pas.
 
 Le langage commercial doit être convaincant sans surpromettre : il décrit ce que le produit permet réellement dans le contexte du client.
 
-## 10. Contrôle CI/CD
+## 11. Contrôle CI/CD
 
 Les gates Retail doivent vérifier progressivement :
 
@@ -116,6 +151,7 @@ Les gates Retail doivent vérifier progressivement :
 - l’absence d’enums bruts connus dans les textes visibles ;
 - l’absence de jargon technique interdit dans les copies clientes ;
 - la présence des traductions FR/EN ;
+- les liens métier vers les sources ERP lorsqu’une action appartient à un autre module ;
 - une allowlist explicite pour les outils internes où le détail technique est nécessaire.
 
 Ce contrôle ne doit pas être un grep aveugle de tout le code : il doit cibler les chaînes réellement rendues dans les surfaces clientes et les contrats de mapping.

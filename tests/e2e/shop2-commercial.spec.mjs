@@ -244,6 +244,21 @@ test.describe.serial("Shop 2.0 commercial engine acceptance", () => {
     expect(duplicateReturn.response.status(), JSON.stringify(duplicateReturn.body)).toBe(409);
     expect(duplicateReturn.body?.error).toBe("RETAIL_RETURN_QUANTITY_EXCEEDED");
 
+    // Product-coherence acceptance: the commercial workspace must render business labels,
+    // preserve progressive/touch navigation and remain structurally usable at 390px.
+    await adminPage.setViewportSize({ width: 390, height: 844 });
+    await adminPage.goto("/enterprise-modules/RETAIL_POS/commercial");
+    await expect(adminPage.getByRole("heading", { name: /Tarification, offres & retours clients|Pricing, offers & customer returns/i })).toBeVisible();
+    await adminPage.getByRole("button", { name: /Offres & promotions|Offers & promotions/i }).click();
+    await expect(adminPage.getByRole("option", { name: /Remise en pourcentage|Percentage discount/i })).toHaveCount(1);
+    await expect(adminPage.getByRole("option", { name: /Non cumulable|Not combinable/i })).toHaveCount(1);
+    await adminPage.getByRole("button", { name: /Retours & échanges|Returns & exchanges/i }).click();
+    await expect(adminPage.getByRole("option", { name: /Moyen de paiement d’origine|Original payment method/i })).toHaveCount(1);
+    const rawEnumText = adminPage.getByText(/^(PERCENTAGE|STACKABLE|SELLABLE|RESTOCK|ORIGINAL_TENDER)$/);
+    await expect(rawEnumText).toHaveCount(0);
+    const hasHorizontalOverflow = await adminPage.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
+    expect(hasHorizontalOverflow, "Retail commercial workspace must not overflow horizontally at 390px").toBe(false);
+
     await approverContext.close();
     await adminContext.close();
   });
