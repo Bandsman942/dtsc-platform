@@ -9,10 +9,23 @@ const QUEUE_STORE = "queue";
 export type RetailOfflineQueueStatus = "PENDING_SYNC" | "SYNCED" | "CONFLICT" | "REJECTED";
 
 export type RetailOfflineSnapshotCatalogItem = {
-  offlineEligible: boolean;
-  name: string;
+  catalogItemId: string;
+  inventoryItemId: string | null;
   code: string;
   sku: string | null;
+  name: string;
+  currencyCode: string;
+  unitPrice: string | null;
+  serviceUnitPrice: string | null;
+  customerUnitDiscountAmount: string | null;
+  serviceUnitDiscountAmount: string | null;
+  taxRate: string | null;
+  taxIncluded: boolean;
+  unitTaxAmount: string | null;
+  unitLineTotal: string | null;
+  trackInventory: boolean;
+  quantityAvailable: string;
+  offlineEligible: boolean;
   [key: string]: unknown;
 };
 
