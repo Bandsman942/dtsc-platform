@@ -23,6 +23,13 @@ import "./qa-standard-ai-rag-reindex-idempotency.mjs";
 import "./qa-standard-ai-tool-gateway.mjs";
 import "./qa-standard-ai-tool-confirmation-idempotency.mjs";
 import "./qa-standard-ai-private-tool-actions.mjs";
+import "./qa-standard-ai-mcp-registry.mjs";
+import "./qa-standard-ai-mcp-tool-bindings.mjs";
+import "./qa-standard-ai-mcp-auth.mjs";
+import "./qa-standard-ai-mcp-ssrf.mjs";
+import "./qa-standard-ai-mcp-data-policy.mjs";
+import "./qa-standard-ai-mcp-tenant-isolation.mjs";
+import "./qa-standard-ai-mcp-discovery.mjs";
 import { runStandardAiIteration05Audit } from "./lib/standard-ai-iteration05-audit.mjs";
 
 runStandardAiIteration05Audit("all");
