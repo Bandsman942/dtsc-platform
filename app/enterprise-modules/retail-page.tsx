@@ -4,6 +4,7 @@ import { RetailDeviceReadiness } from "@/components/enterprise/professional/reta
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
+import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
 import { EnterpriseRetailShopWorkspace } from "@/components/enterprise/professional/enterprise-retail-shop-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -57,6 +58,8 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
                 <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
               </div>
             </details>
+
+            <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
 
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
