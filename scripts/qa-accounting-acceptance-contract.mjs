@@ -16,8 +16,13 @@ const onboarding = "tests/e2e/accounting-onboarding.spec.mjs";
 const close = "tests/e2e/accounting-z-close-protection.spec.mjs";
 const workflow = ".github/workflows/accounting-acceptance.yml";
 const bootstrap = "lib/enterprise/accounting/templates/syscohada/syscohada.bootstrap.v0.1.0.json";
+const strictPositivePostingFiles = [
+  "lib/enterprise/accounting/core-posting-builders.ts",
+  "lib/enterprise/accounting/domain-posting-builders.ts",
+  "lib/enterprise/accounting/sector-adapters/pharmacy.ts",
+];
 
-for (const file of [onboarding, close, workflow, bootstrap]) requireFile(file);
+for (const file of [onboarding, close, workflow, bootstrap, ...strictPositivePostingFiles]) requireFile(file);
 
 requireTokens(onboarding, [
   "390",
@@ -64,6 +69,27 @@ if (exists(workflow)) {
   if (/\bnext dev\b|\bpnpm dev\b/.test(content)) failures.push("Accounting acceptance: workflow must exercise the production server, not dev mode");
   if (content.includes("ENABLE_E2E_SERVICE_FALLBACK")) failures.push("Accounting acceptance: service fallback is forbidden in production-like acceptance");
 }
+
+for (const file of strictPositivePostingFiles) {
+  if (!exists(file)) continue;
+  const content = read(file);
+  if (content.includes(".isPositive()")) {
+    failures.push(`Accounting acceptance: ${file} must use strict gt(0) checks so +0 never creates a posting line`);
+  }
+}
+
+requireTokens("lib/enterprise/accounting/core-posting-builders.ts", [
+  "invoice.taxTotal.gt(0)",
+  "credit.taxTotal.gt(0)",
+  "allocated.gt(0)",
+  "payment.unallocatedAmount.gt(0)",
+  "line.debit.gt(0) ? line.debit : line.credit",
+]);
+requireTokens("lib/enterprise/accounting/domain-posting-builders.ts", [
+  "credit.taxTotal.gt(0)",
+  "retained.gt(0)",
+]);
+requireTokens("lib/enterprise/accounting/sector-adapters/pharmacy.ts", ["event.totalValue.gt(0)"]);
 
 if (exists(bootstrap)) {
   const template = JSON.parse(read(bootstrap));
