@@ -29,20 +29,30 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const conversationId = url.searchParams.get("conversationId")?.trim() || null;
-  if (!conversationId) return NextResponse.json({ confirmations: [] });
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
 
-  const rows = await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
-    SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
-    FROM "AiToolConfirmation"
-    WHERE "userId" = ${session.userId}
-      AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
-      AND "conversationId" = ${conversationId}
-      AND "status" = 'PENDING'
-      AND "expiresAt" > CURRENT_TIMESTAMP
-    ORDER BY "createdAt" DESC
-    LIMIT 5
-  `);
+  const rows = conversationId
+    ? await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
+        SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
+        FROM "AiToolConfirmation"
+        WHERE "userId" = ${session.userId}
+          AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
+          AND "conversationId" = ${conversationId}
+          AND "status" = 'PENDING'
+          AND "expiresAt" > CURRENT_TIMESTAMP
+        ORDER BY "createdAt" DESC
+        LIMIT 5
+      `)
+    : await prisma.$queryRaw<PendingRow[]>(Prisma.sql`
+        SELECT "id", "conversationId", "turnId", "toolCode", "argumentsJson", "expiresAt", "createdAt"
+        FROM "AiToolConfirmation"
+        WHERE "userId" = ${session.userId}
+          AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
+          AND "status" = 'PENDING'
+          AND "expiresAt" > CURRENT_TIMESTAMP
+        ORDER BY "createdAt" DESC
+        LIMIT 5
+      `);
 
   return NextResponse.json({
     confirmations: rows.map((row) => ({
