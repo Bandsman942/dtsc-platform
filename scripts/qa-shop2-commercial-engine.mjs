@@ -110,7 +110,7 @@ check(decisionRoute.includes("finalizeRetailReturnAccounting"), "Return approval
 
 const readiness = JSON.parse(read("lib/enterprise/sector-onboarding-readiness.json"));
 const retail = readiness.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL");
-const iteration2OrLater = new Set(["ITERATION_2_IN_PROGRESS", "ITERATION_3_IN_PROGRESS", "ITERATION_4_IN_PROGRESS", "COMMERCIAL_READY_GLOBAL"]);
+const iteration2OrLater = new Set(["ITERATION_2_IN_PROGRESS", "ITERATION_3_IN_PROGRESS", "ITERATION_4_IN_PROGRESS", "COMPLETE", "COMMERCIAL_READY_GLOBAL"]);
 check(iteration2OrLater.has(retail?.shop2ProgramStatus), "Shop 2 readiness must remain at iteration 2 or later after the commercial engine ships");
 
 if (failures.length) {

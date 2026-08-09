@@ -2,12 +2,14 @@
 
 ## 1. Principe
 
-`COMMERCIAL_READY_GLOBAL` n’est pas un statut marketing manuel. Il ne peut être attribué qu’après convergence de preuves techniques, comportementales, opérationnelles, documentaires et de livraison sur **un même SHA**.
+`COMMERCIAL_READY_GLOBAL` n’est pas un statut marketing manuel. Il ne peut être attribué qu’après convergence de preuves techniques, comportementales, opérationnelles, documentaires et de livraison sur **un même SHA**, puis validation explicite de la couverture commerciale réellement revendiquée par pays.
 
-Jusqu’à cette étape, le manifest doit rester :
+Le programme technique Shop 2.0 4/4 est désormais terminé et déployé en Production. Le manifest doit donc rester cohérent avec cette réalité :
 
-- `shop2ProgramStatus = ITERATION_4_IN_PROGRESS` ;
-- `commercializationStatus = COMMERCIAL_READY`.
+- `shop2ProgramStatus = COMPLETE` ;
+- `commercializationStatus = COMMERCIAL_READY` tant qu’aucune décision distincte ne promeut une couverture globale effectivement prouvée.
+
+Le statut technique `COMPLETE` ne constitue pas une certification juridique, fiscale ou réglementaire globale.
 
 ## 2. Préconditions architecture
 
@@ -89,6 +91,8 @@ Tester au minimum :
 
 ## 7. Country packs
 
+La matrice officielle est `docs/SHOP_2_0_COUNTRY_SUPPORT_MATRIX.md`.
+
 Pour chaque pays déclaré commercialement supporté :
 
 - pack versionné ;
@@ -148,16 +152,21 @@ Doivent être verts sur le même SHA :
 - QA i18n/guides ;
 - scénarios comportementaux Itération 4.
 
-## 11. Promotion du statut
+## 11. Clôture technique et promotion commerciale
 
-Seulement après les preuves ci-dessus :
+Après convergence des preuves techniques et Production de l’Itération 4 :
 
-1. mettre à jour le manifest de readiness avec le statut final supporté par le contrat QA ;
-2. ajouter un gate qui refuse `COMMERCIAL_READY_GLOBAL` si les preuves/documentations Itération 4 manquent ;
-3. exécuter les gates sur ce nouveau SHA ;
-4. sortir la PR du mode draft ;
-5. merger par le mécanisme autorisé dans `AGENTS.md` ;
-6. ne jamais déployer Production depuis la branche feature.
+1. `shop2ProgramStatus` passe à `COMPLETE` ;
+2. `commercializationStatus` reste `COMMERCIAL_READY` ;
+3. les gates QA doivent accepter `COMPLETE` et refuser toute régression vers un état d’itération antérieur ;
+4. la matrice pays doit rester la source officielle des capacités commercialement revendiquables ;
+5. `COMMERCIAL_READY_GLOBAL` ne peut être décidé que dans une évolution séparée, avec preuves pays/capacités explicites et sans transformer automatiquement une preuve technique en conformité réglementaire.
+
+Une éventuelle promotion globale doit encore :
+
+- ajouter un gate qui refuse `COMMERCIAL_READY_GLOBAL` si les preuves/documentations pays manquent ;
+- exécuter les gates sur le nouveau SHA ;
+- passer par PR, revue, merge `main` et Production selon `AGENTS.md`.
 
 ## 12. Production
 
@@ -170,7 +179,7 @@ Après merge :
 - vérifier le workflow Production release ;
 - publier/contrôler le tag et la release du SHA exact ;
 - exécuter le smoke test public/Account/App/Console/Support et le POS Shop ;
-- seulement ensuite fermer #126 et cocher l’Itération 4 dans #122.
+- conserver séparément la preuve de l’acceptance propriétaire authentifiée lorsqu’elle est requise pour une promotion commerciale supplémentaire.
 
 ## 13. Rollback
 

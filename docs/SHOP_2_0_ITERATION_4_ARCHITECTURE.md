@@ -2,7 +2,7 @@
 
 ## Statut
 
-Cette documentation décrit l’architecture de la branche de développement de l’Itération 4. Tant que les preuves finales CI, comportementales et Production ne sont pas réunies, Shop reste `COMMERCIAL_READY` et `ITERATION_4_IN_PROGRESS`. Le statut `COMMERCIAL_READY_GLOBAL` est interdit avant certification finale.
+L’Itération 4 est techniquement terminée et déployée en Production. Le programme Shop 2.0 est donc `COMPLETE`, tandis que le statut commercial reste `COMMERCIAL_READY`. Une éventuelle promotion vers `COMMERCIAL_READY_GLOBAL` demeure une décision distincte, pays par pays, fondée sur les preuves de capacités réellement supportées et sur la matrice officielle de couverture.
 
 ## Principes d’architecture
 
@@ -111,6 +111,8 @@ Capacités du socle :
 - e-invoicing : `NOT_CERTIFIED`.
 
 Aucun taux fiscal n’est codé en dur. Le référentiel fiscal vient du tenant/Finance commun. Une capacité `EVIDENCE_REQUIRED` ne devient validée qu’avec preuves explicites enregistrées.
+
+La couverture officielle par pays est publiée dans `docs/SHOP_2_0_COUNTRY_SUPPORT_MATRIX.md`. Aucun pays ou capability ne doit être revendiqué au-delà de cette matrice.
 
 ## Onboarding self-service
 
