@@ -33,6 +33,10 @@ L'acceptance ne réimplémente pas les contrôles déjà prouvés par la même c
 - chaque écriture `POSTED` est équilibrée ;
 - correction d'un historique par événement inverse/contrepassation, jamais par réécriture.
 
+### Payroll et clôture Finance
+
+Le statut métier `APPROVED` d'un run Payroll reste volontairement l'état final de l'approbation RH ; la comptabilisation de la dette est un événement Finance distinct. La clôture d'une période doit donc bloquer un run `APPROVED` uniquement tant qu'aucune écriture canonique `PAYROLL_APPROVED` en statut `POSTED` n'existe pour ce run. Un run approuvé et déjà comptabilisé ne constitue pas un blocker de clôture. Cette règle est vérifiée à la fois par le gate statique et par l'enchaînement production-like Payroll → Finance → clôture.
+
 ## Acceptance production-like
 
 `.github/workflows/accounting-acceptance.yml` exécute sur PostgreSQL propre et application Next.js buildée :
