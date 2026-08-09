@@ -40,7 +40,7 @@ if (exists(shared)) {
 const onboarding = "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx";
 if (exists(onboarding)) {
   const content = read(onboarding);
-  for (const token of ["official default chart of accounts", "plan officiel par défaut", "financeStatusLabel", "safeFinanceError", "Financial statements", "États financiers", "defaultTemplateReference"]) if (!content.includes(token)) fail(`Finance UX: onboarding final incomplet (${token})`);
+  for (const token of ["official SYSCOHADA default", "plan officiel par défaut", "financeStatusLabel", "safeFinanceError", "Financial statements", "États financiers", "defaultTemplateReference"]) if (!content.includes(token)) fail(`Finance UX: onboarding final incomplet (${token})`);
   for (const forbidden of ["bootstrap non officiel", "unofficial bootstrap", "REGULATORY_STATEMENT_MAPPING_NOT_VALIDATED"]) if (content.includes(forbidden)) fail(`Finance UX: jargon de gouvernance historique affiché au client (${forbidden})`);
 }
 
