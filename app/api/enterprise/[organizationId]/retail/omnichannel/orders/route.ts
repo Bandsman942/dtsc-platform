@@ -35,7 +35,7 @@ export async function GET(req: Request, { params }: Params) {
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "write", { mutation: true, rateLimitAction: "omnichannel-order" });
+  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "write", { mutation: true, limit: 120 });
   if (!auth.ok) return auth.response;
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Commande omnicanale invalide." }, { status: 400 });
@@ -52,6 +52,6 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", salesOrderId: result.order.id, idempotent: result.idempotent } });
     return NextResponse.json(result, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
-    return retailErrorResponse(error, { request: req, startedAt, userId: auth.session.userId, metadata: { organizationId, domain: "retail-omnichannel-orders" } });
+    return retailErrorResponse(error, "RETAIL_OMNICHANNEL_ORDER_FAILED");
   }
 }
