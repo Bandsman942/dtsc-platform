@@ -129,7 +129,10 @@ jobs:
           node scripts/qa-shop2-active-customer-cookie.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
       - name: Build production application
-        run: pnpm build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee /tmp/dtsc-shop2-build.log
         env:
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Install Playwright Chromium
@@ -163,4 +166,5 @@ jobs:
           path: |
             playwright-report
             test-results
+            /tmp/dtsc-shop2-build.log
             /tmp/dtsc-shop2-next.log
