@@ -20,18 +20,9 @@ export type AiToolDefinition = {
 
 const EMPTY_OBJECT = { type: "object", additionalProperties: false } as const;
 const OBJECT_OUTPUT = { type: "object" } as const;
+const SESSION_CONTEXTS = new Set(["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"]);
 
-function pharmacyReadTool({
-  code,
-  label,
-  description,
-  modules,
-}: {
-  code: string;
-  label: string;
-  description: string;
-  modules: string[];
-}): AiToolDefinition {
+function pharmacyReadTool({ code, label, description, modules }: { code: string; label: string; description: string; modules: string[] }): AiToolDefinition {
   return {
     code,
     labelKey: label,
@@ -82,7 +73,7 @@ export const AI_TOOL_REGISTRY: AiToolDefinition[] = [
     descriptionKey: "ai.tools.supportTicketCreate.description",
     inputSchema: { type: "object", required: ["subject", "message", "priority"], properties: { subject: { type: "string" }, message: { type: "string" }, priority: { enum: ["LOW", "MEDIUM", "HIGH", "URGENT"] } }, additionalProperties: false },
     outputSchema: OBJECT_OUTPUT,
-    contexts: ["PERSONAL", "ORGANIZATION"],
+    contexts: ["GLOBAL_CLIENT", "COMMUNITY", "ORGANIZATION"],
     requiredModuleCodes: [],
     requiredPermissions: [],
     mode: "MUTATE",
@@ -96,7 +87,7 @@ export const AI_TOOL_REGISTRY: AiToolDefinition[] = [
     descriptionKey: "ai.tools.contactEmailSend.description",
     inputSchema: { type: "object", required: ["subject", "message"], properties: { subject: { type: "string" }, message: { type: "string" } }, additionalProperties: false },
     outputSchema: OBJECT_OUTPUT,
-    contexts: ["PERSONAL", "ORGANIZATION"],
+    contexts: ["GLOBAL_CLIENT", "COMMUNITY", "ORGANIZATION"],
     requiredModuleCodes: [],
     requiredPermissions: [],
     mode: "MUTATE",
@@ -116,6 +107,8 @@ export function assertAiToolRegistryIntegrity() {
   for (const tool of AI_TOOL_REGISTRY) {
     if (codes.has(tool.code)) failures.push(`Duplicate AI tool: ${tool.code}`);
     codes.add(tool.code);
+    if (!tool.contexts.length) failures.push(`${tool.code}: at least one session context is required`);
+    for (const context of tool.contexts) if (!SESSION_CONTEXTS.has(context)) failures.push(`${tool.code}: unknown session context ${context}`);
     if ((tool.mode === "MUTATE" || tool.mode === "SENSITIVE_MUTATE") && !tool.requiresConfirmation) failures.push(`${tool.code}: mutations require confirmation`);
     if ((tool.mode === "MUTATE" || tool.mode === "SENSITIVE_MUTATE") && !tool.idempotent) failures.push(`${tool.code}: mutations must be idempotent`);
     if (tool.mode === "READ" && tool.requiresConfirmation) failures.push(`${tool.code}: READ tools must not require mutation confirmation`);
