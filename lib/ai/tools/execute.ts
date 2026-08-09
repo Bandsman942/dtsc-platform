@@ -110,11 +110,11 @@ export async function executeAiTool(input: {
       WHERE "id" = ${executionId}
     `);
 
-    if (input.context.organizationId) {
+    if (input.context.organizationId && input.context.conversationId) {
       await prisma.enterpriseAiToolCall.create({
         data: {
           organizationId: input.context.organizationId,
-          conversationId: input.context.conversationId || null,
+          conversationId: input.context.conversationId,
           userId: input.context.userId,
           toolName: input.toolCode,
           toolType: definition.mode,
