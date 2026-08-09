@@ -24,7 +24,7 @@ function canonicalModuleCodes() {
       const parsed = JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
       if (Array.isArray(parsed.modules)) for (const definition of parsed.modules) if (definition?.code) codes.add(definition.code);
     } catch {
-      // Invalid JSON is already caught by build/type gates; ignore non-registry shapes here.
+      // Invalid JSON is caught by build/type gates.
     }
   }
   return codes;
@@ -41,7 +41,11 @@ function staticShopReleaseChecks() {
   const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
   const mobileRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/route.ts");
   const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts");
-  const workspace = read("components/enterprise/professional/enterprise-retail-shop-workspace.tsx");
+  const retailPage = read("app/enterprise-modules/retail-page.tsx");
+  const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
+  const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+  const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
+  const dailyCloseWorkspace = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
   const adminPanels = read("components/enterprise/enterprise-admin-panels.tsx");
   const guides = read("lib/user-guides/retail-telco-mobile-money-guides.ts");
   const migration = read("prisma/migrations/20260807090000_shop_release_candidate_1/migration.sql");
@@ -61,16 +65,16 @@ function staticShopReleaseChecks() {
   const fxDoc = read("docs/ENTERPRISE_EXCHANGE_RATES.md");
 
   const checks = [
-    [workspace.includes("setCart") && workspace.includes("cart.map") && workspace.includes("Basket"), "MULTI_ITEM_POS"],
+    [posWorkspace.includes("setCart") && posWorkspace.includes("cart.map") && posWorkspace.includes("Basket"), "MULTI_ITEM_POS"],
     [commercialEngine.includes("prepareCommercialRetailSaleV2") && commercialEngine.includes("RETAIL_PRICE_OVERRIDE_FORBIDDEN") && saleExecution.includes("prepareCommercialRetailSaleV2") && saleExecution.includes("createRetailSale") && salesRoute.includes("executeCanonicalRetailSale"), "SERVER_PRICE_GUARD"],
     [provisioning.includes('providerCode: "MPESA"') && provisioning.includes('providerType: "MOBILE_MONEY"') && provisioning.includes('providerCode: "VODACOM"') && provisioning.includes('providerType: "TELCO"'), "WALLET_NETWORK_SEPARATION"],
     [migration.includes("EnterpriseMobileMoneyTransaction_rc1_external_ref_key") && migration.includes("EnterpriseTelcoTopup_rc1_external_ref_key") && mobileRoute.includes("prepareCommercialMobileMoney") && telcoRoute.includes("prepareCommercialTelcoTopup"), "UNIQUE_PROVIDER_REFERENCE"],
-    [guardrails.includes("normalizeRetailPhone") && workspace.includes("normalizePhonePreview") && workspace.includes("ConfirmationCard"), "PHONE_NORMALIZATION_AND_CONFIRMATION"],
-    [workspace.includes("floatAccountId: null") && workspace.includes("operatorFloatAccountId: null") && workspace.includes("dashboard.cashSession") && guardrails.includes("floatAccountId: null") && guardrails.includes("operatorFloatAccountId: null"), "AUTOMATIC_CASH_AND_FLOAT_RESOLUTION"],
-    [workspace.includes("CashSessionBar") && workspace.includes("No active till") && workspace.includes("Fonds d’ouverture"), "VISIBLE_CASH_SESSION"],
+    [guardrails.includes("normalizeRetailPhone") && sharedWorkspace.includes("normalizePhonePreview") && operatorWorkspace.includes("ConfirmationCard"), "PHONE_NORMALIZATION_AND_CONFIRMATION"],
+    [operatorWorkspace.includes("floatAccountId: null") && operatorWorkspace.includes("operatorFloatAccountId: null") && sharedWorkspace.includes("dashboard.cashSession") && guardrails.includes("floatAccountId: null") && guardrails.includes("operatorFloatAccountId: null"), "AUTOMATIC_CASH_AND_FLOAT_RESOLUTION"],
+    [sharedWorkspace.includes("CashSessionBar") && sharedWorkspace.includes("No active till") && sharedWorkspace.includes("Fonds d’ouverture"), "VISIBLE_CASH_SESSION"],
     [adminPanels.includes("RETAIL_PERMISSION_CATALOG") && adminPanels.includes('sectorCode === "COMMERCE_RETAIL"') && constants.includes("enterprise.purchases.manage"), "RETAIL_RBAC_CATALOG"],
     [guardrails.includes("getRetailMetricsByCurrency") && dashboard.includes("metricsByCurrency") && dashboardRoute.includes("getCommercialRetailDashboard") && !dashboardRoute.includes("getRetailDashboard("), "MULTI_CURRENCY_REPORTING"],
-    [dashboard.includes("readyForFirstSale") && dashboard.includes('code: "FX"') && workspace.includes("ShopReadiness") && workspace.includes("Mise en service du Shop"), "ONBOARDING_READINESS_CHECKLIST"],
+    [dashboard.includes("readyForFirstSale") && dashboard.includes('code: "FX"') && sharedWorkspace.includes("ShopReadiness") && sharedWorkspace.includes("Mise en service du Shop"), "ONBOARDING_READINESS_CHECKLIST"],
     [currency.includes("resolveExchangeRateDetails") && currency.includes('direction: "INVERSE"') && currency.includes("snapshotExchangeRate") && fxService.includes("createEnterpriseExchangeRate") && fxService.includes("deactivateEnterpriseExchangeRate") && fxSchemas.includes("CENTRAL_BANK") && fxRoute.includes("authorizeFinanceRequest") && fxDeactivateRoute.includes("writeAuditLog") && financeModulePage.includes("FINANCE_TREASURY/exchange-rates") && fxWorkspace.includes("1 {rate.sourceCurrencyCode}"), "FX_RATE_GOVERNANCE"],
     [fxReporting.includes("getRetailFunctionalCurrencySummary") && fxReporting.includes("resolveFromTimeline") && fxReporting.includes("missingRates") && fxReporting.includes("presentationCurrencyCode") && consolidatedReport.includes("ratesUsed") && consolidatedReport.includes("INCOMPLETE"), "HISTORICAL_FX_CONSOLIDATION"],
     [exists("docs/SHOP_ONBOARDING.md") && onboardingDoc.includes("STARTER — Shop Essentials") && onboardingDoc.includes("BUSINESS — Shop Operations") && onboardingDoc.includes("ENTERPRISE — Shop Scale") && onboardingDoc.includes("Taux de change") && guides.includes("Guide d’onboarding Shop") && guides.includes("Consolidation multi-devise") && fxDoc.includes("Gouvernance des taux de change"), "IN_APP_ONBOARDING_GUIDE"],
@@ -79,11 +83,13 @@ function staticShopReleaseChecks() {
 
   for (const marker of ["getSession", "rateLimit", "isSameOriginRequest", "getEnterpriseCommonDomainAccess"]) check(http.includes(marker), `Shop secure mutation contract missing ${marker}`);
   check(schemas.includes("idempotencyKey"), "Shop writes must remain idempotent");
-  check(workspace.includes("stableKey") && workspace.includes("busyAction"), "Shop UI must preserve an idempotency key and disable repeated submission while busy");
-  check(workspace.includes("min-w-0") && workspace.includes("grid-cols-[minmax(0,1fr)]"), "Shop UI must preserve the mobile-first responsive contract");
+  check(sharedWorkspace.includes("stableKey") && sharedWorkspace.includes("busyAction"), "Shop UI must preserve stable idempotency keys and repeated-submission protection");
+  check(posWorkspace.includes("min-w-0") && operatorWorkspace.includes("min-w-0") && dailyCloseWorkspace.includes("min-w-0"), "Shop dedicated workspaces must preserve the mobile-first responsive contract");
+  check(!exists("components/enterprise/professional/enterprise-retail-shop-workspace.tsx"), "Retired monolithic Shop workspace must not return");
+  check(retailPage.includes("RetailPosWorkspace") && retailPage.includes("RetailOperatorWorkspace") && retailPage.includes("RetailDailyCloseWorkspace"), "Retail routing must use dedicated workspaces");
   check(templateApplication.includes("syncRetailOnboardingProvisioning"), "Shop template application must provision the Retail profile at runtime");
   for (const code of ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"]) check(guides.includes(`${code}:`), `Shop user guide missing ${code}`);
-  check(guides.includes("Vodacom") && guides.includes("M-Pesa"), "Shop guides must distinguish telecom networks from Mobile Money wallets");
+  check(guides.includes("Vodacom") && guides.includes("M-Pesa"), "Shop guides must distinguish telecom networks from Mobile Money services");
   check(exists("docs/SECTOR_ONBOARDING_COMMERCIAL_READINESS.md"), "Generic sector onboarding commercialization contract documentation is missing");
 }
 
@@ -160,4 +166,4 @@ if (failures.length) {
   }
   process.exit(1);
 }
-console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract.");
+console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract with dedicated Retail workspaces.");
