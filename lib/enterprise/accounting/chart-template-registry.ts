@@ -6,6 +6,7 @@ import type {
   AccountingTemplateValidationResult,
 } from "@/lib/enterprise/accounting/chart-template-types";
 import genericSmallBusinessV1 from "@/lib/enterprise/accounting/templates/generic-small-business.v1.json";
+import syscohadaBootstrapV010 from "@/lib/enterprise/accounting/templates/syscohada/syscohada.bootstrap.v0.1.0.json";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -55,6 +56,7 @@ export const ACCOUNTING_FRAMEWORKS = deepFreeze([
 
 export const CHART_TEMPLATES = deepFreeze([
   genericSmallBusinessV1 as AccountingChartTemplateDefinition,
+  syscohadaBootstrapV010 as AccountingChartTemplateDefinition,
 ]);
 
 export function chartTemplateReference(template: Pick<AccountingChartTemplateDefinition, "code" | "version">) {

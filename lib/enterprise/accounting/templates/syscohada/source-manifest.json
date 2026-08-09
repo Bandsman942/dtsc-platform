@@ -33,6 +33,30 @@
     "verifiedAt": null,
     "verifiedBy": null
   },
+  "bootstrapPolicy": {
+    "enabled": true,
+    "templateVersion": "0.1.0",
+    "status": "NON_OFFICIAL_SYSCOHADA_2017_BOOTSTRAP",
+    "sourceFileName": "NON_OFFICIAL_SYSCOHADA_2017_WEB_BUNDLE",
+    "sourceSha256": "c4a07dbdd8b0d776cff18fb24cf5bbcc3e7a3ecedc719c4afb9ade4096af316c",
+    "sourceLabel": "Compilation provisoire SYSCOHADA révisé 2017 recoupée sur plusieurs références indépendantes en ligne ; l'AUDCIF officiel est utilisé uniquement pour confirmer le cadre, les dates et l'existence du SYSCOHADA révisé.",
+    "sourceReferences": [
+      "https://www.plan-comptable-ohada.com/",
+      "https://oopidi.com/compta/plan-comptable-syscohada",
+      "https://www.lefisk.cm/blog/plan-comptable-syscohada-revise-liste-comptes"
+    ],
+    "authorizedBy": "DTSC owner instruction 2026-08-09",
+    "allowedPurpose": "BOOTSTRAP_RUNTIME_ONLY",
+    "regulatoryComplianceClaimAllowed": false,
+    "accountingTemplateProductionReadyAllowed": false,
+    "futureVersionsRequireTrustedSource": true,
+    "futureVersionsRequireDatasetVerification": true,
+    "notes": [
+      "Cette exception est strictement limitée à OHADA_SYSCOHADA@0.1.0 afin de disposer immédiatement d'un template fonctionnel basé sur le référentiel révisé 2017.",
+      "Les sources de comptes de cette version sont indépendantes et non officielles ; le texte officiel OHADA prévaut en cas d'écart.",
+      "Toute version postérieure doit revenir au gate normal de source officielle ou légalement exploitable, dataset fingerprinté et revue comptable."
+    ]
+  },
   "datasetPipeline": {
     "schemaVersion": "1.0.0",
     "schemaPath": "lib/enterprise/accounting/templates/syscohada/dataset-schema.v1.json",
@@ -51,9 +75,8 @@
   },
   "lastRegulatoryVerificationAt": "2026-08-09",
   "notes": [
-    "The OHADA act page confirms that the revised SYSCOHADA annex contains the OHADA general chart of accounts and the consolidated/combined accounting framework.",
-    "The official digital-library notice lists two digital documents but does not expose a direct download URL in the crawlable catalog content.",
-    "No SYSCOHADA account dataset may be published until an official or legally exploitable source file is verified and fingerprinted.",
-    "The deterministic dataset pipeline contains no regulatory account data and only accepts reviewed input linked to the verified source SHA-256."
+    "The official AUDCIF confirms adoption on 2017-01-26, publication on 2017-02-15 and revised SYSCOHADA applicability from 2018-01-01 for individual accounts.",
+    "Version 0.1.0 is an isolated owner-authorized bootstrap whose account dataset is compiled from non-official independent references and therefore cannot claim regulatory conformity.",
+    "The deterministic dataset pipeline remains unchanged and still requires a verified trusted source for version 1.0.0 and later releases."
   ]
 }
