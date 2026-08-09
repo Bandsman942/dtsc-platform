@@ -30,6 +30,7 @@ import "./qa-standard-ai-mcp-ssrf.mjs";
 import "./qa-standard-ai-mcp-data-policy.mjs";
 import "./qa-standard-ai-mcp-tenant-isolation.mjs";
 import "./qa-standard-ai-mcp-discovery.mjs";
+import "./qa-standard-ai-mcp-protocol.mjs";
 import { runStandardAiIteration05Audit } from "./lib/standard-ai-iteration05-audit.mjs";
 
 runStandardAiIteration05Audit("all");
