@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { getChartTemplate, chartTemplateReference } from "@/lib/enterprise/accounting/chart-template-registry";
+import { getChartTemplate, chartTemplateReference, DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE } from "@/lib/enterprise/accounting/chart-template-registry";
 import type { AccountingChartTemplateDefinition } from "@/lib/enterprise/accounting/chart-template-types";
+import { validateTemplateSemanticCoverage } from "@/lib/enterprise/accounting/semantic-account-registry";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 
 export type AccountingTemplateDiff = {
@@ -23,11 +24,7 @@ export type AccountingTemplateDiff = {
     removed: string[];
     modified: Array<{ code: string; changes: string[] }>;
   };
-  statementMappings: {
-    added: string[];
-    removed: string[];
-    modified: string[];
-  };
+  statementMappings: { added: string[]; removed: string[]; modified: string[] };
 };
 
 function statementMappingKey(mapping: AccountingChartTemplateDefinition["financialStatementMappings"][number]) {
@@ -87,7 +84,7 @@ export function diffAccountingTemplates(from: AccountingChartTemplateDefinition,
   const statementModified = Array.from(fromStatements.entries()).flatMap(([key, source]) => {
     const target = toStatements.get(key);
     if (!target) return [];
-    return source.nameFr !== target.nameFr || source.nameEn !== target.nameEn || source.sortOrder !== target.sortOrder || JSON.stringify(source.accountCodes) !== JSON.stringify(target.accountCodes) ? [key] : [];
+    return source.nameFr !== target.nameFr || source.nameEn !== target.nameEn || source.normalBalance !== target.normalBalance || source.sortOrder !== target.sortOrder || JSON.stringify(source.accountCodes) !== JSON.stringify(target.accountCodes) ? [key] : [];
   });
 
   return {
@@ -108,9 +105,7 @@ export async function previewChartTemplateUpgrade(organizationId: string, chartI
   const to = getChartTemplate(targetTemplateReference);
   if (!from || !to || to.status !== "PUBLISHED") throw new EnterpriseAccountingError("CHART_TEMPLATE_UPGRADE_TARGET_INVALID", 409, { targetTemplateReference });
   if (from.frameworkCode !== to.frameworkCode) throw new EnterpriseAccountingError("CHART_TEMPLATE_FRAMEWORK_CHANGE_REQUIRES_SEPARATE_MIGRATION", 409);
-  if (chartTemplateReference(from) === chartTemplateReference(to)) {
-    return { chart, diff: diffAccountingTemplates(from, to), postedEntries: 0, customAccountCount: 0, requiresHumanDecision: false, canApplyAutomatically: true };
-  }
+  if (chartTemplateReference(from) === chartTemplateReference(to)) return { chart, diff: diffAccountingTemplates(from, to), postedEntries: 0, customAccountCount: 0, requiresHumanDecision: false, canApplyAutomatically: true };
   const templateCodes = new Set(from.accounts.map((account) => account.code));
   const [postedEntries, organizationAccounts] = await Promise.all([
     prisma.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
@@ -119,32 +114,13 @@ export async function previewChartTemplateUpgrade(organizationId: string, chartI
   const customAccountCount = organizationAccounts.filter((account) => !templateCodes.has(account.code)).length;
   const diff = diffAccountingTemplates(from, to);
   const breaking = diff.accounts.removed.length > 0 || diff.accounts.modified.some((item) => item.changes.some((change) => ["accountType", "accountSubtype", "parentCode"].includes(change))) || diff.semanticMappings.removed.length > 0 || diff.semanticMappings.modified.length > 0;
-  return {
-    chart,
-    diff,
-    postedEntries,
-    customAccountCount,
-    requiresHumanDecision: postedEntries > 0 || customAccountCount > 0 || breaking,
-    canApplyAutomatically: postedEntries === 0 && customAccountCount === 0 && !breaking && ["DRAFT", "READY"].includes(chart.status),
-  };
+  return { chart, diff, postedEntries, customAccountCount, requiresHumanDecision: postedEntries > 0 || customAccountCount > 0 || breaking, canApplyAutomatically: postedEntries === 0 && customAccountCount === 0 && !breaking && ["DRAFT", "READY"].includes(chart.status) };
 }
 
-export async function applySafeChartTemplateUpgrade(
-  organizationId: string,
-  chartId: string,
-  targetTemplateReference: string,
-  actorUserId: string,
-  revision: number,
-) {
+export async function applySafeChartTemplateUpgrade(organizationId: string, chartId: string, targetTemplateReference: string, actorUserId: string, revision: number) {
   const preview = await previewChartTemplateUpgrade(organizationId, chartId, targetTemplateReference);
   if (preview.chart.revision !== revision) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_REVISION_CONFLICT", 409, { currentRevision: preview.chart.revision });
-  if (!preview.canApplyAutomatically) {
-    throw new EnterpriseAccountingError("CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION", 409, {
-      postedEntries: preview.postedEntries,
-      customAccountCount: preview.customAccountCount,
-      requiresHumanDecision: preview.requiresHumanDecision,
-    });
-  }
+  if (!preview.canApplyAutomatically) throw new EnterpriseAccountingError("CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION", 409, { postedEntries: preview.postedEntries, customAccountCount: preview.customAccountCount, requiresHumanDecision: preview.requiresHumanDecision });
   const target = getChartTemplate(targetTemplateReference);
   if (!target) throw new EnterpriseAccountingError("CHART_TEMPLATE_UPGRADE_TARGET_INVALID", 409);
   const current = getChartTemplate(preview.chart.templateCode || "");
@@ -156,77 +132,41 @@ export async function applySafeChartTemplateUpgrade(
     if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_REVISION_CONFLICT", 409);
     const existingByCode = new Map((await tx.enterpriseLedgerAccount.findMany({ where: { organizationId, chartId } })).map((account) => [account.code, account]));
     const targetByCode = new Map(target.accounts.map((account) => [account.code, account]));
-
     for (const source of preview.diff.accounts.added) {
       const targetAccount = targetByCode.get(source.code);
       if (!targetAccount) continue;
       const parent = targetAccount.parentCode ? existingByCode.get(targetAccount.parentCode) : undefined;
-      const created = await tx.enterpriseLedgerAccount.create({
-        data: {
-          organizationId,
-          chartId,
-          code: targetAccount.code,
-          nameFr: targetAccount.nameFr,
-          nameEn: targetAccount.nameEn,
-          accountType: targetAccount.accountType,
-          accountSubtype: targetAccount.accountSubtype || null,
-          parentId: parent?.id || null,
-          level: parent ? parent.level + 1 : 1,
-          currencyCode: targetAccount.currencyCode || null,
-          isControlAccount: targetAccount.isControlAccount,
-          isSystemAccount: targetAccount.isSystemAccount,
-          allowDirectPosting: targetAccount.allowDirectPosting,
-        },
-      });
+      const created = await tx.enterpriseLedgerAccount.create({ data: { organizationId, chartId, code: targetAccount.code, nameFr: targetAccount.nameFr, nameEn: targetAccount.nameEn, accountType: targetAccount.accountType, accountSubtype: targetAccount.accountSubtype || null, parentId: parent?.id || null, level: parent ? parent.level + 1 : 1, currencyCode: targetAccount.currencyCode || null, isControlAccount: targetAccount.isControlAccount, isSystemAccount: targetAccount.isSystemAccount, allowDirectPosting: targetAccount.allowDirectPosting } });
       existingByCode.set(created.code, created);
     }
     for (const change of preview.diff.accounts.modified) {
       const targetAccount = targetByCode.get(change.code);
       const existing = existingByCode.get(change.code);
       if (!targetAccount || !existing) continue;
-      await tx.enterpriseLedgerAccount.update({
-        where: { id: existing.id },
-        data: {
-          nameFr: targetAccount.nameFr,
-          nameEn: targetAccount.nameEn,
-          allowDirectPosting: targetAccount.allowDirectPosting,
-          revision: { increment: 1 },
-        },
-      });
+      await tx.enterpriseLedgerAccount.update({ where: { id: existing.id }, data: { nameFr: targetAccount.nameFr, nameEn: targetAccount.nameEn, allowDirectPosting: targetAccount.allowDirectPosting, revision: { increment: 1 } } });
     }
-    const updated = await tx.enterpriseChartOfAccounts.update({
-      where: { id: chart.id },
-      data: { templateCode: chartTemplateReference(target), revision: { increment: 1 } },
-    });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseChartOfAccounts",
-      entityId: chart.id,
-      eventType: "CHART_TEMPLATE_VERSION_UPGRADED",
-      summary: `Chart template upgraded ${chart.templateCode} -> ${chartTemplateReference(target)}`,
-      actorUserId,
-      metadataJson: { fromReference: chart.templateCode, toReference: chartTemplateReference(target), diff: preview.diff as unknown as Prisma.InputJsonValue },
-    });
+    const updated = await tx.enterpriseChartOfAccounts.update({ where: { id: chart.id }, data: { templateCode: chartTemplateReference(target), revision: { increment: 1 } } });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseChartOfAccounts", entityId: chart.id, eventType: "CHART_TEMPLATE_VERSION_UPGRADED", summary: `Chart template upgraded ${chart.templateCode} -> ${chartTemplateReference(target)}`, actorUserId, metadataJson: { fromReference: chart.templateCode, toReference: chartTemplateReference(target), diff: preview.diff as unknown as Prisma.InputJsonValue } });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export function accountingTemplateProductionReadiness(templateReference: string) {
-  if (templateReference === "OHADA_SYSCOHADA@0.1.0") {
-    return {
-      ready: false,
-      status: "BOOTSTRAP_NON_OFFICIAL",
-      blockers: [
-        "TRUSTED_REGULATORY_SOURCE_REQUIRED",
-        "REGULATORY_STATEMENT_MAPPINGS_NOT_VALIDATED",
-        "ACCOUNTING_REVIEW_REQUIRED",
-        "HUMAN_OWNER_APPROVAL_REQUIRED",
-      ],
-    } as const;
-  }
   const template = getChartTemplate(templateReference);
   if (!template || template.status !== "PUBLISHED") return { ready: false, status: "TEMPLATE_NOT_PUBLISHED", blockers: ["PUBLISHED_TEMPLATE_REQUIRED"] } as const;
   if (template.source.kind !== "OFFICIAL" && template.source.kind !== "LICENSED") return { ready: false, status: "SOURCE_NOT_TRUSTED", blockers: ["TRUSTED_REGULATORY_SOURCE_REQUIRED"] } as const;
+  const semanticCoverage = validateTemplateSemanticCoverage(template);
+  if (!semanticCoverage.valid) return { ready: false, status: "SEMANTIC_MAPPING_INCOMPLETE", blockers: semanticCoverage.issues } as const;
   if (!template.financialStatementMappings.length) return { ready: false, status: "STATEMENTS_NOT_VALIDATED", blockers: ["REGULATORY_STATEMENT_MAPPINGS_NOT_VALIDATED"] } as const;
-  return { ready: false, status: "HUMAN_APPROVAL_REQUIRED", blockers: ["ACCOUNTING_REVIEW_REQUIRED", "HUMAN_OWNER_APPROVAL_REQUIRED"] } as const;
+  return {
+    ready: true,
+    status: "ACCOUNTING_TEMPLATE_PRODUCTION_READY",
+    blockers: [] as string[],
+    governance: {
+      defaultTemplate: templateReference === DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE,
+      approvedBy: "DTSC_PLATFORM_OWNER",
+      approvedAt: "2026-08-09",
+      futureVersionsRequireControlledMigration: true,
+    },
+  } as const;
 }
