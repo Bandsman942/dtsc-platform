@@ -89,7 +89,7 @@ export async function consumeAiToolConfirmation(input: {
   const argumentsHash = hashAiToolArguments(input.args);
   const consumed = await prisma.$queryRaw<ConfirmationRow[]>(Prisma.sql`
     UPDATE "AiToolConfirmation"
-    SET "status" = 'CONSUMED', "consumedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
+    SET "status" = 'CONSUMED', "consumedAt" = CURRENT_TIMESTAMP, "argumentsJson" = NULL, "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${input.confirmationId}
       AND "userId" = ${input.context.userId}
       AND "toolCode" = ${input.toolCode}
