@@ -8,6 +8,8 @@ export function runStandardAiMcpAudit(mode = "all") {
   const failures = [];
   const registry = read("lib/ai/mcp/registry.ts");
   const bindings = read("lib/ai/mcp/bindings.ts");
+  const authorization = read("lib/ai/mcp/authorization.ts");
+  const resourceAdapter = read("lib/ai/mcp/resource-adapter.ts");
   const security = read("lib/ai/mcp/security.ts");
   const transport = read("lib/ai/mcp/transport.ts");
   const adapter = read("lib/ai/mcp/tool-adapter.ts");
@@ -34,6 +36,9 @@ export function runStandardAiMcpAudit(mode = "all") {
     check(toolRegistry.includes("listMcpAiToolDefinitions"), "canonical Tool Registry must include only bound MCP definitions");
     check(schemas.includes("getMcpBindingInputSchema"), "MCP input must use runtime validation");
     check(executors.includes("getMcpToolExecutor"), "MCP execution must stay behind canonical Tool Gateway executors");
+    check(resourceAdapter.includes("DTSC_MCP_RESOURCE_BINDINGS_JSON"), "MCP resources must require explicit bindings");
+    check(resourceAdapter.includes('trust: "UNTRUSTED_EXTERNAL_CONTENT"'), "MCP resource content must remain untrusted");
+    check(resourceAdapter.includes('instructionAuthority: "NONE"'), "MCP resources must have no instruction authority");
   }
 
   if (["all", "auth"].includes(mode)) {
@@ -41,6 +46,8 @@ export function runStandardAiMcpAudit(mode = "all") {
     check(transport.includes("process.env[envKey]"), "MCP token must be loaded from server environment");
     check(!adapter.includes("Authorization:"), "MCP tool adapter must not construct/export credentials");
     check(adapter.includes("MCP_TENANT_CONTEXT_REQUIRED"), "tenant MCP servers must enforce active organization context");
+    check(adapter.includes("authorizeMcpRequiredPermissions"), "MCP tool binding permissions must be enforced before remote calls");
+    check(authorization.includes("MCP_REQUIRED_PERMISSION_DENIED"), "missing exact MCP required-permission denial");
   }
 
   if (["all", "ssrf"].includes(mode)) {
@@ -56,11 +63,13 @@ export function runStandardAiMcpAudit(mode = "all") {
     check(security.includes("MCP_SECRET_DATA_FORBIDDEN"), "SECRET data must never be sent to MCP");
     check(security.includes("MCP_SENSITIVE_SERVER_NOT_CERTIFIED"), "sensitive data must require certified sensitive MCP policy");
     check(adapter.includes("authorizeMcpDataBoundary"), "MCP tool execution must apply data boundary before remote call");
+    check(resourceAdapter.includes("authorizeMcpDataBoundary"), "MCP resource reads must apply data boundary before remote call");
   }
 
   if (["all", "tenant-isolation"].includes(mode)) {
     check(adapter.includes("activeOrganizationId !== input.context.organizationId"), "MCP tenant execution must compare active organization");
     check(adapter.includes("organizationScope === \"TENANT\""), "MCP tenant-scoped servers require explicit tenant policy");
+    check(resourceAdapter.includes("activeOrganizationId !== input.context.organizationId"), "MCP tenant resource reads must compare active organization");
     check(toolRegistry.includes("requiredModuleCodes"), "MCP canonical definitions must remain subject to Tool Gateway module access");
   }
 
