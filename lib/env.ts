@@ -18,6 +18,11 @@ const optionalString = (minimum = 1) =>
 const envSchema = z.object({
   DATABASE_URL: optionalString(),
   OPENAI_API_KEY: optionalString(),
+  OPENROUTER_API_KEY: optionalString(),
+  OPENROUTER_BASE_URL: z.preprocess((value) => (value === "" ? undefined : value), z.string().url().default("https://openrouter.ai/api/v1")),
+  OPENROUTER_HTTP_REFERER: optionalUrl,
+  OPENROUTER_APP_TITLE: optionalString(),
+  AI_OPENROUTER_CERTIFIED_MODELS_JSON: optionalString(),
   AUTH_SECRET: z.string().optional(),
   APP_URL: optionalUrl,
   OPENAI_MODEL: z.string().min(1).default("gpt-5-nano"),
