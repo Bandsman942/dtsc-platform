@@ -1,7 +1,7 @@
 {
   "frameworkCode": "OHADA_AUDCIF",
   "plannedTemplateCode": "OHADA_SYSCOHADA",
-  "plannedTemplateVersion": "0.1.0",
+  "plannedTemplateVersion": "1.0.0",
   "verificationStatus": "SOURCE_FILE_REQUIRED",
   "legalUseStatus": "REVIEW_REQUIRED",
   "regulatoryAuthority": "OHADA",
@@ -70,7 +70,7 @@
   },
   "lastRegulatoryVerificationAt": "2026-08-09",
   "notes": [
-    "The official 2017 provenance chain remains the required path for all future versions.",
+    "The official 2017 provenance chain remains the required path for version 1.0.0 and all future regulatory releases.",
     "Version 0.1.0 is a deliberately isolated owner-authorized bootstrap based on a supplied non-official PDF and cannot claim regulatory conformity.",
     "The deterministic dataset pipeline remains unchanged and still requires a verified source for future reviewed datasets."
   ]
