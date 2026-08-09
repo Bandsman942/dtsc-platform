@@ -78,10 +78,12 @@ export async function generateRegulatoryStatement(
       COALESCE(SUM(l.credit), 0) AS credit,
       COUNT(DISTINCT e.id)::bigint AS "entryCount"
     FROM "EnterpriseLedgerAccount" a
-    LEFT JOIN "EnterpriseJournalLine" l
-      ON l."ledgerAccountId" = a.id AND l."organizationId" = a."organizationId"
-    LEFT JOIN "EnterpriseJournalEntry" e
-      ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId"
+    JOIN "EnterpriseJournalLine" l
+      ON l."ledgerAccountId" = a.id
+      AND l."organizationId" = a."organizationId"
+    JOIN "EnterpriseJournalEntry" e
+      ON e.id = l."journalEntryId"
+      AND e."organizationId" = l."organizationId"
       AND e.status = 'POSTED'
       AND e."accountingDate" BETWEEN ${input.periodStart} AND ${input.periodEnd}
     WHERE a."organizationId" = ${organizationId}
@@ -94,7 +96,7 @@ export async function generateRegulatoryStatement(
       const row = balanceByCode.get(accountCode);
       const debit = row?.debit || new Prisma.Decimal(0);
       const credit = row?.credit || new Prisma.Decimal(0);
-      return { accountCode, debit, credit, netDebit: debit.minus(credit), entryCount: Number(row?.entryCount || 0n) };
+      return { accountCode, debit, credit, netDebit: debit.minus(credit), entryCount: row ? Number(row.entryCount) : 0 };
     });
     const amount = contributors.reduce((total, contributor) => total.plus(contributor.netDebit), new Prisma.Decimal(0));
     return {
