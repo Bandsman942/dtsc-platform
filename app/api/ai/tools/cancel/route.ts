@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId || null : null;
   const updated = await prisma.$executeRaw(Prisma.sql`
     UPDATE "AiToolConfirmation"
-    SET "status" = 'CANCELLED', "cancelledAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
+    SET "status" = 'CANCELLED', "cancelledAt" = CURRENT_TIMESTAMP, "argumentsJson" = NULL, "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${parsed.data.confirmationId}
       AND "userId" = ${session.userId}
       AND ("organizationId" IS NOT DISTINCT FROM ${organizationId})
