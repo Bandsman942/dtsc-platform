@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
+import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
@@ -37,11 +38,19 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
       <div className="space-y-4">
         {moduleCode === "RETAIL_POS" ? <RetailActiveCustomerBar organizationId={organizationId} /> : null}
 
-        <EnterpriseRetailShopWorkspace
-          organizationId={organizationId}
-          organizationName={organization.name}
-          definition={access.definition}
-        />
+        {moduleCode === "RETAIL_DAILY_CLOSE" ? (
+          <RetailDailyCloseWorkspace
+            organizationId={organizationId}
+            organizationName={organization.name}
+            definition={access.definition}
+          />
+        ) : (
+          <EnterpriseRetailShopWorkspace
+            organizationId={organizationId}
+            organizationName={organization.name}
+            definition={access.definition}
+          />
+        )}
 
         {moduleCode === "RETAIL_POS" ? (
           <section aria-label={locale === "en" ? "Additional Shop tools" : "Outils complémentaires du Shop"} className="space-y-3">

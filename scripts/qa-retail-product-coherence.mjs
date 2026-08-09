@@ -32,6 +32,7 @@ const language = read("lib/customer-facing-language.ts");
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
 const activeCustomer = read("components/enterprise/professional/retail-active-customer-bar.tsx");
 const paymentFollowup = read("components/enterprise/professional/retail-payment-followup.tsx");
+const dailyClose = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
 const commercial = read("components/enterprise/professional/retail-commercial-workspace.tsx");
 const deviceReadiness = read("components/enterprise/professional/retail-device-readiness.tsx");
 const globalReadiness = read("components/enterprise/professional/retail-global-readiness.tsx");
@@ -78,6 +79,30 @@ check(before(retailPage, "<EnterpriseRetailShopWorkspace", "<RetailOmnichannelPa
 check(before(retailPage, "<EnterpriseRetailShopWorkspace", "<RetailGlobalReadiness"), "The core Shop workspace must render before setup/readiness tools.");
 check((retailPage.match(/<details/g) || []).length >= 2, "Retail POS secondary tools must use progressive disclosure instead of stacking every panel before the core workflow.");
 check(retailPage.includes("RetailPaymentFollowup"), "Retail POS must integrate the permission-aware payment follow-up surface.");
+check(retailPage.includes("RetailDailyCloseWorkspace"), "Retail daily close must use its dedicated workspace.");
+check(retailPage.includes('moduleCode === "RETAIL_DAILY_CLOSE"'), "Retail daily close routing must be explicit and separate from the generic Shop workspace.");
+
+for (const marker of [
+  "customerFacingError",
+  "customerFacingStatusLabel",
+  "customerFacingFinancialAccountType",
+  'href="/enterprise-modules/FINANCE_CASH"',
+  'href="/enterprise-modules/FINANCE_TREASURY"',
+  "idempotencyKey",
+  "stableKey",
+  "[touch-action:pan-x]",
+  "Soumettre la clôture journalière",
+  "Historique des clôtures",
+]) check(dailyClose.includes(marker), `Retail daily close workspace must include ${marker}.`);
+for (const forbidden of [
+  "`${line.accountType}",
+  "`${account.accountType}",
+  ">{account.accountType}<",
+  ">{line.accountType}<",
+  "EnterpriseRetailShopWorkspace",
+]) check(!dailyClose.includes(forbidden), `Retail daily close customer UI still contains a raw/internal rendering marker: ${forbidden}`);
+check(dailyClose.includes('dashboard.access.canManage && item.status === "SUBMITTED"'), "Retail daily close must preserve independent review actions only for manage-capable users.");
+check(dailyClose.includes('pageSize: "50"'), "Retail daily close history must remain bounded instead of loading all closes.");
 
 check(activeCustomer.includes("useAppLocale"), "Active customer UI must use the shared locale context.");
 check(activeCustomer.includes("customerFacingError"), "Active customer UI must sanitize customer-visible errors.");
