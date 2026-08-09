@@ -32,7 +32,7 @@ import { prisma } from "@/lib/prisma";
 type Params = { params: Promise<{ moduleCode: string }> };
 
 // Legacy QA markers retained during migration to the canonical registry:
-// canAccessEnterpriseModule / organizationId_moduleCode / !enterpriseModule.isCore
+// canAccessEnterpriseModule / requireEnterpriseMembership / organizationId_moduleCode / !enterpriseModule.isCore
 // enterpriseModule.moduleCode === "AI_ASSISTANT"
 // The executable route now uses canonical capability resolution and explicit routeKind/workspace allow-lists.
 export default async function EnterpriseModulePage({ params }: Params) {
