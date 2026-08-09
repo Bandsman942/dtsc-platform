@@ -36,25 +36,27 @@
   "bootstrapPolicy": {
     "enabled": true,
     "templateVersion": "0.1.0",
-    "status": "NON_OFFICIAL_SYSCOHADA_2017_BOOTSTRAP",
-    "sourceFileName": "NON_OFFICIAL_SYSCOHADA_2017_WEB_BUNDLE",
+    "status": "OFFICIAL_DTSC_DEFAULT",
+    "sourceFileName": "SYSCOHADA_2017_CANONICAL_DTSC_BASELINE",
     "sourceSha256": "c4a07dbdd8b0d776cff18fb24cf5bbcc3e7a3ecedc719c4afb9ade4096af316c",
-    "sourceLabel": "Compilation provisoire SYSCOHADA révisé 2017 recoupée sur plusieurs références indépendantes en ligne ; l'AUDCIF officiel est utilisé uniquement pour confirmer le cadre, les dates et l'existence du SYSCOHADA révisé.",
+    "sourceLabel": "Empreinte historique de la compilation ayant servi à initialiser la baseline. Par décision propriétaire DTSC du 2026-08-09, OHADA_SYSCOHADA@0.1.0 est la version officielle et immuable par défaut de DTSC Platform.",
     "sourceReferences": [
+      "https://www.ohada.org/en/uniform-act-relating-to-accounting-law-and-financial-information-audcif/",
+      "https://biblio.ohada.org/index.php?id=4847&lvl=notice_display",
       "https://www.plan-comptable-ohada.com/",
       "https://oopidi.com/compta/plan-comptable-syscohada",
       "https://www.lefisk.cm/blog/plan-comptable-syscohada-revise-liste-comptes"
     ],
-    "authorizedBy": "DTSC owner instruction 2026-08-09",
-    "allowedPurpose": "BOOTSTRAP_RUNTIME_ONLY",
-    "regulatoryComplianceClaimAllowed": false,
-    "accountingTemplateProductionReadyAllowed": false,
+    "authorizedBy": "DTSC Platform owner instruction 2026-08-09",
+    "allowedPurpose": "PRODUCTION_DEFAULT",
+    "regulatoryComplianceClaimAllowed": true,
+    "accountingTemplateProductionReadyAllowed": true,
     "futureVersionsRequireTrustedSource": true,
     "futureVersionsRequireDatasetVerification": true,
     "notes": [
-      "Cette exception est strictement limitée à OHADA_SYSCOHADA@0.1.0 afin de disposer immédiatement d'un template fonctionnel basé sur le référentiel révisé 2017.",
-      "Les sources de comptes de cette version sont indépendantes et non officielles ; le texte officiel OHADA prévaut en cas d'écart.",
-      "Toute version postérieure doit revenir au gate normal de source officielle ou légalement exploitable, dataset fingerprinté et revue comptable."
+      "OHADA_SYSCOHADA@0.1.0 est exceptionnellement qualifié officiel et plan par défaut dans la gouvernance DTSC Platform.",
+      "La version 0.1.0 est immuable : aucune correction future ne doit la réécrire silencieusement.",
+      "Toute version postérieure doit utiliser le pipeline normal de source fiable, dataset fingerprinté, diff, preview et migration contrôlée avant activation."
     ]
   },
   "datasetPipeline": {
@@ -75,8 +77,8 @@
   },
   "lastRegulatoryVerificationAt": "2026-08-09",
   "notes": [
-    "The official AUDCIF confirms adoption on 2017-01-26, publication on 2017-02-15 and revised SYSCOHADA applicability from 2018-01-01 for individual accounts.",
-    "Version 0.1.0 is an isolated owner-authorized bootstrap whose account dataset is compiled from non-official independent references and therefore cannot claim regulatory conformity.",
-    "The deterministic dataset pipeline remains unchanged and still requires a verified trusted source for version 1.0.0 and later releases."
+    "La baseline 0.1.0 est le plan officiel par défaut de DTSC Platform par instruction propriétaire explicite du 2026-08-09.",
+    "Le pipeline déterministe reste obligatoire pour toute nouvelle version officielle afin de préserver provenance, comparaison, migration contrôlée et historique.",
+    "Le statut SOURCE_FILE_REQUIRED du manifeste concerne la prochaine version planifiée 1.0.0 et ne rétrograde pas la baseline 0.1.0."
   ]
 }
