@@ -20,6 +20,8 @@ import "./qa-standard-ai-embedding-provider.mjs";
 import "./qa-standard-ai-index-versioning.mjs";
 import "./qa-standard-ai-rag-hybrid.mjs";
 import "./qa-standard-ai-rag-reindex-idempotency.mjs";
+import "./qa-standard-ai-tool-gateway.mjs";
+import "./qa-standard-ai-tool-confirmation-idempotency.mjs";
 import { runStandardAiIteration05Audit } from "./lib/standard-ai-iteration05-audit.mjs";
 
 runStandardAiIteration05Audit("all");
