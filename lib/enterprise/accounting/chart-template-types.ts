@@ -65,6 +65,7 @@ export type AccountingTemplateStatementMapping = {
   nameFr: string;
   nameEn: string;
   accountCodes: readonly string[];
+  normalBalance: "DEBIT" | "CREDIT";
   sortOrder: number;
 };
 
