@@ -1,5 +1,6 @@
 import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
+import "./qa-syscohada-dataset-pipeline.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([
@@ -11,7 +12,10 @@ requirePaths([
   "lib/enterprise/accounting/chart-template-application-service.ts",
   "lib/enterprise/accounting/templates/generic-small-business.v1.json",
   "lib/enterprise/accounting/templates/syscohada/source-manifest.json",
+  "lib/enterprise/accounting/templates/syscohada/dataset-schema.v1.json",
   "scripts/accounting/verify-syscohada-source.mjs",
+  "scripts/accounting/syscohada-dataset-lib.mjs",
+  "scripts/accounting/build-syscohada-dataset.mjs",
   "lib/enterprise/module-registry-finance.json",
 ]);
 requireTokens("lib/enterprise/accounting/posting-service.ts", [
