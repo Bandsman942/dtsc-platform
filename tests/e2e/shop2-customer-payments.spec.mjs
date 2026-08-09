@@ -227,9 +227,10 @@ test.describe.serial("Shop 2.0 customer, loyalty, stored value and payment accep
     });
     expect(device.response.ok(), JSON.stringify(device.body)).toBeTruthy();
     await page.goto("/enterprise-modules/RETAIL_POS");
-    await expect(page.getByText("Périphériques POS")).toBeVisible();
-    await expect(page.getByText("Imprimante manuelle E2E")).toBeVisible();
-    await expect(page.getByText("Mode manuel")).toBeVisible();
+    await page.getByText("Mise en service & équipements du Shop", { exact: true }).click();
+    await expect(page.getByText("Équipements d’encaissement", { exact: true })).toBeVisible();
+    await expect(page.getByText("Imprimante manuelle E2E", { exact: true })).toBeVisible();
+    await expect(page.getByText("Utilisation manuelle possible", { exact: true })).toBeVisible();
 
     const crossTenant = await get(page, `/api/enterprise/not-this-tenant/retail/customers?search=${encodeURIComponent(customer.legalName)}`);
     expect([401, 403, 404]).toContain(crossTenant.response.status());
