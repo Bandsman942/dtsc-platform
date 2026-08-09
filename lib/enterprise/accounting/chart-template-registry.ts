@@ -36,6 +36,21 @@ export const ACCOUNTING_FRAMEWORKS = deepFreeze([
       verifiedAt: "2026-08-09",
     },
   },
+  {
+    code: "OHADA_AUDCIF",
+    nameFr: "Droit comptable OHADA — AUDCIF",
+    nameEn: "OHADA accounting law — AUDCIF",
+    kind: "REGULATORY",
+    jurisdictions: ["OHADA"],
+    entityTypes: [],
+    source: {
+      kind: "OFFICIAL",
+      authority: "OHADA",
+      reference: "Acte uniforme relatif au droit comptable et à l'information financière (AUDCIF), adopté le 26 janvier 2017 et publié au J.O. le 15 février 2017",
+      uri: "https://www.ohada.org/en/uniform-act-relating-to-accounting-law-and-financial-information-audcif/",
+      verifiedAt: "2026-08-09",
+    },
+  },
 ] satisfies AccountingFrameworkDefinition[]);
 
 export const CHART_TEMPLATES = deepFreeze([
