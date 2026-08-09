@@ -1,5 +1,14 @@
 import { getConfiguredOpenAIModels, getDefaultOpenAIModel, getDisplayName } from "@/lib/openai-config";
-import type { AiContextCode, AiModelDefinition, AiProviderDefinition, AiTaskType } from "@/lib/ai/types";
+import { evaluateAiModelPolicy } from "@/lib/ai/policy";
+import type {
+  AiContextCode,
+  AiDataClassification,
+  AiModelDefinition,
+  AiProviderDefinition,
+  AiRequiredCapabilities,
+  AiTaskType,
+} from "@/lib/ai/types";
+import type { SaasPlanCode } from "@/lib/billing/plans";
 
 const ALL_CONTEXTS: AiContextCode[] = ["PERSONAL", "DTSC_INTERNAL", "ORGANIZATION", "PROJECT", "MODULE", "OBJECT"];
 const TEXT_TASKS: AiTaskType[] = [
@@ -104,47 +113,54 @@ export function getAiModelDefinition(modelCode?: string | null) {
   return catalog.find((model) => model.code === modelCode || model.providerModelId === modelCode) || null;
 }
 
-export function listAvailableAiModels({ context, locale, taskType }: { context: AiContextCode; locale: string; taskType?: AiTaskType }) {
+type AiAvailabilityInput = {
+  context: AiContextCode;
+  locale: string;
+  taskType?: AiTaskType;
+  planCode?: SaasPlanCode | null;
+  dataClassifications?: AiDataClassification[];
+  requiredCapabilities?: AiRequiredCapabilities;
+  maximumContextTokens?: number | null;
+  allowSensitiveExternalModel?: boolean;
+};
+
+export function listAvailableAiModels(input: AiAvailabilityInput) {
   const providers = new Map(getAiProviderCatalog().map((provider) => [provider.code, provider]));
   return getAiModelCatalog().filter((model) => {
     const provider = providers.get(model.providerCode);
     if (!provider || provider.status === "DISABLED" || model.status === "DISABLED") return false;
     if (!process.env[provider.apiKeyEnv]) return false;
-    if (!model.allowedContexts.includes(context)) return false;
-    if (model.allowedLocales?.length && !model.allowedLocales.includes(locale)) return false;
-    if (taskType && model.taskTypes?.length && !model.taskTypes.includes(taskType)) return false;
-    return true;
+
+    const decision = evaluateAiModelPolicy({
+      request: {
+        context: input.context,
+        locale: input.locale,
+        taskType: input.taskType || "GENERAL_CHAT",
+        planCode: input.planCode,
+        dataClassifications: input.dataClassifications,
+        requiredCapabilities: input.requiredCapabilities,
+        maximumContextTokens: input.maximumContextTokens,
+        policyFlags: { allowSensitiveExternalModel: input.allowSensitiveExternalModel },
+      },
+      model,
+      provider,
+    });
+    return decision.allowed;
   });
 }
 
-
-export function listCatalogAiModelsForUi({ context, locale }: { context: AiContextCode; locale: string }) {
-  const providers = new Map(getAiProviderCatalog().map((provider) => [provider.code, provider]));
-  return getAiModelCatalog()
-    .filter((model) => {
-      const provider = providers.get(model.providerCode);
-      if (!provider || provider.status === "DISABLED" || model.status === "DISABLED") return false;
-      if (!process.env[provider.apiKeyEnv]) return false;
-      if (!model.allowedContexts.includes(context)) return false;
-      if (model.allowedLocales?.length && !model.allowedLocales.includes(locale)) return false;
-      return true;
-    })
-    .map((model) => ({
-      id: model.code,
-      label: model.providerCode === "OPENAI" ? getDisplayName(model.providerModelId) : model.providerModelId || model.code,
-      providerCode: model.providerCode,
-      status: model.status,
-      minimumPlan: model.minimumPlan || null,
-    }));
+export function listCatalogAiModelsForUi(input: AiAvailabilityInput) {
+  return listAvailableAiModels(input).map((model) => ({
+    id: model.code,
+    label: model.providerCode === "OPENAI" ? getDisplayName(model.providerModelId) : model.providerModelId || model.code,
+    providerCode: model.providerCode,
+    status: model.status,
+    minimumPlan: model.minimumPlan || null,
+  }));
 }
 
-export function isCatalogAiModelAllowed({ modelCode, context, locale }: { modelCode: string; context: AiContextCode; locale: string }) {
-  const model = getAiModelDefinition(modelCode);
-  if (!model || model.status === "DISABLED" || model.status === "RETIRED") return false;
-  if (!model.allowedContexts.includes(context)) return false;
-  if (model.allowedLocales?.length && !model.allowedLocales.includes(locale)) return false;
-  const provider = getAiProviderDefinition(model.providerCode);
-  return Boolean(provider && provider.status !== "DISABLED" && provider.status !== "RETIRED");
+export function isCatalogAiModelAllowed({ modelCode, ...input }: AiAvailabilityInput & { modelCode: string }) {
+  return listAvailableAiModels(input).some((model) => model.code === modelCode || model.providerModelId === modelCode);
 }
 
 export function assertAiCatalogIntegrity() {
