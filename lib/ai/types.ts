@@ -1,5 +1,6 @@
 import type { OpenAIInputMessage } from "@/lib/openai";
 import type { SaasPlanCode } from "@/lib/billing/plans";
+import type { AiProviderEvent } from "@/lib/ai/provider-events";
 
 export type AiContextCode = "PERSONAL" | "DTSC_INTERNAL" | "ORGANIZATION" | "PROJECT" | "MODULE" | "OBJECT";
 
@@ -53,7 +54,7 @@ export type AiProviderDefinition = {
   code: string;
   labelKey: string;
   descriptionKey: string;
-  protocol: "OPENAI_RESPONSES";
+  protocol: "OPENAI_RESPONSES" | "OPENAI_CHAT_COMPLETIONS" | "OPENROUTER_CHAT_COMPLETIONS";
   baseUrl: string;
   apiKeyEnv: string;
   status: AiModelStatus;
@@ -141,7 +142,7 @@ export type AiRouteSelection = {
 };
 
 export type AiStreamResult = {
-  stream: ReadableStream<Uint8Array>;
+  stream: ReadableStream<AiProviderEvent>;
   selection: AiRouteSelection;
   providerCode: string;
   modelCode: string;
