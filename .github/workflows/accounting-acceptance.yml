@@ -122,6 +122,23 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/accounting-onboarding.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-accounting-onboarding-playwright.log
+      - name: Restart production application before close acceptance
+        shell: bash
+        run: |
+          if [ -f /tmp/dtsc-accounting-next.pid ]; then
+            kill "$(cat /tmp/dtsc-accounting-next.pid)" || true
+          fi
+          : > /tmp/dtsc-accounting-next-close.log
+          nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-accounting-next-close.log 2>&1 &
+          echo $! >/tmp/dtsc-accounting-next.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/auth/sign-in >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/dtsc-accounting-next-close.log
+          exit 1
       - name: Accounting period close and history protection
         shell: bash
         run: |
@@ -144,5 +161,6 @@ jobs:
             test-results
             /tmp/dtsc-accounting-build.log
             /tmp/dtsc-accounting-next.log
+            /tmp/dtsc-accounting-next-close.log
             /tmp/dtsc-accounting-onboarding-playwright.log
             /tmp/dtsc-accounting-close-playwright.log
