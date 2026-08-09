@@ -1,6 +1,7 @@
 import type { AiDataClassification } from "@/lib/ai/types";
+import { writeMcpAuditEvent } from "@/lib/ai/mcp/audit";
 import { getMcpToolBindingByDtscCode } from "@/lib/ai/mcp/bindings";
-import { discoverMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
+import { discoverAndPersistMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
 import { hashMcpSchema } from "@/lib/ai/mcp/schema";
 import { authorizeMcpDataBoundary } from "@/lib/ai/mcp/security";
@@ -37,28 +38,44 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
   if (!binding || !binding.enabled) throw new Error("MCP_TOOL_BINDING_NOT_ACTIVE");
   const server = getMcpServerDefinition(binding.serverCode);
   if (!server || server.status !== "CERTIFIED") throw new Error("MCP_SERVER_NOT_CERTIFIED");
-  if (binding.mode !== "READ" || binding.requiresConfirmation) throw new Error("MCP_AI07_READ_ONLY_POLICY");
-  assertServerContext({ organizationScope: server.organizationScope, contexts: server.contexts, context: input.context });
 
-  const dataDecision = authorizeMcpDataBoundary({
-    server,
-    classifications: (input.context.dataClassifications || []).map(normalizeClassification),
-  });
-  if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
+  const auditBase = {
+    userId: input.context.userId,
+    organizationId: input.context.organizationId || null,
+    serverCode: server.code,
+    dtscToolCode: binding.dtscToolCode,
+    remoteToolName: binding.remoteToolName,
+  };
 
-  const snapshot = await discoverMcpServer(server);
-  const remoteTool = getDiscoveredMcpTool(snapshot, binding.remoteToolName);
-  if (!remoteTool) throw new Error("MCP_BOUND_TOOL_NOT_DISCOVERED");
-  if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
-  if (hashMcpSchema(remoteTool.outputSchema || {}) !== binding.outputSchemaHash) throw new Error("MCP_TOOL_OUTPUT_SCHEMA_CHANGED");
+  try {
+    if (binding.mode !== "READ" || binding.requiresConfirmation) throw new Error("MCP_AI07_READ_ONLY_POLICY");
+    assertServerContext({ organizationScope: server.organizationScope, contexts: server.contexts, context: input.context });
 
-  const result = await callMcpJsonRpc<McpToolCallResult>({
-    server: binding.timeoutMs ? { ...server, timeoutMs: Math.min(server.timeoutMs, binding.timeoutMs) } : server,
-    method: "tools/call",
-    params: { name: binding.remoteToolName, arguments: input.args && typeof input.args === "object" ? input.args as Record<string, unknown> : {} },
-  });
-  if (result.isError) throw new Error("MCP_REMOTE_TOOL_ERROR");
-  return result.structuredContent ?? { content: result.content ?? [] };
+    const dataDecision = authorizeMcpDataBoundary({
+      server,
+      classifications: (input.context.dataClassifications || []).map(normalizeClassification),
+    });
+    if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
+
+    const { snapshot } = await discoverAndPersistMcpServer(server);
+    const remoteTool = getDiscoveredMcpTool(snapshot, binding.remoteToolName);
+    if (!remoteTool) throw new Error("MCP_BOUND_TOOL_NOT_DISCOVERED");
+    if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
+    if (hashMcpSchema(remoteTool.outputSchema || {}) !== binding.outputSchemaHash) throw new Error("MCP_TOOL_OUTPUT_SCHEMA_CHANGED");
+
+    const result = await callMcpJsonRpc<McpToolCallResult>({
+      server: binding.timeoutMs ? { ...server, timeoutMs: Math.min(server.timeoutMs, binding.timeoutMs) } : server,
+      method: "tools/call",
+      params: { name: binding.remoteToolName, arguments: input.args && typeof input.args === "object" ? input.args as Record<string, unknown> : {} },
+    });
+    if (result.isError) throw new Error("MCP_REMOTE_TOOL_ERROR");
+    await writeMcpAuditEvent({ ...auditBase, eventType: "TOOL_CALL", status: "SUCCESS", metadata: { discoveryVersion: snapshot.version } });
+    return result.structuredContent ?? { content: result.content ?? [] };
+  } catch (error) {
+    const reasonCode = error instanceof Error ? error.message.slice(0, 160) : "MCP_TOOL_EXECUTION_FAILED";
+    await writeMcpAuditEvent({ ...auditBase, eventType: "TOOL_CALL", status: reasonCode.includes("FORBIDDEN") || reasonCode.includes("NOT_ALLOWED") || reasonCode.includes("REQUIRED") ? "DENIED" : "FAILED", reasonCode });
+    throw error;
+  }
 }
 
 export function getMcpToolExecutor(code: string): AiToolExecutor | null {
