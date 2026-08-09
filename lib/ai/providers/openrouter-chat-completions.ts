@@ -34,6 +34,12 @@ type OpenRouterChunk = {
   };
 };
 
+type ToolCallAccumulator = {
+  id?: string;
+  name?: string;
+  argumentsText: string;
+};
+
 function classifyOpenRouterStreamError(chunk: OpenRouterChunk): AiProviderEvent {
   const errorType = chunk.error?.metadata?.error_type?.toLowerCase() || "";
   const code = Number(chunk.error?.code);
@@ -54,7 +60,18 @@ function parseDataLine(block: string) {
   return data || null;
 }
 
-function normalizeChunk(chunk: OpenRouterChunk): AiProviderEvent[] {
+function parseToolArguments(value: string) {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function normalizeChunk(
+  chunk: OpenRouterChunk,
+  toolCalls: Map<number, ToolCallAccumulator>,
+): AiProviderEvent[] {
   if (chunk.error) return [classifyOpenRouterStreamError(chunk)];
   const events: AiProviderEvent[] = [];
   const choice = chunk.choices?.[0];
@@ -62,12 +79,30 @@ function normalizeChunk(chunk: OpenRouterChunk): AiProviderEvent[] {
   if (content) events.push({ type: "TEXT_DELTA", text: content });
 
   for (const toolCall of choice?.delta?.tool_calls || []) {
+    const index = toolCall.index ?? 0;
+    const current = toolCalls.get(index) || { argumentsText: "" };
+    if (toolCall.id) current.id = toolCall.id;
+    if (toolCall.function?.name) current.name = toolCall.function.name;
+    if (toolCall.function?.arguments) current.argumentsText += toolCall.function.arguments;
+    toolCalls.set(index, current);
     events.push({
       type: "TOOL_CALL_DELTA",
-      id: toolCall.id,
-      name: toolCall.function?.name,
+      id: toolCall.id || current.id,
+      name: toolCall.function?.name || current.name,
       argumentsDelta: toolCall.function?.arguments,
     });
+  }
+
+  if (choice?.finish_reason === "tool_calls") {
+    for (const [index, toolCall] of [...toolCalls.entries()].sort(([a], [b]) => a - b)) {
+      events.push({
+        type: "TOOL_CALL_COMPLETED",
+        id: toolCall.id || `tool-${index}`,
+        name: toolCall.name,
+        arguments: parseToolArguments(toolCall.argumentsText),
+      });
+    }
+    toolCalls.clear();
   }
 
   if (chunk.usage) {
@@ -159,6 +194,7 @@ export async function createOpenRouterChatCompletionsEventStream({
   return new ReadableStream<AiProviderEvent>({
     async start(controller) {
       const reader = source.getReader();
+      const toolCalls = new Map<number, ToolCallAccumulator>();
       let buffer = "";
       try {
         while (true) {
@@ -175,7 +211,7 @@ export async function createOpenRouterChatCompletionsEventStream({
               continue;
             }
             const chunk = JSON.parse(data) as OpenRouterChunk;
-            for (const event of normalizeChunk(chunk)) controller.enqueue(event);
+            for (const event of normalizeChunk(chunk, toolCalls)) controller.enqueue(event);
           }
         }
         controller.close();
