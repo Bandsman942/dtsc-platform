@@ -1,6 +1,6 @@
 # SYSCOHADA — bootstrap provisoire 0.1.0
 
-Programme parent : #147  
+Programme parent : #147
 Itération : #149
 
 ## Décision produit
