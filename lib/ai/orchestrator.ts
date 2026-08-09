@@ -2,13 +2,22 @@ import { randomUUID } from "node:crypto";
 import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
+import { getAiRuntimeHealth, type AiRuntimeHealth } from "@/lib/ai/health";
 import { completeAiProviderAttempt, startAiProviderAttempt } from "@/lib/ai/observability";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
 import { createProviderEventStream } from "@/lib/ai/provider";
-import type { AiModelDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
+import { scoreAiCandidate, type AiCandidateScore } from "@/lib/ai/routing-score";
+import type { AiModelDefinition, AiProviderDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
-function selectCandidates(request: AiRouteRequest) {
+type RankedCandidate = {
+  model: AiModelDefinition;
+  provider: AiProviderDefinition;
+  health: AiRuntimeHealth;
+  score: AiCandidateScore;
+};
+
+async function rankCandidates(request: AiRouteRequest): Promise<RankedCandidate[]> {
   const available = listAvailableAiModels({
     context: request.context,
     locale: request.locale,
@@ -32,25 +41,51 @@ function selectCandidates(request: AiRouteRequest) {
     }
   }
 
-  const ordered: AiModelDefinition[] = [];
-  const add = (model: AiModelDefinition | null | undefined) => {
-    if (model && available.some((candidate) => candidate.code === model.code) && !ordered.some((candidate) => candidate.code === model.code)) ordered.push(model);
-  };
-  add(requested);
-  if (requested) for (const fallbackCode of requested.fallbackModelCodes) add(getAiModelDefinition(fallbackCode));
-  for (const candidate of available) add(candidate);
-  return ordered;
+  const ranked = (await Promise.all(available.map(async (model) => {
+    const provider = getAiProviderDefinition(model.providerCode);
+    if (!provider) return null;
+    const health = await getAiRuntimeHealth({ provider, model });
+    if (health.status === "UNAVAILABLE" || health.status === "DISABLED_BY_POLICY") return null;
+    const score = scoreAiCandidate({ request, model, health });
+    const maximumCost = request.routingConstraints?.maximumEstimatedInputCost;
+    if (maximumCost != null && (score.estimatedInputCost == null || score.estimatedInputCost > maximumCost)) return null;
+    return { model, provider, health, score } satisfies RankedCandidate;
+  }))).filter((candidate): candidate is RankedCandidate => Boolean(candidate));
+
+  return ranked.sort((left, right) => {
+    if (right.score.total !== left.score.total) return right.score.total - left.score.total;
+    const leftCost = left.score.estimatedInputCost ?? Number.POSITIVE_INFINITY;
+    const rightCost = right.score.estimatedInputCost ?? Number.POSITIVE_INFINITY;
+    if (leftCost !== rightCost) return leftCost - rightCost;
+    const leftLatency = left.health.averageFirstTokenLatencyMs ?? Number.POSITIVE_INFINITY;
+    const rightLatency = right.health.averageFirstTokenLatencyMs ?? Number.POSITIVE_INFINITY;
+    if (leftLatency !== rightLatency) return leftLatency - rightLatency;
+    return left.model.code.localeCompare(right.model.code);
+  });
 }
 
-function buildSelection(request: AiRouteRequest, model: AiModelDefinition): AiRouteSelection {
-  const estimated = estimateAiCost({ model, inputTokens: request.messages.reduce((sum, message) => sum + Math.ceil(message.content.length / 4), 0), outputTokens: 0 });
+function buildSelection(request: AiRouteRequest, candidate: RankedCandidate): AiRouteSelection {
+  const estimated = estimateAiCost({
+    model: candidate.model,
+    inputTokens: request.messages.reduce((sum, message) => sum + Math.ceil(message.content.length / 4), 0),
+    outputTokens: 0,
+  });
   return {
-    strategyCode: "POLICY_CAPABILITY_PLAN_DATA_V1",
+    strategyCode: "POLICY_CAPABILITY_COST_HEALTH_V2",
     taskType: request.taskType,
     requestedModel: request.requestedModel || null,
-    selectedModel: model,
-    fallbackModelCodes: [...model.fallbackModelCodes],
-    selectionReason: request.requestedModel ? "REQUESTED_MODEL_POLICY_ALLOWED" : "DEFAULT_POLICY_ALLOWED_MODEL",
+    selectedModel: candidate.model,
+    fallbackModelCodes: [...candidate.model.fallbackModelCodes],
+    selectionReason: candidate.score.reasonParts.join("|"),
+    selectionScore: candidate.score.total,
+    selectionCriteria: {
+      capabilityScore: candidate.score.capabilityScore,
+      preferenceScore: candidate.score.preferenceScore,
+      healthScore: candidate.score.healthScore,
+      costScore: candidate.score.costScore,
+      healthStatus: candidate.health.status,
+      reasonParts: candidate.score.reasonParts,
+    },
     estimatedInputCost: estimated.amount,
     currency: estimated.currency,
   };
@@ -126,17 +161,16 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
     ...request,
     planCode: await resolveServerPlanCode(request),
   };
-  const candidates = selectCandidates(effectiveRequest);
+  const candidates = await rankCandidates(effectiveRequest);
   if (!candidates.length) {
-    throw new AiProviderError({ reasonCode: "MODEL_UNAVAILABLE", message: "No policy-allowed AI model is configured", statusCode: 503 });
+    throw new AiProviderError({ reasonCode: "MODEL_UNAVAILABLE", message: "No policy-allowed and healthy AI model is configured", statusCode: 503 });
   }
 
   const attempts: AiStreamResult["attempts"] = [];
   const routeRequestId = randomUUID();
   let lastError: unknown;
-  for (const [index, model] of candidates.entries()) {
-    const provider = getAiProviderDefinition(model.providerCode);
-    if (!provider || provider.status === "DISABLED") continue;
+  for (const [index, candidate] of candidates.entries()) {
+    const { model, provider } = candidate;
     const attemptStartedAt = Date.now();
     const attempt = await startAiProviderAttempt({
       routeRequestId,
@@ -153,13 +187,14 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       const providerStream = await createProviderEventStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
       const stream = observeProviderEventStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
+      const requestedBypassed = Boolean(effectiveRequest.requestedModel && effectiveRequest.requestedModel !== model.code && effectiveRequest.requestedModel !== model.providerModelId);
       return {
         stream,
-        selection: buildSelection(effectiveRequest, model),
+        selection: buildSelection(effectiveRequest, candidate),
         providerCode: provider.code,
         modelCode: model.code,
         providerModelId: model.providerModelId,
-        fallbackUsed: index > 0,
+        fallbackUsed: index > 0 || requestedBypassed,
         attempts,
       };
     } catch (error) {
