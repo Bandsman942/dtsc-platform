@@ -1,3 +1,5 @@
+import type { AiProviderEvent } from "@/lib/ai/provider-events";
+
 export type AiStreamUsage = {
   inputTokens: number;
   outputTokens: number;
@@ -13,36 +15,13 @@ export type AiStreamConsumption = {
 };
 
 type StreamCallbacks = {
-  source: ReadableStream<Uint8Array>;
+  source: ReadableStream<AiProviderEvent>;
   signal?: AbortSignal;
   interruptedMessage: string;
   onCompleted: (result: AiStreamConsumption) => Promise<void>;
   onInterrupted: (result: AiStreamConsumption) => Promise<void>;
   onFailed: (error: unknown, result: AiStreamConsumption) => Promise<void>;
 };
-
-type ProviderEvent = {
-  type?: string;
-  delta?: string;
-  response?: {
-    usage?: {
-      input_tokens?: number;
-      output_tokens?: number;
-      total_tokens?: number;
-      input_tokens_details?: { cached_tokens?: number };
-    };
-  };
-};
-
-function parseProviderEvent(block: string): ProviderEvent | null {
-  const data = block
-    .split("\n")
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.replace(/^data:\s*/, ""))
-    .join("");
-  if (!data || data === "[DONE]") return null;
-  return JSON.parse(data) as ProviderEvent;
-}
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
@@ -57,9 +36,8 @@ export function createAuditedAiTextStream({
   onFailed,
 }: StreamCallbacks) {
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
   const startedAt = Date.now();
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let reader: ReadableStreamDefaultReader<AiProviderEvent> | null = null;
   let consumerCancelled = false;
   let interruptionRequested = signal?.aborted || false;
 
@@ -72,7 +50,6 @@ export function createAuditedAiTextStream({
       };
       signal?.addEventListener("abort", requestInterruption, { once: true });
 
-      let buffer = "";
       let content = "";
       let firstTokenAt: number | null = null;
       let usage: AiStreamUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0 };
@@ -82,25 +59,20 @@ export function createAuditedAiTextStream({
         while (!interruptionRequested && !consumerCancelled) {
           const { done, value } = await reader.read();
           if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const blocks = buffer.split("\n\n");
-          buffer = blocks.pop() ?? "";
-          for (const block of blocks) {
-            const event = parseProviderEvent(block);
-            if (!event) continue;
-            if (event.type === "response.output_text.delta" && event.delta) {
-              if (!firstTokenAt) firstTokenAt = Date.now();
-              content += event.delta;
-              if (!consumerCancelled) controller.enqueue(encoder.encode(event.delta));
-            }
-            if (event.type === "response.completed" && event.response?.usage) {
-              usage = {
-                inputTokens: event.response.usage.input_tokens ?? 0,
-                outputTokens: event.response.usage.output_tokens ?? 0,
-                totalTokens: event.response.usage.total_tokens ?? 0,
-                cachedInputTokens: event.response.usage.input_tokens_details?.cached_tokens ?? 0,
-              };
-            }
+          if (value.type === "TEXT_DELTA") {
+            if (!firstTokenAt) firstTokenAt = Date.now();
+            content += value.text;
+            if (!consumerCancelled) controller.enqueue(encoder.encode(value.text));
+          } else if (value.type === "USAGE") {
+            usage = {
+              inputTokens: value.inputTokens,
+              outputTokens: value.outputTokens,
+              totalTokens: value.totalTokens,
+              cachedInputTokens: value.cachedInputTokens,
+            };
+          } else if (value.type === "ERROR") {
+            readError = new Error(value.reasonCode);
+            break;
           }
         }
       } catch (error) {
@@ -130,7 +102,7 @@ export function createAuditedAiTextStream({
           try {
             controller.enqueue(encoder.encode(`\n\n${interruptedMessage}`));
           } catch {
-            // The consumer may already have closed the stream.
+            // Consumer may already be closed.
           }
         }
       } finally {
@@ -139,7 +111,7 @@ export function createAuditedAiTextStream({
           try {
             controller.close();
           } catch {
-            // A concurrent client cancellation already closed the controller.
+            // Concurrent client cancellation may already have closed the controller.
           }
         }
       }
