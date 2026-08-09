@@ -8,6 +8,8 @@ const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
 const foreignOrganizationId = "e2e-erp-cross-tenant-org";
 let adminUserId = "";
+let authenticatedContext;
+let authenticatedPage;
 
 async function signIn(page) {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
@@ -63,7 +65,7 @@ async function enableModule(moduleCode) {
 // Missing mapping / closed period / FX / immutable history are exercised by the accounting acceptance chain.
 
 test.describe.serial("ERP cross-module Finance acceptance", () => {
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     const admin = await prisma.user.findUnique({ where: { email: adminEmail } });
     if (!admin) throw new Error("Cross-module Finance acceptance requires canonical ERP seed");
     adminUserId = admin.id;
@@ -83,9 +85,14 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
         createdByDtscUserId: admin.id,
       },
     });
+
+    authenticatedContext = await browser.newContext();
+    authenticatedPage = await authenticatedContext.newPage();
+    await signIn(authenticatedPage);
   });
 
   test.afterAll(async () => {
+    await authenticatedContext?.close();
     await prisma.organization.deleteMany({ where: { id: foreignOrganizationId } }).catch(() => undefined);
     await prisma.$disconnect();
   });
@@ -104,8 +111,7 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId: foreignOrganizationId, sourceEntityId: entry.sourceEntityId } })).toBe(0);
   });
 
-  test("Procurement supplier invoice posts through the canonical Finance engine idempotently", async ({ page }) => {
-    await signIn(page);
+  test("Procurement supplier invoice posts through the canonical Finance engine idempotently", async () => {
     const supplier = await prisma.enterpriseSupplier.upsert({
       where: { organizationId_normalizedName: { organizationId, normalizedName: "cross module supplier e2e" } },
       update: { status: "ACTIVE", archivedAt: null },
@@ -130,20 +136,19 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
         items: { create: { description: "Cross-module operating expense", quantity: "1", unitPrice: "40", netAmount: "40", taxAmount: "0", totalAmount: "40" } },
       },
     });
-    const first = await post(page, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: invoice.revision });
+    const first = await post(authenticatedPage, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: invoice.revision });
     expect(first.response.ok(), JSON.stringify(first.body)).toBeTruthy();
     const posted = await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(posted.status).toBe("POSTED");
     await assertBalancedPosting({ postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id });
     expect(await prisma.enterprisePayable.count({ where: { organizationId, supplierInvoiceId: invoice.id } })).toBe(1);
 
-    const second = await post(page, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: posted.revision });
+    const second = await post(authenticatedPage, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: posted.revision });
     expect(second.response.ok(), JSON.stringify(second.body)).toBeTruthy();
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityId: invoice.id, status: "POSTED" } })).toBe(1);
   });
 
-  test("Approved payroll posts one balanced aggregate liability and remains idempotent", async ({ page }) => {
-    await signIn(page);
+  test("Approved payroll posts one balanced aggregate liability and remains idempotent", async () => {
     const suffix = Date.now();
     const period = await prisma.enterprisePayrollPeriod.create({
       data: { organizationId, code: `CM-${suffix}`, name: "Cross module payroll E2E", periodStart: new Date("2026-08-01T00:00:00.000Z"), periodEnd: new Date("2026-08-31T23:59:59.000Z"), status: "CLOSED", createdByUserId: adminUserId },
@@ -151,17 +156,16 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     const run = await prisma.enterprisePayrollRun.create({
       data: { organizationId, payrollPeriodId: period.id, reference: `CM-PAY-${suffix}`, status: "APPROVED", currency: "XAF", employeeCount: 1, grossAmount: "100", bonusAmount: "0", deductionAmount: "20", netAmount: "80", preparedByUserId: adminUserId, approverUserId: adminUserId, approvedAt: new Date() },
     });
-    const first = await post(page, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/post-liability`);
+    const first = await post(authenticatedPage, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/post-liability`);
     expect(first.response.ok(), JSON.stringify(first.body)).toBeTruthy();
     await assertBalancedPosting({ postingEvent: "PAYROLL_APPROVED", sourceEntityType: "EnterprisePayrollRun", sourceEntityId: run.id });
-    const second = await post(page, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/post-liability`);
+    const second = await post(authenticatedPage, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/post-liability`);
     expect(second.response.ok(), JSON.stringify(second.body)).toBeTruthy();
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, postingEvent: "PAYROLL_APPROVED", sourceEntityId: run.id, status: "POSTED" } })).toBe(1);
   });
 
-  test("Cross-tenant direct posting route is rejected for the active session", async ({ page }) => {
-    await signIn(page);
-    const response = await post(page, `/api/enterprise/${foreignOrganizationId}/payroll-runs/nonexistent/post-liability`);
+  test("Cross-tenant direct posting route is rejected for the active session", async () => {
+    const response = await post(authenticatedPage, `/api/enterprise/${foreignOrganizationId}/payroll-runs/nonexistent/post-liability`);
     expect(response.response.ok()).toBeFalsy();
     expect([401, 403, 404]).toContain(response.response.status());
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId: foreignOrganizationId } })).toBe(0);
