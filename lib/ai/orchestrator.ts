@@ -1,7 +1,7 @@
 import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
-import { createProviderResponseStream } from "@/lib/ai/provider";
+import { createProviderEventStream } from "@/lib/ai/provider";
 import type { AiModelDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
@@ -60,7 +60,6 @@ async function resolveServerPlanCode(request: AiRouteRequest) {
 }
 
 export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamResult> {
-  // Plan entitlement is always resolved on the server. A caller-provided planCode is never authoritative.
   const effectiveRequest: AiRouteRequest = {
     ...request,
     planCode: await resolveServerPlanCode(request),
@@ -76,7 +75,7 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
     const provider = getAiProviderDefinition(model.providerCode);
     if (!provider || provider.status === "DISABLED") continue;
     try {
-      const stream = await createProviderResponseStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
+      const stream = await createProviderEventStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
       return {
         stream,
