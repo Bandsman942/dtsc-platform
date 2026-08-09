@@ -70,9 +70,6 @@ function ensureMainRef() {
   if (process.env.GITHUB_REF_NAME === "main") {
     const parentProbe = spawnSync("git", ["rev-parse", "--verify", "HEAD^"], { cwd: root, stdio: "ignore" });
     if (parentProbe.status === 0) return;
-    // The migration job intentionally uses a shallow checkout. Deepen only enough
-    // to recover the parent commit so the non-regression gate compares main to
-    // its actual previous state instead of falling back to the historical ceiling.
     spawnSync("git", ["fetch", "origin", "main", "--depth=2"], { cwd: root, stdio: "ignore" });
     return;
   }
@@ -88,7 +85,13 @@ function readBaseVersion(file) {
 }
 
 function countLikelyHardcodedLabels(content) {
-  const jsxText = [...content.matchAll(/>([^<{\n][^<{]*?)</g)].map((match) => match[1].trim()).filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));
+  // Match text only when it follows an actual JSX opening tag. The previous
+  // `>(...)<` expression also started at TypeScript generic closers such as
+  // `useState<Readiness>()`, creating false positives whenever typed UI code grew.
+  // Keep the historical ceilings unchanged; improve only the signal being counted.
+  const jsxText = [...content.matchAll(/<(?:[A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)\b[^>\n]*>([^<{\n][^<{]*?)<\//g)]
+    .map((match) => match[1].trim())
+    .filter((value) => /[A-Za-zÀ-ÿ]{3}/.test(value));
   const attributes = [...content.matchAll(/(?:placeholder|title|aria-label)="([^"]*[A-Za-zÀ-ÿ][^"]*)"/g)].map((match) => match[1]);
   return jsxText.length + attributes.length;
 }
