@@ -1,4 +1,5 @@
 import type { OpenAIInputMessage } from "@/lib/openai";
+import type { SaasPlanCode } from "@/lib/billing/plans";
 
 export type AiContextCode = "PERSONAL" | "DTSC_INTERNAL" | "ORGANIZATION" | "PROJECT" | "MODULE" | "OBJECT";
 
@@ -17,6 +18,34 @@ export type AiTaskType =
   | "AUDIO"
   | "EMBEDDING"
   | "RERANKING";
+
+export type AiDataClassification =
+  | "PUBLIC"
+  | "INTERNAL"
+  | "CONFIDENTIAL"
+  | "RESTRICTED"
+  | "HEALTH_SENSITIVE"
+  | "HR_SENSITIVE"
+  | "FINANCIAL_SENSITIVE"
+  | "LEGAL_SENSITIVE"
+  | "SECRET";
+
+export type AiRequiredCapabilities = Partial<{
+  text: boolean;
+  vision: boolean;
+  audioInput: boolean;
+  audioOutput: boolean;
+  tools: boolean;
+  structuredOutput: boolean;
+  embeddings: boolean;
+  reasoning: boolean;
+}>;
+
+export type AiPolicyFlags = {
+  allowSensitiveExternalModel?: boolean;
+  requireStructuredOutput?: boolean;
+  requireTools?: boolean;
+};
 
 export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
 
@@ -90,6 +119,12 @@ export type AiRouteRequest = {
   instructions: string;
   userId: string;
   organizationId?: string | null;
+  planCode?: SaasPlanCode | null;
+  dataClassifications?: AiDataClassification[];
+  requiredCapabilities?: AiRequiredCapabilities;
+  maximumContextTokens?: number | null;
+  assistantCode?: string | null;
+  policyFlags?: AiPolicyFlags;
   tags?: string[];
   signal?: AbortSignal;
 };
