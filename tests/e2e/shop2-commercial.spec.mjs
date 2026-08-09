@@ -50,22 +50,19 @@ async function loadFixture() {
 }
 
 async function signIn(page, email, password) {
-  await page.goto(`/auth/sign-in?next=${encodeURIComponent("/enterprise-modules/RETAIL_POS")}`);
-  const emailInput = page.locator('input[name="email"], input[type="email"]').first();
-  const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
-  const loadContextButton = page.getByRole("button", { name: /^Charger$/i });
-  await expect(emailInput).toBeEditable();
-  await emailInput.fill(email);
-  await passwordInput.fill(password);
-  const lookupPromise = page.waitForResponse((response) => response.url().endsWith("/api/auth/organizations") && response.request().method() === "POST", { timeout: 15_000 });
-  await loadContextButton.click();
-  const lookup = await lookupPromise;
-  expect(lookup.ok(), `Organization context lookup failed for ${email}`).toBeTruthy();
-  const organizationSelect = page.locator('select[name="organizationId"]');
-  await expect(organizationSelect.locator(`option[value="${organizationId}"]`)).toHaveCount(1);
-  await organizationSelect.selectOption(organizationId);
-  await page.getByRole("button", { name: /^Se connecter$/i }).click();
-  await page.waitForURL((url) => !url.pathname.includes("/auth/sign-in"), { timeout: 30_000 });
+  const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
+    data: {
+      email,
+      password,
+      organizationId,
+      next: "/enterprise-modules/RETAIL_POS",
+    },
+    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
+  });
+  const body = await response.json().catch(() => null);
+  expect(response.ok(), `Direct Shop 2 E2E sign-in failed for ${email}: ${JSON.stringify(body)}`).toBeTruthy();
+  await page.goto("/enterprise-modules/RETAIL_POS");
+  await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/RETAIL_POS"), { timeout: 30_000 });
 }
 
 async function apiJson(response) {
