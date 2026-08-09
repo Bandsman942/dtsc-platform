@@ -9,6 +9,10 @@ on:
       - "app/api/enterprise/**/regulatory-statements/**"
       - "app/api/enterprise/**/financial-close/**"
       - "app/api/enterprise/**/sales-invoices/**"
+      - "app/api/enterprise/**/supplier-invoices/**"
+      - "app/api/enterprise/**/payroll-runs/**"
+      - "app/api/enterprise/**/stock-movements/**"
+      - "app/api/enterprise/**/asset-accounting/**"
       - "app/api/enterprise/**/ledger-accounts/**"
       - "app/api/enterprise/**/fiscal-years/**"
       - "app/api/enterprise/**/fiscal-periods/**"
@@ -16,13 +20,18 @@ on:
       - "components/enterprise/enterprise-finance-module-page.tsx"
       - "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx"
       - "lib/enterprise/accounting/**"
+      - "lib/enterprise/sector-convergence/**"
       - "lib/user-guides/accounting-onboarding-guide.ts"
       - "prisma/enterprise-accounting.prisma"
+      - "prisma/enterprise-hr-payroll.prisma"
+      - "prisma/enterprise-inventory.prisma"
       - "prisma/migrations/**"
       - "scripts/seed-erp-professional-e2e.mjs"
       - "scripts/qa-accounting-program-150-155.mjs"
       - "scripts/qa-accounting-acceptance-contract.mjs"
+      - "scripts/qa-erp-cross-module-finance.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
+      - "tests/e2e/erp-cross-module-finance.spec.mjs"
       - "tests/e2e/accounting-z-close-protection.spec.mjs"
       - "playwright.config.mjs"
       - ".github/workflows/accounting-acceptance.yml"
@@ -36,9 +45,9 @@ concurrency:
 
 jobs:
   acceptance:
-    name: Accounting onboarding, posting, close & history protection
+    name: Accounting onboarding, cross-module posting, close & history protection
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -92,10 +101,11 @@ jobs:
         run: pnpm prisma:deploy
       - name: Seed canonical ERP acceptance tenant
         run: node scripts/seed-erp-professional-e2e.mjs
-      - name: Validate accounting acceptance contracts
+      - name: Validate accounting and cross-module acceptance contracts
         run: |
           node scripts/qa-accounting-program-150-155.mjs
           node scripts/qa-accounting-acceptance-contract.mjs
+          node scripts/qa-erp-cross-module-finance.mjs
       - name: Build production application
         shell: bash
         run: |
@@ -122,6 +132,11 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/accounting-onboarding.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-accounting-onboarding-playwright.log
+      - name: ERP cross-module Finance acceptance
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec playwright test tests/e2e/erp-cross-module-finance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-erp-cross-module-playwright.log
       - name: Restart production application before close acceptance
         shell: bash
         run: |
@@ -163,4 +178,5 @@ jobs:
             /tmp/dtsc-accounting-next.log
             /tmp/dtsc-accounting-next-close.log
             /tmp/dtsc-accounting-onboarding-playwright.log
+            /tmp/dtsc-erp-cross-module-playwright.log
             /tmp/dtsc-accounting-close-playwright.log
