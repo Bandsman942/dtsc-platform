@@ -20,6 +20,8 @@ export type AiTaskType =
   | "EMBEDDING"
   | "RERANKING";
 
+export type AiModelProfileCode = "FAST" | "BALANCED" | "REASONING" | "LONG_CONTEXT" | "TOOLS" | "VISION" | "PREMIUM";
+
 export type AiDataClassification =
   | "PUBLIC"
   | "INTERNAL"
@@ -70,6 +72,9 @@ export type AiModelDefinition = {
   labelKey: string;
   descriptionKey: string;
   status: AiModelStatus;
+  profileCodes?: AiModelProfileCode[];
+  certificationVersion?: string | null;
+  certifiedAt?: string | null;
   capabilities: {
     text: boolean;
     vision: boolean;
