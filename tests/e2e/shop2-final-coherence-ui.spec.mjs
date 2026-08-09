@@ -6,10 +6,11 @@ const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
 const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
+let originalProfileCode = "RETAIL_CORE";
 
-async function signIn(page, next = "/enterprise-modules/RETAIL_POS") {
+async function signIn(page) {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
-    data: { email: adminEmail, password: adminPassword, organizationId, next },
+    data: { email: adminEmail, password: adminPassword, organizationId, next: "/enterprise-modules/RETAIL_POS" },
     headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
   });
   const body = await response.json().catch(() => null);
@@ -25,6 +26,13 @@ async function setLocale(locale) {
 async function enableOperatorModules() {
   const user = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (!user) throw new Error(`Missing E2E admin ${adminEmail}`);
+  const configuration = await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId } });
+  if (!configuration) throw new Error(`Missing Retail configuration for ${organizationId}`);
+  originalProfileCode = configuration.profileCode;
+  await prisma.enterpriseRetailConfiguration.update({
+    where: { organizationId },
+    data: { profileCode: "RETAIL_TELCO_MOBILE_MONEY" },
+  });
   for (const [moduleCode, labelFr, labelEn] of [
     ["MOBILE_MONEY_AGENCY", "Agence Mobile Money", "Mobile Money agency"],
     ["TELCO_TOPUPS", "Recharges Télécom", "Telecom top-ups"],
@@ -45,6 +53,14 @@ async function enableOperatorModules() {
       },
     });
   }
+}
+
+async function restoreFixture() {
+  await prisma.enterpriseRetailConfiguration.update({
+    where: { organizationId },
+    data: { profileCode: originalProfileCode },
+  });
+  await setLocale("fr");
 }
 
 async function assertNoHorizontalOverflow(page) {
@@ -76,24 +92,21 @@ test.describe.serial("Shop 2.0 final product coherence", () => {
   });
 
   test.afterAll(async () => {
-    await setLocale("fr");
+    await restoreFixture();
     await prisma.$disconnect();
   });
 
-  test("FR mobile: POS and ERP continuity are business-facing", async ({ page }) => {
+  test("cross-device FR/EN Retail surfaces respect product language and access contracts", async ({ page }) => {
     await setLocale("fr");
     await signIn(page);
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/enterprise-modules/RETAIL_POS");
     await expect(page.getByText("Vente comptoir", { exact: true })).toBeVisible();
     await expect(page.getByText("Continuer dans l’ERP", { exact: true }).first()).toBeVisible();
     await assertNoRawRetailLanguage(page);
     await assertNoHorizontalOverflow(page);
-  });
 
-  test("FR tablet: Mobile Money uses operator labels and safe navigation", async ({ page }) => {
-    await setLocale("fr");
-    await signIn(page, "/enterprise-modules/MOBILE_MONEY_AGENCY");
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/enterprise-modules/MOBILE_MONEY_AGENCY");
     await expect(page.getByText("Opération Mobile Money", { exact: true })).toBeVisible();
@@ -103,11 +116,8 @@ test.describe.serial("Shop 2.0 final product coherence", () => {
       await expect(page.getByText(raw, { exact: true })).toHaveCount(0);
     }
     await assertNoHorizontalOverflow(page);
-  });
 
-  test("EN desktop: Telco is customer-facing and reports translate account types", async ({ page }) => {
     await setLocale("en");
-    await signIn(page, "/enterprise-modules/TELCO_TOPUPS");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/enterprise-modules/TELCO_TOPUPS");
     await expect(page.getByText("Airtime / bundle", { exact: true })).toBeVisible();
