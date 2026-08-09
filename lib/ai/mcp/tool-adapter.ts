@@ -1,0 +1,68 @@
+import type { AiDataClassification } from "@/lib/ai/types";
+import { getMcpToolBindingByDtscCode } from "@/lib/ai/mcp/bindings";
+import { discoverMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
+import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
+import { hashMcpSchema } from "@/lib/ai/mcp/schema";
+import { authorizeMcpDataBoundary } from "@/lib/ai/mcp/security";
+import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
+import type { McpDataClassification } from "@/lib/ai/mcp/types";
+import type { AiToolExecutor, AiToolRuntimeContext } from "@/lib/ai/tools/types";
+
+function normalizeClassification(value: AiDataClassification): McpDataClassification {
+  if (value === "PUBLIC") return "PUBLIC";
+  if (value === "INTERNAL") return "INTERNAL";
+  if (value === "CONFIDENTIAL") return "CONFIDENTIAL";
+  if (value === "SECRET") return "SECRET";
+  return "SENSITIVE";
+}
+
+function assertServerContext(input: { organizationScope: "GLOBAL" | "TENANT"; contexts: string[]; context: AiToolRuntimeContext }) {
+  const activeContext = input.context.session.activeContext || "GLOBAL_CLIENT";
+  if (!input.contexts.includes(activeContext)) throw new Error("MCP_CONTEXT_NOT_ALLOWED");
+  if (input.organizationScope === "TENANT") {
+    if (activeContext !== "ORGANIZATION" || !input.context.organizationId || input.context.session.activeOrganizationId !== input.context.organizationId) {
+      throw new Error("MCP_TENANT_CONTEXT_REQUIRED");
+    }
+  }
+}
+
+type McpToolCallResult = {
+  content?: unknown;
+  structuredContent?: unknown;
+  isError?: boolean;
+};
+
+export async function executeMcpBoundTool(input: { dtscToolCode: string; args: unknown; context: AiToolRuntimeContext }) {
+  const binding = getMcpToolBindingByDtscCode(input.dtscToolCode);
+  if (!binding || !binding.enabled) throw new Error("MCP_TOOL_BINDING_NOT_ACTIVE");
+  const server = getMcpServerDefinition(binding.serverCode);
+  if (!server || server.status !== "CERTIFIED") throw new Error("MCP_SERVER_NOT_CERTIFIED");
+  if (binding.mode !== "READ" || binding.requiresConfirmation) throw new Error("MCP_AI07_READ_ONLY_POLICY");
+  assertServerContext({ organizationScope: server.organizationScope, contexts: server.contexts, context: input.context });
+
+  const dataDecision = authorizeMcpDataBoundary({
+    server,
+    classifications: (input.context.dataClassifications || []).map(normalizeClassification),
+  });
+  if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
+
+  const snapshot = await discoverMcpServer(server);
+  const remoteTool = getDiscoveredMcpTool(snapshot, binding.remoteToolName);
+  if (!remoteTool) throw new Error("MCP_BOUND_TOOL_NOT_DISCOVERED");
+  if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
+  if (hashMcpSchema(remoteTool.outputSchema || {}) !== binding.outputSchemaHash) throw new Error("MCP_TOOL_OUTPUT_SCHEMA_CHANGED");
+
+  const result = await callMcpJsonRpc<McpToolCallResult>({
+    server: binding.timeoutMs ? { ...server, timeoutMs: Math.min(server.timeoutMs, binding.timeoutMs) } : server,
+    method: "tools/call",
+    params: { name: binding.remoteToolName, arguments: input.args && typeof input.args === "object" ? input.args as Record<string, unknown> : {} },
+  });
+  if (result.isError) throw new Error("MCP_REMOTE_TOOL_ERROR");
+  return result.structuredContent ?? { content: result.content ?? [] };
+}
+
+export function getMcpToolExecutor(code: string): AiToolExecutor | null {
+  const binding = getMcpToolBindingByDtscCode(code);
+  if (!binding?.enabled) return null;
+  return ({ args, context }) => executeMcpBoundTool({ dtscToolCode: code, args, context });
+}
