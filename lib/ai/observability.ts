@@ -80,6 +80,7 @@ export async function startAiModelCall({
   fallbackUsed,
   attempts,
   promptVersion,
+  runtimeMetadata,
 }: {
   userId: string;
   organizationId?: string | null;
@@ -93,6 +94,7 @@ export async function startAiModelCall({
   fallbackUsed: boolean;
   attempts: unknown;
   promptVersion?: string | null;
+  runtimeMetadata?: Record<string, unknown> | null;
 }) {
   return prisma.aiModelCall.create({
     data: {
@@ -116,6 +118,7 @@ export async function startAiModelCall({
         selectionScore: selection.selectionScore ?? null,
         selectionCriteria: selection.selectionCriteria ?? null,
         requestedModel: selection.requestedModel,
+        runtime: runtimeMetadata || null,
       }),
     },
   });
