@@ -9,6 +9,7 @@ import type {
   AiTaskType,
 } from "@/lib/ai/types";
 import type { SaasPlanCode } from "@/lib/billing/plans";
+import { env } from "@/lib/env";
 
 const ALL_CONTEXTS: AiContextCode[] = ["PERSONAL", "DTSC_INTERNAL", "ORGANIZATION", "PROJECT", "MODULE", "OBJECT"];
 const TEXT_TASKS: AiTaskType[] = [
@@ -49,6 +50,19 @@ const defaultProvider: AiProviderDefinition = {
   status: "ACTIVE",
   regions: [],
   dataPolicyCode: "OPENAI_STANDARD",
+  supportsStreaming: true,
+};
+
+const openRouterProvider: AiProviderDefinition = {
+  code: "OPENROUTER",
+  labelKey: "ai.providers.openrouter.label",
+  descriptionKey: "ai.providers.openrouter.description",
+  protocol: "OPENROUTER_CHAT_COMPLETIONS",
+  baseUrl: env.OPENROUTER_BASE_URL,
+  apiKeyEnv: "OPENROUTER_API_KEY",
+  status: "ACTIVE",
+  regions: [],
+  dataPolicyCode: "OPENROUTER_CONTROLLED",
   supportsStreaming: true,
 };
 
@@ -95,16 +109,31 @@ function isModelDefinition(value: unknown): value is AiModelDefinition {
   return Boolean(record.code && record.providerCode && record.providerModelId && record.capabilities && Array.isArray(record.allowedContexts));
 }
 
+function certifiedOpenRouterModels() {
+  return parseJsonArray<unknown>(env.AI_OPENROUTER_CERTIFIED_MODELS_JSON)
+    .filter(isModelDefinition)
+    .filter((model) => model.providerCode === "OPENROUTER")
+    .map((model) => ({
+      ...model,
+      providerCode: "OPENROUTER",
+      dataPolicyCode: model.dataPolicyCode || "INHERIT_PROVIDER",
+    }));
+}
+
 export function getAiProviderCatalog() {
   const configured = parseJsonArray<unknown>(process.env.AI_PROVIDER_CATALOG_JSON).filter(isProviderDefinition);
-  const providers = [defaultProvider, ...configured.filter((provider) => provider.code !== defaultProvider.code)];
+  const canonical = [defaultProvider, openRouterProvider];
+  const canonicalCodes = new Set(canonical.map((provider) => provider.code));
+  const providers = [...canonical, ...configured.filter((provider) => !canonicalCodes.has(provider.code))];
   return providers.filter((provider) => provider.status !== "RETIRED");
 }
 
 export function getAiModelCatalog() {
-  const configured = parseJsonArray<unknown>(process.env.AI_MODEL_CATALOG_JSON).filter(isModelDefinition);
+  const configured = parseJsonArray<unknown>(process.env.AI_MODEL_CATALOG_JSON)
+    .filter(isModelDefinition)
+    .filter((model) => model.providerCode !== "OPENROUTER");
   const byCode = new Map<string, AiModelDefinition>();
-  for (const model of [...defaultOpenAiModels(), ...configured]) byCode.set(model.code, model);
+  for (const model of [...defaultOpenAiModels(), ...configured, ...certifiedOpenRouterModels()]) byCode.set(model.code, model);
   return [...byCode.values()].filter((model) => model.status !== "RETIRED");
 }
 
@@ -157,7 +186,7 @@ export function listAvailableAiModels(input: AiAvailabilityInput) {
 export function listCatalogAiModelsForUi(input: AiAvailabilityInput) {
   return listAvailableAiModels(input).map((model) => ({
     id: model.code,
-    label: model.providerCode === "OPENAI" ? getDisplayName(model.providerModelId) : model.providerModelId || model.code,
+    label: model.providerCode === "OPENAI" ? getDisplayName(model.providerModelId) : model.labelKey || model.code,
     providerCode: model.providerCode,
     status: model.status,
     minimumPlan: model.minimumPlan || null,
