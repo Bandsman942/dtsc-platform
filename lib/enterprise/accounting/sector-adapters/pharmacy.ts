@@ -24,7 +24,7 @@ export const buildPharmacySectorInventoryPosting: PostingBuilder = async (tx, in
       eventType: { in: ["PHARMACY_CUSTOMER_RETURN", "PHARMACY_SUPPLIER_RETURN", "PHARMACY_LOSS", "PHARMACY_EXPIRY_WRITE_OFF", "PHARMACY_ADJUSTMENT", "PHARMACY_RECALL_WRITE_OFF"] },
     },
   });
-  if (!event?.totalValue || !event.currencyCode || !event.totalValue.isPositive()) {
+  if (!event?.totalValue || !event.currencyCode || !event.totalValue.gt(0)) {
     throw new EnterpriseAccountingError("PHARMACY_INVENTORY_EVENT_NOT_POSTABLE", 409);
   }
   const inbound = event.direction === "IN";

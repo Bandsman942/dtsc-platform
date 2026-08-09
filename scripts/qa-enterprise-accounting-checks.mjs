@@ -2,6 +2,7 @@ import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
 import "./qa-syscohada-dataset-pipeline.mjs";
 import "./qa-accounting-program-150-155.mjs";
+import "./qa-accounting-acceptance-contract.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([

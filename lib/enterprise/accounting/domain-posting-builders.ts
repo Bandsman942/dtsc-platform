@@ -9,7 +9,7 @@ export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClien
     { accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable credit ${credit.number}`, debit: credit.grandTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.grandTotal, businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId },
     { accountMappingKey: credit.supplierInvoice.purchaseReceiptId ? "GOODS_RECEIVED_CLEARING" : credit.supplierInvoice.assetId ? "FIXED_ASSET" : "OPERATING_EXPENSE", description: `Supplier credit ${credit.number}`, credit: credit.subtotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.subtotal, businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId, assetId: credit.supplierInvoice.assetId },
   ];
-  if (credit.taxTotal.isPositive()) lines.push({ accountMappingKey: "TAX_RECEIVABLE", description: `Recoverable tax credit ${credit.number}`, credit: credit.taxTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.taxTotal, businessPartyId: credit.supplierInvoice.businessPartyId });
+  if (credit.taxTotal.gt(0)) lines.push({ accountMappingKey: "TAX_RECEIVABLE", description: `Recoverable tax credit ${credit.number}`, credit: credit.taxTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.taxTotal, businessPartyId: credit.supplierInvoice.businessPartyId });
   return { organizationId: input.organizationId, journalType: "PURCHASES", accountingDate: credit.creditDate, documentDate: credit.creditDate, reference: credit.number, description: `Supplier credit note ${credit.number}`, sourceModule: "FINANCE_PAYABLES", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id, currencyCode: credit.currencyCode, lines };
 }
 
@@ -43,7 +43,7 @@ export async function buildPayrollPosting(tx: Prisma.TransactionClient, input: {
     { accountMappingKey: "PAYROLL_PAYABLE", description: `Payroll net liability ${run.reference}`, credit: run.netAmount, transactionCurrencyCode: run.currency, transactionAmount: run.netAmount },
   ];
   const retained = run.grossAmount.minus(run.netAmount);
-  if (retained.isPositive()) lines.push({ accountMappingKey: "PAYROLL_WITHHOLDING_PAYABLE", description: `Payroll withholding ${run.reference}`, credit: retained, transactionCurrencyCode: run.currency, transactionAmount: retained });
+  if (retained.gt(0)) lines.push({ accountMappingKey: "PAYROLL_WITHHOLDING_PAYABLE", description: `Payroll withholding ${run.reference}`, credit: retained, transactionCurrencyCode: run.currency, transactionAmount: retained });
   return { organizationId: input.organizationId, journalType: "PAYROLL", accountingDate: run.payrollPeriod.payDate || run.payrollPeriod.periodEnd, documentDate: run.payrollPeriod.periodEnd, reference: run.reference, description: `Payroll ${run.reference}`, sourceModule: "HR_PAYROLL", sourceEntityType: "EnterprisePayrollRun", sourceEntityId: run.id, currencyCode: run.currency, lines };
 }
 
