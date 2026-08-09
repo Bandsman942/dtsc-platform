@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAiToolDefinition } from "@/lib/ai/tool-registry";
@@ -81,7 +82,7 @@ export async function executeAiTool(input: {
     }
   }
 
-  const executionId = crypto.randomUUID();
+  const executionId = randomUUID();
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "AiToolExecution" (
       "id", "userId", "organizationId", "conversationId", "turnId", "toolCode", "toolMode", "argumentsHash",
