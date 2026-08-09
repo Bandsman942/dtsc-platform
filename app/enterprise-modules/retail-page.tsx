@@ -35,15 +35,42 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
     <AppShell user={user}>
       <div className="space-y-4">
         {moduleCode === "RETAIL_POS" ? <RetailActiveCustomerBar organizationId={organizationId} /> : null}
-        {moduleCode === "RETAIL_POS" ? <RetailDeviceReadiness organizationId={organizationId} locale={locale} /> : null}
-        {moduleCode === "RETAIL_POS" ? <RetailGlobalReadiness organizationId={organizationId} locale={locale} /> : null}
-        {moduleCode === "RETAIL_POS" ? <RetailOfflineContinuity organizationId={organizationId} locale={locale} /> : null}
-        {moduleCode === "RETAIL_POS" ? <RetailOmnichannelPanel organizationId={organizationId} locale={locale} /> : null}
+
         <EnterpriseRetailShopWorkspace
           organizationId={organizationId}
           organizationName={organization.name}
           definition={access.definition}
         />
+
+        {moduleCode === "RETAIL_POS" ? (
+          <section aria-label={locale === "en" ? "Additional Shop tools" : "Outils complémentaires du Shop"} className="space-y-3">
+            <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                <span>
+                  {locale === "en" ? "Orders, pickup & offline sales" : "Commandes, retraits & vente hors connexion"}
+                </span>
+                <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
+                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
+              </summary>
+              <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
+                <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
+                <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
+              </div>
+            </details>
+
+            <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                <span>{locale === "en" ? "Shop setup & POS equipment" : "Mise en service & équipements du Shop"}</span>
+                <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
+                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
+              </summary>
+              <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
+                <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
+                <RetailGlobalReadiness organizationId={organizationId} locale={locale} />
+              </div>
+            </details>
+          </section>
+        ) : null}
       </div>
     </AppShell>
   );
