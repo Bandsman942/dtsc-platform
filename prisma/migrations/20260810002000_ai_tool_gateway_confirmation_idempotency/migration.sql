@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS "AiToolConfirmation" (
   "turnId" TEXT,
   "toolCode" TEXT NOT NULL,
   "argumentsHash" TEXT NOT NULL,
+  "argumentsJson" JSONB,
   "status" TEXT NOT NULL DEFAULT 'PENDING',
   "expiresAt" TIMESTAMP(3) NOT NULL,
   "confirmedAt" TIMESTAMP(3),
