@@ -31,6 +31,7 @@ const contract = read("docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md");
 const language = read("lib/customer-facing-language.ts");
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
 const activeCustomer = read("components/enterprise/professional/retail-active-customer-bar.tsx");
+const commercial = read("components/enterprise/professional/retail-commercial-workspace.tsx");
 const deviceReadiness = read("components/enterprise/professional/retail-device-readiness.tsx");
 const globalReadiness = read("components/enterprise/professional/retail-global-readiness.tsx");
 const offline = read("components/enterprise/professional/retail-offline-continuity.tsx");
@@ -52,7 +53,16 @@ for (const marker of [
   "customerFacingCapabilityLabel",
   "customerFacingDeviceType",
   "customerFacingFulfillmentMode",
+  "customerFacingPromotionType",
+  "customerFacingPromotionStackMode",
+  "customerFacingSalesChannel",
+  "customerFacingReturnType",
+  "customerFacingProductCondition",
+  "customerFacingStockDisposition",
+  "customerFacingRefundMethod",
+  "customerFacingFinancialAccountType",
   "PENDING_PROVIDER",
+  "PENDING_APPROVAL",
   "PENDING_SYNC",
   "TENANT_CONFIGURATION_REQUIRED",
 ]) check(language.includes(marker), `Customer-facing language mapping is missing ${marker}.`);
@@ -66,6 +76,55 @@ check(activeCustomer.includes("useAppLocale"), "Active customer UI must use the 
 check(activeCustomer.includes("customerFacingError"), "Active customer UI must sanitize customer-visible errors.");
 check(!activeCustomer.includes("rattaché côté serveur"), "Active customer UI must not explain server-side implementation to the client.");
 check(!activeCustomer.includes("attached server-side"), "Active customer UI must not explain server-side implementation to the client.");
+
+for (const marker of [
+  "useAppLocale",
+  "customerFacingError",
+  "customerFacingStatusLabel",
+  "customerFacingPromotionType",
+  "customerFacingPromotionStackMode",
+  "customerFacingSalesChannel",
+  "customerFacingReturnType",
+  "customerFacingProductCondition",
+  "customerFacingStockDisposition",
+  "customerFacingRefundMethod",
+  "customerFacingFinancialAccountType",
+]) check(commercial.includes(marker), `Retail commercial UI must use ${marker}.`);
+
+for (const forbidden of [
+  "Canonical sale prices",
+  "Prix de vente canoniques",
+  "Retail price conditions",
+  "Conditions de prix Retail",
+  "canonical price applies at the POS",
+  "prix canonique s’applique au POS",
+  "dedicated Retail domain",
+  "domaine Retail dédié",
+  "retired legacy PROMOTIONS source",
+  "ancienne source PROMOTIONS retirée",
+  "without bypassing Finance or Inventory",
+  "sans contourner Finance ni le stock",
+  ">Fixed<",
+  ">Quantity<",
+  ">Buy X Get Y<",
+  ">Bundle<",
+  ">Exclusive<",
+  ">Stackable<",
+  ">Return<",
+  ">Exchange<",
+  ">Sellable<",
+  ">Restock<",
+  ">Scrap<",
+  ">Original tender<",
+  ">Bank transfer<",
+  ">Unit price<",
+]) check(!commercial.includes(forbidden), `Retail commercial customer UI still contains raw or technical wording: ${forbidden}`);
+
+check(!commercial.includes("caught instanceof Error ? caught.message"), "Retail commercial UI must not pass backend error messages directly to customers.");
+check(!commercial.includes("condition.catalogPriceId}"), "Retail pricing rules must not fall back to an internal price identifier in customer UI.");
+check(commercial.includes('href="/enterprise-modules/CATALOG"'), "Retail pricing UI must deep-link to the Catalog source of truth.");
+check(commercial.includes('href="/enterprise-modules/FINANCE_TREASURY"'), "Retail refund UI must deep-link to Treasury for refund accounts.");
+check(commercial.includes("[touch-action:pan-x]"), "Retail commercial tab/filter rails must preserve touch-first horizontal navigation.");
 
 check(deviceReadiness.includes("customerFacingDeviceType"), "POS device UI must translate internal device types to business labels.");
 check(!deviceReadiness.includes("device.deviceType.replaceAll"), "POS device UI must not render raw enum-derived device types.");
