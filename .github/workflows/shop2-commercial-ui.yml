@@ -6,10 +6,17 @@ on:
     branches: [main]
     paths:
       - "app/enterprise-modules/RETAIL_POS/commercial/**"
-      - "components/enterprise/professional/retail-commercial-control.tsx"
+      - "app/enterprise-modules/retail-page.tsx"
+      - "components/enterprise/professional/retail-*.tsx"
+      - "components/enterprise/professional/enterprise-retail-shop-workspace.tsx"
       - "app/api/enterprise/**/retail/**"
       - "lib/enterprise/retail/**"
+      - "lib/customer-facing-language.ts"
+      - "docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md"
+      - "docs/ERP_CANONICAL_ENTITY_OWNERSHIP.md"
+      - "docs/ERP_CROSS_MODULE_RELATION_MATRIX.md"
       - "scripts/qa-shop2-commercial-ui.mjs"
+      - "scripts/qa-retail-product-coherence.mjs"
       - ".github/workflows/shop2-commercial-ui.yml"
 
 permissions:
@@ -31,3 +38,5 @@ jobs:
           node-version: 22
       - name: Validate Shop 2 commercial workspace
         run: node scripts/qa-shop2-commercial-ui.mjs
+      - name: Validate Retail product coherence and customer language
+        run: node scripts/qa-retail-product-coherence.mjs
