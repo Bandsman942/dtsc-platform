@@ -65,7 +65,8 @@ Pour les erreurs et avertissements, préférer :
 
 Exemple :
 
-**Paiement en attente de confirmation**  
+**Paiement en attente de confirmation**
+
 La confirmation de l’opérateur n’est pas encore arrivée. La vente ne sera finalisée qu’après confirmation.
 
 Plutôt que :
