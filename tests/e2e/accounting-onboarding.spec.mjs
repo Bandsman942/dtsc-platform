@@ -90,7 +90,7 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     const onboarding = page.locator('section[aria-labelledby="accounting-onboarding-title"]');
     await expect(onboarding.getByText("Mise en service comptable")).toBeVisible();
     await expect(onboarding.getByText(/SYSCOHADA 2017 v0\.1\.0 est fonctionnel mais non officiel/i)).toBeVisible();
-    await expect(onboarding.getByText("Aucun plan pour l’instant")).toBeVisible();
+    await expect(onboarding.getByLabel("Plan de l’entreprise")).toHaveValue("");
 
     await onboarding.getByLabel("Code", { exact: true }).fill("SYS17");
     await onboarding.getByLabel("Nom français").fill("Plan SYSCOHADA E2E");
