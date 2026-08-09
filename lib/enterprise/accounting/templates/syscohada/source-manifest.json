@@ -1,0 +1,49 @@
+{
+  "frameworkCode": "OHADA_AUDCIF",
+  "plannedTemplateCode": "OHADA_SYSCOHADA",
+  "plannedTemplateVersion": "1.0.0",
+  "verificationStatus": "SOURCE_FILE_REQUIRED",
+  "legalUseStatus": "REVIEW_REQUIRED",
+  "regulatoryAuthority": "OHADA",
+  "officialAct": {
+    "title": "Acte uniforme relatif au droit comptable et à l'information financière (AUDCIF)",
+    "adoptedAt": "2017-01-26",
+    "publishedAt": "2017-02-15",
+    "effectiveIndividualAccountsFrom": "2018-01-01",
+    "effectiveConsolidatedCombinedFrom": "2019-01-01",
+    "url": "https://www.ohada.org/en/uniform-act-relating-to-accounting-law-and-financial-information-audcif/"
+  },
+  "officialDigitalLibrary": {
+    "catalogNoticeId": 4847,
+    "url": "https://biblio.ohada.org/index.php?id=4847&lvl=notice_display",
+    "publisher": "OHADA",
+    "publicationYear": 2017,
+    "documentType": "Document électronique",
+    "language": "fr",
+    "listedDigitalDocuments": [
+      "Acte uniforme relatif au droit comptable et à l'information financière - Version complète signée",
+      "Acte uniforme relatif au droit comptable et à l’information financière - AUDCIF"
+    ],
+    "directDownloadUrl": null
+  },
+  "verifiedSourceFile": {
+    "fileName": null,
+    "sha256": null,
+    "sizeBytes": null,
+    "verifiedAt": null,
+    "verifiedBy": null
+  },
+  "canonicalDataset": {
+    "path": null,
+    "sha256": null,
+    "generatedAt": null,
+    "accountCount": null,
+    "groupCount": null
+  },
+  "lastRegulatoryVerificationAt": "2026-08-09",
+  "notes": [
+    "The OHADA act page confirms that the revised SYSCOHADA annex contains the OHADA general chart of accounts and the consolidated/combined accounting framework.",
+    "The official digital-library notice lists two digital documents but does not expose a direct download URL in the crawlable catalog content.",
+    "No SYSCOHADA account dataset may be published until an official or legally exploitable source file is verified and fingerprinted."
+  ]
+}

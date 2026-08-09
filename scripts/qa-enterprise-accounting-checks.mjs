@@ -1,4 +1,5 @@
 import "./qa-accounting-framework-registry.mjs";
+import "./qa-syscohada-source-provenance.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([
@@ -9,6 +10,8 @@ requirePaths([
   "lib/enterprise/accounting/chart-template-registry.ts",
   "lib/enterprise/accounting/chart-template-application-service.ts",
   "lib/enterprise/accounting/templates/generic-small-business.v1.json",
+  "lib/enterprise/accounting/templates/syscohada/source-manifest.json",
+  "scripts/accounting/verify-syscohada-source.mjs",
   "lib/enterprise/module-registry-finance.json",
 ]);
 requireTokens("lib/enterprise/accounting/posting-service.ts", [
@@ -33,6 +36,7 @@ requireTokens("lib/enterprise/accounting/reversal-service.ts", [
 requireTokens("lib/enterprise/accounting/chart-template-registry.ts", [
   "ACCOUNTING_FRAMEWORKS",
   "CHART_TEMPLATES",
+  "OHADA_AUDCIF",
   "validateChartTemplate",
   "validateRegisteredChartTemplates",
   "deepFreeze",
