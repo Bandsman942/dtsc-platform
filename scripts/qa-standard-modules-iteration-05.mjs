@@ -12,6 +12,10 @@ import "./qa-standard-ai-policy-router-v2.mjs";
 import "./qa-standard-ai-routing-determinism.mjs";
 import "./qa-standard-ai-routing-cost-health.mjs";
 import "./qa-standard-ai-data-policy-fallbacks.mjs";
+import "./qa-standard-ai-assistant-registry.mjs";
+import "./qa-standard-ai-context-engine.mjs";
+import "./qa-standard-ai-cag-isolation.mjs";
+import "./qa-standard-ai-sector-assistants.mjs";
 import { runStandardAiIteration05Audit } from "./lib/standard-ai-iteration05-audit.mjs";
 
 runStandardAiIteration05Audit("all");
