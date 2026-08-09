@@ -30,7 +30,7 @@ async function loadOptions(organizationId: string) {
       select: { id: true, code: true, name: true, siteId: true },
     }),
     prisma.enterpriseFinancialAccount.findMany({
-      where: { organizationId, isActive: true, archivedAt: null },
+      where: { organizationId, status: "ACTIVE", archivedAt: null },
       orderBy: [{ accountType: "asc" }, { code: "asc" }],
       select: { id: true, code: true, name: true, accountType: true, currencyCode: true, siteId: true },
     }),
