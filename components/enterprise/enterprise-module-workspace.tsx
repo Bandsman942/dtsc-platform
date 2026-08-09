@@ -11,6 +11,7 @@ import { EnterpriseSuppliersWorkspace } from "@/components/enterprise/core-v2/en
 import { EnterpriseTasksWorkspace } from "@/components/enterprise/core-v2/enterprise-tasks-workspace";
 import { EnterpriseWorkflowsWorkspace } from "@/components/enterprise/core-v2/enterprise-workflows-workspace";
 import { EnterpriseCoreWorkspace } from "@/components/enterprise/enterprise-core-workspace";
+import type { ProcurementUiCapabilities } from "@/components/enterprise/professional/enterprise-procurement-operations-workspace";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -61,6 +62,7 @@ export function EnterpriseModuleWorkspace({
   coreData,
   canManage,
   canCreate,
+  capabilities,
   locale,
   coreRecords,
 }: {
@@ -72,6 +74,7 @@ export function EnterpriseModuleWorkspace({
   coreData: CoreData;
   canManage: boolean;
   canCreate: boolean;
+  capabilities: ProcurementUiCapabilities;
   locale?: string | null;
   coreRecords: LegacyCoreRecord[];
 }) {
@@ -155,8 +158,8 @@ export function EnterpriseModuleWorkspace({
           <EnterpriseDocumentsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "DOCUMENT")} />
         ) : enterpriseModule.code === "SUPPLIERS_PURCHASES" ? (
           <div className="grid gap-8">
-            <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "SUPPLIER")} />
-            <EnterprisePurchasesWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "PURCHASE")} />
+            <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={capabilities.canWrite} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "SUPPLIER")} />
+            <EnterprisePurchasesWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} capabilities={capabilities} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "PURCHASE")} />
           </div>
         ) : enterpriseModule.code === "FINANCE_BUDGETS" ? (
           <EnterpriseFinanceWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => ["BUDGET", "EXPENSE"].includes(record.recordType))} />
