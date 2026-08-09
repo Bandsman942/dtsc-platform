@@ -19,6 +19,10 @@ Cette itération remplace les décisions UI locales basées sur les rôles par l
 
 Aucune migration Prisma et aucune réécriture de données.
 
+## Delivery Governance
+
+L'issue #170 et la PR portent `type:bug`, `priority:P1`, `area:erp`, `delivery-impact:high` et le milestone actif `Delivery Governance v1`. La branche respecte `fix/170-...`; la fusion reste interdite tant que les Quality Gates ne sont pas verts sur le head exact.
+
 ## Acceptance attendue
 
 Quality Gates, module registry QA, régression globale, Shop 2 behavioral gates et build Production doivent rester verts sur le même head avant merge.
