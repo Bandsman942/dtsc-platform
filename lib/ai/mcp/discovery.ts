@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getLatestMcpDiscoverySnapshot, persistMcpDiscoverySnapshot, writeMcpAuditEvent } from "@/lib/ai/mcp/audit";
 import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
 import { hashMcpSchema } from "@/lib/ai/mcp/schema";
 import type { McpDiscoverySnapshot, McpDiscoveredTool, McpServerDefinition } from "@/lib/ai/mcp/types";
@@ -63,6 +64,23 @@ export function compareMcpDiscovery(previous: McpDiscoverySnapshot | null, next:
     return inputChanged || outputChanged ? [tool.name] : [];
   });
   return { compatible: removedTools.length === 0 && changedTools.length === 0, addedTools, removedTools, changedTools };
+}
+
+export async function discoverAndPersistMcpServer(server: McpServerDefinition) {
+  const previous = await getLatestMcpDiscoverySnapshot(server.code);
+  const snapshot = await discoverMcpServer(server);
+  const change = compareMcpDiscovery(previous, snapshot);
+  await persistMcpDiscoverySnapshot({ snapshot, compatible: change.compatible, change });
+  if (!previous || previous.version !== snapshot.version) {
+    await writeMcpAuditEvent({
+      serverCode: server.code,
+      eventType: "DISCOVERY",
+      status: change.compatible ? "SUCCESS" : "CHANGED",
+      reasonCode: change.compatible ? null : "MCP_DISCOVERY_INCOMPATIBLE_CHANGE",
+      metadata: { previousVersion: previous?.version || null, nextVersion: snapshot.version, ...change },
+    });
+  }
+  return { snapshot, change };
 }
 
 export function getDiscoveredMcpTool(snapshot: McpDiscoverySnapshot, name: string) {
