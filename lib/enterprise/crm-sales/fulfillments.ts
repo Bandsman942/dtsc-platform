@@ -63,7 +63,6 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
         createdByUserId: actorUserId,
         items: {
           create: input.items.map((item) => ({
-            organizationId,
             salesOrderItemId: item.salesOrderItemId,
             quantityFulfilled: item.quantityFulfilled,
             notes: item.notes || null,
