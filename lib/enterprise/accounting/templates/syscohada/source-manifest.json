@@ -1,7 +1,7 @@
 {
   "frameworkCode": "OHADA_AUDCIF",
   "plannedTemplateCode": "OHADA_SYSCOHADA",
-  "plannedTemplateVersion": "1.0.0",
+  "plannedTemplateVersion": "0.1.0",
   "verificationStatus": "SOURCE_FILE_REQUIRED",
   "legalUseStatus": "REVIEW_REQUIRED",
   "regulatoryAuthority": "OHADA",
@@ -33,6 +33,25 @@
     "verifiedAt": null,
     "verifiedBy": null
   },
+  "bootstrapPolicy": {
+    "enabled": true,
+    "templateVersion": "0.1.0",
+    "status": "USER_PROVIDED_NON_OFFICIAL_BOOTSTRAP",
+    "sourceFileName": "Ohada-Acte-Uniforme-2000-plan-des-comptes.pdf",
+    "sourceSha256": "ab1603afc1d2664fc7d6a05160aa895526ad864b922bd11858f8e976020d7627",
+    "sourceLabel": "Plan comptable OHADA suivant l'acte uniforme du 22 février 2000 — copie Droit-Afrique fournie par le propriétaire",
+    "authorizedBy": "DTSC owner instruction 2026-08-09",
+    "allowedPurpose": "BOOTSTRAP_RUNTIME_ONLY",
+    "regulatoryComplianceClaimAllowed": false,
+    "accountingTemplateProductionReadyAllowed": false,
+    "futureVersionsRequireTrustedSource": true,
+    "futureVersionsRequireDatasetVerification": true,
+    "notes": [
+      "Cette exception est strictement limitée à la version 0.1.0 afin que DTSC ERP dispose d'un premier template fonctionnel.",
+      "Le document fourni décrit le plan OHADA de 2000 et ne doit pas être présenté comme une copie officielle du SYSCOHADA révisé 2017.",
+      "Toute version postérieure doit revenir au gate normal de source officielle ou légalement exploitable, dataset fingerprinté et revue comptable."
+    ]
+  },
   "datasetPipeline": {
     "schemaVersion": "1.0.0",
     "schemaPath": "lib/enterprise/accounting/templates/syscohada/dataset-schema.v1.json",
@@ -51,9 +70,8 @@
   },
   "lastRegulatoryVerificationAt": "2026-08-09",
   "notes": [
-    "The OHADA act page confirms that the revised SYSCOHADA annex contains the OHADA general chart of accounts and the consolidated/combined accounting framework.",
-    "The official digital-library notice lists two digital documents but does not expose a direct download URL in the crawlable catalog content.",
-    "No SYSCOHADA account dataset may be published until an official or legally exploitable source file is verified and fingerprinted.",
-    "The deterministic dataset pipeline contains no regulatory account data and only accepts reviewed input linked to the verified source SHA-256."
+    "The official 2017 provenance chain remains the required path for all future versions.",
+    "Version 0.1.0 is a deliberately isolated owner-authorized bootstrap based on a supplied non-official PDF and cannot claim regulatory conformity.",
+    "The deterministic dataset pipeline remains unchanged and still requires a verified source for future reviewed datasets."
   ]
 }
