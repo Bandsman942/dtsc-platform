@@ -20,7 +20,7 @@ export function registerBuiltInCagBuilders() {
     };
     return {
       code: "sector:PHARMACY",
-      version: "2",
+      version: `2.${settings.setting.settingsVersion}`,
       content: [
         "Secteur PHARMACY: appliquer FEFO et ne jamais présenter comme vendable un lot expiré, rappelé, en quarantaine ou bloqué.",
         "Toute vente, sortie de stock, clôture de caisse, commande ou validation reste une action métier à confirmer et exécuter via les routes autorisées.",
