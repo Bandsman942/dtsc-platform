@@ -78,7 +78,20 @@ async function main() {
     },
   });
 
-  for (const [index, moduleCode] of ["CRM_CUSTOMERS", "CATALOG", "SITES_WAREHOUSES", "CRM_PIPELINE", "CONTRACTS", "DOCUMENTS"].entries()) {
+  // Seed the canonical dependency graph required by Finance acceptance. The
+  // canonical access resolver intentionally blocks a Finance module when a
+  // prerequisite ERP module is missing or disabled.
+  const enabledModules = [
+    "CRM_CUSTOMERS",
+    "CATALOG",
+    "SITES_WAREHOUSES",
+    "CRM_PIPELINE",
+    "CONTRACTS",
+    "DOCUMENTS",
+    "SALES_QUOTES_ORDERS",
+    "SUPPLIERS_PURCHASES",
+  ];
+  for (const [index, moduleCode] of enabledModules.entries()) {
     await prisma.enterpriseModule.upsert({
       where: { organizationId_moduleCode: { organizationId, moduleCode } },
       update: { isEnabled: true, requiresPlanLevel: moduleCode === "CRM_CUSTOMERS" || moduleCode === "CATALOG" ? "STARTER" : "BUSINESS" },
