@@ -37,6 +37,6 @@ forbidTokens(configuration, [
   "hasFunctionalCurrency:", "hasFiscalYear:", "hasOpenPeriod:", "hasChartOfAccounts:",
   "hasSalesJournal:", "hasPurchaseJournal:", "hasFinancialAccount:", "hasTaxConfiguration:", "ledgerReady:",
 ]);
-requireTokens("lib/user-guides/accounting-onboarding-guide.ts", ["server-driven", "calculées par le serveur", "automatically"]);
+requireTokens("lib/user-guides/accounting-onboarding-guide.ts", ["server-driven", "calculés par le serveur", "automatically"]);
 
 success("ERP stabilization Finance onboarding contract");
