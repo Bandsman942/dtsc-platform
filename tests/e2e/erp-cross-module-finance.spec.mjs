@@ -119,7 +119,7 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
         status: "APPROVED",
         invoiceDate: new Date(),
         dueDate: new Date(Date.now() + 7 * 86400000),
-        currencyCode: "USD",
+        currencyCode: "XAF",
         subtotal: "40",
         taxTotal: "0",
         grandTotal: "40",
@@ -149,7 +149,7 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       data: { organizationId, code: `CM-${suffix}`, name: "Cross module payroll E2E", periodStart: new Date("2026-08-01T00:00:00.000Z"), periodEnd: new Date("2026-08-31T23:59:59.000Z"), status: "CLOSED", createdByUserId: adminUserId },
     });
     const run = await prisma.enterprisePayrollRun.create({
-      data: { organizationId, payrollPeriodId: period.id, reference: `CM-PAY-${suffix}`, status: "APPROVED", currency: "USD", employeeCount: 1, grossAmount: "100", bonusAmount: "0", deductionAmount: "20", netAmount: "80", preparedByUserId: adminUserId, approverUserId: adminUserId, approvedAt: new Date() },
+      data: { organizationId, payrollPeriodId: period.id, reference: `CM-PAY-${suffix}`, status: "APPROVED", currency: "XAF", employeeCount: 1, grossAmount: "100", bonusAmount: "0", deductionAmount: "20", netAmount: "80", preparedByUserId: adminUserId, approverUserId: adminUserId, approvedAt: new Date() },
     });
     const first = await post(page, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/post-liability`);
     expect(first.response.ok(), JSON.stringify(first.body)).toBeTruthy();
