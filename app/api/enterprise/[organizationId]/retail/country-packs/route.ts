@@ -26,7 +26,7 @@ export async function GET(req: Request, { params }: Params) {
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, rateLimitAction: "country-pack" });
+  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = activationSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Configuration country pack invalide." }, { status: 400 });
@@ -50,6 +50,6 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-country-packs", packCode: activation.packCode } });
     return NextResponse.json({ activation });
   } catch (error) {
-    return retailErrorResponse(error, { request: req, startedAt, userId: auth.session.userId, metadata: { organizationId, domain: "retail-country-packs" } });
+    return retailErrorResponse(error, "RETAIL_COUNTRY_PACK_SAVE_FAILED");
   }
 }
