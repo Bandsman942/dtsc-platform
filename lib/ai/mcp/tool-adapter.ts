@@ -4,7 +4,7 @@ import { authorizeMcpRequiredPermissions } from "@/lib/ai/mcp/authorization";
 import { getMcpToolBindingByDtscCode } from "@/lib/ai/mcp/bindings";
 import { discoverAndPersistMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
-import { hashMcpSchema } from "@/lib/ai/mcp/schema";
+import { buildMcpParameterHeaders, hashMcpSchema } from "@/lib/ai/mcp/schema";
 import { authorizeMcpDataBoundary } from "@/lib/ai/mcp/security";
 import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
 import type { McpDataClassification } from "@/lib/ai/mcp/types";
@@ -67,10 +67,12 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
     if (hashMcpSchema(remoteTool.inputSchema) !== binding.inputSchemaHash) throw new Error("MCP_TOOL_INPUT_SCHEMA_CHANGED");
     if (hashMcpSchema(remoteTool.outputSchema || {}) !== binding.outputSchemaHash) throw new Error("MCP_TOOL_OUTPUT_SCHEMA_CHANGED");
 
+    const args = input.args && typeof input.args === "object" ? input.args as Record<string, unknown> : {};
     const result = await callMcpJsonRpc<McpToolCallResult>({
       server: binding.timeoutMs ? { ...server, timeoutMs: Math.min(server.timeoutMs, binding.timeoutMs) } : server,
       method: "tools/call",
-      params: { name: binding.remoteToolName, arguments: input.args && typeof input.args === "object" ? input.args as Record<string, unknown> : {} },
+      params: { name: binding.remoteToolName, arguments: args },
+      additionalHeaders: buildMcpParameterHeaders(remoteTool.inputSchema, args),
     });
     if (result.isError) throw new Error("MCP_REMOTE_TOOL_ERROR");
     await writeMcpAuditEvent({ ...auditBase, eventType: "TOOL_CALL", status: "SUCCESS", metadata: { discoveryVersion: snapshot.version } });
