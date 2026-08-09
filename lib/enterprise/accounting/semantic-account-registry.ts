@@ -27,7 +27,7 @@ export type SemanticAccountDefinition = {
   deprecated?: boolean;
 };
 
-export const SEMANTIC_ACCOUNT_REGISTRY = Object.freeze([
+export const SEMANTIC_ACCOUNT_REGISTRY: readonly SemanticAccountDefinition[] = Object.freeze([
   { key: "ACCOUNTS_RECEIVABLE", domain: "SALES", labelFr: "Créances clients", labelEn: "Accounts receivable", category: "RECEIVABLE", expectedAccountTypes: ["ASSET"], expectedAccountSubtypes: ["ACCOUNTS_RECEIVABLE"], requiredForPosting: true, fallbackAllowed: false, consumerEvents: ["SALES_INVOICE_POSTED", "SALES_CREDIT_NOTE_POSTED", "CUSTOMER_PAYMENT_CONFIRMED", "PAYMENT_ALLOCATION_CONFIRMED", "HEALTH_WRITE_OFF_APPROVED"] },
   { key: "ACCOUNTS_PAYABLE", domain: "PURCHASES", labelFr: "Dettes fournisseurs", labelEn: "Accounts payable", category: "PAYABLE", expectedAccountTypes: ["LIABILITY"], expectedAccountSubtypes: ["ACCOUNTS_PAYABLE"], requiredForPosting: true, fallbackAllowed: false, consumerEvents: ["SUPPLIER_INVOICE_POSTED", "SUPPLIER_CREDIT_NOTE_POSTED", "SUPPLIER_PAYMENT_CONFIRMED", "PAYMENT_ALLOCATION_CONFIRMED"] },
   { key: "SALES_REVENUE", domain: "SALES", labelFr: "Chiffre d'affaires - ventes", labelEn: "Sales revenue", category: "REVENUE", expectedAccountTypes: ["REVENUE", "OTHER_INCOME"], requiredForPosting: true, fallbackAllowed: false, consumerEvents: ["SALES_INVOICE_POSTED", "SALES_CREDIT_NOTE_POSTED", "RETAIL_POS_SALE_POSTED", "RETAIL_POS_SALE_REVERSED"] },
@@ -60,9 +60,9 @@ export const SEMANTIC_ACCOUNT_REGISTRY = Object.freeze([
   { key: "FX_GAIN", domain: "TREASURY", labelFr: "Gain de change", labelEn: "Foreign exchange gain", category: "REVENUE", expectedAccountTypes: ["REVENUE", "OTHER_INCOME"], requiredForPosting: false, fallbackAllowed: false, consumerEvents: [] },
   { key: "CLEARING", domain: "TREASURY", labelFr: "Compte de passage", labelEn: "Clearing", category: "CLEARING", expectedAccountTypes: ["ASSET", "LIABILITY"], expectedAccountSubtypes: ["CLEARING"], requiredForPosting: false, fallbackAllowed: false, consumerEvents: [] },
   { key: "RETAINED_EARNINGS", domain: "CLOSE", labelFr: "Report à nouveau", labelEn: "Retained earnings", category: "EQUITY", expectedAccountTypes: ["EQUITY"], expectedAccountSubtypes: ["RETAINED_EARNINGS"], requiredForPosting: false, fallbackAllowed: false, consumerEvents: [] },
-] satisfies readonly SemanticAccountDefinition[]);
+]);
 
-const BY_KEY = new Map(SEMANTIC_ACCOUNT_REGISTRY.map((definition) => [definition.key, definition]));
+const BY_KEY = new Map<string, SemanticAccountDefinition>(SEMANTIC_ACCOUNT_REGISTRY.map((definition) => [definition.key, definition]));
 
 export function getSemanticAccountDefinition(key: string): SemanticAccountDefinition | undefined {
   return BY_KEY.get(key);
