@@ -8,6 +8,14 @@ const QUEUE_STORE = "queue";
 
 export type RetailOfflineQueueStatus = "PENDING_SYNC" | "SYNCED" | "CONFLICT" | "REJECTED";
 
+export type RetailOfflineSnapshotCatalogItem = {
+  offlineEligible: boolean;
+  name: string;
+  code: string;
+  sku: string | null;
+  [key: string]: unknown;
+};
+
 export type RetailOfflineSnapshotEnvelope = {
   version: string;
   payloadHash: string;
@@ -27,7 +35,7 @@ export type RetailOfflineSnapshotEnvelope = {
     total: number;
     returned: number;
     truncated: boolean;
-    items: Array<Record<string, unknown>>;
+    items: RetailOfflineSnapshotCatalogItem[];
   };
   [key: string]: unknown;
 };
