@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getChartTemplate } from "@/lib/enterprise/accounting/chart-template-registry";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+
+export { applyDraftChartTemplate } from "@/lib/enterprise/accounting/chart-template-application-service";
 
 export async function createFiscalYear(
   organizationId: string,
@@ -48,7 +51,9 @@ export async function createFiscalPeriod(
 export async function createChartOfAccounts(organizationId: string, actorUserId: string, input: { code: string; nameFr: string; nameEn: string; templateCode?: string }) {
   return prisma.$transaction(async (tx) => {
     await assertActiveClientOrganization(tx, organizationId);
-    const chart = await tx.enterpriseChartOfAccounts.create({ data: { organizationId, code: input.code, nameFr: input.nameFr, nameEn: input.nameEn, templateCode: input.templateCode || null, createdByUserId: actorUserId } });
+    const template = input.templateCode ? getChartTemplate(input.templateCode) : undefined;
+    if (input.templateCode && !template) throw new EnterpriseAccountingError("CHART_TEMPLATE_UNKNOWN", 409, { templateCode: input.templateCode });
+    const chart = await tx.enterpriseChartOfAccounts.create({ data: { organizationId, code: input.code, nameFr: input.nameFr, nameEn: input.nameEn, templateCode: template?.code || null, createdByUserId: actorUserId } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseChartOfAccounts", entityId: chart.id, eventType: "CHART_OF_ACCOUNTS_CREATED", summary: `Chart ${chart.code} created`, actorUserId, toStatus: "DRAFT" });
     return chart;
   });
@@ -101,7 +106,7 @@ export async function deactivateLedgerAccount(organizationId: string, accountId:
     const updated = await tx.enterpriseLedgerAccount.update({ where: { id: account.id }, data: { isActive: false, revision: { increment: 1 } } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseLedgerAccount", entityId: account.id, eventType: "LEDGER_ACCOUNT_DEACTIVATED", summary: `Ledger account ${account.code} deactivated`, actorUserId, fromStatus: "ACTIVE", toStatus: "INACTIVE" });
     return updated;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function createJournal(organizationId: string, actorUserId: string, input: { code: string; nameFr: string; nameEn: string; journalType: string; sequencePrefix?: string; requiresApproval: boolean }) {
@@ -149,36 +154,4 @@ export async function createTaxCode(
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseTaxCode", entityId: taxCode.id, eventType: "TAX_CODE_CREATED", summary: `Tax code ${taxCode.code} created`, actorUserId, toStatus: "ACTIVE", metadataJson: { category: taxCode.category, jurisdiction: taxCode.jurisdiction } });
     return taxCode;
   });
-}
-
-export const DRAFT_CHART_TEMPLATES = {
-  GENERIC_SMALL_BUSINESS: [
-    ["1000", "Trésorerie", "Cash and cash equivalents", "ASSET", "CASH"],
-    ["1100", "Créances clients", "Accounts receivable", "ASSET", "ACCOUNTS_RECEIVABLE"],
-    ["1200", "Stocks", "Inventory", "ASSET", "INVENTORY"],
-    ["1500", "Immobilisations", "Fixed assets", "ASSET", "FIXED_ASSET"],
-    ["1590", "Amortissements cumulés", "Accumulated depreciation", "ASSET", "ACCUMULATED_DEPRECIATION"],
-    ["2000", "Dettes fournisseurs", "Accounts payable", "LIABILITY", "ACCOUNTS_PAYABLE"],
-    ["2100", "Taxes à payer", "Tax payable", "LIABILITY", "TAX_PAYABLE"],
-    ["2200", "Dettes salariales", "Payroll payable", "LIABILITY", "PAYROLL_PAYABLE"],
-    ["3000", "Capitaux propres", "Equity", "EQUITY", "RETAINED_EARNINGS"],
-    ["4000", "Produits", "Revenue", "REVENUE", "REVENUE"],
-    ["5000", "Coût des ventes", "Cost of sales", "EXPENSE", "COST_OF_SALES"],
-    ["6000", "Charges d'exploitation", "Operating expenses", "EXPENSE", "OPERATING_EXPENSE"],
-    ["9990", "Compte de passage", "Clearing", "ASSET", "CLEARING"],
-  ] as const,
-};
-
-export async function applyDraftChartTemplate(organizationId: string, actorUserId: string, chartId: string, templateCode: keyof typeof DRAFT_CHART_TEMPLATES) {
-  return prisma.$transaction(async (tx) => {
-    const [chart, postedEntries, accounts] = await Promise.all([
-      tx.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId, status: "DRAFT" } }),
-      tx.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
-      tx.enterpriseLedgerAccount.count({ where: { organizationId, chartId } }),
-    ]);
-    if (!chart || postedEntries > 0 || accounts > 0) throw new EnterpriseAccountingError("CHART_TEMPLATE_NOT_APPLICABLE", 409);
-    const template = DRAFT_CHART_TEMPLATES[templateCode];
-    await tx.enterpriseLedgerAccount.createMany({ data: template.map(([code, nameFr, nameEn, accountType, accountSubtype]) => ({ organizationId, chartId, code, nameFr, nameEn, accountType, accountSubtype, isSystemAccount: true, allowDirectPosting: !["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE"].includes(accountSubtype) })) });
-    return tx.enterpriseChartOfAccounts.update({ where: { id: chart.id }, data: { templateCode, status: "ACTIVE", revision: { increment: 1 } } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

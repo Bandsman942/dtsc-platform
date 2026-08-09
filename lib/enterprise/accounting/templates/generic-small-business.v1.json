@@ -1,0 +1,154 @@
+{
+  "code": "GENERIC_SMALL_BUSINESS",
+  "frameworkCode": "DTSC_GENERIC",
+  "version": "1.0.0",
+  "status": "PUBLISHED",
+  "nameFr": "Plan générique petite entreprise",
+  "nameEn": "Generic small business chart",
+  "effectiveFrom": "2026-08-09",
+  "countryScope": [],
+  "entityTypes": ["FOR_PROFIT"],
+  "languages": ["fr", "en"],
+  "source": {
+    "kind": "DTSC_INTERNAL",
+    "authority": "DTSC",
+    "reference": "Legacy GENERIC_SMALL_BUSINESS template migrated from lib/enterprise/accounting/master-service.ts",
+    "verifiedAt": "2026-08-09"
+  },
+  "groups": [],
+  "accounts": [
+    {
+      "code": "1000",
+      "nameFr": "Trésorerie",
+      "nameEn": "Cash and cash equivalents",
+      "accountType": "ASSET",
+      "accountSubtype": "CASH",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "1100",
+      "nameFr": "Créances clients",
+      "nameEn": "Accounts receivable",
+      "accountType": "ASSET",
+      "accountSubtype": "ACCOUNTS_RECEIVABLE",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": false
+    },
+    {
+      "code": "1200",
+      "nameFr": "Stocks",
+      "nameEn": "Inventory",
+      "accountType": "ASSET",
+      "accountSubtype": "INVENTORY",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "1500",
+      "nameFr": "Immobilisations",
+      "nameEn": "Fixed assets",
+      "accountType": "ASSET",
+      "accountSubtype": "FIXED_ASSET",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "1590",
+      "nameFr": "Amortissements cumulés",
+      "nameEn": "Accumulated depreciation",
+      "accountType": "ASSET",
+      "accountSubtype": "ACCUMULATED_DEPRECIATION",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "2000",
+      "nameFr": "Dettes fournisseurs",
+      "nameEn": "Accounts payable",
+      "accountType": "LIABILITY",
+      "accountSubtype": "ACCOUNTS_PAYABLE",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": false
+    },
+    {
+      "code": "2100",
+      "nameFr": "Taxes à payer",
+      "nameEn": "Tax payable",
+      "accountType": "LIABILITY",
+      "accountSubtype": "TAX_PAYABLE",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "2200",
+      "nameFr": "Dettes salariales",
+      "nameEn": "Payroll payable",
+      "accountType": "LIABILITY",
+      "accountSubtype": "PAYROLL_PAYABLE",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "3000",
+      "nameFr": "Capitaux propres",
+      "nameEn": "Equity",
+      "accountType": "EQUITY",
+      "accountSubtype": "RETAINED_EARNINGS",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "4000",
+      "nameFr": "Produits",
+      "nameEn": "Revenue",
+      "accountType": "REVENUE",
+      "accountSubtype": "REVENUE",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "5000",
+      "nameFr": "Coût des ventes",
+      "nameEn": "Cost of sales",
+      "accountType": "EXPENSE",
+      "accountSubtype": "COST_OF_SALES",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "6000",
+      "nameFr": "Charges d'exploitation",
+      "nameEn": "Operating expenses",
+      "accountType": "EXPENSE",
+      "accountSubtype": "OPERATING_EXPENSE",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    },
+    {
+      "code": "9990",
+      "nameFr": "Compte de passage",
+      "nameEn": "Clearing",
+      "accountType": "ASSET",
+      "accountSubtype": "CLEARING",
+      "isControlAccount": false,
+      "isSystemAccount": true,
+      "allowDirectPosting": true
+    }
+  ],
+  "semanticMappings": [],
+  "journals": [],
+  "financialStatementMappings": []
+}

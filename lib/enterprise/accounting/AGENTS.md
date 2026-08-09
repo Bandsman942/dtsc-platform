@@ -23,3 +23,8 @@ Ces règles s’appliquent à tous les fichiers de `lib/enterprise/accounting/` 
 19. `COMMERCIAL_READY` exige la validation E2E manuelle explicite du propriétaire, la Production stable et l’acceptation commerciale.
 20. Aucun test E2E manuel n’est déclaré réussi sans confirmation explicite du propriétaire.
 21. La Production provient uniquement de `main` après Quality Gates et revue.
+22. `chart-template-registry.ts` est l’unique registre canonique des frameworks/templates comptables ; ne jamais recréer un tableau local de templates dans un service, une route ou un secteur.
+23. Toute version de template `PUBLISHED` est immuable. Une correction ou évolution crée une nouvelle version traçable avec source, date de vérification et date d’effet.
+24. Les modules Retail, Health, Pharmacy et futurs secteurs utilisent des clés comptables sémantiques et ne codent jamais directement des numéros de comptes réglementaires.
+25. Un template réglementaire exige une provenance officielle ou légalement exploitable ; aucune règle, classe, compte, rubrique ou date réglementaire n’est inventée pour compléter une source incomplète.
+26. L’application d’un template conserve les protections `DRAFT`, absence de comptes existants, absence d’écritures `POSTED`, transaction sérialisable et isolation par `organizationId`. Aucun fallback silencieux vers un template ou un compte n’est autorisé.
