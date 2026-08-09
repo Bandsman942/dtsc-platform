@@ -6,6 +6,8 @@ import "./qa-standard-ai-provider-attempts.mjs";
 import "./qa-standard-ai-openrouter-provider.mjs";
 import "./qa-standard-ai-certified-models.mjs";
 import "./qa-standard-ai-cross-provider-fallback.mjs";
+import "./qa-standard-ai-external-provider-default.mjs";
+import "./qa-standard-ai-model-ui-policy.mjs";
 import { runStandardAiIteration05Audit } from "./lib/standard-ai-iteration05-audit.mjs";
 
 runStandardAiIteration05Audit("all");
