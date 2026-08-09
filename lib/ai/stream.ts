@@ -1,3 +1,4 @@
+import { AiProviderError } from "@/lib/ai/errors";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
 
 export type AiStreamUsage = {
@@ -71,7 +72,11 @@ export function createAuditedAiTextStream({
               cachedInputTokens: value.cachedInputTokens,
             };
           } else if (value.type === "ERROR") {
-            readError = new Error(value.reasonCode);
+            readError = new AiProviderError({
+              reasonCode: value.reasonCode,
+              message: `Provider stream failed: ${value.reasonCode}`,
+              retryable: false,
+            });
             break;
           }
         }
