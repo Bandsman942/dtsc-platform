@@ -1,0 +1,140 @@
+name: Accounting onboarding & production-like acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/api/enterprise/**/accounting-setup/**"
+      - "app/api/enterprise/**/regulatory-statements/**"
+      - "app/api/enterprise/**/financial-close/**"
+      - "app/api/enterprise/**/sales-invoices/**"
+      - "app/api/enterprise/**/ledger-accounts/**"
+      - "app/api/enterprise/**/fiscal-years/**"
+      - "app/api/enterprise/**/fiscal-periods/**"
+      - "app/enterprise-modules/FINANCE_ACCOUNTING/**"
+      - "components/enterprise/enterprise-finance-module-page.tsx"
+      - "components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx"
+      - "lib/enterprise/accounting/**"
+      - "lib/user-guides/accounting-onboarding-guide.ts"
+      - "prisma/enterprise-accounting.prisma"
+      - "prisma/migrations/**"
+      - "scripts/seed-erp-professional-e2e.mjs"
+      - "scripts/qa-accounting-program-150-155.mjs"
+      - "scripts/qa-accounting-acceptance-contract.mjs"
+      - "tests/e2e/accounting-onboarding.spec.mjs"
+      - "tests/e2e/accounting-z-close-protection.spec.mjs"
+      - "playwright.config.mjs"
+      - ".github/workflows/accounting-acceptance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accounting-acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: Accounting onboarding, posting, close & history protection
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_accounting_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d dtsc_accounting_acceptance"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_accounting_acceptance?schema=public
+      AUTH_SECRET: accounting-acceptance-auth-secret-with-more-than-thirty-two-characters-2026
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_PUBLIC_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_CONSOLE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_ACCOUNT_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPPORT_URL: http://127.0.0.1:3000
+      E2E_BASE_URL: http://127.0.0.1:3000
+      E2E_ORGANIZATION_ID: e2e-erp-professional-org
+      E2E_ORGANIZATION_CODE: e2e-erp-professional
+      E2E_ADMIN_EMAIL: erp-admin@example.test
+      E2E_ADMIN_PASSWORD: E2eAdmin2026!
+      E2E_USER_EMAIL: erp-user@example.test
+      E2E_USER_PASSWORD: E2eUser2026!
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Apply migrations from scratch
+        run: pnpm prisma:deploy
+      - name: Seed canonical ERP acceptance tenant
+        run: node scripts/seed-erp-professional-e2e.mjs
+      - name: Validate accounting acceptance contracts
+        run: |
+          node scripts/qa-accounting-program-150-155.mjs
+          node scripts/qa-accounting-acceptance-contract.mjs
+      - name: Build production application
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee /tmp/dtsc-accounting-build.log
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start production application
+        run: |
+          nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-accounting-next.log 2>&1 &
+          echo $! >/tmp/dtsc-accounting-next.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/auth/sign-in >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/dtsc-accounting-next.log
+          exit 1
+      - name: Accounting onboarding browser acceptance
+        run: pnpm exec playwright test tests/e2e/accounting-onboarding.spec.mjs --workers=1
+      - name: Accounting period close and history protection
+        run: pnpm exec playwright test tests/e2e/accounting-z-close-protection.spec.mjs --workers=1
+      - name: Stop application
+        if: always()
+        run: |
+          if [ -f /tmp/dtsc-accounting-next.pid ]; then
+            kill "$(cat /tmp/dtsc-accounting-next.pid)" || true
+          fi
+      - name: Upload accounting diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accounting-acceptance-diagnostics
+          if-no-files-found: ignore
+          path: |
+            playwright-report
+            test-results
+            /tmp/dtsc-accounting-build.log
+            /tmp/dtsc-accounting-next.log
