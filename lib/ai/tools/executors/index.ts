@@ -1,8 +1,10 @@
 import { PHARMACY_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/pharmacy";
+import { PRIVATE_ACTION_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/private-actions";
 import type { AiToolExecutor } from "@/lib/ai/tools/types";
 
 const AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
   ...PHARMACY_AI_TOOL_EXECUTORS,
+  ...PRIVATE_ACTION_AI_TOOL_EXECUTORS,
 };
 
 export function getAiToolExecutor(code: string) {
