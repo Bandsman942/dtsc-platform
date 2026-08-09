@@ -22,8 +22,8 @@ export type EnterpriseFinanceReadiness = {
   mode: FinanceReadinessMode;
   organizationId: string;
   asOf: string;
-  configuration: Awaited<ReturnType<typeof prisma.enterpriseFinanceConfiguration.findUnique>>;
-  chart: Awaited<ReturnType<typeof prisma.enterpriseChartOfAccounts.findFirst>>;
+  configuration: Prisma.EnterpriseFinanceConfigurationGetPayload<Record<string, never>> | null;
+  chart: Prisma.EnterpriseChartOfAccountsGetPayload<Record<string, never>> | null;
   templateReference: string | null;
   diagnostics: FinanceReadinessDiagnostic[];
   blockers: FinanceReadinessDiagnostic[];
