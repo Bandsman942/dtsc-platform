@@ -19,6 +19,7 @@ const requiredFiles = [
   "lib/enterprise/accounting/templates/syscohada/source-manifest.json",
   "scripts/accounting/syscohada-dataset-lib.mjs",
   "scripts/accounting/build-syscohada-dataset.mjs",
+  "scripts/accounting/diff-syscohada-datasets.mjs",
   "docs/SYSCOHADA_DATASET_PIPELINE_159.md",
 ];
 for (const file of requiredFiles) if (!fs.existsSync(path.join(root, file))) fail(`Absent: ${file}`);
@@ -154,9 +155,19 @@ const schema = parseJson("lib/enterprise/accounting/templates/syscohada/dataset-
 if (schema.properties?.frameworkCode?.const !== "OHADA_AUDCIF" || schema.properties?.templateCode?.const !== "OHADA_SYSCOHADA") fail("Schéma canonique: identité SYSCOHADA incorrecte");
 if (!schema.description?.includes("no regulatory account data")) fail("Schéma canonique: doit déclarer explicitement l'absence de données réglementaires embarquées");
 
+const manifest = parseJson("lib/enterprise/accounting/templates/syscohada/source-manifest.json");
+if (manifest.datasetPipeline?.schemaVersion !== "1.0.0" || manifest.datasetPipeline?.requiresSourceVerification !== true || manifest.datasetPipeline?.publicationRequiresDatasetVerification !== true) {
+  fail("Manifeste SYSCOHADA: contrat datasetPipeline incomplet");
+}
+
 const cli = read("scripts/accounting/build-syscohada-dataset.mjs");
 for (const marker of ["--dry-run", "--input", "--out", "--template-out", "datasetIntegrityReport", "buildDraftTemplate"]) {
   if (!cli.includes(marker)) fail(`CLI dataset: marqueur manquant ${marker}`);
+}
+
+const diffCli = read("scripts/accounting/diff-syscohada-datasets.mjs");
+for (const marker of ["--previous", "--next", "added", "removed", "changed", "hasChanges"]) {
+  if (!diffCli.includes(marker)) fail(`CLI diff dataset: marqueur manquant ${marker}`);
 }
 
 if (failures.length) {
