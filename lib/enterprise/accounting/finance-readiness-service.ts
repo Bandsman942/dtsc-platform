@@ -80,7 +80,7 @@ export async function resolveEnterpriseFinanceReadiness(
   const requiredMappingKeys = [...listRequiredPostingSemanticKeys()];
   const requiredJournals = [...requiredJournalTypes()];
 
-  const [configuration, accounts, mappings, journals, openFiscalYears, openPeriods, treasuryCount, taxCount] = await Promise.all([
+  const [configuration, accounts, mappings, journals, fiscalYearCount, openPeriodCount, treasuryCount, taxCount] = await Promise.all([
     db.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } }),
     chartId
       ? db.enterpriseLedgerAccount.findMany({
@@ -101,14 +101,12 @@ export async function resolveEnterpriseFinanceReadiness(
         })
       : Promise.resolve([]),
     db.enterpriseJournal.findMany({ where: { organizationId, isActive: true }, select: { journalType: true } }),
-    db.enterpriseFiscalYear.findMany({ where: { organizationId, status: "OPEN" }, select: { id: true } }),
-    db.enterpriseFiscalPeriod.findMany({ where: { organizationId, status: "OPEN" }, select: { id: true, fiscalYearId: true } }),
+    db.enterpriseFiscalYear.count({ where: { organizationId } }),
+    db.enterpriseFiscalPeriod.count({ where: { organizationId, status: "OPEN" } }),
     db.enterpriseFinancialAccount.count({ where: { organizationId, status: "ACTIVE", archivedAt: null } }),
     db.enterpriseTaxCode.count({ where: { organizationId, isActive: true } }),
   ]);
 
-  const openFiscalYearIds = new Set(openFiscalYears.map((year) => year.id));
-  const hasOpenPeriodInOpenYear = openPeriods.some((period) => openFiscalYearIds.has(period.fiscalYearId));
   const mappedKeys = new Set(
     mappings
       .filter((mapping) => mapping.ledgerAccount.chartId === chartId && mapping.ledgerAccount.isActive && !mapping.ledgerAccount.archivedAt)
@@ -130,22 +128,22 @@ export async function resolveEnterpriseFinanceReadiness(
       actionEn: "Configure the functional currency in Finance.",
     },
     {
-      code: "OPEN_FISCAL_YEAR_REQUIRED",
+      code: "FISCAL_YEAR_REQUIRED",
       severity: "BLOCKER",
-      ready: openFiscalYears.length > 0,
-      messageFr: "Un exercice financier ouvert est requis.",
-      messageEn: "An open fiscal year is required.",
-      actionFr: "Créer puis ouvrir l’exercice financier.",
-      actionEn: "Create and open the fiscal year.",
+      ready: fiscalYearCount > 0,
+      messageFr: "Un exercice financier doit être configuré.",
+      messageEn: "A fiscal year must be configured.",
+      actionFr: "Créer l’exercice financier correspondant à votre calendrier comptable.",
+      actionEn: "Create the fiscal year matching your accounting calendar.",
     },
     {
       code: "OPEN_FISCAL_PERIOD_REQUIRED",
       severity: "BLOCKER",
-      ready: hasOpenPeriodInOpenYear,
-      messageFr: "Au moins une période comptable ouverte dans un exercice ouvert est requise.",
-      messageEn: "At least one open accounting period inside an open fiscal year is required.",
-      actionFr: "Créer ou ouvrir une période comptable dans l’exercice ouvert.",
-      actionEn: "Create or open an accounting period in the open fiscal year.",
+      ready: openPeriodCount > 0,
+      messageFr: "Au moins une période comptable ouverte est requise.",
+      messageEn: "At least one open accounting period is required.",
+      actionFr: "Créer ou ouvrir une période comptable.",
+      actionEn: "Create or open an accounting period.",
     },
     {
       code: "CHART_REQUIRED",
