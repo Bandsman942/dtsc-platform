@@ -16,6 +16,10 @@ import "./qa-standard-ai-assistant-registry.mjs";
 import "./qa-standard-ai-context-engine.mjs";
 import "./qa-standard-ai-cag-isolation.mjs";
 import "./qa-standard-ai-sector-assistants.mjs";
+import "./qa-standard-ai-embedding-provider.mjs";
+import "./qa-standard-ai-index-versioning.mjs";
+import "./qa-standard-ai-rag-hybrid.mjs";
+import "./qa-standard-ai-rag-reindex-idempotency.mjs";
 import { runStandardAiIteration05Audit } from "./lib/standard-ai-iteration05-audit.mjs";
 
 runStandardAiIteration05Audit("all");
