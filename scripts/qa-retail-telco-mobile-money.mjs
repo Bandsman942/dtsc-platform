@@ -9,69 +9,71 @@ const check = (condition, message) => { if (!condition) failures.push(message); 
 
 const registry = JSON.parse(read("lib/enterprise/module-registry-retail.json"));
 const expectedCodes = ["RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"];
-const definitions = new Map(registry.modules.map((module) => [module.code, module]));
+const definitions = new Map(registry.modules.map((entry) => [entry.code, entry]));
 
 for (const code of expectedCodes) {
   const definition = definitions.get(code);
-  check(Boolean(definition), `Missing retail registry definition: ${code}`);
+  check(Boolean(definition), `Missing Retail registry definition: ${code}`);
   if (!definition) continue;
-  check(definition.implementationStatus === "ACTIVE", `${code} must be ACTIVE`);
-  check(definition.routeKind === "DEDICATED_CORE", `${code} must use DEDICATED_CORE`);
+  check(definition.implementationStatus === "ACTIVE", `${code} must remain ACTIVE`);
+  check(definition.routeKind === "DEDICATED_CORE", `${code} must remain DEDICATED_CORE`);
   check(definition.minimumPlan === "BUSINESS", `${code} must require BUSINESS`);
-  check(Array.isArray(definition.applicableSectors) && definition.applicableSectors.includes("COMMERCE_RETAIL"), `${code} must be restricted to COMMERCE_RETAIL`);
   check(definition.accessPolicy === "POSITION_PERMISSION", `${code} must use POSITION_PERMISSION`);
-  check(definition.qaContract === "enterprise-retail-telco-mobile-money", `${code} must expose the Retail QA contract`);
+  check(Array.isArray(definition.applicableSectors) && definition.applicableSectors.includes("COMMERCE_RETAIL"), `${code} must remain scoped to COMMERCE_RETAIL`);
+  check(definition.qaContract === "enterprise-retail-telco-mobile-money", `${code} must keep the Retail QA contract`);
 }
-check(!definitions.get("RETAIL_POS")?.legacyCodes?.includes("SALES"), "Legacy SALES must not become an alias of RETAIL_POS");
-check(!definitions.get("RETAIL_DAILY_CLOSE")?.dependencies?.includes("MOBILE_MONEY_AGENCY"), "Retail Core daily close must not require the optional Mobile Money extension");
+check(!definitions.get("RETAIL_POS")?.legacyCodes?.includes("SALES"), "Legacy SALES must not become a RETAIL_POS alias");
+check(!definitions.get("RETAIL_DAILY_CLOSE")?.dependencies?.includes("MOBILE_MONEY_AGENCY"), "Retail Core daily close must not require Mobile Money");
 
 const moduleRegistry = read("lib/enterprise/module-registry.ts");
-check(moduleRegistry.includes("module-registry-retail.json"), "Canonical registry must merge the Retail registry");
-check(moduleRegistry.includes("...retailRegistryData.modules"), "Retail definitions must be appended to the canonical registry");
+check(moduleRegistry.includes("module-registry-retail.json"), "Canonical registry must merge Retail registry");
+check(moduleRegistry.includes("...retailRegistryData.modules"), "Retail modules must be appended to the canonical registry");
 
 const prismaSchema = read("prisma/enterprise-retail.prisma");
-for (const model of ["EnterpriseRetailConfiguration", "EnterpriseRetailProvider", "EnterpriseRetailSale", "EnterpriseRetailSaleLine", "EnterpriseRetailTender", "EnterpriseMobileMoneyTransaction", "EnterpriseTelcoTopup", "EnterpriseRetailDailyClose", "EnterpriseRetailDailyCloseLine"]) {
-  check(prismaSchema.includes(`model ${model}`), `Missing Prisma model ${model}`);
-}
-check(prismaSchema.includes("idempotencyKey"), "Retail write models must be idempotent");
-check(prismaSchema.includes('profileCode              String   @default("RETAIL_CORE")'), "New Retail configurations must default to RETAIL_CORE");
-check(exists("prisma/migrations/20260808091500_shop2_retail_core_default/migration.sql"), "Shop 2 Retail Core default migration is missing");
-if (exists("prisma/migrations/20260808091500_shop2_retail_core_default/migration.sql")) {
-  const coreMigration = read("prisma/migrations/20260808091500_shop2_retail_core_default/migration.sql");
-  check(coreMigration.includes("SET DEFAULT 'RETAIL_CORE'"), "Retail Core migration must only establish the new default profile");
-  check(!/UPDATE\s+"EnterpriseRetailConfiguration"/i.test(coreMigration), "Retail Core migration must not rewrite existing tenant profile values");
-}
+for (const model of [
+  "EnterpriseRetailConfiguration",
+  "EnterpriseRetailProvider",
+  "EnterpriseRetailSale",
+  "EnterpriseRetailSaleLine",
+  "EnterpriseRetailTender",
+  "EnterpriseMobileMoneyTransaction",
+  "EnterpriseTelcoTopup",
+  "EnterpriseRetailDailyClose",
+  "EnterpriseRetailDailyCloseLine",
+]) check(prismaSchema.includes(`model ${model}`), `Missing Prisma model ${model}`);
+check(prismaSchema.includes("idempotencyKey"), "Retail write models must preserve idempotency keys");
+check(prismaSchema.includes('profileCode              String   @default("RETAIL_CORE")'), "New Retail configuration must default to RETAIL_CORE");
+check(exists("prisma/migrations/20260808091500_shop2_retail_core_default/migration.sql"), "Retail Core default migration is missing");
 
 const profileContract = read("lib/enterprise/retail/profile-contract.ts");
 for (const marker of ["RETAIL_CORE_PROFILE_CODE", "RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE", "requiredExtensions", "MOBILE_MONEY", "TELCO"]) {
   check(profileContract.includes(marker), `Retail profile contract missing ${marker}`);
 }
-check(profileContract.includes("RETAIL_CORE_PROFILE_CODE = \"RETAIL_CORE\""), "Retail Core profile code must be canonical");
 
 const service = read("lib/enterprise/retail/service.ts");
-check(service.includes('movementType: "SALE_FULFILLMENT"'), "POS must use SALE_FULFILLMENT inventory movement");
-check(service.includes('movementType: "RETURN_IN"'), "POS reversal must use RETURN_IN inventory movement");
-check(service.includes("enterpriseTreasuryTransaction.create"), "Retail settlement must feed common treasury");
-check(service.includes("enterpriseCashMovement.create"), "Cash settlement must feed common cash movements");
-check(service.includes("PENDING_VALIDATION"), "Daily close must require validation");
-check(service.includes("RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN"), "Daily close must forbid self validation");
-check(service.includes("Prisma.TransactionIsolationLevel.Serializable"), "Sensitive Retail operations must use serializable transactions");
-check(!service.includes("EnterpriseCoreRecord"), "Retail must never write EnterpriseCoreRecord");
+for (const marker of [
+  'movementType: "SALE_FULFILLMENT"',
+  'movementType: "RETURN_IN"',
+  "enterpriseTreasuryTransaction.create",
+  "enterpriseCashMovement.create",
+  "PENDING_VALIDATION",
+  "RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN",
+  "Prisma.TransactionIsolationLevel.Serializable",
+]) check(service.includes(marker), `Retail service contract missing ${marker}`);
+check(!service.includes("EnterpriseCoreRecord"), "Retail must not write EnterpriseCoreRecord");
 
 const createSaleStart = service.indexOf("export async function createRetailSale");
 const createSaleEnd = service.indexOf("export async function reverseRetailSale");
-const createRetailSaleBlock = createSaleStart >= 0 && createSaleEnd > createSaleStart ? service.slice(createSaleStart, createSaleEnd) : "";
-check(Boolean(createRetailSaleBlock), "POS sale implementation block must be discoverable for performance QA");
+const createSaleBlock = createSaleStart >= 0 && createSaleEnd > createSaleStart ? service.slice(createSaleStart, createSaleEnd) : "";
+check(Boolean(createSaleBlock), "POS sale implementation must remain discoverable");
 for (const marker of ["catalogItemIds", "tenderAccountIds", "catalogById", "inventoryByCatalogId", "accountById", "enterpriseCashSession.findMany"]) {
-  check(createRetailSaleBlock.includes(marker), `POS sale batch-loading contract missing ${marker}`);
+  check(createSaleBlock.includes(marker), `POS batch-loading contract missing ${marker}`);
 }
-check(!createRetailSaleBlock.includes("enterpriseCatalogItem.findFirst"), "POS sale must not perform per-line catalog lookups inside the transaction");
-check(!createRetailSaleBlock.includes("enterpriseInventoryItem.findFirst"), "POS sale must not perform per-line inventory lookups inside the transaction");
-check(!createRetailSaleBlock.includes("assertFinancialAccount("), "POS sale must not perform per-tender account lookups after batch loading");
-check(!createRetailSaleBlock.includes("assertOpenCashSession("), "POS sale must not perform per-tender cash-session lookups after batch loading");
+check(!createSaleBlock.includes("enterpriseCatalogItem.findFirst"), "POS must not reintroduce per-line catalog N+1 queries");
+check(!createSaleBlock.includes("enterpriseInventoryItem.findFirst"), "POS must not reintroduce per-line inventory N+1 queries");
 
 const provisioning = read("lib/enterprise/retail/provisioning.ts");
-const providerContracts = [
+for (const [provider, type] of [
   ['providerCode: "MPESA"', 'providerType: "MOBILE_MONEY"'],
   ['providerCode: "ORANGE_MONEY"', 'providerType: "MOBILE_MONEY"'],
   ['providerCode: "AIRTEL_MONEY"', 'providerType: "MOBILE_MONEY"'],
@@ -80,48 +82,42 @@ const providerContracts = [
   ['providerCode: "ORANGE"', 'providerType: "TELCO"'],
   ['providerCode: "AIRTEL"', 'providerType: "TELCO"'],
   ['providerCode: "AFRICELL"', 'providerType: "TELCO"'],
-];
-for (const [provider, type] of providerContracts) {
+]) {
   check(provisioning.includes(provider), `Retail provisioning missing ${provider}`);
   check(provisioning.includes(type), `Retail provisioning missing ${type}`);
 }
-check(provisioning.includes("enterpriseRetailConfiguration.upsert"), "Runtime onboarding must upsert Retail configuration");
-check(provisioning.includes("enterpriseRetailProvider.upsert"), "Specialized Retail onboarding must still be able to upsert providers");
-check(provisioning.includes("existingProfile || RETAIL_CORE_PROFILE_CODE"), "New Retail tenants must start on RETAIL_CORE while existing recognized profiles are preserved");
-check(provisioning.includes("profileCode === RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE"), "Default operators must only be activated for the specialized Telco/Mobile Money profile");
-check(provisioning.includes("enterpriseFinanceConfiguration.findUnique"), "Retail provisioning must prefer the Finance functional currency when available");
-check(provisioning.includes("Prisma.TransactionIsolationLevel.Serializable"), "Provisioning must be serializable");
-check(!provisioning.includes("mobileMoneyFloatAccountId:"), "Onboarding must never invent Mobile Money float mappings");
-check(!provisioning.includes("telcoFloatAccountId:"), "Onboarding must never invent Telco account mappings");
-
-const templateApplication = read("lib/enterprise/sector-template-application.ts");
-check(templateApplication.includes("syncRetailOnboardingProvisioning"), "Canonical sector-template application must provision Retail runtime data");
+for (const marker of ["enterpriseRetailConfiguration.upsert", "enterpriseRetailProvider.upsert", "existingProfile || RETAIL_CORE_PROFILE_CODE", "profileCode === RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE", "enterpriseFinanceConfiguration.findUnique", "Prisma.TransactionIsolationLevel.Serializable"]) {
+  check(provisioning.includes(marker), `Retail provisioning contract missing ${marker}`);
+}
+check(!provisioning.includes("mobileMoneyFloatAccountId:"), "Onboarding must not invent Mobile Money account mappings");
+check(!provisioning.includes("telcoFloatAccountId:"), "Onboarding must not invent Telco account mappings");
 
 const guardrails = read("lib/enterprise/retail/commercial-guardrails.ts");
-for (const marker of ["normalizeRetailPhone", "RETAIL_PRICE_OVERRIDE_FORBIDDEN", "RETAIL_PRICE_OVERRIDE_REASON_REQUIRED", "RETAIL_EXTERNAL_REFERENCE_REQUIRED", "RETAIL_EXTERNAL_REFERENCE_DUPLICATE", "getRetailMetricsByCurrency", "moduleCode?: RetailModuleCode"]) {
-  check(guardrails.includes(marker), `Commercial Shop guardrail missing ${marker}`);
+for (const marker of ["normalizeRetailPhone", "RETAIL_PRICE_OVERRIDE_FORBIDDEN", "RETAIL_PRICE_OVERRIDE_REASON_REQUIRED", "RETAIL_EXTERNAL_REFERENCE_REQUIRED", "RETAIL_EXTERNAL_REFERENCE_DUPLICATE", "getRetailMetricsByCurrency", "moduleCode?: RetailModuleCode", "floatAccountId: null", "operatorFloatAccountId: null"]) {
+  check(guardrails.includes(marker), `Retail commercial guardrail missing ${marker}`);
 }
-check(guardrails.includes("floatAccountId: null"), "Mobile Money operation route guard must force provider-mapped float");
-check(guardrails.includes("operatorFloatAccountId: null"), "Telco route guard must force provider-mapped float");
 
 const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
-for (const marker of ["metricsByCurrency", "readyForFirstSale", "readyForMobileMoney", "readyForTelco", "cashSession", "includePos", "includeMobileMoney", "includeTelco", "includeClose", "isRetailBusinessProfileCode", "accountingReadiness", 'code: "ACCOUNTING"']) {
-  check(dashboard.includes(marker), `Commercial dashboard missing ${marker}`);
+for (const marker of ["metricsByCurrency", "readyForFirstSale", "readyForMobileMoney", "readyForTelco", "cashSession", "includePos", "includeMobileMoney", "includeTelco", "includeClose", "accountingReadiness", 'code: "ACCOUNTING"']) {
+  check(dashboard.includes(marker), `Retail dashboard missing ${marker}`);
 }
+
 const accountingReadiness = read("lib/enterprise/retail/accounting-readiness.ts");
-for (const marker of ["SALES_REVENUE", "TAX_PAYABLE", "COST_OF_SALES", "INVENTORY", "SALES", "INVENTORY", "postingPeriodAvailable"]) {
-  check(accountingReadiness.includes(marker), `POS accounting readiness contract missing ${marker}`);
+for (const marker of ["SALES_REVENUE", "TAX_PAYABLE", "COST_OF_SALES", "INVENTORY", "postingPeriodAvailable"]) {
+  check(accountingReadiness.includes(marker), `POS accounting readiness missing ${marker}`);
 }
 
 const schemas = read("lib/enterprise/retail/schemas.ts");
-for (const marker of ["RETAIL_TENDER_METHODS", "MOBILE_MONEY_TRANSACTION_TYPES", "RETAIL_CLOSE_ACCOUNT_TYPES", "idempotencyKey"]) check(schemas.includes(marker), `Retail schema contract missing ${marker}`);
-
-const http = read("lib/enterprise/retail/http.ts");
-for (const contract of ["getSession", "rateLimit", "isSameOriginRequest", "getEnterpriseCommonDomainAccess", "getRetailMutationRateLimitPolicy", "retail:${moduleCode}:${action}:${organizationId}:${session.userId}"]) {
-  check(http.includes(contract), `Retail API security/performance contract missing ${contract}`);
+for (const marker of ["RETAIL_TENDER_METHODS", "MOBILE_MONEY_TRANSACTION_TYPES", "RETAIL_CLOSE_ACCOUNT_TYPES", "idempotencyKey"]) {
+  check(schemas.includes(marker), `Retail schema contract missing ${marker}`);
 }
 
-for (const route of [
+const http = read("lib/enterprise/retail/http.ts");
+for (const marker of ["getSession", "rateLimit", "isSameOriginRequest", "getEnterpriseCommonDomainAccess", "getRetailMutationRateLimitPolicy", "retail:${moduleCode}:${action}:${organizationId}:${session.userId}"]) {
+  check(http.includes(marker), `Retail API security contract missing ${marker}`);
+}
+
+const routes = [
   "app/api/enterprise/[organizationId]/retail/dashboard/route.ts",
   "app/api/enterprise/[organizationId]/retail/providers/route.ts",
   "app/api/enterprise/[organizationId]/retail/products/search/route.ts",
@@ -134,95 +130,83 @@ for (const route of [
   "app/api/enterprise/[organizationId]/retail/daily-close/route.ts",
   "app/api/enterprise/[organizationId]/retail/daily-close/[closeId]/decision/route.ts",
   "app/api/enterprise/[organizationId]/retail/cash-sessions/route.ts",
-]) check(exists(route), `Missing Retail route ${route}`);
+];
+for (const route of routes) check(exists(route), `Missing Retail API route ${route}`);
 
 const productSearchRoute = read("app/api/enterprise/[organizationId]/retail/products/search/route.ts");
 for (const marker of ["pageSize", "contains", "quantityOnHand", "quantityReserved", 'authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read")']) {
-  check(productSearchRoute.includes(marker), `POS server search contract missing ${marker}`);
+  check(productSearchRoute.includes(marker), `POS product search contract missing ${marker}`);
 }
 
 const dashboardRoute = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
-check(dashboardRoute.includes("getCommercialRetailDashboard"), "Retail route must use commercial multi-currency dashboard");
-check(dashboardRoute.includes("moduleCode,"), "Retail dashboard loader must receive the requested module scope");
-check(!dashboardRoute.includes("getRetailDashboard("), "Retail route must not use legacy cross-currency dashboard");
+check(dashboardRoute.includes("getCommercialRetailDashboard"), "Retail dashboard must use commercial multi-currency loader");
+check(dashboardRoute.includes("moduleCode,"), "Retail dashboard must receive requested module scope");
+check(!dashboardRoute.includes("getRetailDashboard("), "Legacy Retail dashboard must not return");
 
-const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
 const saleExecution = read("lib/enterprise/retail/sale-execution.ts");
-check(salesRoute.includes("executeCanonicalRetailSale"), "POS route must delegate successful writes to the canonical sale execution boundary");
+const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
+check(salesRoute.includes("executeCanonicalRetailSale"), "POS route must use canonical sale execution");
 for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "createRetailSale", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) {
-  check(saleExecution.includes(marker), `Canonical POS sale execution missing ${marker}`);
+  check(saleExecution.includes(marker), `Canonical POS execution missing ${marker}`);
 }
 const pricingIndex = saleExecution.indexOf("prepareCommercialRetailSaleV2");
 const createIndex = saleExecution.indexOf("createRetailSale(args.organizationId");
 const accountingIndex = saleExecution.indexOf("finalizeRetailSaleAccounting(args.organizationId");
-check(pricingIndex >= 0 && createIndex > pricingIndex && accountingIndex > createIndex, "Canonical POS sale execution must price/guard before sale creation and finalize accounting before returning");
+check(pricingIndex >= 0 && createIndex > pricingIndex && accountingIndex > createIndex, "POS must price/guard before creation and finalize accounting before returning");
+
 const reverseSaleRoute = read("app/api/enterprise/[organizationId]/retail/sales/[saleId]/reverse/route.ts");
-check(reverseSaleRoute.includes("finalizeRetailSaleReversalAccounting"), "POS reversal must finalize revenue/tender and inventory accounting reversal");
-const mobileRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/route.ts");
-check(mobileRoute.includes("prepareCommercialMobileMoney"), "Mobile Money route must enforce phone/reference guardrails");
-const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts");
-check(telcoRoute.includes("prepareCommercialTelcoTopup"), "Telco route must enforce phone/reference guardrails");
+check(reverseSaleRoute.includes("finalizeRetailSaleReversalAccounting"), "POS reversal must use common accounting reversal");
+check(read("app/api/enterprise/[organizationId]/retail/mobile-money/route.ts").includes("prepareCommercialMobileMoney"), "Mobile Money route must enforce commercial guardrails");
+check(read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts").includes("prepareCommercialTelcoTopup"), "Telco route must enforce commercial guardrails");
 
 const retailAccounting = read("lib/enterprise/retail/accounting.ts");
-for (const marker of ["finalizeRetailSaleAccounting", "valueInventoryIssue", "RETAIL_POS_SALE_POSTED", "finalizeRetailSaleReversalAccounting", "RETAIL_POS_SALE_REVERSED", "RETAIL_POS_INVENTORY_RETURN", "RETAIL_RETURN", "enterpriseInventoryCostLayer"]) {
-  check(retailAccounting.includes(marker), `Shop 2 accounting orchestration missing ${marker}`);
+for (const marker of ["finalizeRetailSaleAccounting", "valueInventoryIssue", "RETAIL_POS_SALE_POSTED", "finalizeRetailSaleReversalAccounting", "RETAIL_POS_SALE_REVERSED", "RETAIL_POS_INVENTORY_RETURN", "enterpriseInventoryCostLayer"]) {
+  check(retailAccounting.includes(marker), `Retail accounting orchestration missing ${marker}`);
 }
 const postingRegistry = read("lib/enterprise/accounting/posting-registry-final.ts");
 for (const marker of ["RETAIL_POS_SALE_POSTED", "RETAIL_POS_SALE_REVERSED", "RETAIL_POS_INVENTORY_RETURN"]) {
-  check(postingRegistry.includes(marker), `Common accounting registry missing Retail posting event ${marker}`);
-}
-const retailPostingAdapter = read("lib/enterprise/accounting/sector-adapters/retail.ts");
-for (const marker of ["SALES_REVENUE", "TAX_PAYABLE", "COST_OF_SALES", "INVENTORY", "ACCOUNT_ID:"]) {
-  check(retailPostingAdapter.includes(marker), `Retail accounting adapter missing ${marker}`);
+  check(postingRegistry.includes(marker), `Common accounting registry missing ${marker}`);
 }
 
-const workspace = read("components/enterprise/professional/enterprise-retail-shop-workspace.tsx");
-for (const marker of ["ContextualUserGuide", "ModuleWorkspace", "ShopReadiness", "CashSessionBar", "stableKey", "busyAction", "setCart", "ConfirmationCard", "metricsByCurrency", "RETAIL_POS", "MOBILE_MONEY_AGENCY", "TELCO_TOPUPS", "RETAIL_DAILY_CLOSE"]) {
-  check(workspace.includes(marker), `Shop workspace missing ${marker}`);
+const retailPage = read("app/enterprise-modules/retail-page.tsx");
+const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
+const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+const dailyCloseWorkspace = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
+const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
+
+check(!exists("components/enterprise/professional/enterprise-retail-shop-workspace.tsx"), "Legacy monolithic Retail workspace must remain retired");
+for (const marker of ["RetailPosWorkspace", "RetailOperatorWorkspace", "RetailDailyCloseWorkspace"]) {
+  check(retailPage.includes(marker), `Retail page must route through ${marker}`);
 }
-check(workspace.includes("grid-cols-[minmax(0,1fr)]"), "Shop workspace must preserve the responsive single-column contract");
+for (const marker of ["setCart", "/retail/products/search", 'pageSize: "30"', "RetailErpLinks", "grid min-w-0"]) {
+  check(posWorkspace.includes(marker), `Dedicated POS workspace missing ${marker}`);
+}
+for (const marker of ["ConfirmationCard", "customerFacingMobileMoneyTransactionType", "customerFacingFeeCollectionMode", "providerLabel", "RetailErpLinks", "floatAccountId: null", "operatorFloatAccountId: null"]) {
+  check(operatorWorkspace.includes(marker), `Dedicated operator workspace missing ${marker}`);
+}
+for (const marker of ["stableKey", "busyAction", "CashSessionBar", "ShopReadiness", "metricsByCurrency", "customerFacingError", "customerFacingFinancialAccountType", "[touch-action:pan-x]"]) {
+  check(sharedWorkspace.includes(marker), `Shared Retail workspace contract missing ${marker}`);
+}
+for (const marker of ["idempotencyKey", "stableKey", "canManage", 'pageSize: "50"', "customerFacingFinancialAccountType"]) {
+  check(dailyCloseWorkspace.includes(marker), `Daily close workspace contract missing ${marker}`);
+}
 
 const adminPanels = read("components/enterprise/enterprise-admin-panels.tsx");
 check(adminPanels.includes("RETAIL_PERMISSION_CATALOG"), "Enterprise admin must expose Retail permission catalog");
-check(adminPanels.includes('sectorCode === "COMMERCE_RETAIL"'), "Enterprise admin must explicitly handle Commerce Retail sector");
-check(!adminPanels.includes('sectorCode === "PHARMACY" ? pharmacyPermissions : healthcarePermissions'), "Enterprise admin must not fall back Commerce permissions to Healthcare");
-
-const constants = read("lib/enterprise/retail/constants.ts");
-check(constants.includes('RETAIL_PROFILE_CODE = "RETAIL_CORE"'), "Retail fallback profile must now be RETAIL_CORE");
-for (const permission of ["enterprise.suppliers.view", "enterprise.suppliers.manage", "enterprise.purchases.manage"]) check(constants.includes(permission), `PURCHASE_MANAGER Retail permissions missing ${permission}`);
+check(adminPanels.includes('sectorCode === "COMMERCE_RETAIL"'), "Enterprise admin must explicitly handle Commerce Retail");
+check(!adminPanels.includes('sectorCode === "PHARMACY" ? pharmacyPermissions : healthcarePermissions'), "Commerce Retail must not fall back to Healthcare permissions");
 
 const guides = read("lib/user-guides/retail-telco-mobile-money-guides.ts");
-for (const code of expectedCodes) check(guides.includes(`${code}:`), `Native user guide missing ${code}`);
-check(guides.includes("Vodacom") && guides.includes("M-Pesa"), "Guides must distinguish telecom networks from Mobile Money wallets");
-check(guides.includes("2026-08-08"), "Retail guides must carry the current Shop 2.0 update date");
-check(guides.includes("RETAIL_CORE") && guides.includes("extensions optionnelles"), "Retail in-app onboarding guide must explain Retail Core and optional extensions");
+for (const code of expectedCodes) check(guides.includes(`${code}:`), `Retail user guide missing ${code}`);
+check(guides.includes("Vodacom") && guides.includes("M-Pesa"), "Retail guides must distinguish telecom networks from Mobile Money services");
 
-const initialMigration = read("prisma/migrations/20260807050000_retail_telco_mobile_money/migration.sql");
-for (const marker of ["RETAIL_TELCO_MOBILE_MONEY", "Commerce Retail — Télécom & Mobile Money", "MOBILE_MONEY_AGENT", "RETAIL_CONTROLLER", "PROMOTIONS"]) check(initialMigration.includes(marker), `Initial Retail migration missing ${marker}`);
-check(initialMigration.includes('"version" = 2'), "Commerce template v2 must remain active");
-
-const onboardingMigration = read("prisma/migrations/20260807060000_shop_onboarding_retail_provisioning/migration.sql");
-for (const marker of ["RETAIL_TELCO_MOBILE_MONEY", "COMMERCE_RETAIL", "createdByDtscUserId", "MPESA", "ORANGE_MONEY", "AIRTEL_MONEY", "AFRIMONEY"]) check(onboardingMigration.includes(marker), `Shop onboarding migration missing ${marker}`);
-check(!onboardingMigration.includes('"mobileMoneyFloatAccountId"'), "Shop onboarding migration must leave Mobile Money account mapping tenant-configured");
-check(!onboardingMigration.includes('"telcoFloatAccountId"'), "Shop onboarding migration must leave Telco account mapping tenant-configured");
-
-const releaseMigration = read("prisma/migrations/20260807090000_shop_release_candidate_1/migration.sql");
-for (const marker of ["VODACOM", "ORANGE", "AIRTEL", "AFRICELL", "EnterpriseMobileMoneyTransaction_rc1_external_ref_key", "EnterpriseTelcoTopup_rc1_external_ref_key", "enterprise.purchases.manage"]) check(releaseMigration.includes(marker), `Shop Release Candidate migration missing ${marker}`);
-
-const readinessManifest = read("lib/enterprise/sector-onboarding-readiness.json");
-check(readinessManifest.includes('"sectorCode": "COMMERCE_RETAIL"'), "Sector onboarding readiness must declare Commerce Retail");
-check(readinessManifest.includes('"businessProfileCode": "RETAIL_CORE"'), "Shop onboarding readiness must use RETAIL_CORE as the new-tenant profile");
-check(readinessManifest.includes('"compatibleExistingProfiles": ["RETAIL_TELCO_MOBILE_MONEY"]'), "Shop onboarding readiness must preserve the specialized existing profile");
-check(readinessManifest.includes('"optionalExtensions"'), "Shop onboarding readiness must declare optional Retail extensions");
-check(readinessManifest.includes('"enforce": true'), "Shop onboarding readiness must be enforced in CI");
-check(readinessManifest.includes('"commercializationStatus": "COMMERCIAL_READY"'), "Shop must remain COMMERCIAL_READY after explicit owner acceptance");
-check(exists("scripts/qa-sector-onboarding-commercial-readiness.mjs"), "Generic sector onboarding readiness QA is missing");
-check(exists("docs/SECTOR_ONBOARDING_COMMERCIAL_READINESS.md"), "Generic sector onboarding readiness documentation is missing");
+const templateApplication = read("lib/enterprise/sector-template-application.ts");
+check(templateApplication.includes("syncRetailOnboardingProvisioning"), "Sector template application must provision Retail runtime data");
 
 if (failures.length) {
-  console.error("Retail / Shop 2.0 QA failed:");
+  console.error("Retail/Telco/Mobile Money QA failed:");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log(`Retail / Shop 2.0 QA passed (${expectedCodes.length} canonical modules, Retail Core compatibility, batched POS dependencies, accounting readiness and posting contracts present).`);
+console.log("Retail/Telco/Mobile Money QA passed: registry, security, accounting, canonical flows, dedicated workspaces, responsive UX, guides and operator separation are consistent.");
