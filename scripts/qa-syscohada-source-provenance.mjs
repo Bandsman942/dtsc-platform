@@ -47,14 +47,27 @@ if (failures.length === 0) {
   const allowedLegalStatuses = new Set(["REVIEW_REQUIRED", "AUTHORIZED_FOR_DTSC_IMPLEMENTATION"]);
   if (!allowedLegalStatuses.has(manifest.legalUseStatus)) fail(`SYSCOHADA source manifest: legalUseStatus inconnu ${manifest.legalUseStatus}`);
 
+  const bootstrap = manifest.bootstrapPolicy;
+  if (bootstrap?.enabled) {
+    if (bootstrap.templateVersion !== "0.1.0") fail("SYSCOHADA bootstrap: seule la version 0.1.0 peut déroger au gate de source fiable");
+    if (bootstrap.status !== "USER_PROVIDED_NON_OFFICIAL_BOOTSTRAP") fail("SYSCOHADA bootstrap: statut explicite requis");
+    if (!/^[a-f0-9]{64}$/i.test(bootstrap.sourceSha256 || "")) fail("SYSCOHADA bootstrap: SHA-256 de la source fournie requis");
+    if (!bootstrap.sourceFileName) fail("SYSCOHADA bootstrap: nom du PDF fourni requis");
+    if (bootstrap.allowedPurpose !== "BOOTSTRAP_RUNTIME_ONLY") fail("SYSCOHADA bootstrap: usage limité au bootstrap runtime");
+    if (bootstrap.regulatoryComplianceClaimAllowed !== false) fail("SYSCOHADA bootstrap: aucune déclaration de conformité réglementaire autorisée");
+    if (bootstrap.accountingTemplateProductionReadyAllowed !== false) fail("SYSCOHADA bootstrap: ACCOUNTING_TEMPLATE_PRODUCTION_READY interdit");
+    if (bootstrap.futureVersionsRequireTrustedSource !== true) fail("SYSCOHADA bootstrap: les versions futures doivent exiger une source fiable");
+    if (bootstrap.futureVersionsRequireDatasetVerification !== true) fail("SYSCOHADA bootstrap: les versions futures doivent exiger un dataset vérifié");
+  }
+
   if (manifest.datasetPipeline) {
     if (manifest.datasetPipeline.schemaVersion !== "1.0.0") fail("SYSCOHADA dataset pipeline: schemaVersion 1.0.0 attendu");
     for (const field of ["schemaPath", "builderPath"]) {
       const configuredPath = manifest.datasetPipeline[field];
       if (!configuredPath || !fs.existsSync(path.join(root, configuredPath))) fail(`SYSCOHADA dataset pipeline: ${field} absent ou introuvable`);
     }
-    if (manifest.datasetPipeline.requiresSourceVerification !== true) fail("SYSCOHADA dataset pipeline: requiresSourceVerification doit être true");
-    if (manifest.datasetPipeline.publicationRequiresDatasetVerification !== true) fail("SYSCOHADA dataset pipeline: publicationRequiresDatasetVerification doit être true");
+    if (manifest.datasetPipeline.requiresSourceVerification !== true) fail("SYSCOHADA dataset pipeline: requiresSourceVerification doit rester true pour les versions futures");
+    if (manifest.datasetPipeline.publicationRequiresDatasetVerification !== true) fail("SYSCOHADA dataset pipeline: publicationRequiresDatasetVerification doit rester true pour les versions futures");
   }
 
   const sourceVerified = ["SOURCE_FILE_VERIFIED", "DATASET_VERIFIED"].includes(manifest.verificationStatus);
@@ -101,11 +114,24 @@ if (failures.length === 0) {
     for (const entry of fs.readdirSync(syscohadaDir)) {
       if (!entry.endsWith(".json") || entry === "source-manifest.json") continue;
       const candidate = parseJson(path.join("lib/enterprise/accounting/templates/syscohada", entry));
-      if (candidate.status === "PUBLISHED") {
-        if (manifest.verificationStatus !== "DATASET_VERIFIED") fail(`SYSCOHADA template ${entry}: publication interdite tant que le dataset n'est pas DATASET_VERIFIED`);
-        if (manifest.legalUseStatus !== "AUTHORIZED_FOR_DTSC_IMPLEMENTATION") fail(`SYSCOHADA template ${entry}: publication interdite tant que l'usage DTSC n'est pas autorisé`);
-        if (candidate.frameworkCode !== "OHADA_AUDCIF") fail(`SYSCOHADA template ${entry}: frameworkCode doit être OHADA_AUDCIF`);
+      if (candidate.status !== "PUBLISHED") continue;
+
+      const isAuthorizedBootstrap = Boolean(
+        bootstrap?.enabled &&
+        candidate.code === "OHADA_SYSCOHADA" &&
+        candidate.frameworkCode === "OHADA_AUDCIF" &&
+        candidate.version === bootstrap.templateVersion &&
+        candidate.source?.reference?.includes(bootstrap.sourceSha256),
+      );
+
+      if (isAuthorizedBootstrap) {
+        if (!Array.isArray(candidate.accounts) || candidate.accounts.length === 0) fail(`SYSCOHADA bootstrap ${entry}: au moins un compte est requis`);
+        continue;
       }
+
+      if (manifest.verificationStatus !== "DATASET_VERIFIED") fail(`SYSCOHADA template ${entry}: publication interdite hors bootstrap tant que le dataset n'est pas DATASET_VERIFIED`);
+      if (manifest.legalUseStatus !== "AUTHORIZED_FOR_DTSC_IMPLEMENTATION") fail(`SYSCOHADA template ${entry}: publication interdite hors bootstrap tant que l'usage DTSC n'est pas autorisé`);
+      if (candidate.frameworkCode !== "OHADA_AUDCIF") fail(`SYSCOHADA template ${entry}: frameworkCode doit être OHADA_AUDCIF`);
     }
   }
 
