@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { getEnterpriseCoreV2Access, type EnterpriseCoreV2Action } from "@/lib/enterprise/core-v2/access";
-import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-capabilities";
+import { ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
 
@@ -18,16 +20,16 @@ export async function getEnterpriseProcurementAccess({
   if (moduleCode === "VALIDATIONS") return getEnterpriseCoreV2Access({ session, organizationId, moduleCode, action });
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
-  if (membership.role === "GUEST" && action !== "read") return null;
-  const moduleReadable = await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, "read");
-  if (!moduleReadable) return null;
-  const isManager = ENTERPRISE_MANAGER_ROLES.has(membership.role);
-  if (!isManager && action !== "read" && !(await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, action))) return null;
+  const decision = await resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode, action });
+  if (!decision.allowed) return null;
+  const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
+  const canSeeAll = ENTERPRISE_MANAGER_ROLES.has(membership.role) || capabilities.canManage;
   return {
     membership,
-    canSeeAll: isManager,
-    canManage: isManager,
-    canCreate: membership.role !== "GUEST" && (isManager || action === "read" || action === "submit" || await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, "submit")),
+    canSeeAll,
+    canManage: capabilities.canManage,
+    canCreate: capabilities.canSubmit || capabilities.canWrite,
+    capabilities,
   };
 }
 
@@ -81,15 +83,7 @@ export async function canAccessEnterpriseDocument({
   return null;
 }
 
-export async function enterpriseDocumentVisibilityWhere({
-  organizationId,
-  userId,
-  canSeeAll,
-}: {
-  organizationId: string;
-  userId: string;
-  canSeeAll: boolean;
-}): Promise<Prisma.EnterpriseDocumentWhereInput> {
+export async function enterpriseDocumentVisibilityWhere({ organizationId, userId, canSeeAll }: { organizationId: string; userId: string; canSeeAll: boolean }): Promise<Prisma.EnterpriseDocumentWhereInput> {
   if (canSeeAll) return { organizationId, archivedAt: null };
   const departmentId = await memberDepartmentId(organizationId, userId);
   return {
@@ -105,15 +99,7 @@ export async function enterpriseDocumentVisibilityWhere({
   };
 }
 
-export function enterprisePurchaseVisibilityWhere({
-  organizationId,
-  userId,
-  canSeeAll,
-}: {
-  organizationId: string;
-  userId: string;
-  canSeeAll: boolean;
-}): Prisma.EnterprisePurchaseWhereInput {
+export function enterprisePurchaseVisibilityWhere({ organizationId, userId, canSeeAll }: { organizationId: string; userId: string; canSeeAll: boolean }): Prisma.EnterprisePurchaseWhereInput {
   return {
     organizationId,
     archivedAt: null,
