@@ -72,6 +72,7 @@ function observeProviderEventStream({
   startedAt: number;
 }) {
   let finalized = false;
+  let reader: ReadableStreamDefaultReader<AiProviderEvent> | null = null;
   const finalize = async (status: "SUCCESS" | "FAILED" | "CANCELLED", reasonCode?: string | null) => {
     if (finalized) return;
     finalized = true;
@@ -80,12 +81,13 @@ function observeProviderEventStream({
 
   return new ReadableStream<AiProviderEvent>({
     async start(controller) {
-      const reader = source.getReader();
+      reader = source.getReader();
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
             await finalize("FAILED", "STREAM_INTERRUPTED");
+            controller.enqueue({ type: "ERROR", reasonCode: "STREAM_INTERRUPTED" });
             controller.close();
             return;
           }
@@ -108,12 +110,13 @@ function observeProviderEventStream({
         await finalize(reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED", reasonCode);
         controller.error(error);
       } finally {
-        reader.releaseLock();
+        reader?.releaseLock();
+        reader = null;
       }
     },
     async cancel(reason) {
       await finalize("CANCELLED", "STREAM_INTERRUPTED");
-      await source.cancel(reason).catch(() => undefined);
+      await reader?.cancel(reason).catch(() => undefined);
     },
   });
 }
