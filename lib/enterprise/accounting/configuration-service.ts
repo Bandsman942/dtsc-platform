@@ -9,6 +9,13 @@ import type { z } from "zod";
 
 type FinanceConfigurationInput = z.infer<typeof financeConfigurationSchema>;
 
+const POSTING_GLOBAL_BLOCKERS = new Set([
+  "FUNCTIONAL_CURRENCY_REQUIRED",
+  "CHART_REQUIRED",
+  "ACTIVE_CHART_REQUIRED",
+  "CHART_ACCOUNTS_REQUIRED",
+]);
+
 function diagnosticReady(readiness: Awaited<ReturnType<typeof getEnterpriseFinanceReadiness>>, code: string) {
   return readiness.diagnostics.find((diagnostic) => diagnostic.code === code)?.ready || false;
 }
@@ -50,11 +57,16 @@ export async function getFinanceReadiness(organizationId: string) {
 
 export async function assertFinanceReady(tx: Prisma.TransactionClient, organizationId: string) {
   const readiness = await resolveEnterpriseFinanceReadiness(tx, organizationId, { mode: "POSTING" });
-  if (!readiness.configuration || !readiness.ready) {
+  const globalBlockers = readiness.blockers.filter((diagnostic) => POSTING_GLOBAL_BLOCKERS.has(diagnostic.code));
+  if (!readiness.configuration || globalBlockers.length > 0) {
     throw new EnterpriseAccountingError("FINANCE_CONFIGURATION_NOT_READY", 409, {
-      blockers: readiness.blockers.map((diagnostic) => diagnostic.code),
+      blockers: globalBlockers.map((diagnostic) => diagnostic.code),
     });
   }
+  // Period, journal and semantic-account requirements are intentionally validated later by
+  // the event-specific posting path, which knows the accounting date, journal type and
+  // exact mapping keys required by the business event. This preserves precise errors such
+  // as FINANCE_PERIOD_CLOSED and avoids blocking one ERP domain on unrelated mappings.
   return readiness.configuration;
 }
 
