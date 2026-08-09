@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, RefreshCw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { financeStatusLabel, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 
 type Template = {
   reference: string;
@@ -15,33 +16,37 @@ type Template = {
   sourceKind: string;
   sourceAuthority: string;
   accountCount: number;
+  semanticMappingCount: number;
   journalCount: number;
   statementMappingCount: number;
+  isDefault: boolean;
   productionReadiness: { ready: boolean; status: string; blockers: readonly string[] };
 };
 type Chart = { id: string; code: string; nameFr: string; nameEn: string; status: string; templateCode: string | null; revision: number; _count?: { accounts?: number } };
 type Diagnostic = { code: string; severity: "BLOCKER" | "WARNING"; ready: boolean; messageFr: string; messageEn: string; actionFr?: string; actionEn?: string };
 type SetupPayload = {
   templates: Template[];
+  defaultTemplateReference: string;
   charts: Chart[];
   selectedChartId: string | null;
   readiness: { ready: boolean; diagnostics: Diagnostic[]; blockers: Diagnostic[]; warnings: Diagnostic[] } | null;
   regulatorySupport: { supported: boolean; reasonCode: string | null; messageFr: string; messageEn: string; templateReference: string | null; statementTypes: string[] };
   countryOverlays: unknown[];
-  governance: { bootstrapWarning: boolean; messageFr: string; messageEn: string };
+  governance: { bootstrapWarning: boolean; officialDefaultReference: string; futureVersionsRequireControlledMigration: boolean; messageFr: string; messageEn: string };
 };
 
 type Props = { organizationId: string; locale?: string | null; canManage: boolean };
 
 async function jsonRequest(url: string, options?: RequestInit) {
   const response = await fetch(url, { cache: "no-store", ...options });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(body.message || body.error || "L’opération n’a pas pu être terminée."));
+  const body = await response.json().catch(() => ({})) as { error?: string; [key: string]: unknown };
+  if (!response.ok) throw new Error(String(body.error || "FINANCE_OPERATION_FAILED"));
   return body as Record<string, unknown>;
 }
 
 export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, canManage }: Props) {
-  const en = locale === "en";
+  const financeLocale: FinanceLocale = locale === "en" ? "en" : "fr";
+  const en = financeLocale === "en";
   const [payload, setPayload] = useState<SetupPayload | null>(null);
   const [selectedChartId, setSelectedChartId] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("OHADA_SYSCOHADA@0.1.0");
@@ -64,13 +69,15 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
       setPayload(body);
       const nextChartId = chartId || body.selectedChartId || body.charts[0]?.id || "";
       setSelectedChartId(nextChartId);
-      if (!body.templates.some((template) => template.reference === selectedTemplate) && body.templates[0]) setSelectedTemplate(body.templates[0].reference);
+      const requested = templateRef || selectedTemplate;
+      if (!body.templates.some((template) => template.reference === requested)) setSelectedTemplate(body.defaultTemplateReference || body.templates[0]?.reference || "");
+      else if (!templateRef && !selectedTemplate) setSelectedTemplate(body.defaultTemplateReference);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Chargement impossible.");
+      setError(safeFinanceError(loadError, en ? "Accounting setup could not be loaded." : "La configuration comptable n’a pas pu être chargée.", financeLocale));
     } finally {
       setLoading(false);
     }
-  }, [organizationId, selectedTemplate]);
+  }, [en, financeLocale, organizationId, selectedTemplate]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -80,30 +87,24 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
   async function createChart() {
     setSaving(true); setError(null); setNotice(null);
     try {
-      const body = await jsonRequest(`/api/enterprise/${organizationId}/charts-of-accounts`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: chartCode, nameFr: chartNameFr, nameEn: chartNameEn }),
-      });
+      const body = await jsonRequest(`/api/enterprise/${organizationId}/charts-of-accounts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: chartCode, nameFr: chartNameFr, nameEn: chartNameEn }) });
       const chart = body.chart as Chart;
-      setNotice(en ? "Chart created. You can now adopt a template." : "Plan créé. Vous pouvez maintenant adopter un template.");
+      setNotice(en ? "Chart created. You can now apply the official DTSC default." : "Plan créé. Vous pouvez maintenant appliquer le plan officiel par défaut de DTSC.");
       await load(chart.id, selectedTemplate);
-    } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Création impossible."); }
-    finally { setSaving(false); }
+    } catch (saveError) {
+      setError(safeFinanceError(saveError, en ? "The chart could not be created." : "Le plan n’a pas pu être créé.", financeLocale));
+    } finally { setSaving(false); }
   }
 
   async function mutate(body: Record<string, unknown>, successFr: string, successEn: string) {
     setSaving(true); setError(null); setNotice(null);
     try {
-      await jsonRequest(`/api/enterprise/${organizationId}/accounting-setup`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      await jsonRequest(`/api/enterprise/${organizationId}/accounting-setup`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       setNotice(en ? successEn : successFr);
       await load(selectedChartId, selectedTemplate);
-    } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Action impossible."); }
-    finally { setSaving(false); }
+    } catch (saveError) {
+      setError(safeFinanceError(saveError, en ? "The requested action could not be completed." : "L’action demandée n’a pas pu être terminée.", financeLocale));
+    } finally { setSaving(false); }
   }
 
   const diagnostics = payload?.readiness?.diagnostics || [];
@@ -117,7 +118,7 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">{en ? "Accounting onboarding" : "Mise en service comptable"}</p>
               <h2 id="accounting-onboarding-title" className="mt-2 text-xl font-black sm:text-2xl">{en ? "Configure, validate, then activate" : "Configurer, valider, puis activer"}</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{en ? "The company chart remains isolated from the source template. Readiness explains every blocker before posting is enabled." : "Le plan de l’entreprise reste isolé du template source. Le readiness explique chaque blocage avant l’activation de la comptabilisation."}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{en ? "DTSC starts with the official SYSCOHADA default while keeping each company chart independent and versioned. Every blocker explains the next action before posting is enabled." : "DTSC propose SYSCOHADA comme plan officiel par défaut tout en gardant le plan de chaque entreprise indépendant et versionné. Chaque blocage indique l’action à effectuer avant l’activation de la comptabilisation."}</p>
             </div>
             <Button type="button" variant="outline" className="rounded-full" onClick={() => void load(selectedChartId, selectedTemplate)} disabled={loading || saving}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}{en ? "Refresh" : "Actualiser"}
@@ -131,12 +132,12 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
               <label className="text-sm font-semibold">{en ? "Company chart" : "Plan de l’entreprise"}
                 <select className="mt-2 h-11 w-full rounded-xl border bg-background px-3 text-sm" value={selectedChartId} onChange={(event) => { setSelectedChartId(event.target.value); void load(event.target.value, selectedTemplate); }}>
                   <option value="">{en ? "No chart yet" : "Aucun plan pour l’instant"}</option>
-                  {payload?.charts.map((chart) => <option key={chart.id} value={chart.id}>{chart.code} · {en ? chart.nameEn : chart.nameFr} · {chart.status}</option>)}
+                  {payload?.charts.map((chart) => <option key={chart.id} value={chart.id}>{chart.code} · {en ? chart.nameEn : chart.nameFr} · {financeStatusLabel(chart.status, financeLocale)}</option>)}
                 </select>
               </label>
-              <label className="text-sm font-semibold">{en ? "Source template" : "Template source"}
+              <label className="text-sm font-semibold">{en ? "Chart version" : "Version du plan"}
                 <select className="mt-2 h-11 w-full rounded-xl border bg-background px-3 text-sm" value={selectedTemplate} onChange={(event) => { setSelectedTemplate(event.target.value); void load(selectedChartId, event.target.value); }}>
-                  {payload?.templates.map((template) => <option key={template.reference} value={template.reference}>{template.reference} · {en ? template.nameEn : template.nameFr}</option>)}
+                  {payload?.templates.map((template) => <option key={template.reference} value={template.reference}>{template.isDefault ? (en ? "Default · " : "Par défaut · ") : ""}{en ? template.nameEn : template.nameFr} · {template.reference}</option>)}
                 </select>
               </label>
             </div>
@@ -154,46 +155,47 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
             ) : (
               <div className="rounded-2xl border p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div><p className="text-xs font-semibold uppercase text-muted-foreground">{en ? "Current chart" : "Plan actuel"}</p><h3 className="mt-1 font-black">{selectedChart.code} · {en ? selectedChart.nameEn : selectedChart.nameFr}</h3><p className="mt-1 text-xs text-muted-foreground">{selectedChart.templateCode || (en ? "No template adopted" : "Aucun template adopté")} · {selectedChart.status}</p></div>
+                  <div><p className="text-xs font-semibold uppercase text-muted-foreground">{en ? "Current chart" : "Plan actuel"}</p><h3 className="mt-1 font-black">{selectedChart.code} · {en ? selectedChart.nameEn : selectedChart.nameFr}</h3><p className="mt-1 text-xs text-muted-foreground">{selectedChart.templateCode || (en ? "No chart version applied" : "Aucune version appliquée")} · {financeStatusLabel(selectedChart.status, financeLocale)}</p></div>
                   <span className="rounded-full border px-3 py-1 text-xs font-bold">{selectedChart._count?.accounts || 0} {en ? "accounts" : "comptes"}</span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {canManage && !selectedChart.templateCode ? <Button className="rounded-full" disabled={saving || !selectedTemplate} onClick={() => void mutate({ action: "ADOPT_TEMPLATE", chartId: selectedChart.id, templateReference: selectedTemplate }, "Template adopté dans le plan brouillon.", "Template adopted into the draft chart.")}>{en ? "Adopt template" : "Adopter le template"}</Button> : null}
-                  {canManage ? <Button variant="outline" className="rounded-full" disabled={saving} onClick={() => void mutate({ action: "APPLY_RECOMMENDED_JOURNALS" }, "Journaux recommandés vérifiés.", "Recommended journals verified.")}>{en ? "Install recommended journals" : "Installer les journaux recommandés"}</Button> : null}
+                  {canManage && !selectedChart.templateCode ? <Button className="rounded-full" disabled={saving || !selectedTemplate} onClick={() => void mutate({ action: "ADOPT_TEMPLATE", chartId: selectedChart.id, templateReference: selectedTemplate }, "Plan officiel appliqué au brouillon de l’entreprise.", "Official chart applied to the company draft.")}>{en ? "Apply chart version" : "Appliquer la version"}</Button> : null}
+                  {canManage ? <Button variant="outline" className="rounded-full" disabled={saving} onClick={() => void mutate({ action: "APPLY_RECOMMENDED_JOURNALS" }, "Journaux recommandés configurés.", "Recommended journals configured.")}>{en ? "Configure recommended journals" : "Configurer les journaux recommandés"}</Button> : null}
                   {canManage && selectedChart.templateCode && selectedChart.status !== "ACTIVE" ? <Button className="rounded-full" disabled={saving || blocked} onClick={() => void mutate({ action: "ACTIVATE_CHART", chartId: selectedChart.id, revision: selectedChart.revision }, "Plan comptable activé.", "Chart of accounts activated.")}>{en ? "Activate accounting" : "Activer la comptabilité"}</Button> : null}
                 </div>
               </div>
             )}
 
             {selectedTemplateItem ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <Metric label={en ? "Jurisdiction" : "Juridiction"} value={selectedTemplateItem.countryScope.join(", ") || "—"} />
                 <Metric label={en ? "Effective from" : "Applicable depuis"} value={selectedTemplateItem.effectiveFrom} />
                 <Metric label={en ? "Accounts" : "Comptes"} value={String(selectedTemplateItem.accountCount)} />
-                <Metric label={en ? "Regulatory lines" : "Rubriques réglementaires"} value={String(selectedTemplateItem.statementMappingCount)} />
+                <Metric label={en ? "Business mappings" : "Mappings métier"} value={String(selectedTemplateItem.semanticMappingCount)} />
+                <Metric label={en ? "Statement lines" : "Rubriques d’états"} value={String(selectedTemplateItem.statementMappingCount)} />
               </div>
             ) : null}
           </div>
 
           <aside className="space-y-4">
             <div className={`rounded-2xl border p-4 ${payload?.readiness?.ready ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30 bg-amber-500/5"}`}>
-              <div className="flex items-start gap-3">{payload?.readiness?.ready ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <CircleDashed className="mt-0.5 h-5 w-5 text-amber-600" />}<div><h3 className="font-black">{payload?.readiness?.ready ? (en ? "Ready to activate" : "Prêt à activer") : (en ? "Configuration to complete" : "Configuration à compléter")}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{en ? "Every blocking rule is checked server-side." : "Chaque règle bloquante est vérifiée côté serveur."}</p></div></div>
+              <div className="flex items-start gap-3">{payload?.readiness?.ready ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <CircleDashed className="mt-0.5 h-5 w-5 text-amber-600" />}<div><h3 className="font-black">{payload?.readiness?.ready ? (en ? "Ready to activate" : "Prêt à activer") : (en ? "Configuration to complete" : "Configuration à compléter")}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{en ? "Every blocking rule is checked by the Finance service." : "Chaque règle bloquante est vérifiée par le service Finance."}</p></div></div>
             </div>
 
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
               {diagnostics.map((diagnostic) => <DiagnosticRow key={diagnostic.code} diagnostic={diagnostic} en={en} />)}
-              {!diagnostics.length && !loading ? <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">{en ? "Create or select a chart to display readiness." : "Créez ou sélectionnez un plan pour afficher le readiness."}</p> : null}
+              {!diagnostics.length && !loading ? <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">{en ? "Create or select a chart to display activation checks." : "Créez ou sélectionnez un plan pour afficher les vérifications d’activation."}</p> : null}
             </div>
 
             {payload?.regulatorySupport ? (
-              <div className={`rounded-2xl border p-4 ${payload.regulatorySupport.supported ? "border-emerald-500/30" : "border-violet-500/30 bg-violet-500/5"}`}>
-                <div className="flex items-start gap-3">{payload.regulatorySupport.supported ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <ShieldAlert className="mt-0.5 h-5 w-5 text-violet-600" />}<div><h3 className="font-black">{en ? "Regulatory reporting" : "Reporting réglementaire"}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{en ? payload.regulatorySupport.messageEn : payload.regulatorySupport.messageFr}</p></div></div>
+              <div className={`rounded-2xl border p-4 ${payload.regulatorySupport.supported ? "border-emerald-500/30 bg-emerald-500/5" : "border-violet-500/30 bg-violet-500/5"}`}>
+                <div className="flex items-start gap-3">{payload.regulatorySupport.supported ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <CircleDashed className="mt-0.5 h-5 w-5 text-violet-600" />}<div><h3 className="font-black">{en ? "Financial statements" : "États financiers"}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{en ? payload.regulatorySupport.messageEn : payload.regulatorySupport.messageFr}</p></div></div>
               </div>
             ) : null}
           </aside>
         </div>
 
-        {payload?.governance.bootstrapWarning ? <div className="flex items-start gap-3 border-t border-amber-500/20 bg-amber-500/5 px-5 py-4 text-sm sm:px-7"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" /><span>{en ? payload.governance.messageEn : payload.governance.messageFr}</span></div> : null}
+        {payload?.governance ? <div className="flex items-start gap-3 border-t border-emerald-500/20 bg-emerald-500/5 px-5 py-4 text-sm sm:px-7"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><span>{en ? payload.governance.messageEn : payload.governance.messageFr}</span></div> : null}
         {notice ? <div className="border-t border-emerald-500/20 bg-emerald-500/5 px-5 py-3 text-sm sm:px-7">{notice}</div> : null}
         {error ? <div className="border-t border-destructive/20 bg-destructive/5 px-5 py-3 text-sm text-destructive sm:px-7">{error}</div> : null}
       </div>

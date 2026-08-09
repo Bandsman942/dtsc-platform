@@ -1,312 +1,193 @@
-# Programme Comptabilité DTSC — clôture technique des itérations 3 à 8
+# Programme Comptabilité DTSC — dossier final
 
 Date : 2026-08-09
 
-## Statut important
+## Statut final du référentiel par défaut
 
-`OHADA_SYSCOHADA@0.1.0` est un **bootstrap provisoire non officiel du SYSCOHADA révisé 2017**. Il est utilisable pour développer, tester et mettre en service le moteur comptable dans le périmètre autorisé par la gouvernance DTSC, mais il ne constitue ni une reproduction officielle OHADA ni une déclaration de conformité réglementaire.
+Par décision propriétaire explicite du 2026-08-09, `OHADA_SYSCOHADA@0.1.0` est la **baseline officielle, immuable et le plan comptable par défaut de DTSC Platform**.
 
-Le statut `ACCOUNTING_TEMPLATE_PRODUCTION_READY` est explicitement interdit pour cette version tant que les conditions de l’itération 8 ne sont pas remplies : source réglementaire suffisamment fiable pour le dataset, revue comptable, rubriques réglementaires validées, QA complète et approbation humaine.
+Cette qualification vaut dans la gouvernance produit DTSC. Elle ne supprime pas le mécanisme de version : toute version officielle ultérieure est enregistrée séparément, vérifiée, comparée, prévisualisée puis migrée de manière contrôlée. Une version déjà utilisée n’est jamais réécrite.
 
-## 1. Architecture finale
+`accountingTemplateProductionReadiness()` peut retourner `ACCOUNTING_TEMPLATE_PRODUCTION_READY` pour cette version lorsque les contrôles du registre, les mappings sémantiques et les rubriques d’états sont valides.
 
-Le moteur sépare désormais les responsabilités suivantes :
+## Architecture
 
-`Framework → Template versionné → Plan entreprise → Mappings sémantiques → Journaux → Posting → Ledger → Reporting de gestion / Reporting réglementaire`
+`Framework → Template versionné → Plan entreprise → Mappings sémantiques → Journaux → Posting → Ledger → États / Reporting`
 
-Principes :
+Principes opposables :
 
-- le framework décrit le cadre comptable ;
-- le template est une source immuable, versionnée et sourcée ;
-- chaque organisation reçoit sa propre copie de travail ;
-- la personnalisation ne modifie jamais le template ;
-- les modules ERP publient des événements et des clés sémantiques, pas des numéros de comptes réglementaires ;
-- les règles pays sont isolées dans des overlays sourcés ;
-- la fiscalité opérationnelle reste dans `FINANCE_TAX` ;
-- les états de gestion sont distincts des états réglementaires.
+- `chart-template-registry.ts` est la source de vérité des frameworks et versions ;
+- `OHADA_SYSCOHADA@0.1.0` est le défaut explicite, pas un fallback caché ;
+- chaque organisation possède son propre plan et ses personnalisations ;
+- les secteurs ERP publient des événements et des clés sémantiques, jamais des numéros SYSCOHADA codés en dur ;
+- les écritures `POSTED` sont équilibrées, idempotentes et immuables ;
+- les périodes fermées bloquent les nouvelles comptabilisations ;
+- les règles pays/fiscales variables restent séparées du référentiel OHADA commun ;
+- toute nouvelle version passe par source vérifiée, dataset, diff et migration contrôlée.
 
-## 2. Itération 3 — adoption et lifecycle
+## Couverture sémantique
 
-### Filiation
-
-`EnterpriseChartOfAccounts.templateCode` conserve une référence versionnée `code@version`, par exemple :
-
-`OHADA_SYSCOHADA@0.1.0`
-
-Cette stratégie évite une migration destructive tout en conservant la filiation exacte.
-
-### Adoption
-
-`adoptDraftChartTemplate` :
-
-- vérifie que le template est publié ;
-- refuse l’application sur un plan déjà rempli avec une autre source ;
-- refuse une adoption destructive après écritures `POSTED` ;
-- copie comptes, groupes, mappings et journaux ;
-- reste idempotent pour la même référence ;
-- conserve le plan en `DRAFT` jusqu’à l’activation explicite.
-
-### Readiness
-
-`getAccountingChartReadiness` vérifie notamment :
-
-- devise fonctionnelle ;
-- période ouverte ;
-- présence de comptes ;
-- filiation template ;
-- couverture sémantique du template ;
-- mappings effectifs de l’organisation ;
-- journaux requis ;
-- comptes de trésorerie comme avertissement contextualisé ;
-- configuration fiscale comme avertissement contextualisé.
-
-Chaque diagnostic possède un code stable, une sévérité, un message FR/EN et une action corrective lorsqu’elle est pertinente.
-
-### Personnalisation
-
-Un plan issu d’un template accepte des sous-comptes personnalisés contrôlés :
-
-- parent obligatoire ;
-- code prolongeant le code parent ;
-- type et sous-type hérités ;
-- compte non système ;
-- isolation organisation stricte.
-
-Un compte utilisé dans une écriture, un mapping, un compte financier ou comme parent ne peut pas être désactivé brutalement.
-
-## 3. Itération 4 — semantic accounting layer
-
-Le registre `semantic-account-registry.ts` définit le contrat commun ERP → comptabilité.
-
-Chaque clé comporte :
-
-- domaine ;
-- libellés FR/EN ;
-- catégorie ;
-- types et sous-types de comptes attendus ;
-- caractère obligatoire pour le posting ;
-- autorisation ou non d’un fallback ;
-- événements consommateurs ;
-- statut de dépréciation éventuel.
-
-Le resolver `semantic-account-resolver.ts` :
-
-- est tenant-aware ;
-- utilise la **date comptable de l’écriture** pour l’effectivité ;
-- refuse un mapping futur ou expiré ;
-- refuse un compte inactif ou archivé ;
-- refuse un type/sous-type incompatible ;
-- n’utilise aucun fallback silencieux ;
-- conserve le support des comptes explicites `ACCOUNT_ID:*` pour les comptes financiers déjà résolus par le moteur.
-
-Les adapters Retail, Health et Pharmacy restent indépendants de SYSCOHADA.
-
-## 4. Itération 5 — journaux, pays et fiscalité
-
-### Journaux
-
-Le registre recommandé couvre les journaux opérationnels nécessaires au moteur :
-
-- ventes ;
-- achats ;
-- banque ;
-- caisse ;
-- Mobile Money ;
-- paie ;
-- stock ;
-- immobilisations ;
-- opérations diverses ;
-- journal général ;
-- ouverture ;
-- fiscalité.
-
-Les journaux sont copiés dans l’organisation et restent personnalisables sans modifier le template source.
-
-### Overlays pays
-
-`country-accounting-overlays.ts` définit le contrat :
-
-- pays ;
-- version ;
-- dates d’effet ;
-- compatibilité framework/template ;
-- comptes recommandés additionnels ;
-- overrides sémantiques ;
-- exigences de reporting ;
-- provenance.
-
-Le registre est volontairement vide tant qu’aucune règle nationale n’a été suffisamment sourcée et revue. DTSC ne fabrique pas de taux, obligations ou règles pays.
-
-### Fiscalité
-
-Le template peut recommander des comptes nécessaires à une mécanique fiscale, mais les taux, catégories, dates d’effet et obligations nationales restent dans `FINANCE_TAX` ou dans un overlay pays validé.
-
-## 5. Itération 6 — reporting
-
-Le service historique `statements-service.ts` reste la couche de **reporting de gestion** : balance, grand livre, résultat, bilan, trésorerie et états auxiliaires.
-
-Le nouveau `regulatory-statements-service.ts` est une couche distincte :
-
-- elle exige un plan actif et une filiation template connue ;
-- elle lit uniquement des écritures `POSTED` ;
-- elle utilise `financialStatementMappings` du template ;
-- chaque ligne conserve la liste des comptes contributeurs ;
-- elle refuse explicitement la génération si aucune rubrique réglementaire validée n’existe.
-
-Pour `OHADA_SYSCOHADA@0.1.0`, `financialStatementMappings` reste vide. Le moteur doit donc afficher que le reporting réglementaire n’est pas encore validé au lieu de présenter les états de gestion comme conformes.
-
-## 6. Itération 7 — onboarding, UX et guides
-
-`FINANCE_ACCOUNTING` affiche un assistant de mise en service au-dessus du workspace Finance existant.
-
-Il permet :
-
-- création du plan entreprise ;
-- sélection du template ;
-- adoption explicite ;
-- installation/vérification des journaux recommandés ;
-- lecture du readiness ;
-- activation lorsque tous les blockers sont corrigés ;
-- lecture du statut du reporting réglementaire ;
-- affichage permanent de l’avertissement du bootstrap non officiel.
-
-Le composant est responsive et les mutations sont masquées aux utilisateurs non gestionnaires, tout en restant systématiquement protégées côté API.
-
-Le guide natif FR/EN `accounting-onboarding-guide.ts` explique :
-
-- choix du référentiel ;
-- plan entreprise ;
-- comptes système/personnalisés ;
-- journaux et mappings ;
-- readiness ;
-- activation ;
-- états ;
-- changement de version ;
-- limitations du bootstrap.
-
-## 7. Itération 8 — version, migration et gouvernance
-
-### Diff
-
-`diffAccountingTemplates` compare :
-
-- comptes ajoutés/retirés ;
-- libellés ;
-- parent/hiérarchie ;
-- type/sous-type ;
-- règle de saisie directe ;
-- statut système/contrôle ;
-- mappings sémantiques ;
-- journaux ;
-- rubriques d’états.
-
-### Preview organisationnelle
-
-`previewChartTemplateUpgrade` ajoute :
-
-- nombre d’écritures `POSTED` ;
-- nombre de comptes personnalisés ;
-- détection des changements cassants ;
-- décision `requiresHumanDecision` ;
-- décision `canApplyAutomatically`.
-
-### Application
-
-Une mise à niveau automatique n’est autorisée que sur un plan `DRAFT/READY`, sans écritures `POSTED`, sans customisation et sans changement cassant.
-
-Toute autre situation renvoie `CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION`.
-
-Aucune écriture historique `POSTED` n’est modifiée ou réécrite.
-
-### Production readiness
-
-`accountingTemplateProductionReadiness` conserve les blockers réglementaires. Pour `OHADA_SYSCOHADA@0.1.0` :
-
-- `TRUSTED_REGULATORY_SOURCE_REQUIRED` ;
-- `REGULATORY_STATEMENT_MAPPINGS_NOT_VALIDATED` ;
-- `ACCOUNTING_REVIEW_REQUIRED` ;
-- `HUMAN_OWNER_APPROVAL_REQUIRED`.
-
-## 8. Matrice ERP → clés sémantiques
+Le template couvre les besoins ERP communs déjà implémentés et des extensions transverses pour les futurs secteurs.
 
 | Domaine | Exemples de clés |
 |---|---|
-| Ventes | `ACCOUNTS_RECEIVABLE`, `SALES_REVENUE`, `TAX_PAYABLE` |
-| Achats | `ACCOUNTS_PAYABLE`, `TAX_RECEIVABLE`, `OPERATING_EXPENSE` |
-| Stock | `INVENTORY`, `COST_OF_SALES`, `GOODS_RECEIVED_CLEARING` |
+| Ventes | `SALES_REVENUE`, `SERVICE_REVENUE`, `WORK_REVENUE`, `ACCOUNTS_RECEIVABLE` |
+| Achats | `ACCOUNTS_PAYABLE`, `ACCRUED_PAYABLES`, `OPERATING_EXPENSE` |
+| Fiscalité | `TAX_PAYABLE`, `TAX_RECEIVABLE`, `VAT_DUE`, `INCOME_TAX_PAYABLE`, `INCOME_TAX_EXPENSE` |
+| Stocks | `INVENTORY`, `GOODS_INVENTORY`, `RAW_MATERIALS_INVENTORY`, `CONSUMABLES_INVENTORY`, `FINISHED_GOODS_INVENTORY`, `COST_OF_SALES` |
+| Immobilisations | `FIXED_ASSET`, `SOFTWARE_ASSET`, `ACCUMULATED_DEPRECIATION`, `DEPRECIATION_EXPENSE`, `ASSET_CLEARING` |
 | Paiements | `CUSTOMER_ADVANCES`, `SUPPLIER_ADVANCES` |
-| Paie | `PAYROLL_EXPENSE`, `PAYROLL_PAYABLE`, `PAYROLL_WITHHOLDING_PAYABLE` |
-| Immobilisations | `FIXED_ASSET`, `ASSET_CLEARING` |
-| Trésorerie | `BANK_CHARGES`, `CASH_VARIANCE_EXPENSE`, `CASH_VARIANCE_INCOME` |
-| Health | utilise les mêmes clés communes, sans dépendance SYSCOHADA |
-| Pharmacy | utilise les mêmes clés communes, sans dépendance SYSCOHADA |
-| Retail / Shop | utilise les mêmes clés communes, sans dépendance SYSCOHADA |
+| Paie | `PAYROLL_EXPENSE`, `PAYROLL_PAYABLE`, `PAYROLL_WITHHOLDING_PAYABLE`, `SOCIAL_SECURITY_PAYABLE` |
+| Trésorerie | `CASH`, `BANK`, `MOBILE_MONEY`, `BANK_CHARGES`, `FX_GAIN`, `FX_LOSS`, `CLEARING` |
+| Financement | `BORROWINGS`, `PROVISIONS`, `INTEREST_EXPENSE` |
+| Capitaux propres | `EQUITY_CAPITAL`, `RETAINED_EARNINGS` |
 
-## 9. QA opposable
+Les mappings réellement utilisés par Retail/Shop, Health, Pharmacy et l’ERP commun restent obligatoires. Les clés futures sont présentes sans devenir artificiellement obligatoires pour les événements actuels.
 
-`scripts/qa-accounting-program-150-155.mjs` vérifie :
+## États financiers
 
-- présence des couches lifecycle/semantic/overlay/reporting/version/UX/guide ;
-- identité et statut non officiel du bootstrap ;
-- absence de rubriques réglementaires inventées ;
-- couverture des clés de posting nécessaires ;
-- journaux requis ;
-- resolver tenant/date-aware ;
-- protections lifecycle ;
-- refus de production-readiness du bootstrap ;
-- absence de numéros de comptes SYSCOHADA hardcodés dans les adapters sectoriels.
+`OHADA_SYSCOHADA@0.1.0` contient des rubriques versionnées pour :
 
-Le script est intégré au gate `qa:enterprise-accounting` via `qa-enterprise-accounting-checks.mjs`.
+- `BALANCE_SHEET` ;
+- `INCOME_STATEMENT`.
 
-## 10. Procédure d’ajout d’un pays
+Chaque rubrique possède :
 
-1. Identifier une source réglementaire fiable et exploitable.
-2. Enregistrer autorité, référence et date de vérification.
-3. Créer un overlay versionné sans modifier le framework commun.
-4. Définir seulement les différences réellement requises.
-5. Tester les dates d’effet et la compatibilité template.
-6. Ajouter/mettre à jour la configuration fiscale dans `FINANCE_TAX` lorsque la règle est fiscale.
-7. Ajouter les QA et la documentation.
-8. Soumettre à revue comptable/juridique selon la règle de gouvernance.
+- code stable ;
+- libellés FR/EN ;
+- comptes contributeurs ;
+- `normalBalance` (`DEBIT` ou `CREDIT`) ;
+- ordre de présentation.
 
-## 11. Procédure de validation d’une nouvelle version
+Le service d’états calcule les montants dans le sens normal de chaque rubrique. Les produits, dettes et capitaux propres ne sont donc pas affichés négativement uniquement parce que leur solde normal est créditeur.
 
-Avant publication :
+La traçabilité reste : `rubrique → comptes → écritures POSTED`.
 
-- source fiable vérifiée ;
-- dataset validé ;
-- codes uniques ;
-- hiérarchie valide ;
-- mappings sémantiques complets ;
-- journaux cohérents ;
-- rubriques réglementaires validées si elles sont déclarées supportées ;
-- diff N→N+1 produit ;
-- scénario d’impact tenant testé ;
-- aucune mutation silencieuse ;
-- tests posting débit=crédit, reversals et idempotence ;
-- isolation multi-tenant et RBAC ;
-- onboarding FR/EN ;
-- guide mis à jour ;
-- approbation humaine avant `ACCOUNTING_TEMPLATE_PRODUCTION_READY`.
+## Lifecycle et personnalisation
 
-## 12. Runbook incident
+L’adoption conserve `templateCode=code@version` et reste tenant-aware. L’entreprise peut créer des sous-comptes contrôlés sans modifier la version source.
 
-En cas de problème de posting :
+Les protections incluent :
 
-1. identifier l’organisation et l’événement ;
-2. vérifier le `PostingBatch` et son idempotency key ;
-3. vérifier période et journal ;
-4. vérifier le mapping sémantique effectif à la date comptable ;
-5. vérifier le compte résolu et son statut ;
-6. vérifier devise/taux de change ;
-7. ne jamais modifier une écriture `POSTED` directement ;
-8. utiliser une contrepassation ou un workflow comptable approprié ;
-9. conserver l’audit et la cause racine.
+- plan utilisé non remplaçable silencieusement ;
+- comptes système/utilisés protégés ;
+- mappings effectifs par date comptable ;
+- absence de fallback silencieux ;
+- activation explicite après diagnostics de readiness ;
+- audit des actions sensibles.
 
-## 13. Limites connues
+## Version N → N+1
 
-- Le bootstrap SYSCOHADA 2017 est non officiel.
-- Aucun overlay pays n’est publié sans source validée.
-- Aucune rubrique réglementaire SYSCOHADA n’est déclarée supportée dans la v0.1.0.
-- Une migration complexe d’un plan actif déjà utilisé nécessite une décision humaine et un plan de transition ; le moteur la bloque plutôt que de deviner.
-- La revue humaine comptable reste obligatoire avant toute qualification réglementaire de production.
+`diffAccountingTemplates` compare comptes, hiérarchie, types, règles de saisie, mappings sémantiques, journaux et rubriques d’états, y compris leur `normalBalance`.
+
+`previewChartTemplateUpgrade` mesure l’impact organisationnel : écritures postées, comptes personnalisés et changements cassants.
+
+Une mise à niveau automatique n’est autorisée que lorsqu’elle est sûre. Sinon `CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION` impose une décision contrôlée. Aucune écriture historique n’est réécrite.
+
+Le manifeste `source-manifest.json` conserve pour les futures versions les gates : source fiable vérifiée, dataset canonique fingerprinté et autorisation de publication.
+
+## UX et i18n Finance
+
+Le socle Finance client est FR/EN et centralise :
+
+- statuts métier ;
+- enums métier ;
+- dates et montants ;
+- erreurs et actions correctives.
+
+Les surfaces clientes ne doivent pas afficher directement :
+
+- messages backend bruts ;
+- erreurs Zod ;
+- types Prisma ;
+- UUID comme libellé ;
+- codes d’erreur comme message principal ;
+- clés sémantiques internes comme explication client.
+
+`safeFinanceError()` transforme les erreurs connues et les familles d’erreurs en messages orientés action. Les helpers de collections/mutations n’exposent plus `body.message` directement.
+
+L’onboarding présente désormais SYSCOHADA comme version officielle par défaut, les étapes d’activation, les actions correctives et la disponibilité des états financiers sans jargon développeur.
+
+## Modules Finance couverts
+
+Le passage UX/i18n couvre le socle partagé des modules :
+
+- `FINANCE_OVERVIEW` ;
+- `FINANCE_RECEIVABLES` ;
+- `FINANCE_PAYABLES` ;
+- `FINANCE_PAYMENTS` ;
+- `FINANCE_TREASURY` ;
+- `FINANCE_CASH` ;
+- `FINANCE_BANK` ;
+- `FINANCE_RECONCILIATION` ;
+- `FINANCE_ACCOUNTING` ;
+- `FINANCE_TAX` ;
+- `FINANCE_CLOSE` ;
+- `FINANCE_STATEMENTS` ;
+- `FINANCE_ASSETS` ;
+- `FINANCE_INVENTORY`.
+
+## Acceptance production-like
+
+Le workflow dédié reconstruit PostgreSQL depuis zéro, applique les migrations, seed l’entreprise ERP canonique, build Next.js en mode production et exécute Chromium sur `next start`.
+
+Le scénario prouve :
+
+1. onboarding FR 390 px ;
+2. SYSCOHADA sélectionné par défaut ;
+3. statut `ACCOUNTING_TEMPLATE_PRODUCTION_READY` ;
+4. blockers devise/période puis correction ;
+5. activation ;
+6. RBAC non-membre ;
+7. facture réelle à taxe zéro ;
+8. approbation indépendante ;
+9. écriture `POSTED` débit = crédit ;
+10. idempotence du posting ;
+11. balance équilibrée ;
+12. compte de résultat avec revenu au signe normal ;
+13. protection historique lors d’un upgrade ;
+14. clôture `SUBMIT → APPROVE → CLOSE` ;
+15. refus d’une nouvelle comptabilisation dans la période fermée ;
+16. historique inchangé ;
+17. onboarding EN 768 px sans overflow structurel.
+
+## QA opposable
+
+Les gates couvrent :
+
+- intégrité du registre et du template par défaut ;
+- FR/EN des comptes et rubriques ;
+- couverture sémantique ;
+- journaux ;
+- absence de hardcodes réglementaires sectoriels ;
+- strict `gt(0)` pour les lignes comptables optionnelles ;
+- multi-tenant/RBAC ;
+- lifecycle et périodes ;
+- version/diff/migration ;
+- états financiers ;
+- UX/i18n Finance et sanitisation des erreurs ;
+- E2E production-like.
+
+## Procédure d’une nouvelle version officielle
+
+1. Enregistrer la source et sa provenance.
+2. Vérifier/fingerprinter le fichier source.
+3. Produire et valider le dataset canonique.
+4. Générer une nouvelle version immuable ; ne jamais modifier `0.1.0`.
+5. Compléter mappings, journaux, états et traductions.
+6. Exécuter les QA d’intégrité et de posting.
+7. Produire le diff N→N+1.
+8. Prévisualiser l’impact sur chaque organisation concernée.
+9. Appliquer uniquement via workflow contrôlé.
+10. Conserver l’historique et l’audit.
+
+## Runbook incident
+
+En cas de problème : identifier organisation et événement, vérifier `PostingBatch`/idempotence, période, journal, mapping effectif à la date comptable, compte résolu, devise/taux de change et écriture. Ne jamais modifier une écriture `POSTED`; utiliser contrepassation ou workflow autorisé et conserver la cause racine dans l’audit.
+
+## Limites durables
+
+- les overlays pays ne sont pas inventés sans source ;
+- la fiscalité nationale reste versionnée séparément ;
+- les migrations complexes d’un plan actif sont volontairement bloquées pour revue ;
+- une nouvelle version officielle ne remplace jamais silencieusement la version déjà utilisée.
