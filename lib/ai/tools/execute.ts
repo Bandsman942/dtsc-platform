@@ -12,6 +12,17 @@ import type { AiToolExecutionResult, AiToolRuntimeContext } from "@/lib/ai/tools
 const jsonValue = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 type ExecutionRow = { id: string; status: string; resultJson: unknown | null };
+type InsertedExecutionRow = { id: string };
+
+async function findExistingExecution(idempotencyScopeKey: string) {
+  const existing = await prisma.$queryRaw<ExecutionRow[]>(Prisma.sql`
+    SELECT "id", "status", "resultJson"
+    FROM "AiToolExecution"
+    WHERE "idempotencyScopeKey" = ${idempotencyScopeKey}
+    LIMIT 1
+  `);
+  return existing[0] || null;
+}
 
 export async function executeAiTool(input: {
   toolCode: string;
@@ -47,6 +58,13 @@ export async function executeAiTool(input: {
     argumentsHash,
   });
 
+  if (definition.idempotent) {
+    const existing = await findExistingExecution(idempotencyScopeKey);
+    if (existing?.status === "SUCCESS") {
+      return { ok: true, toolCode: input.toolCode, status: "SUCCESS", result: existing.resultJson, auditId: existing.id };
+    }
+  }
+
   if (definition.requiresConfirmation && !input.confirmationId) {
     const confirmation = await createAiToolConfirmation({ toolCode: input.toolCode, args: parsedInput.data, context: input.context });
     return {
@@ -70,20 +88,8 @@ export async function executeAiTool(input: {
     }
   }
 
-  if (definition.idempotent) {
-    const existing = await prisma.$queryRaw<ExecutionRow[]>(Prisma.sql`
-      SELECT "id", "status", "resultJson"
-      FROM "AiToolExecution"
-      WHERE "idempotencyScopeKey" = ${idempotencyScopeKey}
-      LIMIT 1
-    `);
-    if (existing[0]?.status === "SUCCESS") {
-      return { ok: true, toolCode: input.toolCode, status: "SUCCESS", result: existing[0].resultJson, auditId: existing[0].id };
-    }
-  }
-
   const executionId = randomUUID();
-  await prisma.$executeRaw(Prisma.sql`
+  const inserted = await prisma.$queryRaw<InsertedExecutionRow[]>(Prisma.sql`
     INSERT INTO "AiToolExecution" (
       "id", "userId", "organizationId", "conversationId", "turnId", "toolCode", "toolMode", "argumentsHash",
       "confirmationId", "idempotencyScopeKey", "status", "auditLevel", "startedAt", "createdAt", "updatedAt"
@@ -92,7 +98,22 @@ export async function executeAiTool(input: {
       ${input.context.turnId || null}, ${input.toolCode}, ${definition.mode}, ${argumentsHash}, ${input.confirmationId || null},
       ${idempotencyScopeKey}, 'STARTED', ${definition.auditLevel}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT ("idempotencyScopeKey") DO NOTHING
+    RETURNING "id"
   `);
+
+  if (!inserted[0]) {
+    const existing = await findExistingExecution(idempotencyScopeKey);
+    if (existing?.status === "SUCCESS") {
+      return { ok: true, toolCode: input.toolCode, status: "SUCCESS", result: existing.resultJson, auditId: existing.id };
+    }
+    return {
+      ok: false,
+      toolCode: input.toolCode,
+      status: "DENIED",
+      reasonCode: existing?.status === "STARTED" ? "TOOL_EXECUTION_IN_PROGRESS" : "TOOL_EXECUTION_ALREADY_RECORDED",
+      auditId: existing?.id,
+    };
+  }
 
   try {
     const rawOutput = await executor({ args: parsedInput.data, context: input.context });
