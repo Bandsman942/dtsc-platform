@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
-import { indexPreparedEnterpriseAiKnowledgeSource } from "@/lib/enterprise-ai/knowledge";
+import { reindexEnterpriseAiKnowledgeSource } from "@/lib/enterprise-ai/knowledge-reindex";
 import { enterpriseAiKnowledgeActionSchema } from "@/lib/enterprise-ai/validators";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
@@ -54,7 +54,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const userId = session.userId;
     after(async () => {
       try {
-        const indexed = await indexPreparedEnterpriseAiKnowledgeSource({ sourceId: id, organizationId });
+        const indexed = await reindexEnterpriseAiKnowledgeSource({ sourceId: id, organizationId });
         await writeAuditLog({ userId, action: "ENTERPRISE_AI_SOURCE_REINDEXED", entity: "EnterpriseAiKnowledgeSource", entityId: id, metadata: { organizationId, chunkCount: indexed._count.chunks } });
       } catch (error) {
         console.error("Enterprise AI source reindex failed", id, error);
