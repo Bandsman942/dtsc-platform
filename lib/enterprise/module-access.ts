@@ -12,7 +12,7 @@ import {
 import { compareEnterpriseModuleDefinitions } from "@/lib/enterprise/module-order";
 import { prisma } from "@/lib/prisma";
 
-export type EnterpriseModuleAction = "read" | "submit" | "write" | "manage";
+export type EnterpriseModuleAction = "read" | "submit" | "write" | "approve" | "manage";
 
 export type EnterpriseModuleAccessCode =
   | "OK"
@@ -37,6 +37,17 @@ export type EnterpriseModuleAccessDecision = {
   tenantModuleId: string | null;
   tenantModuleCode: string | null;
   dependencyCode?: string;
+};
+
+export type EnterpriseModuleCapabilities = {
+  canonicalCode: string | null;
+  definition: EnterpriseModuleDefinition | null;
+  canRead: boolean;
+  canCreate: boolean;
+  canSubmit: boolean;
+  canWrite: boolean;
+  canApprove: boolean;
+  canManage: boolean;
 };
 
 export type EnterpriseModuleConfigurationIssue = {
@@ -94,7 +105,8 @@ function permissionMatchesAction(permission: string, action: EnterpriseModuleAct
   if (action === "read") return permission.endsWith(".view") || permission.endsWith(".read") || permission.endsWith(".chat") || permission.includes(".view_");
   if (action === "submit") return permission.endsWith(".create") || permission.endsWith(".submit") || permission.endsWith(".chat") || permission.endsWith(".dispense");
   if (action === "write") return permission.endsWith(".create") || permission.endsWith(".update") || permission.endsWith(".validate") || permission.endsWith(".manage") || permission.endsWith(".dispense");
-  return permission.endsWith(".manage") || permission.endsWith(".update") || permission.endsWith(".validate");
+  if (action === "approve") return permission.endsWith(".approve") || permission.endsWith(".validate") || permission.endsWith(".manage");
+  return permission.endsWith(".manage") || permission.endsWith(".admin");
 }
 
 function roleAllowsAction(role: string, action: EnterpriseModuleAction) {
@@ -236,6 +248,26 @@ export async function resolveEnterpriseModuleAccess({ userId, organizationId, mo
   const snapshot = await getEnterpriseAccessSnapshot(userId, organizationId);
   if (!snapshot) return denied("NO_ACTIVE_MEMBERSHIP", "Aucun accès actif à cette entreprise n’a été trouvé.", definition);
   return resolveFromSnapshot(snapshot, moduleCode, action);
+}
+
+export async function resolveEnterpriseModuleCapabilities({ userId, organizationId, moduleCode }: { userId: string; organizationId: string; moduleCode: string }): Promise<EnterpriseModuleCapabilities> {
+  const definition = getEnterpriseModuleDefinition(moduleCode);
+  const snapshot = definition ? await getEnterpriseAccessSnapshot(userId, organizationId) : null;
+  if (!definition || !snapshot) {
+    return { canonicalCode: definition?.code || null, definition: definition || null, canRead: false, canCreate: false, canSubmit: false, canWrite: false, canApprove: false, canManage: false };
+  }
+  const allowed = (action: EnterpriseModuleAction) => resolveFromSnapshot(snapshot, moduleCode, action).allowed;
+  const canSubmit = allowed("submit");
+  return {
+    canonicalCode: definition.code,
+    definition,
+    canRead: allowed("read"),
+    canCreate: canSubmit,
+    canSubmit,
+    canWrite: allowed("write"),
+    canApprove: allowed("approve"),
+    canManage: allowed("manage"),
+  };
 }
 
 export async function listNavigableEnterpriseModules({ userId, organizationId, action = "read" }: { userId: string; organizationId: string; action?: EnterpriseModuleAction }) {
