@@ -80,7 +80,8 @@ const offlineClient = read("lib/enterprise/retail/offline-client.ts");
 for (const marker of ["AES-GCM", "indexedDB", "CryptoKey", "transactionDone", "PENDING_SYNC", "CONFLICT", "REJECTED", "crypto.randomUUID()", "ciphertext"]) check(offlineClient.includes(marker), `Encrypted offline client contract missing ${marker}`);
 check(!offlineClient.includes("localStorage.setItem"), "Offline sale payloads must not be stored in plaintext localStorage");
 const offlineUi = read("components/enterprise/professional/retail-offline-continuity.tsx");
-for (const marker of ["saveRetailOfflineSnapshot", "enqueueRetailOfflineSale", "syncPending", "CASH", "server reconciliation", "PENDING_SYNC"]) check(offlineUi.includes(marker), `Visible offline continuity UI missing ${marker}`);
+for (const marker of ["saveRetailOfflineSnapshot", "enqueueRetailOfflineSale", "syncPending", "CASH", "PENDING_SYNC", "customerFacingError", "customerFacingStatusLabel", "Vente hors connexion"]) check(offlineUi.includes(marker), `Visible offline continuity UI missing ${marker}`);
+for (const forbidden of ["server reconciliation", "rapprochement serveur", "AES-GCM · IndexedDB"]) check(!offlineUi.includes(forbidden), `Customer offline UI must not expose technical wording: ${forbidden}`);
 
 const reservations = read("lib/enterprise/inventory/reservations.ts");
 for (const marker of ["TransactionIsolationLevel.Serializable", "quantityReserved", "enterpriseInventoryReservation", "enterpriseSalesOrderItem", "INVENTORY_RESERVATION_INSUFFICIENT"]) check(reservations.includes(marker), `Inventory reservation service missing ${marker}`);
@@ -93,7 +94,8 @@ for (const marker of ["createEnterpriseDirectSalesOrder", "EnterpriseSalesOrder"
 const omnichannel = read("lib/enterprise/retail/omnichannel.ts");
 for (const marker of ["CLICK_COLLECT", "PICKUP_OTHER_STORE", "SHIP_FROM_STORE", "CUSTOMER_DELIVERY", "createEnterpriseDirectSalesOrder", "createEnterpriseInventoryReservation", "releaseEnterpriseInventoryReservation", "EnterpriseRetailOrderOrchestration", "RESERVATION_FAILED"]) check(omnichannel.includes(marker), `Omnichannel orchestration missing ${marker}`);
 const omnichannelUi = read("components/enterprise/professional/retail-omnichannel-panel.tsx");
-for (const marker of ["Canonical CRM customer", "/retail/customers?search=", "/retail/products/search", "/retail/omnichannel/orders", "Cross-channel status", "server reprices on submit"]) check(omnichannelUi.includes(marker), `Omnichannel POS UI missing ${marker}`);
+for (const marker of ["/retail/customers?search=", "/retail/products/search", "/retail/omnichannel/orders", "customerFacingError", "customerFacingFulfillmentMode", "customerFacingStatusLabel", "Commandes, retraits & livraisons", "Prix vérifié automatiquement"]) check(omnichannelUi.includes(marker), `Omnichannel POS UI missing ${marker}`);
+for (const forbidden of ["Canonical CRM customer", "Client CRM canonique", "Cross-channel status", "Statut cross-channel", "server reprices on submit", "repricing serveur à l’envoi"]) check(!omnichannelUi.includes(forbidden), `Customer omnichannel UI must not expose technical wording: ${forbidden}`);
 
 const countryPacks = read("lib/enterprise/retail/country-packs.ts");
 for (const marker of ["CD_RETAIL_CORE_V1", "EVIDENCE_REQUIRED", "NOT_CERTIFIED", "TENANT_CONFIGURATION_REQUIRED", "evidenceSatisfied"]) check(countryPacks.includes(marker), `Country-pack governance missing ${marker}`);
@@ -102,7 +104,8 @@ const onboarding = read("lib/enterprise/retail/self-service-onboarding.ts");
 for (const marker of ["COUNTRY_PACK", "FUNCTIONAL_CURRENCY", "SITE", "WAREHOUSE", "CASH_ACCOUNT", "CATALOG", "INVENTORY_LINKS", "TEAM", "ACCOUNTING", "RETAIL_CONFIGURATION", "getRetailAccountingReadiness"]) check(onboarding.includes(marker), `Self-service onboarding readiness missing ${marker}`);
 for (const forbidden of ["enterpriseFinancialAccount.create", "enterpriseSite.create", "enterpriseWarehouse.create", "enterpriseInventoryBalance.create"]) check(!onboarding.includes(forbidden), `Self-service onboarding must not invent canonical tenant data through ${forbidden}`);
 const readinessUi = read("components/enterprise/professional/retail-global-readiness.tsx");
-for (const marker of ["Activate proven core only", "Operational evidence", "not a legal or fiscal certification", "/retail/onboarding", "/retail/country-packs"]) check(readinessUi.includes(marker), `Visible country/onboarding readiness UI missing ${marker}`);
+for (const marker of ["Mise en service du Shop", "Configuration pays", "Prêt à vendre", "customerFacingCapabilityLabel", "customerFacingStatusLabel", "customerFacingReadinessDetail", "/retail/onboarding", "/retail/country-packs"]) check(readinessUi.includes(marker), `Visible country/onboarding readiness UI missing ${marker}`);
+for (const forbidden of ["Activate proven core only", "Operational evidence", "COMMERCIAL_READY_GLOBAL", "Country pack"]) check(!readinessUi.includes(forbidden), `Customer onboarding UI must not expose governance wording: ${forbidden}`);
 
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
 for (const marker of ["RetailOfflineContinuity", "RetailOmnichannelPanel", "RetailGlobalReadiness"]) check(retailPage.includes(marker), `RETAIL_POS page must mount ${marker}`);
@@ -116,4 +119,4 @@ if (failures.length) {
   console.error("Shop 2 iteration 4 global readiness QA failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("Shop 2 global readiness QA passed: the 4/4 technical program is complete, Retail remains COMMERCIAL_READY, and global commercial claims stay evidence-gated by country.");
+console.log("Shop 2 global readiness QA passed: technical invariants remain enforced while customer-facing Retail surfaces use business language and global commercial claims stay evidence-gated by country.");
