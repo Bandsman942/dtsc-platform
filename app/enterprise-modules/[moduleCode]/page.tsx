@@ -277,6 +277,13 @@ export default async function EnterpriseModulePage({ params }: Params) {
         coreData={{ members, departments, positions, workflows, requests, calendarEvents, audits }}
         canManage={capabilities.canManage}
         canCreate={capabilities.canCreate}
+        capabilities={{
+          canCreate: capabilities.canCreate,
+          canSubmit: capabilities.canSubmit,
+          canWrite: capabilities.canWrite,
+          canApprove: capabilities.canApprove,
+          canManage: capabilities.canManage,
+        }}
         locale={user.locale}
         coreRecords={coreRecords.map((record) => ({
           ...record,
