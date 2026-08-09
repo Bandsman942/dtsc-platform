@@ -41,7 +41,8 @@ requireTokens(posting, [
   "pg_advisory_xact_lock",
   "TransactionIsolationLevel.Serializable",
   "resolveSemanticPostingAccount",
-  "resolveExchangeRateDetailed",
+  "resolveExchangeRate",
+  "snapshotExchangeRate",
   "POSTING_NOT_BALANCED",
   "status: \"POSTED\"",
 ]);
