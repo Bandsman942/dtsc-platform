@@ -90,6 +90,123 @@ async function applyTemplateAccounts(
   return ids;
 }
 
+async function applyTemplateMappings(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  template: AccountingChartTemplateDefinition,
+  accountIds: ReadonlyMap<string, string>,
+  actorUserId: string,
+) {
+  const effectiveFrom = new Date(`${template.effectiveFrom}T00:00:00.000Z`);
+  for (const mapping of template.semanticMappings) {
+    const ledgerAccountId = accountIds.get(mapping.accountCode);
+    if (!ledgerAccountId) throw new EnterpriseAccountingError("CHART_TEMPLATE_MAPPING_ACCOUNT_MISSING", 409, { mappingKey: mapping.mappingKey, accountCode: mapping.accountCode });
+    const existing = await tx.enterpriseAccountMapping.findFirst({
+      where: { organizationId, mappingKey: mapping.mappingKey, effectiveFrom },
+    });
+    if (existing) continue;
+    await tx.enterpriseAccountMapping.create({
+      data: {
+        organizationId,
+        mappingKey: mapping.mappingKey,
+        ledgerAccountId,
+        sourceModule: mapping.sourceModule || null,
+        sourceEntityType: mapping.sourceEntityType || null,
+        effectiveFrom,
+        createdByUserId: actorUserId,
+      },
+    });
+  }
+}
+
+async function applyTemplateJournals(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  template: AccountingChartTemplateDefinition,
+  actorUserId: string,
+) {
+  if (!template.journals.length) return;
+  await tx.enterpriseJournal.createMany({
+    data: template.journals.map((journal) => ({
+      organizationId,
+      code: journal.code,
+      nameFr: journal.nameFr,
+      nameEn: journal.nameEn,
+      journalType: journal.journalType,
+      sequencePrefix: journal.sequencePrefix || null,
+      requiresApproval: journal.requiresApproval,
+      createdByUserId: actorUserId,
+    })),
+    skipDuplicates: true,
+  });
+}
+
+async function populateDraftChartTemplate(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  chartId: string,
+  template: AccountingChartTemplateDefinition,
+  targetStatus: "DRAFT" | "ACTIVE",
+) {
+  const reference = chartTemplateReference(template);
+  const [chart, postedEntries, accounts] = await Promise.all([
+    tx.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId, status: { in: ["DRAFT", "ACTIVE"] } } }),
+    tx.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
+    tx.enterpriseLedgerAccount.count({ where: { organizationId, chartId } }),
+  ]);
+  if (!chart) throw new EnterpriseAccountingError("CHART_TEMPLATE_NOT_APPLICABLE", 409);
+
+  if (accounts > 0 && chart.templateCode === reference) return chart;
+  if (postedEntries > 0 || accounts > 0) throw new EnterpriseAccountingError("CHART_TEMPLATE_NOT_APPLICABLE", 409);
+
+  const groupIds = await applyTemplateGroups(tx, organizationId, chart.id, template);
+  const accountIds = await applyTemplateAccounts(tx, organizationId, chart.id, template, groupIds);
+  await applyTemplateMappings(tx, organizationId, template, accountIds, actorUserId);
+  await applyTemplateJournals(tx, organizationId, template, actorUserId);
+
+  const updated = await tx.enterpriseChartOfAccounts.update({
+    where: { id: chart.id },
+    data: { templateCode: reference, status: targetStatus, revision: { increment: 1 } },
+  });
+  await publishFinanceEvent(tx, {
+    organizationId,
+    entityType: "EnterpriseChartOfAccounts",
+    entityId: chart.id,
+    eventType: targetStatus === "ACTIVE" ? "CHART_TEMPLATE_APPLIED" : "CHART_TEMPLATE_ADOPTED",
+    summary: `Chart template ${reference} ${targetStatus === "ACTIVE" ? "applied" : "adopted"}`,
+    actorUserId,
+    fromStatus: chart.status,
+    toStatus: targetStatus,
+    metadataJson: {
+      frameworkCode: template.frameworkCode,
+      templateCode: template.code,
+      templateVersion: template.version,
+      templateReference: reference,
+      effectiveFrom: template.effectiveFrom,
+      sourceAuthority: template.source.authority,
+      sourceReference: template.source.reference,
+    },
+  });
+  return updated;
+}
+
+export async function adoptDraftChartTemplate(
+  organizationId: string,
+  actorUserId: string,
+  chartId: string,
+  templateCodeOrReference: string,
+) {
+  const template = getChartTemplate(templateCodeOrReference);
+  if (!template || template.status !== "PUBLISHED") {
+    throw new EnterpriseAccountingError("CHART_TEMPLATE_UNKNOWN", 409, { templateCode: templateCodeOrReference });
+  }
+  return prisma.$transaction(
+    (tx) => populateDraftChartTemplate(tx, organizationId, actorUserId, chartId, template, "DRAFT"),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
 export async function applyDraftChartTemplate(
   organizationId: string,
   actorUserId: string,
@@ -100,41 +217,8 @@ export async function applyDraftChartTemplate(
   if (!template || template.status !== "PUBLISHED") {
     throw new EnterpriseAccountingError("CHART_TEMPLATE_UNKNOWN", 409, { templateCode: templateCodeOrReference });
   }
-
-  return prisma.$transaction(async (tx) => {
-    const [chart, postedEntries, accounts] = await Promise.all([
-      tx.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId, status: "DRAFT" } }),
-      tx.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
-      tx.enterpriseLedgerAccount.count({ where: { organizationId, chartId } }),
-    ]);
-    if (!chart || postedEntries > 0 || accounts > 0) throw new EnterpriseAccountingError("CHART_TEMPLATE_NOT_APPLICABLE", 409);
-
-    const groupIds = await applyTemplateGroups(tx, organizationId, chart.id, template);
-    await applyTemplateAccounts(tx, organizationId, chart.id, template, groupIds);
-
-    const updated = await tx.enterpriseChartOfAccounts.update({
-      where: { id: chart.id },
-      data: { templateCode: template.code, status: "ACTIVE", revision: { increment: 1 } },
-    });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseChartOfAccounts",
-      entityId: chart.id,
-      eventType: "CHART_TEMPLATE_APPLIED",
-      summary: `Chart template ${chartTemplateReference(template)} applied`,
-      actorUserId,
-      fromStatus: chart.status,
-      toStatus: "ACTIVE",
-      metadataJson: {
-        frameworkCode: template.frameworkCode,
-        templateCode: template.code,
-        templateVersion: template.version,
-        templateReference: chartTemplateReference(template),
-        effectiveFrom: template.effectiveFrom,
-        sourceAuthority: template.source.authority,
-        sourceReference: template.source.reference,
-      },
-    });
-    return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return prisma.$transaction(
+    (tx) => populateDraftChartTemplate(tx, organizationId, actorUserId, chartId, template, "ACTIVE"),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
