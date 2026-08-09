@@ -4,6 +4,7 @@ const registry = "lib/enterprise/accounting/posting-registry-final.ts";
 const posting = "lib/enterprise/accounting/posting-service.ts";
 const procurement = "lib/enterprise/accounting/payables-service.ts";
 const payroll = "lib/enterprise/accounting/payroll-expense-accounting-service.ts";
+const close = "lib/enterprise/accounting/close-service.ts";
 const inventory = "lib/enterprise/accounting/inventory-accounting-service.ts";
 const assets = "lib/enterprise/accounting/asset-accounting-service.ts";
 const health = "lib/enterprise/accounting/sector-adapters/health.ts";
@@ -14,6 +15,7 @@ requirePaths([
   posting,
   procurement,
   payroll,
+  close,
   inventory,
   assets,
   health,
@@ -56,6 +58,13 @@ requireTokens(payroll, [
   "postApprovedClientPayroll",
   "postingEvent: \"PAYROLL_APPROVED\"",
   "sourceEntityType: \"EnterprisePayrollRun\"",
+]);
+requireTokens(close, [
+  "NOT EXISTS",
+  "entry.\"sourceEntityType\" = 'EnterprisePayrollRun'",
+  "entry.\"postingEvent\" = 'PAYROLL_APPROVED'",
+  "entry.status = 'POSTED'",
+  "approvedPayrollRuns: Number(approvedPayrollRows[0]?.count || 0)",
 ]);
 requireTokens(inventory, [
   "valueInventoryReceipt",
