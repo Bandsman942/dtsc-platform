@@ -1,7 +1,7 @@
 # Clôture du programme de stabilisation ERP #167
 
-Programme : #167  
-Itération finale : #173  
+Programme : #167
+Itération finale : #173
 Objet : élimination des régressions transverses Finance, RBAC et contrats inter-modules.
 
 ## 1. Problème initial
