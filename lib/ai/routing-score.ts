@@ -8,6 +8,7 @@ export type AiCandidateScore = {
   preferenceScore: number;
   healthScore: number;
   costScore: number;
+  latencyScore: number;
   estimatedInputCost: number | null;
   reasonParts: string[];
 };
@@ -59,18 +60,29 @@ export function scoreAiCandidate({
   const estimatedInputCost = estimated.amount;
   let costScore = 0;
   if (estimatedInputCost != null) {
-    costScore = Math.max(-20, -Math.round(estimatedInputCost * 1000));
+    costScore = request.routingConstraints?.preferLowerCost === false ? 0 : Math.max(-20, -Math.round(estimatedInputCost * 1000));
     reasonParts.push("COST_KNOWN");
   } else {
     reasonParts.push("COST_UNKNOWN");
   }
 
+  let latencyScore = 0;
+  if (health.averageFirstTokenLatencyMs != null) {
+    latencyScore = request.routingConstraints?.preferLowerLatency === false
+      ? 0
+      : Math.max(-20, -Math.round(health.averageFirstTokenLatencyMs / 250));
+    reasonParts.push("LATENCY_OBSERVED");
+  } else {
+    reasonParts.push("LATENCY_UNKNOWN");
+  }
+
   return {
-    total: capabilityScore + preferenceScore + healthScore + costScore,
+    total: capabilityScore + preferenceScore + healthScore + costScore + latencyScore,
     capabilityScore,
     preferenceScore,
     healthScore,
     costScore,
+    latencyScore,
     estimatedInputCost,
     reasonParts,
   };
