@@ -153,7 +153,7 @@ export function FinanceRecordList<T extends FinanceRecord>({ items, locale, empt
 }
 
 export function FinancePaginationControls({ pagination, page, onPage, locale }: { pagination: FinancePagination; page: number; onPage: (page: number) => void; locale: FinanceLocale }) {
-  const countLabel = locale === "fr" ? (pagination.total > 1 ? "éléments" : "élément") : (pagination.total === 1 ? "item" : "items");
+  const countLabel = locale === "fr" ? "élément(s)" : "item(s)";
   return <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{pagination.total} {countLabel} · {locale === "fr" ? "Page" : "Page"} {pagination.page}/{pagination.pageCount}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => onPage(Math.max(1, page - 1))}>{locale === "fr" ? "Précédent" : "Previous"}</Button><Button variant="outline" disabled={page >= pagination.pageCount} onClick={() => onPage(Math.min(pagination.pageCount, page + 1))}>{locale === "fr" ? "Suivant" : "Next"}</Button></div></div>;
 }
 
