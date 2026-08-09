@@ -117,7 +117,17 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
     description: `Commande omnicanale Retail. Source: ${site.name}. Fulfillment: ${warehouse.name}${pickupSite ? `. Retrait: ${pickupSite.name}` : ""}.`,
     currency: input.currencyCode,
     expectedFulfillmentAt: input.expectedFulfillmentAt || null,
-    items: pricedLines.map(({ trackInventory: _trackInventory, ...line }) => line),
+    items: pricedLines.map((line) => ({
+      catalogItemId: line.catalogItemId,
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      discountAmount: line.discountAmount,
+      taxRatePercent: line.taxRatePercent,
+      taxAmount: line.taxAmount,
+      lineSubtotal: line.lineSubtotal,
+      lineTotal: line.lineTotal,
+    })),
     eventMetadata: { channelCode: "POS", fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id, fulfillmentWarehouseId: warehouse.id, pickupSiteId: pickupSite?.id || null },
   });
 
