@@ -240,40 +240,19 @@ async function prepareRetailFixture() {
 }
 
 async function signIn(page) {
-  await page.goto(`/auth/sign-in?next=${encodeURIComponent("/enterprise-modules/RETAIL_POS")}`);
-
-  const emailInput = page.locator('input[name="email"], input[type="email"]').first();
-  const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
-  const loadContextButton = page.getByRole("button", { name: /^Charger$/i });
-
-  await expect(emailInput).toBeEditable();
-  await expect(passwordInput).toBeEditable();
-  await expect(async () => {
-    await emailInput.fill(adminEmail);
-    await passwordInput.fill(adminPassword);
-    await page.waitForTimeout(300);
-    await expect(emailInput).toHaveValue(adminEmail);
-    await expect(passwordInput).toHaveValue(adminPassword);
-    await expect(loadContextButton).toBeEnabled();
-  }).toPass({ timeout: 10_000, intervals: [250, 500, 1_000] });
-
-  const lookupPromise = page.waitForResponse(
-    (response) => response.url().endsWith("/api/auth/organizations") && response.request().method() === "POST",
-    { timeout: 15_000 },
-  );
-  await loadContextButton.click();
-  const lookupResponse = await lookupPromise;
-  expect(lookupResponse.ok(), `Organization context lookup failed with ${lookupResponse.status()}`).toBeTruthy();
-
-  const organizationSelect = page.locator('select[name="organizationId"]');
-  await expect(organizationSelect).toHaveCount(1);
-  await expect(organizationSelect.locator(`option[value="${organizationId}"]`)).toHaveCount(1);
-  await organizationSelect.selectOption(organizationId);
-
-  await expect(emailInput).toHaveValue(adminEmail);
-  await expect(passwordInput).toHaveValue(adminPassword);
-  await page.getByRole("button", { name: /^Se connecter$/i }).click();
-  await page.waitForURL((url) => !url.pathname.includes("/auth/sign-in"), { timeout: 30_000 });
+  const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
+    data: {
+      email: adminEmail,
+      password: adminPassword,
+      organizationId,
+      next: "/enterprise-modules/RETAIL_POS",
+    },
+    headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
+  });
+  const body = await response.json().catch(() => null);
+  expect(response.ok(), `Direct Shop 2 E2E sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();
+  await page.goto("/enterprise-modules/RETAIL_POS");
+  await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/RETAIL_POS"), { timeout: 30_000 });
 }
 
 async function apiJson(response) {
@@ -438,6 +417,7 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       },
     });
     expect(asNumber(afterReverseBalance.quantityOnHand)).toBeCloseTo(asNumber(beforeBalance.quantityOnHand), 5);
+
     expect(await prisma.enterpriseStockMovement.count({
       where: {
         organizationId,

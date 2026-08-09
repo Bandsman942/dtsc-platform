@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { customerFacingError } from "@/lib/customer-facing-language";
 
 type Customer = {
   id: string;
@@ -25,7 +27,7 @@ async function readJson(response: Response) {
 }
 
 export function RetailActiveCustomerBar({ organizationId }: { organizationId: string }) {
-  const [language, setLanguage] = useState<"fr" | "en">("fr");
+  const language: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [active, setActive] = useState<Customer | null>(null);
   const [search, setSearch] = useState("");
@@ -39,33 +41,37 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
   const copy = useMemo(() => language === "en" ? {
     title: "Customer at checkout",
     walkIn: "Walk-in sale",
-    search: "Search name, phone, email or customer code",
-    selected: "Selected customer",
-    clear: "Clear",
-    create: "Quick create",
-    createTitle: "Create customer in CRM",
+    search: "Search name, phone, email or customer number",
+    selected: "Customer selected",
+    clear: "Remove",
+    create: "New customer",
+    createTitle: "Add a customer",
     name: "Customer name",
     phone: "Phone",
     email: "Email",
     save: "Create & select",
     cancel: "Cancel",
     noResult: "No matching customer.",
-    hint: "The selected customer is visible here and will be attached server-side to the next POS sale. Clear it for an anonymous walk-in sale.",
+    hint: "Choose a customer to personalize this sale and keep their purchase history together. Remove the customer for a walk-in sale.",
   } : {
     title: "Client au comptoir",
     walkIn: "Vente de passage",
-    search: "Rechercher nom, téléphone, email ou code client",
+    search: "Rechercher nom, téléphone, email ou numéro client",
     selected: "Client sélectionné",
     clear: "Retirer",
-    create: "Création rapide",
-    createTitle: "Créer le client dans le CRM",
+    create: "Nouveau client",
+    createTitle: "Ajouter un client",
     name: "Nom du client",
     phone: "Téléphone",
     email: "Email",
     save: "Créer & sélectionner",
     cancel: "Annuler",
     noResult: "Aucun client correspondant.",
-    hint: "Le client sélectionné reste visible ici et sera rattaché côté serveur à la prochaine vente POS. Retirez-le pour une vente de passage anonyme.",
+    hint: "Sélectionnez un client pour personnaliser la vente et conserver son historique d’achats. Retirez-le pour une vente de passage.",
+  }, [language]);
+
+  const showError = useCallback((caught: unknown, fallback?: { fr: string; en: string }) => {
+    setError(customerFacingError(caught, language, fallback));
   }, [language]);
 
   const load = useCallback(async () => {
@@ -77,12 +83,14 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
       setCapabilities(permissionData.capabilities);
       setActive(activeData.customer || null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Customer context unavailable");
+      showError(caught, {
+        fr: "Les informations client ne sont pas disponibles pour le moment.",
+        en: "Customer information is not available right now.",
+      });
     }
-  }, [organizationId]);
+  }, [organizationId, showError]);
 
   useEffect(() => {
-    setLanguage(document.documentElement.lang.toLowerCase().startsWith("en") ? "en" : "fr");
     void load();
   }, [load]);
 
@@ -99,13 +107,18 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
         const data = await fetch(`/api/enterprise/${organizationId}/retail/customers?search=${encodeURIComponent(search.trim())}&pageSize=10`, { signal: controller.signal }).then(readJson);
         setResults(data.items || []);
       } catch (caught) {
-        if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : "Search failed");
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+          showError(caught, {
+            fr: "La recherche de clients n’a pas abouti. Réessayez avec un autre nom ou contact.",
+            en: "Customer search could not be completed. Try another name or contact.",
+          });
+        }
       } finally {
         setSearching(false);
       }
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [organizationId, search, capabilities?.canReadCustomers]);
+  }, [organizationId, search, capabilities?.canReadCustomers, showError]);
 
   async function select(customer: Customer) {
     setError("");
@@ -119,7 +132,10 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
       setSearch("");
       setResults([]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Selection failed");
+      showError(caught, {
+        fr: "Ce client n’a pas pu être sélectionné pour la vente.",
+        en: "This customer could not be selected for the sale.",
+      });
     }
   }
 
@@ -129,7 +145,10 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
       await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).then(readJson);
       setActive(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Clear failed");
+      showError(caught, {
+        fr: "Le client n’a pas pu être retiré de la vente.",
+        en: "The customer could not be removed from the sale.",
+      });
     }
   }
 
@@ -161,7 +180,10 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
       setForm({ legalName: "", primaryPhone: "", primaryEmail: "" });
       setShowCreate(false);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Customer creation failed");
+      showError(caught, {
+        fr: "Le client n’a pas pu être créé. Vérifiez son nom et ses coordonnées puis réessayez.",
+        en: "The customer could not be created. Check the name and contact details, then try again.",
+      });
     } finally {
       setCreating(false);
     }
@@ -218,7 +240,7 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
           </div>
         </form>
       ) : null}
-      {error ? <p className="mt-3 text-sm" role="alert">{error}</p> : null}
+      {error ? <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" role="alert">{error}</p> : null}
     </section>
   );
 }
