@@ -2,16 +2,12 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getRetailActiveCustomerIdFromCookieHeader } from "@/lib/enterprise/retail/active-customer";
-import { finalizeRetailSaleAccounting } from "@/lib/enterprise/retail/accounting";
-import { persistRetailCommercialDecisions, prepareCommercialRetailSaleV2, previewRetailCommercialPricing } from "@/lib/enterprise/retail/commercial-engine";
 import { retailCommercialContextSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
-import { autoEarnRetailLoyaltyForSale } from "@/lib/enterprise/retail/loyalty-sale-hooks";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
+import { executeCanonicalRetailSale } from "@/lib/enterprise/retail/sale-execution";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
-import { createRetailSale } from "@/lib/enterprise/retail/service";
-import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -68,53 +64,13 @@ export async function POST(req: Request, { params }: Params) {
   if (!commercialContext.success) return NextResponse.json({ error: "Invalid commercial context", message: commercialContext.error.issues[0]?.message || "Contexte commercial invalide." }, { status: 400 });
   try {
     const permissions = await getRetailCommercialPermissions(auth.session.userId, organizationId);
-    let pricingInput = parsed.data;
-    if (!commercialContext.data.overrideReason) {
-      const preview = await previewRetailCommercialPricing(
-        organizationId,
-        {
-          siteId: parsed.data.siteId,
-          customerBusinessPartyId: parsed.data.customerBusinessPartyId,
-          currencyCode: parsed.data.currencyCode,
-          soldAt: parsed.data.soldAt,
-          lines: parsed.data.lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })),
-        },
-        {
-          couponCode: commercialContext.data.couponCode,
-          customerSegmentCode: commercialContext.data.customerSegmentCode,
-          channelCode: commercialContext.data.channelCode,
-        },
-      );
-      const previewByItem = new Map(preview.lines.map((line) => [line.catalogItemId, line]));
-      pricingInput = {
-        ...parsed.data,
-        lines: parsed.data.lines.map((line) => {
-          const resolved = previewByItem.get(line.catalogItemId);
-          if (!resolved) return line;
-          return {
-            ...line,
-            unitPrice: Number(resolved.resolvedUnitPrice),
-            discountAmount: Number(resolved.discountAmount),
-            taxAmount: Number(resolved.taxAmount),
-          };
-        }),
-      };
-    }
-    const guarded = await prepareCommercialRetailSaleV2(organizationId, pricingInput, commercialContext.data, permissions);
-    const result = await withRetailTransactionRetry(
-      () => createRetailSale(organizationId, auth.session.userId, guarded.input),
-      { maxAttempts: 3, baseDelayMs: 20 },
-    );
-    await persistRetailCommercialDecisions(
+    const { result, guarded, accounting, loyalty, promotionCount } = await executeCanonicalRetailSale({
       organizationId,
-      result.sale.id,
-      result.sale.customerBusinessPartyId,
-      result.sale.currencyCode,
-      guarded.decisions,
-    );
-    const accounting = await finalizeRetailSaleAccounting(organizationId, auth.session.userId, result.sale.id);
-    const loyalty = await autoEarnRetailLoyaltyForSale(organizationId, auth.session.userId, result.sale.id);
-    const promotionCount = new Set(guarded.decisions.flatMap((decision) => decision.promotionIds)).size;
+      actorUserId: auth.session.userId,
+      input: parsed.data,
+      commercialContext: commercialContext.data,
+      permissions,
+    });
     await writeAuditLog({
       userId: auth.session.userId,
       action: "ENTERPRISE_RETAIL_SALE_COMPLETED",

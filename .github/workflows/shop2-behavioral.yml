@@ -6,10 +6,15 @@ on:
     branches: [main]
     paths:
       - "app/api/enterprise/**/retail/**"
+      - "app/api/enterprise/**/sales-orders/**"
       - "app/enterprise-modules/retail-page.tsx"
       - "components/enterprise/professional/enterprise-retail-shop-workspace.tsx"
-      - "components/enterprise/professional/retail-active-customer-bar.tsx"
+      - "components/enterprise/professional/retail-*.tsx"
       - "lib/enterprise/retail/**"
+      - "lib/enterprise/inventory/reservations.ts"
+      - "lib/enterprise/inventory/service.ts"
+      - "lib/enterprise/crm-sales/orders.ts"
+      - "lib/enterprise/crm-sales/fulfillments.ts"
       - "lib/enterprise/accounting/**"
       - "lib/enterprise/module-registry-retail.json"
       - "lib/auth.ts"
@@ -17,12 +22,16 @@ on:
       - "middleware.ts"
       - "prisma/enterprise-retail.prisma"
       - "prisma/enterprise-retail-customer-payments.prisma"
+      - "prisma/enterprise-retail-offline-omnichannel.prisma"
+      - "prisma/enterprise-inventory-reservations.prisma"
       - "prisma/enterprise-accounting.prisma"
       - "prisma/enterprise-inventory.prisma"
+      - "prisma/enterprise-crm-sales.prisma"
       - "prisma/migrations/**"
       - "tests/e2e/shop2-retail.spec.mjs"
       - "tests/e2e/shop2-commercial.spec.mjs"
       - "tests/e2e/shop2-customer-payments.spec.mjs"
+      - "tests/e2e/shop2-z-global.spec.mjs"
       - "playwright.config.mjs"
       - "scripts/seed-shop2-behavioral-e2e.mjs"
       - "scripts/seed-shop2-commercial-e2e.mjs"
@@ -30,6 +39,8 @@ on:
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
       - "scripts/qa-shop2-customer-payments.mjs"
+      - "scripts/qa-shop2-global-readiness.mjs"
+      - "scripts/qa-shop2-fulfillment-reservations.mjs"
       - "scripts/qa-shop2-active-customer-cookie.mjs"
       - "scripts/qa-session-cookie-security.mjs"
       - ".github/workflows/shop2-behavioral.yml"
@@ -43,9 +54,9 @@ concurrency:
 
 jobs:
   behavioral:
-    name: Retail POS accounting, concurrency & customer payments
+    name: Retail POS accounting, concurrency, payments & global readiness
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -113,10 +124,15 @@ jobs:
           node scripts/qa-shop2-retail-frontend-contract.mjs
           node scripts/qa-shop2-commercial-engine.mjs
           node scripts/qa-shop2-customer-payments.mjs
+          node scripts/qa-shop2-global-readiness.mjs
+          node scripts/qa-shop2-fulfillment-reservations.mjs
           node scripts/qa-shop2-active-customer-cookie.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
       - name: Build production application
-        run: pnpm build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee /tmp/dtsc-shop2-build.log
         env:
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Install Playwright Chromium
@@ -134,7 +150,7 @@ jobs:
           cat /tmp/dtsc-shop2-next.log
           exit 1
       - name: Shop 2 POS behavioral acceptance
-        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs
+        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-z-global.spec.mjs
       - name: Stop application
         if: always()
         run: |
@@ -150,4 +166,5 @@ jobs:
           path: |
             playwright-report
             test-results
+            /tmp/dtsc-shop2-build.log
             /tmp/dtsc-shop2-next.log

@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
+import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
+import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
+import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { EnterpriseRetailShopWorkspace } from "@/components/enterprise/professional/enterprise-retail-shop-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -33,6 +36,9 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
       <div className="space-y-4">
         {moduleCode === "RETAIL_POS" ? <RetailActiveCustomerBar organizationId={organizationId} /> : null}
         {moduleCode === "RETAIL_POS" ? <RetailDeviceReadiness organizationId={organizationId} locale={locale} /> : null}
+        {moduleCode === "RETAIL_POS" ? <RetailGlobalReadiness organizationId={organizationId} locale={locale} /> : null}
+        {moduleCode === "RETAIL_POS" ? <RetailOfflineContinuity organizationId={organizationId} locale={locale} /> : null}
+        {moduleCode === "RETAIL_POS" ? <RetailOmnichannelPanel organizationId={organizationId} locale={locale} /> : null}
         <EnterpriseRetailShopWorkspace
           organizationId={organizationId}
           organizationName={organization.name}

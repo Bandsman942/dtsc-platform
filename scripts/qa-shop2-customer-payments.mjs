@@ -131,8 +131,9 @@ for (const doc of ["docs/SHOP_2_0_ITERATION_3_ARCHITECTURE.md", "docs/SHOP_2_0_C
 
 const readiness = JSON.parse(read("lib/enterprise/sector-onboarding-readiness.json"));
 const retail = readiness.profiles.find((profile) => profile.sectorCode === "COMMERCE_RETAIL");
-check(retail?.shop2ProgramStatus === "ITERATION_3_IN_PROGRESS", "Shop 2 readiness must identify iteration 3 while this branch is under development");
-check(retail?.commercializationStatus === "COMMERCIAL_READY", "Iteration 3 must not prematurely promote Shop to COMMERCIAL_READY_GLOBAL");
+const iteration3OrLater = new Set(["ITERATION_3_IN_PROGRESS", "ITERATION_4_IN_PROGRESS", "COMPLETE"]);
+check(iteration3OrLater.has(retail?.shop2ProgramStatus), "Shop 2 iteration 3 guarantees must remain active in iteration 3 or any later programme state");
+check(["COMMERCIAL_READY", "COMMERCIAL_READY_GLOBAL"].includes(retail?.commercializationStatus), "Iteration 3 guarantees must remain compatible with the current or globally certified commercial status");
 
 for (const route of [
   "app/api/enterprise/[organizationId]/retail/customers/route.ts",

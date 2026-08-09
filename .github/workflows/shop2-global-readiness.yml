@@ -1,0 +1,79 @@
+name: Shop 2 global readiness
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/api/enterprise/**/retail/**"
+      - "app/api/enterprise/**/sales-orders/**"
+      - "app/enterprise-modules/retail-page.tsx"
+      - "components/enterprise/professional/**retail**"
+      - "lib/enterprise/retail/**"
+      - "lib/enterprise/inventory/**"
+      - "lib/enterprise/crm-sales/**"
+      - "lib/enterprise/sector-onboarding-readiness.json"
+      - "prisma/enterprise-retail*.prisma"
+      - "prisma/enterprise-inventory*.prisma"
+      - "prisma/enterprise-crm-sales.prisma"
+      - "prisma/migrations/**"
+      - "public/sw.js"
+      - "scripts/qa-shop2-global-readiness.mjs"
+      - ".github/workflows/shop2-global-readiness.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shop2-global-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    name: Offline, multi-store & omnichannel contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_shop2_global
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d dtsc_shop2_global"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_shop2_global?schema=public
+      AUTH_SECRET: shop2-global-auth-secret-with-more-than-thirty-two-characters
+      APP_URL: http://127.0.0.1:3000
+      CRON_SECRET: shop2-global-cron-secret-with-more-than-twenty-four-characters
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Apply migrations from scratch
+        run: pnpm prisma:deploy
+      - name: Validate iteration 4 contracts
+        run: node scripts/qa-shop2-global-readiness.mjs
+      - name: Type check
+        run: pnpm type-check

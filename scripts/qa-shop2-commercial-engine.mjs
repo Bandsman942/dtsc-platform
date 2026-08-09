@@ -89,7 +89,22 @@ for (const route of [
 ]) check(exists(route), `Missing Shop 2 iteration 2 API route ${route}`);
 
 const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
-for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) check(salesRoute.includes(marker), `POS sale route missing authoritative commercial marker ${marker}`);
+const saleExecution = read("lib/enterprise/retail/sale-execution.ts");
+check(salesRoute.includes("executeCanonicalRetailSale"), "POS sale route must delegate authoritative commercial execution to the canonical sale service");
+for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) {
+  check(saleExecution.includes(marker), `Canonical POS sale service missing authoritative commercial marker ${marker}`);
+}
+const executeStart = saleExecution.indexOf("export async function executeCanonicalRetailSale");
+const executeBlock = executeStart >= 0 ? saleExecution.slice(executeStart) : "";
+const prepareIndex = executeBlock.indexOf("await prepareCommercialRetailSaleV2");
+const createIndex = executeBlock.indexOf("createRetailSale(args.organizationId");
+const persistIndex = executeBlock.indexOf("await persistRetailCommercialDecisions");
+const accountingIndex = executeBlock.indexOf("await finalizeRetailSaleAccounting");
+const loyaltyIndex = executeBlock.indexOf("await autoEarnRetailLoyaltyForSale");
+check(
+  prepareIndex >= 0 && createIndex > prepareIndex && persistIndex > createIndex && accountingIndex > persistIndex && loyaltyIndex > accountingIndex,
+  "Canonical POS sale service must prepare pricing, create the sale, persist decisions, finalize accounting and apply loyalty before returning",
+);
 const decisionRoute = read("app/api/enterprise/[organizationId]/retail/returns/[returnId]/decision/route.ts");
 check(decisionRoute.includes("finalizeRetailReturnAccounting"), "Return approval must post common accounting before successful response");
 

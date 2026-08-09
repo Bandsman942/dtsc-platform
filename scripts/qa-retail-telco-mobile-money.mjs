@@ -147,8 +147,15 @@ check(dashboardRoute.includes("moduleCode,"), "Retail dashboard loader must rece
 check(!dashboardRoute.includes("getRetailDashboard("), "Retail route must not use legacy cross-currency dashboard");
 
 const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
-check(salesRoute.includes("prepareCommercialRetailSale"), "POS route must enforce server-side commercial price guardrails");
-check(salesRoute.includes("finalizeRetailSaleAccounting"), "POS sale must finalize common double-entry and inventory accounting before a successful response");
+const saleExecution = read("lib/enterprise/retail/sale-execution.ts");
+check(salesRoute.includes("executeCanonicalRetailSale"), "POS route must delegate successful writes to the canonical sale execution boundary");
+for (const marker of ["previewRetailCommercialPricing", "prepareCommercialRetailSaleV2", "createRetailSale", "persistRetailCommercialDecisions", "finalizeRetailSaleAccounting"]) {
+  check(saleExecution.includes(marker), `Canonical POS sale execution missing ${marker}`);
+}
+const pricingIndex = saleExecution.indexOf("prepareCommercialRetailSaleV2");
+const createIndex = saleExecution.indexOf("createRetailSale(args.organizationId");
+const accountingIndex = saleExecution.indexOf("finalizeRetailSaleAccounting(args.organizationId");
+check(pricingIndex >= 0 && createIndex > pricingIndex && accountingIndex > createIndex, "Canonical POS sale execution must price/guard before sale creation and finalize accounting before returning");
 const reverseSaleRoute = read("app/api/enterprise/[organizationId]/retail/sales/[saleId]/reverse/route.ts");
 check(reverseSaleRoute.includes("finalizeRetailSaleReversalAccounting"), "POS reversal must finalize revenue/tender and inventory accounting reversal");
 const mobileRoute = read("app/api/enterprise/[organizationId]/retail/mobile-money/route.ts");
