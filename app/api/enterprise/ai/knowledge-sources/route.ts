@@ -1,8 +1,13 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
-import { assertEnterpriseAiKnowledgeQuota, canIndexEnterpriseAiFile, indexEnterpriseAiKnowledgeSource } from "@/lib/enterprise-ai/knowledge";
+import {
+  assertEnterpriseAiKnowledgeQuota,
+  canIndexEnterpriseAiFile,
+  indexPreparedEnterpriseAiKnowledgeSource,
+  prepareEnterpriseAiKnowledgeSource,
+} from "@/lib/enterprise-ai/knowledge";
 import { enterpriseAiKnowledgeListSchema, enterpriseAiKnowledgeUploadSchema } from "@/lib/enterprise-ai/validators";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
@@ -37,38 +42,22 @@ export async function GET(req: Request) {
       ...(parsed.data.status ? { status: parsed.data.status } : { archivedAt: null }),
       ...(parsed.data.cursor ? { createdAt: { lt: new Date(parsed.data.cursor) } } : {}),
     },
-    orderBy: { createdAt: "desc" },
-    take: 21,
+    orderBy: { createdAt: "desc" }, take: 21,
     include: { _count: { select: { chunks: true } }, createdBy: { select: { name: true } } },
   });
   const page = sources.slice(0, 20);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId: parsed.data.organizationId } });
   return NextResponse.json({
     sources: page.map((source) => ({
-      id: source.id,
-      title: source.title,
-      sourceType: source.sourceType,
-      status: source.status,
-      sectorCode: source.sectorCode,
-      moduleCode: source.moduleCode,
-      confidentiality: source.confidentiality,
-      language: source.language,
-      versionNumber: source.versionNumber,
-      fileName: source.fileName,
-      mimeType: source.mimeType,
-      sizeBytes: source.sizeBytes,
-      chunkCount: source._count.chunks,
-      createdByName: source.createdBy.name,
-      createdAt: source.createdAt.toISOString(),
-      updatedAt: source.updatedAt.toISOString(),
-      errorMessage: source.errorMessage,
+      id: source.id, title: source.title, sourceType: source.sourceType, status: source.status,
+      sectorCode: source.sectorCode, moduleCode: source.moduleCode, confidentiality: source.confidentiality,
+      language: source.language, versionNumber: source.versionNumber, fileName: source.fileName, mimeType: source.mimeType,
+      sizeBytes: source.sizeBytes, chunkCount: source._count.chunks, createdByName: source.createdBy.name,
+      createdAt: source.createdAt.toISOString(), updatedAt: source.updatedAt.toISOString(), errorMessage: source.errorMessage,
       archivedAt: source.archivedAt?.toISOString() || null,
     })),
     nextCursor: sources.length > 20 ? page[page.length - 1]?.createdAt.toISOString() || null : null,
-    permissions: {
-      canUploadSources: access.canUploadSources,
-      canManageSources: access.canManageSources,
-    },
+    permissions: { canUploadSources: access.canUploadSources, canManageSources: access.canManageSources },
   });
 }
 
@@ -92,12 +81,9 @@ export async function POST(req: Request) {
   const formData = await req.formData().catch(() => null);
   const file = formData?.get("file");
   const parsed = enterpriseAiKnowledgeUploadSchema.safeParse({
-    organizationId: formData?.get("organizationId"),
-    title: formData?.get("title") || "",
-    sectorCode: formData?.get("sectorCode") || "",
-    moduleCode: formData?.get("moduleCode") || "",
-    confidentiality: formData?.get("confidentiality") || "INTERNAL",
-    language: formData?.get("language") || "fr",
+    organizationId: formData?.get("organizationId"), title: formData?.get("title") || "",
+    sectorCode: formData?.get("sectorCode") || "", moduleCode: formData?.get("moduleCode") || "",
+    confidentiality: formData?.get("confidentiality") || "INTERNAL", language: formData?.get("language") || "fr",
   });
   if (!parsed.success || !(file instanceof File)) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
@@ -119,23 +105,28 @@ export async function POST(req: Request) {
   }
 
   try {
-    const source = await indexEnterpriseAiKnowledgeSource({
-      organizationId: parsed.data.organizationId,
-      assistantId: access.assistantId,
-      userId: session.userId,
-      sectorCode: parsed.data.sectorCode || access.sectorCode,
-      moduleCode: parsed.data.moduleCode || null,
-      title: parsed.data.title || null,
-      confidentiality: parsed.data.confidentiality,
-      language: parsed.data.language,
-      file,
+    const prepared = await prepareEnterpriseAiKnowledgeSource({
+      organizationId: parsed.data.organizationId, assistantId: access.assistantId, userId: session.userId,
+      sectorCode: parsed.data.sectorCode || access.sectorCode, moduleCode: parsed.data.moduleCode || null,
+      title: parsed.data.title || null, confidentiality: parsed.data.confidentiality, language: parsed.data.language, file,
     });
-    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_AI_SOURCE_INDEXED", entity: "EnterpriseAiKnowledgeSource", entityId: source.id, request: req, metadata: { organizationId: parsed.data.organizationId, confidentiality: source.confidentiality } });
-    await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId: parsed.data.organizationId, sourceId: source.id } });
-    return NextResponse.json({ ok: true, source: { id: source.id, title: source.title, status: source.status, chunkCount: source._count.chunks } }, { status: 201 });
+    const organizationId = parsed.data.organizationId;
+    const sourceId = prepared.id;
+    const userId = session.userId;
+    after(async () => {
+      try {
+        const indexed = await indexPreparedEnterpriseAiKnowledgeSource({ sourceId, organizationId });
+        await writeAuditLog({ userId, action: "ENTERPRISE_AI_SOURCE_INDEXED", entity: "EnterpriseAiKnowledgeSource", entityId: sourceId, metadata: { organizationId, chunkCount: indexed._count.chunks } });
+      } catch (error) {
+        console.error("Enterprise AI source background indexing failed", sourceId, error);
+      }
+    });
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_AI_SOURCE_PREPARED", entity: "EnterpriseAiKnowledgeSource", entityId: sourceId, request: req, metadata: { organizationId, confidentiality: parsed.data.confidentiality, dataClassification: prepared.dataClassification, indexVersion: prepared.indexVersion } });
+    await writeApiLog({ request: req, statusCode: 202, userId: session.userId, startedAt, metadata: { organizationId, sourceId, status: "PROCESSING" } });
+    return NextResponse.json({ ok: true, source: { id: sourceId, title: prepared.title, status: "PROCESSING", chunkCount: 0 } }, { status: 202 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Indexing failed";
+    const message = error instanceof Error ? error.message : "Source preparation failed";
     await writeApiLog({ request: req, statusCode: 500, userId: session.userId, startedAt, metadata: { organizationId: parsed.data.organizationId, message } });
-    return NextResponse.json({ error: "Indexing failed", message: "La source n'a pas pu être indexée." }, { status: 500 });
+    return NextResponse.json({ error: "Source preparation failed", message: "La source n'a pas pu être préparée pour indexation." }, { status: 500 });
   }
 }
