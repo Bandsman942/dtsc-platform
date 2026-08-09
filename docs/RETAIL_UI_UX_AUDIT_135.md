@@ -1,10 +1,14 @@
-# Issue #135 — Audit UI/UX Retail / Shop — tranche 1
+# Issue #135 — Audit UI/UX Retail / Shop
 
 ## Statut
 
-Première tranche d’implémentation de la consolidation Retail engagée depuis le `main` de clôture Shop 2.0.
+Consolidation Retail engagée depuis le `main` de clôture Shop 2.0 et livrée par tranches opposables.
 
-Cette tranche ne prétend pas clôturer l’issue #135. Elle traite les points les plus visibles du POS et pose les contrats qui permettront de poursuivre l’audit écran par écran.
+Ce document ne prétend pas clôturer l’issue #135. Il suit les écarts détectés, les corrections appliquées et les zones qui restent à auditer.
+
+---
+
+# Tranche 1 — POS, offline, omnicanal, mise en service et équipements
 
 ## Diagnostic initial
 
@@ -53,9 +57,97 @@ Le texte expliquait que le client serait « rattaché côté serveur » à la ve
 
 **Correction :** bénéfice métier : personnalisation de la vente et continuité de l’historique d’achats.
 
-## Fondations ajoutées
+---
 
-### Langage client
+# Tranche 2 — Tarification, promotions, retours et remboursements
+
+## Diagnostic
+
+### P1 — L’espace commercial exposait l’architecture au client
+
+Exemples constatés :
+
+- « Canonical sale prices » / « Prix de vente canoniques » ;
+- « Retail price conditions » ;
+- explication du « common Catalog » et du prix « canonical » appliqué au POS ;
+- promotions décrites comme un « dedicated Retail domain » ne réutilisant pas une « retired legacy source » ;
+- texte expliquant que le parcours ne « bypass » pas Finance ou Inventory.
+
+Ces formulations décrivaient correctement l’architecture, mais n’aidaient pas l’utilisateur à agir.
+
+**Correction :** l’écran parle maintenant de prix de vente, règles de prix à la caisse, offres clients, retours à examiner et remboursement. La cohérence ERP est matérialisée par des liens d’action au lieu d’être racontée dans la copie.
+
+### P1 — Enums et statuts bruts dans les formulaires et cartes
+
+Exemples constatés :
+
+- `PERCENTAGE`, `FIXED_AMOUNT`, `QUANTITY_BREAK`, `BUY_X_GET_Y`, `BUNDLE` ;
+- `EXCLUSIVE`, `STACKABLE` ;
+- `RETURN`, `EXCHANGE` ;
+- `SELLABLE`, `OPENED`, `DAMAGED`, `DEFECTIVE`, `EXPIRED` ;
+- `RESTOCK`, `SCRAP`, `NO_STOCK` ;
+- `ORIGINAL_TENDER`, `BANK_TRANSFER` ;
+- statuts de promotion et de retour rendus directement ;
+- type de compte financier rendu brut.
+
+**Correction :** toutes ces valeurs restent inchangées dans les payloads métier, mais leur rendu passe par `lib/customer-facing-language.ts` en français et en anglais.
+
+### P1 — Erreurs backend affichables telles quelles
+
+`retail-commercial-workspace.tsx` relayait `body.message` ou `body.error` puis affichait directement `caught.message`.
+
+**Correction :** toutes les erreurs visibles passent désormais par `customerFacingError`. Les reason codes connus disposent de messages métier ; un code technique inconnu utilise un fallback humain.
+
+### P1 — Sources de vérité ERP décrites mais peu actionnables
+
+Le texte rappelait que Catalogue, Finance et Inventory restaient propriétaires des données, mais sans fournir systématiquement le chemin d’action.
+
+**Correction :**
+
+- la tarification renvoie vers **Catalogue** pour administrer les prix produits ;
+- le remboursement renvoie vers **Trésorerie** pour administrer les comptes financiers compatibles ;
+- aucun CRUD parallèle n’est créé dans Retail.
+
+### P2 — Hiérarchie et responsive de l’écran commercial
+
+Plusieurs champs étaient regroupés par deux colonnes sans repli explicite, et le rail d’onglets ne déclarait pas son contrat tactile.
+
+**Correction :**
+
+- formulaires mono-colonne par défaut, deux colonnes à partir de `sm` seulement ;
+- onglets et filtres en rail horizontal tactile `pan-x` ;
+- actions de validation empilées sur mobile ;
+- aucun identifiant interne utilisé comme fallback d’affichage.
+
+## Contrats renforcés pendant la tranche 2
+
+`lib/customer-facing-language.ts` couvre maintenant aussi :
+
+- types de promotion ;
+- règles de cumul ;
+- canaux de vente ;
+- types de retour ;
+- état du produit ;
+- traitement du stock ;
+- modes de remboursement ;
+- types de compte financier ;
+- `PENDING_APPROVAL` ;
+- erreurs courantes de retours et paiements.
+
+`scripts/qa-retail-product-coherence.mjs` vérifie désormais en plus :
+
+- consommation de tous ces mappings par l’espace commercial ;
+- disparition des formulations d’architecture de la tranche ;
+- absence de libellés d’enum bruts connus dans les options clientes ;
+- absence de `caught.message` rendu directement ;
+- présence des deep links Catalogue et Trésorerie ;
+- maintien du rail tactile.
+
+---
+
+# Fondations communes
+
+## Langage client
 
 `lib/customer-facing-language.ts` centralise :
 
@@ -64,9 +156,10 @@ Le texte expliquait que le client serait « rattaché côté serveur » à la ve
 - capacités Shop ;
 - types d’équipement ;
 - modes de retrait/livraison ;
+- vocabulaire commercial Retail ;
 - fallback humain pour erreur technique inconnue.
 
-### Contrat documentaire
+## Contrat documentaire
 
 `docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md` rend opposables :
 
@@ -74,29 +167,25 @@ Le texte expliquait que le client serait « rattaché côté serveur » à la ve
 - la séparation diagnostic / copie client ;
 - le fallback humain ;
 - le FR/EN ;
+- la traduction des enums rendues ;
+- les liens vers les sources ERP plutôt que l’explication de leur architecture ;
 - l’absence de surpromesse de conformité.
 
-### QA
+## QA
 
-`scripts/qa-retail-product-coherence.mjs` vérifie cette première tranche :
-
-- hiérarchie du POS ;
-- usage du mapping client ;
-- disparition des principales fuites techniques connues ;
-- maintien des contrats de source de vérité ERP.
-
-Le gate est exécuté dans :
+`scripts/qa-retail-product-coherence.mjs` est exécuté dans :
 
 - `Shop 2 commercial UI` ;
 - `Quality gates`.
 
-## Ce qui reste à auditer
+---
 
-### UI/UX Retail
+# Ce qui reste à auditer
 
-- workspace principal `EnterpriseRetailShopWorkspace` ;
-- pricing, taxes, promotions, dérogations ;
-- retours et remboursements ;
+## UI/UX Retail
+
+- workspace principal `EnterpriseRetailShopWorkspace` en profondeur ;
+- dérogations prix/remises/taxes dans le parcours de vente ;
 - fidélité, gift cards et avoirs ;
 - paiements et états provider ;
 - clôture quotidienne ;
@@ -107,7 +196,7 @@ Le gate est exécuté dans :
 - guides utilisateur ;
 - responsive 390 / 768 / desktop sur tous les parcours.
 
-### ERP ↔ Retail
+## ERP ↔ Retail
 
 - deep links objet par objet ;
 - achat → réception → stock → POS ;
@@ -117,9 +206,9 @@ Le gate est exécuté dans :
 - cohérence KPI avec Reports ;
 - liens contextuels vers Validations, Tasks, Assets et AI Assistant lorsqu’ils sont réellement utiles.
 
-### Langage client transversal
+## Langage client transversal
 
-Le mapper posé dans cette tranche est d’abord consommé par les surfaces Retail les plus visibles. L’issue #135 exige ensuite l’audit des autres modules ERP clients pour éliminer les mêmes fuites techniques sans masquer les détails nécessaires aux outils internes DTSC.
+Le mapper est maintenant consommé par les surfaces Retail les plus visibles et l’espace commercial. L’issue #135 exige encore l’audit des autres parcours Retail puis, progressivement, des autres modules ERP clients pour éliminer les mêmes fuites techniques sans masquer les détails nécessaires aux outils internes DTSC.
 
 ## Règle de clôture de l’issue #135
 
