@@ -25,14 +25,14 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-self-service-onboarding" } });
     return NextResponse.json(state);
   } catch (error) {
-    return retailErrorResponse(error, { request: req, startedAt, userId: auth.session.userId, metadata: { organizationId, domain: "retail-self-service-onboarding" } });
+    return retailErrorResponse(error, "RETAIL_ONBOARDING_LOAD_FAILED");
   }
 }
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "write", { mutation: true, rateLimitAction: "self-service-onboarding" });
+  const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "write", { mutation: true, limit: 90 });
   if (!auth.ok) return auth.response;
   const parsed = onboardingSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: "Sélection d’onboarding invalide." }, { status: 400 });
@@ -49,6 +49,6 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-self-service-onboarding", status: result.run.status } });
     return NextResponse.json(result);
   } catch (error) {
-    return retailErrorResponse(error, { request: req, startedAt, userId: auth.session.userId, metadata: { organizationId, domain: "retail-self-service-onboarding" } });
+    return retailErrorResponse(error, "RETAIL_ONBOARDING_SAVE_FAILED");
   }
 }
