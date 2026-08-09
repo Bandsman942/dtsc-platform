@@ -20,14 +20,17 @@ export async function GET() {
   const context = resolveContext(session?.activeContext);
   const locale = user?.locale || "fr";
   const organizationId = session ? getActiveOrganizationId(session) : null;
-  const usageLimits = session ? await getCanonicalAiUsageLimits({ userId: session.userId, organizationId }) : null;
-  const models = listCatalogAiModelsForUi({ context, locale, planCode: usageLimits?.planCode || "STARTER" });
+  const usageLimits = session && context !== "DTSC_INTERNAL"
+    ? await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })
+    : null;
+  const planCode = context === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits?.planCode || "STARTER";
+  const models = listCatalogAiModelsForUi({ context, locale, planCode });
   const preferred = user?.preferredModel ? getAiModelDefinition(user.preferredModel) : null;
   const defaultModel = preferred && models.some((model) => model.id === preferred.code) ? preferred.code : models[0]?.id || null;
 
   return NextResponse.json({
     defaultModel,
-    planCode: usageLimits?.planCode || "STARTER",
+    planCode,
     models: models.map((model) => ({
       id: model.id,
       name: model.label,
