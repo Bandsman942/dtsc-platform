@@ -31,8 +31,8 @@ async function assertBalancedPosting({ postingEvent, sourceEntityType, sourceEnt
     include: { lines: true },
   });
   expect(entries).toHaveLength(1);
-  const debit = entries[0].lines.reduce((total, line) => total + Number(line.debitAmount), 0);
-  const credit = entries[0].lines.reduce((total, line) => total + Number(line.creditAmount), 0);
+  const debit = entries[0].lines.reduce((total, line) => total + Number(line.debit), 0);
+  const credit = entries[0].lines.reduce((total, line) => total + Number(line.credit), 0);
   expect(debit).toBeGreaterThan(0);
   expect(Math.abs(debit - credit)).toBeLessThan(0.000001);
   return entries[0];
@@ -98,8 +98,8 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     });
     expect(salesEntries.length).toBeGreaterThan(0);
     const entry = salesEntries[0];
-    const debit = entry.lines.reduce((total, line) => total + Number(line.debitAmount), 0);
-    const credit = entry.lines.reduce((total, line) => total + Number(line.creditAmount), 0);
+    const debit = entry.lines.reduce((total, line) => total + Number(line.debit), 0);
+    const credit = entry.lines.reduce((total, line) => total + Number(line.credit), 0);
     expect(Math.abs(debit - credit)).toBeLessThan(0.000001);
     expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId: foreignOrganizationId, sourceEntityId: entry.sourceEntityId } })).toBe(0);
   });
