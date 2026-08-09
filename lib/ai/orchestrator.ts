@@ -16,6 +16,18 @@ function selectCandidates(request: AiRouteRequest) {
     allowSensitiveExternalModel: request.policyFlags?.allowSensitiveExternalModel,
   });
   const requested = getAiModelDefinition(request.requestedModel);
+
+  if (request.requestedModel) {
+    const requestedAllowed = requested && available.some((candidate) => candidate.code === requested.code);
+    if (!requestedAllowed) {
+      throw new AiProviderError({
+        reasonCode: "MODEL_UNAVAILABLE",
+        message: "The requested AI model is not allowed by the active plan or policy",
+        statusCode: 403,
+      });
+    }
+  }
+
   const ordered: AiModelDefinition[] = [];
   const add = (model: AiModelDefinition | null | undefined) => {
     if (model && available.some((candidate) => candidate.code === model.code) && !ordered.some((candidate) => candidate.code === model.code)) ordered.push(model);
