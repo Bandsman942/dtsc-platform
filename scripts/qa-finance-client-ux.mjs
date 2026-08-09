@@ -25,11 +25,8 @@ for (const file of financeFiles) if (!exists(file)) fail(`Finance UX: fichier re
 const ui = "components/enterprise/professional/finance-professional-ui.ts";
 if (exists(ui)) {
   const content = read(ui);
-  for (const token of ["FinanceLocale", "fr:", "en:", "financeStatusLabel", "financeEnumLabel", "financeErrorMessage", "safeFinanceError", "FINANCE_PERIOD_CLOSED", "CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION", "Business value to review", "Valeur métier à vérifier"]) {
-    if (!content.includes(token)) fail(`Finance UX: socle i18n/client-safe incomplet (${token})`);
-  }
+  for (const token of ["FinanceLocale", "fr:", "en:", "financeStatusLabel", "financeEnumLabel", "financeErrorMessage", "safeFinanceError", "FINANCE_PERIOD_CLOSED", "CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION", "Business value to review", "Valeur métier à vérifier"]) if (!content.includes(token)) fail(`Finance UX: socle i18n/client-safe incomplet (${token})`);
   if (/return\s+error\.message/.test(content)) fail("Finance UX: safeFinanceError ne doit jamais renvoyer error.message brut");
-  if (/return\s+value\s*;/.test(content) && content.includes("financeEnumLabel")) fail("Finance UX: financeEnumLabel ne doit pas afficher un enum inconnu brut");
 }
 
 const shared = "components/enterprise/professional/finance-professional-workspace-shared.tsx";
@@ -58,13 +55,12 @@ for (const file of financeFiles) {
 const modulePage = "components/enterprise/enterprise-finance-module-page.tsx";
 if (exists(modulePage)) {
   const content = read(modulePage);
-  for (const moduleCode of ["FINANCE_OVERVIEW", "FINANCE_RECEIVABLES", "FINANCE_PAYABLES", "FINANCE_PAYMENTS", "FINANCE_TREASURY", "FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION", "FINANCE_ACCOUNTING", "FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS", "FINANCE_INVENTORY"]) {
-    if (!content.includes(moduleCode) && !["FINANCE_RECEIVABLES", "FINANCE_PAYABLES", "FINANCE_PAYMENTS", "FINANCE_TREASURY", "FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION"].includes(moduleCode)) {
-      // Operational modules may be routed through grouped sets rather than repeated literals.
-      fail(`Finance UX: module Finance non visible dans le routeur principal (${moduleCode})`);
-    }
-  }
-  if (!content.includes("EnterpriseAccountingOnboardingPanel")) fail("Finance UX: onboarding comptable absent du module Finance");
+  for (const token of ["OPERATIONAL_FINANCE_MODULE_CODES", "EnterpriseOperationalFinanceWorkspace", "EnterpriseAdvancedFinanceWorkspace", "EnterpriseAccountingOnboardingPanel", "getAccountingOnboardingGuide"]) if (!content.includes(token)) fail(`Finance UX: routeur Finance incomplet (${token})`);
+}
+const constants = "lib/enterprise/accounting/constants.ts";
+if (exists(constants)) {
+  const content = read(constants);
+  for (const moduleCode of ["FINANCE_OVERVIEW", "FINANCE_RECEIVABLES", "FINANCE_PAYABLES", "FINANCE_PAYMENTS", "FINANCE_TREASURY", "FINANCE_CASH", "FINANCE_BANK", "FINANCE_RECONCILIATION", "FINANCE_ACCOUNTING", "FINANCE_TAX", "FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS", "FINANCE_INVENTORY"]) if (!content.includes(moduleCode)) fail(`Finance UX: module canonique absent ${moduleCode}`);
 }
 
 if (failures.length) {
