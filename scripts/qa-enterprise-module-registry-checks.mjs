@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import "./qa-erp-stabilization-rbac.mjs";
 
 const root = process.cwd();
 const registryPath = path.join(root, "lib/enterprise/module-registry-data.json");
@@ -102,7 +103,7 @@ const navigationExecutableSource = withoutComments(navigationSource);
 
 fail(routeExecutableSource.includes("!enterpriseModule.isCore"), "La route générique rejette encore les modules sectoriels sur isCore=false");
 fail(navigationExecutableSource.includes(".filter((enterpriseModule) => enterpriseModule.isCore"), "La navigation filtre encore uniquement isCore");
-fail(!routeExecutableSource.includes("resolveEnterpriseModuleAccess"), "La route n'utilise pas le résolveur canonique");
+fail(!routeExecutableSource.includes("resolveEnterpriseModuleCapabilities"), "La route n'utilise pas le résolveur canonique de capacités");
 fail(!routeExecutableSource.includes("EnterpriseSectorModuleWorkspace"), "Aucun renderer sectoriel allow-listé n'est monté");
 fail(!accessSource.includes("organizationId"), "Le résolveur ne démontre pas l'isolation organizationId");
 fail(accessSource.includes("prisma[moduleCode]") || registrySource.includes("prisma[moduleCode]"), "Import ou accès Prisma dynamique arbitraire détecté");
