@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseAiAccess } from "@/lib/enterprise-ai/access";
+import { indexPreparedEnterpriseAiKnowledgeSource } from "@/lib/enterprise-ai/knowledge";
 import { enterpriseAiKnowledgeActionSchema } from "@/lib/enterprise-ai/validators";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
@@ -36,10 +37,32 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  const source = await prisma.enterpriseAiKnowledgeSource.findFirst({ where: { id, organizationId: parsed.data.organizationId }, select: { id: true } });
+  const source = await prisma.enterpriseAiKnowledgeSource.findFirst({
+    where: { id, organizationId: parsed.data.organizationId },
+    select: { id: true, title: true, status: true, archivedAt: true, extractedText: true },
+  });
   if (!source) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (parsed.data.action === "reindex") {
+    if (!source.extractedText) return NextResponse.json({ error: "Source not prepared" }, { status: 409 });
+    if (source.archivedAt) return NextResponse.json({ error: "Archived source cannot be reindexed" }, { status: 409 });
+    await prisma.enterpriseAiKnowledgeSource.update({ where: { id }, data: { status: "PROCESSING", errorMessage: null } });
+    const organizationId = parsed.data.organizationId;
+    const userId = session.userId;
+    after(async () => {
+      try {
+        const indexed = await indexPreparedEnterpriseAiKnowledgeSource({ sourceId: id, organizationId });
+        await writeAuditLog({ userId, action: "ENTERPRISE_AI_SOURCE_REINDEXED", entity: "EnterpriseAiKnowledgeSource", entityId: id, metadata: { organizationId, chunkCount: indexed._count.chunks } });
+      } catch (error) {
+        console.error("Enterprise AI source reindex failed", id, error);
+      }
+    });
+    await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_AI_SOURCE_REINDEX_REQUESTED", entity: "EnterpriseAiKnowledgeSource", entityId: id, request: req, metadata: { organizationId } });
+    await writeApiLog({ request: req, statusCode: 202, userId: session.userId, startedAt, metadata: { organizationId, sourceId: id, action: "reindex" } });
+    return NextResponse.json({ ok: true, source: { id, title: source.title, status: "PROCESSING", archivedAt: null } }, { status: 202 });
   }
 
   const saved = await prisma.enterpriseAiKnowledgeSource.update({
