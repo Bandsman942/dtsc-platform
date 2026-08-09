@@ -75,9 +75,54 @@ export function mcpJsonSchemaToZod(schema: unknown): z.ZodTypeAny {
   return primitiveSchema(value);
 }
 
+function collectHeaderAnnotations(schema: unknown, path: string[] = [], seen = new Set<string>()): Array<{ path: string[]; headerName: string; type: string }> {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return [];
+  const value = schema as Record<string, unknown>;
+  const annotation = value["x-mcp-header"];
+  const found: Array<{ path: string[]; headerName: string; type: string }> = [];
+  if (annotation !== undefined) {
+    if (typeof annotation !== "string" || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(annotation)) throw new Error("MCP_X_HEADER_NAME_INVALID");
+    const normalized = annotation.toLowerCase();
+    if (seen.has(normalized)) throw new Error("MCP_X_HEADER_NAME_DUPLICATE");
+    seen.add(normalized);
+    if (!path.length || !["string", "integer", "boolean"].includes(String(value.type))) throw new Error("MCP_X_HEADER_TYPE_UNSUPPORTED");
+    found.push({ path, headerName: `Mcp-Param-${annotation}`, type: String(value.type) });
+  }
+  if (value.type === "object" || value.properties) {
+    const properties = value.properties && typeof value.properties === "object" && !Array.isArray(value.properties) ? value.properties as Record<string, unknown> : {};
+    for (const [key, child] of Object.entries(properties)) found.push(...collectHeaderAnnotations(child, [...path, key], seen));
+  }
+  return found;
+}
+
+function valueAtPath(root: unknown, path: string[]) {
+  let current = root;
+  for (const key of path) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+export function buildMcpParameterHeaders(schema: unknown, args: unknown) {
+  const headers: Record<string, string> = {};
+  for (const annotation of collectHeaderAnnotations(schema)) {
+    const value = valueAtPath(args, annotation.path);
+    if (value === undefined || value === null) continue;
+    if (annotation.type === "integer" && (!Number.isSafeInteger(value) || typeof value !== "number")) throw new Error("MCP_X_HEADER_INTEGER_INVALID");
+    if (annotation.type === "boolean" && typeof value !== "boolean") throw new Error("MCP_X_HEADER_BOOLEAN_INVALID");
+    if (annotation.type === "string" && typeof value !== "string") throw new Error("MCP_X_HEADER_STRING_INVALID");
+    const rendered = String(value);
+    if (/\r|\n/.test(rendered)) throw new Error("MCP_X_HEADER_VALUE_INVALID");
+    headers[annotation.headerName] = rendered;
+  }
+  return headers;
+}
+
 export function assertSupportedMcpSchema(schema: unknown) {
   try {
     mcpJsonSchemaToZod(schema);
+    collectHeaderAnnotations(schema);
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : "MCP_JSON_SCHEMA_UNSUPPORTED";
