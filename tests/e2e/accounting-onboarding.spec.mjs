@@ -11,6 +11,7 @@ const outsiderPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
 const accountingPath = "/enterprise-modules/FINANCE_ACCOUNTING";
 
 let adminUserId = "";
+let outsiderUserId = "";
 let chartId = "";
 
 async function signIn(page, { email = adminEmail, password = adminPassword, organization = organizationId } = {}) {
@@ -60,17 +61,23 @@ function blockerCodes(payload) {
 
 test.describe.serial("Accounting onboarding and production-readiness UX", () => {
   test.beforeAll(async () => {
-    const admin = await prisma.user.findUnique({ where: { email: adminEmail } });
+    const [admin, outsider, organization] = await Promise.all([
+      prisma.user.findUnique({ where: { email: adminEmail } }),
+      prisma.user.findUnique({ where: { email: outsiderEmail } }),
+      prisma.organization.findUnique({ where: { id: organizationId } }),
+    ]);
     if (!admin) throw new Error(`Accounting E2E requires seeded admin ${adminEmail}`);
-    adminUserId = admin.id;
-    const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!outsider) throw new Error(`Accounting E2E requires seeded outsider ${outsiderEmail}`);
     if (!organization) throw new Error(`Accounting E2E requires seeded organization ${organizationId}`);
+    adminUserId = admin.id;
+    outsiderUserId = outsider.id;
     const existingCharts = await prisma.enterpriseChartOfAccounts.count({ where: { organizationId } });
     if (existingCharts !== 0) throw new Error("Accounting E2E requires a clean accounting chart state");
   });
 
   test.afterAll(async () => {
     if (adminUserId) await prisma.user.update({ where: { id: adminUserId }, data: { locale: "fr" } }).catch(() => undefined);
+    if (outsiderUserId) await prisma.organizationMember.deleteMany({ where: { organizationId, userId: outsiderUserId } }).catch(() => undefined);
     await prisma.$disconnect();
   });
 
@@ -185,6 +192,100 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await signIn(page, { email: outsiderEmail, password: outsiderPassword, organization: null });
     const response = await page.context().request.get(`${baseUrl}/api/enterprise/${organizationId}/accounting-setup`);
     expect([403, 404]).toContain(response.status());
+  });
+
+  test("production-like receivables posting is balanced and idempotent on the activated chart", async ({ page }) => {
+    await prisma.organizationMember.upsert({
+      where: { organizationId_userId: { organizationId, userId: outsiderUserId } },
+      update: { role: "OWNER", status: "ACTIVE", joinedAt: new Date(), removedAt: null },
+      create: { organizationId, userId: outsiderUserId, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
+    });
+
+    const ledgerAccounts = await prisma.enterpriseLedgerAccount.findMany({ where: { organizationId, code: { in: ["571", "4431", "4452"] } } });
+    const byCode = new Map(ledgerAccounts.map((account) => [account.code, account]));
+    for (const code of ["571", "4431", "4452"]) expect(byCode.get(code), `Missing bootstrap account ${code}`).toBeTruthy();
+
+    await prisma.enterpriseFinancialAccount.upsert({
+      where: { organizationId_code: { organizationId, code: "CASH-E2E" } },
+      update: { status: "ACTIVE", archivedAt: null, ledgerAccountId: byCode.get("571").id, currencyCode: "XAF" },
+      create: { organizationId, code: "CASH-E2E", name: "Caisse acceptance", accountType: "CASH", currencyCode: "XAF", openingBalance: "0", operationalBalance: "0", reconciledBalance: "0", ledgerAccountId: byCode.get("571").id },
+    });
+    const taxCode = await prisma.enterpriseTaxCode.upsert({
+      where: { organizationId_code: { organizationId, code: "E2E-ZERO" } },
+      update: { isActive: true, payableAccountId: byCode.get("4431").id, recoverableAccountId: byCode.get("4452").id },
+      create: { organizationId, code: "E2E-ZERO", nameFr: "Taxe zéro E2E", nameEn: "E2E zero tax", category: "ZERO_RATED", payableAccountId: byCode.get("4431").id, recoverableAccountId: byCode.get("4452").id, roundingRule: "HALF_UP" },
+    });
+    await prisma.enterpriseTaxRate.upsert({
+      where: { organizationId_taxCodeId_effectiveFrom: { organizationId, taxCodeId: taxCode.id, effectiveFrom: new Date("2026-01-01T00:00:00.000Z") } },
+      update: { rate: "0", status: "ACTIVE" },
+      create: { organizationId, taxCodeId: taxCode.id, rate: "0", effectiveFrom: new Date("2026-01-01T00:00:00.000Z"), status: "ACTIVE", createdByUserId: adminUserId },
+    });
+
+    await page.context().clearCookies();
+    await signIn(page);
+    const refreshed = await apiPatch(page, `/api/enterprise/${organizationId}/finance/configuration`, {
+      functionalCurrencyCode: "XAF",
+      presentationCurrencyCode: "XAF",
+      inventoryValuationMethod: "WEIGHTED_AVERAGE",
+      reconciliationTolerance: "0.01",
+      defaultAccountsJson: { acceptance: "configured" },
+      automaticPostingEnabled: false,
+    });
+    expect(refreshed.response.ok(), JSON.stringify(refreshed.body)).toBeTruthy();
+    expect(refreshed.body?.configuration?.readinessStatus).toBe("READY");
+
+    const created = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices`, {
+      businessPartyId: "e2e-baseline-business-party",
+      invoiceDate: "2026-08-09T12:00:00.000Z",
+      dueDate: "2026-08-31T12:00:00.000Z",
+      currencyCode: "XAF",
+      notes: "Accounting production-like acceptance",
+      items: [{ description: "Service ERP E2E", quantity: "1", unitPrice: "10000", discountAmount: "0" }],
+    });
+    expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
+    let invoice = created.body.invoice;
+
+    const submitted = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${invoice.id}/transition`, { action: "SUBMIT", revision: invoice.revision });
+    expect(submitted.response.ok(), JSON.stringify(submitted.body)).toBeTruthy();
+    invoice = submitted.body.invoice;
+
+    await page.context().clearCookies();
+    await signIn(page, { email: outsiderEmail, password: outsiderPassword, organization: organizationId });
+    const approved = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${invoice.id}/transition`, { action: "APPROVE", revision: invoice.revision });
+    expect(approved.response.ok(), JSON.stringify(approved.body)).toBeTruthy();
+    invoice = approved.body.invoice;
+
+    await page.context().clearCookies();
+    await signIn(page);
+    const issued = await apiPost(page, `/api/enterprise/${organizationId}/sales-invoices/${invoice.id}/transition`, { action: "ISSUE", revision: invoice.revision });
+    expect(issued.response.ok(), JSON.stringify(issued.body)).toBeTruthy();
+    invoice = issued.body.invoice;
+    expect(invoice.status).toBe("ISSUED");
+
+    const entries = await prisma.enterpriseJournalEntry.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoice.id, status: "POSTED" }, include: { lines: true } });
+    expect(entries).toHaveLength(1);
+    const debit = entries[0].lines.reduce((total, line) => total + Number(line.debit), 0);
+    const credit = entries[0].lines.reduce((total, line) => total + Number(line.credit), 0);
+    expect(debit).toBeGreaterThan(0);
+    expect(Math.abs(debit - credit)).toBeLessThan(0.00001);
+
+    const batches = await prisma.enterprisePostingBatch.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoice.id, postingEvent: "SALES_INVOICE_POSTED" } });
+    expect(batches).toHaveLength(1);
+    expect(batches[0].status).toBe("COMPLETED");
+
+    const trialBalance = await apiGet(page, `/api/enterprise/${organizationId}/accounting-professional?view=trial-balance&page=1&pageSize=100`);
+    expect(trialBalance.response.ok(), JSON.stringify(trialBalance.body)).toBeTruthy();
+    const trialDebit = (trialBalance.body?.items || []).reduce((total, item) => total + Number(item.debit || 0), 0);
+    const trialCredit = (trialBalance.body?.items || []).reduce((total, item) => total + Number(item.credit || 0), 0);
+    expect(trialDebit).toBeGreaterThan(0);
+    expect(Math.abs(trialDebit - trialCredit)).toBeLessThan(0.00001);
+
+    const chart = await prisma.enterpriseChartOfAccounts.findFirstOrThrow({ where: { id: chartId, organizationId } });
+    const upgrade = await apiPatch(page, `/api/enterprise/${organizationId}/accounting-setup`, { action: "APPLY_SAFE_TEMPLATE_UPGRADE", chartId, targetTemplateReference: "OHADA_SYSCOHADA@0.1.0", revision: chart.revision });
+    expect(upgrade.response.ok(), JSON.stringify(upgrade.body)).toBeTruthy();
+    const entryAfter = await prisma.enterpriseJournalEntry.findUniqueOrThrow({ where: { id: entries[0].id }, include: { lines: true } });
+    expect(entryAfter.status).toBe("POSTED");
+    expect(entryAfter.lines).toHaveLength(entries[0].lines.length);
   });
 
   test("English tablet onboarding remains responsive and keeps the governance warning", async ({ page }) => {
