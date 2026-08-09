@@ -18,7 +18,7 @@ import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-mo
 import { EnterpriseSectorModuleWorkspace } from "@/components/enterprise/enterprise-sector-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
-import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import {
   getEnterpriseAdminLegacyRedirect,
   getEnterpriseModuleDescription,
@@ -26,19 +26,15 @@ import {
   normalizeEnterpriseModuleCode,
   resolveEnterpriseModuleRoute,
 } from "@/lib/enterprise/module-registry";
-import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ moduleCode: string }> };
 
-const ENTERPRISE_ADMIN_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
-const ENTERPRISE_OVERSIGHT_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE", "MANAGER"]);
-
 // Legacy QA markers retained during migration to the canonical registry:
 // canAccessEnterpriseModule / organizationId_moduleCode / !enterpriseModule.isCore
 // enterpriseModule.moduleCode === "AI_ASSISTANT"
-// The executable route now uses resolveEnterpriseModuleAccess and explicit routeKind/workspace allow-lists.
+// The executable route now uses canonical capability resolution and explicit routeKind/workspace allow-lists.
 export default async function EnterpriseModulePage({ params }: Params) {
   const user = await requireUser();
   const session = await getSession();
@@ -50,28 +46,25 @@ export default async function EnterpriseModulePage({ params }: Params) {
   const routeResolution = resolveEnterpriseModuleRoute(requestedModuleCode);
   if (!routeResolution) notFound();
 
-  const access = await resolveEnterpriseModuleAccess({
+  const capabilities = await resolveEnterpriseModuleCapabilities({
     userId: user.id,
     organizationId,
     moduleCode: requestedModuleCode,
-    action: routeResolution.definition.routeKind === "ADMIN_SECTION" ? "manage" : "read",
   });
-  if (!access.allowed || !access.definition) notFound();
+  const routeAllowed = routeResolution.definition.routeKind === "ADMIN_SECTION" ? capabilities.canManage : capabilities.canRead;
+  if (!routeAllowed || !capabilities.definition) notFound();
 
   const adminRedirect = getEnterpriseAdminLegacyRedirect(requestedModuleCode);
   if (adminRedirect) redirect(adminRedirect);
   if (requestedModuleCode.toUpperCase() !== canonicalModuleCode) redirect(routeResolution.path);
 
-  const membership = await requireEnterpriseMembership(session, organizationId);
-  if (!membership) notFound();
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },
     select: { name: true, sectorCode: true },
   });
   if (!organization) notFound();
 
-  const definition = access.definition;
-  const canManage = ENTERPRISE_ADMIN_ROLES.has(membership.role);
+  const definition = capabilities.definition;
 
   if (definition.routeKind === "AI_SERVICE") {
     const models = listCatalogAiModelsForUi({ context: "ORGANIZATION", locale: user.locale });
@@ -82,7 +75,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
             organizationId={organizationId}
             organizationName={organization.name}
             sectorCode={organization.sectorCode}
-            canManage={canManage}
+            canManage={capabilities.canManage}
             models={models}
           />
         </AssistantImmersiveWorkspaceShell>
@@ -135,7 +128,23 @@ export default async function EnterpriseModulePage({ params }: Params) {
     return <AppShell user={user}><EnterpriseSalesOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
   if (definition.code === "SUPPLIERS_PURCHASES") {
-    return <AppShell user={user}><EnterpriseProcurementOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} canManage={canManage} locale={user.locale} /></AppShell>;
+    return (
+      <AppShell user={user}>
+        <EnterpriseProcurementOperationsWorkspace
+          organizationId={organizationId}
+          organizationName={organization.name}
+          definition={definition}
+          capabilities={{
+            canCreate: capabilities.canCreate,
+            canSubmit: capabilities.canSubmit,
+            canWrite: capabilities.canWrite,
+            canApprove: capabilities.canApprove,
+            canManage: capabilities.canManage,
+          }}
+          locale={user.locale}
+        />
+      </AppShell>
+    );
   }
   if (definition.code === "INVENTORY_LOGISTICS") {
     return <AppShell user={user}><EnterpriseInventoryOperationsWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
@@ -159,7 +168,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
     return <AppShell user={user}><EnterpriseAssetsMaintenanceWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
 
-  const canSeeAll = ENTERPRISE_OVERSIGHT_ROLES.has(membership.role);
+  const canSeeAll = capabilities.canApprove || capabilities.canManage;
   const [activityBlocks, records, members, departments, positions, workflows, requests, calendarEvents, audits, coreRecords] = await Promise.all([
     prisma.enterpriseActivityBlock.findMany({
       where: { organizationId, isEnabled: true, targetModuleCode: { in: [definition.code, requestedModuleCode.toUpperCase()] } },
@@ -266,8 +275,8 @@ export default async function EnterpriseModulePage({ params }: Params) {
         activityBlocks={activityBlocks}
         records={records}
         coreData={{ members, departments, positions, workflows, requests, calendarEvents, audits }}
-        canManage={canManage}
-        canCreate={membership.role !== "GUEST"}
+        canManage={capabilities.canManage}
+        canCreate={capabilities.canCreate}
         locale={user.locale}
         coreRecords={coreRecords.map((record) => ({
           ...record,
