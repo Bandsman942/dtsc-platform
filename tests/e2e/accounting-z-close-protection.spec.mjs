@@ -45,7 +45,7 @@ test.describe.serial("Accounting period close and historical protection", () => 
       prisma.enterpriseJournalEntry.findFirst({
         where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", status: "POSTED" },
         orderBy: { postedAt: "asc" },
-        include: { lines: { orderBy: { lineNumber: "asc" } } },
+        include: { lines: { orderBy: { id: "asc" } } },
       }),
     ]);
     expect(admin).toBeTruthy();
@@ -128,7 +128,7 @@ test.describe.serial("Accounting period close and historical protection", () => 
     const blockedEntryCount = await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: blockedInvoice.id, status: "POSTED" } });
     expect(blockedEntryCount).toBe(0);
 
-    const historical = await prisma.enterpriseJournalEntry.findUniqueOrThrow({ where: { id: originalSnapshot.id }, include: { lines: { orderBy: { lineNumber: "asc" } } } });
+    const historical = await prisma.enterpriseJournalEntry.findUniqueOrThrow({ where: { id: originalSnapshot.id }, include: { lines: { orderBy: { id: "asc" } } } });
     expect(historical.status).toBe(originalSnapshot.status);
     expect(historical.totalDebit.toString()).toBe(originalSnapshot.totalDebit);
     expect(historical.totalCredit.toString()).toBe(originalSnapshot.totalCredit);
