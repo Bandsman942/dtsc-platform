@@ -31,7 +31,9 @@ const SENSITIVE_CLASSIFICATIONS = new Set<AiDataClassification>([
   "LEGAL_SENSITIVE",
 ]);
 
-const EXTERNAL_PROVIDER_CODES = new Set(["OPENAI", "OPENROUTER"]);
+// Secure default: every configured provider is external unless a future DTSC-local runtime
+// is explicitly reviewed and allow-listed here.
+const INTERNAL_PROVIDER_CODES = new Set<string>();
 
 function supportsCapabilities(model: AiModelDefinition, required?: AiRequiredCapabilities) {
   if (!required) return true;
@@ -58,7 +60,7 @@ function dataAllowed({
   provider: AiProviderDefinition;
 }): AiPolicyDecision {
   const classifications = request.dataClassifications || ["INTERNAL"];
-  const isExternal = EXTERNAL_PROVIDER_CODES.has(provider.code);
+  const isExternal = !INTERNAL_PROVIDER_CODES.has(provider.code);
 
   if (classifications.includes("SECRET") && isExternal) {
     return { allowed: false, reasonCode: "SECRET_NEVER_EXTERNAL" };
