@@ -1,6 +1,7 @@
 import "./qa-accounting-framework-registry.mjs";
 import "./qa-syscohada-source-provenance.mjs";
 import "./qa-syscohada-dataset-pipeline.mjs";
+import "./qa-accounting-program-150-155.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([
@@ -10,6 +11,13 @@ requirePaths([
   "lib/enterprise/accounting/reversal-service.ts",
   "lib/enterprise/accounting/chart-template-registry.ts",
   "lib/enterprise/accounting/chart-template-application-service.ts",
+  "lib/enterprise/accounting/semantic-account-registry.ts",
+  "lib/enterprise/accounting/semantic-account-resolver.ts",
+  "lib/enterprise/accounting/chart-lifecycle-service.ts",
+  "lib/enterprise/accounting/journal-template-registry.ts",
+  "lib/enterprise/accounting/country-accounting-overlays.ts",
+  "lib/enterprise/accounting/regulatory-statements-service.ts",
+  "lib/enterprise/accounting/chart-version-migration-service.ts",
   "lib/enterprise/accounting/templates/generic-small-business.v1.json",
   "lib/enterprise/accounting/templates/syscohada/source-manifest.json",
   "lib/enterprise/accounting/templates/syscohada/dataset-schema.v1.json",
@@ -25,6 +33,7 @@ requireTokens("lib/enterprise/accounting/posting-service.ts", [
   "TransactionIsolationLevel.Serializable",
   "idempotencyKey",
   "status: \"POSTED\"",
+  "resolveSemanticPostingAccount",
 ]);
 requireTokens("lib/enterprise/accounting/journal-service.ts", [
   "POSTED_ENTRY_IMMUTABLE",
@@ -49,6 +58,19 @@ requireTokens("lib/enterprise/accounting/chart-template-application-service.ts",
   "CHART_TEMPLATE_NOT_APPLICABLE",
   "status: \"POSTED\"",
   "TransactionIsolationLevel.Serializable",
+  "adoptDraftChartTemplate",
+  "chartTemplateReference(template)",
+]);
+requireTokens("lib/enterprise/accounting/semantic-account-resolver.ts", [
+  "accountingDate",
+  "effectiveFrom",
+  "effectiveTo",
+  "POSTING_ACCOUNT_TYPE_INCOMPATIBLE",
+]);
+requireTokens("lib/enterprise/accounting/chart-version-migration-service.ts", [
+  "CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION",
+  "OHADA_SYSCOHADA@0.1.0",
+  "HUMAN_OWNER_APPROVAL_REQUIRED",
 ]);
 forbidTokens("lib/enterprise/accounting/posting-service.ts", [
   "prisma[sourceEntityType]",

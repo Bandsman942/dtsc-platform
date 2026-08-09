@@ -8,37 +8,7 @@ import { financeReference, idempotencyKey, money, publishFinanceEvent, sumDecima
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 import { getPostingBuilderV2 } from "@/lib/enterprise/accounting/posting-registry-v2";
 import type { PostingLineDraft } from "@/lib/enterprise/accounting/posting-types";
-
-async function resolvePostingAccount(
-  tx: Prisma.TransactionClient,
-  organizationId: string,
-  mappingKey: string,
-) {
-  if (mappingKey.startsWith("ACCOUNT_ID:")) {
-    const accountId = mappingKey.slice("ACCOUNT_ID:".length);
-    const direct = await tx.enterpriseLedgerAccount.findFirst({
-      where: { id: accountId, organizationId, isActive: true, archivedAt: null },
-    });
-    if (!direct) throw new EnterpriseAccountingError("POSTING_DIRECT_ACCOUNT_INVALID", 409, { accountId });
-    return direct;
-  }
-  const mapping = await tx.enterpriseAccountMapping.findFirst({
-    where: {
-      organizationId,
-      mappingKey,
-      isActive: true,
-      OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: new Date() } }],
-      AND: [{ OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }] }],
-    },
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-  });
-  if (!mapping) throw new EnterpriseAccountingError("POSTING_ACCOUNT_MAPPING_REQUIRED", 409, { mappingKey });
-  const account = await tx.enterpriseLedgerAccount.findFirst({
-    where: { id: mapping.ledgerAccountId, organizationId, isActive: true, archivedAt: null },
-  });
-  if (!account) throw new EnterpriseAccountingError("POSTING_ACCOUNT_INACTIVE", 409, { mappingKey });
-  return account;
-}
+import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
 
 async function prepareFunctionalLines(
   tx: Prisma.TransactionClient,
@@ -54,7 +24,11 @@ async function prepareFunctionalLines(
   const cache = new Map<string, Prisma.Decimal>();
   const prepared = [];
   for (const line of input.lines) {
-    const account = await resolvePostingAccount(tx, input.organizationId, line.accountMappingKey);
+    const account = await resolveSemanticPostingAccount(tx, {
+      organizationId: input.organizationId,
+      mappingKey: line.accountMappingKey,
+      accountingDate: input.accountingDate,
+    });
     const debitTransaction = new Prisma.Decimal(line.debit || 0);
     const creditTransaction = new Prisma.Decimal(line.credit || 0);
     const debitPositive = debitTransaction.gt(0);
