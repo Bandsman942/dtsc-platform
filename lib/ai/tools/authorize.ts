@@ -22,7 +22,8 @@ export async function authorizeAiTool(toolCode: string, context: AiToolRuntimeCo
     return deny("TOOL_NOT_REGISTERED", "Cet outil IA n’est pas disponible dans ce contexte.");
   }
 
-  if (!definition.contexts.includes(context.session.activeContext)) {
+  const activeContext = context.session.activeContext || "GLOBAL_CLIENT";
+  if (!definition.contexts.includes(activeContext)) {
     return deny("CONTEXT_NOT_ALLOWED", "Cet outil n’est pas autorisé dans l’espace actif.");
   }
 
@@ -34,7 +35,7 @@ export async function authorizeAiTool(toolCode: string, context: AiToolRuntimeCo
     return deny("SENSITIVE_DATA_NOT_ALLOWED", "Les données classifiées SECRET ne peuvent pas être transmises à un outil IA.");
   }
 
-  if (context.session.activeContext !== "ORGANIZATION") {
+  if (activeContext !== "ORGANIZATION") {
     return { allowed: true, reasonCode: "ALLOWED", message: "Accès autorisé." };
   }
 
@@ -66,15 +67,8 @@ export async function authorizeAiTool(toolCode: string, context: AiToolRuntimeCo
 
   const action = actionForToolMode(definition.mode);
   for (const moduleCode of definition.requiredModuleCodes) {
-    const moduleDecision = await resolveEnterpriseModuleAccess({
-      userId: context.userId,
-      organizationId,
-      moduleCode,
-      action,
-    });
-    if (!moduleDecision.allowed) {
-      return deny("MODULE_NOT_ALLOWED", moduleDecision.message);
-    }
+    const moduleDecision = await resolveEnterpriseModuleAccess({ userId: context.userId, organizationId, moduleCode, action });
+    if (!moduleDecision.allowed) return deny("MODULE_NOT_ALLOWED", moduleDecision.message);
   }
 
   return { allowed: true, reasonCode: "ALLOWED", message: "Accès autorisé." };
