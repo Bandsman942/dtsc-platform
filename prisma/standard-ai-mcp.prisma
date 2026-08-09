@@ -1,0 +1,33 @@
+model AiMcpDiscoverySnapshot {
+  id            String   @id @default(cuid())
+  serverCode    String
+  version       String
+  toolsJson     Json
+  resourcesJson Json
+  promptsJson   Json
+  compatible    Boolean  @default(true)
+  changeJson    Json?
+  discoveredAt  DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([serverCode, version])
+  @@index([serverCode, discoveredAt])
+}
+
+model AiMcpAuditEvent {
+  id             String   @id @default(cuid())
+  userId         String?
+  organizationId String?
+  serverCode     String
+  dtscToolCode   String?
+  remoteToolName String?
+  eventType      String
+  status         String
+  reasonCode     String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([serverCode, eventType, createdAt])
+  @@index([userId, organizationId, createdAt])
+  @@index([dtscToolCode, status, createdAt])
+}
