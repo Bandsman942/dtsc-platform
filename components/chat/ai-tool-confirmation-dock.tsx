@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Loader2, ShieldCheck, TicketCheck, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { cn } from "@/lib/utils";
@@ -54,24 +55,22 @@ export function AiToolConfirmationDock({ conversationId, locale = "fr" }: { conv
   const en = locale === "en";
   const [confirmations, setConfirmations] = useState<PendingConfirmation[]>([]);
   const [busyId, setBusyId] = useState("");
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!conversationId) {
-      setConfirmations([]);
-      return;
-    }
-    const response = await fetch(`/api/ai/tools/pending?conversationId=${encodeURIComponent(conversationId)}`, { cache: "no-store" });
+    const suffix = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : "";
+    const response = await fetch(`/api/ai/tools/pending${suffix}`, { cache: "no-store" });
     const body = await response.json().catch(() => null);
     if (!response.ok) return;
     setConfirmations(Array.isArray(body?.confirmations) ? body.confirmations : []);
   }, [conversationId]);
 
   useEffect(() => {
+    setPortalTarget(document.querySelector<HTMLElement>("[data-immersive-conversation='true']"));
     void refresh();
-    if (!conversationId) return;
     const timer = window.setInterval(() => { void refresh(); }, 4000);
     return () => window.clearInterval(timer);
-  }, [conversationId, refresh]);
+  }, [refresh]);
 
   async function cancel(item: PendingConfirmation) {
     setBusyId(item.id);
@@ -124,9 +123,9 @@ export function AiToolConfirmationDock({ conversationId, locale = "fr" }: { conv
     }
   }
 
-  if (!confirmations.length) return null;
+  if (!confirmations.length || !portalTarget) return null;
 
-  return (
+  return createPortal(
     <div className="shrink-0 border-t border-dtsc-border/70 bg-dtsc-surface px-2.5 py-2 sm:px-4" aria-live="polite">
       <div className="mx-auto grid w-full max-w-4xl gap-2">
         {confirmations.map((item) => {
@@ -137,7 +136,7 @@ export function AiToolConfirmationDock({ conversationId, locale = "fr" }: { conv
             <section key={item.id} className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.055] p-3 shadow-sm">
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/12 text-cyan-700 dark:text-cyan-300">
-                  {isTicket ? <TicketCheck className="h-4.5 w-4.5" /> : <ShieldCheck className="h-4.5 w-4.5" />}
+                  {isTicket ? <TicketCheck className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -163,6 +162,7 @@ export function AiToolConfirmationDock({ conversationId, locale = "fr" }: { conv
           );
         })}
       </div>
-    </div>
+    </div>,
+    portalTarget,
   );
 }
