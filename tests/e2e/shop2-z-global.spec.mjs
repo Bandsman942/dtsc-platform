@@ -229,7 +229,7 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     expect(asNumber(offlineItem?.unitLineTotal)).toBeCloseTo(116, 4);
 
     const beforeOffline = await prisma.enterpriseInventoryBalance.findFirstOrThrow({ where: { organizationId, inventoryItemId: fixture.inventoryItemId, warehouseId: fixture.warehouseId, storageLocationId: null, stockLotId: null } });
-    const operationUuid = `offline-${crypto.randomUUID()}`;
+    const operationUuid = crypto.randomUUID();
     const offlinePayload = {
       warehouseId: fixture.warehouseId,
       siteId: fixture.siteId,
@@ -271,7 +271,7 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
 
     const rejectedTender = await apiPost(page, `/api/enterprise/${organizationId}/retail/offline/sync`, {
       ...syncBody,
-      operationUuid: `offline-card-${crypto.randomUUID()}`,
+      operationUuid: crypto.randomUUID(),
       payload: { ...offlinePayload, idempotencyKey: `offline-card-local:${crypto.randomUUID()}`, tenders: [{ methodType: "CARD", financialAccountId: fixture.cashAccountId, amount: asNumber(offlineItem.unitLineTotal), reference: null }] },
     });
     expect(rejectedTender.response.status(), JSON.stringify(rejectedTender.body)).toBe(422);
@@ -279,7 +279,7 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
 
     const expired = await apiPost(page, `/api/enterprise/${organizationId}/retail/offline/sync`, {
       ...syncBody,
-      operationUuid: `offline-expired-${crypto.randomUUID()}`,
+      operationUuid: crypto.randomUUID(),
       payload: { ...offlinePayload, idempotencyKey: `offline-expired-local:${crypto.randomUUID()}`, soldAt: new Date(new Date(snapshot.body.validUntil).getTime() + 1000).toISOString() },
     });
     expect(expired.response.status(), JSON.stringify(expired.body)).toBe(409);
