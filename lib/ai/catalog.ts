@@ -23,6 +23,11 @@ const TEXT_TASKS: AiTaskType[] = [
   "ENTERPRISE_SEARCH",
   "TOOL_EXECUTION",
 ];
+const SUPPORTED_PROVIDER_PROTOCOLS = new Set<AiProviderDefinition["protocol"]>([
+  "OPENAI_RESPONSES",
+  "OPENAI_CHAT_COMPLETIONS",
+  "OPENROUTER_CHAT_COMPLETIONS",
+]);
 
 function parseJsonArray<T>(raw: string | undefined): T[] {
   if (!raw?.trim()) return [];
@@ -81,7 +86,7 @@ function defaultOpenAiModels(): AiModelDefinition[] {
 function isProviderDefinition(value: unknown): value is AiProviderDefinition {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<AiProviderDefinition>;
-  return Boolean(record.code && record.baseUrl && record.apiKeyEnv && record.protocol === "OPENAI_RESPONSES");
+  return Boolean(record.code && record.baseUrl && record.apiKeyEnv && record.protocol && SUPPORTED_PROVIDER_PROTOCOLS.has(record.protocol));
 }
 
 function isModelDefinition(value: unknown): value is AiModelDefinition {
