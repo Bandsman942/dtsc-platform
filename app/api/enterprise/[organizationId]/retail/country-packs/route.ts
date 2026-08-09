@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -36,8 +37,8 @@ export async function POST(req: Request, { params }: Params) {
       actorUserId: auth.session.userId,
       packCode: parsed.data.packCode,
       countryCode: parsed.data.countryCode,
-      configuration: parsed.data.configuration || null,
-      evidence: parsed.data.evidence || null,
+      configuration: parsed.data.configuration ? parsed.data.configuration as Prisma.InputJsonValue : null,
+      evidence: parsed.data.evidence ? parsed.data.evidence as Prisma.InputJsonValue : null,
     });
     await writeAuditLog({
       userId: auth.session.userId,
