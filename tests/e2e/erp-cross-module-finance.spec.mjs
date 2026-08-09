@@ -127,7 +127,7 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
         approvedAt: new Date(),
         approvedByUserId: adminUserId,
         createdByUserId: adminUserId,
-        items: { create: { organizationId, description: "Cross-module operating expense", quantity: "1", unitPrice: "40", netAmount: "40", taxAmount: "0", totalAmount: "40" } },
+        items: { create: { description: "Cross-module operating expense", quantity: "1", unitPrice: "40", netAmount: "40", taxAmount: "0", totalAmount: "40" } },
       },
     });
     const first = await post(page, `/api/enterprise/${organizationId}/supplier-invoices/${invoice.id}/transition`, { action: "POST", revision: invoice.revision });
