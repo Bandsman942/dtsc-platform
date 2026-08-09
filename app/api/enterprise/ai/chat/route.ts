@@ -76,11 +76,7 @@ export async function POST(req: Request) {
     const useKnowledge = preference?.useKnowledge ?? data.useKnowledge;
     const useTools = preference?.useTools ?? data.useTools;
 
-    const preparedTurn = await prepareAiTurn({
-      userId: session.userId,
-      contextCode: "ORGANIZATION",
-      organizationId: data.organizationId,
-    });
+    const preparedTurn = await prepareAiTurn({ userId: session.userId, contextCode: "ORGANIZATION", organizationId: data.organizationId });
 
     await prisma.enterpriseAiMessage.create({
       data: { organizationId: data.organizationId, conversationId: conversation.id, userId: session.userId, role: "user", content: data.content, model: requestedModel || null, tokenHint: Math.ceil(data.content.length / 4) },
@@ -89,9 +85,13 @@ export async function POST(req: Request) {
     const [knowledge, toolResults] = await Promise.all([
       useKnowledge
         ? retrieveEnterpriseAiKnowledge({ organizationId: data.organizationId, question: data.content, sectorCode: access.sectorCode, moduleCode: null, canReadSensitive: access.canManageSources, queryLocale: locale })
-        : Promise.resolve({ context: "", citations: [] }),
+        : Promise.resolve({ context: "", citations: [], dataClassifications: [] }),
       useTools && access.canUseReadTools && access.sectorCode === "PHARMACY" ? runPharmacyReadTools(data.organizationId, data.content) : Promise.resolve([]),
     ]);
+    const routeDataClassifications = Array.from(new Set([
+      ...preparedTurn.routePolicy.dataClassifications,
+      ...knowledge.dataClassifications,
+    ]));
 
     if (toolResults.length) {
       await prisma.enterpriseAiToolCall.createMany({
@@ -101,9 +101,7 @@ export async function POST(req: Request) {
 
     const previousMessages = await prisma.enterpriseAiMessage.findMany({
       where: { organizationId: data.organizationId, conversationId: conversation.id, deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { role: true, content: true },
+      orderBy: { createdAt: "desc" }, take: 8, select: { role: true, content: true },
     });
     const baseInstructions = buildEnterpriseAiInstructions(access, {
       assistantProfileCode: preparedTurn.executionContext.profile.code,
@@ -111,11 +109,7 @@ export async function POST(req: Request) {
       cagContent: preparedTurn.cag.content,
       cagVersion: preparedTurn.cag.version,
     });
-    const preferenceInstructions = buildAssistantResponsePreferencePrompt({
-      style: preference?.responseStyle,
-      length: preference?.responseLength,
-      customInstructions: preference?.customInstructions,
-    });
+    const preferenceInstructions = buildAssistantResponsePreferencePrompt({ style: preference?.responseStyle, length: preference?.responseLength, customInstructions: preference?.customInstructions });
     const instructions = `${baseInstructions}\n\n${buildLanguageInstruction(locale)}\n\nPréférences de cette conversation:\n${preferenceInstructions}`;
     const prompt = buildEnterpriseAiPrompt({ question: data.content, knowledgeContext: knowledge.context, citations: knowledge.citations, toolResults });
     const messages = [
@@ -127,22 +121,15 @@ export async function POST(req: Request) {
     let routed: Awaited<ReturnType<typeof routeAiStream>>;
     try {
       routed = await routeAiStream({
-        requestedModel,
-        taskType,
-        context: "ORGANIZATION",
-        locale,
-        messages,
-        instructions,
-        userId: session.userId,
+        requestedModel, taskType, context: "ORGANIZATION", locale, messages, instructions, userId: session.userId,
         organizationId: data.organizationId,
         assistantCode: preparedTurn.routePolicy.assistantCode,
-        dataClassifications: preparedTurn.routePolicy.dataClassifications,
-        tags: ["feature:enterprise-assistant", `assistant:${preparedTurn.executionContext.profile.code}`, `organization:${data.organizationId}`, `locale:${locale}`],
-        signal: req.signal,
+        dataClassifications: routeDataClassifications,
+        tags: ["feature:enterprise-assistant", `assistant:${preparedTurn.executionContext.profile.code}`, `organization:${data.organizationId}`, `locale:${locale}`], signal: req.signal,
       });
     } catch (error) {
       const reasonCode = toAiReasonCode(error);
-      await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, reasonCode, taskType, requestedModel, ...preparedTurn.auditMetadata } });
+      await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, reasonCode, taskType, requestedModel, dataClassifications: routeDataClassifications, ...preparedTurn.auditMetadata } });
       return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
     }
 
@@ -150,20 +137,12 @@ export async function POST(req: Request) {
     const authorizedAccess = access;
     const conversationId = conversation.id;
     const conversationTitle = conversation.title;
-
     const modelCall = await startAiModelCall({
-      userId: sessionUserId,
-      organizationId: data.organizationId,
-      contextCode: "ORGANIZATION",
-      locale,
-      enterpriseConversationId: conversationId,
-      selection: routed.selection,
-      providerCode: routed.providerCode,
-      providerModelId: routed.providerModelId,
-      fallbackUsed: routed.fallbackUsed,
-      attempts: routed.attempts,
+      userId: sessionUserId, organizationId: data.organizationId, contextCode: "ORGANIZATION", locale,
+      enterpriseConversationId: conversationId, selection: routed.selection, providerCode: routed.providerCode,
+      providerModelId: routed.providerModelId, fallbackUsed: routed.fallbackUsed, attempts: routed.attempts,
       promptVersion: preparedTurn.auditMetadata.promptVersion,
-      runtimeMetadata: preparedTurn.auditMetadata,
+      runtimeMetadata: { ...preparedTurn.auditMetadata, dataClassifications: routeDataClassifications },
     });
 
     async function persistAssistant(result: AiStreamConsumption, completed: boolean) {
@@ -175,14 +154,14 @@ export async function POST(req: Request) {
         writes.push(
           prisma.enterpriseAiMessage.create({
             data: {
-              organizationId: data.organizationId,
-              conversationId,
-              role: "assistant",
-              content: result.content,
-              model: routed.modelCode,
-              citationsJson: jsonValue(knowledge.citations.map((citation) => ({ sourceId: citation.sourceId, title: citation.title, confidentiality: citation.confidentiality, language: citation.language, pageNumber: citation.pageNumber, section: citation.section, distance: citation.distance }))),
-              toolResultsJson: jsonValue(toolResults),
-              tokenHint: outputTokens,
+              organizationId: data.organizationId, conversationId, role: "assistant", content: result.content, model: routed.modelCode,
+              citationsJson: jsonValue(knowledge.citations.map((citation) => ({
+                sourceId: citation.sourceId, title: citation.title, confidentiality: citation.confidentiality,
+                dataClassification: citation.dataClassification, sourceVersion: citation.sourceVersion, indexVersion: citation.indexVersion,
+                language: citation.language, pageNumber: citation.pageNumber, section: citation.section,
+                distance: citation.distance, hybridScore: citation.hybridScore,
+              }))),
+              toolResultsJson: jsonValue(toolResults), tokenHint: outputTokens,
             },
           }),
           prisma.enterpriseAiConversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date(), title: conversationTitle === "Nouvelle conversation" ? data.content.slice(0, 90) : undefined } }),
@@ -190,22 +169,17 @@ export async function POST(req: Request) {
       }
       writes.push(
         recordEnterpriseAiUsage({ organizationId: data.organizationId, assistantId: authorizedAccess.assistantId, conversationId, userId: sessionUserId, inputTokens, outputTokens, estimatedCost: cost.amount }),
-        completed
-          ? completeAiModelCall({ callId: modelCall.id, model: routed.selection.selectedModel, inputTokens, outputTokens, cachedInputTokens: result.usage.cachedInputTokens, durationMs: result.durationMs, firstTokenLatencyMs: result.firstTokenLatencyMs })
-          : interruptAiModelCall(modelCall.id, result.durationMs),
-        writeAuditLog({ userId: sessionUserId, action: completed ? "ENTERPRISE_AI_CHAT_COMPLETED" : "ENTERPRISE_AI_CHAT_INTERRUPTED", entity: "EnterpriseAiConversation", entityId: conversationId, request: req, metadata: { organizationId: data.organizationId, providerCode: routed.providerCode, modelCode: routed.modelCode, toolCount: toolResults.length, citationCount: knowledge.citations.length, useKnowledge, useTools, taskType, fallbackUsed: routed.fallbackUsed, locale, interrupted: !completed, ...preparedTurn.auditMetadata } }),
+        completed ? completeAiModelCall({ callId: modelCall.id, model: routed.selection.selectedModel, inputTokens, outputTokens, cachedInputTokens: result.usage.cachedInputTokens, durationMs: result.durationMs, firstTokenLatencyMs: result.firstTokenLatencyMs }) : interruptAiModelCall(modelCall.id, result.durationMs),
+        writeAuditLog({ userId: sessionUserId, action: completed ? "ENTERPRISE_AI_CHAT_COMPLETED" : "ENTERPRISE_AI_CHAT_INTERRUPTED", entity: "EnterpriseAiConversation", entityId: conversationId, request: req, metadata: { organizationId: data.organizationId, providerCode: routed.providerCode, modelCode: routed.modelCode, toolCount: toolResults.length, citationCount: knowledge.citations.length, dataClassifications: routeDataClassifications, useKnowledge, useTools, taskType, fallbackUsed: routed.fallbackUsed, locale, interrupted: !completed, ...preparedTurn.auditMetadata } }),
       );
       await Promise.all(writes);
       await getEnterpriseAiUsageSnapshot(data.organizationId, sessionUserId, authorizedAccess);
-      await writeApiLog({ request: req, statusCode: completed ? 200 : 499, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, providerCode: routed.providerCode, modelCode: routed.modelCode, totalTokens: inputTokens + outputTokens, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed, ...preparedTurn.auditMetadata } });
+      await writeApiLog({ request: req, statusCode: completed ? 200 : 499, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, providerCode: routed.providerCode, modelCode: routed.modelCode, totalTokens: inputTokens + outputTokens, dataClassifications: routeDataClassifications, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed, ...preparedTurn.auditMetadata } });
     }
 
     const stream = createAuditedAiTextStream({
-      source: routed.stream,
-      signal: req.signal,
-      interruptedMessage: getAiErrorMessage("STREAM_INTERRUPTED", locale),
-      onCompleted: (result) => persistAssistant(result, true),
-      onInterrupted: (result) => persistAssistant(result, false),
+      source: routed.stream, signal: req.signal, interruptedMessage: getAiErrorMessage("STREAM_INTERRUPTED", locale),
+      onCompleted: (result) => persistAssistant(result, true), onInterrupted: (result) => persistAssistant(result, false),
       onFailed: async (streamError, result) => {
         console.error("Enterprise AI streaming failed", streamError);
         await failAiModelCall(modelCall.id, "STREAM_INTERRUPTED", result.durationMs);
@@ -213,18 +187,11 @@ export async function POST(req: Request) {
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        "X-Conversation-Id": conversationId,
-        "X-AI-Provider": routed.providerCode,
-        "X-AI-Model": routed.modelCode,
-        "X-AI-Task": taskType,
-        "X-AI-Assistant": preparedTurn.executionContext.profile.code,
-        "X-AI-Fallback": String(routed.fallbackUsed),
-      },
-    });
+    return new Response(stream, { headers: {
+      "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache, no-transform",
+      "X-Conversation-Id": conversationId, "X-AI-Provider": routed.providerCode, "X-AI-Model": routed.modelCode,
+      "X-AI-Task": taskType, "X-AI-Assistant": preparedTurn.executionContext.profile.code, "X-AI-Fallback": String(routed.fallbackUsed),
+    } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Enterprise AI chat failed";
     await writeApiLog({ request: req, statusCode: 500, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, message } });
