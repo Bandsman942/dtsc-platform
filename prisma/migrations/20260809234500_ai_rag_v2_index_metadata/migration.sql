@@ -38,6 +38,25 @@ ALTER TABLE "EnterpriseAiKnowledgeChunk"
   ADD COLUMN IF NOT EXISTS "sourceVersion" INTEGER NOT NULL DEFAULT 1,
   ADD COLUMN IF NOT EXISTS "contentHash" TEXT;
 
+-- Backfill legacy Enterprise sources conservatively before any provider can consume them.
+UPDATE "EnterpriseAiKnowledgeSource"
+SET "dataClassification" = CASE
+  WHEN "confidentiality" = 'PUBLIC' THEN 'PUBLIC'
+  WHEN "sectorCode" IN ('HEALTH_CARE', 'PHARMACY') THEN 'HEALTH_SENSITIVE'
+  WHEN UPPER(COALESCE("moduleCode", '')) LIKE '%HR%' OR UPPER(COALESCE("moduleCode", '')) LIKE '%PAYROLL%' THEN 'HR_SENSITIVE'
+  WHEN UPPER(COALESCE("moduleCode", '')) LIKE '%FINANCE%' OR UPPER(COALESCE("moduleCode", '')) LIKE '%ACCOUNT%' OR UPPER(COALESCE("moduleCode", '')) LIKE '%BUDGET%' THEN 'FINANCIAL_SENSITIVE'
+  WHEN UPPER(COALESCE("moduleCode", '')) LIKE '%LEGAL%' OR UPPER(COALESCE("moduleCode", '')) LIKE '%CONTRACT%' THEN 'LEGAL_SENSITIVE'
+  WHEN "confidentiality" IN ('CONFIDENTIAL', 'MANAGERS_ONLY') THEN 'CONFIDENTIAL'
+  ELSE 'INTERNAL'
+END;
+
+UPDATE "EnterpriseAiKnowledgeChunk" AS chunk
+SET "dataClassification" = source."dataClassification",
+    "sourceVersion" = source."sourceVersion"
+FROM "EnterpriseAiKnowledgeSource" AS source
+WHERE source."id" = chunk."sourceId"
+  AND source."organizationId" = chunk."organizationId";
+
 CREATE INDEX IF NOT EXISTS "KnowledgeChunk_documentId_indexVersion_idx"
   ON "KnowledgeChunk"("documentId", "indexVersion");
 CREATE INDEX IF NOT EXISTS "EnterpriseAiKnowledgeChunk_org_indexVersion_idx"
