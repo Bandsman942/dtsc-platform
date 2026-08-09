@@ -1,5 +1,5 @@
 import type { McpServerDefinition } from "@/lib/ai/mcp/types";
-import { validateMcpEndpoint } from "@/lib/ai/mcp/security";
+import { validateMcpEndpointResolution } from "@/lib/ai/mcp/security";
 
 let requestId = 0;
 
@@ -8,7 +8,7 @@ export async function callMcpJsonRpc<T>(input: {
   method: string;
   params?: Record<string, unknown>;
 }) {
-  const endpoint = validateMcpEndpoint(input.server);
+  const endpoint = await validateMcpEndpointResolution(input.server);
   if (!endpoint.allowed) throw new Error(endpoint.reasonCode);
   if (input.server.status !== "CERTIFIED") throw new Error("MCP_SERVER_NOT_CERTIFIED");
 
