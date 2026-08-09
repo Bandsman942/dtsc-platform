@@ -28,7 +28,7 @@ export type CountryAccountingOverlay = {
 
 // Deliberately empty until a country rule has a reviewed source. Country tax rates and
 // volatile national obligations must never be invented inside the common SYSCOHADA template.
-export const COUNTRY_ACCOUNTING_OVERLAYS = Object.freeze([] satisfies readonly CountryAccountingOverlay[]);
+export const COUNTRY_ACCOUNTING_OVERLAYS: readonly CountryAccountingOverlay[] = Object.freeze([]);
 
 export function getCountryAccountingOverlay(codeOrReference: string) {
   return COUNTRY_ACCOUNTING_OVERLAYS.find((overlay) => overlay.code === codeOrReference || `${overlay.code}@${overlay.version}` === codeOrReference);
