@@ -70,6 +70,7 @@ model AiToolConfirmation {
   turnId         String?
   toolCode       String
   argumentsHash  String
+  argumentsJson  Json?
   status         String   @default("PENDING")
   expiresAt      DateTime
   confirmedAt    DateTime?
