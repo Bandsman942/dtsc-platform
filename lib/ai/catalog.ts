@@ -186,7 +186,7 @@ export function listAvailableAiModels(input: AiAvailabilityInput) {
 export function listCatalogAiModelsForUi(input: AiAvailabilityInput) {
   return listAvailableAiModels(input).map((model) => ({
     id: model.code,
-    label: model.providerCode === "OPENAI" ? getDisplayName(model.providerModelId) : model.labelKey || model.code,
+    label: model.providerCode === "OPENAI" ? getDisplayName(model.providerModelId) : model.providerModelId,
     providerCode: model.providerCode,
     status: model.status,
     minimumPlan: model.minimumPlan || null,
