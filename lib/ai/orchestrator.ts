@@ -3,6 +3,7 @@ import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } 
 import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { completeAiProviderAttempt, startAiProviderAttempt } from "@/lib/ai/observability";
+import type { AiProviderEvent } from "@/lib/ai/provider-events";
 import { createProviderEventStream } from "@/lib/ai/provider";
 import type { AiModelDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
@@ -61,6 +62,62 @@ async function resolveServerPlanCode(request: AiRouteRequest) {
   return limits.planCode;
 }
 
+function observeProviderEventStream({
+  source,
+  attemptId,
+  startedAt,
+}: {
+  source: ReadableStream<AiProviderEvent>;
+  attemptId?: string | null;
+  startedAt: number;
+}) {
+  let finalized = false;
+  const finalize = async (status: "SUCCESS" | "FAILED" | "CANCELLED", reasonCode?: string | null) => {
+    if (finalized) return;
+    finalized = true;
+    await completeAiProviderAttempt({ attemptId, status, reasonCode, durationMs: Date.now() - startedAt });
+  };
+
+  return new ReadableStream<AiProviderEvent>({
+    async start(controller) {
+      const reader = source.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            await finalize("FAILED", "STREAM_INTERRUPTED");
+            controller.close();
+            return;
+          }
+          controller.enqueue(value);
+          if (value.type === "COMPLETED") {
+            await finalize("SUCCESS");
+            controller.close();
+            await reader.cancel("PROVIDER_COMPLETED").catch(() => undefined);
+            return;
+          }
+          if (value.type === "ERROR") {
+            await finalize("FAILED", value.reasonCode);
+            controller.close();
+            await reader.cancel("PROVIDER_ERROR").catch(() => undefined);
+            return;
+          }
+        }
+      } catch (error) {
+        const reasonCode = toAiReasonCode(error);
+        await finalize(reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED", reasonCode);
+        controller.error(error);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+    async cancel(reason) {
+      await finalize("CANCELLED", "STREAM_INTERRUPTED");
+      await source.cancel(reason).catch(() => undefined);
+    },
+  });
+}
+
 export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamResult> {
   const effectiveRequest: AiRouteRequest = {
     ...request,
@@ -90,9 +147,9 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       attemptIndex: index,
     });
     try {
-      const stream = await createProviderEventStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
+      const providerStream = await createProviderEventStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
+      const stream = observeProviderEventStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
-      await completeAiProviderAttempt({ attemptId: attempt?.id, status: "SUCCESS", durationMs: Date.now() - attemptStartedAt });
       return {
         stream,
         selection: buildSelection(effectiveRequest, model),
