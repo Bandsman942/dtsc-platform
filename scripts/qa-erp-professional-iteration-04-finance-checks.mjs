@@ -54,8 +54,15 @@ const checks = {
     need(content.page, "OPERATIONAL_FINANCE_MODULE_CODES", "Page Finance");
   },
   overview() {
-    for (const marker of ["Assistant de configuration", "Checklist de préparation", "Actions recommandées", "financeMetricLabel", "functionalCurrencyCode", "reconciliationTolerance"]) need(content.overview, marker, "Vue d’ensemble Finance");
-    reject(content.overview, "hasFiscalYear}", "Libellés métier");
+    // The original iteration-04 contract expected two locally-computed checklist sections.
+    // The ERP stabilization programme intentionally replaces them with the canonical,
+    // server-driven diagnostic assistant. Keep the business capabilities, but require
+    // the new authority markers so this QA cannot re-introduce a second readiness source.
+    for (const marker of ["Assistant de mise en service", "DiagnosticCard", "diagnostics", "Actions recommandées", "financeMetricLabel", "functionalCurrencyCode", "reconciliationTolerance"]) need(content.overview, marker, "Vue d’ensemble Finance");
+    reject(content.overview, "Assistant de configuration", "Ancien assistant Finance interdit");
+    reject(content.overview, "Checklist de préparation", "Ancienne checklist Finance interdite");
+    reject(content.overview, "const steps = useMemo", "Checklist locale Finance interdite");
+    reject(content.overview, "checklist.hasFunctionalCurrency", "Contrat checklist legacy interdit");
   },
   receivables() {
     for (const marker of ["Nouvelle facture client", "Factures clients", "Créances", "Avoirs", "Échéances", "Créer un avoir", "FinanceCollaboration", "sales-credit-notes", "PENDING_APPROVAL"]) need(content.invoices, marker, "Créances professionnelles");
