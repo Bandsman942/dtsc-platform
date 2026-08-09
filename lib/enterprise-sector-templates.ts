@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
-import { canUseFeature, canUseModule } from "@/lib/billing/entitlements";
+import { canUseFeature } from "@/lib/billing/entitlements";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
 import { requireActiveOrganizationMembership } from "@/lib/organizations";
@@ -29,10 +30,6 @@ export type ApplySectorTemplateMode = "merge" | "replace_sector";
 
 function isEnterpriseAdminRole(role: string | null | undefined) {
   return role ? ENTERPRISE_ADMIN_ROLES.has(role) : false;
-}
-
-function isEnterpriseManagerRole(role: string | null | undefined) {
-  return role ? ENTERPRISE_MANAGER_ROLES.has(role) : false;
 }
 
 function permissionList(value: Prisma.JsonValue | null | undefined) {
@@ -71,60 +68,6 @@ async function getEnterpriseAccessContext(userId: string, organizationId: string
 
 export function hasEnterprisePermission(permissions: string[], permission: string) {
   return permissions.some((candidate) => candidate === permission);
-}
-
-const enterpriseModulePermissionPrefixes: Record<string, string[]> = {
-  AI_ASSISTANT: ["enterprise.ai."],
-  PATIENTS: ["health.patients."],
-  APPOINTMENTS: ["health.appointments."],
-  CONSULTATIONS: ["health.consultations."],
-  MEDICAL_RECORDS: ["health.medical_records."],
-  LABORATORY: ["health.lab."],
-  INTERNAL_PHARMACY: ["health.pharmacy."],
-  MEDICAL_BILLING: ["health.billing."],
-  INSURANCE_COVERAGE: ["health.insurance."],
-  QUALITY_INCIDENTS: ["health.incidents."],
-  MEDICAL_DOCUMENTS: ["health.documents."],
-  HEALTH_SETTINGS: ["health.settings."],
-  HEALTH_REPORTS: ["health.billing.", "health.incidents.", "health.patients."],
-  MEDICINES_PRODUCTS: ["pharmacy.products."],
-  BATCH_EXPIRY: ["pharmacy.batches."],
-  STOCK_INVENTORY: ["pharmacy.stock."],
-  STOCK_RECEIPTS: ["pharmacy.receipts."],
-  SALES_DISPENSATION: ["pharmacy.sales."],
-  PRESCRIPTIONS: ["pharmacy.prescriptions."],
-  SUPPLIERS_ORDERS: ["pharmacy.suppliers.", "pharmacy.purchase_orders."],
-  CASH_INVOICES_PAYMENTS: ["pharmacy.cash."],
-  RETURNS_ADJUSTMENTS_LOSSES: ["pharmacy.adjustments."],
-  ALERTS_EXPIRY_LOW_STOCK: ["pharmacy.alerts."],
-  QUALITY_PHARMACOVIGILANCE: ["pharmacy.quality."],
-  PHARMACY_DOCUMENTS: ["pharmacy.documents."],
-  PHARMACY_REPORTS: ["pharmacy.reports."],
-  PHARMACY_SETTINGS: ["pharmacy.settings."],
-};
-
-function canUseModuleWithPositionPermissions(permissions: string[], moduleCode: string, action: "read" | "submit" | "write" | "manage") {
-  if (hasEnterprisePermission(permissions, "enterprise.admin.manage")) {
-    return true;
-  }
-  const prefixes = enterpriseModulePermissionPrefixes[moduleCode] || [];
-  if (!prefixes.length) {
-    return action === "read" || action === "submit";
-  }
-  const modulePermissions = permissions.filter((permission) => prefixes.some((prefix) => permission.startsWith(prefix)));
-  if (!modulePermissions.length) {
-    return false;
-  }
-  if (action === "read") {
-    return modulePermissions.some((permission) => permission.endsWith(".view") || permission.endsWith(".read") || permission.endsWith(".chat") || permission.includes(".view_"));
-  }
-  if (action === "submit") {
-    return modulePermissions.some((permission) => permission.endsWith(".create") || permission.endsWith(".submit") || permission.endsWith(".chat") || permission.endsWith(".dispense"));
-  }
-  if (action === "write") {
-    return modulePermissions.some((permission) => permission.endsWith(".create") || permission.endsWith(".update") || permission.endsWith(".validate") || permission.endsWith(".manage") || permission.endsWith(".dispense"));
-  }
-  return modulePermissions.some((permission) => permission.endsWith(".manage") || permission.endsWith(".update") || permission.endsWith(".validate"));
 }
 
 export async function listBusinessSectors() {
@@ -228,41 +171,20 @@ export async function canManageEnterpriseAdministration(userId: string, organiza
   if (!featureAccess.allowed) {
     return false;
   }
-  if (isEnterpriseManagerRole(access.role)) {
+  if (isEnterpriseAdminRole(access.role)) {
     return true;
   }
   return hasEnterprisePermission(access.permissions, "enterprise.admin.manage") || hasEnterprisePermission(access.permissions, "enterprise.admin.members.manage");
 }
 
+/**
+ * Compatibility adapter retained for legacy sector access modules.
+ * The canonical module resolver owns aliases, tenant enablement, dependencies,
+ * entitlements and role/position permissions. Do not add access logic here.
+ */
 export async function canAccessEnterpriseModule(userId: string, organizationId: string, moduleCode: string, action: "read" | "submit" | "write" | "manage" = "read") {
-  const access = await getEnterpriseAccessContext(userId, organizationId);
-  if (!access) {
-    return false;
-  }
-
-  const enterpriseModule = await prisma.enterpriseModule.findUnique({
-    where: { organizationId_moduleCode: { organizationId, moduleCode } },
-    select: { isEnabled: true },
-  });
-  if (!enterpriseModule?.isEnabled) {
-    return false;
-  }
-
-  const moduleAccess = await canUseModule(organizationId, moduleCode);
-  if (!moduleAccess.allowed) {
-    return false;
-  }
-
-  if (isEnterpriseAdminRole(access.role)) {
-    return true;
-  }
-  if (access.permissions.length > 0) {
-    return canUseModuleWithPositionPermissions(access.permissions, moduleCode, action);
-  }
-  if (access.role === "MANAGER") {
-    return action !== "manage";
-  }
-  return action === "read" || action === "submit";
+  const decision = await resolveEnterpriseModuleAccess({ userId, organizationId, moduleCode, action });
+  return decision.allowed;
 }
 
 export async function canAccessEnterpriseActivity(userId: string, organizationId: string, blockCode: string, action: "read" | "submit" | "manage" = "read") {
@@ -286,22 +208,22 @@ export async function canAccessEnterpriseActivity(userId: string, organizationId
   if (isEnterpriseAdminRole(access.role)) {
     return true;
   }
-  if (access.permissions.length > 0) {
-    if (action === "manage") {
-      return hasEnterprisePermission(access.permissions, "enterprise.activities.manage");
-    }
-    if (block.targetModuleCode) {
-      return canUseModuleWithPositionPermissions(access.permissions, block.targetModuleCode, action === "submit" ? "submit" : "read");
-    }
-    return hasEnterprisePermission(access.permissions, "enterprise.activities.manage") || hasEnterprisePermission(access.permissions, "enterprise.activities.submit");
-  }
   if (action === "manage") {
-    return isEnterpriseManagerRole(access.role);
+    return hasEnterprisePermission(access.permissions, "enterprise.activities.manage");
   }
   if (block.targetModuleCode) {
-    return canAccessEnterpriseModule(userId, organizationId, block.targetModuleCode, action === "submit" ? "submit" : "read");
+    const decision = await resolveEnterpriseModuleAccess({
+      userId,
+      organizationId,
+      moduleCode: block.targetModuleCode,
+      action: action === "submit" ? "submit" : "read",
+    });
+    return decision.allowed;
   }
-  return true;
+  if (access.permissions.length > 0) {
+    return hasEnterprisePermission(access.permissions, "enterprise.activities.manage") || hasEnterprisePermission(access.permissions, "enterprise.activities.submit");
+  }
+  return action === "read" || action === "submit";
 }
 
 export async function requireEnterpriseMembership(session: SessionPayload, organizationId: string) {

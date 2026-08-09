@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { getEnterpriseCoreV2Access, type EnterpriseCoreV2Action } from "@/lib/enterprise/core-v2/access";
-import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/session";
 
@@ -18,16 +19,23 @@ export async function getEnterpriseProcurementAccess({
   if (moduleCode === "VALIDATIONS") return getEnterpriseCoreV2Access({ session, organizationId, moduleCode, action });
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
-  if (membership.role === "GUEST" && action !== "read") return null;
-  const moduleReadable = await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, "read");
-  if (!moduleReadable) return null;
-  const isManager = ENTERPRISE_MANAGER_ROLES.has(membership.role);
-  if (!isManager && action !== "read" && !(await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, action))) return null;
+  const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
+  const actionAllowed = action === "read"
+    ? capabilities.canRead
+    : action === "submit"
+      ? capabilities.canSubmit
+      : action === "write"
+        ? capabilities.canWrite
+        : capabilities.canManage;
+  if (!actionAllowed) return null;
   return {
     membership,
-    canSeeAll: isManager,
-    canManage: isManager,
-    canCreate: membership.role !== "GUEST" && (isManager || action === "read" || action === "submit" || await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, "submit")),
+    capabilities,
+    canSeeAll: capabilities.canApprove || capabilities.canManage,
+    canManage: capabilities.canManage,
+    canCreate: capabilities.canCreate,
+    canWrite: capabilities.canWrite,
+    canApprove: capabilities.canApprove,
   };
 }
 

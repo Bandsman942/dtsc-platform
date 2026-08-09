@@ -13,17 +13,25 @@ type Lookups = {
   departments?: Array<{ id: string; labelFr?: string; name?: string; departmentCode?: string }>;
 };
 
+export type ProcurementUiCapabilities = {
+  canCreate: boolean;
+  canSubmit: boolean;
+  canWrite: boolean;
+  canApprove: boolean;
+  canManage: boolean;
+};
+
 export function EnterpriseProcurementOperationsWorkspace({
   organizationId,
   organizationName,
   definition,
-  canManage,
+  capabilities,
   locale,
 }: {
   organizationId: string;
   organizationName: string;
   definition: EnterpriseModuleDefinition;
-  canManage: boolean;
+  capabilities: ProcurementUiCapabilities;
   locale?: string | null;
 }) {
   const [members, setMembers] = useState<Choice[]>([]);
@@ -57,10 +65,10 @@ export function EnterpriseProcurementOperationsWorkspace({
       <ModuleContent>
         {error ? <ProfessionalError message={error} /> : null}
         <ModuleSection title="Référentiel fournisseurs" description="Les organisations fournisseurs restent distinctes des comptes personnels de leurs représentants.">
-          <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={canManage} locale={locale} />
+          <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={capabilities.canWrite} locale={locale} />
         </ModuleSection>
         <ModuleSection title="Demandes, commandes et réceptions" description="Soumettre, approuver, commander et réceptionner partiellement ou complètement sans double comptabilisation.">
-          <EnterprisePurchasesWorkspace organizationId={organizationId} members={members} departments={departments} canManage={canManage} locale={locale} />
+          <EnterprisePurchasesWorkspace organizationId={organizationId} members={members} departments={departments} capabilities={capabilities} locale={locale} />
         </ModuleSection>
         <ProfessionalHelp moduleCode="SUPPLIERS_PURCHASES" />
       </ModuleContent>
