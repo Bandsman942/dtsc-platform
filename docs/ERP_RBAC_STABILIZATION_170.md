@@ -1,6 +1,6 @@
 # ERP Stabilisation 3/6 — RBAC et capacités
 
-Issue : #170  
+Issue : #170
 Parent : #167
 
 Cette itération remplace les décisions UI locales basées sur les rôles par le contrat canonique de capacités ERP. Elle conserve les contrôles backend comme autorité finale et ne crée aucun bypass de tenant, entitlement ou permission.
