@@ -83,7 +83,7 @@ if (exists("lib/enterprise/accounting/chart-version-migration-service.ts")) {
 }
 if (exists("components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx")) {
   const content = read("components/enterprise/professional/enterprise-accounting-onboarding-panel.tsx");
-  for (const token of ["Mise en service comptable", "ADOPT_TEMPLATE", "APPLY_RECOMMENDED_JOURNALS", "ACTIVATE_CHART", "regulatorySupport", "official default chart of accounts", "financeStatusLabel", "safeFinanceError"]) if (!content.includes(token)) fail(`Accounting 3-8: onboarding UI incomplet (${token})`);
+  for (const token of ["Mise en service comptable", "ADOPT_TEMPLATE", "APPLY_RECOMMENDED_JOURNALS", "ACTIVATE_CHART", "regulatorySupport", "official SYSCOHADA default", "financeStatusLabel", "safeFinanceError"]) if (!content.includes(token)) fail(`Accounting 3-8: onboarding UI incomplet (${token})`);
 }
 
 const sectorAdapters = path.join(root, "lib/enterprise/accounting/sector-adapters");
