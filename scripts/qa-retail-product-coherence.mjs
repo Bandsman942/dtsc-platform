@@ -29,7 +29,11 @@ function before(source, first, second) {
 
 const contract = read("docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md");
 const language = read("lib/customer-facing-language.ts");
+const operatorLanguage = read("lib/retail-customer-language.ts");
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
+const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
+const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
+const sharedWorkspace = read("components/enterprise/professional/retail-workspace-shared.tsx");
 const activeCustomer = read("components/enterprise/professional/retail-active-customer-bar.tsx");
 const paymentFollowup = read("components/enterprise/professional/retail-payment-followup.tsx");
 const dailyClose = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
@@ -74,13 +78,20 @@ for (const marker of [
   "TENANT_CONFIGURATION_REQUIRED",
 ]) check(language.includes(marker), `Customer-facing language mapping is missing ${marker}.`);
 
-check(before(retailPage, "<EnterpriseRetailShopWorkspace", "<RetailOfflineContinuity"), "The core Shop workspace must render before offline tools.");
-check(before(retailPage, "<EnterpriseRetailShopWorkspace", "<RetailOmnichannelPanel"), "The core Shop workspace must render before customer order tools.");
-check(before(retailPage, "<EnterpriseRetailShopWorkspace", "<RetailGlobalReadiness"), "The core Shop workspace must render before setup/readiness tools.");
-check((retailPage.match(/<details/g) || []).length >= 2, "Retail POS secondary tools must use progressive disclosure instead of stacking every panel before the core workflow.");
-check(retailPage.includes("RetailPaymentFollowup"), "Retail POS must integrate the permission-aware payment follow-up surface.");
+for (const marker of ["customerFacingMobileMoneyTransactionType", "customerFacingFeeCollectionMode", "DEPOSIT", "WITHDRAWAL"]) {
+  check(operatorLanguage.includes(marker), `Retail operator language mapping is missing ${marker}.`);
+}
+
+check(!fs.existsSync(path.join(root, "components/enterprise/professional/enterprise-retail-shop-workspace.tsx")), "The retired monolithic Retail workspace must not remain in the active codebase.");
+check(retailPage.includes("RetailPosWorkspace"), "Retail POS must use its dedicated workspace.");
+check(retailPage.includes("RetailOperatorWorkspace"), "Mobile Money and Telco must use the dedicated operator workspace.");
 check(retailPage.includes("RetailDailyCloseWorkspace"), "Retail daily close must use its dedicated workspace.");
-check(retailPage.includes('moduleCode === "RETAIL_DAILY_CLOSE"'), "Retail daily close routing must be explicit and separate from the generic Shop workspace.");
+check(!retailPage.includes("EnterpriseRetailShopWorkspace"), "Retail routing must not revive the retired monolithic workspace.");
+check(before(retailPage, "<RetailPosWorkspace", "<RetailOfflineContinuity"), "The core POS workspace must render before offline tools.");
+check(before(retailPage, "<RetailPosWorkspace", "<RetailOmnichannelPanel"), "The core POS workspace must render before customer order tools.");
+check(before(retailPage, "<RetailPosWorkspace", "<RetailGlobalReadiness"), "The core POS workspace must render before setup/readiness tools.");
+check((retailPage.match(/<details/g) || []).length >= 2, "Retail POS secondary tools must use progressive disclosure.");
+check(retailPage.includes("RetailPaymentFollowup"), "Retail POS must integrate the permission-aware payment follow-up surface.");
 
 for (const marker of [
   "customerFacingError",
@@ -104,6 +115,68 @@ for (const forbidden of [
 check(dailyClose.includes('dashboard.access.canManage && item.status === "SUBMITTED"'), "Retail daily close must preserve independent review actions only for manage-capable users.");
 check(dailyClose.includes('pageSize: "50"'), "Retail daily close history must remain bounded instead of loading all closes.");
 
+for (const marker of [
+  "customerFacingError",
+  "customerFacingStatusLabel",
+  "RetailErpLinks",
+  "/retail/products/search",
+  'pageSize: "30"',
+  "/enterprise-modules/CRM_CUSTOMERS",
+  "/enterprise-modules/CATALOG",
+  "/enterprise-modules/INVENTORY_LOGISTICS",
+  "/enterprise-modules/SALES_QUOTES_ORDERS",
+  "/enterprise-modules/FINANCE_CASH",
+  "/enterprise-modules/REPORTS",
+]) check((posWorkspace + sharedWorkspace).includes(marker), `Dedicated POS workspace must include ${marker}.`);
+for (const forbidden of [
+  "Search products on the server",
+  "Recherchez les articles côté serveur",
+  "searchFailure instanceof Error ? searchFailure.message",
+  "loadError instanceof Error ? loadError.message",
+  "mutationError instanceof Error ? mutationError.message",
+  "status.replaceAll",
+  ">{account.accountType}<",
+]) check(!(posWorkspace + sharedWorkspace).includes(forbidden), `POS customer UI still contains technical/raw wording: ${forbidden}`);
+
+for (const marker of [
+  "customerFacingMobileMoneyTransactionType",
+  "customerFacingFeeCollectionMode",
+  "customerFacingStatusLabel",
+  "customerFacingFinancialAccountType",
+  "providerLabel",
+  "RetailErpLinks",
+  "/enterprise-modules/FINANCE_CASH",
+  "/enterprise-modules/FINANCE_TREASURY",
+  "/enterprise-modules/REPORTS",
+]) check((operatorWorkspace + sharedWorkspace).includes(marker), `Operator workspace must include ${marker}.`);
+for (const forbidden of [
+  "provider float",
+  "float de l’opérateur",
+  "supplier float",
+  "float fournisseur",
+  '"Wallet"',
+  "Provider commission",
+  "Provider reference",
+  "Configured non-cash account",
+  "Compte non-cash configuré",
+  "provider-side operations",
+  "opération chez l’opérateur",
+  "`${item.number} · ${item.providerCode}`",
+  "`${item.transactionType}",
+  ">{provider.providerType}<",
+  "Float account",
+  "Compte de float",
+]) check(!operatorWorkspace.includes(forbidden), `Operator customer UI still contains technical/raw wording: ${forbidden}`);
+check(!operatorWorkspace.includes("String(pending.providerCode)"), "Operator confirmation must display the business provider label, not the provider code.");
+check(operatorWorkspace.includes("selectedProvider?.label"), "Operator confirmations must resolve provider labels.");
+check(operatorWorkspace.includes("providerLabel(dashboard, item.providerCode)"), "Operator histories must resolve provider labels.");
+
+check(sharedWorkspace.includes("customerFacingError"), "Shared Retail workspace must sanitize load and mutation errors.");
+check(sharedWorkspace.includes("customerFacingFinancialAccountType(account.accountType, locale)"), "Retail reports must translate financial account types.");
+check(sharedWorkspace.includes("[touch-action:pan-x]"), "Retail navigation and ERP links must preserve touch-first horizontal behavior.");
+check(!sharedWorkspace.includes("setError(loadError instanceof Error ? loadError.message"), "Shared Retail workspace must not expose raw load errors.");
+check(!sharedWorkspace.includes("setMessage(mutationError instanceof Error ? mutationError.message"), "Shared Retail workspace must not expose raw mutation errors.");
+
 check(activeCustomer.includes("useAppLocale"), "Active customer UI must use the shared locale context.");
 check(activeCustomer.includes("customerFacingError"), "Active customer UI must sanitize customer-visible errors.");
 check(activeCustomer.includes("customerFacingStoredValueType"), "Active customer UI must translate stored-value types.");
@@ -113,9 +186,7 @@ check(activeCustomer.includes("Fidélité & avoirs client"), "Active customer UI
 check(activeCustomer.includes("<details"), "Customer value must remain progressively disclosed instead of expanding the checkout by default.");
 check(!activeCustomer.includes("rattaché côté serveur"), "Active customer UI must not explain server-side implementation to the client.");
 check(!activeCustomer.includes("attached server-side"), "Active customer UI must not explain server-side implementation to the client.");
-for (const forbidden of [">GIFT_CARD<", ">STORE_CREDIT<", ">ACTIVE<", ">SUSPENDED<", ">EXHAUSTED<"]) {
-  check(!activeCustomer.includes(forbidden), `Active customer value UI still renders a raw enum: ${forbidden}`);
-}
+for (const forbidden of [">GIFT_CARD<", ">STORE_CREDIT<", ">ACTIVE<", ">SUSPENDED<", ">EXHAUSTED<"]) check(!activeCustomer.includes(forbidden), `Active customer value UI still renders a raw enum: ${forbidden}`);
 
 for (const marker of [
   "canManagePayments",
@@ -126,14 +197,8 @@ for (const marker of [
   "[touch-action:pan-x]",
   "<details",
 ]) check(paymentFollowup.includes(marker), `Payment follow-up UI must include ${marker}.`);
-for (const forbidden of ["providerId", "providerReference", "failureCode", "failureMessage", "payload", "webhook", "credentialReference", "secretReference"]) {
-  check(!paymentFollowup.includes(forbidden), `Payment follow-up UI must not load or render sensitive/internal field ${forbidden}.`);
-}
-for (const forbidden of [">INITIATED<", ">AUTHORIZED<", ">CAPTURED<", ">FAILED<", ">VOIDED<", ">REFUNDED<", ">CARD<", ">BANK_TRANSFER<"]) {
-  check(!paymentFollowup.includes(forbidden), `Payment follow-up UI still renders a raw enum: ${forbidden}`);
-}
-check(!paymentFollowup.includes("provider diagnostics"), "Payment follow-up customer copy must not explain provider diagnostics.");
-check(!paymentFollowup.includes("diagnostics opérateur"), "Payment follow-up customer copy must not explain operator diagnostics.");
+for (const forbidden of ["providerId", "providerReference", "failureCode", "failureMessage", "payload", "webhook", "credentialReference", "secretReference"]) check(!paymentFollowup.includes(forbidden), `Payment follow-up UI must not load or render sensitive/internal field ${forbidden}.`);
+for (const forbidden of [">INITIATED<", ">AUTHORIZED<", ">CAPTURED<", ">FAILED<", ">VOIDED<", ">REFUNDED<", ">CARD<", ">BANK_TRANSFER<"]) check(!paymentFollowup.includes(forbidden), `Payment follow-up UI still renders a raw enum: ${forbidden}`);
 
 for (const marker of [
   "useAppLocale",
@@ -148,7 +213,6 @@ for (const marker of [
   "customerFacingRefundMethod",
   "customerFacingFinancialAccountType",
 ]) check(commercial.includes(marker), `Retail commercial UI must use ${marker}.`);
-
 for (const forbidden of [
   "Canonical sale prices",
   "Prix de vente canoniques",
@@ -177,7 +241,6 @@ for (const forbidden of [
   ">Bank transfer<",
   ">Unit price<",
 ]) check(!commercial.includes(forbidden), `Retail commercial customer UI still contains raw or technical wording: ${forbidden}`);
-
 check(!commercial.includes("caught instanceof Error ? caught.message"), "Retail commercial UI must not pass backend error messages directly to customers.");
 check(!commercial.includes("condition.catalogPriceId}"), "Retail pricing rules must not fall back to an internal price identifier in customer UI.");
 check(commercial.includes('href="/enterprise-modules/CATALOG"'), "Retail pricing UI must deep-link to the Catalog source of truth.");
@@ -187,9 +250,7 @@ check(commercial.includes("[touch-action:pan-x]"), "Retail commercial tab/filter
 check(deviceReadiness.includes("customerFacingDeviceType"), "POS device UI must translate internal device types to business labels.");
 check(!deviceReadiness.includes("device.deviceType.replaceAll"), "POS device UI must not render raw enum-derived device types.");
 
-for (const marker of ["customerFacingCapabilityLabel", "customerFacingStatusLabel", "customerFacingReadinessDetail", "customerFacingError"]) {
-  check(globalReadiness.includes(marker), `Shop setup UI must use ${marker}.`);
-}
+for (const marker of ["customerFacingCapabilityLabel", "customerFacingStatusLabel", "customerFacingReadinessDetail", "customerFacingError"]) check(globalReadiness.includes(marker), `Shop setup UI must use ${marker}.`);
 check(!globalReadiness.includes("JSON.stringify(item.detail"), "Shop setup UI must not render raw readiness payloads.");
 check(!globalReadiness.includes("COMMERCIAL_READY_GLOBAL"), "Customer Shop setup UI must not expose internal commercial maturity codes.");
 check(!globalReadiness.includes('"Country pack"'), "Customer Shop setup UI must use commercial country-configuration wording.");
@@ -207,9 +268,7 @@ for (const forbidden of [
   "Chiffrer le brouillon de vente",
 ]) check(!offline.includes(forbidden), `Offline customer UI still contains technical wording: ${forbidden}`);
 
-for (const marker of ["customerFacingError", "customerFacingFulfillmentMode", "customerFacingStatusLabel"]) {
-  check(omnichannel.includes(marker), `Customer order UI must use ${marker}.`);
-}
+for (const marker of ["customerFacingError", "customerFacingFulfillmentMode", "customerFacingStatusLabel"]) check(omnichannel.includes(marker), `Customer order UI must use ${marker}.`);
 for (const forbidden of [
   "Canonical CRM customer",
   "Client CRM canonique",

@@ -8,9 +8,9 @@ on:
       - "app/api/enterprise/**/retail/**"
       - "app/api/enterprise/**/sales-orders/**"
       - "app/enterprise-modules/retail-page.tsx"
-      - "components/enterprise/professional/enterprise-retail-shop-workspace.tsx"
       - "components/enterprise/professional/retail-*.tsx"
       - "lib/enterprise/retail/**"
+      - "lib/retail-customer-language.ts"
       - "lib/enterprise/inventory/reservations.ts"
       - "lib/enterprise/inventory/service.ts"
       - "lib/enterprise/crm-sales/orders.ts"
@@ -33,6 +33,7 @@ on:
       - "tests/e2e/shop2-customer-payments.spec.mjs"
       - "tests/e2e/shop2-customer-value-ui.spec.mjs"
       - "tests/e2e/shop2-daily-close-ui.spec.mjs"
+      - "tests/e2e/shop2-final-coherence-ui.spec.mjs"
       - "tests/e2e/shop2-z-global.spec.mjs"
       - "playwright.config.mjs"
       - "scripts/seed-shop2-behavioral-e2e.mjs"
@@ -45,6 +46,7 @@ on:
       - "scripts/qa-shop2-fulfillment-reservations.mjs"
       - "scripts/qa-shop2-active-customer-cookie.mjs"
       - "scripts/qa-session-cookie-security.mjs"
+      - "scripts/qa-retail-product-coherence.mjs"
       - ".github/workflows/shop2-behavioral.yml"
 
 permissions:
@@ -129,6 +131,7 @@ jobs:
           node scripts/qa-shop2-global-readiness.mjs
           node scripts/qa-shop2-fulfillment-reservations.mjs
           node scripts/qa-shop2-active-customer-cookie.mjs
+          node scripts/qa-retail-product-coherence.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
       - name: Build production application
         shell: bash
@@ -152,7 +155,7 @@ jobs:
           cat /tmp/dtsc-shop2-next.log
           exit 1
       - name: Shop 2 POS behavioral acceptance
-        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs
+        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs
       - name: Stop application
         if: always()
         run: |

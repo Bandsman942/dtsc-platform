@@ -4,96 +4,127 @@
 
 Cette matrice rend explicite la complémentarité entre Shop 2.0 et les domaines ERP communs sans créer de seconde source de vérité.
 
-Elle s’appuie sur :
+État de référence pour la consolidation finale #145 :
 
-- `docs/ERP_CANONICAL_ENTITY_OWNERSHIP.md` ;
-- `docs/ERP_CROSS_MODULE_RELATION_MATRIX.md` ;
-- le registre canonique des modules ERP ;
-- les parcours Shop 2.0 déjà livrés.
+- baseline Production : `bd948059eb2c2d2053f7f4359c61aa647bcdb13d` ;
+- Release : `prod-20260809-0759-bd94805` ;
+- Shop 2.0 technique : `COMPLETE` ;
+- commercialisation : `COMMERCIAL_READY` ;
+- aucune promotion `COMMERCIAL_READY_GLOBAL` dans cette itération.
 
-La relation avec Retail est classée en trois niveaux :
+La relation avec Retail est classée :
 
 - **DIRECTE** : Retail consomme ou déclenche directement un objet ERP commun ;
-- **CONTEXTUELLE** : le domaine enrichit l’exploitation Retail sans être une dépendance transactionnelle du POS ;
-- **INDÉPENDANTE** : le module cohabite avec Retail mais aucune dépendance métier ne doit être fabriquée artificiellement.
+- **CONTEXTUELLE** : le domaine enrichit l’exploitation Retail sans être une dépendance transactionnelle ;
+- **INDÉPENDANTE** : aucune dépendance ne doit être fabriquée artificiellement.
 
-## Matrice canonique
+## Matrice canonique et continuité UX
 
-| Objet / domaine | Autorité canonique | Module ERP propriétaire | Relation Retail | Usage Shop / Retail | Risque principal à éviter | Continuité UX attendue |
-|---|---|---|---|---|---|---|
-| Client | `EnterpriseBusinessParty` | `CRM_CUSTOMERS` | DIRECTE | client actif POS, historique, fidélité, commande client | créer un « client Retail » concurrent du CRM | sélectionner/créer depuis le Shop puis ouvrir la fiche client sans perdre le contexte |
-| Catalogue | `EnterpriseCatalogItem` | `CATALOG` | DIRECTE | recherche POS, panier, prix de référence, commandes | dupliquer nom, SKU, prix de base ou article | recherche Retail rapide, accès au produit canonique pour administration |
-| Sites | `EnterpriseSite` | `SITES_WAREHOUSES` | DIRECTE | magasin de vente, retrait, disponibilité multi-boutiques | créer une notion de magasin parallèle | afficher des libellés identiques et ouvrir le site propriétaire quand nécessaire |
-| Dépôts / emplacements | `EnterpriseWarehouse`, `EnterpriseStorageLocation` | `SITES_WAREHOUSES` / `INVENTORY_LOGISTICS` | DIRECTE | stock POS, préparation, offline, réservation | maintenir un dépôt Retail séparé | choix du dépôt dans le Shop, administration dans le module propriétaire |
-| Stock physique | `EnterpriseStockMovement` et soldes Inventory | `INVENTORY_LOGISTICS` | DIRECTE | disponibilité, réservation, vente, retour, multi-store | créer une balance Retail parallèle | Shop montre la disponibilité ; Inventory garde l’administration et l’historique détaillé |
-| Réservation de stock | domaine Inventory commun | `INVENTORY_LOGISTICS` | DIRECTE | click & collect, retrait autre magasin, livraison | réserver sans contrôle de concurrence ou hors tenant | état métier traduit dans Shop ; détail logistique accessible depuis Inventory |
-| Commande client | `EnterpriseSalesOrder` | `SALES_QUOTES_ORDERS` | DIRECTE | commande depuis POS, omnicanal | créer une commande financière Retail distincte | Shop crée/suit la commande ; Sales reste propriétaire du cycle commercial |
-| Livraison / remise | `EnterpriseFulfillment` | `SALES_QUOTES_ORDERS` / Fulfillment commun | DIRECTE | retrait, ship-from-store, livraison client | reconstruire un moteur de fulfillment dans Retail | Shop affiche un suivi simple ; le détail opérationnel reste dans le domaine commun |
-| Fournisseur / achat | `EnterpriseBusinessParty`, `EnterprisePurchase` | `SUPPLIERS_PURCHASES` | DIRECTE EN AMONT | approvisionnement du stock vendu dans Shop | permettre au POS de gérer un achat parallèle | achats et réceptions alimentent Inventory ; Shop ne fait que consommer la disponibilité |
-| Réception achat | `EnterprisePurchaseReceipt` | `SUPPLIERS_PURCHASES` | DIRECTE EN AMONT | entrée de stock disponible ensuite à la vente | incrémenter aussi un stock Retail | réception → mouvement Inventory → disponibilité Shop |
-| Paiement | `EnterprisePayment` et domaines financiers communs | `FINANCE_PAYMENTS` | DIRECTE | paiement des ventes, remboursements, méthodes autorisées | conserver un paiement financier parallèle dans Retail | Shop présente le moyen et l’état métier ; Finance garde la vérité financière |
-| Caisse | sessions et comptes Finance communs | `FINANCE_CASH` | DIRECTE | ouverture, encaissement, comptage, clôture | caisse Retail indépendante de Finance | état de caisse visible dans Shop ; gestion et contrôles complets dans Finance |
-| Trésorerie | comptes financiers communs | `FINANCE_TREASURY` | DIRECTE | cash, Mobile Money, float, transferts | soldes opérateurs parallèles | soldes résolus depuis Finance, jamais réécrits dans Retail |
-| Comptabilité | `EnterpriseJournalEntry` | `FINANCE_ACCOUNTING` | DIRECTE | comptabilisation des ventes, retours, écarts | écriture sectorielle parallèle ou modification d’une écriture postée | Shop confirme l’effet métier ; détail comptable consultable dans Finance |
-| Fiscalité | référentiel Finance commun | `FINANCE_TAX` | DIRECTE | taxes appliquées au pricing et aux ventes | taux pays codé en dur dans Retail | Shop affiche le résultat commercial ; configuration fiscale dans Finance |
-| Valorisation stock | domaine Finance Inventory | `FINANCE_INVENTORY` | DIRECTE | coût/valorisation des sorties et retours | recalculer une valorisation Retail indépendante | impact invisible au caissier sauf besoin ; détail dans Finance |
-| Clôture financière | domaines de clôture communs | `FINANCE_CLOSE` | CONTEXTUELLE / DIRECTE SELON PROCESSUS | cohérence fin de période après clôtures Retail | confondre clôture de caisse et clôture comptable | distinguer clairement « clôturer la caisse » de « clôturer une période comptable » |
-| États financiers | versions publiées communes | `FINANCE_STATEMENTS` | CONTEXTUELLE | consolidation des effets Retail | produire un état financier Retail concurrent | Shop fournit ses KPI ; les états officiels restent Finance |
-| Créances / factures | `EnterpriseSalesInvoice` | `FINANCE_RECEIVABLES` | CONTEXTUELLE / DIRECTE SELON VENTE | ventes à crédit / facturation lorsque le parcours le prévoit | créer une facture Shop parallèle | lien vers la facture commune lorsque générée, sans afficher une fausse facture POS |
-| Banque / rapprochement | domaine Finance commun | `FINANCE_BANK`, `FINANCE_RECONCILIATION` | CONTEXTUELLE | paiements non-cash et contrôle financier | exposer la mécanique de rapprochement au vendeur | le vendeur voit « paiement confirmé/en attente » ; Finance voit le rapprochement détaillé |
-| Collaborateurs | `EnterpriseEmployee` + membership/permissions | `HUMAN_RESOURCES` / Administration | CONTEXTUELLE FORTE | vendeur, caissier, manager, contrôleur | dupliquer l’identité employé ou contourner RBAC | Shop n’affiche que les actions autorisées ; gestion équipe dans son module propriétaire |
-| Temps / présence | domaine RH commun | `TIME_ATTENDANCE` | CONTEXTUELLE | disponibilité opérationnelle des équipes | bloquer une vente sur une dépendance non requise | information contextuelle seulement si un vrai cas métier existe |
-| Paie | `EnterprisePayrollRun` | `PAYROLL_OPERATIONS` | INDÉPENDANTE | aucun lien transactionnel nécessaire au POS | inventer une dépendance Retail → paie | cohérence visuelle générale uniquement |
-| Tâches | domaine opérations commun | `TASKS_OPERATIONS` | CONTEXTUELLE | suivi d’actions correctives, préparation, inventaire, incidents | créer un moteur de tâches dans Retail | action contextuelle éventuelle « créer/suivre une tâche » avec retour vers Shop |
-| Demandes internes | domaine opérations commun | `INTERNAL_REQUESTS` | CONTEXTUELLE | demande d’approvisionnement, matériel, support interne | remplacer le workflow achat/stock | utiliser seulement pour demandes internes non transactionnelles |
-| Validations | domaine opérations commun | `VALIDATIONS` | CONTEXTUELLE FORTE | retours, dérogations, écarts selon politiques | auto-validation par l’initiateur | statut de validation lisible dans Shop ; détail dans Validations |
-| Workflows | Workflow Engine commun | `WORKFLOWS` | CONTEXTUELLE | automatisations autour de processus Retail | dupliquer une state machine métier déjà existante | lien contextuel seulement quand un workflow réel est configuré |
-| Réunions | domaine collaboration/opérations | `MEETINGS` | INDÉPENDANTE | pas de dépendance POS | imposer une relation artificielle | cohérence de navigation et UI seulement |
-| Pipeline CRM | domaine CRM commun | `CRM_PIPELINE` | CONTEXTUELLE | exploitation commerciale de clients/prospects | transformer une vente POS en opportunité par défaut | intégration uniquement pour cas B2B/configurés |
-| Contrats | domaine contrats commun | `CONTRACTS` | CONTEXTUELLE | tarifs ou engagements B2B si configurés | appliquer implicitement un contrat non sélectionné | afficher l’effet commercial lorsqu’un contrat est réellement applicable |
-| Projets / services | `EnterpriseProject`, livrables | `PROJECTS_SERVICES`, `TIME_DELIVERABLES` | INDÉPENDANTE / CONTEXTUELLE | cas Retail services spécifiques | créer une dépendance obligatoire | seulement si un produit/service Retail est réellement lié à un projet |
-| Actifs | `EnterpriseAsset` | `ASSETS_MAINTENANCE` | CONTEXTUELLE | terminaux, imprimantes et matériel du point de vente | confondre profil de périphérique POS et actif comptable/opérationnel | possibilité de relier un équipement géré à son actif sans dupliquer l’actif |
-| IA entreprise | domaine assistant commun | `AI_ASSISTANT` | CONTEXTUELLE | aide à l’analyse ou au support métier | laisser l’IA devenir source de vérité | IA lit/assiste ; aucune écriture silencieuse dans Retail/ERP |
-| Reporting | agrégats et rapports canoniques | `REPORTS` et rapports dédiés | DIRECTE EN LECTURE | performance commerciale, ventes, stock, marge selon autorisations | deux définitions différentes du même KPI | même définition et même période entre Shop et Reports |
+| Objet / domaine | Autorité canonique | Module propriétaire | Relation Retail | Usage Retail | Continuité UX finale |
+|---|---|---|---|---|---|
+| Client | `EnterpriseBusinessParty` | `CRM_CUSTOMERS` | DIRECTE | client actif POS, historique, fidélité, commandes | lien **Clients** depuis le POS ; aucune fiche client Retail parallèle |
+| Catalogue | `EnterpriseCatalogItem` | `CATALOG` | DIRECTE | recherche POS, panier, prix de référence | lien **Catalogue** depuis le POS ; administration des produits hors Retail |
+| Sites / dépôts | `EnterpriseSite`, `EnterpriseWarehouse` | `SITES_WAREHOUSES` | DIRECTE | point de vente, dépôt, retrait | Shop sélectionne les objets existants ; aucun magasin parallèle |
+| Stock | Inventory commun | `INVENTORY_LOGISTICS` | DIRECTE | disponibilité, vente, retour, réservation, multi-store | lien **Stocks** depuis le POS ; Inventory garde l’historique et l’administration |
+| Commande client | `EnterpriseSalesOrder` | `SALES_QUOTES_ORDERS` | DIRECTE | omnicanal, click & collect, livraison | lien **Commandes clients** depuis le POS ; aucune commande Retail concurrente |
+| Fulfillment | `EnterpriseFulfillment` | Sales/Fulfillment commun | DIRECTE | retrait, livraison, ship-from-store | Shop affiche le suivi ; Sales garde le détail opérationnel |
+| Fournisseur / achat | Purchase commun | `SUPPLIERS_PURCHASES` | DIRECTE EN AMONT | alimentation du stock | achat → réception → Inventory → disponibilité Shop |
+| Paiement | Finance commun / `EnterprisePayment` | `FINANCE_PAYMENTS` | DIRECTE | paiement, remboursement, état paiement | Shop affiche moyen/état métier ; Finance garde les objets financiers |
+| Caisse | sessions et comptes Finance | `FINANCE_CASH` | DIRECTE | ouverture, encaissement, comptage, clôture | lien **Caisse** depuis POS, opérateurs et clôture |
+| Trésorerie | comptes financiers communs | `FINANCE_TREASURY` | DIRECTE | Mobile Money, Télécom, comptes opérateurs, remboursements | lien **Trésorerie** depuis opérateurs et clôture ; aucun solde opérateur Retail parallèle |
+| Comptabilité | `EnterpriseJournalEntry` | `FINANCE_ACCOUNTING` | DIRECTE | ventes, COGS, retours, écarts | impacts générés par le moteur commun ; aucun journal Retail parallèle |
+| Fiscalité | référentiel fiscal Finance | `FINANCE_TAX` | DIRECTE | pricing/taxes | résultat commercial visible dans Shop, configuration dans Finance |
+| Valorisation stock | Finance Inventory | `FINANCE_INVENTORY` | DIRECTE | COGS et retours | invisible au caissier sauf besoin ; source Finance commune |
+| Clôture financière | domaine Finance | `FINANCE_CLOSE` | CONTEXTUELLE | fin de période | distincte de la clôture journalière du Shop |
+| Créances / factures | `EnterpriseSalesInvoice` | `FINANCE_RECEIVABLES` | CONTEXTUELLE / DIRECTE | vente à crédit ou facture liée | Retail ne fabrique pas de facture parallèle |
+| Banque / rapprochement | Finance commun | `FINANCE_BANK`, `FINANCE_RECONCILIATION` | CONTEXTUELLE | paiement non cash | vendeur : état métier ; Finance : rapprochement détaillé |
+| Collaborateurs | membership + RH | `HUMAN_RESOURCES` | CONTEXTUELLE FORTE | vendeur, caissier, manager, contrôleur | Retail respecte les permissions résolues ; aucune identité employé parallèle |
+| Validations | domaine commun | `VALIDATIONS` | CONTEXTUELLE FORTE | retours, dérogations, écarts | séparation demandeur/approbateur conservée |
+| Tâches / demandes | domaines opérations | `TASKS_OPERATIONS`, `INTERNAL_REQUESTS` | CONTEXTUELLE | actions correctives ou besoins internes | pas de moteur de tâches Retail parallèle |
+| Actifs | `EnterpriseAsset` | `ASSETS_MAINTENANCE` | CONTEXTUELLE | équipement POS | profil périphérique Retail ≠ actif ERP ; relation seulement si utile |
+| IA | assistant commun | `AI_ASSISTANT` | CONTEXTUELLE | assistance/analyse | aucune écriture silencieuse ni autorité métier IA |
+| Reporting | agrégats canoniques | `REPORTS` | DIRECTE EN LECTURE | ventes, marges, activité opérateur | lien **Rapports** depuis POS/MM/Telco ; mêmes périodes/devises |
 
-## Parcours de référence
+## Parcours de référence prouvés par la suite Shop 2
 
 ### 1. Mise en service
 
 `Entreprise → Site → Dépôt → Catalogue → Inventory → Finance/Tax → Caisse → Équipe/RBAC → Shop prêt à vendre`
 
-Le Shop sélectionne et vérifie les objets communs existants ; il ne recrée ni compte, ni site, ni dépôt, ni taux fiscal.
+Le Shop vérifie et sélectionne les objets communs ; il ne recrée ni compte, ni site, ni dépôt, ni fiscalité.
 
 ### 2. Achat vers vente
 
 `Fournisseur → Achat → Réception → Mouvement Inventory → Disponibilité Shop → Vente POS → Paiement/Caisse → Comptabilité → Reporting`
 
-### 3. Commande client
+### 3. Client vers vente / commande omnicanale
 
-`Client CRM → Shop → EnterpriseSalesOrder → Réservation Inventory → Fulfillment → Paiement → Historique client → Reporting`
+`Client CRM → POS / commande → EnterpriseSalesOrder → réservation Inventory → fulfillment → paiement → historique client → reporting`
 
 ### 4. Retour / remboursement
 
-`Vente source → Retour → Validation si requise → Stock inverse/rebut → Remboursement → Finance → Fidélité / avoir → Historique`
+`Vente source → retour → validation indépendante si requise → stock inverse/rebut → remboursement → Finance → fidélité/avoir → historique`
 
-### 5. Clôture
+### 5. Clôture quotidienne
 
-`Session de caisse → Mouvements → Comptage → Écart → Justification → Validation indépendante → Finance / Accounting → Rapports`
+`Session de caisse → mouvements → comptage → écart → justification → validation indépendante → Finance / Accounting → rapports`
 
-### 6. Offline vers online
+`RetailDailyCloseWorkspace` affiche l’étape métier et renvoie vers `FINANCE_CASH` / `FINANCE_TREASURY` pour l’administration financière.
 
-`Vente enregistrée localement → Retour réseau → Validation serveur → Vente canonique → Inventory → Finance → Historique`
+### 6. Mobile Money / Télécom
 
-Le brouillon local n’est jamais une seconde vérité durable.
+`Opération client → service opérateur configuré → état métier → compte opérateur Finance → caisse/trésorerie → rapports`
 
-## Risques transverses à auditer dans les tranches suivantes
+L’interface ne demande plus à l’agent de comprendre ou sélectionner un « provider float » ; la configuration associe un compte opérateur une seule fois et le moteur existant reste l’autorité.
 
-1. deep links exacts entre Shop et les objets ERP propriétaires ;
-2. conservation du contexte de retour vers Shop ;
-3. cohérence des KPI Shop vs `REPORTS` ;
-4. cohérence des labels et statuts entre Retail, Sales, Inventory et Finance ;
-5. surfaces où une erreur backend brute peut encore atteindre le client ;
-6. duplication éventuelle de formulaires de configuration déjà possédés par l’ERP commun ;
-7. permissions visibles côté UI mais non alignées avec les mêmes capacités côté serveur.
+### 7. Offline vers online
 
-Cette matrice est un contrat d’audit. Toute correction doit conserver les autorités canoniques ci-dessus.
+`Vente enregistrée localement → retour réseau → validation serveur → vente canonique → Inventory → Finance → historique`
+
+Le brouillon local reste temporaire et ne devient jamais une seconde vérité durable.
+
+## Deep links opposables après #145
+
+### POS
+
+- `/enterprise-modules/CRM_CUSTOMERS`
+- `/enterprise-modules/CATALOG`
+- `/enterprise-modules/INVENTORY_LOGISTICS`
+- `/enterprise-modules/SALES_QUOTES_ORDERS`
+- `/enterprise-modules/FINANCE_CASH`
+- `/enterprise-modules/REPORTS`
+
+### Mobile Money / Télécom
+
+- `/enterprise-modules/FINANCE_CASH`
+- `/enterprise-modules/FINANCE_TREASURY`
+- `/enterprise-modules/REPORTS`
+
+### Clôture quotidienne
+
+- `/enterprise-modules/FINANCE_CASH`
+- `/enterprise-modules/FINANCE_TREASURY`
+
+Les deep links rendent le propriétaire de la donnée actionnable sans créer de CRUD concurrent dans Shop.
+
+## Risques désormais bloqués par QA
+
+1. retour du workspace Retail monolithique ;
+2. erreur backend brute rendue directement par les nouveaux workspaces ;
+3. codes opérateur, types de transaction ou types de comptes utilisés comme libellés clients ;
+4. disparition des liens ERP prioritaires ;
+5. seconde source Retail pour CRM, Catalog, Inventory, Sales ou Finance ;
+6. chargement non borné des listes principales ;
+7. perte de la séparation soumission/validation des opérations sensibles.
+
+## Frontière de cette consolidation
+
+La matrice confirme la cohérence et la continuité du produit Retail existant. Elle ne crée :
+
+- aucun nouveau domaine comptable ;
+- aucun SYSCOHADA ;
+- aucun nouveau plan comptable ;
+- aucun provider fictif ;
+- aucune certification réglementaire pays implicite.
+
+Le programme d’implantation des plans comptables est explicitement hors scope et ne commence qu’après la stabilisation/acceptance demandée.

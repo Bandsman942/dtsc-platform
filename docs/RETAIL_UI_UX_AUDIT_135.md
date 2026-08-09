@@ -2,223 +2,250 @@
 
 ## Statut
 
-Consolidation Retail engagée depuis le `main` de clôture Shop 2.0 et livrée par tranches opposables.
+Consolidation produit finale en cours dans l’issue #145, à partir de la Production certifiée :
 
-Ce document ne prétend pas clôturer l’issue #135. Il suit les écarts détectés, les corrections appliquées et les zones qui restent à auditer.
+- SHA : `bd948059eb2c2d2053f7f4359c61aa647bcdb13d` ;
+- Release : `prod-20260809-0759-bd94805` ;
+- Shop 2.0 technique : `COMPLETE` ;
+- maturité commerciale conservée : `COMMERCIAL_READY`.
 
----
-
-# Tranche 1 — POS, offline, omnicanal, mise en service et équipements
-
-## Diagnostic initial
-
-### P1 — Hiérarchie du POS surchargée
-
-Avant cette tranche, `RETAIL_POS` affichait successivement :
-
-1. client actif ;
-2. périphériques ;
-3. readiness / country pack ;
-4. offline ;
-5. omnicanal ;
-6. workspace principal du Shop.
-
-Le parcours de vente principal arrivait donc après plusieurs surfaces de configuration ou d’exception.
-
-**Correction :** le workspace Shop est désormais prioritaire. Les outils offline/commandes et mise en service/équipements sont regroupés par divulgation progressive après le parcours principal.
-
-### P1 — Langage technique visible dans la mise en service
-
-Exemples constatés : `Country pack`, `readiness`, statuts bruts, détails JSON, `COMMERCIAL_READY_GLOBAL`, références à la preuve de release.
-
-**Correction :** conversion vers « Mise en service du Shop », « Configuration pays », « Prêt à vendre », labels de capacités métier et détails humainement lisibles.
-
-### P1 — Langage technique visible dans l’offline
-
-Exemples constatés : `AES-GCM`, `IndexedDB`, `snapshot`, `server reconciliation`, UUID d’opération, statuts `PENDING_SYNC`, `CONFLICT`, codes de conflit bruts.
-
-**Correction :** présentation centrée sur « Vente hors connexion », protection locale, synchronisation, vente à vérifier et messages d’action. Le moteur interne n’est pas modifié.
-
-### P1 — Langage technique visible dans les commandes omnicanales
-
-Exemples constatés : « canonical CRM customer », « fulfillment », « server reprices on submit », « authoritative pricing », « cross-channel status ».
-
-**Correction :** « Client », « retrait ou livraison », « prix vérifié automatiquement », « suivi des commandes » et statuts traduits.
-
-### P2 — Type de périphérique rendu depuis l’enum
-
-Le type de périphérique était généré via `replaceAll("_", " ")`, ce qui exposait le vocabulaire du modèle.
-
-**Correction :** mapping métier FR/EN via le contrat de langage client.
-
-### P2 — Client actif expliqué par l’implémentation serveur
-
-Le texte expliquait que le client serait « rattaché côté serveur » à la vente suivante.
-
-**Correction :** bénéfice métier : personnalisation de la vente et continuité de l’historique d’achats.
+Ce document décrit l’état réel après les quatre tranches déjà livrées et la tranche finale de stabilisation. La clôture de #135 reste conditionnée aux Quality Gates, à l’acceptance comportementale, au merge dans `main` et à une Production Vercel `READY` sur le SHA fusionné.
 
 ---
 
-# Tranche 2 — Issue #138 — Tarification, promotions, retours et remboursements
+## Tranche 1 — POS, offline, omnicanal, mise en service et équipements
 
-Branche de livraison : `refactor/138-retail-commercial-coherence`, créée depuis la baseline Production `ed4ec212abbb60c139c47617389a34cc6f66fc1f`.
+### Problèmes initiaux
 
-## Diagnostic
+- parcours de vente principal enfoui derrière plusieurs surfaces secondaires ;
+- jargon `Country pack`, `readiness`, états de synchronisation et détails techniques ;
+- explications d’architecture visibles dans l’offline et l’omnicanal ;
+- types de périphériques et statuts rendus depuis des enums ;
+- client actif expliqué par son implémentation serveur.
 
-### P1 — L’espace commercial exposait l’architecture au client
+### Corrections livrées
 
-Exemples constatés :
-
-- « Canonical sale prices » / « Prix de vente canoniques » ;
-- « Retail price conditions » ;
-- explication du « common Catalog » et du prix « canonical » appliqué au POS ;
-- promotions décrites comme un « dedicated Retail domain » ne réutilisant pas une « retired legacy source » ;
-- texte expliquant que le parcours ne « bypass » pas Finance ou Inventory.
-
-Ces formulations décrivaient correctement l’architecture, mais n’aidaient pas l’utilisateur à agir.
-
-**Correction :** l’écran parle maintenant de prix de vente, règles de prix à la caisse, offres clients, retours à examiner et remboursement. La cohérence ERP est matérialisée par des liens d’action au lieu d’être racontée dans la copie.
-
-### P1 — Enums et statuts bruts dans les formulaires et cartes
-
-Exemples constatés :
-
-- `PERCENTAGE`, `FIXED_AMOUNT`, `QUANTITY_BREAK`, `BUY_X_GET_Y`, `BUNDLE` ;
-- `EXCLUSIVE`, `STACKABLE` ;
-- `RETURN`, `EXCHANGE` ;
-- `SELLABLE`, `OPENED`, `DAMAGED`, `DEFECTIVE`, `EXPIRED` ;
-- `RESTOCK`, `SCRAP`, `NO_STOCK` ;
-- `ORIGINAL_TENDER`, `BANK_TRANSFER` ;
-- statuts de promotion et de retour rendus directement ;
-- type de compte financier rendu brut.
-
-**Correction :** toutes ces valeurs restent inchangées dans les payloads métier, mais leur rendu passe par `lib/customer-facing-language.ts` en français et en anglais.
-
-### P1 — Erreurs backend affichables telles quelles
-
-`retail-commercial-workspace.tsx` relayait `body.message` ou `body.error` puis affichait directement `caught.message`.
-
-**Correction :** toutes les erreurs visibles passent désormais par `customerFacingError`. Les reason codes connus disposent de messages métier ; un code technique inconnu utilise un fallback humain.
-
-### P1 — Sources de vérité ERP décrites mais peu actionnables
-
-Le texte rappelait que Catalogue, Finance et Inventory restaient propriétaires des données, mais sans fournir systématiquement le chemin d’action.
-
-**Correction :**
-
-- la tarification renvoie vers **Catalogue** pour administrer les prix produits ;
-- le remboursement renvoie vers **Trésorerie** pour administrer les comptes financiers compatibles ;
-- aucun CRUD parallèle n’est créé dans Retail.
-
-### P2 — Hiérarchie et responsive de l’écran commercial
-
-Plusieurs champs étaient regroupés par deux colonnes sans repli explicite, et le rail d’onglets ne déclarait pas son contrat tactile.
-
-**Correction :**
-
-- formulaires mono-colonne par défaut, deux colonnes à partir de `sm` seulement ;
-- onglets et filtres en rail horizontal tactile `pan-x` ;
-- actions de validation empilées sur mobile ;
-- aucun identifiant interne utilisé comme fallback d’affichage.
-
-## Contrats renforcés pendant la tranche 2
-
-`lib/customer-facing-language.ts` couvre maintenant aussi :
-
-- types de promotion ;
-- règles de cumul ;
-- canaux de vente ;
-- types de retour ;
-- état du produit ;
-- traitement du stock ;
-- modes de remboursement ;
-- types de compte financier ;
-- `PENDING_APPROVAL` ;
-- erreurs courantes de retours et paiements.
-
-`scripts/qa-retail-product-coherence.mjs` vérifie désormais en plus :
-
-- consommation de tous ces mappings par l’espace commercial ;
-- disparition des formulations d’architecture de la tranche ;
-- absence de libellés d’enum bruts connus dans les options clientes ;
-- absence de `caught.message` rendu directement ;
-- présence des deep links Catalogue et Trésorerie ;
-- maintien du rail tactile.
+- le POS est prioritaire ;
+- offline, commandes, équipements et mise en service utilisent la divulgation progressive ;
+- messages métier FR/EN via `customerFacingError`, `customerFacingStatusLabel`, `customerFacingFulfillmentMode`, `customerFacingDeviceType` et les mappings de readiness ;
+- suppression du vocabulaire d’architecture des surfaces clientes ;
+- responsive mobile renforcé.
 
 ---
 
-# Fondations communes
+## Tranche 2 — Tarification, promotions, retours et remboursements
 
-## Langage client
+### Problèmes initiaux
 
-`lib/customer-facing-language.ts` centralise :
+- vocabulaire `canonical`, domaine Retail, legacy, posting et autres termes d’architecture ;
+- enums bruts de promotion, retour, état produit, traitement stock et remboursement ;
+- erreurs backend visibles telles quelles ;
+- sources ERP décrites mais peu actionnables ;
+- contrôles commerciaux trop denses sur mobile.
 
-- traduction des reason codes ;
-- statuts métier ;
-- capacités Shop ;
-- types d’équipement ;
-- modes de retrait/livraison ;
-- vocabulaire commercial Retail ;
-- fallback humain pour erreur technique inconnue.
+### Corrections livrées
 
-## Contrat documentaire
-
-`docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md` rend opposables :
-
-- les termes techniques interdits côté client ;
-- la séparation diagnostic / copie client ;
-- le fallback humain ;
-- le FR/EN ;
-- la traduction des enums rendues ;
-- les liens vers les sources ERP plutôt que l’explication de leur architecture ;
-- l’absence de surpromesse de conformité.
-
-## QA
-
-`scripts/qa-retail-product-coherence.mjs` est exécuté dans :
-
-- `Shop 2 commercial UI` ;
-- `Quality gates`.
+- langage commercial FR/EN ;
+- erreurs visibles systématiquement assainies ;
+- liens vers `CATALOG` pour les prix produits et `FINANCE_TREASURY` pour les comptes de remboursement ;
+- formulaires mono-colonne par défaut et rails tactiles ;
+- aucune source de vérité Finance, Inventory ou Catalog parallèle.
 
 ---
 
-# Ce qui reste à auditer
+## Tranche 3 — Valeur client et suivi des paiements
 
-## UI/UX Retail
+### Problèmes initiaux
 
-- workspace principal `EnterpriseRetailShopWorkspace` en profondeur ;
-- dérogations prix/remises/taxes dans le parcours de vente ;
-- fidélité, gift cards et avoirs ;
-- paiements et états provider ;
-- clôture quotidienne ;
-- Mobile Money ;
-- Telco Topups ;
-- reçus et historique ;
-- rapports ;
-- guides utilisateur ;
-- responsive 390 / 768 / desktop sur tous les parcours.
+Les capacités de fidélité, cartes-cadeaux, avoirs et paiements existaient dans les moteurs mais restaient peu visibles ou trop techniques dans le parcours commercial.
 
-## ERP ↔ Retail
+### Corrections livrées
 
-- deep links objet par objet ;
-- achat → réception → stock → POS ;
-- POS → Sales Order → fulfillment ;
-- retour → Inventory / Finance / fidélité ;
-- caisse → Treasury / Accounting ;
-- cohérence KPI avec Reports ;
-- liens contextuels vers Validations, Tasks, Assets et AI Assistant lorsqu’ils sont réellement utiles.
+- bloc replié `Fidélité & avoirs client` ;
+- historique d’achats et soldes utiles au vendeur ;
+- suivi récent des paiements uniquement pour les rôles autorisés ;
+- états et moyens de paiement traduits ;
+- aucune référence provider, payload, credential, secret ou diagnostic interne dans l’état UI ;
+- acceptance mobile 390 px.
 
-## Langage client transversal
+---
 
-Le mapper est maintenant consommé par les surfaces Retail les plus visibles et l’espace commercial. L’issue #135 exige encore l’audit des autres parcours Retail puis, progressivement, des autres modules ERP clients pour éliminer les mêmes fuites techniques sans masquer les détails nécessaires aux outils internes DTSC.
+## Tranche 4 — Clôture quotidienne et passage vers Finance
 
-## Règle de clôture de l’issue #135
+Production : `prod-20260809-0759-bd94805`.
 
-L’issue principale ne pourra être clôturée qu’après :
+### Problèmes initiaux
 
-- audit complet des surfaces Retail ;
-- matrice ERP ↔ Retail validée et corrections appliquées ;
-- E2E des parcours prioritaires ;
-- contrat mobile et i18n ;
-- QA de cohérence durable ;
-- acceptance Production.
+- `RETAIL_DAILY_CLOSE` dépendait du gros workspace Shop ;
+- clôture, POS, Mobile Money et Télécom partageaient une même surface monolithique ;
+- types de comptes bruts visibles ;
+- passage vers Finance peu explicite.
+
+### Corrections livrées
+
+- workspace autonome `RetailDailyCloseWorkspace` ;
+- caisse active, soldes à compter, écarts et motifs clairement présentés ;
+- ouverture de caisse avec le moteur existant ;
+- soumission idempotente ;
+- validation/refus réservés aux permissions `manage`, sans modifier l’interdiction backend d’auto-validation ;
+- historique borné ;
+- types de comptes et statuts traduits ;
+- liens `FINANCE_CASH` et `FINANCE_TREASURY` ;
+- E2E dédié à 390 px.
+
+---
+
+# Tranche finale — Issue #145 — Stabilisation produit et acceptance ERP
+
+## Diagnostic final
+
+Après les quatre tranches précédentes, les dettes P1 restantes étaient concentrées dans l’ancien `EnterpriseRetailShopWorkspace` :
+
+1. un seul composant mélangeait encore POS, Mobile Money, Télécom, historique, configuration et rapports ;
+2. le chargement et certaines mutations pouvaient remonter directement un message backend ;
+3. la recherche POS expliquait encore qu’elle travaillait « côté serveur » ;
+4. Mobile Money et Télécom exposaient encore des formulations telles que `provider float`, `supplier float`, `Wallet`, compte `non-cash` ou `Provider reference` ;
+5. les confirmations et historiques utilisaient encore `providerCode` ou `transactionType` comme texte visible ;
+6. les rapports rendaient `accountType` directement ;
+7. la continuité Shop ↔ ERP restait répartie et non explicite sur toutes les surfaces opérationnelles.
+
+## Corrections implémentées
+
+### 1. Décomposition définitive du workspace monolithique
+
+L’ancien `EnterpriseRetailShopWorkspace` est retiré du runtime.
+
+Les responsabilités sont désormais séparées :
+
+- `RetailPosWorkspace` — vente, panier, encaissement, tickets et historique POS ;
+- `RetailOperatorWorkspace` — Mobile Money et Télécom ;
+- `RetailDailyCloseWorkspace` — clôture quotidienne ;
+- `retail-workspace-shared.tsx` — primitives communes de chargement, mutations, caisse, métriques, rapports et continuité ERP.
+
+La séparation est une refactorisation d’interface : elle ne crée aucun moteur métier parallèle.
+
+### 2. Erreurs clientes assainies
+
+Les chargements, recherches et mutations des nouveaux workspaces passent par `customerFacingError`.
+
+Les détails internes restent disponibles dans les réponses/logs serveurs protégés mais ne deviennent plus automatiquement le texte d’erreur affiché au client.
+
+### 3. Mobile Money et Télécom professionnalisés
+
+`lib/retail-customer-language.ts` ajoute des libellés métier dédiés pour :
+
+- dépôt / retrait Mobile Money ;
+- traitement des frais ;
+- confirmations opérateur.
+
+L’UI utilise maintenant :
+
+- `Service Mobile Money` ;
+- `Compte opérateur Mobile Money` ;
+- `Compte opérateur Télécom` ;
+- `Référence opérateur` ;
+- les noms commerciaux des opérateurs.
+
+Les codes opérateur, types de comptes et types de transaction restent des données internes/payloads mais ne servent plus de libellés clients.
+
+### 4. Rapports et historique
+
+- les types de comptes financiers utilisent `customerFacingFinancialAccountType` ;
+- les statuts utilisent `customerFacingStatusLabel` ;
+- l’historique Mobile Money utilise le type de transaction traduit ;
+- les historiques opérateurs affichent le libellé de l’opérateur et non `providerCode` ;
+- les listes restent bornées par les APIs de dashboard existantes.
+
+### 5. Continuité ERP
+
+Les workspaces exposent des liens d’action vers les autorités existantes :
+
+#### POS
+
+- `CRM_CUSTOMERS` ;
+- `CATALOG` ;
+- `INVENTORY_LOGISTICS` ;
+- `SALES_QUOTES_ORDERS` ;
+- `FINANCE_CASH` ;
+- `REPORTS`.
+
+#### Mobile Money / Télécom
+
+- `FINANCE_CASH` ;
+- `FINANCE_TREASURY` ;
+- `REPORTS`.
+
+#### Clôture quotidienne
+
+- `FINANCE_CASH` ;
+- `FINANCE_TREASURY`.
+
+Ces liens rendent l’autorité métier actionnable sans dupliquer son CRUD dans Retail.
+
+---
+
+# Sources de vérité conservées
+
+| Objet | Autorité | Usage Retail |
+|---|---|---|
+| Client | `EnterpriseBusinessParty` / CRM | sélection et historique |
+| Produit | `EnterpriseCatalogItem` / Catalog | recherche et panier |
+| Stock | Inventory commun | disponibilité, vente, retour, réservation |
+| Commande | `EnterpriseSalesOrder` | omnicanal et fulfillment |
+| Achat | Purchase commun | alimentation du stock |
+| Paiement / caisse / trésorerie | Finance commun | encaissements, remboursements, soldes opérateurs |
+| Comptabilité | `EnterpriseJournalEntry` | posting de vente, retour et écarts |
+| Reporting | `REPORTS` + agrégats canoniques | lecture et décision |
+
+Aucun dual-write permanent n’est introduit dans cette consolidation.
+
+---
+
+# Contrat mobile / i18n / accessibilité
+
+La tranche finale ajoute une acceptance dédiée :
+
+- **390 px, FR** : POS + continuité ERP ;
+- **768 px, FR** : Mobile Money ;
+- **1440 px, EN** : Télécom + rapports ;
+- absence de débordement horizontal structurel ;
+- absence des principaux termes techniques interdits ;
+- absence d’`accountType` brut dans les rapports couverts.
+
+Les scénarios historiques Shop 2.0 restent exécutés dans le même workflow comportemental.
+
+---
+
+# QA opposable
+
+`scripts/qa-retail-product-coherence.mjs` bloque maintenant notamment :
+
+- le retour du workspace monolithique ;
+- une route Retail qui ne passe pas par les workspaces dédiés ;
+- l’affichage de types de comptes bruts ;
+- le retour des formulations techniques Mobile Money/Télécom connues ;
+- les codes opérateur utilisés comme texte d’historique ;
+- les erreurs brutes sur les nouveaux workspaces ;
+- la perte des liens ERP prioritaires ;
+- la perte des contrats offline, omnicanal, commercial, valeur client, paiements et clôture déjà établis.
+
+Le gate est exécuté dans les Quality Gates et dans le workflow comportemental Shop 2.
+
+---
+
+# Critères de clôture #135
+
+La consolidation pourra être déclarée terminée uniquement lorsque le même head de #145 aura :
+
+- Delivery Governance verte ;
+- migrations depuis zéro vertes ;
+- type-check, QA, lint et build verts ;
+- Quality Gates vertes ;
+- Shop 2 Behavioral vert, y compris l’acceptance finale multi-écrans ;
+- Shop 2 Commercial UI vert ;
+- Shop 2 Global Readiness vert ;
+- merge dans `main` ;
+- Vercel Production `READY` sur le SHA fusionné ;
+- GitHub Release Production correspondante.
+
+Aucune promotion `COMMERCIAL_READY_GLOBAL` n’est incluse dans cette consolidation. Aucun chantier SYSCOHADA ou plan comptable n’est inclus.
