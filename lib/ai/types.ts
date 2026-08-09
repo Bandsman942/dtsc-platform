@@ -54,6 +54,10 @@ export type AiRoutingConstraints = {
   maximumEstimatedInputCost?: number | null;
   preferLowerCost?: boolean;
   preferLowerLatency?: boolean;
+  requireZeroDataRetention?: boolean;
+  maximumProviderPromptPricePerMillion?: number | null;
+  maximumProviderCompletionPricePerMillion?: number | null;
+  providerSortPreference?: "price" | "latency" | "throughput" | null;
 };
 
 export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
@@ -155,6 +159,7 @@ export type AiRouteSelection = {
     preferenceScore: number;
     healthScore: number;
     costScore: number;
+    latencyScore: number;
     healthStatus: string;
     reasonParts: string[];
   } | null;
