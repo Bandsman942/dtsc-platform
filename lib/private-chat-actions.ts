@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { executeAiTool } from "@/lib/ai/tools/execute";
 
 export type ChatHistoryItem = {
+  id?: string;
+  conversationId?: string;
   role: string;
   content: string;
 };
@@ -111,6 +113,9 @@ export async function performPrivateChatActionFromHistory({
     return { handled: true, reply: "Le contexte entreprise actif ne correspond plus à cette conversation.", metadata: { action: "private_chat_action_context_denied" } };
   }
 
+  const latestUserTurn = [...history].reverse().find((item) => item.role === "user");
+  const boundConversationId = conversationId || latestUserTurn?.conversationId || history.find((item) => item.conversationId)?.conversationId || null;
+  const turnId = latestUserTurn?.id || null;
   const toolCode = action.action === "CREATE_TICKET" ? "SUPPORT_TICKET_CREATE" : "DTSC_CONTACT_EMAIL_SEND";
   const args = action.action === "CREATE_TICKET"
     ? { subject, message, priority: normalizePriority(action.priority) }
@@ -122,7 +127,8 @@ export async function performPrivateChatActionFromHistory({
       session,
       userId,
       organizationId,
-      conversationId,
+      conversationId: boundConversationId,
+      turnId,
       request,
     },
   });
@@ -145,6 +151,8 @@ export async function performPrivateChatActionFromHistory({
       toolCode,
       confirmationId: confirmation?.confirmationId || null,
       expiresAt: confirmation?.expiresAt || null,
+      conversationId: boundConversationId,
+      turnId,
       subject,
     },
   };
