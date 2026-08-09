@@ -6,6 +6,10 @@ import type { OpenAIInputMessage } from "@/lib/openai";
 type NativeOpenAiEvent = {
   type?: string;
   delta?: string;
+  item_id?: string;
+  name?: string;
+  arguments?: string;
+  code?: string;
   response?: {
     usage?: {
       input_tokens?: number;
@@ -26,9 +30,32 @@ function parseSseBlock(block: string): NativeOpenAiEvent | null {
   return JSON.parse(data) as NativeOpenAiEvent;
 }
 
+function parseToolArguments(value?: string) {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
 function normalizeNativeEvent(event: NativeOpenAiEvent): AiProviderEvent[] {
   if (event.type === "response.output_text.delta" && event.delta) {
     return [{ type: "TEXT_DELTA", text: event.delta }];
+  }
+  if (event.type === "response.function_call_arguments.delta") {
+    return [{ type: "TOOL_CALL_DELTA", id: event.item_id, argumentsDelta: event.delta }];
+  }
+  if (event.type === "response.function_call_arguments.done") {
+    return [{
+      type: "TOOL_CALL_COMPLETED",
+      id: event.item_id,
+      name: event.name,
+      arguments: parseToolArguments(event.arguments),
+    }];
+  }
+  if (event.type === "error") {
+    return [{ type: "ERROR", reasonCode: "UNKNOWN_PROVIDER_ERROR" }];
   }
   if (event.type === "response.completed") {
     const usage = event.response?.usage;
