@@ -34,6 +34,8 @@ function staticShopReleaseChecks() {
   const provisioning = read("lib/enterprise/retail/provisioning.ts");
   const constants = read("lib/enterprise/retail/constants.ts");
   const guardrails = read("lib/enterprise/retail/commercial-guardrails.ts");
+  const commercialEngine = read("lib/enterprise/retail/commercial-engine.ts");
+  const saleExecution = read("lib/enterprise/retail/sale-execution.ts");
   const dashboard = read("lib/enterprise/retail/commercial-dashboard.ts");
   const dashboardRoute = read("app/api/enterprise/[organizationId]/retail/dashboard/route.ts");
   const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.ts");
@@ -60,7 +62,7 @@ function staticShopReleaseChecks() {
 
   const checks = [
     [workspace.includes("setCart") && workspace.includes("cart.map") && workspace.includes("Basket"), "MULTI_ITEM_POS"],
-    [guardrails.includes("prepareCommercialRetailSale") && guardrails.includes("RETAIL_PRICE_OVERRIDE_FORBIDDEN") && salesRoute.includes("prepareCommercialRetailSale"), "SERVER_PRICE_GUARD"],
+    [commercialEngine.includes("prepareCommercialRetailSaleV2") && commercialEngine.includes("RETAIL_PRICE_OVERRIDE_FORBIDDEN") && saleExecution.includes("prepareCommercialRetailSaleV2") && saleExecution.includes("createRetailSale") && salesRoute.includes("executeCanonicalRetailSale"), "SERVER_PRICE_GUARD"],
     [provisioning.includes('providerCode: "MPESA"') && provisioning.includes('providerType: "MOBILE_MONEY"') && provisioning.includes('providerCode: "VODACOM"') && provisioning.includes('providerType: "TELCO"'), "WALLET_NETWORK_SEPARATION"],
     [migration.includes("EnterpriseMobileMoneyTransaction_rc1_external_ref_key") && migration.includes("EnterpriseTelcoTopup_rc1_external_ref_key") && mobileRoute.includes("prepareCommercialMobileMoney") && telcoRoute.includes("prepareCommercialTelcoTopup"), "UNIQUE_PROVIDER_REFERENCE"],
     [guardrails.includes("normalizeRetailPhone") && workspace.includes("normalizePhonePreview") && workspace.includes("ConfirmationCard"), "PHONE_NORMALIZATION_AND_CONFIRMATION"],
