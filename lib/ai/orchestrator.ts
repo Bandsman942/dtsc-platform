@@ -5,7 +5,16 @@ import { createProviderResponseStream } from "@/lib/ai/provider";
 import type { AiModelDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
 
 function selectCandidates(request: AiRouteRequest) {
-  const available = listAvailableAiModels({ context: request.context, locale: request.locale, taskType: request.taskType });
+  const available = listAvailableAiModels({
+    context: request.context,
+    locale: request.locale,
+    taskType: request.taskType,
+    planCode: request.planCode,
+    dataClassifications: request.dataClassifications,
+    requiredCapabilities: request.requiredCapabilities,
+    maximumContextTokens: request.maximumContextTokens,
+    allowSensitiveExternalModel: request.policyFlags?.allowSensitiveExternalModel,
+  });
   const requested = getAiModelDefinition(request.requestedModel);
   const ordered: AiModelDefinition[] = [];
   const add = (model: AiModelDefinition | null | undefined) => {
@@ -20,12 +29,12 @@ function selectCandidates(request: AiRouteRequest) {
 function buildSelection(request: AiRouteRequest, model: AiModelDefinition): AiRouteSelection {
   const estimated = estimateAiCost({ model, inputTokens: request.messages.reduce((sum, message) => sum + Math.ceil(message.content.length / 4), 0), outputTokens: 0 });
   return {
-    strategyCode: "CAPABILITY_COST_HEALTH_V1",
+    strategyCode: "POLICY_CAPABILITY_PLAN_DATA_V1",
     taskType: request.taskType,
     requestedModel: request.requestedModel || null,
     selectedModel: model,
     fallbackModelCodes: [...model.fallbackModelCodes],
-    selectionReason: request.requestedModel ? "REQUESTED_MODEL_ALLOWED" : "DEFAULT_CAPABLE_MODEL",
+    selectionReason: request.requestedModel ? "REQUESTED_MODEL_POLICY_ALLOWED" : "DEFAULT_POLICY_ALLOWED_MODEL",
     estimatedInputCost: estimated.amount,
     currency: estimated.currency,
   };
@@ -34,7 +43,7 @@ function buildSelection(request: AiRouteRequest, model: AiModelDefinition): AiRo
 export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamResult> {
   const candidates = selectCandidates(request);
   if (!candidates.length) {
-    throw new AiProviderError({ reasonCode: "MODEL_UNAVAILABLE", message: "No allowed AI model is configured", statusCode: 503 });
+    throw new AiProviderError({ reasonCode: "MODEL_UNAVAILABLE", message: "No policy-allowed AI model is configured", statusCode: 503 });
   }
 
   const attempts: AiStreamResult["attempts"] = [];
