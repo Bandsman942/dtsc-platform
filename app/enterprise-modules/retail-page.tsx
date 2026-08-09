@@ -5,8 +5,9 @@ import { RetailDeviceReadiness } from "@/components/enterprise/professional/reta
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
+import { RetailOperatorWorkspace } from "@/components/enterprise/professional/retail-operator-workspace";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
-import { EnterpriseRetailShopWorkspace } from "@/components/enterprise/professional/enterprise-retail-shop-workspace";
+import { RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
@@ -44,11 +45,18 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             organizationName={organization.name}
             definition={access.definition}
           />
-        ) : (
-          <EnterpriseRetailShopWorkspace
+        ) : moduleCode === "RETAIL_POS" ? (
+          <RetailPosWorkspace
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
+          />
+        ) : (
+          <RetailOperatorWorkspace
+            organizationId={organizationId}
+            organizationName={organization.name}
+            definition={access.definition}
+            moduleCode={moduleCode}
           />
         )}
 
@@ -56,9 +64,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           <section aria-label={locale === "en" ? "Additional Shop tools" : "Outils complémentaires du Shop"} className="space-y-3">
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span>
-                  {locale === "en" ? "Orders, pickup & offline sales" : "Commandes, retraits & vente hors connexion"}
-                </span>
+                <span>{locale === "en" ? "Orders, pickup & offline sales" : "Commandes, retraits & vente hors connexion"}</span>
                 <span className="text-xs font-bold text-dtsc-muted group-open:hidden">{locale === "en" ? "Open" : "Ouvrir"}</span>
                 <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline">{locale === "en" ? "Close" : "Fermer"}</span>
               </summary>
