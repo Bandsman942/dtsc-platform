@@ -50,6 +50,12 @@ export type AiPolicyFlags = {
   requireTools?: boolean;
 };
 
+export type AiRoutingConstraints = {
+  maximumEstimatedInputCost?: number | null;
+  preferLowerCost?: boolean;
+  preferLowerLatency?: boolean;
+};
+
 export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
 
 export type AiProviderDefinition = {
@@ -131,6 +137,7 @@ export type AiRouteRequest = {
   maximumContextTokens?: number | null;
   assistantCode?: string | null;
   policyFlags?: AiPolicyFlags;
+  routingConstraints?: AiRoutingConstraints;
   tags?: string[];
   signal?: AbortSignal;
 };
@@ -142,6 +149,15 @@ export type AiRouteSelection = {
   selectedModel: AiModelDefinition;
   fallbackModelCodes: string[];
   selectionReason: string;
+  selectionScore?: number | null;
+  selectionCriteria?: {
+    capabilityScore: number;
+    preferenceScore: number;
+    healthScore: number;
+    costScore: number;
+    healthStatus: string;
+    reasonParts: string[];
+  } | null;
   estimatedInputCost: number | null;
   currency: string | null;
 };
