@@ -33,9 +33,10 @@ async function enableOperatorModules() {
     where: { organizationId },
     data: { profileCode: "RETAIL_TELCO_MOBILE_MONEY" },
   });
-  for (const [moduleCode, labelFr, labelEn] of [
-    ["MOBILE_MONEY_AGENCY", "Agence Mobile Money", "Mobile Money agency"],
-    ["TELCO_TOPUPS", "Recharges Télécom", "Telecom top-ups"],
+  for (const [moduleCode, labelFr, labelEn, isCore] of [
+    ["FINANCE_TREASURY", "Trésorerie", "Treasury", true],
+    ["MOBILE_MONEY_AGENCY", "Agence Mobile Money", "Mobile Money agency", false],
+    ["TELCO_TOPUPS", "Recharges Télécom", "Telecom top-ups", false],
   ]) {
     await prisma.enterpriseModule.upsert({
       where: { organizationId_moduleCode: { organizationId, moduleCode } },
@@ -47,7 +48,7 @@ async function enableOperatorModules() {
         labelEn,
         moduleCategory: "SHOP2_E2E",
         isEnabled: true,
-        isCore: false,
+        isCore,
         requiresPlanLevel: "BUSINESS",
         sortOrder: 940,
       },
