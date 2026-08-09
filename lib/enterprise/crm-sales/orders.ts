@@ -77,7 +77,6 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
         createdByUserId: actorUserId,
         items: {
           create: input.items.map((item, index) => ({
-            organizationId,
             catalogItemId: item.catalogItemId,
             description: item.description,
             quantityOrdered: item.quantity,
