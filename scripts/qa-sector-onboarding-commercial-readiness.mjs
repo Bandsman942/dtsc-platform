@@ -14,6 +14,7 @@ const check = (condition, message, hard = true) => {
   if (condition) return;
   (hard ? failures : warnings).push(message);
 };
+const githubAnnotationValue = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 function canonicalModuleCodes() {
   const directory = path.join(root, "lib/enterprise");
@@ -151,7 +152,10 @@ for (const result of results) console.log(`- ${result.sectorCode} v${result.temp
 for (const warning of warnings) console.warn(`WARN: ${warning}`);
 if (failures.length) {
   console.error("\nSector onboarding commercial-readiness QA failed:");
-  for (const failure of failures) console.error(`- ${failure}`);
+  for (const failure of failures) {
+    console.error(`- ${failure}`);
+    if (process.env.GITHUB_ACTIONS === "true") console.error(`::error title=Sector onboarding commercial readiness::${githubAnnotationValue(failure)}`);
+  }
   process.exit(1);
 }
 console.log("\nSector onboarding commercial-readiness QA passed. COMMERCE_RETAIL satisfies the enforced COMMERCIAL_READY onboarding contract.");
