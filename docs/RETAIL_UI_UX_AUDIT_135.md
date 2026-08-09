@@ -59,7 +59,9 @@ Le texte expliquait que le client serait « rattaché côté serveur » à la ve
 
 ---
 
-# Tranche 2 — Tarification, promotions, retours et remboursements
+# Tranche 2 — Issue #138 — Tarification, promotions, retours et remboursements
+
+Branche de livraison : `refactor/138-retail-commercial-coherence`, créée depuis la baseline Production `ed4ec212abbb60c139c47617389a34cc6f66fc1f`.
 
 ## Diagnostic
 
