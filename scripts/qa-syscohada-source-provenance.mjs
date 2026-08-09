@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -46,6 +47,16 @@ if (failures.length === 0) {
   const allowedLegalStatuses = new Set(["REVIEW_REQUIRED", "AUTHORIZED_FOR_DTSC_IMPLEMENTATION"]);
   if (!allowedLegalStatuses.has(manifest.legalUseStatus)) fail(`SYSCOHADA source manifest: legalUseStatus inconnu ${manifest.legalUseStatus}`);
 
+  if (manifest.datasetPipeline) {
+    if (manifest.datasetPipeline.schemaVersion !== "1.0.0") fail("SYSCOHADA dataset pipeline: schemaVersion 1.0.0 attendu");
+    for (const field of ["schemaPath", "builderPath"]) {
+      const configuredPath = manifest.datasetPipeline[field];
+      if (!configuredPath || !fs.existsSync(path.join(root, configuredPath))) fail(`SYSCOHADA dataset pipeline: ${field} absent ou introuvable`);
+    }
+    if (manifest.datasetPipeline.requiresSourceVerification !== true) fail("SYSCOHADA dataset pipeline: requiresSourceVerification doit être true");
+    if (manifest.datasetPipeline.publicationRequiresDatasetVerification !== true) fail("SYSCOHADA dataset pipeline: publicationRequiresDatasetVerification doit être true");
+  }
+
   const sourceVerified = ["SOURCE_FILE_VERIFIED", "DATASET_VERIFIED"].includes(manifest.verificationStatus);
   if (sourceVerified) {
     const sourceSha = manifest.verifiedSourceFile?.sha256 || "";
@@ -56,9 +67,33 @@ if (failures.length === 0) {
 
   if (manifest.verificationStatus === "DATASET_VERIFIED") {
     const datasetSha = manifest.canonicalDataset?.sha256 || "";
+    const datasetPath = manifest.canonicalDataset?.path || "";
     if (!/^[a-f0-9]{64}$/i.test(datasetSha)) fail("SYSCOHADA source manifest: SHA-256 dataset obligatoire au statut DATASET_VERIFIED");
-    if (!manifest.canonicalDataset?.path) fail("SYSCOHADA source manifest: path dataset obligatoire au statut DATASET_VERIFIED");
+    if (!datasetPath) fail("SYSCOHADA source manifest: path dataset obligatoire au statut DATASET_VERIFIED");
     if (!Number.isInteger(manifest.canonicalDataset?.accountCount) || manifest.canonicalDataset.accountCount <= 0) fail("SYSCOHADA source manifest: accountCount positif obligatoire au statut DATASET_VERIFIED");
+    if (!Number.isInteger(manifest.canonicalDataset?.groupCount) || manifest.canonicalDataset.groupCount < 0) fail("SYSCOHADA source manifest: groupCount entier obligatoire au statut DATASET_VERIFIED");
+
+    if (datasetPath) {
+      const absoluteDatasetPath = path.join(root, datasetPath);
+      if (!fs.existsSync(absoluteDatasetPath)) {
+        fail(`SYSCOHADA source manifest: dataset canonique introuvable ${datasetPath}`);
+      } else {
+        const datasetBytes = fs.readFileSync(absoluteDatasetPath);
+        const actualSha = crypto.createHash("sha256").update(datasetBytes).digest("hex");
+        if (datasetSha && actualSha.toLowerCase() !== datasetSha.toLowerCase()) fail("SYSCOHADA source manifest: SHA-256 du dataset canonique ne correspond pas au fichier");
+        try {
+          const dataset = JSON.parse(datasetBytes.toString("utf8"));
+          if (dataset.frameworkCode !== manifest.frameworkCode || dataset.templateCode !== manifest.plannedTemplateCode || dataset.templateVersion !== manifest.plannedTemplateVersion) {
+            fail("SYSCOHADA source manifest: identité du dataset canonique incompatible avec le manifeste");
+          }
+          if (!Array.isArray(dataset.accounts) || dataset.accounts.length !== manifest.canonicalDataset.accountCount) fail("SYSCOHADA source manifest: accountCount ne correspond pas au dataset");
+          if (!Array.isArray(dataset.groups) || dataset.groups.length !== manifest.canonicalDataset.groupCount) fail("SYSCOHADA source manifest: groupCount ne correspond pas au dataset");
+          if ((dataset.source?.sha256 || "").toLowerCase() !== (manifest.verifiedSourceFile?.sha256 || "").toLowerCase()) fail("SYSCOHADA source manifest: dataset non lié au SHA-256 de la source vérifiée");
+        } catch (error) {
+          fail(`SYSCOHADA source manifest: dataset canonique JSON invalide (${error instanceof Error ? error.message : String(error)})`);
+        }
+      }
+    }
   }
 
   const syscohadaDir = path.join(root, "lib/enterprise/accounting/templates/syscohada");
