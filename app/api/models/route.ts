@@ -31,12 +31,17 @@ export async function GET() {
   return NextResponse.json({
     defaultModel,
     planCode,
-    models: models.map((model) => ({
-      id: model.id,
-      name: model.label,
-      providerCode: model.providerCode,
-      status: model.status,
-      minimumPlan: model.minimumPlan,
-    })),
+    models: models.map((model) => {
+      const definition = getAiModelDefinition(model.id);
+      return {
+        id: model.id,
+        name: model.label,
+        providerCode: model.providerCode,
+        status: model.status,
+        minimumPlan: model.minimumPlan,
+        profileCodes: definition?.profileCodes || [],
+        certificationVersion: definition?.certificationVersion || null,
+      };
+    }),
   });
 }
