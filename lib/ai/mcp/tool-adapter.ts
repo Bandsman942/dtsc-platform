@@ -1,5 +1,6 @@
 import type { AiDataClassification } from "@/lib/ai/types";
 import { writeMcpAuditEvent } from "@/lib/ai/mcp/audit";
+import { authorizeMcpRequiredPermissions } from "@/lib/ai/mcp/authorization";
 import { getMcpToolBindingByDtscCode } from "@/lib/ai/mcp/bindings";
 import { discoverAndPersistMcpServer, getDiscoveredMcpTool } from "@/lib/ai/mcp/discovery";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
@@ -51,6 +52,9 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
     if (binding.mode !== "READ" || binding.requiresConfirmation) throw new Error("MCP_AI07_READ_ONLY_POLICY");
     assertServerContext({ organizationScope: server.organizationScope, contexts: server.contexts, context: input.context });
 
+    const permissionDecision = await authorizeMcpRequiredPermissions({ requiredPermissions: binding.requiredPermissions, context: input.context });
+    if (!permissionDecision.allowed) throw new Error(permissionDecision.reasonCode);
+
     const dataDecision = authorizeMcpDataBoundary({
       server,
       classifications: (input.context.dataClassifications || []).map(normalizeClassification),
@@ -73,7 +77,7 @@ export async function executeMcpBoundTool(input: { dtscToolCode: string; args: u
     return result.structuredContent ?? { content: result.content ?? [] };
   } catch (error) {
     const reasonCode = error instanceof Error ? error.message.slice(0, 160) : "MCP_TOOL_EXECUTION_FAILED";
-    await writeMcpAuditEvent({ ...auditBase, eventType: "TOOL_CALL", status: reasonCode.includes("FORBIDDEN") || reasonCode.includes("NOT_ALLOWED") || reasonCode.includes("REQUIRED") ? "DENIED" : "FAILED", reasonCode });
+    await writeMcpAuditEvent({ ...auditBase, eventType: "TOOL_CALL", status: reasonCode.includes("FORBIDDEN") || reasonCode.includes("NOT_ALLOWED") || reasonCode.includes("REQUIRED") || reasonCode.includes("PERMISSION") ? "DENIED" : "FAILED", reasonCode });
     throw error;
   }
 }
