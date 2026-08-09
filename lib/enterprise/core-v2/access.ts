@@ -1,8 +1,20 @@
 import type { Prisma } from "@prisma/client";
-import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { resolveEnterpriseModuleCapabilities, type EnterpriseModuleAction } from "@/lib/enterprise/module-access";
+import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import type { SessionPayload } from "@/lib/session";
 
 export type EnterpriseCoreV2Action = "read" | "submit" | "write" | "manage";
+
+function capabilityAllowsAction(
+  capabilities: Awaited<ReturnType<typeof resolveEnterpriseModuleCapabilities>>,
+  action: EnterpriseModuleAction,
+) {
+  if (action === "read") return capabilities.canRead;
+  if (action === "submit") return capabilities.canSubmit;
+  if (action === "write") return capabilities.canWrite;
+  if (action === "approve") return capabilities.canApprove;
+  return capabilities.canManage;
+}
 
 export async function getEnterpriseCoreV2Access({
   session,
@@ -17,14 +29,16 @@ export async function getEnterpriseCoreV2Access({
 }) {
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
-  if (membership.role === "GUEST" && action !== "read") return null;
-  const allowed = await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, action);
-  if (!allowed) return null;
+  const capabilities = await resolveEnterpriseModuleCapabilities({ userId: session.userId, organizationId, moduleCode });
+  if (!capabilityAllowsAction(capabilities, action)) return null;
   return {
     membership,
-    canSeeAll: ENTERPRISE_MANAGER_ROLES.has(membership.role),
-    canManage: ENTERPRISE_MANAGER_ROLES.has(membership.role),
-    canCreate: membership.role !== "GUEST",
+    capabilities,
+    canSeeAll: capabilities.canApprove || capabilities.canManage,
+    canManage: capabilities.canManage,
+    canCreate: capabilities.canCreate,
+    canWrite: capabilities.canWrite,
+    canApprove: capabilities.canApprove,
   };
 }
 
