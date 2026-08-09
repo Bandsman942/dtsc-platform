@@ -10,15 +10,8 @@ export type AiExecutionContext = {
   contextCode: AiContextCode;
   profile: AssistantProfile;
   profileResolution: "REQUESTED" | "INFERRED" | "FALLBACK";
-  organization: {
-    id: string;
-    name: string;
-    sectorCode: string | null;
-  } | null;
-  membership: {
-    role: string;
-    positionCode: string | null;
-  } | null;
+  organization: { id: string; name: string; sectorCode: string | null } | null;
+  membership: { role: string; positionCode: string | null } | null;
   planCode: string;
   activeModuleCodes: string[];
   requestedModuleCode: string | null;
@@ -38,9 +31,9 @@ function shortHash(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 20);
 }
 
-function defaultClassifications(profile: AssistantProfile): AiDataClassification[] {
+function defaultClassifications(profile: AssistantProfile, organizationScoped: boolean): AiDataClassification[] {
+  if (organizationScoped) return ["CONFIDENTIAL"];
   if (profile.code === "DTSC_GENERAL") return ["INTERNAL"];
-  if (profile.code === "SHOP_ASSISTANT") return ["INTERNAL"];
   return ["CONFIDENTIAL"];
 }
 
@@ -76,7 +69,7 @@ export async function buildAiExecutionContext({
       requestedModuleCode: null,
       canReadClinicalData: false,
       contextVersion: shortHash({ contextCode, profile: profile.code, profileVersion: profile.version, plan: plan.planCode }),
-      defaultDataClassifications: defaultClassifications(profile),
+      defaultDataClassifications: defaultClassifications(profile, false),
     };
   }
 
@@ -111,12 +104,7 @@ export async function buildAiExecutionContext({
   }
 
   const sectorCode = membership.organization.sectorCode;
-  const profile = resolveAssistantProfile({
-    context: contextCode,
-    sectorCode,
-    moduleCode: canonicalRequestedModule,
-    requestedCode: requestedAssistantCode,
-  });
+  const profile = resolveAssistantProfile({ context: contextCode, sectorCode, moduleCode: canonicalRequestedModule, requestedCode: requestedAssistantCode });
   const requestedResolved = requestedAssistantCode && profile.code === requestedAssistantCode;
   const activeModuleCodes = Array.from(new Set(navigableModules.map((entry) => entry.canonicalCode).filter((code): code is string => Boolean(code)))).sort();
 
@@ -152,6 +140,6 @@ export async function buildAiExecutionContext({
     requestedModuleCode: canonicalRequestedModule,
     canReadClinicalData,
     contextVersion,
-    defaultDataClassifications: defaultClassifications(profile),
+    defaultDataClassifications: defaultClassifications(profile, true),
   };
 }
