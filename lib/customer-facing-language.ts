@@ -69,6 +69,14 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "La recherche de clients n’a pas abouti. Réessayez avec un autre nom, numéro ou contact.",
     en: "Customer search could not be completed. Try another name, number or contact.",
   },
+  RETAIL_CUSTOMER_NOT_FOUND: {
+    fr: "Ce client n’est plus disponible dans le Shop actif.",
+    en: "This customer is no longer available in the active Shop.",
+  },
+  RETAIL_CUSTOMER_HISTORY_LOAD_FAILED: {
+    fr: "Les avantages et l’historique de ce client ne sont pas disponibles pour le moment.",
+    en: "This customer’s benefits and history are not available right now.",
+  },
   RETAIL_PRODUCT_SEARCH_FAILED: {
     fr: "La recherche de produits n’a pas abouti. Réessayez ou vérifiez le dépôt sélectionné.",
     en: "Product search could not be completed. Try again or check the selected warehouse.",
@@ -117,12 +125,27 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "L’état de ce paiement a changé et cette action n’est plus disponible.",
     en: "This payment status has changed and this action is no longer available.",
   },
+  RETAIL_PAYMENT_CREATE_FAILED: {
+    fr: "Le paiement n’a pas pu être enregistré. Vérifiez le moyen de paiement, le montant et la devise.",
+    en: "The payment could not be recorded. Check the payment method, amount and currency.",
+  },
+  RETAIL_PAYMENT_LIST_FAILED: {
+    fr: "Le suivi des paiements n’est pas disponible pour le moment.",
+    en: "Payment follow-up is not available right now.",
+  },
 };
 
 const STATUS_LABELS: Record<string, Bilingual> = {
   READY: { fr: "Prêt", en: "Ready" },
   ACTIVE: { fr: "Actif", en: "Active" },
   INACTIVE: { fr: "À activer", en: "Needs activation" },
+  DRAFT: { fr: "Brouillon", en: "Draft" },
+  PAUSED: { fr: "En pause", en: "Paused" },
+  ENDED: { fr: "Terminé", en: "Ended" },
+  SUSPENDED: { fr: "Suspendu", en: "Suspended" },
+  EXHAUSTED: { fr: "Solde épuisé", en: "Balance used up" },
+  EXPIRED: { fr: "Expiré", en: "Expired" },
+  DISABLED: { fr: "Désactivé", en: "Disabled" },
   ACTIVE_CORE: { fr: "Configuration active", en: "Configuration active" },
   VALIDATED: { fr: "Validé", en: "Validated" },
   SUPPORTED: { fr: "Disponible", en: "Available" },
@@ -240,6 +263,28 @@ const FINANCIAL_ACCOUNT_TYPE_LABELS: Record<string, Bilingual> = {
   CARD_CLEARING: { fr: "Encaissements carte", en: "Card clearing account" },
 };
 
+const STORED_VALUE_TYPE_LABELS: Record<string, Bilingual> = {
+  GIFT_CARD: { fr: "Carte-cadeau", en: "Gift card" },
+  STORE_CREDIT: { fr: "Avoir client", en: "Store credit" },
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, Bilingual> = {
+  CASH: { fr: "Espèces", en: "Cash" },
+  CARD: { fr: "Carte", en: "Card" },
+  MOBILE_MONEY: { fr: "Mobile Money", en: "Mobile Money" },
+  BANK_TRANSFER: { fr: "Virement bancaire", en: "Bank transfer" },
+  OTHER: { fr: "Autre moyen de paiement", en: "Other payment method" },
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, Bilingual> = {
+  INITIATED: { fr: "À traiter", en: "To process" },
+  AUTHORIZED: { fr: "Autorisé", en: "Authorized" },
+  CAPTURED: { fr: "Confirmé", en: "Confirmed" },
+  FAILED: { fr: "Échec", en: "Failed" },
+  VOIDED: { fr: "Annulé", en: "Voided" },
+  REFUNDED: { fr: "Remboursé", en: "Refunded" },
+};
+
 const TECHNICAL_PATTERN = /(^[A-Z0-9]+(?:_[A-Z0-9]+)+$)|\b(prisma|tenant|idempot|webhook|adapter|payload|snapshot|canonical|server|posting|stack trace|http\s?\d{3}|\/api\/)\b/i;
 
 function pick(value: Bilingual, locale: CustomerFacingLocale) {
@@ -311,6 +356,18 @@ export function customerFacingRefundMethod(code: string, locale: CustomerFacingL
 
 export function customerFacingFinancialAccountType(code: string, locale: CustomerFacingLocale) {
   return labelFrom(FINANCIAL_ACCOUNT_TYPE_LABELS, code, locale, { fr: "Compte financier", en: "Financial account" });
+}
+
+export function customerFacingStoredValueType(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(STORED_VALUE_TYPE_LABELS, code, locale, { fr: "Solde client", en: "Customer balance" });
+}
+
+export function customerFacingPaymentMethod(code: string, locale: CustomerFacingLocale) {
+  return labelFrom(PAYMENT_METHOD_LABELS, code, locale, { fr: "Moyen de paiement", en: "Payment method" });
+}
+
+export function customerFacingPaymentStatus(status: string | null | undefined, locale: CustomerFacingLocale) {
+  return labelFrom(PAYMENT_STATUS_LABELS, status, locale, { fr: "En cours", en: "In progress" });
 }
 
 export function customerFacingReadinessDetail(detail: unknown, complete: boolean, locale: CustomerFacingLocale) {

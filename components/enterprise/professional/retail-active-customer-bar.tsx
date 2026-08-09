@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
-import { customerFacingError } from "@/lib/customer-facing-language";
+import {
+  customerFacingError,
+  customerFacingStatusLabel,
+  customerFacingStoredValueType,
+} from "@/lib/customer-facing-language";
 
 type Customer = {
   id: string;
@@ -20,16 +24,61 @@ type Capabilities = {
   canManageCustomers: boolean;
 };
 
+type LoyaltyAccount = {
+  id: string;
+  pointsBalance: string;
+  lifetimeEarned: string;
+  lifetimeRedeemed: string;
+  status: string;
+  program: { nameFr: string; nameEn: string; currencyCode: string; status: string };
+};
+
+type StoredValueAccount = {
+  id: string;
+  accountType: string;
+  displayCode: string;
+  currencyCode: string;
+  balance: string;
+  status: string;
+  expiresAt: string | null;
+};
+
+type CustomerValue = {
+  summary: {
+    saleCount: number;
+    returnCount: number;
+    salesTotalByCurrency: Record<string, number>;
+    returnsTotalByCurrency: Record<string, number>;
+  };
+  loyaltyAccounts: LoyaltyAccount[];
+  storedValueAccounts: StoredValueAccount[];
+};
+
 async function readJson(response: Response) {
   const body = await response.json().catch(() => null);
   if (!response.ok) throw new Error(body?.message || body?.error || "Request failed");
   return body;
 }
 
+function money(value: string | number, currencyCode: string) {
+  const amount = Number(value || 0);
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode, maximumFractionDigits: 2 }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currencyCode}`;
+  }
+}
+
+function points(value: string | number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(value || 0));
+}
+
 export function RetailActiveCustomerBar({ organizationId }: { organizationId: string }) {
   const language: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [active, setActive] = useState<Customer | null>(null);
+  const [customerValue, setCustomerValue] = useState<CustomerValue | null>(null);
+  const [valueLoading, setValueLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [searching, setSearching] = useState(false);
@@ -53,6 +102,19 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
     cancel: "Cancel",
     noResult: "No matching customer.",
     hint: "Choose a customer to personalize this sale and keep their purchase history together. Remove the customer for a walk-in sale.",
+    benefits: "Loyalty & customer balances",
+    benefitsHint: "See the benefits already linked to this customer before completing the sale.",
+    loyalty: "Loyalty",
+    points: "points available",
+    earned: "earned in total",
+    redeemed: "used in total",
+    storedValue: "Gift cards & store credit",
+    noBenefits: "No loyalty balance, gift card or store credit is linked to this customer yet.",
+    purchaseHistory: "Purchase history",
+    sales: "sales",
+    returns: "returns",
+    expires: "Expires",
+    loadingBenefits: "Loading customer benefits…",
   } : {
     title: "Client au comptoir",
     walkIn: "Vente de passage",
@@ -68,6 +130,19 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
     cancel: "Annuler",
     noResult: "Aucun client correspondant.",
     hint: "Sélectionnez un client pour personnaliser la vente et conserver son historique d’achats. Retirez-le pour une vente de passage.",
+    benefits: "Fidélité & avoirs client",
+    benefitsHint: "Consultez les avantages déjà liés à ce client avant de finaliser la vente.",
+    loyalty: "Fidélité",
+    points: "points disponibles",
+    earned: "gagnés au total",
+    redeemed: "utilisés au total",
+    storedValue: "Cartes-cadeaux & avoirs",
+    noBenefits: "Aucun solde fidélité, carte-cadeau ou avoir n’est encore lié à ce client.",
+    purchaseHistory: "Historique d’achats",
+    sales: "ventes",
+    returns: "retours",
+    expires: "Expire le",
+    loadingBenefits: "Chargement des avantages client…",
   }, [language]);
 
   const showError = useCallback((caught: unknown, fallback?: { fr: string; en: string }) => {
@@ -77,8 +152,8 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
   const load = useCallback(async () => {
     try {
       const [permissionData, activeData] = await Promise.all([
-        fetch(`/api/enterprise/${organizationId}/retail/customer-payment-permissions`).then(readJson),
-        fetch(`/api/enterprise/${organizationId}/retail/active-customer`).then(readJson),
+        fetch(`/api/enterprise/${organizationId}/retail/customer-payment-permissions`, { cache: "no-store" }).then(readJson),
+        fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { cache: "no-store" }).then(readJson),
       ]);
       setCapabilities(permissionData.capabilities);
       setActive(activeData.customer || null);
@@ -93,6 +168,32 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!active?.id || !capabilities?.canReadCustomers) {
+      setCustomerValue(null);
+      return;
+    }
+    const controller = new AbortController();
+    setValueLoading(true);
+    fetch(`/api/enterprise/${organizationId}/retail/customers/${active.id}`, { signal: controller.signal, cache: "no-store" })
+      .then(readJson)
+      .then((data) => setCustomerValue({
+        summary: data.summary,
+        loyaltyAccounts: data.loyaltyAccounts || [],
+        storedValueAccounts: data.storedValueAccounts || [],
+      }))
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+          showError(caught, {
+            fr: "Les avantages de ce client ne sont pas disponibles pour le moment.",
+            en: "This customer’s benefits are not available right now.",
+          });
+        }
+      })
+      .finally(() => setValueLoading(false));
+    return () => controller.abort();
+  }, [active?.id, capabilities?.canReadCustomers, organizationId, showError]);
 
   useEffect(() => {
     if (!capabilities?.canReadCustomers || search.trim().length < 2) {
@@ -129,6 +230,7 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
         body: JSON.stringify({ customerBusinessPartyId: customer.id }),
       }).then(readJson);
       setActive(data.customer);
+      setCustomerValue(null);
       setSearch("");
       setResults([]);
     } catch (caught) {
@@ -144,6 +246,7 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
     try {
       await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).then(readJson);
       setActive(null);
+      setCustomerValue(null);
     } catch (caught) {
       showError(caught, {
         fr: "Le client n’a pas pu être retiré de la vente.",
@@ -201,12 +304,81 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
           </div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{copy.hint}</p>
           {active ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 p-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{active.displayName || active.legalName}</p>
-                <p className="truncate text-xs text-muted-foreground">{[active.retailProfile?.customerNumber || active.code, active.primaryPhone, active.primaryEmail, active.retailProfile?.segmentCode].filter(Boolean).join(" · ")}</p>
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{active.displayName || active.legalName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{[active.retailProfile?.customerNumber || active.code, active.primaryPhone, active.primaryEmail, active.retailProfile?.segmentCode].filter(Boolean).join(" · ")}</p>
+                </div>
+                <button type="button" onClick={() => void clear()} className="min-h-10 rounded-xl border px-3 text-sm font-medium hover:bg-muted">{copy.clear}</button>
               </div>
-              <button type="button" onClick={() => void clear()} className="min-h-10 rounded-xl border px-3 text-sm font-medium hover:bg-muted">{copy.clear}</button>
+
+              <details className="group rounded-xl border bg-background">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                  <span>{copy.benefits}</span>
+                  <span className="text-xs font-medium text-muted-foreground group-open:hidden">{language === "en" ? "View" : "Voir"}</span>
+                  <span className="hidden text-xs font-medium text-muted-foreground group-open:inline">{language === "en" ? "Hide" : "Masquer"}</span>
+                </summary>
+                <div className="space-y-4 border-t p-3">
+                  <p className="text-xs leading-5 text-muted-foreground">{copy.benefitsHint}</p>
+                  {valueLoading ? <p className="text-sm text-muted-foreground">{copy.loadingBenefits}</p> : customerValue ? (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">{copy.purchaseHistory}</p>
+                          <p className="mt-1 text-sm font-semibold">{customerValue.summary.saleCount} {copy.sales} · {customerValue.summary.returnCount} {copy.returns}</p>
+                        </div>
+                        {Object.entries(customerValue.summary.salesTotalByCurrency || {}).slice(0, 2).map(([currency, total]) => (
+                          <div key={currency} className="rounded-xl bg-muted/30 p-3">
+                            <p className="text-xs text-muted-foreground">{language === "en" ? "Purchases" : "Achats"} · {currency}</p>
+                            <p className="mt-1 text-sm font-semibold">{money(total, currency)}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {customerValue.loyaltyAccounts.length ? (
+                        <div>
+                          <h3 className="text-sm font-semibold">{copy.loyalty}</h3>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {customerValue.loyaltyAccounts.map((account) => (
+                              <div key={account.id} className="rounded-xl border p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="min-w-0 truncate text-sm font-medium">{language === "en" ? account.program.nameEn : account.program.nameFr}</p>
+                                  <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">{customerFacingStatusLabel(account.status, language)}</span>
+                                </div>
+                                <p className="mt-2 text-lg font-semibold">{points(account.pointsBalance)} <span className="text-xs font-medium text-muted-foreground">{copy.points}</span></p>
+                                <p className="mt-1 text-xs text-muted-foreground">{points(account.lifetimeEarned)} {copy.earned} · {points(account.lifetimeRedeemed)} {copy.redeemed}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {customerValue.storedValueAccounts.length ? (
+                        <div>
+                          <h3 className="text-sm font-semibold">{copy.storedValue}</h3>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {customerValue.storedValueAccounts.map((account) => (
+                              <div key={account.id} className="rounded-xl border p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-sm font-medium">{customerFacingStoredValueType(account.accountType, language)}</p>
+                                  <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">{customerFacingStatusLabel(account.status, language)}</span>
+                                </div>
+                                <p className="mt-2 text-lg font-semibold">{money(account.balance, account.currencyCode)}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{account.displayCode}{account.expiresAt ? ` · ${copy.expires}: ${new Date(account.expiresAt).toLocaleDateString(language === "en" ? "en" : "fr")}` : ""}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {!customerValue.loyaltyAccounts.length && !customerValue.storedValueAccounts.length ? (
+                        <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">{copy.noBenefits}</p>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              </details>
             </div>
           ) : null}
         </div>

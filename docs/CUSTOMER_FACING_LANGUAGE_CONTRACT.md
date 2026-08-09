@@ -30,7 +30,8 @@ Sauf nécessité métier explicite, ne pas afficher directement :
 - enums techniques avec underscores ;
 - identifiants internes sans valeur métier ;
 - `tenant`, `canonical`, `idempotency`, `webhook`, `adapter`, `payload`, `snapshot`, `server reconciliation`, `posting` ;
-- codes tels que `PENDING_PROVIDER`, `PENDING_SYNC`, `UNKNOWN`, `ACTIVE_CORE`, `TENANT_CONFIGURATION_REQUIRED`, `PERCENTAGE`, `STACKABLE`, `SELLABLE`, `RESTOCK` ou `ORIGINAL_TENDER` sans traduction métier ;
+- identifiants et diagnostics fournisseur comme `providerId`, `providerReference`, `failureCode`, `failureMessage`, références de credential ou secrets ;
+- codes tels que `PENDING_PROVIDER`, `PENDING_SYNC`, `UNKNOWN`, `ACTIVE_CORE`, `TENANT_CONFIGURATION_REQUIRED`, `PERCENTAGE`, `STACKABLE`, `SELLABLE`, `RESTOCK`, `ORIGINAL_TENDER`, `GIFT_CARD`, `STORE_CREDIT`, `INITIATED`, `CAPTURED` ou `REFUNDED` sans traduction métier ;
 - noms d’entités comme `EnterpriseBusinessParty`, `EnterpriseInventoryReservation` ou équivalent.
 
 Les codes restent autorisés comme **valeurs internes** de formulaires, payloads, logs, audits et tests lorsqu’ils ne sont pas rendus comme texte client.
@@ -68,7 +69,16 @@ Les codes restent autorisés comme **valeurs internes** de formulaires, payloads
 | SCRAP | Sortir du stock / rebut | Remove from stock / scrap |
 | NO_STOCK | Aucun mouvement de stock | No stock movement |
 | ORIGINAL_TENDER | Moyen de paiement d’origine | Original payment method |
+| GIFT_CARD | Carte-cadeau | Gift card |
 | STORE_CREDIT | Avoir client | Store credit |
+| CARD | Carte | Card |
+| BANK_TRANSFER | Virement bancaire | Bank transfer |
+| INITIATED payment | À traiter | To process |
+| AUTHORIZED payment | Autorisé | Authorized |
+| CAPTURED payment | Confirmé | Confirmed |
+| FAILED payment | Échec | Failed |
+| VOIDED payment | Annulé | Voided |
+| REFUNDED payment | Remboursé | Refunded |
 | Posting | Comptabilisation | Accounting entry / posting only when needed |
 | Reconciliation | Vérification / rapprochement | Verification / reconciliation only when understood by the role |
 
@@ -108,7 +118,47 @@ Il ne doit pas être injecté tel quel dans un toast, une alerte ou une carte cl
 
 Une erreur backend déjà formulée pour un humain peut être conservée lorsqu’elle ne contient aucun détail d’implémentation. Une erreur technique inconnue doit obligatoirement passer par le fallback client.
 
-## 7. Fallback obligatoire
+## 7. Données de paiement visibles
+
+Une surface cliente de suivi des paiements doit appliquer le principe de minimisation : afficher uniquement ce qui aide le rôle métier à comprendre et agir.
+
+Sont appropriés, selon permission :
+
+- montant et devise ;
+- moyen de paiement ;
+- état métier traduit ;
+- référence client ou opérationnelle compréhensible ;
+- date utile.
+
+Ne doivent pas être affichés dans une surface cliente standard :
+
+- identifiant interne du fournisseur ;
+- référence technique fournisseur ;
+- code ou message d’échec brut ;
+- payload fournisseur ;
+- credential reference ;
+- secret ou référence de secret ;
+- état technique non traduit.
+
+Ces éléments restent disponibles pour les outils internes, l’audit, le support et les processus de rapprochement autorisés.
+
+## 8. Valeur client, fidélité et avoirs
+
+Le POS peut afficher les avantages déjà liés au client actif lorsqu’ils sont utiles à la vente :
+
+- points disponibles ;
+- historique de gain/utilisation ;
+- carte-cadeau ;
+- avoir client ;
+- solde et devise ;
+- statut traduit ;
+- échéance si elle est pertinente.
+
+Cette information doit rester progressive : elle ne doit pas prendre la priorité visuelle sur la vente elle-même.
+
+Le code interne d’un programme, le type d’entité, l’identifiant de compte ou l’enum technique ne doit pas remplacer le nom métier visible.
+
+## 9. Fallback obligatoire
 
 Lorsqu’un code n’a pas encore de traduction dédiée, utiliser un message humain générique plutôt que le code brut.
 
@@ -116,7 +166,7 @@ FR : `Cette action n’a pas pu être terminée. Vérifiez les informations puis
 
 EN : `This action could not be completed. Check the information and try again.`
 
-## 8. Internationalisation
+## 10. Internationalisation
 
 Toute nouvelle formulation cliente doit être disponible au minimum en français et en anglais.
 
@@ -124,7 +174,7 @@ Les traductions doivent être naturelles et orientées métier, pas une traducti
 
 Une valeur d’enum peut rester identique dans le payload technique, mais chaque option rendue dans un sélecteur, badge, liste, tableau ou carte doit utiliser le mapping localisé.
 
-## 9. Liens vers les sources de vérité
+## 11. Liens vers les sources de vérité
 
 Lorsqu’une information est administrée dans un autre module ERP, le texte client ne doit pas expliquer la propriété technique de l’entité. L’interface doit plutôt proposer un lien métier vers l’espace où l’utilisateur peut agir.
 
@@ -137,13 +187,13 @@ Exemples Retail :
 
 Ces liens ne créent aucun second CRUD et ne changent pas la source de vérité.
 
-## 10. Responsabilité produit
+## 12. Responsabilité produit
 
 Une fonctionnalité ne doit pas être présentée comme certifiée, conforme ou connectée si la preuve correspondante n’existe pas.
 
 Le langage commercial doit être convaincant sans surpromettre : il décrit ce que le produit permet réellement dans le contexte du client.
 
-## 11. Contrôle CI/CD
+## 13. Contrôle CI/CD
 
 Les gates Retail doivent vérifier progressivement :
 
@@ -151,6 +201,7 @@ Les gates Retail doivent vérifier progressivement :
 - l’absence d’enums bruts connus dans les textes visibles ;
 - l’absence de jargon technique interdit dans les copies clientes ;
 - la présence des traductions FR/EN ;
+- la minimisation des données de paiement visibles ;
 - les liens métier vers les sources ERP lorsqu’une action appartient à un autre module ;
 - une allowlist explicite pour les outils internes où le détail technique est nécessaire.
 
