@@ -4,6 +4,8 @@
 
 Le runtime assistant unifie la préparation d'un tour IA sans fusionner les historiques existants.
 
+Baseline de réconciliation AI04 : `main@f0075ba640d9318b3fe5895d24276104b227a643`, c’est-à-dire la Production contenant AI03 et le correctif urgent de la boîte à outils professionnelle. L’ancienne branche `agent/dtsc-ai-04-assistant-runtime-cag` n’est utilisée que comme référence fonctionnelle.
+
 Sources de vérité conservées :
 
 - chatbot global : `Conversation` / `Message` ;
