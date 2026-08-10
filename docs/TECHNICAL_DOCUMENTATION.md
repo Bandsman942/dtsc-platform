@@ -444,3 +444,11 @@ Les uploads personnels et Enterprise persistent stockage + texte extrait, retour
 Les classifications RAG sélectionnées (dont `HEALTH_SENSITIVE`, `HR_SENSITIVE`, `FINANCIAL_SENSITIVE`, `LEGAL_SENSITIVE`) sont fusionnées avec celles du Context Engine avant passage au Policy Router. Aucun reindex global automatique n’est autorisé en Production ; le planificateur `scripts/ai/plan-rag-reindex.mjs` est dry-run et borné.
 
 Documentation canonique : `docs/STANDARD_AI_KNOWLEDGE_RAG_ARCHITECTURE.md`, `docs/STANDARD_AI_EMBEDDING_INDEXING.md` et `docs/STANDARD_AI_DATA_CLASSIFICATION.md`.
+
+## AI06 — DTSC Tool Gateway
+
+AI06 introduces the canonical Tool Gateway on top of `lib/ai/tool-registry.ts`. Certified tools require an explicit registry definition, runtime Zod schemas, an explicit executor and centralized authorization. Pharmacy READ tools are migrated behind the Gateway; private support-ticket and DTSC-contact-email actions are mutations requiring a turn-bound structural confirmation.
+
+The additive migration `20260810002000_ai_tool_gateway_confirmation_idempotency` creates `AiToolConfirmation` and `AiToolExecution`. Idempotency is protected by a unique database scope key and an atomic `ON CONFLICT ... DO NOTHING RETURNING id` execution claim. Pending confirmations expose only sanitized previews to the browser. The canonical Prisma representation lives in `prisma/standard-ai-governance.prisma`, consistent with the repository's multi-file Prisma schema.
+
+Dedicated AI06 QA covers runtime registry integrity, authorization, structural confirmation, idempotency, tenant isolation and private-action bypass prevention. The five official package commands are `qa:standard-ai-tool-runtime`, `qa:standard-ai-tool-authorization`, `qa:standard-ai-tool-confirmation`, `qa:standard-ai-tool-idempotency-runtime` and `qa:standard-ai-tool-tenant-isolation`.

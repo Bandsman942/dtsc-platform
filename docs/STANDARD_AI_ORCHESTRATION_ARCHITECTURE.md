@@ -139,3 +139,15 @@ Les appels historiques qui contournent encore `lib/ai/*` sont versionnés dans `
 ## État de validation
 
 AI00, AI01 et AI02 constituent la baseline Production : Policy Engine, provider facade, flux normalisé, observabilité des tentatives et OpenRouter certifié. AI03 ajoute le classement déterministe et explicable sans migration Prisma. Les Quality Gates AI03 doivent rester verts avant toute fusion vers `main`.
+
+## Tool Gateway — AI06
+
+AI06 separates model reasoning from execution authority. A provider or deterministic selector may propose a tool code and arguments, but only the DTSC Tool Gateway can authorize and execute it.
+
+The execution chain is:
+
+`tool proposal → AI_TOOL_REGISTRY → Zod input validation → authorizeAiTool() → confirmation policy → idempotency claim → explicit executor → Zod output validation → audit/result`.
+
+Pharmacy currently keeps a deterministic keyword selector as a documented transitional fallback. It has no authority: every selected code still crosses the same Gateway. Structured provider tool calls can replace selection later without changing the authorization/execution boundary.
+
+Mutations are structurally confirmed through `AiToolConfirmation`; free-form text such as `oui/yes/ok` is never proof of consent. `AiToolExecution` owns transversal execution identity and idempotency. AI06 does not certify payment, accounting or clinical mutations, and MCP remains reserved for AI07.

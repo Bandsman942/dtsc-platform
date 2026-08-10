@@ -863,3 +863,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Annuaire des contacts acceptés, invitation `ADMIN DTSC` et pagination de conversation avec ancrage conservé.
 - Contrat uniforme des guides, inventaire i18n global et nouveaux contrôles CI.
 - Migration additive `20260806110000_iteration_07_e2e_remediation_v3`.
+
+### AI06 — DTSC Tool Gateway
+
+- Added the canonical Tool Gateway runtime backed by `AI_TOOL_REGISTRY`, Zod I/O validation, centralized authorization and explicit executors.
+- Migrated nine Pharmacy READ capabilities behind the Gateway while keeping deterministic selection only as a temporary non-authoritative fallback.
+- Migrated private support-ticket and DTSC-contact-email mutations to structural Confirm/Cancel controls; natural-language approval is non-authoritative.
+- Added turn/tenant/tool/argument-hash-bound confirmations, single-use consumption and database-enforced idempotent execution claims.
+- Added responsive FR/EN confirmation UX and five dedicated AI06 QA commands plus regression integration.
+- Added additive Prisma persistence for `AiToolConfirmation` and `AiToolExecution`; no payment, accounting or clinical mutation is enabled by AI06.
