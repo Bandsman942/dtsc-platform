@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { getCurrentHostType, type HostType } from "@/lib/domains";
 
 const ProfessionalToolbox = dynamic(
-  () => import("@/components/productivity/professional-toolbox").then((module) => module.ProfessionalToolbox),
+  () => import("@/components/productivity/professional-toolbox-v2").then((module) => module.ProfessionalToolboxV2),
   { ssr: false },
 );
 
