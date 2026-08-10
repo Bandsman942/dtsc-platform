@@ -5,6 +5,8 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import type { AiContextCode } from "@/lib/ai/types";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { accountPreferencesSchema } from "@/lib/validators";
 
@@ -37,7 +39,11 @@ export async function PATCH(req: Request) {
     : session.activeContext === "ORGANIZATION"
       ? "ORGANIZATION"
       : "PERSONAL";
-  if (preferredModel && !isCatalogAiModelAllowed({ modelCode: preferredModel, context: aiContext, locale: body.data.locale })) {
+  const organizationId = aiContext === "ORGANIZATION" ? getActiveOrganizationId(session) : null;
+  const planCode = aiContext === "DTSC_INTERNAL"
+    ? "ENTERPRISE"
+    : (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })).planCode;
+  if (preferredModel && !isCatalogAiModelAllowed({ modelCode: preferredModel, context: aiContext, locale: body.data.locale, planCode })) {
     await writeApiLog({
       request: req,
       statusCode: 400,
