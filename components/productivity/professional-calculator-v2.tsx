@@ -236,7 +236,7 @@ export function ProfessionalCalculatorV2({ english }: { english: boolean }) {
     <section className="grid min-w-0 gap-4" aria-label={english ? "Professional calculator" : "Calculatrice professionnelle"}>
       <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {modeDefinitions.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id} className={cn("inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-black transition", mode === id ? "border-cyan-500 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}> 
+          <button key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id} className={cn("inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-black transition", mode === id ? "border-cyan-500 bg-cyan-500/15 text-cyan-800 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}>
             <Icon className="h-4 w-4" /> {label}
           </button>
         ))}
@@ -302,7 +302,7 @@ export function ProfessionalCalculatorV2({ english }: { english: boolean }) {
             <div className="grid grid-cols-4 gap-2 p-3 sm:gap-3 sm:p-4">
               <CalcKey label="AC" onClick={() => { setExpression(""); setResult(""); }} accent="utility" />
               <CalcKey label="±" onClick={() => setExpression((current) => current ? `-(${current})` : "-")} accent="utility" />
-              <CalcKey label="%" onClick={() => append("%") } accent="utility" />
+              <CalcKey label="%" onClick={() => append("%")} accent="utility" />
               <CalcKey label="÷" onClick={() => append("/")} accent="operator" />
               <CalcKey label="7" onClick={() => append("7")} />
               <CalcKey label="8" onClick={() => append("8")} />
@@ -344,7 +344,10 @@ class SafeExpressionParser {
   private readonly source: string;
 
   constructor(raw: string) {
-    this.source = raw.replaceAll("×", "*").replaceAll("÷", "/").replaceAll("−", "-").replaceAll(",", ".").trim();
+    // Keep comma as the scientific argument separator (e.g. pow(2,3)).
+    // The keypad uses a dot for decimals, while localized financial inputs are
+    // normalized separately by numeric().
+    this.source = raw.replaceAll("×", "*").replaceAll("÷", "/").replaceAll("−", "-").trim();
   }
 
   parse() {
