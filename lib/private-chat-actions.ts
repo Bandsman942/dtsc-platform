@@ -1,24 +1,21 @@
-import { TicketPriority, UserRole, UserStatus } from "@prisma/client";
-import { writeAuditLog } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { getOpenAIModel } from "@/lib/openai";
-import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
-import { prisma } from "@/lib/prisma";
-import { sendZohoOutboundMail } from "@/lib/zoho-mail";
-import { notifyUsers } from "@/lib/notifications";
+import { getSession } from "@/lib/auth";
+import { executeAiTool } from "@/lib/ai/tools/execute";
 
-type ChatHistoryItem = {
+export type ChatHistoryItem = {
+  id?: string;
+  conversationId?: string;
   role: string;
   content: string;
 };
 
-type PrivateChatActionResult =
+export type PrivateChatActionResult =
   | { handled: false }
   | { handled: true; reply: string; metadata: Record<string, unknown> };
 
 type ExtractedAction = {
   action?: "NONE" | "SEND_EMAIL" | "CREATE_TICKET";
-  ready?: boolean;
   missing?: string[];
   subject?: string;
   message?: string;
@@ -27,81 +24,45 @@ type ExtractedAction = {
 
 const directActionPattern =
   /\b(envoie|envoyer|transmets|transmettre|cr[eé]e|ouvrir|ouvre|soumettre)\b.*\b(ticket|support|mail|email|e-mail|contact@dtsc-platform\.com|message)\b/i;
-const confirmationPattern = /\b(oui|ok|d'accord|vas-y|confirme|je confirme|envoie|cr[eé]e-le|cr[eé]e le|fais-le|faites-le)\b/i;
 
 function clean(value?: string | null) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
-function normalizePriority(value?: string | null): TicketPriority {
+function normalizePriority(value?: string | null) {
   const priority = clean(value).toUpperCase();
-  if (priority === TicketPriority.LOW) {
-    return TicketPriority.LOW;
-  }
-  if (priority === TicketPriority.HIGH) {
-    return TicketPriority.HIGH;
-  }
-  if (priority === TicketPriority.URGENT) {
-    return TicketPriority.URGENT;
-  }
-  return TicketPriority.MEDIUM;
+  return ["LOW", "MEDIUM", "HIGH", "URGENT"].includes(priority) ? priority : "MEDIUM";
 }
 
 async function extractAction(history: ChatHistoryItem[]) {
   const latestUserMessage = [...history].reverse().find((message) => message.role === "user")?.content || "";
-  const previousAssistantMessage = [...history]
-    .reverse()
-    .find((message) => message.role === "assistant")?.content || "";
-  const respondsToActionConfirmation =
-    confirmationPattern.test(latestUserMessage) &&
-    /\b(envoyer|envoie|mail|email|e-mail|ticket|support|cr[eé]er|cr[eé]e)\b/i.test(previousAssistantMessage);
-  if (!directActionPattern.test(latestUserMessage) && !respondsToActionConfirmation) {
-    return null;
-  }
-  if (!env.OPENAI_API_KEY) {
-    return null;
-  }
+  if (!directActionPattern.test(latestUserMessage) || !env.OPENAI_API_KEY) return null;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: getOpenAIModel(),
       instructions: [
-        "Tu extrais une action à exécuter dans le chatbot privé DTSC.",
+        "Tu extrais uniquement une intention d'action demandée dans le chatbot privé DTSC.",
         "Retourne uniquement un JSON valide, sans markdown.",
         "Actions possibles: NONE, SEND_EMAIL, CREATE_TICKET.",
         "SEND_EMAIL cible toujours contact@dtsc-platform.com.",
-        "CREATE_TICKET crée un ticket support DTSC.",
-        "Ne mets ready=true que si l'utilisateur confirme explicitement qu'il faut envoyer ou créer maintenant.",
+        "CREATE_TICKET prépare un ticket support DTSC.",
+        "Tu n'autorises jamais l'exécution. La confirmation est gérée séparément par le Tool Gateway.",
         "Champs minimaux pour SEND_EMAIL: subject et message.",
         "Champs minimaux pour CREATE_TICKET: subject, message et priority LOW/MEDIUM/HIGH/URGENT.",
-        "Si une information manque ou si la confirmation explicite manque, mets ready=false et liste les champs manquants en français.",
+        "Si une information manque, liste les champs manquants en français.",
       ].join("\n"),
       input: history.slice(-12).map((message) => ({ role: message.role === "assistant" ? "assistant" : "user", content: message.content })),
       store: false,
     }),
   });
-
-  if (!response.ok) {
-    return null;
-  }
+  if (!response.ok) return null;
 
   const body = (await response.json()) as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
-  const text =
-    body.output_text ||
-    (body.output || [])
-      .flatMap((item) => item.content || [])
-      .map((content) => content.text || "")
-      .join("")
-      .trim();
-  if (!text) {
-    return null;
-  }
-
+  const text = body.output_text || (body.output || []).flatMap((item) => item.content || []).map((content) => content.text || "").join("").trim();
+  if (!text) return null;
   try {
     return JSON.parse(text) as ExtractedAction;
   } catch {
@@ -111,11 +72,10 @@ async function extractAction(history: ChatHistoryItem[]) {
 
 function missingInfoReply(action: ExtractedAction) {
   const missing = action.missing?.filter(Boolean) || [];
-  const label = action.action === "CREATE_TICKET" ? "créer le ticket support" : "envoyer le mail à DTSC";
+  const label = action.action === "CREATE_TICKET" ? "préparer le ticket support" : "préparer le mail à DTSC";
   return [
     `Je peux ${label}, mais il me manque encore quelques éléments.`,
-    missing.length ? `Merci de préciser: ${missing.join(", ")}.` : "Merci de confirmer explicitement que je dois exécuter l'action maintenant.",
-    "Dès que ces informations sont validées, je m'en occupe directement depuis votre espace DTSC.",
+    missing.length ? `Merci de préciser : ${missing.join(", ")}.` : "Merci de préciser l’objet et le contenu de l’action.",
   ].join("\n\n");
 }
 
@@ -123,127 +83,77 @@ export async function performPrivateChatActionFromHistory({
   history,
   userId,
   organizationId = null,
+  conversationId = null,
   request,
 }: {
   history: ChatHistoryItem[];
   userId: string;
   organizationId?: string | null;
+  conversationId?: string | null;
   request: Request;
 }): Promise<PrivateChatActionResult> {
   const action = await extractAction(history);
-  if (!action || !action.action || action.action === "NONE") {
-    return { handled: false };
-  }
-  if (!action.ready) {
-    return { handled: true, reply: missingInfoReply(action), metadata: { action: "private_chat_action_missing", requestedAction: action.action } };
-  }
+  if (!action || !action.action || action.action === "NONE") return { handled: false };
 
   const subject = clean(action.subject);
   const message = clean(action.message);
   if (subject.length < 3 || message.length < 10) {
-    return { handled: true, reply: missingInfoReply({ ...action, ready: false, missing: ["objet", "description détaillée"] }), metadata: { action: "private_chat_action_invalid", requestedAction: action.action } };
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, phone: true, companyName: true },
-  });
-  if (!user) {
-    return { handled: true, reply: "Votre compte n'a pas pu être retrouvé pour finaliser cette action.", metadata: { action: "private_chat_action_user_missing" } };
-  }
-
-  if (action.action === "SEND_EMAIL") {
-    const contactMessage = await prisma.contactMessage.create({
-      data: {
-        name: user.name,
-        email: user.email,
-        phone: user.phone || null,
-        companyName: user.companyName || null,
-        subject,
-        message,
-        source: "private_chatbot",
-      },
-    });
-    const mail = await sendZohoOutboundMail({
-      subject,
-      to: [env.CONTACT_EMAIL || env.DTSC_CONTACT_EMAIL],
-      fromName: user.name,
-      fromEmail: user.email,
-      replyTo: user.email,
-      source: "private-chatbot-contact",
-      heading: "Message transmis depuis le chatbot privé DTSC",
-      message: [
-        message,
-        "",
-        "Coordonnées client",
-        `- Nom: ${user.name}`,
-        `- Email: ${user.email}`,
-        `- Téléphone: ${user.phone || "Non renseigné"}`,
-        `- Organisation: ${user.companyName || "Non renseignée"}`,
-        `- ID message: ${contactMessage.id}`,
-      ].join("\n"),
-    }).catch((error) => ({ sent: false, reason: error instanceof Error ? error.message : "Private chatbot mail failed" }));
-
-    await writeAuditLog({
-      userId,
-      action: "PRIVATE_CHAT_EMAIL_SENT",
-      entity: "ContactMessage",
-      entityId: contactMessage.id,
-      metadata: { subject, mail },
-      request,
-    });
-
     return {
       handled: true,
-      reply: `Votre message a bien été transmis à l'équipe DTSC à l'adresse ${env.CONTACT_EMAIL || env.DTSC_CONTACT_EMAIL}. Un membre de l'équipe pourra vous recontacter prochainement.`,
-      metadata: { action: "private_chat_email_sent", contactMessageId: contactMessage.id, mail },
+      reply: missingInfoReply({ ...action, missing: action.missing?.length ? action.missing : ["objet", "description détaillée"] }),
+      metadata: { action: "private_chat_action_missing", requestedAction: action.action },
     };
   }
 
-  const priority = normalizePriority(action.priority);
-  const ticket = await prisma.supportTicket.create({
-    data: {
+  const session = await getSession();
+  if (!session || session.userId !== userId) {
+    return { handled: true, reply: "Votre session ne permet pas de préparer cette action.", metadata: { action: "private_chat_action_session_denied" } };
+  }
+  if (organizationId && (session.activeContext !== "ORGANIZATION" || session.activeOrganizationId !== organizationId)) {
+    return { handled: true, reply: "Le contexte entreprise actif ne correspond plus à cette conversation.", metadata: { action: "private_chat_action_context_denied" } };
+  }
+
+  const latestUserTurn = [...history].reverse().find((item) => item.role === "user");
+  const boundConversationId = conversationId || latestUserTurn?.conversationId || history.find((item) => item.conversationId)?.conversationId || null;
+  const turnId = latestUserTurn?.id || null;
+  const toolCode = action.action === "CREATE_TICKET" ? "SUPPORT_TICKET_CREATE" : "DTSC_CONTACT_EMAIL_SEND";
+  const args = action.action === "CREATE_TICKET"
+    ? { subject, message, priority: normalizePriority(action.priority) }
+    : { subject, message };
+  const preparation = await executeAiTool({
+    toolCode,
+    args,
+    context: {
+      session,
       userId,
       organizationId,
-      subject,
-      description: message,
-      priority,
+      conversationId: boundConversationId,
+      turnId,
+      request,
     },
   });
-  try {
-    const supportUsers = await prisma.user.findMany({
-      where: {
-        status: UserStatus.ACTIVE,
-        OR: [{ role: UserRole.ADMIN }, { role: UserRole.SUPPORT }],
-        organizationMemberships: {
-          some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null },
-        },
-      },
-      select: { id: true },
-    });
-    await notifyUsers({
-      userIds: supportUsers.map((supportUser) => supportUser.id),
-      title: "Nouveau ticket support",
-      body: subject,
-      type: "SUPPORT",
-      targetUrl: "/support",
-      organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
-    });
-  } catch (error) {
-    console.error("Private chatbot ticket notification failed", error);
-  }
-  await writeAuditLog({
-    userId,
-    action: "PRIVATE_CHAT_TICKET_CREATED",
-    entity: "SupportTicket",
-    entityId: ticket.id,
-    metadata: { subject, priority },
-    request,
-  });
 
+  if (preparation.status !== "CONFIRMATION_REQUIRED") {
+    return {
+      handled: true,
+      reply: "Cette action ne peut pas être préparée pour le moment.",
+      metadata: { action: "private_chat_action_prepare_failed", toolCode, reasonCode: preparation.reasonCode || preparation.status },
+    };
+  }
+
+  const confirmation = preparation.result as { confirmationId?: string; expiresAt?: string } | undefined;
+  const actionLabel = toolCode === "SUPPORT_TICKET_CREATE" ? "créer ce ticket support" : "envoyer ce message à l’équipe DTSC";
   return {
     handled: true,
-    reply: `Votre ticket support a bien été créé sous la référence ${ticket.id}. Vous pouvez le suivre dans le module Support.`,
-    metadata: { action: "private_chat_ticket_created", ticketId: ticket.id, priority },
+    reply: `L’action est prête. Vérifiez les informations affichées puis utilisez le contrôle de confirmation pour ${actionLabel}. Une réponse comme « oui » ou « vas-y » dans le chat ne déclenche pas l’action.`,
+    metadata: {
+      action: "private_chat_action_confirmation_required",
+      toolCode,
+      confirmationId: confirmation?.confirmationId || null,
+      expiresAt: confirmation?.expiresAt || null,
+      conversationId: boundConversationId,
+      turnId,
+      subject,
+    },
   };
 }

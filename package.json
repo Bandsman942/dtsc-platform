@@ -296,7 +296,12 @@
     "delivery:governance:sync": "node scripts/github/sync-delivery-governance.mjs",
     "delivery:pr:validate": "node scripts/github/validate-pr-governance.mjs",
     "delivery:commits:validate": "node scripts/github/validate-commits.mjs",
-    "qa:delivery-governance": "node scripts/qa-delivery-governance.mjs"
+    "qa:delivery-governance": "node scripts/qa-delivery-governance.mjs",
+    "qa:standard-ai-tool-runtime": "node scripts/qa-standard-ai-tool-gateway.mjs",
+    "qa:standard-ai-tool-authorization": "node scripts/qa-standard-ai-tool-authorization.mjs",
+    "qa:standard-ai-tool-confirmation": "node scripts/qa-standard-ai-tool-confirmation.mjs",
+    "qa:standard-ai-tool-idempotency-runtime": "node scripts/qa-standard-ai-tool-idempotency-runtime.mjs",
+    "qa:standard-ai-tool-tenant-isolation": "node scripts/qa-standard-ai-tool-tenant-isolation.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

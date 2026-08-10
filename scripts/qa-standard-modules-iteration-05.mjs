@@ -28,6 +28,13 @@ const checks = [
   ["AI index versioning", "scripts/qa-standard-ai-index-versioning.mjs"],
   ["AI RAG hybrid retrieval", "scripts/qa-standard-ai-rag-hybrid.mjs"],
   ["AI RAG reindex idempotency", "scripts/qa-standard-ai-rag-reindex-idempotency.mjs"],
+  ["AI Tool Gateway runtime", "scripts/qa-standard-ai-tool-gateway.mjs"],
+  ["AI Tool Gateway authorization", "scripts/qa-standard-ai-tool-authorization.mjs"],
+  ["AI Tool Gateway confirmation", "scripts/qa-standard-ai-tool-confirmation.mjs"],
+  ["AI Tool Gateway idempotency runtime", "scripts/qa-standard-ai-tool-idempotency-runtime.mjs"],
+  ["AI Tool Gateway confirmation/idempotency compatibility", "scripts/qa-standard-ai-tool-confirmation-idempotency.mjs"],
+  ["AI Tool Gateway tenant isolation", "scripts/qa-standard-ai-tool-tenant-isolation.mjs"],
+  ["AI private action Gateway", "scripts/qa-standard-ai-private-tool-actions.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -39,4 +46,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 + AI06 gates passed");

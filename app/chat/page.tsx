@@ -1,4 +1,5 @@
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
+import { AiToolConfirmationDock } from "@/components/chat/ai-tool-confirmation-dock";
 import { ChatWorkspaceV2 } from "@/components/chat/chat-workspace-v2";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -67,6 +68,7 @@ export default async function ChatPage({
           models={models}
           assistantDefaults={{ preferredModel: user.preferredModel || null, responseStyle: user.chatResponseStyle || "PROFESSIONAL", responseLength: user.chatResponseLength || "BALANCED" }}
         />
+        <AiToolConfirmationDock conversationId={conversationId || null} locale={user.locale} />
       </AssistantImmersiveWorkspaceShell>
     </AppShell>
   );
