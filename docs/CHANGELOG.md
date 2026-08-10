@@ -2,6 +2,38 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-08-10 — DTSC AI 08/08 : Agent Runtime contrôlé
+
+### Ajouté
+
+- Runtime agentique interactif borné au-dessus du Policy Router, du Context Engine, du RAG/CAG et du DTSC Tool Gateway, sans troisième mémoire conversationnelle.
+- Modèles `AiAgentRun` et `AiAgentStep` avec limites serveur, progression, outils, tokens, coût estimé, durée active, confirmation, cancellation et reason codes.
+- Structured tool calls normalisés pour OpenAI Responses et OpenRouter Chat Completions, toujours exécutés exclusivement via `executeAiTool()`.
+- Routes opt-in du Chatbot global et de l’Assistant IA Entreprise, statut de run sûr, cancellation et reprise canonique du même run après confirmation.
+- Panneau **Mode agent** commun aux deux assistants avec progression, outils, consommation, confirmation/refus, annulation, reprise, responsive mobile et libellés FR/EN, sans exposition de chaîne de pensée privée.
+- Guides utilisateur FR/EN et runbook d’incident/rollback AI08.
+
+### Sécurisé
+
+- Budgets serveur par plan : étapes, appels outils, tokens, coût estimé, durée active, modes et codes outils ; les valeurs client ne peuvent que réduire ces plafonds.
+- Autorisation des outils avant exposition au modèle puis revalidation complète au Tool Gateway ; aucune importation dynamique pilotée par le modèle.
+- Mutations suspendues jusqu’à confirmation structurelle ; `oui`, `yes`, `ok` ou équivalent n’accordent aucune autorité.
+- Reprise uniquement depuis un `AiToolExecution(status=SUCCESS)` chargé côté serveur et claim single-winner du run `READY_TO_RESUME`.
+- Refus d’une confirmation : la proposition est annulée et le run lié encore suspendu est clôturé avec `CONFIRMATION_CANCELLED`.
+- Domaines sensibles limités à READ/PREPARE et `SENSITIVE_MUTATE` exclu de la baseline AI08 ; aucune décision clinique, paiement/écriture comptable, paie/sanction RH ou engagement juridique final autonome.
+- MCP reste subordonné au Tool Gateway, READ-only et fail-closed ; aucun E2E MCP n’est revendiqué sans serveur réellement configuré et certifié.
+
+### Qualité
+
+- Gates AI08 pour runtime/confidentialité, budgets, confirmation, reprise, UX FR/EN/mobile, idempotence, cancellation, isolation tenant et domaines sensibles, intégrées à `scripts/qa-standard-modules-iteration-05.mjs`.
+- Correction de deux faux négatifs QA source-level sans affaiblir les contrats : reconnaissance du header `X-AI-Execution` et vérification de l’ordre réel exécution canonique → claim de reprise.
+- `Shop 2 global readiness` utilise désormais 6 GiB de heap Node pour son type-check, comme le Quality Gate, après diagnostic d’un OOM V8 à ~4 GiB ; aucune erreur TypeScript n’est masquée.
+- Checkpoint AI08 core `266103fd12750f53877f66ade0d92c620ed04907` validé par Quality Gates, migrations, Shop Global, Shop Behavioral et Accounting production-like avant l’ajout de l’UX/documentation finale.
+
+### Maturité
+
+- AI08 reste **non `COMMERCIAL_READY`** tant que le SHA final n’est pas fusionné sur `main`, déployé en Production et validé par les E2E propriétaire requis avec providers/outils/MCP réellement configurés.
+
 ## 2026-08-10 — DTSC AI 05/08 : RAG V2
 
 ### Ajouté

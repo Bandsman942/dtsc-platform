@@ -1,6 +1,6 @@
 # DTSC Platform — Documentation technique
 
-**Version :** Consolidation ERP + modules standards 4/8
+**Version :** Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
@@ -452,3 +452,80 @@ AI06 introduces the canonical Tool Gateway on top of `lib/ai/tool-registry.ts`. 
 The additive migration `20260810002000_ai_tool_gateway_confirmation_idempotency` creates `AiToolConfirmation` and `AiToolExecution`. Idempotency is protected by a unique database scope key and an atomic `ON CONFLICT ... DO NOTHING RETURNING id` execution claim. Pending confirmations expose only sanitized previews to the browser. The canonical Prisma representation lives in `prisma/standard-ai-governance.prisma`, consistent with the repository's multi-file Prisma schema.
 
 Dedicated AI06 QA covers runtime registry integrity, authorization, structural confirmation, idempotency, tenant isolation and private-action bypass prevention. The five official package commands are `qa:standard-ai-tool-runtime`, `qa:standard-ai-tool-authorization`, `qa:standard-ai-tool-confirmation`, `qa:standard-ai-tool-idempotency-runtime` and `qa:standard-ai-tool-tenant-isolation`.
+
+## Annexe — DTSC AI 08/08 : Agent Runtime contrôlé
+
+AI08 complète la chaîne Standard AI sans créer de routeur, moteur d’outils ou mémoire conversationnelle parallèle :
+
+```text
+Conversation canonique
+→ Assistant Runtime / Context Engine / CAG / RAG
+→ Policy Router
+→ provider certifié
+→ structured tool proposal
+→ DTSC Tool Gateway
+→ résultat audité et traité comme donnée non fiable
+→ continuation bornée
+→ réponse finale ou suspension/arrêt contrôlé
+```
+
+### Sources de vérité
+
+- `lib/ai/agent/*` : policy de run, runtime interactif, persistance, outils, turns et reprise ;
+- `AiAgentRun` / `AiAgentStep` : état, plafonds, étapes, outils, provider/modèle, usage, coût, durée et reason codes ;
+- `routeAiStream()` : autorité unique de routage provider/modèle/policy ;
+- `executeAiTool()` : autorité unique d’exécution outil ;
+- `AiToolConfirmation` / `AiToolExecution` : confirmation structurelle et idempotence ;
+- `Conversation` / `Message` et `EnterpriseAiConversation` / `EnterpriseAiMessage` : mémoires conversationnelles existantes.
+
+Aucun prompt complet, copie de conversation ou chaîne de pensée privée n’est ajouté aux modèles Agent.
+
+### Surfaces
+
+- `POST /api/chat/agent` : Agent Chatbot global opt-in ;
+- `POST /api/enterprise/ai/agent` : Agent Entreprise opt-in ;
+- `GET /api/ai/agent/context` : contexte actif minimal dérivé de la session ;
+- `GET /api/ai/agent/runs/:id` : statut sûr ;
+- `POST /api/ai/agent/runs/:id/cancel` : cancellation ;
+- `POST /api/ai/agent/runs/:id/resume` : reprise canonique ;
+- `components/chat/ai-agent-run-dock.tsx` : UX commune FR/EN/mobile du mode Agent.
+
+Les routes historiques `/api/chat/v2` et `/api/enterprise/ai/chat` restent indépendantes. Le mode Agent est donc un opt-in produit et non un remplacement implicite du chat existant.
+
+### Budgets, confirmations et sécurité
+
+Chaque run reçoit des plafonds serveur `maxSteps`, `maxToolCalls`, `maxTokens`, `maxEstimatedCost`, `maxDurationMs`, `allowedToolModes` et `allowedToolCodes`. Une demande client ne peut jamais les augmenter.
+
+Une mutation nécessitant confirmation suspend le run en `WAITING_CONFIRMATION`. Après confirmation structurelle réussie, le Tool Gateway produit l’exécution canonique et le run passe `READY_TO_RESUME`. La reprise recharge le résultat côté serveur, revalide tenant, droits, plan, quotas et classifications, puis claim atomiquement le même run. Un refus clôt le run suspendu avec `CONFIRMATION_CANCELLED`.
+
+`SENSITIVE_MUTATE` n’est pas exposé. Pour Health, Finance, RH et Legal sensibles, l’Agent reste limité à READ/PREPARE et les workflows métier canoniques conservent l’autorité finale.
+
+### MCP et Durable Agent
+
+AI08 peut orchestrer uniquement les outils MCP READ déjà certifiés et projetés dans le Tool Gateway. Discovery distante, ressources ou prompts MCP ne deviennent jamais une permission ou une instruction système. `SECRET` ne sort pas vers MCP/provider externe.
+
+La classe `DURABLE` reste réservée mais inactive. DTSC ne simule pas un agent background par une requête HTTP longue ; tout raccord durable futur doit réutiliser une infrastructure de worker réellement persistante et disposer de ses propres contrats/QA.
+
+### Observabilité et UX
+
+L’interface affiche uniquement l’état sûr du run : progression, outils, plafonds, tokens, coût estimé, confirmations, reason codes, annulation et reprise. Elle n’affiche ni prompts, ni arguments bruts, ni raisonnement privé.
+
+Les traces provider (`AiProviderAttempt`), appels modèle (`AiModelCall`), exécutions outil (`AiToolExecution`), audits MCP et runs/steps Agent restent complémentaires afin de conserver la provenance sans double comptage fonctionnel.
+
+### Validation et maturité
+
+Les gates AI08 couvrent runtime/confidentialité, budgets, confirmation, reprise, UX FR/EN/mobile, idempotence, cancellation, isolation tenant et domaines sensibles. Elles sont intégrées à la régression Standard AI.
+
+`COMMERCIAL_READY` reste interdit sans preuve sur le SHA `main` réellement déployé en Production : E2E Chatbot Agent, Assistant Entreprise, CAG+RAG, OpenRouter/fallback, READ, PREPARE, MUTATE confirmé/repris, MCP READ réellement configuré, cancellation et refus sensitive/cross-tenant.
+
+Documents détaillés :
+
+- `docs/STANDARD_AI_AGENT_RUNTIME.md` ;
+- `docs/STANDARD_AI_AGENT_RUNBOOK.md` ;
+- `docs/STANDARD_AI_TOOL_GATEWAY.md` ;
+- `docs/STANDARD_AI_MCP_ARCHITECTURE.md` ;
+- `docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md` ;
+- `docs/STANDARD_AI_OBSERVABILITY_MODEL.md` ;
+- `docs/user-guides/AI_AGENT_MODE_FR.md` ;
+- `docs/user-guides/AI_AGENT_MODE_EN.md`.
+
