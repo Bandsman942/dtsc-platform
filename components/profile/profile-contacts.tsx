@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Mail, MessageCircle, MoreHorizontal, UserRound } from "lucide-react";
+import { Copy, Mail, MessageCircle, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ConversationAvatar } from "@/components/chat/ConversationAvatar";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
