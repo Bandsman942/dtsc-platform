@@ -8,43 +8,59 @@ export type AiCagPack = {
   cacheHit: boolean;
 };
 
-export type AiCagBuilderResult = {
+export type AiCagBuilderDefinition = {
   code: string;
-  version: string;
-  content: string;
+  version: string | ((context: AiExecutionContext) => string | Promise<string>);
+  build: (context: AiExecutionContext) => Promise<string>;
 };
-
-export type AiCagBuilder = (context: AiExecutionContext) => Promise<AiCagBuilderResult>;
 
 const CACHE_TTL_MS = 2 * 60 * 1000;
 const cache = new Map<string, { expiresAt: number; value: Omit<AiCagPack, "cacheHit"> }>();
-const sectorBuilders = new Map<string, AiCagBuilder>();
+const sectorBuilders = new Map<string, AiCagBuilderDefinition>();
 
-export function registerSectorCagBuilder(sectorCode: string, builder: AiCagBuilder) {
+export function registerSectorCagBuilder(sectorCode: string, builder: AiCagBuilderDefinition) {
   sectorBuilders.set(sectorCode, builder);
 }
 
 function keyFor(context: AiExecutionContext, code: string, version: string) {
-  return ["cag", context.organization?.id || "personal", context.userId, context.profile.code, context.profile.version, code, version, context.contextVersion].join(":");
+  return [
+    "cag",
+    context.organization?.id || "personal",
+    context.userId,
+    context.profile.code,
+    context.profile.version,
+    code,
+    version,
+    context.contextVersion,
+  ].join(":");
 }
 
-async function cached(context: AiExecutionContext, builder: AiCagBuilder): Promise<AiCagPack> {
-  const built = await builder(context);
-  const key = keyFor(context, built.code, built.version);
+async function resolveBuilderVersion(builder: AiCagBuilderDefinition, context: AiExecutionContext) {
+  return typeof builder.version === "function" ? await builder.version(context) : builder.version;
+}
+
+async function cached(context: AiExecutionContext, builder: AiCagBuilderDefinition): Promise<AiCagPack> {
+  const version = await resolveBuilderVersion(builder, context);
+  const key = keyFor(context, builder.code, version);
   const existing = cache.get(key);
   if (existing && existing.expiresAt > Date.now()) return { ...existing.value, cacheHit: true };
-  const value = { ...built, cacheKey: key };
+
+  // The expensive builder executes only after the cache lookup. Dynamic
+  // versions may perform a cheap version read (for example Pharmacy settingsVersion)
+  // so a configuration change invalidates the key without rebuilding every turn.
+  const content = await builder.build(context);
+  const value = { code: builder.code, version, content, cacheKey: key };
   cache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, value });
   return { ...value, cacheHit: false };
 }
 
-const organizationBuilder: AiCagBuilder = async (context) => ({
+const organizationBuilder: AiCagBuilderDefinition = {
   code: "organization",
   version: "1",
-  content: context.organization && context.membership
+  build: async (context) => context.organization && context.membership
     ? `Organisation active: ${context.organization.name} (${context.organization.id}). Secteur: ${context.organization.sectorCode || "GENERAL"}. Rôle: ${context.membership.role}. Plan: ${context.planCode}. Modules lisibles: ${context.activeModuleCodes.join(", ") || "aucun"}.`
     : "Aucune organisation active.",
-});
+};
 
 export async function buildAiCagPack(context: AiExecutionContext): Promise<AiCagPack> {
   const packs = [await cached(context, organizationBuilder)];
