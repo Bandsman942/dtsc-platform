@@ -4,7 +4,7 @@ import { buildAssistantResponsePreferencePrompt, getEnterpriseAiConversationPref
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
-import { toAiReasonCode } from "@/lib/ai/errors";
+import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { completeAiModelCall, failAiModelCall, interruptAiModelCall, startAiModelCall } from "@/lib/ai/observability";
 import { routeAiStream } from "@/lib/ai/orchestrator";
@@ -117,8 +117,9 @@ export async function POST(req: Request) {
       routed = await routeAiStream({ requestedModel, taskType, context: "ORGANIZATION", locale, messages, instructions, userId: session.userId, organizationId: data.organizationId, tags: ["feature:enterprise-assistant", `organization:${data.organizationId}`, `locale:${locale}`], signal: req.signal });
     } catch (error) {
       const reasonCode = toAiReasonCode(error);
-      await writeApiLog({ request: req, statusCode: 502, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, reasonCode, taskType, requestedModel } });
-      return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: 502 });
+      const statusCode = error instanceof AiProviderError ? error.statusCode : 502;
+      await writeApiLog({ request: req, statusCode, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, reasonCode, taskType, requestedModel } });
+      return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode });
     }
 
     const sessionUserId = session.userId;

@@ -1,3 +1,4 @@
+import { resolveSaasPlanCode, type SaasPlanCode } from "@/lib/billing/plans";
 import { prisma } from "@/lib/prisma";
 
 const ACTIVE_ORGANIZATION_SUBSCRIPTION_STATUSES = ["ACTIVE", "TRIAL"];
@@ -5,6 +6,7 @@ const ACTIVE_ORGANIZATION_SUBSCRIPTION_STATUSES = ["ACTIVE", "TRIAL"];
 export type CanonicalAiUsageLimits = {
   planId: string | null;
   planName: string;
+  planCode: SaasPlanCode;
   audience: "PERSONAL" | "ORGANIZATION";
   dailyMessageLimit: number;
   dailyTokenLimit: number;
@@ -60,6 +62,7 @@ export async function getCanonicalAiUsageLimits({
   return {
     planId: null,
     planName: "Legacy fallback",
+    planCode: "STARTER",
     audience: "PERSONAL",
     dailyMessageLimit: legacyUser?.dailyMessageLimit || 5,
     dailyTokenLimit: legacyUser?.dailyTokenLimit || 15_000,
@@ -69,13 +72,14 @@ export async function getCanonicalAiUsageLimits({
 }
 
 function fromPlan(
-  plan: { id: string; name: string; dailyMessageLimit: number; dailyTokenLimit: number; maxDocuments: number },
+  plan: { id: string; name: string; slug?: string | null; dailyMessageLimit: number; dailyTokenLimit: number; maxDocuments: number },
   audience: CanonicalAiUsageLimits["audience"],
   source: CanonicalAiUsageLimits["source"],
 ): CanonicalAiUsageLimits {
   return {
     planId: plan.id,
     planName: plan.name,
+    planCode: resolveSaasPlanCode(plan),
     audience,
     dailyMessageLimit: plan.dailyMessageLimit,
     dailyTokenLimit: plan.dailyTokenLimit,

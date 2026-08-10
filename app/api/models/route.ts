@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getAiModelDefinition, listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import type { AiContextCode } from "@/lib/ai/types";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 function resolveContext(activeContext?: string | null): AiContextCode {
@@ -17,12 +19,18 @@ export async function GET() {
     : null;
   const context = resolveContext(session?.activeContext);
   const locale = user?.locale || "fr";
-  const models = listCatalogAiModelsForUi({ context, locale });
+  const organizationId = session ? getActiveOrganizationId(session) : null;
+  const usageLimits = session && context !== "DTSC_INTERNAL"
+    ? await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })
+    : null;
+  const planCode = context === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits?.planCode || "STARTER";
+  const models = listCatalogAiModelsForUi({ context, locale, planCode });
   const preferred = user?.preferredModel ? getAiModelDefinition(user.preferredModel) : null;
   const defaultModel = preferred && models.some((model) => model.id === preferred.code) ? preferred.code : models[0]?.id || null;
 
   return NextResponse.json({
     defaultModel,
+    planCode,
     models: models.map((model) => ({
       id: model.id,
       name: model.label,
