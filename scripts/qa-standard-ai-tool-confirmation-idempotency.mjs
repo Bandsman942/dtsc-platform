@@ -9,7 +9,6 @@ const registry = read("lib/ai/tool-registry.ts");
 const confirmation = read("lib/ai/tools/confirmation.ts");
 const execution = read("lib/ai/tools/execute.ts");
 const migration = read("prisma/migrations/20260810002000_ai_tool_gateway_confirmation_idempotency/migration.sql");
-const schema = read("prisma/schema.prisma");
 const standardSchema = read("prisma/standard-ai-governance.prisma");
 
 for (const code of ["SUPPORT_TICKET_CREATE", "DTSC_CONTACT_EMAIL_SEND"]) {
@@ -31,10 +30,12 @@ if (!migration.includes('CREATE TABLE IF NOT EXISTS \"AiToolConfirmation\"')) fa
 if (!migration.includes('CREATE TABLE IF NOT EXISTS \"AiToolExecution\"')) failures.push("execution table migration missing");
 if (!migration.includes('CREATE UNIQUE INDEX IF NOT EXISTS \"AiToolExecution_idempotencyScopeKey_key\"')) failures.push("idempotency unique constraint missing");
 for (const model of ["model AiToolConfirmation {", "model AiToolExecution {"]) {
-  if (!schema.includes(model)) failures.push(`schema.prisma missing ${model}`);
   if (!standardSchema.includes(model)) failures.push(`standard-ai-governance.prisma missing ${model}`);
 }
-if (!schema.includes("idempotencyScopeKey String   @unique")) failures.push("schema.prisma must preserve idempotency uniqueness");
+if (!standardSchema.includes("idempotencyScopeKey String   @unique")) failures.push("Prisma Tool Gateway model must preserve idempotency uniqueness");
+for (const field of ["argumentsHash", "argumentsJson", "expiresAt", "confirmedAt", "cancelledAt", "consumedAt"]) {
+  if (!standardSchema.includes(field)) failures.push(`Prisma confirmation model missing ${field}`);
+}
 
 if (failures.length) {
   console.error("AI tool confirmation/idempotency QA failed:\n" + failures.map((item) => `- ${item}`).join("\n"));
