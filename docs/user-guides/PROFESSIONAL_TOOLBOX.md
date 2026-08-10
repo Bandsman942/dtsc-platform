@@ -43,7 +43,7 @@ La boîte à outils regroupe des notes persistantes, des pense-bêtes et une cal
 
 - Le mode **Standard** utilise une disposition conventionnelle : `AC`, changement de signe, pourcentage, division, chiffres, multiplication, soustraction, addition, décimale et `=`.
 - Le pourcentage est appliqué comme opérateur postfixé (`25%` = `0,25`).
-- La **Calculatrice scientifique** ajoute `sin`, `cos`, `tan`, `sqrt`, `log`, `ln`, `abs`, `pow`, les constantes `pi` et `e`, les puissances et parenthèses.
+- Le mode **Scientifique** de la **Calculatrice scientifique** ajoute `sin`, `cos`, `tan`, `sqrt`, `log`, `ln`, `abs`, `pow`, les constantes `pi` et `e`, les puissances et parenthèses.
 - Les fonctions trigonométriques utilisent les radians.
 - L’évaluation reste locale et sûre : aucun `eval`, `new Function` ou service externe n’est utilisé.
 
