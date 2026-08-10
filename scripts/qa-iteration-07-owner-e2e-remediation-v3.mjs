@@ -24,6 +24,54 @@ requireText("app/api/toolbox/notes/[id]/route.ts", ["userId: session.userId", "a
 requireText("components/productivity/professional-toolbox.tsx", ["RichTextEditor", "NoteView", "Grouping", "ScientificExpressionParser", "calculateFinance", "useFloatingAction"]);
 forbidText("components/productivity/professional-toolbox.tsx", ["localStorage", "eval(", "new Function(", "Function(`"]);
 
+// UX v2 #204: the product-scoped loader points to the new implementation while
+// the historical component remains intact for rollback and regression evidence.
+requireText("components/productivity/product-scoped-professional-toolbox.tsx", [
+  "ProductScopedProfessionalToolbox",
+  "professional-toolbox-v2",
+  "ProfessionalToolboxV2",
+  "getCurrentHostType(window.location.host)",
+  'hostType === "app"',
+  'hostType === "console"',
+  'hostType === "support"',
+  "ssr: false",
+]);
+requireText("components/productivity/professional-toolbox-v2.tsx", [
+  "ProfessionalToolboxV2",
+  "metadataSession",
+  "editorSession",
+  "Valider et éditer",
+  "ProfessionalNoteRichEditor",
+  "ProfessionalCalculatorV2",
+  "RichNotePreview",
+  "dangerouslySetInnerHTML",
+  "returnToMetadata",
+  "saveEditorSession",
+]);
+forbidText("components/productivity/professional-toolbox-v2.tsx", ["localStorage", "eval(", "new Function(", "Function(`"]);
+requireText("components/productivity/professional-note-rich-editor.tsx", [
+  "ProfessionalNoteEditorHandle",
+  "contentEditable",
+  "min-w-max flex-nowrap",
+  "scheduleCaretVisibility",
+  "editor.scrollTop",
+  "event.preventDefault()",
+  "selectionRef",
+  "restoreSelection",
+]);
+requireText("components/productivity/professional-calculator-v2.tsx", [
+  "ProfessionalCalculatorV2",
+  "SafeExpressionParser",
+  "FINANCIAL_FORMULAS",
+  'id: "npv"',
+  'id: "break-even"',
+  'id: "effective-rate"',
+  'id: "cagr"',
+  "Financial assistant",
+  "Assistant financier",
+]);
+forbidText("components/productivity/professional-calculator-v2.tsx", ["eval(", "new Function(", "Function(`"]);
+
 requireText("components/activities/work-prestations-panel-v2.tsx", ["weeklyGrouping", '"workType"', '"locationMode"', "EntityCommentsThread"]);
 requireText("components/activities/entity-comments-thread.tsx", ["WORK_ENTRY", "WORK_SUBMISSION", "/api/activities/comments"]);
 requireText("app/api/activities/comments/route.ts", ["WORK_ENTRY", "WORK_SUBMISSION", "reviewerEmployeeId"]);
@@ -43,16 +91,14 @@ requireText("components/floating-actions/floating-action-hub.tsx", [
   'hostType === "app"',
   'hostType === "console"',
   'hostType === "support"',
+  "SCROLL_DIRECTION_THRESHOLD",
+  "isRelevantWorkspaceScroll",
+  "data-floating-action-hub-visible",
+  "delta < 0",
+  "setVisible(false)",
+  "setVisible(true)",
 ]);
 forbidText("components/floating-actions/floating-action-hub.tsx", ["<FloatingActionContext.Provider value={{ register }}>"]);
-requireText("components/productivity/product-scoped-professional-toolbox.tsx", [
-  "ProductScopedProfessionalToolbox",
-  "getCurrentHostType(window.location.host)",
-  'hostType === "app"',
-  'hostType === "console"',
-  'hostType === "support"',
-  "ssr: false",
-]);
 requireText("app/layout.tsx", ["FloatingActionHubProvider", "ProductScopedProfessionalToolbox"]);
 forbidText("app/layout.tsx", ['import { ProfessionalToolbox } from "@/components/productivity/professional-toolbox"', "<ProfessionalToolbox />"]);
 requireText("components/user-guides/standard-module-fallback-guide.tsx", ["useFloatingAction", "hideTrigger"]);
@@ -71,7 +117,7 @@ requireText("app/api/collaborators/contact-requests/route.ts", ["ADMIN DTSC", "s
 requireText("scripts/audit-user-guide-contract.mjs", ["Contrat de guide DTSC v2", "PROFESSIONAL_TOOLBOX.md"]);
 requireText("scripts/audit-iteration-07-i18n-contract.mjs", ["i18n-hardcoded-baseline.json", "bilingualContracts"]);
 requireText(".github/workflows/quality-gates.yml", ["User guide contract QA", "Iteration 07 i18n contract QA", "Iteration 07 owner E2E remediation v3 QA"]);
-requireText("docs/user-guides/PROFESSIONAL_TOOLBOX.md", ["plusieurs notes", "Kanban", "Scientifique", "Financière"]);
+requireText("docs/user-guides/PROFESSIONAL_TOOLBOX.md", ["plusieurs notes", "Kanban", "Scientifique", "Financière", "plein écran", "VAN", "seuil de rentabilité"]);
 
 if (fs.existsSync(path.join(root, ".github/workflows/export-source-artifact.yml"))) failures.push("Le workflow temporaire d’export source doit être retiré avant fusion.");
 
@@ -79,4 +125,4 @@ if (failures.length) {
   console.error(failures.map((failure) => `✗ ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log("✓ Correctifs E2E propriétaire v3 de l’itération 07 couverts");
+console.log("✓ Correctifs E2E propriétaire v3 + UX boîte à outils #204 couverts");
