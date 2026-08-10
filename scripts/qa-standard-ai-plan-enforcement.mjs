@@ -16,7 +16,11 @@ expect(policy.includes("planMeetsRequirement"), "AI policy must enforce canonica
 expect(policy.includes("PLAN_NOT_ALLOWED"), "AI policy must expose a stable PLAN_NOT_ALLOWED reason");
 expect(catalog.includes("planCode"), "AI catalog availability must receive planCode");
 expect(modelsRoute.includes("getCanonicalAiUsageLimits"), "/api/models must resolve the effective plan server-side");
-expect(modelsRoute.includes("planCode:"), "/api/models must filter models with the effective plan");
+expect(modelsRoute.includes("const planCode ="), "/api/models must derive one effective plan before listing models");
+expect(
+  modelsRoute.includes("listCatalogAiModelsForUi({ context, locale, planCode })"),
+  "/api/models must pass the effective plan to the catalog",
+);
 expect(usageLimits.includes("planCode"), "Canonical AI usage limits must expose normalized planCode");
 expect(orchestrator.includes("getCanonicalAiUsageLimits"), "Runtime router must resolve the effective plan server-side");
 expect(orchestrator.includes("DTSC_INTERNAL") && orchestrator.includes("ENTERPRISE"), "DTSC internal context must preserve full internal model entitlement");
