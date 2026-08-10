@@ -37,6 +37,8 @@ export async function GET() {
       providerCode: model.providerCode,
       status: model.status,
       minimumPlan: model.minimumPlan,
+      profileCodes: model.profileCodes,
+      certificationVersion: model.certificationVersion,
     })),
   });
 }
