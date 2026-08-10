@@ -1,0 +1,40 @@
+name: AI05 temporary docs sync
+
+on:
+  push:
+    branches:
+      - feat/184-ai05-rag-v2
+    paths:
+      - scripts/ai/ai05-doc-sync-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/184-ai05-rag-v2
+          fetch-depth: 0
+
+      - name: Apply targeted AI05 documentation sync
+        run: node scripts/ai/sync-ai05-docs.mjs
+
+      - name: Validate diff whitespace
+        run: git diff --check
+
+      - name: Commit documentation
+        run: |
+          if git diff --quiet -- docs/CHANGELOG.md docs/TECHNICAL_DOCUMENTATION.md; then
+            echo "No documentation change produced"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CHANGELOG.md docs/TECHNICAL_DOCUMENTATION.md
+          git commit -m "docs(ai): document AI05 RAG V2 delivery"
+          git push origin HEAD:feat/184-ai05-rag-v2
