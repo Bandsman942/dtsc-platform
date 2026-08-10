@@ -74,12 +74,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Corrigé
 
 - Adoucissement de la disparition mobile du premier bloc privé avec une transition plus longue et synchronisation du header mobile haut avec la navigation basse pour libérer l'écran au scroll.
-- Stabilisation du masquage mobile du premier bloc des modules privés: la hauteur n'est plus recalculée pendant le geste de scroll, le repli se fait après stabilisation et les panneaux restent homogènes en séparant présentation, indicateurs et actions.
+- Stabilisation du masquage mobile du premier bloc privé: la hauteur n'est plus recalculée pendant le geste de scroll, le repli se fait après stabilisation et les panneaux restent homogènes en séparant présentation, indicateurs et actions.
 - Correction des micro-saccades de transition mobile du premier bloc privé: les variables de scroll sont appliquées par `requestAnimationFrame`, les transitions CSS sont désactivées pendant le scroll actif et le flou est réduit pour limiter le coût graphique.
 - Correction du formulaire d'affectation des collaborateurs entreprise: le statut `Invitation en attente` n'est plus sélectionnable et une invitation ne peut plus être forcée vers `ACTIVE` ou `SUSPENDED` hors acceptation volontaire.
 - Correction de l'animation mobile de masquage du premier bloc privé: disparition progressive avec opacité, flou et glissement vertical, sans limite fixe qui coupait les dashboards longs.
 - Correction du débordement horizontal mobile sur les pages publiques DTSC: garde-fous globaux `overflow-x`, watermark décoratif encapsulé, header/menu/recherche publics bornés et wrappers principaux limités à la largeur du viewport.
-- Correction du workflow d'invitation des collaborateurs entreprise: les invitations restent `INVITED` jusqu'à acceptation explicite, disposent d'une page privée de réponse et ne sont plus masquées par le contexte actif des notifications.
+- Correction du workflow d'invitation des collaborateurs dans les entreprises clientes: les invitations restent `INVITED` jusqu'à acceptation explicite, disposent d'une page privée de réponse et ne sont plus masquées par le contexte actif des notifications.
 - Correction du login entreprise afin de distinguer les memberships `ACTIVE` sélectionnables des invitations `INVITED` seulement informatives.
 
 ### Ajouté
@@ -840,7 +840,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Progression opérationnelle dérivée des tâches et checklists, avec blocage serveur des clôtures incomplètes.
 - Boîte à outils persistante : notes multiples, liste/Kanban, éditeur riche, presse-papiers et calculatrices standard/scientifique/financière.
 - Hub unique d’actions flottantes pour supprimer les chevauchements.
-- Catalogue d'offres individuelles et d’organisation centralisé; quotas Chatbot et Assistant IA dérivés des plans administrés.
+- Catalogue d’offres individuelles et d’organisation centralisé; quotas Chatbot et Assistant IA dérivés des plans administrés.
 - Annuaire des contacts acceptés, invitation `ADMIN DTSC` et pagination de conversation avec ancrage conservé.
 - Contrat uniforme des guides, inventaire i18n global et nouveaux contrôles CI.
 - Migration additive `20260806110000_iteration_07_e2e_remediation_v3`.
