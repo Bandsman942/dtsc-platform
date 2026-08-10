@@ -69,8 +69,10 @@ requireText("components/productivity/professional-calculator-v2.tsx", [
   'id: "cagr"',
   "Financial assistant",
   "Assistant financier",
+  "Keep comma as the scientific argument separator",
+  'while (this.consume(",")) args.push(this.parseExpression())',
 ]);
-forbidText("components/productivity/professional-calculator-v2.tsx", ["eval(", "new Function(", "Function(`"]);
+forbidText("components/productivity/professional-calculator-v2.tsx", ["eval(", "new Function(", "Function(`", 'replaceAll(",", ".")']);
 
 requireText("components/activities/work-prestations-panel-v2.tsx", ["weeklyGrouping", '"workType"', '"locationMode"', "EntityCommentsThread"]);
 requireText("components/activities/entity-comments-thread.tsx", ["WORK_ENTRY", "WORK_SUBMISSION", "/api/activities/comments"]);
