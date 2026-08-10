@@ -40,7 +40,7 @@ export default async function AddCollaborationContactPage() {
           eyebrow={english ? "Professional contacts" : "Contacts professionnels"}
           title={english ? "Add a contact" : "Ajouter un contact"}
           description={english ? "Find a discoverable DTSC Platform profile, send a contact invitation and manage pending invitations without leaving the collaboration security model." : "Recherchez un profil DTSC Platform découvrable, envoyez une invitation de contact et gérez les invitations en attente sans quitter le modèle de sécurité de la collaboration."}
-          primaryActions={(
+          primaryAction={(
             <Button asChild type="button" variant="outline" className="rounded-xl">
               <Link href="/collaborators"><ArrowLeft className="h-4 w-4" />{english ? "Back to discussions" : "Retour aux discussions"}</Link>
             </Button>
