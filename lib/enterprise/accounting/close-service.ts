@@ -7,7 +7,7 @@ import { publishFinanceEvent, serializeFinanceValue } from "@/lib/enterprise/acc
 export async function calculateFinancialCloseChecklist(organizationId: string, fiscalPeriodId: string) {
   const period = await prisma.enterpriseFiscalPeriod.findFirst({ where: { id: fiscalPeriodId, organizationId }, include: { fiscalYear: true } });
   if (!period) throw new EnterpriseAccountingError("FISCAL_PERIOD_NOT_FOUND", 404);
-  const [unbalancedRows, journalDrafts, failedPostings, openCashSessions, openReconciliations, salesDrafts, supplierDrafts, unreconciledTreasury, approvedPayrollRows, clearingRows] = await Promise.all([
+  const [unbalancedRows, journalDrafts, failedPostings, openCashSessions, openReconciliations, salesDrafts, supplierDrafts, unreconciledTreasury, approvedPayrolls, clearingRows] = await Promise.all([
     prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`SELECT COUNT(*)::bigint AS count FROM "EnterpriseJournalEntry" WHERE "organizationId" = ${organizationId} AND status = 'POSTED' AND "accountingDate" BETWEEN ${period.startDate} AND ${period.endDate} AND "totalDebit" <> "totalCredit"`),
     prisma.enterpriseJournalEntry.count({ where: { organizationId, accountingDate: { gte: period.startDate, lte: period.endDate }, status: { in: ["DRAFT", "PENDING_APPROVAL", "APPROVED"] } } }),
     prisma.enterprisePostingBatch.count({ where: { organizationId, createdAt: { gte: period.startDate, lte: period.endDate }, status: "FAILED" } }),
@@ -16,26 +16,7 @@ export async function calculateFinancialCloseChecklist(organizationId: string, f
     prisma.enterpriseSalesInvoice.count({ where: { organizationId, invoiceDate: { gte: period.startDate, lte: period.endDate }, status: { in: ["DRAFT", "PENDING_APPROVAL", "APPROVED"] } } }),
     prisma.enterpriseSupplierInvoice.count({ where: { organizationId, invoiceDate: { gte: period.startDate, lte: period.endDate }, status: { in: ["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED"] } } }),
     prisma.enterpriseTreasuryTransaction.count({ where: { organizationId, transactionDate: { gte: period.startDate, lte: period.endDate }, status: "CONFIRMED", reconciliationStatus: "UNRECONCILED" } }),
-    prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-      SELECT COUNT(*)::bigint AS count
-      FROM "EnterprisePayrollRun" run
-      INNER JOIN "EnterprisePayrollPeriod" period
-        ON period.id = run."payrollPeriodId"
-        AND period."organizationId" = run."organizationId"
-      WHERE run."organizationId" = ${organizationId}
-        AND run.status = 'APPROVED'
-        AND period."periodStart" <= ${period.endDate}
-        AND period."periodEnd" >= ${period.startDate}
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "EnterpriseJournalEntry" entry
-          WHERE entry."organizationId" = run."organizationId"
-            AND entry."sourceEntityType" = 'EnterprisePayrollRun'
-            AND entry."sourceEntityId" = run.id
-            AND entry."postingEvent" = 'PAYROLL_APPROVED'
-            AND entry.status = 'POSTED'
-        )
-    `),
+    prisma.enterprisePayrollRun.count({ where: { organizationId, status: "APPROVED", payrollPeriod: { periodStart: { lte: period.endDate }, periodEnd: { gte: period.startDate } } } }),
     prisma.$queryRaw<Array<{ accountId: string; balance: Prisma.Decimal }>>(Prisma.sql`
       SELECT a.id AS "accountId", COALESCE(SUM(l.debit - l.credit), 0) AS balance
       FROM "EnterpriseLedgerAccount" a
@@ -55,7 +36,7 @@ export async function calculateFinancialCloseChecklist(organizationId: string, f
     nonFinalSalesInvoices: salesDrafts,
     nonFinalSupplierInvoices: supplierDrafts,
     unreconciledTreasuryTransactions: unreconciledTreasury,
-    approvedPayrollRuns: Number(approvedPayrollRows[0]?.count || 0),
+    approvedPayrollRuns: approvedPayrolls,
     unresolvedClearingAccounts: clearingRows.length,
   };
   const checklist = {

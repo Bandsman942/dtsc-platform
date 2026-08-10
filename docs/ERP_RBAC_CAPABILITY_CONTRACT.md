@@ -28,26 +28,6 @@ Les surfaces Fournisseurs/Achats reçoivent les capacités calculées côté ser
 
 Le backend reste l'autorité finale : masquer un bouton ne remplace jamais les contrôles same-origin, session, tenant, membership, module, entitlement, Zod, rate limiting ou règles d'objet.
 
-## Finance et comptabilité
-
-`lib/enterprise/accounting/access.ts` est désormais un adaptateur métier strict au-dessus de `resolveEnterpriseModuleCapabilities()` et ne possède plus de liste locale de rôles privilégiés.
-
-Les actions Finance sont traduites vers les capacités canoniques :
-
-- lecture/export → `canRead` ;
-- création → `canCreate` ;
-- soumission → `canSubmit` ;
-- modification/paiement → `canWrite` ;
-- revue/approbation → `canApprove` ;
-- posting, contrepassation, rapprochement, clôture, réouverture et administration → `canManage` ;
-- lecture sensible → `canApprove || canManage`.
-
-`canSeeAll` et `canViewSensitive` ne sont donc jamais obtenus simplement parce que le membership porte le rôle `MANAGER`. Toute permission plus fine continue d'être revalidée côté service et objet lorsque le workflow l'exige.
-
-## Gate permanent
-
-`scripts/qa-erp-stabilization-rbac.mjs` refuse le retour de `ENTERPRISE_MANAGER_ROLES`, `canAccessEnterpriseModule` ou d'un calcul `isManager` local dans l'accès Finance. Il est agrégé par `scripts/qa-erp-stabilization-final.mjs`, lui-même exécuté par la QA comptable et `qa:regression`.
-
 ## Règle durable
 
 Toute nouvelle surface ERP professionnelle doit dériver ses actions visibles du contrat de capacités canonique ou d'un contrat métier plus strict construit au-dessus de celui-ci. Elle ne doit pas recréer une décision d'accès à partir du nom du rôle.

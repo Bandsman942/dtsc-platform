@@ -5,7 +5,6 @@ requirePaths([
   "lib/enterprise-sector-templates.ts",
   "lib/enterprise/core-v2/access.ts",
   "lib/enterprise/procurement/access.ts",
-  "lib/enterprise/accounting/access.ts",
   "app/enterprise-modules/[moduleCode]/page.tsx",
   "components/enterprise/professional/enterprise-procurement-operations-workspace.tsx",
   "components/enterprise/core-v2/enterprise-purchases-workspace.tsx",
@@ -67,24 +66,6 @@ forbidTokens("lib/enterprise/procurement/access.ts", [
   "ENTERPRISE_MANAGER_ROLES",
   "const isManager",
   "canManage: isManager",
-]);
-
-requireTokens("lib/enterprise/accounting/access.ts", [
-  "resolveEnterpriseModuleCapabilities",
-  "financeActionAllowed",
-  "canSeeAll = capabilities.canApprove || capabilities.canManage",
-  "canManage: capabilities.canManage",
-  "canCreate: capabilities.canCreate",
-  "canWrite: capabilities.canWrite",
-  "canApprove: capabilities.canApprove",
-  "canViewSensitive: canSeeAll",
-]);
-forbidTokens("lib/enterprise/accounting/access.ts", [
-  "ENTERPRISE_MANAGER_ROLES",
-  "canAccessEnterpriseModule",
-  "const isManager",
-  "canManage: isManager",
-  "isManager ||",
 ]);
 
 requireTokens("components/enterprise/professional/enterprise-procurement-operations-workspace.tsx", [

@@ -1,5 +1,4 @@
-import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
-import { resolveEnterpriseModuleCapabilities, type EnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import type { SessionPayload } from "@/lib/session";
 import {
   FINANCE_PERMISSION_PREFIX_BY_MODULE,
@@ -9,14 +8,13 @@ import {
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
 
-function financeActionAllowed(capabilities: EnterpriseModuleCapabilities, action: EnterpriseFinanceAction) {
-  if (action === "view" || action === "export") return capabilities.canRead;
-  if (action === "create") return capabilities.canCreate;
-  if (action === "submit") return capabilities.canSubmit;
-  if (action === "update" || action === "pay") return capabilities.canWrite;
-  if (action === "review" || action === "approve") return capabilities.canApprove;
-  if (action === "view_sensitive") return capabilities.canApprove || capabilities.canManage;
-  return capabilities.canManage;
+const READ_ACTIONS = new Set<EnterpriseFinanceAction>(["view", "view_sensitive", "export"]);
+const WRITE_ACTIONS = new Set<EnterpriseFinanceAction>(["create", "update", "submit", "pay"]);
+
+function canonicalAccessAction(action: EnterpriseFinanceAction) {
+  if (READ_ACTIONS.has(action)) return "read" as const;
+  if (WRITE_ACTIONS.has(action)) return "submit" as const;
+  return "manage" as const;
 }
 
 export async function getEnterpriseAccountingAccess({
@@ -32,31 +30,28 @@ export async function getEnterpriseAccountingAccess({
 }) {
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership) return null;
+  if (membership.role === "GUEST" && !READ_ACTIONS.has(action)) return null;
 
   await ensureCanonicalFinanceModulesForOrganization({ organizationId });
 
-  const capabilities = await resolveEnterpriseModuleCapabilities({
-    userId: session.userId,
-    organizationId,
-    moduleCode,
-  });
-  if (!financeActionAllowed(capabilities, action)) return null;
+  const canonicalAction = canonicalAccessAction(action);
+  const moduleAllowed = await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, canonicalAction);
+  if (!moduleAllowed) return null;
 
+  const isManager = ENTERPRISE_MANAGER_ROLES.has(membership.role);
   const permissionPrefix = FINANCE_PERMISSION_PREFIX_BY_MODULE[moduleCode];
-  const canSeeAll = capabilities.canApprove || capabilities.canManage;
+  const explicitActionAllowed = isManager || await canAccessEnterpriseModule(session.userId, organizationId, moduleCode, canonicalAction);
+  if (!explicitActionAllowed) return null;
 
   return {
     membership,
-    capabilities,
     moduleCode,
     action,
     permissionKey: `${permissionPrefix}${action}`,
-    canSeeAll,
-    canManage: capabilities.canManage,
-    canCreate: capabilities.canCreate,
-    canWrite: capabilities.canWrite,
-    canApprove: capabilities.canApprove,
-    canViewSensitive: canSeeAll,
+    canSeeAll: isManager || action === "view_sensitive",
+    canManage: isManager || canonicalAction === "manage",
+    canCreate: membership.role !== "GUEST" && (isManager || canonicalAction !== "read"),
+    canViewSensitive: isManager || action === "view_sensitive",
   };
 }
 

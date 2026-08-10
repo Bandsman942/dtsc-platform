@@ -1,4 +1,3 @@
-import "./qa-erp-stabilization-observability.mjs";
 import { forbidTokens, requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 const overview = "components/enterprise/professional/enterprise-finance-overview-workspace.tsx";
