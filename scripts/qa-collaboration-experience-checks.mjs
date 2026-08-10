@@ -40,6 +40,11 @@ const mobileChrome = read("components/layout/private-mobile-chrome-controller.ts
 const participantColors = read("lib/participant-colors.ts");
 const composer = read("components/chat/VoiceConversationComposer.tsx");
 const page = read("app/collaborators/page.tsx");
+const contactDiscovery = read("components/collaborators/contact-discovery-workspace.tsx");
+const contactDiscoveryPage = read("app/collaborators/contacts/new/page.tsx");
+const profilePage = read("app/profile/page.tsx");
+const profileContacts = read("components/profile/profile-contacts.tsx");
+const standardCollaboration = read("lib/standard-collaboration.ts");
 const vercel = read("vercel.json");
 
 for (const model of ["CollaborationGroupExperience", "CollaborationGroupStory", "CollaborationVoiceMessage", "CollaborationGroupPreference"]) {
@@ -126,6 +131,26 @@ assert(workspace.includes("profile-photo") && workspace.includes("stories") && w
 assert(immersiveShell.includes("useImmersiveConversationViewport"), "Collaborators must use the reusable immersive viewport controller");
 assert(immersiveShell.includes("getParticipantColor"), "Conversation bubbles must retain stable participant colors");
 
+// Hotfix #211: the shared floating hub owns contact creation and the conversation list becomes compact/mobile-first.
+assert(immersiveShell.includes("useFloatingAction") && immersiveShell.includes('id: "collaborators-add-contact"'), "Collaboration must register Add contact in the shared Floating Action Hub");
+assert(immersiveShell.includes("/collaborators/contacts/new"), "Floating Add contact action must open the canonical contact discovery route");
+assert(immersiveShell.includes("dataContactAvatarRail") || immersiveShell.includes("contactAvatarRail"), "Accepted contacts must be converted into a compact avatar rail");
+assert(immersiveShell.includes("overflow") && immersiveShell.includes("scroll-snap-type: x"), "Accepted contact avatars must use bounded horizontal scrolling");
+assert(immersiveShell.includes("data-message-author-avatar") || immersiveShell.includes("messageAuthorAvatar"), "Incoming conversation messages must expose author avatars");
+assert(immersiveShell.includes("data-collaboration-composer") || immersiveShell.includes("collaborationComposer"), "Conversation composer must receive the compact messenger layout contract");
+assert(contactDiscoveryPage.includes("ContactDiscoveryWorkspace") && contactDiscoveryPage.includes("canUseFeature"), "Add contact page must preserve collaboration entitlement checks");
+assert(contactDiscovery.includes("/api/collaborators/contact-directory") && contactDiscovery.includes("/api/collaborators/contact-requests"), "Contact creation must reuse the existing discovery and invitation APIs");
+assert(contactDiscovery.includes("BusinessList") && contactDiscovery.includes("data-responsive-actions"), "Contact discovery must reuse DTSC list and responsive action primitives");
+
+// Profile contacts reuse the exact accepted-contact source of truth and expose a compact list -> fullscreen detail workflow.
+assert(profilePage.includes("getAcceptedCollaborationContacts") && profilePage.includes("getCollaborationPresenceMap"), "Profile contacts must reuse accepted collaboration contacts and presence");
+assert(profilePage.includes("<Accordion") && profilePage.includes("ProfileContacts"), "Profile must remain organized as collapsible sections including Contacts");
+assert(profileContacts.includes("BusinessListItem") && profileContacts.includes("onOpen={() => setSelected(contact)}"), "Profile contacts must be compact clickable list items");
+assert(profileContacts.includes('className="h-[96dvh] max-w-none'), "Contact details must use an immersive mobile dialog");
+assert(profileContacts.includes("ActionMenu") && profileContacts.includes("Open conversation") && profileContacts.includes("Ouvrir la conversation"), "Contact detail must expose real ellipsis actions");
+assert(profileContacts.includes("/api/collaborators/direct"), "Profile contact conversations must continue through the canonical direct conversation API");
+assert(standardCollaboration.includes("status: \"ACCEPTED\"") && standardCollaboration.includes("collaborationUserBlock"), "Accepted contact source must continue filtering by accepted relationship and blocks");
+
 // Definitive mobile scroll rule: viewport owns geometry, global chrome owns one tap-vs-drag gesture.
 assert(immersiveViewport.includes("visualViewport"), "Immersive mobile conversations must follow VisualViewport changes");
 assert(immersiveViewport.includes('overflow = "hidden"'), "Global page scrolling must be locked during immersive mobile conversations");
@@ -145,4 +170,4 @@ assert(vercel.includes('"main": true'), "Vercel production-only main deployment 
 assert(vercel.includes('"*": false'), "Feature branch Vercel deployments must stay disabled");
 assert(vercel.includes("ignoreCommand"), "Vercel preview ignoreCommand must remain configured");
 
-console.log("Collaboration immersive scroll, presence journal, read info, meetings and voice QA passed.");
+console.log("Collaboration immersive scroll, contact rail/profile, messenger polish, presence journal, read info, meetings and voice QA passed.");
