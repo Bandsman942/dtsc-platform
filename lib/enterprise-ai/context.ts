@@ -1,51 +1,24 @@
 import type { EnterpriseAiAccess } from "@/lib/enterprise-ai/access";
 import type { EnterpriseAiKnowledgeCitation } from "@/lib/enterprise-ai/knowledge";
 import type { EnterpriseAiToolResult } from "@/lib/enterprise-ai/pharmacy-tools";
-import { getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
-import { prisma } from "@/lib/prisma";
 
 function jsonBlock(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-async function buildPharmacyCag(access: EnterpriseAiAccess) {
-  const settings = await getEffectivePharmacySettings(access.organizationId, "system");
-  const [enabledModules, activeMembers] = await Promise.all([
-    prisma.enterpriseModule.findMany({
-      where: { organizationId: access.organizationId, isEnabled: true },
-      orderBy: { sortOrder: "asc" },
-      select: { moduleCode: true, labelFr: true, moduleCategory: true },
-    }),
-    prisma.organizationMember.count({ where: { organizationId: access.organizationId, status: "ACTIVE", removedAt: null } }),
-  ]);
-
-  return [
-    "Contexte secteur PHARMACY:",
-    "- Respecter FEFO: les lots expirés, rappelés, en quarantaine ou bloqués ne doivent jamais être proposés comme vendables.",
-    "- Ne jamais créer une vente, une sortie de stock, une clôture de caisse, une commande, un incident qualité ou une validation sans confirmation humaine et sans passer par les routes métier.",
-    "- Les réponses doivent distinguer clairement constat, risque, recommandation et prochaine action.",
-    "- Les données financières, documents sensibles et incidents qualité restent résumés au strict besoin.",
-    "",
-    "Paramètres pharmacie utiles:",
-    jsonBlock({
-      general: settings.sections.general,
-      expiryFefo: settings.sections["expiry-fefo"],
-      alerts: settings.sections["alerts-notifications"],
-      cash: settings.sections["cash-payments"],
-      documents: settings.sections["documents-compliance"],
-      quality: settings.sections.quality,
-    }),
-    "",
-    "Modules actifs:",
-    jsonBlock(enabledModules),
-    "",
-    `Collaborateurs actifs dans l'entreprise: ${activeMembers}`,
-  ].join("\n");
-}
-
-export async function buildEnterpriseAiInstructions(access: EnterpriseAiAccess) {
+export function buildEnterpriseAiInstructions(
+  access: EnterpriseAiAccess,
+  runtime?: {
+    assistantProfileCode?: string | null;
+    assistantProfileVersion?: string | null;
+    cagContent?: string | null;
+    cagVersion?: string | null;
+  },
+) {
   const sector = access.sectorCode || "GENERAL";
-  const sectorContext = sector === "PHARMACY" ? await buildPharmacyCag(access) : "Contexte secteur générique: répondre avec prudence, sans inventer de données et en demandant une validation humaine pour toute action métier.";
+  const sectorContext = runtime?.cagContent?.trim()
+    ? runtime.cagContent
+    : "Contexte sectoriel non disponible: répondre avec prudence, sans inventer de données et en demandant une validation humaine pour toute action métier.";
 
   return [
     "Tu es l'IA Assistant Entreprise de DTSC Platform.",
@@ -66,6 +39,9 @@ export async function buildEnterpriseAiInstructions(access: EnterpriseAiAccess) 
       role: access.role,
       planCode: access.planCode,
       canUseActionDrafts: access.canUseActionDrafts,
+      assistantProfileCode: runtime?.assistantProfileCode || "ENTERPRISE_GENERAL",
+      assistantProfileVersion: runtime?.assistantProfileVersion || null,
+      cagVersion: runtime?.cagVersion || null,
     }),
     "",
     sectorContext,
