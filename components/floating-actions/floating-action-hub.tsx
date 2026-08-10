@@ -20,15 +20,38 @@ type FloatingActionRegistry = {
 };
 
 const FloatingActionContext = createContext<FloatingActionRegistry | null>(null);
+const SCROLL_DIRECTION_THRESHOLD = 8;
 
 function isFloatingActionHostEnabled(hostType: HostType | null) {
   return hostType === "app" || hostType === "console" || hostType === "support" || hostType === "local";
 }
 
+function getScrollPosition(target: EventTarget | null) {
+  if (target === document || target === document.documentElement || target === document.body) {
+    return window.scrollY;
+  }
+  return target instanceof HTMLElement ? target.scrollTop : null;
+}
+
+function isRelevantWorkspaceScroll(target: EventTarget | null) {
+  if (target === document || target === document.documentElement || target === document.body) {
+    return Boolean(document.querySelector("[data-module-workspace], main"));
+  }
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.closest("[data-dtsc-dialog-panel], [data-floating-action-hub]")) return false;
+  return Boolean(
+    target.matches("main, [data-module-workspace], [data-module-content]") ||
+      target.closest("[data-module-workspace], main") ||
+      target.querySelector("[data-module-workspace]"),
+  );
+}
+
 export function FloatingActionHubProvider({ children }: { children: ReactNode }) {
   const [actions, setActions] = useState<Record<string, FloatingActionDefinition>>({});
   const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [hostType, setHostType] = useState<HostType | null>(null);
+  const scrollPositionsRef = useRef(new WeakMap<EventTarget, number>());
   const locale = useAppLocale() || "fr";
 
   const register = useCallback((action: FloatingActionDefinition) => {
@@ -59,7 +82,35 @@ export function FloatingActionHubProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     if (!sortedActions.length || !isFloatingActionHostEnabled(hostType)) setOpen(false);
+    setVisible(true);
   }, [hostType, sortedActions.length]);
+
+  useEffect(() => {
+    if (!isFloatingActionHostEnabled(hostType)) return;
+
+    function handleScroll(event: Event) {
+      const target = event.target;
+      if (!isRelevantWorkspaceScroll(target)) return;
+      const position = getScrollPosition(target);
+      if (position === null) return;
+      const previous = scrollPositionsRef.current.get(target) ?? position;
+      scrollPositionsRef.current.set(target, position);
+      const delta = position - previous;
+      if (Math.abs(delta) < SCROLL_DIRECTION_THRESHOLD) return;
+
+      // Product contract #204: moving toward the top hides the hub;
+      // moving toward the bottom brings it back. The initial state stays visible.
+      if (delta < 0) {
+        setOpen(false);
+        setVisible(false);
+      } else {
+        setVisible(true);
+      }
+    }
+
+    document.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", handleScroll, true);
+  }, [hostType]);
 
   const hubEnabled = isFloatingActionHostEnabled(hostType);
 
@@ -68,8 +119,12 @@ export function FloatingActionHubProvider({ children }: { children: ReactNode })
       {children}
       {hubEnabled && sortedActions.length ? (
         <div
-          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[950] flex max-h-[min(72dvh,38rem)] flex-col items-end gap-2 sm:right-6"
+          className={cn(
+            "fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[950] flex max-h-[min(72dvh,38rem)] flex-col items-end gap-2 transition duration-200 sm:right-6",
+            visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0",
+          )}
           data-floating-action-hub
+          data-floating-action-hub-visible={visible ? "true" : "false"}
           data-product-host={hostType}
         >
           {open ? (
