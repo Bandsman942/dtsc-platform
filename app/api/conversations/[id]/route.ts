@@ -4,6 +4,7 @@ import { chatPreferenceView, getChatConversationPreference } from "@/lib/assista
 import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { writeApiLog } from "@/lib/audit";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { chatConversationActionSchema } from "@/lib/chat-conversation-validators";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
@@ -56,7 +57,10 @@ export async function PATCH(req: Request, { params }: Params) {
     const modelOverride = data.modelOverride?.trim() || "";
     const userLocale = await prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } });
     const context = organizationId ? "ORGANIZATION" : session.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : "PERSONAL";
-    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context, locale: userLocale?.locale || "fr" })) {
+    const planCode = context === "DTSC_INTERNAL"
+      ? "ENTERPRISE"
+      : (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })).planCode;
+    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context, locale: userLocale?.locale || "fr", planCode })) {
       return NextResponse.json({ reasonCode: "MODEL_UNAVAILABLE", message: getAiErrorMessage("MODEL_UNAVAILABLE", userLocale?.locale) }, { status: 400 });
     }
   }
