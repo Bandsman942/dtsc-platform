@@ -204,6 +204,7 @@ const enterpriseAiAccess = read("lib/enterprise-ai/access.ts");
 const enterpriseAiKnowledge = read("lib/enterprise-ai/knowledge.ts");
 const enterpriseAiContext = read("lib/enterprise-ai/context.ts");
 const enterpriseAiPharmacyTools = read("lib/enterprise-ai/pharmacy-tools.ts");
+const enterpriseAiPharmacyToolData = read("lib/enterprise-ai/pharmacy-tool-data.ts");
 const enterpriseAiUsage = read("lib/enterprise-ai/usage.ts");
 const enterpriseAiChatRoute = read("app/api/enterprise/ai/chat/route.ts");
 const enterpriseAiKnowledgeRoute = read("app/api/enterprise/ai/knowledge-sources/route.ts");
@@ -1187,9 +1188,15 @@ check(
 );
 
 check(
-  "Enterprise AI PHARMACY: CAG, outils lecture et absence de mutation métier directe",
+  "Enterprise AI PHARMACY: CAG, Tool Gateway lecture et absence de mutation métier directe",
   containsAll(enterpriseAiContext, ["Contexte secteur PHARMACY", "Respecter FEFO", "ne prétends jamais avoir exécuté une action métier"])
     && containsAll(enterpriseAiPharmacyTools, [
+      "executeAiTool",
+      "selectPharmacyReadToolCodes",
+      'session.activeContext !== "ORGANIZATION"',
+      "session.activeOrganizationId !== organizationId",
+    ])
+    && containsAll(enterpriseAiPharmacyToolData, [
       "pharmacy.dashboard.summary",
       "pharmacy.stock.low",
       "pharmacy.batches.expiring",
@@ -1199,10 +1206,16 @@ check(
       "pharmacy.purchases.open",
       "pharmacy.quality.open",
       "pharmacy.documents.summary",
+      "organizationId",
     ])
     && !enterpriseAiPharmacyTools.includes(".create({")
     && !enterpriseAiPharmacyTools.includes(".update({")
     && !enterpriseAiPharmacyTools.includes(".delete({")
+    && !enterpriseAiPharmacyTools.includes(".upsert({")
+    && !enterpriseAiPharmacyToolData.includes(".create({")
+    && !enterpriseAiPharmacyToolData.includes(".update({")
+    && !enterpriseAiPharmacyToolData.includes(".delete({")
+    && !enterpriseAiPharmacyToolData.includes(".upsert({")
 );
 
 check(
