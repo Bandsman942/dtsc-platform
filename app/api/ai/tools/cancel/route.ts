@@ -28,5 +28,23 @@ export async function POST(req: Request) {
       AND "expiresAt" > CURRENT_TIMESTAMP
   `);
   if (!updated) return NextResponse.json({ error: "CONFIRMATION_NOT_FOUND_OR_EXPIRED" }, { status: 404 });
+
+  const now = new Date();
+  await prisma.aiAgentRun.updateMany({
+    where: {
+      pendingConfirmationId: parsed.data.confirmationId,
+      userId: session.userId,
+      organizationId,
+      status: { in: ["WAITING_CONFIRMATION", "READY_TO_RESUME"] },
+    },
+    data: {
+      status: "CANCELLED",
+      reasonCode: "CONFIRMATION_CANCELLED",
+      pendingConfirmationId: null,
+      cancelRequestedAt: now,
+      cancelledAt: now,
+    },
+  });
+
   return NextResponse.json({ ok: true, status: "CANCELLED" });
 }
