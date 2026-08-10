@@ -3,6 +3,7 @@ import {
   isValidBranch,
   isValidTitle,
   extractLinkedIssue,
+  hasContributingAcknowledgement,
   MATERIAL_IMPACTS,
   missingEssentialLabels,
 } from './delivery-governance-core.mjs';
@@ -88,11 +89,17 @@ const requiredHeadings = [
   '## Documentation',
   '## Release note',
   '## Preuves',
+  '## Gouvernance de contribution',
 ];
 for (const heading of requiredHeadings) {
   if (!String(pr.body || '').includes(heading)) {
     errors.push(`Missing PR template section: ${heading}`);
   }
+}
+
+const isAutomatedDependencyPr = /^(dependabot|renovate)\//.test(pr.head.ref);
+if (!isAutomatedDependencyPr && !hasContributingAcknowledgement(pr.body)) {
+  errors.push("PR must confirm: - [x] J'ai lu et respecté `docs/CONTRIBUTING.md`.");
 }
 
 const structuredMetadata = liveIssueMetadata || pr;
