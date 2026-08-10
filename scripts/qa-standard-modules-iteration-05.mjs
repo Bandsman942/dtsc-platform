@@ -35,6 +35,14 @@ const checks = [
   ["AI Tool Gateway confirmation/idempotency compatibility", "scripts/qa-standard-ai-tool-confirmation-idempotency.mjs"],
   ["AI Tool Gateway tenant isolation", "scripts/qa-standard-ai-tool-tenant-isolation.mjs"],
   ["AI private action Gateway", "scripts/qa-standard-ai-private-tool-actions.mjs"],
+  ["AI MCP registry", "scripts/qa-standard-ai-mcp-registry.mjs"],
+  ["AI MCP tool bindings", "scripts/qa-standard-ai-mcp-tool-bindings.mjs"],
+  ["AI MCP auth", "scripts/qa-standard-ai-mcp-auth.mjs"],
+  ["AI MCP SSRF", "scripts/qa-standard-ai-mcp-ssrf.mjs"],
+  ["AI MCP data policy", "scripts/qa-standard-ai-mcp-data-policy.mjs"],
+  ["AI MCP tenant isolation", "scripts/qa-standard-ai-mcp-tenant-isolation.mjs"],
+  ["AI MCP discovery", "scripts/qa-standard-ai-mcp-discovery.mjs"],
+  ["AI MCP protocol", "scripts/qa-standard-ai-mcp-protocol.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -46,4 +54,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 + AI06 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 + AI06 + AI07 gates passed");

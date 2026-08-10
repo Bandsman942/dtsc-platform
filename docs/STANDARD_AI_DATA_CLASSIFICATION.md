@@ -62,3 +62,23 @@ Le retrieval renvoie les classifications des chunks réellement sélectionnés. 
 Les embeddings sont séparés du runtime génératif et passent par `lib/ai/embeddings.ts`. Le provider, le modèle, la dimension et la version d'index sont enregistrés séparément de la classification métier.
 
 Les vecteurs historiques conservent `legacy-openai-1536-v1` et `LEGACY_UNKNOWN`. Aucun ancien vecteur n'est rétroactivement attribué à un modèle non vérifié ; seule une réindexation explicite effectue le cutover vers une nouvelle version.
+
+## MCP Gateway — AI07
+
+Un serveur MCP externe est une nouvelle frontière d'egress, jamais une autorité de classification. Avant `tools/call` ou `resources/read`, DTSC réutilise les classifications serveur et applique la règle suivante :
+
+- `PUBLIC` reste `PUBLIC` ;
+- `INTERNAL` reste `INTERNAL` ;
+- `CONFIDENTIAL` reste `CONFIDENTIAL` ;
+- `RESTRICTED`, `HEALTH_SENSITIVE`, `HR_SENSITIVE`, `FINANCIAL_SENSITIVE` et `LEGAL_SENSITIVE` sont normalisés en `SENSITIVE` pour l'egress MCP ;
+- `SECRET` reste interdit sans exception.
+
+Les politiques serveur MCP sont :
+
+- `PUBLIC_ONLY` : uniquement `PUBLIC` ;
+- `BUSINESS_ALLOWED` : données métier non classées `SENSITIVE`/`SECRET` ;
+- `SENSITIVE_CERTIFIED` : peut recevoir `SENSITIVE` uniquement après certification explicite ; `SECRET` reste interdit.
+
+L'absence de classification n'est jamais assimilée à `PUBLIC`. Par défaut, un contexte `ORGANIZATION` ou `DTSC_INTERNAL` devient `CONFIDENTIAL`; les autres contextes deviennent `INTERNAL`. Une intégration voulant envoyer réellement des données publiques doit donc les classifier explicitement comme `PUBLIC`.
+
+Les ressources MCP retournées restent `UNTRUSTED_EXTERNAL_CONTENT` et `instructionAuthority: NONE`. Elles ne sont pas automatiquement injectées dans RAG, CAG ou un system prompt. Une future ingestion documentaire doit repasser par provenance, permissions, classification et indexation canoniques.
