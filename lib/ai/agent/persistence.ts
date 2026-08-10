@@ -172,3 +172,40 @@ export async function markAiAgentReadyAfterConfirmation(input: { confirmationId:
   });
   return result.count;
 }
+
+export async function getConfirmedAiToolExecutionForRun(input: {
+  confirmationId: string;
+  userId: string;
+  organizationId?: string | null;
+}) {
+  return prisma.aiToolExecution.findFirst({
+    where: {
+      confirmationId: input.confirmationId,
+      userId: input.userId,
+      organizationId: input.organizationId || null,
+      status: "SUCCESS",
+    },
+    orderBy: { completedAt: "desc" },
+    select: { id: true, toolCode: true, resultJson: true, reasonCode: true, completedAt: true },
+  });
+}
+
+export async function claimAiAgentRunResume(input: {
+  runId: string;
+  userId: string;
+  organizationId?: string | null;
+  confirmationId: string;
+}) {
+  const result = await prisma.aiAgentRun.updateMany({
+    where: {
+      id: input.runId,
+      userId: input.userId,
+      organizationId: input.organizationId || null,
+      status: "READY_TO_RESUME",
+      pendingConfirmationId: input.confirmationId,
+      cancelRequestedAt: null,
+    },
+    data: { status: "RUNNING", pendingConfirmationId: null, reasonCode: null },
+  });
+  return result.count === 1;
+}
