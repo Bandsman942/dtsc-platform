@@ -91,6 +91,8 @@ jobs:
         run: pnpm prisma:deploy
       - name: Type check
         run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Regression QA
         run: node scripts/run-regression-qa-ci.mjs
       - name: Standard modules iteration 01 QA
