@@ -27,7 +27,10 @@ check(!route.includes("req.json("), "Resume API must not accept tool result or a
 check(resume.includes("GLOBAL_CHAT") && resume.includes("ENTERPRISE_CHAT"), "Same-run resume must support both certified chat scopes");
 check(!resume.includes("createAiAgentRun"), "Resume must never create a second agent run");
 check(resume.includes("activeDurationMs") && resume.includes("step.durationMs"), "Confirmation wait time must not silently consume active execution duration budget");
-check(resume.includes("claimAiAgentRunResume") && resume.indexOf("claimAiAgentRunResume") > resume.indexOf("getConfirmedAiToolExecutionForRun"), "Canonical execution must be verified before the resume claim");
+check(
+  resume.indexOf("await claimAiAgentRunResume") > resume.indexOf("await getConfirmedAiToolExecutionForRun"),
+  "Canonical execution must be verified before the resume claim",
+);
 
 if (failures.length) {
   console.error(`Standard AI Agent resume QA failed:\n${failures.map((item) => `- ${item}`).join("\n")}`);
