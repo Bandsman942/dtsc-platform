@@ -20,6 +20,10 @@ const checks = [
   ["AI routing determinism", "scripts/qa-standard-ai-routing-determinism.mjs"],
   ["AI routing cost/health", "scripts/qa-standard-ai-routing-cost-health.mjs"],
   ["AI data policy fallbacks", "scripts/qa-standard-ai-data-policy-fallbacks.mjs"],
+  ["AI assistant registry", "scripts/qa-standard-ai-assistant-registry.mjs"],
+  ["AI context engine", "scripts/qa-standard-ai-context-engine.mjs"],
+  ["AI CAG isolation", "scripts/qa-standard-ai-cag-isolation.mjs"],
+  ["AI sector assistants", "scripts/qa-standard-ai-sector-assistants.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -31,4 +35,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 gates passed");
