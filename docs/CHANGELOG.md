@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-08-10 — DTSC AI 02/08 : OpenRouter et modèles certifiés
+
+### Ajouté
+
+- Ajout du provider OpenRouter derrière la façade AI01 avec Chat Completions streaming normalisé dans `AiProviderEvent`.
+- Ajout de l’allow-list serveur `AI_OPENROUTER_CERTIFIED_MODELS_JSON` et des profils de modèles certifiés, sans modèle OpenRouter activé par défaut.
+- Ajout de l’audit non mutateur `scripts/ai/audit-openrouter-catalog.mjs` sur le catalogue ZDR compatible et de cinq gates permanents AI02.
+
+### Sécurisé
+
+- Chaque requête OpenRouter impose `allow_fallbacks: false`, `data_collection: "deny"` et `zdr: true`; les fallbacks restent décidés et audités par DTSC.
+- Le catalogue générique ne peut pas injecter de modèle OpenRouter et `/api/models` ne lit ni secret, ni allow-list brute, ni catalogue distant.
+- Les règles AI00 `SECRET`/données sensibles et le statut externe par défaut restent inchangés.
+
+### Amélioré
+
+- `/api/models` expose les profils et versions de certification non sensibles uniquement après filtrage plan/contexte/policy.
+- `AiProviderAttempt` couvre désormais OpenAI et OpenRouter sans créer un second journal ou un double comptage.
+
 ## 2026-08-10 — DTSC AI 01/08 : abstraction provider et streaming normalisé
 
 ### Ajouté
@@ -339,33 +358,6 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Amélioré
 
 - Le dataset facturation de la Console couvre désormais toutes les entreprises clientes, y compris celles sans abonnement, et fournit les plans actifs ainsi que les KPI d'abonnements et le MRR estimé.
-- La QA source-level contrôle désormais les protections backend et les opérations du centre de contrôle des abonnements.
-- `ensureBillingPlans()` crée uniquement les plans absents avec `createMany(..., skipDuplicates: true)` et ne réécrit plus les tarifs ou quotas administrés.
-
-### Corrigé
-
-- Correction du build Vercel du centre de contrôle: le fallback de limites utilise désormais le plan SaaS minimal typé `STARTER` au lieu de la valeur invalide `FREE`.
-
-### Sécurisé
-
-- La suppression d'un abonnement est traitée comme une annulation métier auditée; aucun abonnement, paiement ou historique n'est supprimé physiquement.
-- Le renouvellement clôture l'abonnement courant et crée une nouvelle période afin de préserver la traçabilité.
-
-## 2026-06-05
-
-### Ajouté
-
-- Ajout d'une couche SaaS centralisee pour les organisations clientes: plans `STARTER`, `BUSINESS`, `ENTERPRISE`, limites d'usage, entitlements de modules et helpers `getOrganizationEntitlements`, `canUseModule`, `canUseFeature`, `assertCanUseModule`, `getOrganizationUsageLimits` et `isSubscriptionActive`.
-- Ajout de `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`, reference technique des plans, limites, modules controles, comportements d'acces, Console DTSC et QA associee.
-- Ajout de contenus commerciaux publics approfondis pour Accueil, Services, Solutions, Secteurs, Projets, À propos, Ressources, Contact, Data en Afrique, BI & KPI et IA en entreprise: blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
-- Ajout sur la page Contact d'une qualification par besoin client et par levier DTSC, avec mini-parcours de cadrage sans modifier le formulaire serveur existant.
-- Ajout sur la page Ressources de catégories éditoriales, d'une lecture par objectif et d'un état vide orienté visiteur.
-- Ajout de `docs/QA_REGRESSION_CHECKLIST.md`, checklist QA globale couvrant sous-domaines, auth, Console DTSC, Support, modules Entreprise, groupes, appels, notifications, calendrier, UX mobile et accès interdits entre organisations.
-- Ajout de `pnpm qa:regression` via `scripts/qa-regression-checks.mjs`, suite source-level sans dépendance externe pour vérifier les garde-fous critiques multi-tenant avant build Vercel.
-
-### Amélioré
-
-- La Console DTSC `Abonnements & facturation` affiche maintenant les abonnements organisations avec plan resolu, statut, dates, limites, modules, utilisateurs actifs, dernier paiement et audit des paiements.
 - La page client `/billing` expose en lecture seule le plan de l'organisation active, son statut, ses limites, les modules disponibles et les enregistrements de facturation organisationnels recents.
 - `AGENTS.md` impose maintenant la vérification de `pnpm qa:regression` avant commit/push et le maintien de `docs/QA_REGRESSION_CHECKLIST.md` avant push quand les parcours ou règles QA changent.
 - Les pages publiques corporate utilisent désormais un modèle de contenu enrichi et réutilisable pour afficher problèmes, livrables, bénéfices, exemples, FAQ, parcours et CTA sans créer de route ni action placeholder.
