@@ -26,12 +26,16 @@ La boîte à outils regroupe des notes persistantes, des pense-bêtes et une cal
 
 ## Éditeur riche plein écran
 
+- Sur mobile, l’éditeur se comporte comme un espace de prise de notes dédié : titre compact, rail de mise en forme, grande zone de rédaction et commandes essentielles au-dessus du clavier.
+- Lorsque le clavier logiciel s’ouvre, la fenêtre d’édition se recalcule sur la hauteur réellement visible de l’écran ; le texte en cours de saisie doit rester visible sur les petits écrans.
+- Le long texte d’aide de l’éditeur est masqué sur mobile pour réserver la hauteur à la rédaction, mais reste disponible sur tablette et desktop.
 - Le contenu éditable ne repasse pas dans l’état React à chaque caractère : la frappe reste locale au champ jusqu’à l’enregistrement afin de stabiliser les navigateurs mobiles et les claviers virtuels.
 - Le caret reste maintenu dans la zone visible de l’éditeur pendant la saisie et les suppressions avec Backspace ; l’utilisateur ne doit pas devoir remonter manuellement la page après chaque caractère supprimé.
 - La barre de mise en forme reste fixe au-dessus du texte et se parcourt horizontalement sur mobile comme sur desktop.
 - Sélectionnez un texte existant puis appliquez directement gras, italique, soulignement, barré, surlignage, titre, citation, listes, alignement, couleur, police, taille, interligne, espacement ou lien : la sélection est restaurée avant l’application du format.
 - L’éditeur conserve son propre défilement vertical et utilise une taille de texte mobile évitant le zoom automatique des navigateurs.
-- Le bouton **Retour aux informations** permet de corriger les métadonnées sans perdre le brouillon de contenu de la session d’édition.
+- Sur petit écran, les actions **Infos** et **Enregistrer** utilisent des libellés compacts ; sur écran plus large, les intitulés complets **Retour aux informations** et **Enregistrer la note** restent affichés.
+- **Retour aux informations** récupère le brouillon courant avant de rouvrir les métadonnées. Fermer l’éditeur par son bouton de fermeture suit le même parcours afin d’éviter de perdre accidentellement le texte saisi dans la session.
 
 ## Aperçu fidèle des notes
 
@@ -81,6 +85,7 @@ Les valeurs monétaires doivent utiliser une unité cohérente entre les champs.
 ## Dépannage
 
 - Si la zone d’édition ne semble plus active après une interaction système, touchez directement le texte : le caret doit rester dans le viewport propre de l’éditeur.
+- Si le clavier masque anormalement la zone de rédaction, fermez puis rouvrez l’éditeur et vérifiez que le navigateur n’est pas forcé en mode bureau ; le dialogue doit normalement suivre automatiquement le visual viewport.
 - Si une note n’apparaît pas après l’enregistrement, rechargez la liste et vérifiez que les éléments archivés sont masqués.
 - Si un calcul échoue, vérifiez les parenthèses, les nombres, les taux et les séparateurs des flux financiers.
 - Pour la VAN, séparez les flux par des virgules ou des points-virgules.

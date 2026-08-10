@@ -14,6 +14,7 @@ type DialogProps = {
   footer?: ReactNode;
   onClose: () => void;
   className?: string;
+  presentation?: "default" | "editor";
 };
 
 const EDITABLE_DIALOG_CONTROL_SELECTOR = [
@@ -29,16 +30,18 @@ function isEditableDialogControl(target: EventTarget | null): target is HTMLElem
   return target instanceof HTMLElement && target.matches(EDITABLE_DIALOG_CONTROL_SELECTOR);
 }
 
-export function Dialog({ open, title, description, children, footer, onClose, className }: DialogProps) {
+export function Dialog({ open, title, description, children, footer, onClose, className, presentation = "default" }: DialogProps) {
   const titleId = useId();
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isEditorPresentation = presentation === "editor";
   const isTallDialog =
-    typeof className === "string" &&
-    (className.includes("h-[90dvh]") ||
-      className.includes("h-[92dvh]") ||
-      className.includes("h-[94dvh]") ||
-      className.includes("h-[96dvh]"));
+    isEditorPresentation ||
+    (typeof className === "string" &&
+      (className.includes("h-[90dvh]") ||
+        className.includes("h-[92dvh]") ||
+        className.includes("h-[94dvh]") ||
+        className.includes("h-[96dvh]")));
 
   useEffect(() => {
     if (!open) {
@@ -129,6 +132,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
 
   const panelStyle: CSSProperties = {
     maxHeight: "calc(var(--dtsc-dialog-visual-height, 100dvh) - 1rem)",
+    ...(isEditorPresentation ? { height: "calc(var(--dtsc-dialog-visual-height, 100dvh) - 1rem)" } : {}),
   };
 
   return createPortal(
@@ -149,6 +153,7 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
     >
       <div
         data-dtsc-dialog-panel
+        data-dtsc-dialog-presentation={presentation}
         className={cn(
           "flex max-h-full w-full min-w-0 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.65rem] border border-dtsc-border bg-dtsc-surface shadow-[0_24px_80px_rgba(0,23,54,0.35)] sm:min-h-[min(34rem,calc(100dvh-2rem))] sm:max-w-2xl sm:rounded-2xl",
           className,
@@ -156,10 +161,19 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         )}
         style={panelStyle}
       >
-        <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b-2 border-dtsc-border bg-dtsc-page px-4 py-3.5 sm:px-5 sm:py-4">
+        <div className={cn(
+          "sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b-2 border-dtsc-border bg-dtsc-page px-4 py-3.5 sm:px-5 sm:py-4",
+          isEditorPresentation && "px-3 py-2.5 sm:px-5 sm:py-3.5",
+        )}>
           <div className="min-w-0 border-l-[3px] border-cyan-500 pl-3.5">
-            <h2 id={titleId} className="break-words text-xl font-black tracking-[-0.02em] text-dtsc-ink sm:text-2xl">{title}</h2>
-            {description && <p className="mt-1.5 break-words text-sm leading-6 text-dtsc-muted">{description}</p>}
+            <h2 id={titleId} className={cn(
+              "break-words font-black tracking-[-0.02em] text-dtsc-ink",
+              isEditorPresentation ? "text-lg sm:text-2xl" : "text-xl sm:text-2xl",
+            )}>{title}</h2>
+            {description && <p className={cn(
+              "mt-1.5 break-words text-sm leading-6 text-dtsc-muted",
+              isEditorPresentation && "hidden sm:block",
+            )}>{description}</p>}
           </div>
           <Button type="button" variant="ghost" size="icon" onClick={onClose} className="shrink-0 rounded-xl text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink" aria-label="Fermer" title="Fermer le formulaire">
             <X className="h-4 w-4" />
@@ -168,11 +182,21 @@ export function Dialog({ open, title, description, children, footer, onClose, cl
         <div
           ref={scrollRef}
           data-dtsc-dialog-scroll
-          className="min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain bg-dtsc-surface px-3 py-4 scroll-pb-24 sm:px-5 sm:py-5"
+          className={cn(
+            "min-h-0 min-w-0 flex-1 touch-pan-y overscroll-contain bg-dtsc-surface",
+            isEditorPresentation
+              ? "flex flex-col overflow-hidden p-0 scroll-pb-0"
+              : "overflow-x-hidden overflow-y-auto px-3 py-4 scroll-pb-24 sm:px-5 sm:py-5",
+          )}
         >
           {children}
         </div>
-        {footer && <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-dtsc-border bg-dtsc-page px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-4">{footer}</div>}
+        {footer && <div className={cn(
+          "shrink-0 border-t border-dtsc-border bg-dtsc-page pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+          isEditorPresentation
+            ? "grid grid-cols-2 gap-2 px-2 py-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3 sm:px-5 sm:py-3"
+            : "flex flex-wrap justify-end gap-3 px-4 py-3 sm:px-5 sm:py-4",
+        )}>{footer}</div>}
       </div>
     </div>,
     document.body,

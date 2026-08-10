@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, Calculator, Check, Columns3, Lightbulb, List, Pencil, Pin, Plus, Save, Search, StickyNote, Trash2, Wrench } from "lucide-react";
+import { Archive, ArrowLeft, Calculator, Check, Columns3, Lightbulb, List, Pencil, Pin, Plus, Save, Search, StickyNote, Trash2, Wrench } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useFloatingAction } from "@/components/floating-actions/floating-action-hub";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -320,18 +320,20 @@ export function ProfessionalToolboxV2() {
         open={editorSession !== null}
         title={editorSession?.metadata.title || (english ? "Note editor" : "Éditeur de note")}
         description={english ? "Fullscreen editor. The formatting rail stays fixed and scrolls horizontally; select text first, then apply formatting." : "Éditeur plein écran. Le rail de mise en forme reste fixe et défile horizontalement ; sélectionnez un texte puis appliquez directement le format."}
-        onClose={() => setEditorSession(null)}
-        className="h-[96dvh] max-w-none"
-        footer={editorSession ? <><Button type="button" variant="outline" onClick={returnToMetadata} className="rounded-xl">{english ? "Back to information" : "Retour aux informations"}</Button><Button type="button" disabled={saving} onClick={() => void saveEditorSession()} className="rounded-xl bg-dtsc-blue text-white"><Save className="h-4 w-4" />{saving ? (english ? "Saving…" : "Enregistrement…") : (english ? "Save note" : "Enregistrer la note")}</Button></> : null}
+        onClose={returnToMetadata}
+        className="max-w-none"
+        presentation="editor"
+        footer={editorSession ? <><Button type="button" variant="outline" onClick={returnToMetadata} className="w-full rounded-xl sm:w-auto"><ArrowLeft className="h-4 w-4" /><span className="sm:hidden">{english ? "Info" : "Infos"}</span><span className="hidden sm:inline">{english ? "Back to information" : "Retour aux informations"}</span></Button><Button type="button" disabled={saving} onClick={() => void saveEditorSession()} className="w-full rounded-xl bg-dtsc-blue text-white sm:w-auto"><Save className="h-4 w-4" /><span className="sm:hidden">{saving ? (english ? "Saving…" : "Enregistrement…") : (english ? "Save" : "Enregistrer")}</span><span className="hidden sm:inline">{saving ? (english ? "Saving…" : "Enregistrement…") : (english ? "Save note" : "Enregistrer la note")}</span></Button></> : null}
       >
         {editorSession ? (
-          <div className="flex h-[calc(var(--dtsc-dialog-visual-height,100dvh)-10rem)] min-h-[24rem] min-w-0 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <ProfessionalNoteRichEditor
               key={`${editorSession.note?.id || "new"}-${editorSession.contentHtml.length}`}
               ref={editorRef}
               initialHtml={editorSession.contentHtml}
               placeholder={english ? "Write your note…" : "Rédigez votre note…"}
               english={english}
+              className="rounded-none border-0"
             />
           </div>
         ) : null}
