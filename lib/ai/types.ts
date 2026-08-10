@@ -60,6 +60,12 @@ export type AiRoutingConstraints = {
   providerSortPreference?: "price" | "latency" | "throughput" | null;
 };
 
+export type AiProviderToolDefinition = {
+  code: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+};
+
 export type AiModelStatus = "ACTIVE" | "DEGRADED" | "DISABLED" | "RETIRED";
 
 export type AiProviderDefinition = {
@@ -142,6 +148,7 @@ export type AiRouteRequest = {
   assistantCode?: string | null;
   policyFlags?: AiPolicyFlags;
   routingConstraints?: AiRoutingConstraints;
+  tools?: AiProviderToolDefinition[];
   tags?: string[];
   signal?: AbortSignal;
 };

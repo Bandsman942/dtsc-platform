@@ -43,6 +43,15 @@ const checks = [
   ["AI MCP tenant isolation", "scripts/qa-standard-ai-mcp-tenant-isolation.mjs"],
   ["AI MCP discovery", "scripts/qa-standard-ai-mcp-discovery.mjs"],
   ["AI MCP protocol", "scripts/qa-standard-ai-mcp-protocol.mjs"],
+  ["AI Agent runtime", "scripts/qa-standard-ai-agent-runtime.mjs"],
+  ["AI Agent budgets", "scripts/qa-standard-ai-agent-budgets.mjs"],
+  ["AI Agent confirmation", "scripts/qa-standard-ai-agent-confirmation.mjs"],
+  ["AI Agent resume", "scripts/qa-standard-ai-agent-resume.mjs"],
+  ["AI Agent UI", "scripts/qa-standard-ai-agent-ui.mjs"],
+  ["AI Agent idempotency", "scripts/qa-standard-ai-agent-idempotency.mjs"],
+  ["AI Agent cancellation", "scripts/qa-standard-ai-agent-cancellation.mjs"],
+  ["AI Agent tenant isolation", "scripts/qa-standard-ai-agent-tenant-isolation.mjs"],
+  ["AI Agent sensitive domains", "scripts/qa-standard-ai-agent-sensitive-domains.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -54,4 +63,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 + AI06 + AI07 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 + AI06 + AI07 + AI08 gates passed");

@@ -6,6 +6,8 @@
 
 Question → contexte serveur → classification de tâche → résolution du plan → classification des données/capacités → Policy Engine → candidats éligibles → health registry → scoring capacité/coût/latence/préférence → candidats classés → provider adapter → événements normalisés DTSC → streaming applicatif → usage/coût → audit.
 
+En mode Agent AI08, cette chaîne reste l’autorité modèle/provider et est réutilisée à chaque tour modèle. Le runtime agentique ne possède pas de routeur parallèle.
+
 ## Tâches
 
 `GENERAL_CHAT`, `REASONING`, `SUMMARIZATION`, `DOCUMENT_ANALYSIS`, `EXTRACTION`, `STRUCTURED_GENERATION`, `CODE`, `TRANSLATION`, `ENTERPRISE_SEARCH`, `TOOL_EXECUTION`, `VISION`, `AUDIO`, `EMBEDDING`, `RERANKING`.
@@ -48,6 +50,8 @@ Le contrat `AiProviderEvent` vit dans `lib/ai/provider-events.ts` et couvre `TEX
 Le parsing de `response.output_text.delta`, `response.function_call_arguments.*` et `response.completed` appartient exclusivement à `lib/ai/providers/openai-responses.ts`. OpenRouter Chat Completions est normalisé par `lib/ai/providers/openrouter-chat-completions.ts`. Les routes métier ne dépendent d'aucun nom d'événement natif.
 
 `lib/ai/provider.ts` reste une façade d'adapters. La cancellation du consumer est propagée jusqu'au reader HTTP natif. Un transport qui se termine sans événement `COMPLETED` est classé `STREAM_INTERRUPTED` au lieu d'être compté comme succès.
+
+AI08 réutilise ces mêmes événements normalisés pour recevoir des structured tool calls. Le runtime ne lit pas directement un format natif OpenAI/OpenRouter.
 
 ## OpenRouter — AI02
 
@@ -128,26 +132,70 @@ Ces options ne peuvent jamais assouplir AI02 : `allow_fallbacks:false`, `data_co
 - un fallback repasse toujours par l'éligibilité canonique et ne peut pas réduire la classification, contourner le plan ou utiliser un provider caché.
 - seules les erreurs provider retryables survenues avant remise du stream au consumer progressent vers le candidat suivant ; aucune réponse partielle ne déclenche un second stream.
 
+AI08 ne modifie pas ces règles. Un run agent peut appeler plusieurs fois `routeAiStream()` au fil de ses étapes, mais chaque appel repart de la policy et des plafonds applicables au run. Un provider/model précédent ne devient jamais une permission pour le tour suivant.
+
 ## Cohérence UI/runtime
 
 `/api/models` utilise le même catalogue filtré par policy et plan effectif. Les profils et certifications exposés sont des métadonnées sûres uniquement pour des modèles réellement éligibles. AI03 ne crée pas de catalogue client parallèle.
 
+Le panneau Agent AI08 n’offre aucun sélecteur capable de dépasser ces politiques. Il affiche l’état du run, les outils, les limites, tokens et coûts issus de l’état serveur sûr.
+
 ## Bypass providers
 
-Les appels historiques qui contournent encore `lib/ai/*` sont versionnés dans `docs/STANDARD_AI_PROVIDER_BYPASS_INVENTORY.md`. Les embeddings restent une capacité séparée et seront abstraits dans RAG V2.
-
-## État de validation
-
-AI00, AI01 et AI02 constituent la baseline Production : Policy Engine, provider facade, flux normalisé, observabilité des tentatives et OpenRouter certifié. AI03 ajoute le classement déterministe et explicable sans migration Prisma. Les Quality Gates AI03 doivent rester verts avant toute fusion vers `main`.
+Les appels historiques qui contournent encore `lib/ai/*` sont versionnés dans `docs/STANDARD_AI_PROVIDER_BYPASS_INVENTORY.md`. Les embeddings sont abstraits par la couche RAG V2 et ne deviennent pas un moteur de génération parallèle.
 
 ## Tool Gateway — AI06
 
-AI06 separates model reasoning from execution authority. A provider or deterministic selector may propose a tool code and arguments, but only the DTSC Tool Gateway can authorize and execute it.
+AI06 sépare le raisonnement modèle de l’autorité d’exécution. Un provider ou sélecteur déterministe peut proposer un code outil et des arguments, mais seul le DTSC Tool Gateway peut l’autoriser et l’exécuter.
 
-The execution chain is:
+La chaîne d’exécution est :
 
 `tool proposal → AI_TOOL_REGISTRY → Zod input validation → authorizeAiTool() → confirmation policy → idempotency claim → explicit executor → Zod output validation → audit/result`.
 
-Pharmacy currently keeps a deterministic keyword selector as a documented transitional fallback. It has no authority: every selected code still crosses the same Gateway. Structured provider tool calls can replace selection later without changing the authorization/execution boundary.
+Pharmacy conserve temporairement un sélecteur par mots-clés comme fallback documenté. Il n’a aucune autorité : chaque code sélectionné repasse par le même Gateway.
 
-Mutations are structurally confirmed through `AiToolConfirmation`; free-form text such as `oui/yes/ok` is never proof of consent. `AiToolExecution` owns transversal execution identity and idempotency. AI06 does not certify payment, accounting or clinical mutations, and MCP remains reserved for AI07.
+Les mutations sont confirmées structurellement via `AiToolConfirmation`; le texte libre `oui/yes/ok` n’est jamais une preuve de consentement. `AiToolExecution` possède l’identité transversale et l’idempotence d’exécution.
+
+## MCP Gateway — AI07
+
+AI07 projette uniquement des bindings MCP explicitement certifiés dans `AI_TOOL_REGISTRY`. Discovery, ressource ou prompt distant ne devient jamais une permission ni une instruction système.
+
+MCP reste READ-only dans cette baseline et tout appel distant repasse par tenant, permission, plan, data policy, vérification de schéma et Tool Gateway. `SECRET` n’est jamais envoyé.
+
+## Agent Runtime — AI08
+
+AI08 ajoute `lib/ai/agent/*` au-dessus des autorités précédentes :
+
+```text
+messages/contexte canonique
+  -> budget serveur Agent
+  -> outils pré-autorisés
+  -> routeAiStream()
+  -> texte final OU tool proposal
+  -> executeAiTool()
+  -> résultat non fiable
+  -> routeAiStream()
+  -> ... jusqu’à réponse finale ou limite
+```
+
+Règles opposables :
+
+- `maxSteps`, `maxToolCalls`, `maxTokens`, `maxEstimatedCost`, `maxDurationMs` sont des plafonds serveur ;
+- le client peut seulement demander plus restrictif ;
+- le modèle n’exécute jamais lui-même un outil ;
+- une mutation suspend le run si confirmation requise ;
+- la confirmation réussie produit un `AiToolExecution` canonique puis `READY_TO_RESUME` ;
+- la reprise recharge ce résultat côté serveur et continue le même `runId` ;
+- un refus ferme la proposition et le run suspendu ;
+- cancellation provider/run est supportée ;
+- aucun retry aveugle d’outil n’est introduit ;
+- `SENSITIVE_MUTATE` n’est pas exposé ;
+- aucune chaîne de pensée privée n’est persistée ou affichée.
+
+Le mode Agent est opt-in dans le shell immersif du Chatbot global et de l’Assistant Entreprise. Les routes historiques restent indépendantes, ce qui rend le rollback applicatif possible sans changer la mémoire conversationnelle existante.
+
+## État de validation
+
+AI00→AI08 constituent désormais une chaîne de gouvernance unique : policy → provider abstraction → routing → context/CAG/RAG → Tool Gateway → MCP certifié → Agent Runtime borné.
+
+Les Quality Gates AI08 couvrent runtime, budgets, confirmation, reprise, UX FR/EN/mobile, idempotence, cancellation, tenant isolation, domaines sensibles et confidentialité. La maturité `COMMERCIAL_READY` reste néanmoins conditionnée à des E2E propriétaire exécutés sur le SHA `main` réellement déployé en Production.

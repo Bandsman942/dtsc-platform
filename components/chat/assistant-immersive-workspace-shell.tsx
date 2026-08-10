@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { AiAgentRunDock } from "@/components/chat/ai-agent-run-dock";
 import { useImmersiveConversationViewport } from "@/components/chat/use-immersive-conversation-viewport";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +74,7 @@ export function AssistantImmersiveWorkspaceShell({
         }
       `}</style>
       {children}
+      <AiAgentRunDock variant={variant} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { markAiAgentReadyAfterConfirmation } from "@/lib/ai/agent/persistence";
 import { confirmAiToolConfirmation, getPendingAiToolConfirmation } from "@/lib/ai/tools/confirmation";
 import { executeAiTool } from "@/lib/ai/tools/execute";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -50,13 +51,23 @@ export async function POST(req: Request) {
     context,
     confirmationId: pending.id,
   });
+  if (execution.ok) {
+    await markAiAgentReadyAfterConfirmation({ confirmationId: pending.id, userId: session.userId });
+  }
   const statusCode = execution.ok ? 200 : execution.status === "DENIED" ? 403 : 409;
   await writeApiLog({
     request: req,
     statusCode,
     userId: session.userId,
     startedAt,
-    metadata: { action: "ai_tool_confirm_execute", toolCode: pending.toolCode, confirmationId: pending.id, executionStatus: execution.status, auditId: execution.auditId || null },
+    metadata: {
+      action: "ai_tool_confirm_execute",
+      toolCode: pending.toolCode,
+      confirmationId: pending.id,
+      executionStatus: execution.status,
+      auditId: execution.auditId || null,
+      agentRunReady: execution.ok,
+    },
   });
   return NextResponse.json(execution, { status: statusCode });
 }

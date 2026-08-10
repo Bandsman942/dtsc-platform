@@ -1,0 +1,66 @@
+model AiAgentRun {
+  id                       String   @id
+  userId                   String
+  organizationId           String?
+  scope                    String
+  executionClass           String   @default("INTERACTIVE")
+  contextCode              String
+  assistantCode            String?
+  conversationId           String?
+  enterpriseConversationId String?
+  status                   String   @default("RUNNING")
+  maxSteps                 Int
+  maxToolCalls             Int
+  maxTokens                Int
+  maxEstimatedCost         Decimal  @db.Decimal(14, 8)
+  maxDurationMs            Int
+  allowedToolModesJson     Json
+  allowedToolCodesJson     Json?
+  currentStep              Int      @default(0)
+  toolCallCount            Int      @default(0)
+  inputTokens              Int      @default(0)
+  outputTokens             Int      @default(0)
+  totalTokens              Int      @default(0)
+  estimatedCost            Decimal  @default(0) @db.Decimal(14, 8)
+  pendingConfirmationId    String?
+  reasonCode               String?
+  cancelRequestedAt        DateTime?
+  metadataJson             Json?
+  startedAt                DateTime @default(now())
+  completedAt              DateTime?
+  cancelledAt              DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  steps                    AiAgentStep[]
+
+  @@index([userId, organizationId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([enterpriseConversationId, createdAt])
+  @@index([status, createdAt])
+  @@index([pendingConfirmationId, status])
+}
+
+model AiAgentStep {
+  id            String     @id
+  runId         String
+  stepIndex     Int
+  kind          String
+  status        String
+  toolCode      String?
+  providerCode  String?
+  modelCode     String?
+  inputTokens   Int        @default(0)
+  outputTokens  Int        @default(0)
+  totalTokens   Int        @default(0)
+  estimatedCost Decimal    @default(0) @db.Decimal(14, 8)
+  durationMs    Int?
+  reasonCode    String?
+  metadataJson  Json?
+  createdAt     DateTime   @default(now())
+  completedAt   DateTime?
+  run           AiAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, stepIndex, createdAt])
+  @@index([kind, status, createdAt])
+  @@index([toolCode, status, createdAt])
+}

@@ -1,6 +1,6 @@
 import { AiProviderError, classifyProviderHttpError } from "@/lib/ai/errors";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
-import type { AiModelDefinition, AiProviderDefinition } from "@/lib/ai/types";
+import type { AiModelDefinition, AiProviderDefinition, AiProviderToolDefinition } from "@/lib/ai/types";
 import type { OpenAIInputMessage } from "@/lib/openai";
 
 type NativeOpenAiEvent = {
@@ -40,23 +40,14 @@ function parseToolArguments(value?: string) {
 }
 
 function normalizeNativeEvent(event: NativeOpenAiEvent): AiProviderEvent[] {
-  if (event.type === "response.output_text.delta" && event.delta) {
-    return [{ type: "TEXT_DELTA", text: event.delta }];
-  }
+  if (event.type === "response.output_text.delta" && event.delta) return [{ type: "TEXT_DELTA", text: event.delta }];
   if (event.type === "response.function_call_arguments.delta") {
     return [{ type: "TOOL_CALL_DELTA", id: event.item_id, argumentsDelta: event.delta }];
   }
   if (event.type === "response.function_call_arguments.done") {
-    return [{
-      type: "TOOL_CALL_COMPLETED",
-      id: event.item_id,
-      name: event.name,
-      arguments: parseToolArguments(event.arguments),
-    }];
+    return [{ type: "TOOL_CALL_COMPLETED", id: event.item_id, name: event.name, arguments: parseToolArguments(event.arguments) }];
   }
-  if (event.type === "error") {
-    return [{ type: "ERROR", reasonCode: "UNKNOWN_PROVIDER_ERROR" }];
-  }
+  if (event.type === "error") return [{ type: "ERROR", reasonCode: "UNKNOWN_PROVIDER_ERROR" }];
   if (event.type === "response.completed") {
     const usage = event.response?.usage;
     const events: AiProviderEvent[] = [];
@@ -80,12 +71,14 @@ export async function createOpenAiResponsesEventStream({
   model,
   messages,
   instructions,
+  tools,
   signal,
 }: {
   provider: AiProviderDefinition;
   model: AiModelDefinition;
   messages: OpenAIInputMessage[];
   instructions: string;
+  tools?: AiProviderToolDefinition[];
   signal?: AbortSignal;
 }): Promise<ReadableStream<AiProviderEvent>> {
   const apiKey = process.env[provider.apiKeyEnv];
@@ -106,9 +99,11 @@ export async function createOpenAiResponsesEventStream({
       body: JSON.stringify({
         model: model.providerModelId,
         instructions,
-        input: messages
-          .filter((message) => message.role !== "system")
-          .map((message) => ({ role: message.role, content: message.content })),
+        input: messages.filter((message) => message.role !== "system").map((message) => ({ role: message.role, content: message.content })),
+        ...(tools?.length ? {
+          tools: tools.map((tool) => ({ type: "function", name: tool.code, description: tool.description, parameters: tool.inputSchema, strict: true })),
+          tool_choice: "auto",
+        } : {}),
         stream: true,
         store: false,
       }),
@@ -128,12 +123,7 @@ export async function createOpenAiResponsesEventStream({
 
   if (!response.ok || !response.body) {
     const classified = classifyProviderHttpError(response.status);
-    throw new AiProviderError({
-      ...classified,
-      message: `${provider.code} response ${response.status}`,
-      providerCode: provider.code,
-      modelCode: model.code,
-    });
+    throw new AiProviderError({ ...classified, message: `${provider.code} response ${response.status}`, providerCode: provider.code, modelCode: model.code });
   }
 
   const source = response.body;
@@ -160,7 +150,6 @@ export async function createOpenAiResponsesEventStream({
           buffer = blocks.pop() ?? "";
           for (const block of blocks) emitBlock(controller, block);
         }
-
         buffer += decoder.decode();
         if (!cancelled && buffer.trim()) emitBlock(controller, buffer);
         if (!cancelled) controller.close();
