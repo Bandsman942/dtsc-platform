@@ -8,13 +8,13 @@
 - `HR_SENSITIVE` : dossiers RH, rémunérations et évaluations.
 - `FINANCIAL_SENSITIVE` : comptes, paiements, écritures et états non publics.
 - `LEGAL_SENSITIVE` : contrats, litiges et avis juridiques.
-- `SECRET` : secrets techniques ou stratégiques ; jamais envoyés au modèle.
+- `SECRET` : secrets techniques ou stratégiques ; jamais envoyés au modèle externe.
 
 Chaque politique modèle peut interdire une classe, exiger minimisation, masquage ou pseudonymisation. Les données Health, RH, Finance et Legal restent soumises à leurs services et permissions canoniques. Une réponse IA n’est pas une décision médicale, juridique, financière ou administrative validée.
 
 ## Contrat runtime — AI00
 
-La classification n'est plus uniquement documentaire. `AiRouteRequest.dataClassifications` transporte les classifications résolues côté serveur et `lib/ai/policy.ts` les évalue avant toute tentative fournisseur.
+`AiRouteRequest.dataClassifications` transporte les classifications résolues côté serveur et `lib/ai/policy.ts` les évalue avant toute tentative fournisseur.
 
 Règles opposables :
 
@@ -29,24 +29,36 @@ Règles opposables :
 
 OpenAI direct et OpenRouter passent par la même autorité `lib/ai/*`. OpenRouter est considéré externe par défaut et n'est utilisable qu'avec une clé serveur et des modèles explicitement présents dans l'allow-list DTSC certifiée.
 
-La baseline OpenRouter ajoute systématiquement :
-
-- `allow_fallbacks:false` afin qu'OpenRouter ne masque pas un changement de provider ;
-- `data_collection:"deny"` afin d'exclure les endpoints qui collectent les données ;
-- `zdr:true` afin d'exiger une route Zero Data Retention.
-
-Ces protections provider ne remplacent jamais la classification DTSC.
+La baseline OpenRouter ajoute systématiquement : `allow_fallbacks:false`, `data_collection:"deny"` et `zdr:true`. Ces protections provider ne remplacent jamais la classification DTSC.
 
 ## Policy Router V2 — AI03
 
-Le health registry, le coût, la latence et la préférence utilisateur interviennent **après** l'éligibilité de policy. Aucun score, état `HEALTHY`, coût inférieur ou modèle préféré ne peut rendre un candidat interdit à nouveau éligible.
-
-`routeAiStream()` conserve actuellement `allowSensitiveExternalModel:false` dans la requête effective résolue côté serveur. Les contraintes de routage AI03 sont uniquement restrictives : plafond de coût, préférence coût/latence, ZDR réaffirmé, plafond de prix provider et ordre technique OpenRouter. Elles ne contiennent aucun mécanisme d'assouplissement de classification.
+Le health registry, le coût, la latence et la préférence utilisateur interviennent après l'éligibilité de policy. Aucun score, état `HEALTHY`, coût inférieur ou modèle préféré ne peut rendre un candidat interdit à nouveau éligible.
 
 Un fallback multi-provider reste soumis aux mêmes classifications et à `listAvailableAiModels()`. Une erreur retryable ne permet donc jamais de basculer vers un provider moins sûr ou vers un modèle non autorisé.
 
 Les métadonnées `selectionScore` et `selectionCriteria` ne contiennent que des scores, statuts health, raisons non sensibles et codes modèles. Elles ne stockent ni prompt complet, ni messages, ni secret, ni document métier.
 
-## Frontière RAG
+## RAG V2 — classification des sources Enterprise
 
-Les embeddings directs historiques sont inventoriés séparément et seront traités par une abstraction `EmbeddingProvider` dans RAG V2. Ils ne sont pas fusionnés artificiellement avec le runtime de génération et restent soumis à leur propre réconciliation de classification.
+La confidentialité documentaire (`PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, `MANAGERS_ONLY`) contrôle l'accès au document, mais elle n'est pas utilisée seule comme autorité de routage fournisseur. Une classification de données distincte est dérivée côté serveur lors de la préparation/réindexation.
+
+Règles conservatrices initiales :
+
+- source `PUBLIC` → `PUBLIC` ;
+- source non publique d'une organisation `HEALTH_CARE` ou `PHARMACY` → `HEALTH_SENSITIVE` ;
+- module HR/PAYROLL → `HR_SENSITIVE` ;
+- module FINANCE/ACCOUNT/BUDGET → `FINANCIAL_SENSITIVE` ;
+- module LEGAL/CONTRACT → `LEGAL_SENSITIVE` ;
+- autre source `CONFIDENTIAL` ou `MANAGERS_ONLY` → `CONFIDENTIAL` ;
+- autre source → `INTERNAL`.
+
+Cette première résolution privilégie une sur-classification sûre à une sous-classification risquée. Une future règle plus fine ne pourra réduire cette classification qu'à partir de métadonnées canoniques et d'une QA dédiée.
+
+Le retrieval renvoie les classifications des chunks réellement sélectionnés. La route Enterprise fusionne ces classes avec celles du Context Engine, puis transmet l'ensemble au Policy Router avant tout appel modèle. Une question qui devient sensible après retrieval ne continue donc pas avec une classification initiale trop faible.
+
+## Embeddings et index
+
+Les embeddings sont séparés du runtime génératif et passent par `lib/ai/embeddings.ts`. Le provider, le modèle, la dimension et la version d'index sont enregistrés séparément de la classification métier.
+
+Les vecteurs historiques conservent `legacy-openai-1536-v1` et `LEGACY_UNKNOWN`. Aucun ancien vecteur n'est rétroactivement attribué à un modèle non vérifié ; seule une réindexation explicite effectue le cutover vers une nouvelle version.
