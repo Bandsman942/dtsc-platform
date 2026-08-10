@@ -54,6 +54,13 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
       section.dataset.contactAvatarRail = "true";
       const header = aside.firstElementChild;
       if (header && header.nextElementSibling !== section) aside.insertBefore(section, header.nextSibling);
+
+      for (const button of aside.querySelectorAll<HTMLButtonElement>("button")) {
+        const label = button.getAttribute("aria-label");
+        if (label === "Nouvelle conversation directe" || label === "New direct conversation") {
+          button.hidden = true;
+        }
+      }
     };
 
     const applyConversationPolish = () => {
@@ -122,11 +129,6 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
             height: 100% !important;
             min-height: 0 !important;
           }
-        }
-
-        [data-collaboration-immersive-root] button[aria-label="Nouvelle conversation directe"],
-        [data-collaboration-immersive-root] button[aria-label="New direct conversation"] {
-          display: none !important;
         }
 
         [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] {
@@ -210,7 +212,7 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
           object-fit: cover;
         }
 
-        [data-collaboration-immersive-root] [data-collaboration-message-bubble="true"] > div > button[aria-label="Message"] {
+        [data-collaboration-immersive-root] [data-collaboration-message-bubble="true"] > div > button:last-child {
           opacity: 0.38;
         }
 
