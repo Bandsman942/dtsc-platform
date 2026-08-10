@@ -46,6 +46,7 @@ export default async function ChatPage({
   const models = listCatalogAiModelsForUi({
     context: activeOrganizationId ? "ORGANIZATION" : session?.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : "PERSONAL",
     locale: user.locale,
+    planCode: session?.activeContext === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits.planCode,
   });
 
   return (
