@@ -17,6 +17,8 @@ expect(example.includes("OPENROUTER_API_KEY="), "env.example must document OpenR
 expect(provider.includes("OPENROUTER_CHAT_COMPLETIONS"), "Provider facade must dispatch OpenRouter protocol");
 expect(adapter.includes("/chat/completions"), "OpenRouter adapter must use chat completions endpoint");
 expect(adapter.includes("stream: true"), "OpenRouter adapter must request streaming");
+expect(adapter.includes("stream_options: { include_usage: true }"), "OpenRouter streaming must request terminal usage metadata");
+expect(adapter.includes('data === "[DONE]"'), "OpenRouter adapter must emit completion only from the provider DONE sentinel");
 expect(adapter.includes("allow_fallbacks: false"), "OpenRouter internal provider fallbacks must stay disabled so DTSC owns fallback policy");
 expect(adapter.includes('data_collection: "deny"'), "OpenRouter request must deny provider data collection");
 expect(adapter.includes("zdr: true"), "OpenRouter request must require a Zero Data Retention endpoint");
