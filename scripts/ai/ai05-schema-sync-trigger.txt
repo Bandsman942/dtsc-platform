@@ -1,1 +1,1 @@
-trigger ai05 prisma schema sync
+trigger ai05 prisma schema sync v2
