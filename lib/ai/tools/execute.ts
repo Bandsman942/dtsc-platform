@@ -49,14 +49,17 @@ export async function executeAiTool(input: {
   }
 
   const argumentsHash = hashAiToolArguments(parsedInput.data);
-  const idempotencyScopeKey = buildAiToolIdempotencyScopeKey({
-    userId: input.context.userId,
-    organizationId: input.context.organizationId,
-    conversationId: input.context.conversationId,
-    turnId: input.context.turnId,
-    toolCode: input.toolCode,
-    argumentsHash,
-  });
+  const executionId = randomUUID();
+  const idempotencyScopeKey = definition.idempotent
+    ? buildAiToolIdempotencyScopeKey({
+        userId: input.context.userId,
+        organizationId: input.context.organizationId,
+        conversationId: input.context.conversationId,
+        turnId: input.context.turnId,
+        toolCode: input.toolCode,
+        argumentsHash,
+      })
+    : `execution:${executionId}`;
 
   if (definition.idempotent) {
     const existing = await findExistingExecution(idempotencyScopeKey);
@@ -88,7 +91,6 @@ export async function executeAiTool(input: {
     }
   }
 
-  const executionId = randomUUID();
   const inserted = await prisma.$queryRaw<InsertedExecutionRow[]>(Prisma.sql`
     INSERT INTO "AiToolExecution" (
       "id", "userId", "organizationId", "conversationId", "turnId", "toolCode", "toolMode", "argumentsHash",

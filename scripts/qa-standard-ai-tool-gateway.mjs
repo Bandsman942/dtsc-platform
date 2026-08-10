@@ -38,6 +38,8 @@ for (const code of ["SUPPORT_TICKET_CREATE", "DTSC_CONTACT_EMAIL_SEND"]) {
 }
 if (!taskExecutors.includes("TASK_DRAFT_PREPARE")) failures.push("TASK_DRAFT_PREPARE must have an explicit executor");
 if (!registry.includes('mode: "MUTATE"')) failures.push("mutation tools must use MUTATE mode");
+if (!registry.includes('mode: "READ"') || !registry.includes("idempotent: false")) failures.push("live READ tools must not reuse mutation idempotency results as a cache");
+if (!execute.includes("definition.idempotent") || !execute.includes("execution:${executionId}")) failures.push("non-idempotent READ executions must receive a unique execution scope");
 if (!registry.includes("requiresConfirmation: true")) failures.push("mutation tools must require structured confirmation");
 if (!registry.includes("idempotent: true")) failures.push("mutation tools must be idempotent");
 if (!authorize.includes("getEnterpriseAiAccess")) failures.push("tool authorization must reuse Enterprise AI access");

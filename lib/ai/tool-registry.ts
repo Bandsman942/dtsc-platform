@@ -37,7 +37,7 @@ function pharmacyReadTool({ code, label, description, modules }: { code: string;
     allowedAssistantCodes: ["PHARMACY_ASSISTANT", "ENTERPRISE_GENERAL"],
     mode: "READ",
     requiresConfirmation: false,
-    idempotent: true,
+    idempotent: false,
     auditLevel: "STANDARD",
   };
 }
