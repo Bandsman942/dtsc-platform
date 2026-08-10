@@ -528,4 +528,3 @@ Documents détaillés :
 - `docs/STANDARD_AI_OBSERVABILITY_MODEL.md` ;
 - `docs/user-guides/AI_AGENT_MODE_FR.md` ;
 - `docs/user-guides/AI_AGENT_MODE_EN.md`.
-
