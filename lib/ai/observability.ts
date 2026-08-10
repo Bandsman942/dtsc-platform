@@ -46,12 +46,7 @@ export async function startAiProviderAttempt({
   }).catch(() => null);
 }
 
-export async function completeAiProviderAttempt({
-  attemptId,
-  status,
-  reasonCode,
-  durationMs,
-}: {
+export async function completeAiProviderAttempt({ attemptId, status, reasonCode, durationMs }: {
   attemptId?: string | null;
   status: "SUCCESS" | "FAILED" | "CANCELLED";
   reasonCode?: string | null;
@@ -60,20 +55,11 @@ export async function completeAiProviderAttempt({
   if (!attemptId) return null;
   return prisma.aiProviderAttempt.update({
     where: { id: attemptId },
-    data: {
-      status,
-      reasonCode: reasonCode || null,
-      durationMs,
-      completedAt: new Date(),
-    },
+    data: { status, reasonCode: reasonCode || null, durationMs, completedAt: new Date() },
   }).catch(() => null);
 }
 
-export function observeAiProviderAttemptStream({
-  source,
-  attemptId,
-  startedAt,
-}: {
+export function observeAiProviderAttemptStream({ source, attemptId, startedAt }: {
   source: ReadableStream<AiProviderEvent>;
   attemptId?: string | null;
   startedAt: number;
@@ -81,18 +67,11 @@ export function observeAiProviderAttemptStream({
   let reader: ReadableStreamDefaultReader<AiProviderEvent> | null = null;
   let terminalRecorded = false;
   let consumerCancelled = false;
-
   const finish = async (status: "SUCCESS" | "FAILED" | "CANCELLED", reasonCode?: string | null) => {
     if (terminalRecorded) return;
     terminalRecorded = true;
-    await completeAiProviderAttempt({
-      attemptId,
-      status,
-      reasonCode,
-      durationMs: Date.now() - startedAt,
-    });
+    await completeAiProviderAttempt({ attemptId, status, reasonCode, durationMs: Date.now() - startedAt });
   };
-
   return new ReadableStream<AiProviderEvent>({
     async start(controller) {
       reader = source.getReader();
@@ -104,7 +83,6 @@ export function observeAiProviderAttemptStream({
             if (!consumerCancelled) controller.close();
             break;
           }
-
           if (value.type === "COMPLETED") await finish("SUCCESS");
           if (value.type === "ERROR") await finish("FAILED", value.reasonCode);
           if (!consumerCancelled) controller.enqueue(value);
@@ -139,6 +117,7 @@ export async function startAiModelCall({
   fallbackUsed,
   attempts,
   promptVersion,
+  runtimeMetadata,
 }: {
   userId: string;
   organizationId?: string | null;
@@ -152,6 +131,7 @@ export async function startAiModelCall({
   fallbackUsed: boolean;
   attempts: unknown;
   promptVersion?: string | null;
+  runtimeMetadata?: Record<string, unknown> | null;
 }) {
   return prisma.aiModelCall.create({
     data: {
@@ -175,20 +155,13 @@ export async function startAiModelCall({
         selectionScore: selection.selectionScore ?? null,
         selectionCriteria: selection.selectionCriteria ?? null,
         requestedModel: selection.requestedModel,
+        runtime: runtimeMetadata || null,
       }),
     },
   });
 }
 
-export async function completeAiModelCall({
-  callId,
-  model,
-  inputTokens,
-  outputTokens,
-  cachedInputTokens = 0,
-  durationMs,
-  firstTokenLatencyMs,
-}: {
+export async function completeAiModelCall({ callId, model, inputTokens, outputTokens, cachedInputTokens = 0, durationMs, firstTokenLatencyMs }: {
   callId: string;
   model: AiRouteSelection["selectedModel"];
   inputTokens: number;
@@ -218,15 +191,9 @@ export async function completeAiModelCall({
 }
 
 export async function interruptAiModelCall(callId: string, durationMs: number) {
-  return prisma.aiModelCall.update({
-    where: { id: callId },
-    data: { status: "CANCELLED", reasonCode: "STREAM_INTERRUPTED", durationMs, completedAt: new Date() },
-  }).catch(() => null);
+  return prisma.aiModelCall.update({ where: { id: callId }, data: { status: "CANCELLED", reasonCode: "STREAM_INTERRUPTED", durationMs, completedAt: new Date() } }).catch(() => null);
 }
 
 export async function failAiModelCall(callId: string, reasonCode: string, durationMs: number) {
-  return prisma.aiModelCall.update({
-    where: { id: callId },
-    data: { status: "FAILED", reasonCode, durationMs, completedAt: new Date() },
-  }).catch(() => null);
+  return prisma.aiModelCall.update({ where: { id: callId }, data: { status: "FAILED", reasonCode, durationMs, completedAt: new Date() } }).catch(() => null);
 }
