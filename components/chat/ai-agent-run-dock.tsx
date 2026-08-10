@@ -155,14 +155,16 @@ export function AiAgentRunDock({ variant }: { variant: AgentVariant }) {
     await refreshConfirmation(body?.pendingConfirmationId || null);
   }, [refreshConfirmation, runId]);
 
+  const snapshotStatus = snapshot?.status;
+
   useEffect(() => {
     if (!runId) return;
     void refreshRun(runId);
     const timer = window.setInterval(() => {
-      if (!snapshot || !TERMINAL_STATUSES.has(snapshot.status)) void refreshRun(runId);
+      if (!snapshotStatus || !TERMINAL_STATUSES.has(snapshotStatus)) void refreshRun(runId);
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [refreshRun, runId, snapshot?.status]);
+  }, [refreshRun, runId, snapshotStatus]);
 
   const endpoint = variant === "enterprise" ? "/api/enterprise/ai/agent" : "/api/chat/agent";
   const canStart = variant === "chatbot" || Boolean(organizationId);
