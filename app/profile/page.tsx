@@ -118,7 +118,7 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
             description={english ? `Open only the information you need. Activity history remains limited by the ${settings.notificationRetentionDays}-day retention policy.` : `Dépliez uniquement les informations utiles. L’historique reste limité selon la politique de rétention de ${settings.notificationRetentionDays} jours.`}
           >
             <Accordion>
-              <AccordionItem title={english ? "Account and visibility" : "Compte et visibilité"} defaultOpen>
+              <AccordionItem title={english ? "Account, visibility and responsibilities" : "Visibilité et responsabilités"} defaultOpen>
                 <div className="grid min-w-0 gap-5">
                   <ProfileAccountInfo
                     account={{
