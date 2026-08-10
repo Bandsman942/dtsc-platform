@@ -5,9 +5,25 @@
 
 Ce guide explique l’utilisation opérationnelle de **Profil** dans DTSC Platform. Il décrit uniquement les actions disponibles dans l’application, leurs règles métier et les contrôles appliqués.
 
+## Sections pliables
+
+Le module Profil est organisé en sections qui peuvent être ouvertes et repliées afin de garder une lecture compacte sur mobile comme sur desktop : **Visibilité et responsabilités**, **Contacts**, **Modifier le profil** et **Historique d’activité**.
+
 ## Informations personnelles
 
 Le profil permet de modifier le nom affiché, le téléphone, la fonction, l’entreprise déclarée, la localisation, le site et la biographie. L’adresse e-mail principale n’est pas modifiée silencieusement depuis ce formulaire.
+
+## Contacts
+
+La section **Contacts** affiche les relations de contact acceptées dans **Mes collaborateurs**. Elle ne maintient pas un carnet d’adresses séparé : la liste provient du même workflow de collaboration et respecte les blocages actifs.
+
+Chaque contact apparaît en ligne compacte avec son avatar, sa fonction et son état de présence. Touchez la ligne pour ouvrir un détail immersif en plein écran sur mobile. Le menu `...` du détail contient uniquement des actions réellement disponibles :
+
+- ouvrir ou réutiliser la conversation directe DTSC ;
+- préparer un e-mail ;
+- copier l’adresse e-mail.
+
+Le détail indique également la date de mise en relation et la dernière présence disponible. L’ouverture d’une conversation repasse toujours par l’API de collaboration afin de réappliquer les autorisations et d’éviter les conversations directes en doublon.
 
 ## Avatar
 
@@ -23,7 +39,7 @@ L’historique récent combine des éléments autorisés du compte, sans préten
 
 ## Sécurité
 
-Toute modification est réservée au propriétaire du profil et validée côté serveur.
+Toute modification est réservée au propriétaire du profil et validée côté serveur. Les contacts visibles restent limités aux relations acceptées du compte connecté.
 
 ## Accès et permissions
 
