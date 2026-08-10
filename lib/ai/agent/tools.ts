@@ -27,11 +27,8 @@ function definitionToProviderTool(definition: AiToolDefinition): AiProviderToolD
   };
 }
 
-export async function listAuthorizedAgentTools(input: {
-  context: AiToolRuntimeContext;
-  budget: AiAgentBudget;
-}) {
-  const requestedCodes = input.budget.allowedToolCodes?.length ? new Set(input.budget.allowedToolCodes) : null;
+export async function listAuthorizedAgentTools(input: { context: AiToolRuntimeContext; budget: AiAgentBudget }) {
+  const requestedCodes = input.budget.allowedToolCodes == null ? null : new Set(input.budget.allowedToolCodes);
   const allowedModes = new Set(input.budget.allowedToolModes);
   const authorized: Array<{ definition: AiToolDefinition; providerTool: AiProviderToolDefinition }> = [];
 

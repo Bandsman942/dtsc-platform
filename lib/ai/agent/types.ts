@@ -3,14 +3,7 @@ import type { AiToolMode } from "@/lib/ai/tool-registry";
 
 export type AiAgentExecutionClass = "INTERACTIVE" | "DURABLE";
 export type AiAgentScope = "GLOBAL_CHAT" | "ENTERPRISE_CHAT";
-export type AiAgentRunStatus =
-  | "RUNNING"
-  | "WAITING_CONFIRMATION"
-  | "READY_TO_RESUME"
-  | "COMPLETED"
-  | "FAILED"
-  | "CANCELLED"
-  | "BUDGET_EXHAUSTED";
+export type AiAgentRunStatus = "RUNNING" | "WAITING_CONFIRMATION" | "READY_TO_RESUME" | "COMPLETED" | "FAILED" | "CANCELLED" | "BUDGET_EXHAUSTED";
 
 export type AiAgentBudget = {
   maxSteps: number;
@@ -32,19 +25,8 @@ export type AiAgentBudgetRequest = Partial<{
   allowedToolCodes: string[];
 }>;
 
-export type AiAgentUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  estimatedCost: number;
-};
-
-export type AiAgentToolCall = {
-  id?: string;
-  name?: string;
-  arguments?: unknown;
-};
-
+export type AiAgentUsage = { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
+export type AiAgentToolCall = { id?: string; name?: string; arguments?: unknown };
 export type AiAgentTurnResult = {
   content: string;
   toolCalls: AiAgentToolCall[];
@@ -53,13 +35,14 @@ export type AiAgentTurnResult = {
   modelCode: string;
   durationMs: number;
 };
-
 export type AiAgentCompletion = {
   runId: string;
   status: AiAgentRunStatus;
   content: string;
   reasonCode?: string | null;
   pendingConfirmationId?: string | null;
+  providerCode?: string | null;
+  modelCode?: string | null;
   usage: AiAgentUsage;
 };
 

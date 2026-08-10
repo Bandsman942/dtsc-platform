@@ -20,6 +20,10 @@ export function runStandardAiAgentAudit(mode = "all") {
   const confirmRoute = read("app/api/ai/tools/confirm/route.ts");
   const statusRoute = read("app/api/ai/agent/runs/[id]/route.ts");
   const cancelRoute = read("app/api/ai/agent/runs/[id]/cancel/route.ts");
+  const globalAgentRoute = read("app/api/chat/agent/route.ts");
+  const enterpriseAgentRoute = read("app/api/enterprise/ai/agent/route.ts");
+  const globalChatRoute = read("app/api/chat/v2/route.ts");
+  const enterpriseChatRoute = read("app/api/enterprise/ai/chat/route.ts");
   const prisma = read("prisma/standard-ai-agent.prisma");
   const migration = read("prisma/migrations/20260810006000_ai_agent_runtime/migration.sql");
 
@@ -39,12 +43,24 @@ export function runStandardAiAgentAudit(mode = "all") {
     check(!runtime.includes("import(") && !runtime.includes("require("), "Agent runtime must not dynamically import a model-selected executor");
   }
 
+  if (["all", "integration"].includes(mode)) {
+    check(globalAgentRoute.includes("createInteractiveAiAgentStream"), "Global agent endpoint must use canonical agent runtime");
+    check(enterpriseAgentRoute.includes("createInteractiveAiAgentStream"), "Enterprise agent endpoint must use canonical agent runtime");
+    check(globalAgentRoute.includes('X-AI-Execution", "AGENT_V1"') && enterpriseAgentRoute.includes('X-AI-Execution", "AGENT_V1"'), "Agent endpoints must identify execution mode without changing legacy stream payloads");
+    check(!globalChatRoute.includes("createInteractiveAiAgentStream"), "Legacy global chat route must stay unchanged until explicit agent opt-in");
+    check(!enterpriseChatRoute.includes("createInteractiveAiAgentStream"), "Legacy Enterprise chat route must stay unchanged until explicit agent opt-in");
+    check(!globalAgentRoute.includes("performPrivateChatActionFromHistory"), "Global agent endpoint must not bypass Tool Gateway via legacy private actions");
+    check(!enterpriseAgentRoute.includes("runPharmacyReadTools"), "Enterprise agent endpoint must not execute deterministic Pharmacy tools outside the agent Tool Gateway");
+    check(enterpriseAgentRoute.includes("maxToolCalls: 0") && enterpriseAgentRoute.includes("allowedToolModes: []"), "Enterprise useTools=false must disable all model tools without disabling the model response");
+  }
+
   if (["all", "budgets"].includes(mode)) {
     for (const marker of ["maxSteps", "maxToolCalls", "maxTokens", "maxEstimatedCost", "maxDurationMs"]) check(policy.includes(marker), `Agent policy missing ${marker}`);
     check(policy.includes("Math.min"), "Client-requested limits must only reduce server ceilings");
     check(runtime.includes("isAgentBudgetExceeded"), "Agent loop must enforce server execution budgets");
     check(runtime.includes("estimateAiCost"), "Agent run must aggregate estimated model cost");
     check(runtime.includes("BUDGET_EXHAUSTED"), "Agent runtime needs an explicit budget-exhausted terminal state");
+    check(policy.includes("requested === undefined") || policy.includes("requestedCodesSupplied"), "Explicit empty tool constraints must not be treated as unrestricted defaults");
   }
 
   if (["all", "confirmation"].includes(mode)) {
@@ -77,6 +93,7 @@ export function runStandardAiAgentAudit(mode = "all") {
     check(persistence.includes("userId: input.userId") && persistence.includes("organizationId: input.organizationId || null"), "Agent runs must persist user and tenant scope");
     check(agentTools.includes("authorizeAiTool"), "Every model-visible tool must pass canonical tenant/module/plan authorization before exposure");
     check(runtime.includes("organizationId: input.organizationId"), "Policy Router calls must preserve tenant scope");
+    check(globalAgentRoute.includes("getActiveOrganizationId") && enterpriseAgentRoute.includes("getEnterpriseAiAccess"), "Agent endpoints must resolve tenant context server-side");
   }
 
   if (["all", "sensitive-domains"].includes(mode)) {
