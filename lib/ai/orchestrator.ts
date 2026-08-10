@@ -52,16 +52,13 @@ async function rankCandidates(request: AiRouteRequest): Promise<RankedCandidate[
       available.map(async (model) => {
         const provider = getAiProviderDefinition(model.providerCode);
         if (!provider) return null;
-
         const health = await getAiRuntimeHealth({ provider, model });
         if (health.status === "UNAVAILABLE" || health.status === "DISABLED_BY_POLICY") return null;
-
         const score = scoreAiCandidate({ request, model, health });
         const maximumCost = request.routingConstraints?.maximumEstimatedInputCost;
         if (maximumCost != null && (score.estimatedInputCost == null || score.estimatedInputCost > maximumCost)) return null;
-
         return { model, provider, health, score } satisfies RankedCandidate;
-      }),
+      })
     )
   ).filter((candidate): candidate is RankedCandidate => Boolean(candidate));
 
@@ -120,16 +117,11 @@ function resolveServerDataClassifications(request: AiRouteRequest): AiDataClassi
 }
 
 export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamResult> {
-  // Entitlements and default data policy are resolved on the server. Caller-provided
-  // planCode is never authoritative, and AI00 does not permit sensitive external overrides.
   const effectiveRequest: AiRouteRequest = {
     ...request,
     planCode: await resolveServerPlanCode(request),
     dataClassifications: resolveServerDataClassifications(request),
-    policyFlags: {
-      ...request.policyFlags,
-      allowSensitiveExternalModel: false,
-    },
+    policyFlags: { ...request.policyFlags, allowSensitiveExternalModel: false },
   };
   const candidates = await rankCandidates(effectiveRequest);
   if (!candidates.length) {
@@ -165,19 +157,12 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
         messages: effectiveRequest.messages,
         instructions: effectiveRequest.instructions,
         routingConstraints: effectiveRequest.routingConstraints,
+        tools: effectiveRequest.tools,
         signal: effectiveRequest.signal,
       });
-      const stream = observeAiProviderAttemptStream({
-        source: providerStream,
-        attemptId: attempt?.id,
-        startedAt: attemptStartedAt,
-      });
+      const stream = observeAiProviderAttemptStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
-      const requestedBypassed = Boolean(
-        effectiveRequest.requestedModel &&
-          effectiveRequest.requestedModel !== model.code &&
-          effectiveRequest.requestedModel !== model.providerModelId,
-      );
+      const requestedBypassed = Boolean(effectiveRequest.requestedModel && effectiveRequest.requestedModel !== model.code && effectiveRequest.requestedModel !== model.providerModelId);
       return {
         stream,
         selection: buildSelection(effectiveRequest, candidate),
@@ -191,12 +176,7 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       lastError = error;
       const reasonCode = toAiReasonCode(error);
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "FAILED", reasonCode });
-      await completeAiProviderAttempt({
-        attemptId: attempt?.id,
-        status: reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED",
-        reasonCode,
-        durationMs: Date.now() - attemptStartedAt,
-      });
+      await completeAiProviderAttempt({ attemptId: attempt?.id, status: reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED", reasonCode, durationMs: Date.now() - attemptStartedAt });
       if (!(error instanceof AiProviderError) || !error.retryable) throw error;
     }
   }
