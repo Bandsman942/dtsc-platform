@@ -1,0 +1,59 @@
+name: AI08 agent dock dependency patch
+
+on:
+  push:
+    branches:
+      - fix/ai08-agent-dock-effect-dependency
+    paths:
+      - .github/workflows/ai08-agent-dock-warning-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/ai08-agent-dock-effect-dependency
+      - name: Make polling status dependency explicit
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("components/chat/ai-agent-run-dock.tsx")
+          text = path.read_text(encoding="utf-8")
+          old = '''  useEffect(() => {
+    if (!runId) return;
+    void refreshRun(runId);
+    const timer = window.setInterval(() => {
+      if (!snapshot || !TERMINAL_STATUSES.has(snapshot.status)) void refreshRun(runId);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [refreshRun, runId, snapshot?.status]);
+'''
+          new = '''  const snapshotStatus = snapshot?.status;
+
+  useEffect(() => {
+    if (!runId) return;
+    void refreshRun(runId);
+    const timer = window.setInterval(() => {
+      if (!snapshotStatus || !TERMINAL_STATUSES.has(snapshotStatus)) void refreshRun(runId);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [refreshRun, runId, snapshotStatus]);
+'''
+          if old not in text:
+              raise SystemExit("Expected polling effect not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/chat/ai-agent-run-dock.tsx
+          git diff --cached --check
+          git commit -m "fix(ai): make agent polling dependency explicit"
+          git push origin HEAD:fix/ai08-agent-dock-effect-dependency
