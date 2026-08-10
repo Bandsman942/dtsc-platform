@@ -32,7 +32,7 @@ export function runStandardAiIteration05Audit(scope = "all") {
       requireNoText("lib/ai/provider.ts", ["OPENAI_API_KEY =", "sk-"]);
     },
     orchestration: () => {
-      requireText("lib/ai/orchestrator.ts", ["CAPABILITY_COST_HEALTH_V1", "selectCandidates", "fallbackUsed", "createProviderResponseStream"]);
+      requireText("lib/ai/orchestrator.ts", ["POLICY_CAPABILITY_PLAN_DATA_V1", "selectCandidates", "fallbackUsed", "createProviderResponseStream"]);
       requireText("app/api/chat/v2/route.ts", ["routeAiStream", "classifyAiTask", "X-AI-Provider"]);
       requireText("app/api/enterprise/ai/chat/route.ts", ["routeAiStream", "context: \"ORGANIZATION\"", "X-AI-Fallback"]);
     },
