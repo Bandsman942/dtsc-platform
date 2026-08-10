@@ -39,6 +39,33 @@ Cette séparation évite de considérer une simple ouverture HTTP comme un succ�
 
 Le contenu complet, les secrets, documents sensibles et prompts privés ne sont pas journalisés par défaut. Les métadonnées sont limitées à ce qui est nécessaire au diagnostic, à la sécurité, au fallback et à l'attribution de coût.
 
+## Health registry AI03
+
+`lib/ai/health.ts` ne crée aucune table de santé. Il dérive l'état runtime depuis les traces déjà existantes sur une fenêtre récente bornée :
+
+- succès/échecs depuis `AiProviderAttempt` ;
+- latence premier token depuis `AiModelCall.firstTokenLatencyMs` ;
+- statut configuré du provider et du modèle.
+
+États calculés : `HEALTHY`, `DEGRADED`, `UNAVAILABLE`, `DISABLED_BY_POLICY`.
+
+Le health registry sert exclusivement à éliminer une indisponibilité technique avérée ou à déprioriser un candidat dégradé après que la policy AI00 l'a déclaré éligible. Il ne peut jamais autoriser un modèle, une classification, un plan ou un tenant.
+
+Si la lecture de télémétrie est temporairement indisponible, `reason=OBSERVABILITY_UNAVAILABLE` est retourné et la télémétrie cesse d'influencer le classement. Cette défaillance ne supprime aucune barrière AI00.
+
+## Explicabilité AI03
+
+`AiModelCall.metadataJson` enregistre désormais, en plus des tentatives :
+
+- `selectionReason` ;
+- `selectionScore` ;
+- `selectionCriteria` ;
+- `requestedModel`.
+
+Les critères comprennent les composantes capacité, préférence, santé, coût, latence, pénalité de fallback, le statut health et sa raison. Ce sont des métadonnées de décision non sensibles ; le prompt, les messages, les documents et les secrets ne sont pas copiés dans cette explication.
+
+Cette séparation permet d'expliquer pourquoi un modèle a été choisi sans créer de journal de raisonnement privé ni de nouvelle source de consommation.
+
 ## OpenRouter et audit distant
 
 Le script `scripts/ai/audit-openrouter-catalog.mjs` est un contrôle de certification, pas une source d'observabilité d'usage. Il consulte le catalogue ZDR compatible en lecture seule et ne crée aucun `AiModelCall` ni `AiProviderAttempt`, car aucune génération utilisateur n'a lieu.

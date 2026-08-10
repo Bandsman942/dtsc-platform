@@ -16,6 +16,10 @@ const checks = [
   ["AI cross-provider fallback", "scripts/qa-standard-ai-cross-provider-fallback.mjs"],
   ["AI external provider default", "scripts/qa-standard-ai-external-provider-default.mjs"],
   ["AI model UI policy", "scripts/qa-standard-ai-model-ui-policy.mjs"],
+  ["AI Policy Router V2", "scripts/qa-standard-ai-policy-router-v2.mjs"],
+  ["AI routing determinism", "scripts/qa-standard-ai-routing-determinism.mjs"],
+  ["AI routing cost/health", "scripts/qa-standard-ai-routing-cost-health.mjs"],
+  ["AI data policy fallbacks", "scripts/qa-standard-ai-data-policy-fallbacks.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -27,4 +31,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 gates passed");

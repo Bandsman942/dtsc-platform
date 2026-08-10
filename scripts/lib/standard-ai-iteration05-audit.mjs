@@ -34,7 +34,7 @@ export function runStandardAiIteration05Audit(scope = "all") {
       requireNoText("lib/ai/providers/openai-responses.ts", ["OPENAI_API_KEY =", "sk-"]);
     },
     orchestration: () => {
-      requireText("lib/ai/orchestrator.ts", ["POLICY_CAPABILITY_PLAN_DATA_V1", "selectCandidates", "fallbackUsed", "createProviderEventStream", "observeAiProviderAttemptStream"]);
+      requireText("lib/ai/orchestrator.ts", ["POLICY_CAPABILITY_COST_HEALTH_V2", "rankCandidates", "listAvailableAiModels", "fallbackUsed", "createProviderEventStream", "observeAiProviderAttemptStream"]);
       requireNoText("lib/ai/orchestrator.ts", ["response.output_text.delta", "response.completed"]);
       requireText("app/api/chat/v2/route.ts", ["routeAiStream", "classifyAiTask", "X-AI-Provider"]);
       requireText("app/api/enterprise/ai/chat/route.ts", ["routeAiStream", "context: \"ORGANIZATION\"", "X-AI-Fallback"]);
