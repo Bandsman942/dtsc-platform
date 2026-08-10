@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
-import { createProviderResponseStream } from "@/lib/ai/provider";
+import { completeAiProviderAttempt, observeAiProviderAttemptStream, startAiProviderAttempt } from "@/lib/ai/observability";
+import { createProviderEventStream } from "@/lib/ai/provider";
 import type { AiDataClassification, AiModelDefinition, AiRouteRequest, AiRouteSelection, AiStreamResult } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
@@ -83,12 +85,33 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
   }
 
   const attempts: AiStreamResult["attempts"] = [];
+  const routeRequestId = randomUUID();
   let lastError: unknown;
   for (const [index, model] of candidates.entries()) {
     const provider = getAiProviderDefinition(model.providerCode);
     if (!provider || provider.status === "DISABLED") continue;
+    const attemptStartedAt = Date.now();
+    const attempt = await startAiProviderAttempt({
+      routeRequestId,
+      userId: effectiveRequest.userId,
+      organizationId: effectiveRequest.organizationId,
+      contextCode: effectiveRequest.context,
+      taskType: effectiveRequest.taskType,
+      providerCode: provider.code,
+      modelCode: model.code,
+      providerModelId: model.providerModelId,
+      attemptIndex: index,
+    });
+
     try {
-      const stream = await createProviderResponseStream({ provider, model, messages: effectiveRequest.messages, instructions: effectiveRequest.instructions, signal: effectiveRequest.signal });
+      const providerStream = await createProviderEventStream({
+        provider,
+        model,
+        messages: effectiveRequest.messages,
+        instructions: effectiveRequest.instructions,
+        signal: effectiveRequest.signal,
+      });
+      const stream = observeAiProviderAttemptStream({ source: providerStream, attemptId: attempt?.id, startedAt: attemptStartedAt });
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "SUCCESS" });
       return {
         stream,
@@ -103,9 +126,16 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       lastError = error;
       const reasonCode = toAiReasonCode(error);
       attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "FAILED", reasonCode });
+      await completeAiProviderAttempt({
+        attemptId: attempt?.id,
+        status: reasonCode === "STREAM_INTERRUPTED" ? "CANCELLED" : "FAILED",
+        reasonCode,
+        durationMs: Date.now() - attemptStartedAt,
+      });
       if (!(error instanceof AiProviderError) || !error.retryable) throw error;
     }
   }
+
   throw lastError instanceof Error
     ? lastError
     : new AiProviderError({ reasonCode: "PROVIDER_UNAVAILABLE", message: "All configured AI routes failed", statusCode: 502 });

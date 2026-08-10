@@ -1,10 +1,129 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { estimateAiCost } from "@/lib/ai/costs";
+import { toAiReasonCode } from "@/lib/ai/errors";
+import type { AiProviderEvent } from "@/lib/ai/provider-events";
 import type { AiRouteSelection } from "@/lib/ai/types";
+import { prisma } from "@/lib/prisma";
 
 function jsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+export async function startAiProviderAttempt({
+  routeRequestId,
+  userId,
+  organizationId,
+  contextCode,
+  taskType,
+  providerCode,
+  modelCode,
+  providerModelId,
+  attemptIndex,
+}: {
+  routeRequestId: string;
+  userId: string;
+  organizationId?: string | null;
+  contextCode: string;
+  taskType: string;
+  providerCode: string;
+  modelCode: string;
+  providerModelId: string;
+  attemptIndex: number;
+}) {
+  return prisma.aiProviderAttempt.create({
+    data: {
+      routeRequestId,
+      userId,
+      organizationId: organizationId || null,
+      contextCode,
+      taskType,
+      providerCode,
+      modelCode,
+      providerModelId,
+      attemptIndex,
+    },
+    select: { id: true, startedAt: true },
+  }).catch(() => null);
+}
+
+export async function completeAiProviderAttempt({
+  attemptId,
+  status,
+  reasonCode,
+  durationMs,
+}: {
+  attemptId?: string | null;
+  status: "SUCCESS" | "FAILED" | "CANCELLED";
+  reasonCode?: string | null;
+  durationMs: number;
+}) {
+  if (!attemptId) return null;
+  return prisma.aiProviderAttempt.update({
+    where: { id: attemptId },
+    data: {
+      status,
+      reasonCode: reasonCode || null,
+      durationMs,
+      completedAt: new Date(),
+    },
+  }).catch(() => null);
+}
+
+export function observeAiProviderAttemptStream({
+  source,
+  attemptId,
+  startedAt,
+}: {
+  source: ReadableStream<AiProviderEvent>;
+  attemptId?: string | null;
+  startedAt: number;
+}) {
+  let reader: ReadableStreamDefaultReader<AiProviderEvent> | null = null;
+  let terminalRecorded = false;
+  let consumerCancelled = false;
+
+  const finish = async (status: "SUCCESS" | "FAILED" | "CANCELLED", reasonCode?: string | null) => {
+    if (terminalRecorded) return;
+    terminalRecorded = true;
+    await completeAiProviderAttempt({
+      attemptId,
+      status,
+      reasonCode,
+      durationMs: Date.now() - startedAt,
+    });
+  };
+
+  return new ReadableStream<AiProviderEvent>({
+    async start(controller) {
+      reader = source.getReader();
+      try {
+        while (!consumerCancelled) {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (!terminalRecorded) await finish("FAILED", "STREAM_INTERRUPTED");
+            if (!consumerCancelled) controller.close();
+            break;
+          }
+
+          if (value.type === "COMPLETED") await finish("SUCCESS");
+          if (value.type === "ERROR") await finish("FAILED", value.reasonCode);
+          if (!consumerCancelled) controller.enqueue(value);
+        }
+      } catch (error) {
+        const interrupted = error instanceof DOMException && error.name === "AbortError";
+        await finish(interrupted || consumerCancelled ? "CANCELLED" : "FAILED", interrupted || consumerCancelled ? "STREAM_INTERRUPTED" : toAiReasonCode(error));
+        if (!consumerCancelled) controller.error(error);
+      } finally {
+        reader?.releaseLock();
+        reader = null;
+      }
+    },
+    async cancel(reason) {
+      consumerCancelled = true;
+      await finish("CANCELLED", "STREAM_INTERRUPTED");
+      await reader?.cancel(reason).catch(() => undefined);
+    },
+  });
 }
 
 export async function startAiModelCall({

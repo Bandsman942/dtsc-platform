@@ -38,6 +38,30 @@ model AiModelCall {
   @@index([status, reasonCode, createdAt])
 }
 
+model AiProviderAttempt {
+  id              String   @id @default(cuid())
+  routeRequestId  String
+  userId          String
+  organizationId  String?
+  contextCode     String
+  taskType        String
+  providerCode    String
+  modelCode       String
+  providerModelId String
+  attemptIndex    Int
+  status          String   @default("STARTED")
+  reasonCode      String?
+  durationMs      Int?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([routeRequestId, attemptIndex])
+  @@index([organizationId, providerCode, modelCode, createdAt])
+  @@index([status, reasonCode, createdAt])
+}
+
 model CommercialMaturityEvidence {
   id             String   @id @default(cuid())
   moduleType     String

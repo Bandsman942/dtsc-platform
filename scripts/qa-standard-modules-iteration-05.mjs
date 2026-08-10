@@ -7,6 +7,10 @@ const checks = [
   ["AI00 integration", "scripts/qa-ai00-integration-gate.mjs"],
   ["AI plan enforcement", "scripts/qa-standard-ai-plan-enforcement.mjs"],
   ["AI provider bypass inventory", "scripts/qa-standard-ai-provider-bypass-inventory.mjs"],
+  ["AI provider adapters", "scripts/qa-standard-ai-provider-adapters.mjs"],
+  ["AI normalized stream", "scripts/qa-standard-ai-normalized-stream.mjs"],
+  ["AI stream cancellation", "scripts/qa-standard-ai-stream-cancellation.mjs"],
+  ["AI provider attempts", "scripts/qa-standard-ai-provider-attempts.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -18,4 +22,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 gates passed");
