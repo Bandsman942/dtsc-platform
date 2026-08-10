@@ -394,10 +394,21 @@ export async function retrieveEnterpriseAiKnowledge({
     candidates: rows.map((row) => ({ id: row.chunkId, score: Number(row.hybridScore), value: row })),
     limit: 6,
   });
-  const citations: EnterpriseAiKnowledgeCitation[] = reranked.map(({ value }) => {
-    const { chunkId: _chunkId, ...citation } = value;
-    return citation;
-  });
+  const citations: EnterpriseAiKnowledgeCitation[] = reranked.map(({ value }) => ({
+    sourceId: value.sourceId,
+    title: value.title,
+    confidentiality: value.confidentiality,
+    dataClassification: value.dataClassification,
+    sourceVersion: value.sourceVersion,
+    indexVersion: value.indexVersion,
+    content: value.content,
+    distance: value.distance,
+    lexicalRank: value.lexicalRank,
+    hybridScore: value.hybridScore,
+    language: value.language,
+    pageNumber: value.pageNumber,
+    section: value.section,
+  }));
   const context = citations
     .map(
       (row, index) =>

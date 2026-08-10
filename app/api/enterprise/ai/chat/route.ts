@@ -270,10 +270,7 @@ export async function POST(req: Request) {
           ...preparedTurn.auditMetadata,
         },
       });
-      return NextResponse.json(
-        { error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) },
-        { status: statusCode }
-      );
+      return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode });
     }
 
     const sessionUserId = session.userId;
