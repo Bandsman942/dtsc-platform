@@ -64,6 +64,14 @@ const toolbox = includesAll("components/productivity/professional-toolbox-v2.tsx
 ok(!toolbox.includes("min-h-[24rem]"), "Toolbox rich editor must not force a minimum height larger than the visual viewport when the software keyboard is open.");
 ok(!toolbox.includes("h-[calc(var(--dtsc-dialog-visual-height,100dvh)-10rem)]"), "Toolbox rich editor must flex inside the keyboard-safe dialog instead of computing a competing viewport height.");
 
+const richEditor = includesAll("components/productivity/professional-note-rich-editor.tsx", [
+  "flex min-h-0 flex-1 flex-col overflow-hidden",
+  "min-h-0 min-w-0 flex-1 touch-pan-y",
+  "overflow-y-auto",
+  "text-[16px]",
+]);
+ok(!richEditor.includes("min-h-[18rem]"), "The editable note surface must be allowed to shrink below 18rem when the software keyboard reduces the visual viewport.");
+
 includesAll("components/ui/dialog.tsx", [
   'presentation?: "default" | "editor"',
   "data-dtsc-dialog-presentation={presentation}",
