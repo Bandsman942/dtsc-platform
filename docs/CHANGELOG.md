@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-08-10 — DTSC AI 05/08 : RAG V2
+
+### Ajouté
+
+- Abstraction provider indépendante pour les embeddings avec modèle, dimension, batch et version d’index explicites.
+- Indexation différée et retryable des documents personnels et Enterprise, avec état `PROCESSING` puis `READY` uniquement après index complet.
+- Retrieval hybride pgvector + recherche lexicale PostgreSQL, reranking optionnel et citations enrichies avec langue, page, section, classification et versions.
+- Réindexation contrôlée, planificateur dry-run et métadonnées Prisma additives pour le cutover legacy.
+
+### Sécurisé
+
+- Les sources Enterprise sont classifiées côté serveur et les classifications réellement sélectionnées par le RAG sont transmises au Policy Router avant l’appel modèle.
+- Les sources archivées, cross-tenant, non autorisées ou d’index incompatible restent exclues avant ranking.
+- Les vecteurs historiques restent `legacy-openai-1536-v1` / `LEGACY_UNKNOWN` jusqu’à réindexation explicite.
+
+### Qualité
+
+- Quatre gates AI05 couvrent provider embedding, versioning d’index, retrieval hybride et idempotence/réindexation, intégrées à l’agrégateur Standard AI.
+
 ## 2026-08-10 — DTSC AI 02/08 : OpenRouter et modèles certifiés
 
 ### Ajouté

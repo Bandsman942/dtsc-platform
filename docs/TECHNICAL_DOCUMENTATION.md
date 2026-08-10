@@ -434,3 +434,13 @@ La Console globale utilise désormais des routes canoniques sous `/admin`, des d
 ## Delivery Governance v1
 
 Le workflow officiel est défini dans `docs/DELIVERY_GOVERNANCE.md`. Les agents suivent `docs/AGENT_DELIVERY_RUNBOOK.md`; le rapport du vendredi suit `docs/WEEKLY_DELIVERY_REPORT_CONTRACT.md`. Les checks canoniques requis sont `Delivery governance`, `Quality` et `Migration`. Vercel publie nativement le statut `Production` sur GitHub ; seule sa réussite autorise la GitHub Release.
+
+## DTSC AI — RAG V2 / Knowledge Engine (AI05)
+
+AI05 conserve PostgreSQL/pgvector et les modèles documentaires existants comme sources de vérité, sans index parallèle. Les embeddings passent désormais par `lib/ai/embeddings.ts`, avec identité provider/modèle/dimension/version et batch borné. Les index historiques restent explicitement `legacy-openai-1536-v1` jusqu’à réindexation contrôlée.
+
+Les uploads personnels et Enterprise persistent stockage + texte extrait, retournent `202 PROCESSING`, puis terminent l’indexation avec `after()`. Les insertions de chunks sont idempotentes via SHA-256 + `indexVersion`. Le retrieval Enterprise filtre tenant, statut, archive, confidentialité, secteur/module et compatibilité d’index avant un ranking hybride pgvector + PostgreSQL lexical, puis un reranking optionnel avec fallback déterministe.
+
+Les classifications RAG sélectionnées (dont `HEALTH_SENSITIVE`, `HR_SENSITIVE`, `FINANCIAL_SENSITIVE`, `LEGAL_SENSITIVE`) sont fusionnées avec celles du Context Engine avant passage au Policy Router. Aucun reindex global automatique n’est autorisé en Production ; le planificateur `scripts/ai/plan-rag-reindex.mjs` est dry-run et borné.
+
+Documentation canonique : `docs/STANDARD_AI_KNOWLEDGE_RAG_ARCHITECTURE.md`, `docs/STANDARD_AI_EMBEDDING_INDEXING.md` et `docs/STANDARD_AI_DATA_CLASSIFICATION.md`.
