@@ -55,6 +55,23 @@ ok(workflowWorkspace.includes("min-w-0"), "Workflow workspace must keep shrinkab
 ok(workflowWorkspace.includes("flex flex-wrap gap-2"), "Workflow actions must wrap instead of forcing the mobile viewport wider.");
 ok(!workflowWorkspace.includes("whitespace-nowrap"), "Workflow workspace must not force long labels or technical identifiers onto one line.");
 
+const toolbox = includesAll("components/productivity/professional-toolbox-v2.tsx", [
+  'presentation="editor"',
+  "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+  'className="rounded-none border-0"',
+  "sm:hidden",
+]);
+ok(!toolbox.includes("min-h-[24rem]"), "Toolbox rich editor must not force a minimum height larger than the visual viewport when the software keyboard is open.");
+ok(!toolbox.includes("h-[calc(var(--dtsc-dialog-visual-height,100dvh)-10rem)]"), "Toolbox rich editor must flex inside the keyboard-safe dialog instead of computing a competing viewport height.");
+
+includesAll("components/ui/dialog.tsx", [
+  'presentation?: "default" | "editor"',
+  "data-dtsc-dialog-presentation={presentation}",
+  'height: "calc(var(--dtsc-dialog-visual-height, 100dvh) - 1rem)"',
+  'isEditorPresentation && "hidden sm:block"',
+  "grid grid-cols-2 gap-2",
+]);
+
 for (const agentsFile of ["app/AGENTS.md", "components/AGENTS.md"]) {
   includesAll(agentsFile, [
     "Contrat responsive obligatoire",
@@ -83,4 +100,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Responsive UI contract QA passed: global root, shared workspace primitives, long-content wrapping, mobile action layout, scoped AGENTS rules, documentation and CI guard are present.");
+console.log("Responsive UI contract QA passed: global root, shared workspace primitives, keyboard-safe toolbox editor, long-content wrapping, mobile action layout, scoped AGENTS rules, documentation and CI guard are present.");
