@@ -1,0 +1,39 @@
+name: AI08 technical documentation EOF fix
+
+on:
+  push:
+    branches:
+      - feat/187-ai08-agent-runtime
+    paths:
+      - .github/workflows/ai08-eof-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/187-ai08-agent-runtime
+      - name: Normalize EOF
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("docs/TECHNICAL_DOCUMENTATION.md")
+          path.write_text(path.read_text(encoding="utf-8").rstrip() + "\n", encoding="utf-8")
+          PY
+      - name: Commit normalized document
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/TECHNICAL_DOCUMENTATION.md
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "docs(ai): normalize technical documentation EOF"
+          git push origin HEAD:feat/187-ai08-agent-runtime
