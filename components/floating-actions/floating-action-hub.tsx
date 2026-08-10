@@ -26,14 +26,14 @@ function isFloatingActionHostEnabled(hostType: HostType | null) {
   return hostType === "app" || hostType === "console" || hostType === "support" || hostType === "local";
 }
 
-function getScrollPosition(target: EventTarget | null) {
+function getScrollPosition(target: EventTarget) {
   if (target === document || target === document.documentElement || target === document.body) {
     return window.scrollY;
   }
   return target instanceof HTMLElement ? target.scrollTop : null;
 }
 
-function isRelevantWorkspaceScroll(target: EventTarget | null) {
+function isRelevantWorkspaceScroll(target: EventTarget) {
   if (target === document || target === document.documentElement || target === document.body) {
     return Boolean(document.querySelector("[data-module-workspace], main"));
   }
@@ -90,7 +90,7 @@ export function FloatingActionHubProvider({ children }: { children: ReactNode })
 
     function handleScroll(event: Event) {
       const target = event.target;
-      if (!isRelevantWorkspaceScroll(target)) return;
+      if (!target || !isRelevantWorkspaceScroll(target)) return;
       const position = getScrollPosition(target);
       if (position === null) return;
       const previous = scrollPositionsRef.current.get(target) ?? position;
