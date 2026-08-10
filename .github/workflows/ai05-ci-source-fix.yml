@@ -1,0 +1,37 @@
+name: AI05 temporary CI source fix
+
+on:
+  push:
+    branches:
+      - feat/184-ai05-rag-v2
+    paths:
+      - scripts/ai/ai05-ci-source-fix-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  patch-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/184-ai05-rag-v2
+          fetch-depth: 0
+      - name: Apply targeted fixes
+        run: node scripts/ai/fix-ai05-ci-source.mjs
+      - name: Validate whitespace
+        run: git diff --check
+      - name: Commit source fixes
+        run: |
+          if git diff --quiet -- app/api/enterprise/ai/chat/route.ts lib/enterprise-ai/knowledge.ts; then
+            echo "No source change produced"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/api/enterprise/ai/chat/route.ts lib/enterprise-ai/knowledge.ts
+          git commit -m "fix(ai): satisfy RAG policy and build contracts"
+          git push origin HEAD:feat/184-ai05-rag-v2
