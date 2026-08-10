@@ -79,3 +79,7 @@ Aucun / description sans valeur secrète
 ## Preuves
 
 Screenshots / logs / tests / références pertinentes.
+
+## Gouvernance de contribution
+
+- [ ] J'ai lu et respecté `docs/CONTRIBUTING.md`.

@@ -6,6 +6,7 @@ import {
   isValidCommit,
   isValidTitle,
   extractLinkedIssue,
+  hasContributingAcknowledgement,
   missingEssentialLabels,
 } from './github/delivery-governance-core.mjs';
 import {
@@ -29,6 +30,18 @@ assert.equal(
   true,
 );
 assert.equal(isValidCommit('random commit'), false);
+assert.equal(
+  hasContributingAcknowledgement("- [x] J'ai lu et respecté `docs/CONTRIBUTING.md`."),
+  true,
+);
+assert.equal(
+  hasContributingAcknowledgement("- [X] J’ai lu et respecté `docs/CONTRIBUTING.md`."),
+  true,
+);
+assert.equal(
+  hasContributingAcknowledgement("- [ ] J'ai lu et respecté `docs/CONTRIBUTING.md`."),
+  false,
+);
 assert.deepEqual(
   missingEssentialLabels([
     'type:chore',
@@ -38,6 +51,23 @@ assert.deepEqual(
   ]),
   [],
 );
+
+const contributing = fs.readFileSync('docs/CONTRIBUTING.md', 'utf8');
+assert.match(contributing, /obligatoire avant toute contribution/i);
+assert.match(contributing, /dernier état réel de `main`/i);
+assert.match(contributing, /delta fonctionnel/i);
+assert.match(contributing, /arbre complet d'une branche historique/i);
+assert.match(contributing, /Un test ne se neutralise jamais/i);
+assert.match(contributing, /J'ai lu et respecté `docs\/CONTRIBUTING\.md`/i);
+assert.match(contributing, /Production provient uniquement de `main`/i);
+
+const prTemplate = fs.readFileSync('.github/PULL_REQUEST_TEMPLATE.md', 'utf8');
+assert.match(prTemplate, /## Gouvernance de contribution/);
+assert.match(prTemplate, /- \[ \] J'ai lu et respecté `docs\/CONTRIBUTING\.md`\./);
+
+const validator = fs.readFileSync('scripts/github/validate-pr-governance.mjs', 'utf8');
+assert.match(validator, /hasContributingAcknowledgement/);
+assert.match(validator, /Gouvernance de contribution/);
 
 const productionSuccessEvent = {
   deployment: {
