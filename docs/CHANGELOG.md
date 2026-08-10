@@ -79,7 +79,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Correction du formulaire d'affectation des collaborateurs entreprise: le statut `Invitation en attente` n'est plus sélectionnable et une invitation ne peut plus être forcée vers `ACTIVE` ou `SUSPENDED` hors acceptation volontaire.
 - Correction de l'animation mobile de masquage du premier bloc privé: disparition progressive avec opacité, flou et glissement vertical, sans limite fixe qui coupait les dashboards longs.
 - Correction du débordement horizontal mobile sur les pages publiques DTSC: garde-fous globaux `overflow-x`, watermark décoratif encapsulé, header/menu/recherche publics bornés et wrappers principaux limités à la largeur du viewport.
-- Correction du workflow d'invitation des collaborateurs dans les entreprises clientes: les invitations restent `INVITED` jusqu'à acceptation explicite, disposent d'une page privée de réponse et ne sont plus masquées par le contexte actif des notifications.
+- Correction du workflow d'invitation des collaborateurs entreprise: les invitations restent `INVITED` jusqu'à acceptation explicite, disposent d'une page privée de réponse et ne sont plus masquées par le contexte actif des notifications.
 - Correction du login entreprise afin de distinguer les memberships `ACTIVE` sélectionnables des invitations `INVITED` seulement informatives.
 
 ### Ajouté
@@ -358,6 +358,33 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 ### Amélioré
 
 - Le dataset facturation de la Console couvre désormais toutes les entreprises clientes, y compris celles sans abonnement, et fournit les plans actifs ainsi que les KPI d'abonnements et le MRR estimé.
+- La QA source-level contrôle désormais les protections backend et les opérations du centre de contrôle des abonnements.
+- `ensureBillingPlans()` crée uniquement les plans absents avec `createMany(..., skipDuplicates: true)` et ne réécrit plus les tarifs ou quotas administrés.
+
+### Corrigé
+
+- Correction du build Vercel du centre de contrôle: le fallback de limites utilise désormais le plan SaaS minimal typé `STARTER` au lieu de la valeur invalide `FREE`.
+
+### Sécurisé
+
+- La suppression d'un abonnement est traitée comme une annulation métier auditée; aucun abonnement, paiement ou historique n'est supprimé physiquement.
+- Le renouvellement clôture l'abonnement courant et crée une nouvelle période afin de préserver la traçabilité.
+
+## 2026-06-05
+
+### Ajouté
+
+- Ajout d'une couche SaaS centralisee pour les organisations clientes: plans `STARTER`, `BUSINESS`, `ENTERPRISE`, limites d'usage, entitlements de modules et helpers `getOrganizationEntitlements`, `canUseModule`, `canUseFeature`, `assertCanUseModule`, `getOrganizationUsageLimits` et `isSubscriptionActive`.
+- Ajout de `docs/SAAS_PLANS_AND_ENTITLEMENTS.md`, reference technique des plans, limites, modules controles, comportements d'acces, Console DTSC et QA associee.
+- Ajout de contenus commerciaux publics approfondis pour Accueil, Services, Solutions, Secteurs, Projets, À propos, Ressources, Contact, Data en Afrique, BI & KPI et IA en entreprise: blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
+- Ajout sur la page Contact d'une qualification par besoin client et par levier DTSC, avec mini-parcours de cadrage sans modifier le formulaire serveur existant.
+- Ajout sur la page Ressources de catégories éditoriales, d'une lecture par objectif et d'un état vide orienté visiteur.
+- Ajout de `docs/QA_REGRESSION_CHECKLIST.md`, checklist QA globale couvrant sous-domaines, auth, Console DTSC, Support, modules Entreprise, groupes, appels, notifications, calendrier, UX mobile et accès interdits entre organisations.
+- Ajout de `pnpm qa:regression` via `scripts/qa-regression-checks.mjs`, suite source-level sans dépendance externe pour vérifier les garde-fous critiques multi-tenant avant build Vercel.
+
+### Amélioré
+
+- La Console DTSC `Abonnements & facturation` affiche maintenant les abonnements organisations avec plan resolu, statut, dates, limites, modules, utilisateurs actifs, dernier paiement et audit des paiements.
 - La page client `/billing` expose en lecture seule le plan de l'organisation active, son statut, ses limites, les modules disponibles et les enregistrements de facturation organisationnels recents.
 - `AGENTS.md` impose maintenant la vérification de `pnpm qa:regression` avant commit/push et le maintien de `docs/QA_REGRESSION_CHECKLIST.md` avant push quand les parcours ou règles QA changent.
 - Les pages publiques corporate utilisent désormais un modèle de contenu enrichi et réutilisable pour afficher problèmes, livrables, bénéfices, exemples, FAQ, parcours et CTA sans créer de route ni action placeholder.
@@ -813,7 +840,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Progression opérationnelle dérivée des tâches et checklists, avec blocage serveur des clôtures incomplètes.
 - Boîte à outils persistante : notes multiples, liste/Kanban, éditeur riche, presse-papiers et calculatrices standard/scientifique/financière.
 - Hub unique d’actions flottantes pour supprimer les chevauchements.
-- Catalogue d’offres individuelles et d’organisation centralisé; quotas Chatbot et Assistant IA dérivés des plans administrés.
+- Catalogue d'offres individuelles et d’organisation centralisé; quotas Chatbot et Assistant IA dérivés des plans administrés.
 - Annuaire des contacts acceptés, invitation `ADMIN DTSC` et pagination de conversation avec ancrage conservé.
 - Contrat uniforme des guides, inventaire i18n global et nouveaux contrôles CI.
 - Migration additive `20260806110000_iteration_07_e2e_remediation_v3`.
