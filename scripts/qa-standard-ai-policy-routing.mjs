@@ -28,7 +28,8 @@ expect(orchestrator.includes("planCode: await resolveServerPlanCode(request)"), 
 expect(orchestrator.includes("resolveServerDataClassifications"), "Runtime must resolve a server-side default data classification");
 expect(orchestrator.includes('return ["CONFIDENTIAL"]'), "Organization-bound AI requests must default to CONFIDENTIAL");
 expect(orchestrator.includes("allowSensitiveExternalModel: false"), "AI00 must not permit a caller to weaken sensitive external policy");
-expect(orchestrator.includes('strategyCode: "POLICY_CAPABILITY_PLAN_DATA_V1"'), "Routing strategy must expose the policy/capability/plan/data strategy code");
+expect(orchestrator.includes("listAvailableAiModels"), "Policy Router V2 must rank only candidates already allowed by the canonical policy-filtered catalog");
+expect(orchestrator.includes('strategyCode: "POLICY_CAPABILITY_COST_HEALTH_V2"'), "Routing strategy must expose the current policy/capability/cost/health strategy code");
 expect(orchestrator.includes("if (!(error instanceof AiProviderError) || !error.retryable) throw error"), "Fallback must only continue for retryable provider failures");
 
 for (const [label, route] of [
