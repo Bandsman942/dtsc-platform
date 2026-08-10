@@ -62,6 +62,53 @@ model AiProviderAttempt {
   @@index([status, reasonCode, createdAt])
 }
 
+model AiToolConfirmation {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String?
+  conversationId String?
+  turnId         String?
+  toolCode       String
+  argumentsHash  String
+  argumentsJson  Json?
+  status         String   @default("PENDING")
+  expiresAt      DateTime
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+  consumedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, organizationId, toolCode, status, createdAt])
+  @@index([conversationId, turnId, createdAt])
+  @@index([expiresAt, status])
+}
+
+model AiToolExecution {
+  id                  String   @id @default(cuid())
+  userId              String
+  organizationId      String?
+  conversationId      String?
+  turnId              String?
+  toolCode            String
+  toolMode            String
+  argumentsHash       String
+  confirmationId      String?
+  idempotencyScopeKey String   @unique
+  status              String   @default("STARTED")
+  reasonCode          String?
+  resultJson          Json?
+  auditLevel          String   @default("STANDARD")
+  startedAt           DateTime @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([userId, organizationId, toolCode, createdAt])
+  @@index([conversationId, turnId, createdAt])
+  @@index([status, reasonCode, createdAt])
+}
+
 model CommercialMaturityEvidence {
   id             String   @id @default(cuid())
   moduleType     String
