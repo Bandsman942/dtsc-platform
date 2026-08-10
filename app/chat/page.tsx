@@ -15,6 +15,11 @@ export default async function ChatPage({
   const user = await requireUser();
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
+  const aiContext = activeOrganizationId
+    ? "ORGANIZATION" as const
+    : session?.activeContext === "DTSC_INTERNAL"
+      ? "DTSC_INTERNAL" as const
+      : "PERSONAL" as const;
   const { conversationId } = await searchParams;
   const conversations = await prisma.conversation.findMany({
     where: { userId: user.id, organizationId: activeOrganizationId },
@@ -44,9 +49,9 @@ export default async function ChatPage({
     getCanonicalAiUsageLimits({ userId: user.id, organizationId: activeOrganizationId }),
   ]);
   const models = listCatalogAiModelsForUi({
-    context: activeOrganizationId ? "ORGANIZATION" : session?.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : "PERSONAL",
+    context: aiContext,
     locale: user.locale,
-    planCode: session?.activeContext === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits.planCode,
+    planCode: aiContext === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits.planCode,
   });
 
   return (
