@@ -24,6 +24,10 @@ const checks = [
   ["AI context engine", "scripts/qa-standard-ai-context-engine.mjs"],
   ["AI CAG isolation", "scripts/qa-standard-ai-cag-isolation.mjs"],
   ["AI sector assistants", "scripts/qa-standard-ai-sector-assistants.mjs"],
+  ["AI embedding provider", "scripts/qa-standard-ai-embedding-provider.mjs"],
+  ["AI index versioning", "scripts/qa-standard-ai-index-versioning.mjs"],
+  ["AI RAG hybrid retrieval", "scripts/qa-standard-ai-rag-hybrid.mjs"],
+  ["AI RAG reindex idempotency", "scripts/qa-standard-ai-rag-reindex-idempotency.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -35,4 +39,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 + AI03 + AI04 + AI05 gates passed");
