@@ -27,7 +27,7 @@ export const enterpriseAiKnowledgeListSchema = z.object({
 
 export const enterpriseAiKnowledgeActionSchema = z.object({
   organizationId: z.string().min(1).max(160),
-  action: z.enum(["archive", "restore"]),
+  action: z.enum(["archive", "restore", "reindex"]),
 });
 
 export const enterpriseAiConversationListSchema = z.object({
