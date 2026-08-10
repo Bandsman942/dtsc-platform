@@ -31,6 +31,12 @@ Le `contextVersion` dépend notamment du rôle, poste, plan, modules lisibles et
 
 Le cache est local au runtime et possède un TTL court de deux minutes. Il n'est jamais partagé entre tenants ni entre utilisateurs.
 
+### Ordre du cache
+
+La version du builder est résolue avant le lookup. Le registre cherche ensuite la clé en cache **avant** d'exécuter la fonction de construction du CAG. Un hit évite donc réellement les lectures et agrégations coûteuses du builder.
+
+Une version dynamique peut effectuer une lecture très légère nécessaire à l'invalidation. C'est le cas de Pharmacy : seul `PharmacySetting.settingsVersion` est lu pour former la version de clé. Les paramètres opérationnels complets ne sont chargés qu'en cas de cache miss.
+
 ## Builders actifs
 
 ### PHARMACY
