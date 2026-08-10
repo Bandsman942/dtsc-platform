@@ -47,6 +47,7 @@ const checks = [
   ["AI Agent budgets", "scripts/qa-standard-ai-agent-budgets.mjs"],
   ["AI Agent confirmation", "scripts/qa-standard-ai-agent-confirmation.mjs"],
   ["AI Agent resume", "scripts/qa-standard-ai-agent-resume.mjs"],
+  ["AI Agent UI", "scripts/qa-standard-ai-agent-ui.mjs"],
   ["AI Agent idempotency", "scripts/qa-standard-ai-agent-idempotency.mjs"],
   ["AI Agent cancellation", "scripts/qa-standard-ai-agent-cancellation.mjs"],
   ["AI Agent tenant isolation", "scripts/qa-standard-ai-agent-tenant-isolation.mjs"],
