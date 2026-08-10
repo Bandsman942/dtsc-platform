@@ -4,10 +4,44 @@
 
 Le module `AI_ASSISTANT` fournit un assistant IA sectoriel pour les organisations clientes actives. Il combine:
 
+- Assistant Runtime: profil, contexte et policy résolus côté serveur;
 - CAG: contexte contrôlé de l'entreprise, du secteur, du plan, des modules activés et des règles métier;
 - RAG: sources documentaires privées indexées en embeddings pgvector et filtrées par `organizationId`;
 - outils backend en lecture: synthèses métier autorisées sans mutation directe;
 - quotas de plan: messages mensuels, sources, stockage, outils lecture et brouillons d'action.
+
+## Runtime unifié
+
+`POST /api/enterprise/ai/chat` utilise désormais `prepareAiTurn()` comme le chatbot général.
+
+Cette primitive résout :
+
+- le profil assistant autorisé ;
+- l'organisation et le membership actifs ;
+- le plan effectif ;
+- les modules réellement lisibles ;
+- le secteur réel ;
+- le CAG sectoriel versionné ;
+- les classifications de données transmises au Policy Router.
+
+Les historiques restent séparés : `EnterpriseAiConversation` / `EnterpriseAiMessage` restent la source de vérité du module entreprise. Aucune migration vers les conversations du chatbot général n'est effectuée.
+
+Profils sectoriels actuellement enregistrés :
+
+- `PHARMACY_ASSISTANT` ;
+- `HEALTH_ASSISTANT` ;
+- `SHOP_ASSISTANT` pour `COMMERCE_RETAIL` ;
+- fallback `ENTERPRISE_GENERAL` lorsque le profil sectoriel demandé n'est pas compatible.
+
+## CAG sectoriel
+
+Le CAG est construit uniquement à partir de données autorisées dans l'organisation active.
+
+- Pharmacy : FEFO et paramètres opérationnels minimisés ;
+- Health : CAG de base strictement organisationnel et non clinique ;
+- Shop : règles d'exploitation générales et modules lisibles, sans fabrication de stock ou de ventes.
+
+Le cache CAG est segmenté par `organizationId`, `userId`, profil/version et `contextVersion`. Il ne peut pas être partagé entre tenants. Les paramètres Pharmacy participent à la version du CAG via `settingsVersion`.
 
 ## Modèle de données
 
@@ -31,7 +65,7 @@ Les chunks utilisent `vector(1536)` et `CREATE EXTENSION IF NOT EXISTS vector`. 
 - Accès: membre `ACTIVE` de l'organisation active, module `AI_ASSISTANT` activé et autorisé par le plan.
 - Sécurité: origine same-origin, session, utilisateur actif via membership, rate limit, validation Zod, quotas mensuels.
 - Payload: `organizationId`, `conversationId?`, `content`, `model?`, `useKnowledge`, `useTools`.
-- Réponse: message assistant, citations RAG, résultats d'outils, usage.
+- Réponse streaming texte avec identifiants de conversation, provider, modèle, tâche et profil assistant dans les headers techniques internes.
 
 `GET /api/enterprise/ai/conversations`
 
@@ -68,6 +102,8 @@ Toutes les lectures et écritures filtrent par `organizationId`. Le backend refu
 
 Les sources RAG sont considérées comme contenu non fiable. Les instructions de l'assistant demandent d'ignorer toute instruction contenue dans les documents qui chercherait à contourner les règles, révéler des secrets ou changer de rôle.
 
+Le CAG Health n'injecte automatiquement aucune donnée patient ou clinique. Même lorsqu'un droit `MEDICAL_RECORDS` est résolu, une future récupération clinique devra posséder son propre contrôle d'objet et sa propre policy.
+
 ## Limites par plan
 
 Les limites sont centralisées dans `lib/billing/plan-limits.ts`:
@@ -87,3 +123,7 @@ Le module est accessible via `/enterprise-modules/AI_ASSISTANT` lorsqu'il est ac
 - Paramètres.
 
 Les actions de sources passent par un menu `...` et les confirmations destructives utilisent la boîte de dialogue applicative.
+
+## Audit
+
+Les `AiModelCall` peuvent conserver les codes/versions du profil, CAG, contexte et prompt dans `metadataJson.runtime`. Le contenu complet du CAG ou des documents n'y est pas persisté.

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { buildAssistantResponsePreferencePrompt, getEnterpriseAiConversationPreference } from "@/lib/assistant-conversation-preferences";
+import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
@@ -8,7 +9,7 @@ import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { completeAiModelCall, failAiModelCall, interruptAiModelCall, startAiModelCall } from "@/lib/ai/observability";
 import { routeAiStream } from "@/lib/ai/orchestrator";
-import { buildLanguageInstruction, getAiPromptVersion } from "@/lib/ai/prompts";
+import { buildLanguageInstruction } from "@/lib/ai/prompts";
 import { createAuditedAiTextStream, type AiStreamConsumption } from "@/lib/ai/stream";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -75,6 +76,12 @@ export async function POST(req: Request) {
     const useKnowledge = preference?.useKnowledge ?? data.useKnowledge;
     const useTools = preference?.useTools ?? data.useTools;
 
+    const preparedTurn = await prepareAiTurn({
+      userId: session.userId,
+      contextCode: "ORGANIZATION",
+      organizationId: data.organizationId,
+    });
+
     await prisma.enterpriseAiMessage.create({
       data: { organizationId: data.organizationId, conversationId: conversation.id, userId: session.userId, role: "user", content: data.content, model: requestedModel || null, tokenHint: Math.ceil(data.content.length / 4) },
     });
@@ -98,7 +105,12 @@ export async function POST(req: Request) {
       take: 8,
       select: { role: true, content: true },
     });
-    const baseInstructions = await buildEnterpriseAiInstructions(access);
+    const baseInstructions = buildEnterpriseAiInstructions(access, {
+      assistantProfileCode: preparedTurn.executionContext.profile.code,
+      assistantProfileVersion: preparedTurn.executionContext.profile.version,
+      cagContent: preparedTurn.cag.content,
+      cagVersion: preparedTurn.cag.version,
+    });
     const preferenceInstructions = buildAssistantResponsePreferencePrompt({
       style: preference?.responseStyle,
       length: preference?.responseLength,
@@ -114,11 +126,24 @@ export async function POST(req: Request) {
 
     let routed: Awaited<ReturnType<typeof routeAiStream>>;
     try {
-      routed = await routeAiStream({ requestedModel, taskType, context: "ORGANIZATION", locale, messages, instructions, userId: session.userId, organizationId: data.organizationId, tags: ["feature:enterprise-assistant", `organization:${data.organizationId}`, `locale:${locale}`], signal: req.signal });
+      routed = await routeAiStream({
+        requestedModel,
+        taskType,
+        context: "ORGANIZATION",
+        locale,
+        messages,
+        instructions,
+        userId: session.userId,
+        organizationId: data.organizationId,
+        assistantCode: preparedTurn.routePolicy.assistantCode,
+        dataClassifications: preparedTurn.routePolicy.dataClassifications,
+        tags: ["feature:enterprise-assistant", `assistant:${preparedTurn.executionContext.profile.code}`, `organization:${data.organizationId}`, `locale:${locale}`],
+        signal: req.signal,
+      });
     } catch (error) {
       const reasonCode = toAiReasonCode(error);
       const statusCode = error instanceof AiProviderError ? error.statusCode : 502;
-      await writeApiLog({ request: req, statusCode, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, reasonCode, taskType, requestedModel } });
+      await writeApiLog({ request: req, statusCode, userId: session.userId, startedAt, metadata: { organizationId: data.organizationId, reasonCode, taskType, requestedModel, ...preparedTurn.auditMetadata } });
       return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode });
     }
 
@@ -138,7 +163,8 @@ export async function POST(req: Request) {
       providerModelId: routed.providerModelId,
       fallbackUsed: routed.fallbackUsed,
       attempts: routed.attempts,
-      promptVersion: getAiPromptVersion("ENTERPRISE_ASSISTANT")?.version,
+      promptVersion: preparedTurn.auditMetadata.promptVersion,
+      runtimeMetadata: preparedTurn.auditMetadata,
     });
 
     async function persistAssistant(result: AiStreamConsumption, completed: boolean) {
@@ -168,11 +194,11 @@ export async function POST(req: Request) {
         completed
           ? completeAiModelCall({ callId: modelCall.id, model: routed.selection.selectedModel, inputTokens, outputTokens, cachedInputTokens: result.usage.cachedInputTokens, durationMs: result.durationMs, firstTokenLatencyMs: result.firstTokenLatencyMs })
           : interruptAiModelCall(modelCall.id, result.durationMs),
-        writeAuditLog({ userId: sessionUserId, action: completed ? "ENTERPRISE_AI_CHAT_COMPLETED" : "ENTERPRISE_AI_CHAT_INTERRUPTED", entity: "EnterpriseAiConversation", entityId: conversationId, request: req, metadata: { organizationId: data.organizationId, providerCode: routed.providerCode, modelCode: routed.modelCode, toolCount: toolResults.length, citationCount: knowledge.citations.length, useKnowledge, useTools, taskType, fallbackUsed: routed.fallbackUsed, locale, interrupted: !completed } }),
+        writeAuditLog({ userId: sessionUserId, action: completed ? "ENTERPRISE_AI_CHAT_COMPLETED" : "ENTERPRISE_AI_CHAT_INTERRUPTED", entity: "EnterpriseAiConversation", entityId: conversationId, request: req, metadata: { organizationId: data.organizationId, providerCode: routed.providerCode, modelCode: routed.modelCode, toolCount: toolResults.length, citationCount: knowledge.citations.length, useKnowledge, useTools, taskType, fallbackUsed: routed.fallbackUsed, locale, interrupted: !completed, ...preparedTurn.auditMetadata } }),
       );
       await Promise.all(writes);
       await getEnterpriseAiUsageSnapshot(data.organizationId, sessionUserId, authorizedAccess);
-      await writeApiLog({ request: req, statusCode: completed ? 200 : 499, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, providerCode: routed.providerCode, modelCode: routed.modelCode, totalTokens: inputTokens + outputTokens, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed } });
+      await writeApiLog({ request: req, statusCode: completed ? 200 : 499, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, providerCode: routed.providerCode, modelCode: routed.modelCode, totalTokens: inputTokens + outputTokens, taskType, fallbackUsed: routed.fallbackUsed, interrupted: !completed, ...preparedTurn.auditMetadata } });
     }
 
     const stream = createAuditedAiTextStream({
@@ -184,7 +210,7 @@ export async function POST(req: Request) {
       onFailed: async (streamError, result) => {
         console.error("Enterprise AI streaming failed", streamError);
         await failAiModelCall(modelCall.id, "STREAM_INTERRUPTED", result.durationMs);
-        await writeApiLog({ request: req, statusCode: 502, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, reasonCode: "STREAM_INTERRUPTED", providerCode: routed.providerCode, modelCode: routed.modelCode } });
+        await writeApiLog({ request: req, statusCode: 502, userId: sessionUserId, startedAt, metadata: { organizationId: data.organizationId, conversationId, reasonCode: "STREAM_INTERRUPTED", providerCode: routed.providerCode, modelCode: routed.modelCode, ...preparedTurn.auditMetadata } });
       },
     });
 
@@ -196,6 +222,7 @@ export async function POST(req: Request) {
         "X-AI-Provider": routed.providerCode,
         "X-AI-Model": routed.modelCode,
         "X-AI-Task": taskType,
+        "X-AI-Assistant": preparedTurn.executionContext.profile.code,
         "X-AI-Fallback": String(routed.fallbackUsed),
       },
     });

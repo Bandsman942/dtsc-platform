@@ -36,8 +36,8 @@ export function runStandardAiIteration05Audit(scope = "all") {
     orchestration: () => {
       requireText("lib/ai/orchestrator.ts", ["POLICY_CAPABILITY_COST_HEALTH_V2", "rankCandidates", "listAvailableAiModels", "fallbackUsed", "createProviderEventStream", "observeAiProviderAttemptStream"]);
       requireNoText("lib/ai/orchestrator.ts", ["response.output_text.delta", "response.completed"]);
-      requireText("app/api/chat/v2/route.ts", ["routeAiStream", "classifyAiTask", "X-AI-Provider"]);
-      requireText("app/api/enterprise/ai/chat/route.ts", ["routeAiStream", "context: \"ORGANIZATION\"", "X-AI-Fallback"]);
+      requireText("app/api/chat/v2/route.ts", ["routeAiStream", "classifyAiTask", "X-AI-Provider", "prepareAiTurn"]);
+      requireText("app/api/enterprise/ai/chat/route.ts", ["routeAiStream", "context: \"ORGANIZATION\"", "X-AI-Fallback", "prepareAiTurn"]);
     },
     fallbacks: () => {
       requireText("lib/ai/orchestrator.ts", ["error.retryable", "attempts.push", "fallbackModelCodes"]);
@@ -74,7 +74,9 @@ export function runStandardAiIteration05Audit(scope = "all") {
     },
     prompts: () => {
       requireText("lib/ai/prompts.ts", ["AI_PROMPT_REGISTRY", "GLOBAL_ASSISTANT", "ENTERPRISE_ASSISTANT", "2026-08-04.1"]);
-      requireText("app/api/chat/v2/route.ts", ["getAiPromptVersion(\"GLOBAL_ASSISTANT\")"]);
+      requireText("lib/ai/assistant-runtime.ts", ["getAiPromptVersion", "executionContext.profile.promptCode", "promptVersion"]);
+      requireText("app/api/chat/v2/route.ts", ["prepareAiTurn", 'assistantCode: "DTSC_GENERAL"']);
+      requireText("app/api/enterprise/ai/chat/route.ts", ["prepareAiTurn", "preparedTurn.auditMetadata.promptVersion"]);
     },
     i18n: () => {
       requireText("locales/fr.json", ["\"ai\"", "\"commercialMaturity\"", "\"userGuides\""]);
