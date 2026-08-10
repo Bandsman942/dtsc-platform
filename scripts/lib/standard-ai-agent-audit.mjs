@@ -3,6 +3,9 @@ import path from "node:path";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const hasAgentExecutionHeader = (source) =>
+  /["']X-AI-Execution["']\s*:\s*["']AGENT_V1["']/.test(source) ||
+  /\.set\(\s*["']X-AI-Execution["']\s*,\s*["']AGENT_V1["']\s*\)/.test(source);
 
 export function runStandardAiAgentAudit(mode = "all") {
   const failures = [];
@@ -46,7 +49,7 @@ export function runStandardAiAgentAudit(mode = "all") {
   if (["all", "integration"].includes(mode)) {
     check(globalAgentRoute.includes("createInteractiveAiAgentStream"), "Global agent endpoint must use canonical agent runtime");
     check(enterpriseAgentRoute.includes("createInteractiveAiAgentStream"), "Enterprise agent endpoint must use canonical agent runtime");
-    check(globalAgentRoute.includes('X-AI-Execution", "AGENT_V1"') && enterpriseAgentRoute.includes('X-AI-Execution", "AGENT_V1"'), "Agent endpoints must identify execution mode without changing legacy stream payloads");
+    check(hasAgentExecutionHeader(globalAgentRoute) && hasAgentExecutionHeader(enterpriseAgentRoute), "Agent endpoints must identify execution mode without changing legacy stream payloads");
     check(!globalChatRoute.includes("createInteractiveAiAgentStream"), "Legacy global chat route must stay unchanged until explicit agent opt-in");
     check(!enterpriseChatRoute.includes("createInteractiveAiAgentStream"), "Legacy Enterprise chat route must stay unchanged until explicit agent opt-in");
     check(!globalAgentRoute.includes("performPrivateChatActionFromHistory"), "Global agent endpoint must not bypass Tool Gateway via legacy private actions");
