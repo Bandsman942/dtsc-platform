@@ -1,6 +1,6 @@
 import { AiProviderError, classifyProviderHttpError } from "@/lib/ai/errors";
 import type { AiProviderEvent } from "@/lib/ai/provider-events";
-import type { AiModelDefinition, AiProviderDefinition } from "@/lib/ai/types";
+import type { AiModelDefinition, AiProviderDefinition, AiRoutingConstraints } from "@/lib/ai/types";
 import { env } from "@/lib/env";
 import type { OpenAIInputMessage } from "@/lib/openai";
 
@@ -62,6 +62,34 @@ function parseToolArguments(value: string) {
   }
 }
 
+function buildProviderRouting(routingConstraints?: AiRoutingConstraints) {
+  const routing: Record<string, unknown> = {
+    allow_fallbacks: false,
+    data_collection: "deny",
+    // AI02 established ZDR as the minimum DTSC OpenRouter baseline. AI03 may
+    // tighten provider routing, but it may never turn this protection off.
+    zdr: true,
+  };
+  if (routingConstraints?.requireZeroDataRetention) routing.zdr = true;
+  if (routingConstraints?.providerSortPreference) routing.sort = routingConstraints.providerSortPreference;
+
+  const maxPrice: Record<string, number> = {};
+  if (
+    typeof routingConstraints?.maximumProviderPromptPricePerMillion === "number" &&
+    routingConstraints.maximumProviderPromptPricePerMillion >= 0
+  ) {
+    maxPrice.prompt = routingConstraints.maximumProviderPromptPricePerMillion;
+  }
+  if (
+    typeof routingConstraints?.maximumProviderCompletionPricePerMillion === "number" &&
+    routingConstraints.maximumProviderCompletionPricePerMillion >= 0
+  ) {
+    maxPrice.completion = routingConstraints.maximumProviderCompletionPricePerMillion;
+  }
+  if (Object.keys(maxPrice).length) routing.max_price = maxPrice;
+  return routing;
+}
+
 function normalizeChunk(chunk: OpenRouterChunk, toolCalls: Map<number, ToolCallAccumulator>): AiProviderEvent[] {
   if (chunk.error) return [classifyOpenRouterStreamError(chunk)];
   const events: AiProviderEvent[] = [];
@@ -113,12 +141,14 @@ export async function createOpenRouterChatCompletionsEventStream({
   model,
   messages,
   instructions,
+  routingConstraints,
   signal,
 }: {
   provider: AiProviderDefinition;
   model: AiModelDefinition;
   messages: OpenAIInputMessage[];
   instructions: string;
+  routingConstraints?: AiRoutingConstraints;
   signal?: AbortSignal;
 }): Promise<ReadableStream<AiProviderEvent>> {
   const apiKey = process.env[provider.apiKeyEnv];
@@ -151,11 +181,7 @@ export async function createOpenRouterChatCompletionsEventStream({
         ],
         stream: true,
         stream_options: { include_usage: true },
-        provider: {
-          allow_fallbacks: false,
-          data_collection: "deny",
-          zdr: true,
-        },
+        provider: buildProviderRouting(routingConstraints),
       }),
       signal,
     });
