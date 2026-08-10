@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-08-10 — DTSC AI 02/08 : OpenRouter et modèles certifiés
+
+### Ajouté
+
+- Ajout du provider OpenRouter derrière la façade AI01 avec Chat Completions streaming normalisé dans `AiProviderEvent`.
+- Ajout de l’allow-list serveur `AI_OPENROUTER_CERTIFIED_MODELS_JSON` et des profils de modèles certifiés, sans modèle OpenRouter activé par défaut.
+- Ajout de l’audit non mutateur `scripts/ai/audit-openrouter-catalog.mjs` sur le catalogue ZDR compatible et de cinq gates permanents AI02.
+
+### Sécurisé
+
+- Chaque requête OpenRouter impose `allow_fallbacks: false`, `data_collection: "deny"` et `zdr: true`; les fallbacks restent décidés et audités par DTSC.
+- Le catalogue générique ne peut pas injecter de modèle OpenRouter et `/api/models` ne lit ni secret, ni allow-list brute, ni catalogue distant.
+- Les règles AI00 `SECRET`/données sensibles et le statut externe par défaut restent inchangés.
+
+### Amélioré
+
+- `/api/models` expose les profils et versions de certification non sensibles uniquement après filtrage plan/contexte/policy.
+- `AiProviderAttempt` couvre désormais OpenAI et OpenRouter sans créer un second journal ou un double comptage.
+
 ## 2026-08-10 — DTSC AI 01/08 : abstraction provider et streaming normalisé
 
 ### Ajouté

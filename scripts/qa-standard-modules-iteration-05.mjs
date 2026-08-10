@@ -11,6 +11,11 @@ const checks = [
   ["AI normalized stream", "scripts/qa-standard-ai-normalized-stream.mjs"],
   ["AI stream cancellation", "scripts/qa-standard-ai-stream-cancellation.mjs"],
   ["AI provider attempts", "scripts/qa-standard-ai-provider-attempts.mjs"],
+  ["AI OpenRouter provider", "scripts/qa-standard-ai-openrouter-provider.mjs"],
+  ["AI certified models", "scripts/qa-standard-ai-certified-models.mjs"],
+  ["AI cross-provider fallback", "scripts/qa-standard-ai-cross-provider-fallback.mjs"],
+  ["AI external provider default", "scripts/qa-standard-ai-external-provider-default.mjs"],
+  ["AI model UI policy", "scripts/qa-standard-ai-model-ui-policy.mjs"],
 ];
 
 for (const [label, script] of checks) {
@@ -22,4 +27,4 @@ for (const [label, script] of checks) {
   }
 }
 
-console.log("\n[standard-ai-iteration-05] AI00 + AI01 gates passed");
+console.log("\n[standard-ai-iteration-05] AI00 + AI01 + AI02 gates passed");

@@ -4,11 +4,13 @@ import type {
   AiContextCode,
   AiDataClassification,
   AiModelDefinition,
+  AiModelProfileCode,
   AiProviderDefinition,
   AiRequiredCapabilities,
   AiTaskType,
 } from "@/lib/ai/types";
 import type { SaasPlanCode } from "@/lib/billing/plans";
+import { env } from "@/lib/env";
 
 const ALL_CONTEXTS: AiContextCode[] = ["PERSONAL", "DTSC_INTERNAL", "ORGANIZATION", "PROJECT", "MODULE", "OBJECT"];
 const TEXT_TASKS: AiTaskType[] = [
@@ -23,6 +25,7 @@ const TEXT_TASKS: AiTaskType[] = [
   "ENTERPRISE_SEARCH",
   "TOOL_EXECUTION",
 ];
+const MODEL_PROFILE_CODES = new Set<AiModelProfileCode>(["FAST", "BALANCED", "REASONING", "LONG_CONTEXT", "TOOLS", "VISION", "PREMIUM"]);
 const SUPPORTED_PROVIDER_PROTOCOLS = new Set<AiProviderDefinition["protocol"]>([
   "OPENAI_RESPONSES",
   "OPENAI_CHAT_COMPLETIONS",
@@ -52,6 +55,19 @@ const defaultProvider: AiProviderDefinition = {
   supportsStreaming: true,
 };
 
+const openRouterProvider: AiProviderDefinition = {
+  code: "OPENROUTER",
+  labelKey: "ai.providers.openrouter.label",
+  descriptionKey: "ai.providers.openrouter.description",
+  protocol: "OPENROUTER_CHAT_COMPLETIONS",
+  baseUrl: env.OPENROUTER_BASE_URL,
+  apiKeyEnv: "OPENROUTER_API_KEY",
+  status: "ACTIVE",
+  regions: [],
+  dataPolicyCode: "OPENROUTER_CONTROLLED",
+  supportsStreaming: true,
+};
+
 function defaultOpenAiModels(): AiModelDefinition[] {
   const configured = getConfiguredOpenAIModels();
   const fallback = configured.filter((model) => model !== getDefaultOpenAIModel());
@@ -62,6 +78,7 @@ function defaultOpenAiModels(): AiModelDefinition[] {
     labelKey: `ai.models.${modelId.replace(/[^a-zA-Z0-9]+/g, "_")}.label`,
     descriptionKey: "ai.models.generic.description",
     status: "ACTIVE",
+    profileCodes: index === 0 ? ["FAST", "BALANCED"] : ["BALANCED"],
     capabilities: {
       text: true,
       vision: false,
@@ -86,31 +103,57 @@ function defaultOpenAiModels(): AiModelDefinition[] {
 function isProviderDefinition(value: unknown): value is AiProviderDefinition {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<AiProviderDefinition>;
-  return Boolean(
-    record.code &&
-      record.baseUrl &&
-      record.apiKeyEnv &&
-      record.protocol &&
-      SUPPORTED_PROVIDER_PROTOCOLS.has(record.protocol),
-  );
+  return Boolean(record.code && record.baseUrl && record.apiKeyEnv && record.protocol && SUPPORTED_PROVIDER_PROTOCOLS.has(record.protocol));
 }
 
 function isModelDefinition(value: unknown): value is AiModelDefinition {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<AiModelDefinition>;
-  return Boolean(record.code && record.providerCode && record.providerModelId && record.capabilities && Array.isArray(record.allowedContexts));
+  return Boolean(
+    record.code &&
+      record.providerCode &&
+      record.providerModelId &&
+      record.capabilities &&
+      Array.isArray(record.allowedContexts) &&
+      Array.isArray(record.fallbackModelCodes),
+  );
+}
+
+function isCertifiedOpenRouterModelDefinition(value: unknown): value is AiModelDefinition {
+  if (!isModelDefinition(value) || value.providerCode !== "OPENROUTER") return false;
+  if (!value.certificationVersion?.trim()) return false;
+  if (value.profileCodes && !value.profileCodes.every((profile) => MODEL_PROFILE_CODES.has(profile))) return false;
+  return true;
+}
+
+function certifiedOpenRouterModels() {
+  return parseJsonArray<unknown>(env.AI_OPENROUTER_CERTIFIED_MODELS_JSON)
+    .filter(isCertifiedOpenRouterModelDefinition)
+    .map((model) => ({
+      ...model,
+      providerCode: "OPENROUTER",
+      dataPolicyCode: model.dataPolicyCode || "INHERIT_PROVIDER",
+    }));
 }
 
 export function getAiProviderCatalog() {
   const configured = parseJsonArray<unknown>(process.env.AI_PROVIDER_CATALOG_JSON).filter(isProviderDefinition);
-  const providers = [defaultProvider, ...configured.filter((provider) => provider.code !== defaultProvider.code)];
+  const canonical = [defaultProvider, openRouterProvider];
+  const canonicalCodes = new Set(canonical.map((provider) => provider.code));
+  const providers = [...canonical, ...configured.filter((provider) => !canonicalCodes.has(provider.code))];
   return providers.filter((provider) => provider.status !== "RETIRED");
 }
 
 export function getAiModelCatalog() {
-  const configured = parseJsonArray<unknown>(process.env.AI_MODEL_CATALOG_JSON).filter(isModelDefinition);
+  const configured = parseJsonArray<unknown>(process.env.AI_MODEL_CATALOG_JSON)
+    .filter(isModelDefinition)
+    .filter((model) => model.providerCode !== "OPENROUTER");
   const byCode = new Map<string, AiModelDefinition>();
   for (const model of [...defaultOpenAiModels(), ...configured]) byCode.set(model.code, model);
+  for (const model of certifiedOpenRouterModels()) {
+    // Certification may add a model, but it may not shadow an existing DTSC model code.
+    if (!byCode.has(model.code)) byCode.set(model.code, model);
+  }
   return [...byCode.values()].filter((model) => model.status !== "RETIRED");
 }
 
@@ -167,6 +210,8 @@ export function listCatalogAiModelsForUi(input: AiAvailabilityInput) {
     providerCode: model.providerCode,
     status: model.status,
     minimumPlan: model.minimumPlan || null,
+    profileCodes: model.profileCodes || [],
+    certificationVersion: model.certificationVersion || null,
   }));
 }
 
@@ -189,6 +234,11 @@ export function assertAiCatalogIntegrity() {
     for (const fallback of model.fallbackModelCodes) {
       if (fallback === model.code) failures.push(`${model.code}: self fallback is forbidden`);
     }
+  }
+
+  const nonOpenRouterCodes = new Set([...defaultOpenAiModels(), ...parseJsonArray<unknown>(process.env.AI_MODEL_CATALOG_JSON).filter(isModelDefinition).filter((model) => model.providerCode !== "OPENROUTER")].map((model) => model.code));
+  for (const model of certifiedOpenRouterModels()) {
+    if (nonOpenRouterCodes.has(model.code)) failures.push(`${model.code}: certified OpenRouter model code collides with an existing DTSC model`);
   }
   return failures;
 }

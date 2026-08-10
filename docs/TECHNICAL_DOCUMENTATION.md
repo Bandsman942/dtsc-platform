@@ -395,6 +395,16 @@ La cancellation est propagée au reader provider. Un flux qui se termine sans `C
 
 Les gates `qa-standard-ai-provider-adapters`, `qa-standard-ai-normalized-stream`, `qa-standard-ai-stream-cancellation` et `qa-standard-ai-provider-attempts` sont raccordées à l'agrégateur de l'itération 05 et doivent rester vertes avec AI00, la régression ERP, type-check, lint, migrations et build.
 
+### DTSC AI 02/08 — OpenRouter et modèles certifiés
+
+AI02 rend `OPENROUTER_CHAT_COMPLETIONS` exécutable derrière la façade AI01 sans modifier l'autorité AI00. `lib/ai/providers/openrouter-chat-completions.ts` normalise texte, outils, usage, erreurs et cancellation dans `AiProviderEvent`.
+
+OpenRouter n'est jamais une source de vérité de catalogue : aucun modèle n'est activé par défaut et `AI_OPENROUTER_CERTIFIED_MODELS_JSON` est la seule allow-list OpenRouter. Le catalogue générique ne peut pas injecter de modèle OpenRouter, une certification exige une version explicite et ne peut pas écraser un code modèle DTSC existant.
+
+Chaque requête OpenRouter impose `allow_fallbacks:false`, `data_collection:"deny"` et `zdr:true`. Les fallbacks restent donc décidés et audités par DTSC, et l'accès à un modèle reste soumis au plan, au contexte, aux capacités et à la politique de données. Le script `scripts/ai/audit-openrouter-catalog.mjs` compare les modèles certifiés au catalogue ZDR compatible en lecture seule ; il n'active ni ne modifie aucun modèle.
+
+`/api/models` expose uniquement les modèles déjà filtrés par le runtime, avec des métadonnées non sensibles de profil/certification. Les gates AI02 contrôlent l'adapter, la certification, les fallbacks inter-provider, le statut externe par défaut et la parité UI/runtime. Aucun changement Prisma n'est introduit par AI02.
+
 ## Modules standards — Itération 06 — Gouvernance d’entreprise (2026-08-05)
 
 L’itération 06 professionnalise Budgets, Rapports et Administration entreprise sans dupliquer les moteurs ERP. Les budgets utilisent des versions additives, scénarios, gel, prévisions et alertes ; les métriques communes sont définies dans `lib/enterprise/reporting/metric-registry.ts`. L’administration ajoute rôles d’organisation, simulation de permissions, politiques de sécurité, protection du dernier administrateur, hiérarchie des départements et audit enrichi. La migration `20260805003000_standard_enterprise_governance_iteration_06` est additive. Les guides natifs sont dans `lib/user-guides/iteration06-guides.ts` et la QA agrégée est `pnpm qa:standard-modules-iteration-06`.
