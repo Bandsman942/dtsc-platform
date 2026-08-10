@@ -12,13 +12,18 @@ if (fs.existsSync(inventoryPath)) {
   for (const path of ["lib/rag.ts", "lib/openai.ts", "lib/private-chat-actions.ts", "app/api/public/dtsc-agent/route.ts"]) {
     expect(inventory.includes(path), `Provider bypass inventory must classify ${path}`);
   }
-  for (const classification of ["MIGRATE_TO_ORCHESTRATOR", "KEEP_DIRECT_TEMPORARILY", "EMBEDDING_PROVIDER_SEPARATE"]) {
+  for (const classification of ["MIGRATE_TO_ORCHESTRATOR", "KEEP_DIRECT_TEMPORARILY", "EMBEDDING_PROVIDER_MIGRATED"]) {
     expect(inventory.includes(classification), `Provider bypass inventory must use classification ${classification}`);
   }
 }
 
 const rag = fs.readFileSync("lib/rag.ts", "utf8");
-expect(rag.includes("api.openai.com/v1/embeddings"), "Current direct embeddings bypass changed; update inventory and migration plan before removing this assertion");
+const enterpriseKnowledge = fs.readFileSync("lib/enterprise-ai/knowledge.ts", "utf8");
+const embeddings = fs.readFileSync("lib/ai/embeddings.ts", "utf8");
+expect(!rag.includes("api.openai.com/v1/embeddings"), "Personal RAG must no longer call the OpenAI embedding endpoint directly");
+expect(!enterpriseKnowledge.includes("api.openai.com/v1/embeddings"), "Enterprise RAG must no longer call the OpenAI embedding endpoint directly");
+expect(embeddings.includes("api.openai.com/v1/embeddings"), "The current OpenAI embedding transport must live behind the canonical embedding provider abstraction");
+expect(embeddings.includes("EmbeddingProviderDefinition"), "Embedding provider abstraction contract must remain explicit");
 
 if (failures.length) {
   console.error("AI provider bypass inventory QA failed:\n- " + failures.join("\n- "));
