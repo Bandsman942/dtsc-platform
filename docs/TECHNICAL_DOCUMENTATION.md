@@ -381,6 +381,20 @@ La PR peut viser `PROFESSIONAL_READY` uniquement après Quality Gates, revue, fu
 
 La couche `lib/ai/` fournit types, catalogue, classification, abstraction fournisseur, orchestration/fallback, erreurs stables, prompts versionnés, registre d’outils, i18n des erreurs, coûts et observabilité. Les routes existantes `/api/chat/v2` et `/api/enterprise/ai/chat` l’utilisent sans recréer leurs historiques. La migration `20260804173000_standard_ai_governance_iteration_05` ajoute les appels modèle et les preuves/transitions de maturité, plus les métadonnées linguistiques de connaissance. La console `/admin/erp-readiness` devient la surface canonique ERP + standards en matrice/Kanban.
 
+### DTSC AI 00/08 — Policy Governance
+
+Le Policy Engine `lib/ai/policy.ts` rend opposables avant provider le contexte, le plan effectif résolu côté serveur, les capacités requises, la fenêtre de contexte et la classification des données. Un provider inconnu est considéré externe jusqu'à certification ; `SECRET` n'est jamais transmis à un provider externe et les classifications sensibles externes sont refusées par défaut.
+
+### DTSC AI 01/08 — Provider abstraction et streaming normalisé
+
+AI01 découple le runtime applicatif des événements natifs OpenAI Responses. `lib/ai/provider.ts` devient la façade canonique d'adapters ; `lib/ai/providers/openai-responses.ts` contient le transport HTTP/SSE et traduit les événements natifs vers `AiProviderEvent` (`TEXT_DELTA`, `TOOL_CALL_DELTA`, `TOOL_CALL_COMPLETED`, `USAGE`, `COMPLETED`, `ERROR`). `lib/ai/stream.ts` consomme uniquement ce contrat normalisé.
+
+Les protocoles `OPENAI_CHAT_COMPLETIONS` et `OPENROUTER_CHAT_COMPLETIONS` sont préparés dans le type et le catalogue, mais restent fail-closed tant qu'un adapter certifié n'est pas livré. OpenRouter n'est donc pas activé par AI01.
+
+La cancellation est propagée au reader provider. Un flux qui se termine sans `COMPLETED` devient `STREAM_INTERRUPTED`; un événement provider `ERROR` arrête le flux amont. La migration additive `20260810065000_ai_provider_attempt_observability` introduit `AiProviderAttempt` pour tracer l'ordre, le provider/modèle, le statut, le reason code et la durée de chaque tentative sans prompt, message ou secret. `AiModelCall` reste l'unité applicative de consommation ; plusieurs tentatives techniques ne créent pas un double comptage quota/coût.
+
+Les gates `qa-standard-ai-provider-adapters`, `qa-standard-ai-normalized-stream`, `qa-standard-ai-stream-cancellation` et `qa-standard-ai-provider-attempts` sont raccordées à l'agrégateur de l'itération 05 et doivent rester vertes avec AI00, la régression ERP, type-check, lint, migrations et build.
+
 ## Modules standards — Itération 06 — Gouvernance d’entreprise (2026-08-05)
 
 L’itération 06 professionnalise Budgets, Rapports et Administration entreprise sans dupliquer les moteurs ERP. Les budgets utilisent des versions additives, scénarios, gel, prévisions et alertes ; les métriques communes sont définies dans `lib/enterprise/reporting/metric-registry.ts`. L’administration ajoute rôles d’organisation, simulation de permissions, politiques de sécurité, protection du dernier administrateur, hiérarchie des départements et audit enrichi. La migration `20260805003000_standard_enterprise_governance_iteration_06` est additive. Les guides natifs sont dans `lib/user-guides/iteration06-guides.ts` et la QA agrégée est `pnpm qa:standard-modules-iteration-06`.

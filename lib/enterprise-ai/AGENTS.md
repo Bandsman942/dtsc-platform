@@ -15,7 +15,8 @@
 ## Gouvernance IA itération 05
 
 - Les modèles entreprise sont résolus par `lib/ai/catalog.ts` et `lib/ai/orchestrator.ts`, jamais par un identifiant client arbitraire.
-- Toute tentative fournisseur crée une observation `AiModelCall`; ne jamais journaliser le contenu sensible complet.
+- Chaque appel applicatif crée une observation `AiModelCall`; chaque tentative provider/modèle crée une observation `AiProviderAttempt`. Aucun de ces journaux ne stocke le contenu sensible complet.
+- Les consommateurs métier utilisent le flux normalisé `AiProviderEvent`; les noms d'événements natifs d'un provider restent confinés à son adapter.
 - Les sources et fragments conservent leur langue source. Les citations persistées transportent langue, page et section lorsqu'elles existent.
 - Les outils actifs restent en lecture ou préparation tant qu'une mutation canonique, confirmée et idempotente n'a pas été livrée.
 - Les erreurs fournisseur sont normalisées en `reasonCode` stable puis traduites par la couche de présentation.

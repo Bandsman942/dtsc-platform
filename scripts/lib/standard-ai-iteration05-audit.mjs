@@ -28,11 +28,14 @@ export function runStandardAiIteration05Audit(scope = "all") {
       requireText("lib/ai/types.ts", ["AiModelDefinition", "AiProviderDefinition", "costProfile", "dataPolicyCode"]);
     },
     "provider-configuration": () => {
-      requireText("lib/ai/provider.ts", ["apiKeyEnv", "process.env[provider.apiKeyEnv]", "OPENAI_RESPONSES", "store: false"]);
-      requireNoText("lib/ai/provider.ts", ["OPENAI_API_KEY =", "sk-"]);
+      requireText("lib/ai/provider.ts", ["createProviderEventStream", "createOpenAiResponsesEventStream", "OPENAI_RESPONSES", "Unsupported AI provider protocol"]);
+      requireNoText("lib/ai/provider.ts", ["OPENAI_API_KEY =", "sk-", "/responses"]);
+      requireText("lib/ai/providers/openai-responses.ts", ["apiKeyEnv", "process.env[provider.apiKeyEnv]", "store: false", "/responses"]);
+      requireNoText("lib/ai/providers/openai-responses.ts", ["OPENAI_API_KEY =", "sk-"]);
     },
     orchestration: () => {
-      requireText("lib/ai/orchestrator.ts", ["POLICY_CAPABILITY_PLAN_DATA_V1", "selectCandidates", "fallbackUsed", "createProviderResponseStream"]);
+      requireText("lib/ai/orchestrator.ts", ["POLICY_CAPABILITY_PLAN_DATA_V1", "selectCandidates", "fallbackUsed", "createProviderEventStream", "observeAiProviderAttemptStream"]);
+      requireNoText("lib/ai/orchestrator.ts", ["response.output_text.delta", "response.completed"]);
       requireText("app/api/chat/v2/route.ts", ["routeAiStream", "classifyAiTask", "X-AI-Provider"]);
       requireText("app/api/enterprise/ai/chat/route.ts", ["routeAiStream", "context: \"ORGANIZATION\"", "X-AI-Fallback"]);
     },

@@ -2,6 +2,25 @@
 
 Ce document suit en français professionnel les améliorations apportées à DTSC Platform. Chaque entrée doit préciser ce qui a été ajouté, modifié, corrigé, supprimé ou amélioré afin de conserver une lecture claire de l'évolution du produit.
 
+## 2026-08-10 — DTSC AI 01/08 : abstraction provider et streaming normalisé
+
+### Ajouté
+
+- Ajout du contrat provider canonique `AiProviderEvent` et de l'adapter dédié OpenAI Responses afin que les routes métier et le consumer de streaming ne dépendent plus des noms d'événements natifs OpenAI.
+- Ajout de `AiProviderAttempt` et de la migration additive `20260810065000_ai_provider_attempt_observability` pour tracer chaque tentative provider/modèle sans prompt, message ni secret.
+- Ajout des gates permanents AI01 pour adapters, flux normalisé, cancellation, fin de stream incomplète et observabilité des tentatives.
+
+### Amélioré
+
+- Le provider runtime est désormais une façade fail-closed préparant les futurs protocoles Chat Completions/OpenRouter sans les activer avant certification.
+- La cancellation est propagée jusqu'au transport provider, un événement `ERROR` arrête le flux amont et une fermeture sans `COMPLETED` devient `STREAM_INTERRUPTED` au lieu d'un faux succès.
+- `AiModelCall` reste l'unité applicative de consommation et de coût ; les `AiProviderAttempt` techniques ne créent aucun double comptage quota/facturation.
+
+### Sécurisé
+
+- Les règles AI00 de plan, capacités, contexte et classification restent opposables avant provider ; aucun nouveau provider ne devient implicitement fiable ou actif par simple configuration.
+- Les tentatives conservent `organizationId` pour l'observabilité tenant-scoped sans persister le contenu sensible des conversations.
+
 ## 2026-06-23
 
 ### Corrigé
@@ -213,13 +232,13 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout des modèles et de la migration additive `PharmacySupplier`, `PharmacySupplierProduct`, `PharmacyReplenishmentRequest`, `PharmacyPurchaseOrder`, `PharmacyPurchaseOrderLine`, `PharmacySupplierDocument` et `PharmacyPurchaseAlert`.
 - Ajout des routes privées achats pour créer les référentiels, gérer les transitions de validation et préparer une réception brouillon depuis une commande.
 - Ajout du module dédié Pharmacie > Ordonnances / prescriptions avec réception structurée, lignes prescrites référencées ou libres, rapprochement produits, substitution générique traçable, contrôle pharmacien, dispensation, documents et audit.
-- Ajout des modèles et de la migration additive `PharmacyPrescription`, `PharmacyPrescriptionLine`, `PharmacyPrescriptionDocument` et `PharmacyPrescriptionAuditEvent`.
+- Ajout des modèles `PharmacyPrescription`, `PharmacyPrescriptionLine`, `PharmacyPrescriptionDocument` et `PharmacyPrescriptionAuditEvent`.
 - Ajout des routes privées de création, consultation, soumission, validation, rejet, demande d'information, rapprochement, substitution, indisponibilité, dispensation, archivage et génération de vente brouillon.
 - Ajout du module dédié Pharmacie > Sorties, ventes & dispensation avec panier multi-produit, lots vendables FEFO, validation pharmacien, paiements, annulations, remboursements, anomalies et mouvements de stock.
-- Ajout des modèles et de la migration additive `PharmacySale`, `PharmacySaleLine`, `PharmacySaleRefund`, `PharmacySaleRefundLine` et `PharmacySaleAnomaly`.
+- Ajout des modèles `PharmacySale`, `PharmacySaleLine`, `PharmacySaleRefund`, `PharmacySaleRefundLine` et `PharmacySaleAnomaly`.
 - Ajout des routes privées de création, consultation, confirmation, validation pharmacien, annulation et remboursement des ventes.
 - Ajout du module dédié Pharmacie > Entrées stock / réceptions avec tableau de bord, réceptions fournisseurs, lignes, réceptions partielles, écarts, documents et historique.
-- Ajout des modèles et de la migration additive `PharmacyReceipt`, `PharmacyReceiptLine`, `PharmacyReceiptBatch`, `PharmacyReceiptDiscrepancy` et `PharmacyReceiptDocument`.
+- Ajout des modèles `PharmacyReceipt`, `PharmacyReceiptLine`, `PharmacyReceiptBatch`, `PharmacyReceiptDiscrepancy` et `PharmacyReceiptDocument`.
 - Ajout des routes privées de création, modification de brouillon, soumission, validation, rejet, annulation et traitement des écarts de réception.
 
 ### Amélioré
@@ -546,7 +565,7 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - Ajout des routes sécurisées `GET/POST /api/calendar`, `GET/POST /api/calendar/availabilities` et `GET/PATCH/DELETE /api/calendar/events/[id]`.
 - Ajout d'une synchronisation COO vers le calendrier interne pour les tâches datées et réunions datées créées depuis l'Administration COO.
 - Ajout d'une route sécurisée `POST /api/announcements/images` pour téléverser les images d'annonces via Supabase Storage, avec validation type/taille, rate limiting, audit log et URL publique contrôlée.
-- Ajout de pièces jointes persistées sur les demandes collaboratives (`CollaboratorRequest.attachments`) avec migration `20260521152000_collaborator_request_attachments`.
+- Ajout de pièces jointes persistées sur les demandes collaboratives (`CollaboratorRequest.attachments`) avec migration additive `20260521152000_collaborator_request_attachments`.
 - Ajout de réactions persistées `Like`/`Dislike` sur les réponses assistant du chatbot privé, avec migration `20260521113000_message_feedback` et route sécurisée `PATCH /api/conversations/messages/[id]/feedback`.
 - Ajout d'un historique d'activité compact dans le Profil à partir des notifications, conversations, tickets support et messages de groupe réels de l'utilisateur.
 - Ajout de filtres avancés dans les notifications: toutes, non lues, mentions, appels, groupes, administration, workflows, juridique, RH, système et critiques.
