@@ -29,8 +29,19 @@ check(dock.includes('locale === "en"') && dock.includes("Mode agent") && dock.in
 check(contextRoute.includes("getSession") && contextRoute.includes("getActiveOrganizationId"), "Enterprise agent UI context must be resolved server-side from the authenticated session");
 check(toolCancelRoute.includes("aiAgentRun.updateMany") && toolCancelRoute.includes('status: "CANCELLED"') && toolCancelRoute.includes('reasonCode: "CONFIRMATION_CANCELLED"'), "Rejecting a pending mutation must close the linked waiting agent run");
 
-check(guideFr.includes("# Guide utilisateur — Mode Agent DTSC") && guideFr.includes("Validation d’une action") && guideFr.includes("Annuler"), "French AI08 user guide must document Agent Mode, structural approval and cancellation");
-check(guideEn.includes("# User Guide — DTSC Agent Mode") && guideEn.includes("Approve an action") && guideEn.includes("Cancel"), "English AI08 user guide must document Agent Mode, structural approval and cancellation");
+const guideContractHeadings = [
+  "## Objectif et périmètre",
+  "## Accès et permissions",
+  "## Statuts, validations et traçabilité",
+  "## Sécurité et confidentialité",
+  "## Dépannage",
+];
+check(guideFr.startsWith("# Guide utilisateur — Mode Agent DTSC") && guideFr.includes("Contrat de guide DTSC v2") && guideFr.includes("Validation d’une action") && guideFr.includes("Annuler"), "French AI08 user guide must follow the DTSC v2 guide contract and document structural approval/cancellation");
+check(guideEn.startsWith("# Guide utilisateur — DTSC Agent Mode (EN)") && guideEn.includes("Contrat de guide DTSC v2") && guideEn.includes("Approve an action") && guideEn.includes("Cancel"), "English AI08 user guide must follow the DTSC v2 guide contract and document structural approval/cancellation");
+for (const heading of guideContractHeadings) {
+  check(guideFr.includes(heading), `French AI08 guide missing canonical heading: ${heading}`);
+  check(guideEn.includes(heading), `English AI08 guide missing canonical heading: ${heading}`);
+}
 check(runtimeDoc.includes("## UX agent opt-in") && runtimeDoc.includes("CONFIRMATION_CANCELLED"), "Agent Runtime standard must document the opt-in UX and rejection semantics");
 check(runbook.includes("## Rollback") && runbook.includes("## Post-deploy verification") && runbook.includes("COMMERCIAL_READY"), "Agent runbook must cover rollback, production verification and commercial-readiness evidence");
 check(changelog.includes("## 2026-08-10 — DTSC AI 08/08 : Agent Runtime contrôlé") && changelog.includes("non `COMMERCIAL_READY`"), "Central changelog must record AI08 without claiming premature commercial readiness");
