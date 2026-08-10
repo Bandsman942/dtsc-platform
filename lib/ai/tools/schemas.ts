@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getMcpBindingInputSchema, getMcpBindingOutputSchema } from "@/lib/ai/mcp/bindings";
 
 const emptyInput = z.object({}).strict();
 const pharmacyResult = z.object({
@@ -41,9 +42,9 @@ export const AI_TOOL_OUTPUT_SCHEMAS = {
 export type AiToolSchemaCode = keyof typeof AI_TOOL_INPUT_SCHEMAS;
 
 export function getAiToolInputSchema(code: string) {
-  return AI_TOOL_INPUT_SCHEMAS[code as AiToolSchemaCode] || null;
+  return AI_TOOL_INPUT_SCHEMAS[code as AiToolSchemaCode] || getMcpBindingInputSchema(code);
 }
 
 export function getAiToolOutputSchema(code: string) {
-  return AI_TOOL_OUTPUT_SCHEMAS[code as AiToolSchemaCode] || null;
+  return AI_TOOL_OUTPUT_SCHEMAS[code as AiToolSchemaCode] || getMcpBindingOutputSchema(code);
 }
