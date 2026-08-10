@@ -6,7 +6,7 @@
 
 La boîte à outils regroupe des notes persistantes, des pense-bêtes et une calculatrice professionnelle accessibles depuis le bouton d’actions flottantes. Les notes restent privées à leur auteur et conservent le module dans lequel elles ont été créées.
 
-## Accès et bouton flottant
+## Accès et permissions
 
 - Ouvrez le bouton flottant unique puis choisissez **Boîte à outils professionnelle**.
 - Sur les workspaces privés, le bouton s’efface lorsque vous remontez dans le contenu et réapparaît lorsque vous redescendez, afin de libérer l’espace de lecture sans perdre l’accès aux outils.
@@ -39,11 +39,11 @@ La boîte à outils regroupe des notes persistantes, des pense-bêtes et une cal
 - Les titres, couleurs, polices, tailles, alignements, listes, espacements, citations, code et liens restent visibles dans l’aperçu sans passer par **Modifier**.
 - Le contenu est normalisé côté serveur avant persistance et les scripts, iframes ou attributs dangereux ne sont pas acceptés.
 
-## Calculatrice standard et scientifique
+## Calculatrice scientifique et standard
 
 - Le mode **Standard** utilise une disposition conventionnelle : `AC`, changement de signe, pourcentage, division, chiffres, multiplication, soustraction, addition, décimale et `=`.
 - Le pourcentage est appliqué comme opérateur postfixé (`25%` = `0,25`).
-- Le mode **Scientifique** ajoute `sin`, `cos`, `tan`, `sqrt`, `log`, `ln`, `abs`, `pow`, les constantes `pi` et `e`, les puissances et parenthèses.
+- La **Calculatrice scientifique** ajoute `sin`, `cos`, `tan`, `sqrt`, `log`, `ln`, `abs`, `pow`, les constantes `pi` et `e`, les puissances et parenthèses.
 - Les fonctions trigonométriques utilisent les radians.
 - L’évaluation reste locale et sûre : aucun `eval`, `new Function` ou service externe n’est utilisé.
 
