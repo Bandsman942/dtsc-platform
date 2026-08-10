@@ -23,7 +23,7 @@ La vue **Ajouter un contact** réutilise le répertoire sécurisé de collaborat
 
 Aucun carnet d’adresses parallèle n’est créé : un contact apparaît uniquement après acceptation du workflow de collaboration existant.
 
-## Contacts rapides dans Discussions
+## Mes contacts — accès rapide dans Discussions
 
 Les contacts acceptés sont affichés immédiatement sous la recherche et les filtres sous forme d’un **rail compact d’avatars**. Le rail se parcourt horizontalement sur mobile sans provoquer de débordement global de la page.
 
