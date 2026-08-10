@@ -33,11 +33,33 @@ Le mode agent reste séparé des routes historiques afin que le comportement exi
 
 - `POST /api/chat/agent` : agent interactif du chatbot global ;
 - `POST /api/enterprise/ai/agent` : agent interactif entreprise ;
+- `GET /api/ai/agent/context` : contexte actif minimal, dérivé de la session, pour initialiser l’UX Enterprise ;
 - `GET /api/ai/agent/runs/:id` : état sûr du run ;
 - `POST /api/ai/agent/runs/:id/cancel` : cancellation ;
 - `POST /api/ai/agent/runs/:id/resume` : reprise après confirmation structurelle.
 
 Les routes historiques `/api/chat/v2` et `/api/enterprise/ai/chat` restent indépendantes du runtime agentique.
+
+## UX agent opt-in
+
+`components/chat/ai-agent-run-dock.tsx` fournit une surface commune au chatbot global et à l’assistant entreprise. Elle est montée par `AssistantImmersiveWorkspaceShell` et reste opt-in : aucune conversation historique n’est automatiquement basculée vers le runtime agentique.
+
+L’UX expose uniquement des éléments auditables et utiles :
+
+- état du run (`RUNNING`, `WAITING_CONFIRMATION`, `READY_TO_RESUME`, terminal) ;
+- progression par étapes sans raisonnement privé ;
+- outils effectivement invoqués ;
+- consommation tokens/coût estimé et plafonds du run ;
+- réponse finale streamée ;
+- confirmation structurée ;
+- refus ;
+- annulation ;
+- reprise canonique après confirmation ;
+- reason codes techniques utiles sans prompt ni arguments sensibles.
+
+Le panneau est responsive, tient compte de `safe-area-inset-bottom` sur mobile et fournit ses libellés en français et en anglais. La chaîne de pensée privée n’est jamais affichée.
+
+Pour Enterprise, l’`organizationId` utilisé par l’UI est relu via `/api/ai/agent/context` depuis la session authentifiée ; la valeur n’est jamais déduite d’un texte ou d’un paramètre libre de modèle.
 
 ## Budgets serveur
 
@@ -84,6 +106,8 @@ RUNNING
 ```
 
 Le modèle ne peut jamais se confirmer lui-même. Des mots tels que `oui`, `yes`, `ok` ou `vas-y` ne constituent aucune autorité de mutation.
+
+Un refus via `/api/ai/tools/cancel` annule la confirmation, efface les arguments persistés de la proposition et clôt tout `AiAgentRun` lié encore en `WAITING_CONFIRMATION` ou `READY_TO_RESUME` avec `CONFIRMATION_CANCELLED`. Un run ne reste donc pas suspendu après un refus humain explicite.
 
 ## Reprise canonique du même run
 
@@ -136,7 +160,7 @@ Un run interactif observe :
 - une demande de cancellation persistée ;
 - une déconnexion du stream.
 
-L’annulation est propagée au provider. Un run suspendu en `WAITING_CONFIRMATION` ou `READY_TO_RESUME` est clôturé immédiatement si l’utilisateur annule.
+L’annulation est propagée au provider. Un run suspendu en `WAITING_CONFIRMATION` ou `READY_TO_RESUME` est clôturé immédiatement si l’utilisateur annule ou refuse la confirmation structurelle.
 
 Une mutation déjà confirmée/exécutée reste auditée et réelle : la cancellation du run ne prétend jamais l’effacer.
 
@@ -150,7 +174,7 @@ AI08 n’ajoute aucun retry automatique de tool call. Les fallbacks provider res
 
 `AiAgentStep` conserve seulement les métadonnées nécessaires à l’audit d’exécution : type d’étape, statut, code outil, provider/modèle, tokens, coût, durée et reason code.
 
-L’API de statut n’expose pas `metadataJson`, arguments outils, prompts ou raisonnement privé.
+L’API de statut n’expose pas `metadataJson`, arguments outils, prompts ou raisonnement privé. L’UI consomme ce payload sûr plutôt que des traces internes du modèle.
 
 ## Durable / background agent
 
@@ -166,16 +190,19 @@ Les gates Standard AI incluent désormais :
 - budgets ;
 - confirmation ;
 - reprise canonique ;
+- UX agent FR/EN/mobile ;
 - idempotence ;
 - cancellation ;
 - isolation tenant ;
 - domaines sensibles.
 
+`qa-standard-ai-agent-ui.mjs` exige notamment que les deux surfaces utilisent les endpoints certifiés, que le contexte Enterprise soit résolu depuis la session, que l’UI expose coûts/outils/annulation/reprise, qu’elle ne présente pas de chaîne de pensée et qu’un refus de confirmation ferme le run lié.
+
 La reprise QA exige notamment : aucun `req.json()` dans la route resume, aucun second `AiAgentRun`, `AiToolExecution SUCCESS` côté serveur, claim atomique, quotas actuels et delta d’usage.
 
 ## Commercial readiness
 
-Le runtime et des Quality Gates vertes ne suffisent pas à `COMMERCIAL_READY`. Il faut encore, sur un SHA `main` Production :
+Le runtime, l’UX et des Quality Gates vertes ne suffisent pas à `COMMERCIAL_READY`. Il faut encore, sur un SHA `main` Production :
 
 - E2E chatbot agent ;
 - E2E assistant entreprise ;
