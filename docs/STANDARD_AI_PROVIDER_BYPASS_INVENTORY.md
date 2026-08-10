@@ -1,6 +1,6 @@
 # DTSC AI — inventaire des bypass providers
 
-Statut : programme DTSC AI, actualisé RAG V2 / issue #184  
+Statut : programme DTSC AI, actualisé RAG V2 / issue #184
 Autorité cible : `lib/ai/*`
 
 ## Objet
