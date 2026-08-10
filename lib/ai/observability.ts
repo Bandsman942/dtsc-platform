@@ -169,7 +169,13 @@ export async function startAiModelCall({
       promptVersion: promptVersion || null,
       fallbackUsed,
       retryCount: Math.max((attempts as Array<unknown>).length - 1, 0),
-      metadataJson: jsonValue({ attempts, selectionReason: selection.selectionReason, requestedModel: selection.requestedModel }),
+      metadataJson: jsonValue({
+        attempts,
+        selectionReason: selection.selectionReason,
+        selectionScore: selection.selectionScore ?? null,
+        selectionCriteria: selection.selectionCriteria ?? null,
+        requestedModel: selection.requestedModel,
+      }),
     },
   });
 }
