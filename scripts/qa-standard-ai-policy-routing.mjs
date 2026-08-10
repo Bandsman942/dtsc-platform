@@ -10,6 +10,8 @@ const policy = read("lib/ai/policy.ts");
 const orchestrator = read("lib/ai/orchestrator.ts");
 const catalog = read("lib/ai/catalog.ts");
 const types = read("lib/ai/types.ts");
+const globalChatRoute = read("app/api/chat/v2/route.ts");
+const enterpriseChatRoute = read("app/api/enterprise/ai/chat/route.ts");
 
 expect(types.includes("dataClassifications?: AiDataClassification[]"), "AiRouteRequest must carry data classifications");
 expect(types.includes("allowSensitiveExternalModel?: boolean"), "AiRouteRequest must carry the explicit sensitive-data policy flag");
@@ -28,6 +30,21 @@ expect(orchestrator.includes('return ["CONFIDENTIAL"]'), "Organization-bound AI 
 expect(orchestrator.includes("allowSensitiveExternalModel: false"), "AI00 must not permit a caller to weaken sensitive external policy");
 expect(orchestrator.includes('strategyCode: "POLICY_CAPABILITY_PLAN_DATA_V1"'), "Routing strategy must expose the policy/capability/plan/data strategy code");
 expect(orchestrator.includes("if (!(error instanceof AiProviderError) || !error.retryable) throw error"), "Fallback must only continue for retryable provider failures");
+
+for (const [label, route] of [
+  ["global chat", globalChatRoute],
+  ["enterprise chat", enterpriseChatRoute],
+]) {
+  expect(route.includes("AiProviderError"), `${label} must recognize typed AI routing errors`);
+  expect(
+    route.includes("error instanceof AiProviderError ? error.statusCode : 502"),
+    `${label} must preserve policy/provider HTTP status instead of forcing 502`,
+  );
+  expect(
+    route.includes("NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode })"),
+    `${label} must return the resolved AI error status to the client`,
+  );
+}
 
 if (failures.length) {
   console.error("[standard-ai-policy-routing] FAILED");
