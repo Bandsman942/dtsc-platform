@@ -435,7 +435,6 @@ model KnowledgeDocument {
   @@index([userId, organizationId, status, createdAt])
   @@index([storageBucket, storagePath])
   @@index([createdAt])
-  @@index([id, indexVersion])
 }
 
 model KnowledgeChunk {
@@ -763,7 +762,6 @@ model EnterpriseAiKnowledgeSource {
   @@index([organizationId, sectorCode, moduleCode])
   @@index([organizationId, confidentiality, status])
   @@index([storageBucket, storagePath])
-  @@index([organizationId, indexVersion])
 }
 
 model EnterpriseAiKnowledgeChunk {
