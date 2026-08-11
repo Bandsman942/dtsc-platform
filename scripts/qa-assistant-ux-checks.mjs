@@ -26,6 +26,7 @@ const enterpriseMessage = read("app/api/enterprise/ai/messages/[id]/route.ts");
 const connectedAppsCatalog = read("lib/ai/mcp/app-catalog.ts");
 const connectedAppsPage = read("app/ai/apps/page.tsx");
 const collaboratorComposer = read("components/chat/VoiceConversationComposer.tsx");
+const collaboratorI18n = read("lib/collaboration-experience-i18n.ts");
 const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
 const vercel = read("vercel.json");
 
@@ -79,8 +80,8 @@ assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCata
 assert(connectedAppsPage.includes("Security first") && connectedAppsPage.includes("certification de sécurité DTSC"), "Connected applications UI must explain the security boundary in human language");
 assert(connectedAppsPage.includes("runtime OAuth utilisateur") && connectedAppsPage.includes("Non activé"), "Connected applications UI must not fabricate a personal OAuth connection that the runtime does not yet provide");
 
-assert(collaboratorComposer.includes("Copilote IA DTSC") && collaboratorComposer.includes("PROPOSE_REPLY"), "Mes collaborateurs composer must expose the DTSC AI drafting copilot");
-assert(collaboratorComposer.includes("vous décidez toujours de l’envoi") && collaboratorComposer.includes("n’envoie aucun message à votre place"), "Collaboration AI drafting must keep explicit user control over sending");
+assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes('aiCopilot: "Copilote IA DTSC"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the shared i18n contract");
+assert(collaboratorComposer.includes('aiT("aiPrivacyNote")') && collaboratorI18n.includes("vous décidez toujours de l’envoi") && collaboratorI18n.includes("n’envoie aucun message à votre place"), "Collaboration AI drafting must keep explicit user control over sending in the FR/EN i18n source of truth");
 assert(collaboratorAiCompose.includes("routeAiStream") && collaboratorAiCompose.includes("prepareAiTurn"), "Collaboration AI drafting must use the canonical DTSC AI runtime");
 assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCompose.includes("rateLimit") && collaboratorAiCompose.includes("getSession"), "Collaboration AI drafting must keep same-origin, session and rate-limit protections");
 assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");
