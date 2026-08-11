@@ -1,16 +1,13 @@
 import type { EnterpriseAiAccess } from "@/lib/enterprise-ai/access";
 import type { EnterpriseAiKnowledgeCitation } from "@/lib/enterprise-ai/knowledge";
 import type { EnterpriseAiToolResult } from "@/lib/enterprise-ai/pharmacy-tools";
-import {
-  getEnterpriseModuleLabel,
-  listEnterpriseModuleDefinitions,
-} from "@/lib/enterprise/module-registry";
+import { listEnterpriseModuleDefinitions } from "@/lib/enterprise/module-registry";
 
 function jsonBlock(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-function buildModuleVocabulary(locale: string, sectorCode: string | null) {
+function buildModuleVocabulary(sectorCode: string | null) {
   const definitions = listEnterpriseModuleDefinitions({ statuses: ["ACTIVE", "BETA"] })
     .filter((definition) =>
       definition.applicableSectors === "ALL" ||
@@ -20,7 +17,8 @@ function buildModuleVocabulary(locale: string, sectorCode: string | null) {
 
   return definitions.map((definition) => ({
     internalCode: definition.code,
-    userFacingLabel: getEnterpriseModuleLabel(definition, locale),
+    labelFr: definition.labelFr,
+    labelEn: definition.labelEn,
   }));
 }
 
@@ -31,15 +29,13 @@ export function buildEnterpriseAiInstructions(
     assistantProfileVersion?: string | null;
     cagContent?: string | null;
     cagVersion?: string | null;
-    locale?: string | null;
   },
 ) {
-  const locale = runtime?.locale === "en" ? "en" : "fr";
   const sector = access.sectorCode || "GENERAL";
   const sectorContext = runtime?.cagContent?.trim()
     ? runtime.cagContent
     : "Contexte sectoriel non disponible: répondre avec prudence, sans inventer de données et en demandant une validation humaine pour toute action métier.";
-  const moduleVocabulary = buildModuleVocabulary(locale, access.sectorCode);
+  const moduleVocabulary = buildModuleVocabulary(access.sectorCode);
 
   return [
     "Tu es l'IA Assistant Entreprise de DTSC Platform.",
@@ -50,16 +46,16 @@ export function buildEnterpriseAiInstructions(
     "Contexte secteur PHARMACY: lorsqu'il est actif, ses données et paramètres viennent exclusivement du CAG versionné DTSC; ne les invente jamais.",
     "Respecter FEFO pour PHARMACY lorsque ce contexte est actif; une vente, sortie, validation ou autre mutation reste soumise aux outils et workflows métier autorisés.",
     "Tu refuses toute demande de fuite multi-tenant, de données d'une autre entreprise, de secret, de clé API, de mot de passe ou de contournement d'autorisation.",
-    locale === "en" ? "Answer in English unless the user explicitly asks for another language." : "Réponds en français par défaut, avec un ton professionnel, clair et actionnable.",
+    "Réponds dans la langue demandée par l'instruction linguistique du runtime, avec un ton professionnel, clair et actionnable.",
     "",
     "CONTRAT STRICT DE PRÉSENTATION DES MODULES:",
     "- Les codes internes servent uniquement au raisonnement et ne doivent jamais être affichés dans une réponse métier normale.",
-    "- Quand un code interne de module apparaît dans une source, un résultat d'outil, l'historique ou la question, remplace-le dans la réponse par le libellé UX canonique correspondant ci-dessous.",
+    "- Quand un code interne de module apparaît dans une source, un résultat d'outil, l'historique ou la question, remplace-le dans la réponse par le libellé UX canonique correspondant ci-dessous, en choisissant labelFr pour le français ou labelEn pour l'anglais.",
     "- N'affiche jamais un nom de module avec des underscores. Ne montre notamment jamais FINANCE_ACCOUNTING, FINANCE_CASH, FINANCE_PAYABLES ou FINANCE_RECEIVABLES à l'utilisateur.",
     "- N'invente pas un nom fonctionnel différent du registre. Si un code ne figure pas dans le vocabulaire canonique, décris son effet métier en langage naturel sans reproduire le code brut.",
     "- Les noms de tables, champs, enums, routes, variables d'environnement et codes d'outils restent également invisibles sauf diagnostic technique explicitement demandé et autorisé.",
     "",
-    "VOCABULAIRE CANONIQUE DES MODULES (interne -> libellé visible):",
+    "VOCABULAIRE CANONIQUE DES MODULES (strictement interne; ne jamais recopier internalCode dans la réponse):",
     jsonBlock(moduleVocabulary),
     "",
     "FORMAT DE RÉPONSE ENRICHI:",
