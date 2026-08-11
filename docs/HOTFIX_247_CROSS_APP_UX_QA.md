@@ -1,6 +1,6 @@
 # Hotfix #247 — intégrité UX transverse, Shop, notifications et deep links IA
 
-Statut : **implémentation terminée ; Quality Gates automatiques validées ; validation E2E propriétaire confirmée le 11 août 2026 ; fusion autorisée sous réserve du dernier cycle CI déclenché par cette trace documentaire**.
+Statut : **implémentation terminée ; Quality Gates automatiques précédemment validées ; validation E2E propriétaire confirmée le 11 août 2026 ; fusion autorisée sous réserve du dernier cycle CI déclenché par cette trace documentaire**.
 
 ## Objectif
 
@@ -160,9 +160,9 @@ Les contrats IA existants sont également renforcés dans `qa-standard-ai-contex
 
 ## Preuve de validation E2E propriétaire
 
-Le **11 août 2026**, après exécution des vérifications E2E réelles prévues ci-dessus, le propriétaire du produit a fourni la validation globale explicite : **« E2E OK, fusionne »**.
+Le **11 août 2026**, le propriétaire du produit a fourni la validation globale explicite **« E2E OK, fusionne »** pour le plan E2E de ce document.
 
-Cette trace signifie que la validation propriétaire exigée par `docs/CONTRIBUTING.md` est acquise pour ce hotfix. Elle ne remplace pas les Quality Gates automatiques : le commit documentaire qui consigne cette preuve doit lui-même rester vert avant la fusion.
+Cette trace consigne l’approbation propriétaire exigée par `docs/CONTRIBUTING.md`. Elle ne prétend pas ajouter des observations scénario par scénario au-delà de cette confirmation globale. Elle ne remplace pas non plus les Quality Gates automatiques : le commit documentaire qui consigne cette preuve doit lui-même rester vert avant la fusion.
 
 ## Base de données
 
