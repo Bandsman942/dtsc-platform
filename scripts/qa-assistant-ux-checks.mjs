@@ -12,6 +12,7 @@ const oauthMigration = read("prisma/migrations/20260811010000_add_mcp_user_oauth
 const helper = read("lib/assistant-conversation-preferences.ts");
 const promptPolicy = read("lib/ai/prompts.ts");
 const productAwareness = read("lib/ai/product-awareness.ts");
+const productAwarenessPolicy = read("docs/AI_PRODUCT_AWARENESS_POLICY.md");
 const chatPage = read("app/chat/page.tsx");
 const chatWorkspace = read("components/chat/chat-workspace-v2.tsx");
 const legacyChatWorkspace = read("components/chat/chat-workspace.tsx");
@@ -69,6 +70,7 @@ assert(productAwareness.includes("docs\", \"CHANGELOG.md") && productAwareness.i
 assert(productAwareness.includes("USER_FACING_SECTIONS") && productAwareness.includes("TECHNICAL_ONLY") && productAwareness.includes("MAX_ITEMS = 28"), "Product awareness must stay bounded and exclude technical-only release notes");
 assert(nextConfig.includes("outputFileTracingIncludes") && nextConfig.includes("./docs/CHANGELOG.md") && nextConfig.includes("./docs/changelog/*.md"), "Product awareness release sources must be included in production server traces");
 assert(releaseFragment.includes("Les IA DTSC reçoivent automatiquement un contexte des nouveautés produit récentes"), "The current release must document automatic AI product awareness");
+assert(productAwarenessPolicy.includes("Toute PR qui ajoute, modifie ou retire un comportement visible par un utilisateur") && productAwarenessPolicy.includes("buildLanguageInstruction()") && productAwarenessPolicy.includes("qa:assistant-ux"), "Automatic AI product awareness must be a documented durable contribution policy");
 
 assert(chatPage.includes("ChatWorkspaceV2") && chatPage.includes("listCatalogAiModelsForUi"), "Chat page must use the new assistant workspace with the canonical model catalog");
 assert(assistantUi.includes("<textarea") && assistantUi.includes("requestSubmit"), "Assistant composer must be multiline and keyboard accessible");
@@ -76,7 +78,7 @@ assert(assistantUi.includes("Context and sources") && assistantUi.includes("Conv
 assert(assistantUi.includes("/ai/apps") && assistantUi.includes("Applications connectées"), "Assistant composer and settings must expose the connected applications center");
 assert(chatWorkspace.includes("PINNED") && chatWorkspace.includes("ARCHIVED") && chatWorkspace.includes("Exporter en Markdown"), "Chatbot contextual menu must support pin/archive/export");
 assert(chatWorkspace.includes("useCompanyContext") && chatWorkspace.includes("useKnowledge"), "Chatbot must expose real company/document context toggles");
-assert(chatWorkspace.includes('import { Streamdown } from "streamdown"') && chatWorkspace.includes("<Streamdown") && chatWorkspace.includes("dtsc-assistant-markdown"), "General Chatbot v2 must render assistant output with the rich streaming Markdown surface");
+assert(chatWorkspace.includes('import { Streamdown } from "streamdown"') && chatWorkspace.includes("<Streamdown") && assistantUi.includes("dtsc-assistant-markdown"), "General Chatbot v2 must render assistant output with the shared rich streaming Markdown surface");
 assert(legacyChatWorkspace.includes('import { Streamdown } from "streamdown"') && legacyChatWorkspace.includes("<Streamdown") && legacyChatWorkspace.includes("dtsc-assistant-markdown"), "Legacy Chatbot history/streaming must keep the same rich Markdown renderer");
 assert(legacyChatRoute.includes("buildLanguageInstruction") && legacyChatRoute.includes("format enrichi DTSC"), "Legacy general Chatbot must apply the shared rich presentation and product-awareness policy");
 assert(chatWorkspace.includes("/api/chat/v2") && chatRoute.includes("getChatConversationPreference"), "Chatbot v2 must apply persisted preferences server-side");
