@@ -122,11 +122,11 @@ export function OperationalSlaPanel() {
     <section className="dtsc-card min-w-0 overflow-hidden p-4 sm:p-6">
       <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-600"><Gauge className="h-4 w-4" /> Suivi des délais</p>
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-600"><Gauge className="h-4 w-4" /> SLA opérationnels avancés</p>
           <h2 className="mt-2 text-2xl font-black text-dtsc-ink">Règles, avertissements et dépassements</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">Définissez des délais de traitement et suivez les éléments qui approchent ou dépassent leur échéance, sans modifier automatiquement leur statut métier.</p>
         </div>
-        <Button type="button" variant="outline" onClick={() => void evaluate()} disabled={saving} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"><RefreshCcw className="h-4 w-4" /> Vérifier maintenant</Button>
+        <Button type="button" variant="outline" onClick={() => void evaluate()} disabled={saving} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue"><RefreshCcw className="h-4 w-4" /> Évaluer maintenant</Button>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -151,7 +151,7 @@ export function OperationalSlaPanel() {
         </form>
 
         <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-          <h3 className="font-black text-dtsc-ink">Règles actives</h3>
+          <h3 className="font-black text-dtsc-ink">Politiques actives</h3>
           <div className="mt-4 max-h-[68dvh] space-y-3 overflow-y-auto pr-1">
             {policies.map((policy) => (
               <article key={policy.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-4">
