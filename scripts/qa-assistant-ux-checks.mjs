@@ -36,6 +36,8 @@ const mcpTypes = read("lib/ai/mcp/types.ts");
 const mcpRegistry = read("lib/ai/mcp/registry.ts");
 const mcpTransport = read("lib/ai/mcp/transport.ts");
 const mcpOauth = read("lib/ai/mcp/oauth.ts");
+const mcpOauthAccess = read("lib/ai/mcp/oauth-access.ts");
+const mcpOauthScopes = read("lib/ai/mcp/oauth-scopes.ts");
 const mcpOauthCrypto = read("lib/ai/mcp/oauth-crypto.ts");
 const mcpOauthStore = read("lib/ai/mcp/oauth-store.ts");
 const mcpConnectRoute = read("app/api/ai/apps/oauth/connect/route.ts");
@@ -46,6 +48,7 @@ const collaboratorI18n = read("lib/collaboration-experience-i18n.ts");
 const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
 const nextConfig = read("next.config.ts");
 const releaseFragment = read("docs/changelog/2026-08-11-ai-conversation-hotfix.md");
+const calendarScopeRelease = read("docs/changelog/2026-08-11-google-calendar-mcp-scopes.md");
 const vercel = read("vercel.json");
 
 for (const model of ["ChatConversationPreference", "EnterpriseAiConversationPreference", "EnterpriseAiMessageFeedback"]) {
@@ -57,7 +60,6 @@ assert(migration.includes("EnterpriseAiMessageFeedback_value_check"), "Enterpris
 
 assert(helper.includes("isolation tenant") && helper.includes("confirmation humaine"), "Custom conversation instructions must never override DTSC safety rules");
 assert(helper.includes("getChatConversationPreference") && helper.includes("getEnterpriseAiConversationPreference"), "Conversation preferences must be server-side sources of truth");
-
 assert(promptPolicy.includes("Présente DTSC Platform exactement comme un utilisateur métier la voit dans l’interface"), "AI responses must use the same human-facing language as DTSC Platform");
 assert(promptPolicy.includes("N’expose jamais les codes internes de modules") && promptPolicy.includes("clés camelCase"), "AI prompt policy must explicitly hide technical implementation identifiers from normal users");
 assert(promptPolicy.includes("N’affiche jamais à un utilisateur métier un nom de module contenant des underscores"), "AI prompt policy must explicitly forbid underscore module names");
@@ -113,8 +115,11 @@ for (const appName of ["Gmail", "Google Calendar", "Notion", "GitHub", "Linear",
   assert(connectedAppsCatalog.includes(`name: \"${appName}\"`), `Connected applications catalog must include ${appName}`);
 }
 assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCatalog.includes("READY_TO_CONNECT") && connectedAppsCatalog.includes("CONNECTED") && connectedAppsCatalog.includes("PLATFORM_SETUP_REQUIRED"), "Connected applications must derive certification, platform OAuth readiness and per-user connection status from real server state");
+assert(connectedAppsCatalog.includes("REAUTHORIZATION_REQUIRED") && connectedAppsCatalog.includes("listMcpOAuthConnectionGrants") && connectedAppsCatalog.includes("hasRequiredMcpOAuthScopes"), "Connected applications must detect stale OAuth grants without decrypting credentials");
 assert(connectedAppsPage.includes("/api/ai/apps/oauth/connect") && connectedAppsPage.includes("/api/ai/apps/oauth/disconnect"), "Connected applications UI must expose real connect and disconnect actions only for eligible servers");
 assert(connectedAppsPage.includes("Étapes de connexion") && connectedAppsPage.includes("Continuer avec") && connectedAppsPage.includes("Intégration prête côté DTSC"), "Connected applications UI must provide an interactive human OAuth journey and an honest platform-setup state");
+assert(connectedAppsPage.includes("Autorisation à renouveler") && connectedAppsPage.includes("Renouveler l’autorisation") && connectedAppsPage.includes("DTSC n’utilisera pas la connexion"), "Connected applications UI must guide users through safe OAuth reauthorization when certified scopes change");
+assert(connectedAppsPage.includes("Voir vos calendriers") && connectedAppsPage.includes("Vérifier vos disponibilités") && connectedAppsPage.includes("Lire les événements autorisés"), "Google Calendar OAuth scopes must remain humanized in FR/EN UX");
 assert(connectedAppsPage.includes("Permissions demandées") && !connectedAppsPage.includes("scope.join"), "Connected applications UI must humanize OAuth permissions instead of exposing raw scope URLs");
 assert(connectedAppsPage.includes("ne les expose jamais au modèle IA") && connectedAppsPage.includes("La déconnexion supprime l’autorisation locale"), "Connected applications UI must explain the OAuth security boundary in human language");
 
@@ -122,19 +127,29 @@ assert(mcpTypes.includes('"OAUTH_USER"'), "MCP server contract must support user
 assert(mcpRegistry.includes("oauthAllowedHosts") && mcpRegistry.includes("OAUTH_USER requires oauthClientIdEnvKey"), "OAuth servers must declare explicit client configuration and certified metadata hosts");
 assert(mcpRegistry.includes("https://gmailmcp.googleapis.com/mcp/v1") && mcpRegistry.includes("https://calendarmcp.googleapis.com/mcp/v1"), "Official Gmail and Google Calendar MCP endpoints must be built into the certified registry");
 assert(mcpRegistry.includes('oauthClientIdEnvKey: "MCP_GOOGLE_CLIENT_ID"') && mcpRegistry.includes('oauthClientSecretEnvKey: "MCP_GOOGLE_CLIENT_SECRET"'), "Built-in Google MCP servers must reuse the canonical server-only OAuth env configuration");
+for (const calendarScope of ["calendar.calendarlist.readonly", "calendar.events.freebusy", "calendar.events.readonly"]) {
+  assert(mcpRegistry.includes(`https://www.googleapis.com/auth/${calendarScope}`), `Google Calendar MCP registry must request official scope ${calendarScope}`);
+}
+assert(!mcpRegistry.includes("https://www.googleapis.com/auth/calendar.readonly"), "Google Calendar MCP registry must not fall back to the old broad calendar.readonly scope");
+assert(mcpRegistry.includes("https://www.googleapis.com/auth/gmail.readonly") && !mcpRegistry.includes("https://www.googleapis.com/auth/gmail.compose"), "Gmail DTSC baseline must remain READ-only in this scope alignment");
 assert(mcpRegistry.includes('allowedToolModes: ["READ"]') && mcpRegistry.includes("isMcpOAuthPlatformConfigured"), "Built-in MCP baseline must remain READ-only and fail closed when provider credentials are absent");
+assert(mcpOauthScopes.includes("hasRequiredMcpOAuthScopes") && mcpOauthScopes.includes("required.every"), "OAuth scope coverage must use an exact reusable server-side helper");
 assert(mcpOauthCrypto.includes("aes-256-gcm") && mcpOauthCrypto.includes("setAAD") && mcpOauthCrypto.includes("DTSC_MCP_OAUTH_ENCRYPTION_KEY"), "MCP OAuth credentials must be encrypted server-side with authenticated tenant-bound encryption");
 assert(mcpOauth.includes("code_challenge_method") && mcpOauth.includes('"S256"') && mcpOauth.includes('url.searchParams.set("resource"'), "MCP OAuth must use PKCE S256 and resource indicators");
 assert(mcpOauth.includes('url.searchParams.set("access_type", "offline")') && mcpOauth.includes('url.searchParams.set("prompt", "consent")'), "Google MCP OAuth must request durable server-side authorization for refresh-token continuity");
 assert(mcpOauth.includes("oauth-protected-resource") && mcpOauth.includes("oauth-authorization-server") && mcpOauth.includes("openid-configuration"), "MCP OAuth must support protected-resource and authorization-server discovery");
 assert(mcpOauthStore.includes("encryptedCredentials") && mcpOauthStore.includes("consumeMcpOAuthState") && !mcpOauthStore.includes("console.log"), "OAuth tokens and PKCE verifier must remain in the encrypted server store");
+assert(mcpOauthStore.includes("listMcpOAuthConnectionGrants") && mcpOauthStore.includes('SELECT "serverCode", "grantedScopes"') && mcpOauthStore.includes("getMcpOAuthGrantedScopes"), "OAuth readiness must inspect granted scopes without decrypting stored credentials");
+assert(mcpOauthAccess.includes("MCP_OAUTH_REAUTHORIZATION_REQUIRED") && mcpOauthAccess.includes("getMcpOAuthGrantedScopes") && mcpOauthAccess.includes("getValidMcpOAuthAccessToken"), "MCP transport authorization must fail closed before using a stale OAuth grant");
+assert(mcpCallbackRoute.includes("effectiveCredentials") && mcpCallbackRoute.includes("server.oauthScopes") && mcpCallbackRoute.includes("credentials.scope.length"), "OAuth callback must preserve requested scopes when the provider omits the optional scope response field");
+assert(calendarScopeRelease.includes("Renouveler l’autorisation Google Calendar") && calendarScopeRelease.includes("lecture seule"), "Calendar MCP scope alignment must be documented for users and automatic product awareness");
 assert(oauthMigration.includes('CREATE TABLE "McpUserOAuthConnection"') && oauthMigration.includes('CREATE TABLE "McpUserOAuthState"'), "MCP OAuth persistence migration must create connection and one-time-state tables");
 assert(!/DROP TABLE|DROP COLUMN|TRUNCATE/i.test(oauthMigration), "MCP OAuth migration must be additive");
 assert(oauthMigration.includes('"userId", "organizationId", "serverCode"') && oauthMigration.includes("ON DELETE CASCADE"), "MCP OAuth credentials must be isolated by user, organization and server");
 assert(mcpConnectRoute.includes("isSameOriginRequest") && mcpConnectRoute.includes("requireActiveOrganizationMembership") && mcpConnectRoute.includes("rateLimit"), "OAuth connect must enforce same-origin, active tenant membership and rate limiting");
 assert(mcpCallbackRoute.includes("consumeMcpOAuthState") && mcpCallbackRoute.includes("activeOrganizationId !== savedState.organizationId"), "OAuth callback must consume state once and reject tenant-context changes");
 assert(mcpDisconnectRoute.includes("revokeMcpOAuthConnection") && mcpDisconnectRoute.includes("localCredentialsDestroyed: true"), "OAuth disconnect must destroy the local encrypted credential even when remote revocation is unavailable");
-assert(mcpTransport.includes("getValidMcpOAuthAccessToken") && mcpTransport.includes("MCP_OAUTH_USER_CONTEXT_REQUIRED"), "MCP transport must resolve user tokens server-side only with explicit user and tenant context");
+assert(mcpTransport.includes("getAuthorizedMcpOAuthAccessToken") && mcpTransport.includes("MCP_OAUTH_USER_CONTEXT_REQUIRED"), "MCP transport must resolve only scope-current user tokens with explicit user and tenant context");
 
 assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes('aiCopilot: "Copilote IA DTSC"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the shared i18n contract");
 assert(collaboratorComposer.includes("MAX_COMPOSER_HEIGHT = 176") && collaboratorComposer.includes('className="max-h-44 min-h-12 w-full') && collaboratorComposer.includes("border-t border-dtsc-border/70"), "Collaboration AI drafts must use a full-width mobile composer with a separate professional action rail");
@@ -145,4 +160,4 @@ assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCo
 assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");
 
 assert(vercel.includes('"main": true') && vercel.includes('"*": false') && vercel.includes("ignoreCommand"), "Vercel must remain production-only from main");
-console.log("Assistant UI/UX, rich chatbot output, versioned product awareness, official Google MCP OAuth readiness, canonical module labels, encrypted tenant-safe OAuth, mobile collaboration composer and production-only CI/CD QA passed.");
+console.log("Assistant UI/UX, rich chatbot output, versioned product awareness, current Google MCP OAuth scopes, canonical module labels, encrypted tenant-safe OAuth, mobile collaboration composer and production-only CI/CD QA passed.");

@@ -42,11 +42,29 @@ The client advertises both `application/json` and `text/event-stream`, accepts e
 
 ## Server registry
 
-`DTSC_MCP_SERVERS_JSON` is server-only configuration. Empty or missing configuration means zero MCP servers.
+`DTSC_MCP_SERVERS_JSON` remains a server-only extension configuration. Missing extension configuration adds no custom server, but the registry may also contain explicitly reviewed built-in certified definitions maintained in source control. Built-in definitions are not auto-discovered and remain subject to the same host allow-list, auth, data-policy and Tool Gateway requirements.
 
 Each definition declares a stable code, endpoint, exact host allow-list, contexts, tenant/global scope, status, data policy, authentication mode, timeout/response limits, and allowed tool modes.
 
 AI07 accepts READ mode only. `BEARER_ENV` resolves credentials exclusively from a dedicated server-side environment variable. The same auth env key cannot be intentionally assigned to multiple server definitions.
+
+## User OAuth and scope lifecycle
+
+A certified server may use `OAUTH_USER`. The authorization flow remains server-side and uses Authorization Code + PKCE S256, one-time state, certified metadata hosts, resource indicators, tenant/user scoping and encrypted credential persistence. Access and refresh tokens never become browser state, model context or user-visible application data.
+
+OAuth connection state is not determined by the mere presence of a stored credential. The current certified server definition declares the scopes required by the integration, and DTSC compares them with `grantedScopes` persisted for the same user, organization and server. All required scopes must be present before the connection is considered usable.
+
+When a certified integration changes its required scopes:
+
+1. an existing grant that still covers every required scope remains connected;
+2. an incomplete grant becomes `REAUTHORIZATION_REQUIRED` only when the provider OAuth configuration is itself ready;
+3. the connected-apps UX asks the user to reauthorize explicitly with the provider;
+4. the MCP transport fails closed with `MCP_OAUTH_REAUTHORIZATION_REQUIRED` before resolving or transmitting the access token;
+5. successful reauthorization upserts the same tenant/user/server connection with the newly granted scopes.
+
+The readiness check uses only persisted `grantedScopes`; it does not decrypt credentials merely to decide what the UI should display. If an OAuth token response omits its optional `scope` field after a successful authorization, DTSC records the scopes that were explicitly requested for that certified server. If the provider returns a non-empty scope list, that returned list remains authoritative and is never widened silently.
+
+The built-in Google baseline is deliberately READ-only. Gmail requests only its DTSC-certified read scope. Google Calendar requests the current targeted read scopes for calendar-list visibility, free/busy access and event reading. A scope change never changes `allowedToolModes`; adding a mutation requires a separate certification and Tool Gateway contract.
 
 ## Controlled discovery
 
@@ -88,7 +106,7 @@ The agent cannot:
 
 An MCP result is reinjected into the model as untrusted tool data. The agent can use it for synthesis, but it cannot promote that result to system/CAG authority.
 
-A real MCP Agent E2E is not claimed unless a server is actually configured and certified in the environment under test. Empty MCP configuration remains a valid fail-closed production state, but it is not evidence that the MCP Agent scenario passed.
+A real MCP Agent E2E is not claimed unless a server is actually configured and certified in the environment under test. A fail-closed provider configuration is valid system behavior, but it is not evidence that an authenticated MCP Agent scenario passed.
 
 ## Tenant, permission and plan boundary
 
@@ -129,12 +147,14 @@ Migration `20260810004000_ai_mcp_gateway_governance` additively creates:
 - `AiMcpDiscoverySnapshot`;
 - `AiMcpAuditEvent`.
 
+User OAuth persistence is additive and stores encrypted credentials plus the granted scope list per user, organization and server. The granted scope list is authorization metadata; it may be inspected for readiness without decrypting the credential payload.
+
 The repo uses Prisma multi-file schema configuration (`prisma.schema = ./prisma`), so `prisma/standard-ai-mcp.prisma` is part of the canonical schema layout rather than a temporary duplicate.
 
 AI08 `AiAgentRun` / `AiAgentStep` records reference execution metadata but do not duplicate MCP discovery or protocol audit state.
 
 ## Delivery boundary
 
-AI07 ships the secure MCP capability with zero configured servers by default. AI08 can orchestrate certified MCP READ tools only when such bindings exist.
+AI07 ships the secure MCP capability with no implicitly trusted custom server. A built-in server is usable only if it has an explicit certified definition and its required authentication/configuration is available. AI08 can orchestrate certified MCP READ tools only when the corresponding connection and binding are valid.
 
 A real GitHub, Drive, CRM, calendar, document, or other connector is enabled only after the actual endpoint, authentication, data policy, discovery snapshot, schema hashes, permissions, and E2E evidence are reviewed. No connector or MCP Agent pass is fabricated for roadmap optics.

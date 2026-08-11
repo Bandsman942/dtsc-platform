@@ -25,6 +25,11 @@ type ConnectionRow = {
   revokedAt: Date | null;
 };
 
+type GrantRow = {
+  serverCode: string;
+  grantedScopes: string[];
+};
+
 type StateRow = {
   id: string;
   state: string;
@@ -55,6 +60,30 @@ export async function getMcpOAuthConnection(input: { userId: string; organizatio
   if (!row) return null;
   const credentials = JSON.parse(decryptMcpOAuthSecret(row.encryptedCredentials, connectionAad(row))) as McpOAuthCredentials;
   return { ...row, credentials };
+}
+
+export async function getMcpOAuthGrantedScopes(input: { userId: string; organizationId: string; serverCode: string }) {
+  const rows = await prisma.$queryRaw<Array<{ grantedScopes: string[] }>>(Prisma.sql`
+    SELECT "grantedScopes"
+    FROM "McpUserOAuthConnection"
+    WHERE "userId" = ${input.userId}
+      AND "organizationId" = ${input.organizationId}
+      AND "serverCode" = ${input.serverCode}
+      AND "revokedAt" IS NULL
+    LIMIT 1
+  `);
+  return rows[0]?.grantedScopes || null;
+}
+
+export async function listMcpOAuthConnectionGrants(input: { userId: string; organizationId: string }) {
+  const rows = await prisma.$queryRaw<GrantRow[]>(Prisma.sql`
+    SELECT "serverCode", "grantedScopes"
+    FROM "McpUserOAuthConnection"
+    WHERE "userId" = ${input.userId}
+      AND "organizationId" = ${input.organizationId}
+      AND "revokedAt" IS NULL
+  `);
+  return new Map(rows.map((row) => [row.serverCode, new Set(row.grantedScopes)]));
 }
 
 export async function listMcpOAuthConnectionServerCodes(input: { userId: string; organizationId: string }) {

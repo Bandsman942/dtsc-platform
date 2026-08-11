@@ -1,5 +1,6 @@
 import { MCP_SERVER_REGISTRY, isMcpOAuthPlatformConfigured } from "@/lib/ai/mcp/registry";
-import { listMcpOAuthConnectionServerCodes } from "@/lib/ai/mcp/oauth-store";
+import { hasRequiredMcpOAuthScopes } from "@/lib/ai/mcp/oauth-scopes";
+import { listMcpOAuthConnectionGrants } from "@/lib/ai/mcp/oauth-store";
 
 export type ConnectedAppCode =
   | "GMAIL"
@@ -35,25 +36,31 @@ export const CONNECTED_APP_CATALOG: ConnectedAppCatalogEntry[] = [
 
 export async function listConnectedAppsForUser(input: { locale: string | null | undefined; userId: string; organizationId: string | null }) {
   const en = input.locale === "en";
-  const connectedServerCodes = input.organizationId
-    ? await listMcpOAuthConnectionServerCodes({ userId: input.userId, organizationId: input.organizationId })
-    : new Set<string>();
+  const connectionGrants = input.organizationId
+    ? await listMcpOAuthConnectionGrants({ userId: input.userId, organizationId: input.organizationId })
+    : new Map<string, Set<string>>();
 
   return CONNECTED_APP_CATALOG.map((app) => {
     const configuredServers = MCP_SERVER_REGISTRY.filter((server) => app.serverMatch.test(`${server.code} ${server.label} ${server.endpoint}`));
     const certifiedServers = configuredServers.filter((server) => server.status === "CERTIFIED");
     const oauthServer = certifiedServers.find((server) => server.authMode === "OAUTH_USER") || null;
-    const connected = Boolean(oauthServer && connectedServerCodes.has(oauthServer.code));
+    const grantedScopes = oauthServer ? connectionGrants.get(oauthServer.code) || null : null;
+    const connectionExists = Boolean(grantedScopes);
+    const scopeCoverageCurrent = Boolean(oauthServer && grantedScopes && hasRequiredMcpOAuthScopes(grantedScopes, oauthServer.oauthScopes));
+    const connected = connectionExists && scopeCoverageCurrent;
+    const reauthorizationRequired = connectionExists && !scopeCoverageCurrent;
     const platformConfigured = Boolean(oauthServer && isMcpOAuthPlatformConfigured(oauthServer));
     const availability = connected
       ? "CONNECTED" as const
-      : oauthServer && platformConfigured
-        ? "READY_TO_CONNECT" as const
-        : oauthServer
-          ? "PLATFORM_SETUP_REQUIRED" as const
-          : certifiedServers.length
-            ? "CERTIFIED_BY_DTSC" as const
-            : "REQUIRES_DTSC_CERTIFICATION" as const;
+      : reauthorizationRequired && platformConfigured
+        ? "REAUTHORIZATION_REQUIRED" as const
+        : oauthServer && platformConfigured
+          ? "READY_TO_CONNECT" as const
+          : oauthServer
+            ? "PLATFORM_SETUP_REQUIRED" as const
+            : certifiedServers.length
+              ? "CERTIFIED_BY_DTSC" as const
+              : "REQUIRES_DTSC_CERTIFICATION" as const;
     return {
       code: app.code,
       name: app.name,
