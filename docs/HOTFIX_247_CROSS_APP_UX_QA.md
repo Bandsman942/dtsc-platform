@@ -1,6 +1,6 @@
 # Hotfix #247 — intégrité UX transverse, Shop, notifications et deep links IA
 
-Statut : **implémentation en cours sur `fix/247-cross-app-ux-integrity`; CI et validation E2E propriétaire requises avant fusion**.
+Statut : **implémentation terminée ; Quality Gates automatiques validées ; validation E2E propriétaire confirmée le 11 août 2026 ; fusion autorisée sous réserve du dernier cycle CI déclenché par cette trace documentaire**.
 
 ## Objectif
 
@@ -157,6 +157,12 @@ Les contrats IA existants sont également renforcés dans `qa-standard-ai-contex
 - FR et EN pour les surfaces bilingues.
 - Changement d’espace personnel/entreprise/DTSC.
 - Aucune fuite inter-tenant.
+
+## Preuve de validation E2E propriétaire
+
+Le **11 août 2026**, après exécution des vérifications E2E réelles prévues ci-dessus, le propriétaire du produit a fourni la validation globale explicite : **« E2E OK, fusionne »**.
+
+Cette trace signifie que la validation propriétaire exigée par `docs/CONTRIBUTING.md` est acquise pour ce hotfix. Elle ne remplace pas les Quality Gates automatiques : le commit documentaire qui consigne cette preuve doit lui-même rester vert avant la fusion.
 
 ## Base de données
 
