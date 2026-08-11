@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buildApplicationInterfaceContext } from "@/lib/ai/application-interface-context";
 import { getAiModelDefinition, getAiProviderDefinition, listAvailableAiModels } from "@/lib/ai/catalog";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
@@ -117,8 +118,12 @@ function resolveServerDataClassifications(request: AiRouteRequest): AiDataClassi
 }
 
 export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamResult> {
+  const interfaceContext = request.assistantCode
+    ? buildApplicationInterfaceContext({ contextCode: request.context, locale: request.locale })
+    : "";
   const effectiveRequest: AiRouteRequest = {
     ...request,
+    instructions: [request.instructions, interfaceContext].filter(Boolean).join("\n\n"),
     planCode: await resolveServerPlanCode(request),
     dataClassifications: resolveServerDataClassifications(request),
     policyFlags: { ...request.policyFlags, allowSensitiveExternalModel: false },
