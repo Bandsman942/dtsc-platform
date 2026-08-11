@@ -220,7 +220,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
             </>
           ) : (
             <div className="space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-semibold text-dtsc-ink">
                     <Building2 className="h-4 w-4 shrink-0 text-dtsc-blue" />
@@ -235,7 +235,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
                   variant="outline"
                   onClick={() => void loadOrganizations()}
                   disabled={organizationLoading || !emailValue.trim().includes("@") || !passwordValue}
-                  className="shrink-0 rounded-xl"
+                  className="w-full rounded-xl sm:w-auto sm:shrink-0"
                 >
                   {organizationLoading ? "Recherche…" : organizationsLoaded ? "Actualiser" : "Charger mes espaces"}
                 </Button>
@@ -276,7 +276,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
               {pendingInvitations.length ? (
                 <div className="rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs leading-5 text-dtsc-blue">
                   <p>Vous avez une invitation en attente pour : {pendingInvitations.map((item) => item.name).join(", ")}.</p>
-                  <p>Connectez-vous à votre espace personnel pour la consulter.</p>
+                  <p>Connectez-vous à votre espace standard pour l&apos;accepter. Votre espace personnel centralise vos invitations et vos accès.</p>
                 </div>
               ) : null}
             </div>
