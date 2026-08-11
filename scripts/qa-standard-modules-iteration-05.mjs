@@ -22,6 +22,7 @@ const checks = [
   ["AI data policy fallbacks", "scripts/qa-standard-ai-data-policy-fallbacks.mjs"],
   ["AI assistant registry", "scripts/qa-standard-ai-assistant-registry.mjs"],
   ["AI context engine", "scripts/qa-standard-ai-context-engine.mjs"],
+  ["Cross-app UX integrity hotfix", "scripts/qa-cross-app-ux-integrity-hotfix.mjs"],
   ["AI CAG isolation", "scripts/qa-standard-ai-cag-isolation.mjs"],
   ["AI sector assistants", "scripts/qa-standard-ai-sector-assistants.mjs"],
   ["AI embedding provider", "scripts/qa-standard-ai-embedding-provider.mjs"],
