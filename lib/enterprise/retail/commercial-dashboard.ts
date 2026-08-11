@@ -15,6 +15,12 @@ const ACCOUNTING_READINESS_DESCRIPTOR = {
   label: "Suivi comptable des ventes prêt",
 };
 
+const FX_REPORTING_READINESS_DESCRIPTOR = {
+  code: "FX" as const,
+  label: "Consolidation multi-devise",
+  deepLink: "/enterprise-modules/RETAIL_POS/consolidated-report",
+};
+
 const READINESS_LABELS: Record<string, string> = {
   COUNTRY_PACK: "Configuration pays active",
   FUNCTIONAL_CURRENCY: "Devise principale configurée",
@@ -98,6 +104,11 @@ export async function getCommercialRetailDashboard(
     complete: item.complete,
     deepLink: item.code === "RETAIL_CONFIGURATION" ? "/enterprise-modules/RETAIL_POS/commercial" : item.deepLink,
   }));
+  const reportingReadiness = {
+    ...FX_REPORTING_READINESS_DESCRIPTOR,
+    label: `${FX_REPORTING_READINESS_DESCRIPTOR.label}${fxReadiness.targetCurrencyCode ? ` · ${fxReadiness.targetCurrencyCode}` : ""}`,
+    complete: fxReadiness.complete,
+  };
 
   return {
     configuration,
@@ -110,6 +121,7 @@ export async function getCommercialRetailDashboard(
     metricsByCurrency,
     fxReadiness,
     accountingReadiness,
+    reportingReadiness,
     readiness: {
       items: readinessItems,
       completed: canonicalReadiness.completed,
