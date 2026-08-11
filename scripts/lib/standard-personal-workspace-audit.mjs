@@ -60,14 +60,45 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
 
   if (run("context")) {
     const route = requireFile(errors, "app/api/account/context/route.ts");
-    expectTokens(errors, "Changement de contexte", route, [
+    const signInRoute = requireFile(errors, "app/api/auth/sign-in/route.ts");
+    const authForm = requireFile(errors, "components/auth/auth-form.tsx");
+    const switcher = requireFile(errors, "components/layout/organization-context-switcher.tsx");
+    const mobileShell = requireFile(errors, "components/dtsc/mobile-shell.tsx");
+    expectTokens(errors, "Changement d’espace", route, [
       "isSameOriginRequest",
       "rateLimit",
+      "getDefaultContextForRole",
       "resolveOrganizationLoginContext",
       "setSessionCookie",
       "ORGANIZATION_CONTEXT_SWITCHED",
       "reasonCode",
     ]);
+    expectTokens(errors, "Connexion avec choix d’espace", signInRoute, [
+      "hasExplicitWorkspaceSelection",
+      "getDefaultContextForRole",
+      "requestedOrganizationId",
+      "resolveOrganizationLoginContext",
+      "Chargez vos espaces puis choisissez",
+    ]);
+    expectTokens(errors, "Parcours de connexion", authForm, [
+      "UNSELECTED_WORKSPACE",
+      "organizationsLoaded",
+      "signInReady",
+      "Charger mes espaces",
+      "Choisissez votre espace",
+      "Mon espace personnel",
+    ]);
+    expectTokens(errors, "Sélecteur d’espace", switcher, [
+      "Mon espace personnel",
+      "Changer d’espace de travail",
+      "/api/account/context",
+    ]);
+    const groupsPosition = mobileShell.indexOf("{visibleGroups.map((group) => {");
+    const switcherPosition = mobileShell.indexOf("{organizationOptions.length > 0 ? <OrganizationContextSwitcher");
+    const signOutPosition = mobileShell.indexOf('<button type="button" onClick={() => void signOut()}');
+    if (!(groupsPosition >= 0 && switcherPosition > groupsPosition && signOutPosition > switcherPosition)) {
+      errors.push("Navigation mobile: le sélecteur d’espace doit rester après les groupes DTSC et avant Déconnexion");
+    }
   }
 
   if (run("subscription")) {
