@@ -91,7 +91,7 @@ export async function getCommercialRetailDashboard(
     code: item.code,
     label: READINESS_LABELS[item.code] || "Configuration du Shop",
     complete: item.complete,
-    deepLink: item.deepLink,
+    deepLink: item.code === "RETAIL_CONFIGURATION" ? "/enterprise-modules/RETAIL_POS/commercial" : item.deepLink,
   }));
 
   return {
