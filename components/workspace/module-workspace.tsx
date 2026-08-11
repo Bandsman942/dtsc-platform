@@ -128,7 +128,7 @@ export function ModuleContent({ children, className }: { children: ReactNode; cl
   return (
     <div
       data-module-content
-      className={cn("w-full min-w-0 max-w-full space-y-4 overflow-x-clip sm:space-y-5", className)}
+      className={cn("w-full min-w-0 max-w-full space-y-10 overflow-x-clip sm:space-y-12", className)}
     >
       {children}
     </div>
@@ -216,7 +216,7 @@ export function ModuleSection({
           </div>
         </div>
         <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 lg:px-8 lg:pt-8">
-          <div className="mb-6 min-w-0 border-l-[3px] border-cyan-500 pl-4">
+          <div data-workspace-section-header className="mb-6 min-w-0 border-l-[3px] border-cyan-500 pl-4">
             <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
               <h2 id={titleId} className="min-w-0 break-words text-2xl font-black tracking-[-0.02em] text-dtsc-ink sm:text-3xl">{title}</h2>
               {count !== undefined ? <span className="rounded-full bg-dtsc-soft px-2.5 py-1 text-xs font-black text-dtsc-blue">{count}</span> : null}
@@ -241,6 +241,7 @@ export function ModuleSection({
         type="button"
         onClick={openWorkspace}
         aria-expanded="false"
+        data-workspace-section-header
         className="group flex w-full min-w-0 max-w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-dtsc-soft/70 sm:px-5 sm:py-5"
       >
         <span className="min-w-0 flex-1 border-l-[3px] border-cyan-500 pl-3.5 sm:pl-4">
