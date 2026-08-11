@@ -63,7 +63,11 @@ const BUILT_IN_MCP_SERVERS: McpServerDefinition[] = [
     authMode: "OAUTH_USER",
     oauthClientIdEnvKey: "MCP_GOOGLE_CLIENT_ID",
     oauthClientSecretEnvKey: "MCP_GOOGLE_CLIENT_SECRET",
-    oauthScopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+    oauthScopes: [
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+      "https://www.googleapis.com/auth/calendar.events.freebusy",
+      "https://www.googleapis.com/auth/calendar.events.readonly",
+    ],
     oauthAuthorizationServer: "https://accounts.google.com",
     oauthAllowedHosts: ["calendarmcp.googleapis.com", ...GOOGLE_OAUTH_HOSTS],
     timeoutMs: 8_000,
