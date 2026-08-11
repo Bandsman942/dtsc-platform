@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, Send, Sparkles, Square, Trash2 } from "lucide-react";
+import { Bot, Mic, Send, Sparkles, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 type VoicePayload = { blob: Blob; durationMs: number; waveform: number[] };
 type VoiceCapabilities = { enabled: boolean; maxDurationSeconds: number; maxFileSizeBytes: number };
-type AiDraftAction = "REWRITE" | "PROFESSIONAL" | "SHORTEN" | "FRIENDLY" | "PROPOSE_REPLY";
+type AiDraftAction = "REWRITE" | "PROFESSIONAL" | "SHORTEN" | "FRIENDLY" | "PROPOSE_REPLY" | "SUMMARY" | "NEXT_ACTIONS";
 
 const DEFAULT_VOICE_CAPABILITIES: VoiceCapabilities = {
   enabled: true,
@@ -54,11 +54,26 @@ function microphoneErrorMessage(error: unknown) {
   return "Le microphone n’a pas pu être ouvert. Vérifiez l’autorisation du navigateur et la disponibilité du microphone.";
 }
 
+async function readTextResponse(response: Response) {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let content = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    content += decoder.decode(value, { stream: true });
+  }
+  content += decoder.decode();
+  return content.trim();
+}
+
 export function VoiceConversationComposer({
   value,
   onChange,
   onSendText,
   onSendVoice,
+  groupId,
   placeholder = "Écrire un message…",
   disabled = false,
   sending = false,
@@ -71,6 +86,7 @@ export function VoiceConversationComposer({
   onChange: (value: string) => void;
   onSendText: () => Promise<void> | void;
   onSendVoice: (payload: VoicePayload) => Promise<void> | void;
+  groupId?: string | null;
   placeholder?: string;
   disabled?: boolean;
   sending?: boolean;
@@ -85,6 +101,7 @@ export function VoiceConversationComposer({
   const [aiOpen, setAiOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [replyContext, setReplyContext] = useState("");
+  const [agentInstruction, setAgentInstruction] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -149,11 +166,15 @@ export function VoiceConversationComposer({
 
   async function runAiAction(action: AiDraftAction) {
     if (aiBusy || disabled || sending) return;
-    if (action === "PROPOSE_REPLY" && !replyContext.trim()) {
+    if (action === "PROPOSE_REPLY" && !groupId && !replyContext.trim()) {
       onError?.(aiT("aiReplyContextRequired"));
       return;
     }
-    if (action !== "PROPOSE_REPLY" && !value.trim()) {
+    if ((action === "SUMMARY" || action === "NEXT_ACTIONS") && !groupId) {
+      onError?.(aiT("aiGroupContextRequired"));
+      return;
+    }
+    if (!["PROPOSE_REPLY", "SUMMARY", "NEXT_ACTIONS"].includes(action) && !value.trim()) {
       onError?.(aiT("aiDraftRequired"));
       return;
     }
@@ -163,13 +184,41 @@ export function VoiceConversationComposer({
       const response = await fetch("/api/collaborators/ai/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, draft: value, context: replyContext }),
+        body: JSON.stringify({ action, draft: value, context: replyContext, groupId: groupId || undefined }),
       });
       const body = await response.json().catch(() => null) as { content?: string; message?: string } | null;
       if (!response.ok || !body?.content) throw new Error(body?.message || aiT("aiComposeError"));
       onChange(body.content);
       setAiOpen(false);
       if (action === "PROPOSE_REPLY") setReplyContext("");
+      window.requestAnimationFrame(() => textareaRef.current?.focus());
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : aiT("aiComposeError"));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function runAgent() {
+    if (aiBusy || disabled || sending) return;
+    if (!groupId) return onError?.(aiT("aiGroupContextRequired"));
+    if (!agentInstruction.trim()) return onError?.(aiT("aiDraftRequired"));
+    setAiBusy(true);
+    try {
+      const response = await fetch("/api/collaborators/ai/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, instruction: agentInstruction.trim() }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { message?: string } | null;
+        throw new Error(body?.message || aiT("aiComposeError"));
+      }
+      const content = await readTextResponse(response);
+      if (!content) throw new Error(aiT("aiComposeError"));
+      onChange(content);
+      setAgentInstruction("");
+      setAiOpen(false);
       window.requestAnimationFrame(() => textareaRef.current?.focus());
     } catch (error) {
       onError?.(error instanceof Error ? error.message : aiT("aiComposeError"));
@@ -366,6 +415,18 @@ export function VoiceConversationComposer({
         className="max-h-[92dvh] max-w-lg overflow-y-auto"
       >
         <div className="grid gap-4">
+          {groupId ? (
+            <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/8 p-3">
+              <strong className="text-sm text-dtsc-ink">{aiT("aiThreadContext")}</strong>
+              <p className="mt-1 text-xs leading-5 text-dtsc-muted">{aiT("aiThreadContextHelp")}</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Button type="button" variant="outline" disabled={aiBusy} onClick={() => void runAiAction("PROPOSE_REPLY")}>{aiT("aiProposeReply")}</Button>
+                <Button type="button" variant="outline" disabled={aiBusy} onClick={() => void runAiAction("SUMMARY")}>{aiT("aiSummarize")}</Button>
+                <Button type="button" variant="outline" disabled={aiBusy} onClick={() => void runAiAction("NEXT_ACTIONS")}>{aiT("aiNextActions")}</Button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("REWRITE")}>{aiT("aiRewrite")}</Button>
             <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("PROFESSIONAL")}>{aiT("aiProfessional")}</Button>
@@ -380,15 +441,38 @@ export function VoiceConversationComposer({
               id="dtsc-ai-reply-context"
               value={replyContext}
               onChange={(event) => setReplyContext(event.target.value)}
-              rows={5}
+              rows={3}
               maxLength={6000}
               placeholder={aiT("aiReceivedMessage")}
               className="mt-3 w-full resize-y rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm leading-6 text-dtsc-ink outline-none focus:border-cyan-400"
               disabled={aiBusy}
             />
-            <Button type="button" className="mt-3 w-full" disabled={aiBusy || !replyContext.trim()} onClick={() => void runAiAction("PROPOSE_REPLY")}>
+            <Button type="button" className="mt-3 w-full" disabled={aiBusy || (!groupId && !replyContext.trim())} onClick={() => void runAiAction("PROPOSE_REPLY")}>
               <Sparkles className="mr-2 h-4 w-4" />
               {aiBusy ? aiT("aiPreparing") : aiT("aiPrepareReply")}
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-cyan-500/10 text-cyan-600"><Bot className="h-4 w-4" /></span>
+              <div className="min-w-0 flex-1">
+                <strong className="text-sm text-dtsc-ink">{aiT("aiAgentMode")}</strong>
+                <p className="mt-1 text-xs leading-5 text-dtsc-muted">{aiT("aiAgentDescription")}</p>
+              </div>
+            </div>
+            <textarea
+              value={agentInstruction}
+              onChange={(event) => setAgentInstruction(event.target.value)}
+              rows={4}
+              maxLength={4000}
+              placeholder={aiT("aiAgentPlaceholder")}
+              disabled={aiBusy || !groupId}
+              className="mt-3 w-full resize-y rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm leading-6 text-dtsc-ink outline-none focus:border-cyan-400 disabled:opacity-60"
+            />
+            <Button type="button" className="mt-3 w-full" disabled={aiBusy || !groupId || !agentInstruction.trim()} onClick={() => void runAgent()}>
+              <Bot className="mr-2 h-4 w-4" />
+              {aiBusy ? aiT("aiAgentWorking") : aiT("aiRunAgent")}
             </Button>
           </div>
 
