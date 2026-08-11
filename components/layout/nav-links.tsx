@@ -6,6 +6,7 @@ import { Blocks, Gauge, LifeBuoy, MessagesSquare, ShieldCheck } from "lucide-rea
 import type { ElementType } from "react";
 import type { UserRole } from "@prisma/client";
 import { canAccessAdministration } from "@/lib/admin-access";
+import { resolveEnterpriseModuleIcon } from "@/lib/enterprise/enterprise-module-icons";
 import type { EnterpriseNavigationModule } from "@/lib/enterprise/enterprise-navigation";
 import {
   MODULE_NAVIGATION_GROUPS,
@@ -71,19 +72,22 @@ export function NavLinks({
   return (
     <div className={cn("min-w-0 max-w-full", mobile ? "flex gap-2 overflow-x-auto" : "space-y-1")}>
       {visibleGroups.map((group) => {
-        const Icon = ICON_BY_GROUP[group.code];
+        const enterpriseModule = group.code === "ORGANIZATION_ERP" ? enterpriseContext?.modules[0] || null : null;
+        const Icon = enterpriseModule ? resolveEnterpriseModuleIcon(enterpriseModule) : ICON_BY_GROUP[group.code];
         const href = getModuleNavigationGroupHref(group.code);
         const active = (pathname === "/modules" && selectedGroup === group.code) || moduleNavigationGroupOwnsPath(group.code, pathname);
         const badge = signalCount(group.code);
         const label = getModuleNavigationGroupLabel(group, locale, mobile);
         const description = getModuleNavigationGroupDescription(group, locale);
         const organizationHint = group.code === "ORGANIZATION_ERP" && enterpriseContext ? enterpriseContext.organizationName : null;
+        const enterpriseModuleHint = enterpriseModule?.description || null;
+        const title = [description, organizationHint, enterpriseModuleHint].filter(Boolean).join(" · ");
 
         return (
           <Link
             key={group.code}
             href={href}
-            title={organizationHint ? `${description} · ${organizationHint}` : description}
+            title={title}
             aria-current={active ? "page" : undefined}
             className={cn(
               "relative flex min-w-0 items-center gap-3 rounded-xl font-semibold transition",
