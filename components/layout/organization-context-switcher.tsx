@@ -31,7 +31,7 @@ export function OrganizationContextSwitcher({
       });
       const body = (await response.json().catch(() => null)) as { message?: string } | null;
       if (!response.ok) {
-        setError(body?.message || "Impossible de changer de contexte.");
+        setError(body?.message || "Impossible d’ouvrir cet espace pour le moment.");
         return;
       }
 
@@ -39,7 +39,7 @@ export function OrganizationContextSwitcher({
       // and client workspace from the newly signed organization context.
       window.location.reload();
     } catch {
-      setError("Impossible de changer de contexte. Vérifiez votre connexion puis réessayez.");
+      setError("Impossible d’ouvrir cet espace. Vérifiez votre connexion puis réessayez.");
     } finally {
       setPending(false);
     }
@@ -49,18 +49,19 @@ export function OrganizationContextSwitcher({
     <div className="min-w-0 max-w-full">
       <label className="flex min-w-[15rem] max-w-[calc(100vw-2rem)] shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/90 px-3 py-2 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.12)] backdrop-blur-xl">
         <Building2 className="h-4 w-4 shrink-0 text-cyan-500" />
+        <span className="sr-only">Espace de travail</span>
         <select
           value={value}
           disabled={pending}
           onChange={(event) => void changeContext(event.target.value)}
           className="w-full min-w-0 truncate bg-transparent text-xs font-black text-dtsc-ink outline-none"
-          aria-label="Changer d'espace DTSC"
+          aria-label="Changer d’espace de travail"
           aria-describedby={error ? "organization-context-error" : undefined}
         >
-          <option value="">Espace client standard</option>
+          <option value="">Mon espace personnel</option>
           {organizations.map((organization) => (
             <option key={organization.id} value={organization.id}>
-              {organization.label}{organization.role ? ` · ${organization.role}` : ""}
+              {organization.label}
             </option>
           ))}
         </select>
