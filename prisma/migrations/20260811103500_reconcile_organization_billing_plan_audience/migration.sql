@@ -24,6 +24,14 @@ VALUES
   ('org-premium', 'Organisation Premium', 'org-premium', 'Offre avancée pour organisations avec capacités renforcées, gouvernance et support prioritaire.', 'ORGANIZATION', 180.00, 10000, 30000000, 1000, true, 12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
+-- These three identifiers are reserved for the organization catalog. Correct an
+-- accidental legacy audience without changing price, quotas, activation or any
+-- other administrator-managed field.
+UPDATE "BillingPlan"
+SET "audience" = 'ORGANIZATION', "updatedAt" = CURRENT_TIMESTAMP
+WHERE "id" IN ('org-starter', 'org-growth', 'org-premium')
+  AND "audience" NOT IN ('ORGANIZATION', 'BOTH');
+
 UPDATE "OrganizationSubscription"
 SET
   "planId" = CASE
