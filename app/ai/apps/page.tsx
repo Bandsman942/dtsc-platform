@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, CircleOff, Github, Link2, LockKeyhole, Mail, NotebookText, PanelsTopLeft, PlugZap, ReceiptText, ShieldCheck, Unplug } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, CircleOff, Github, Link2, LockKeyhole, Mail, NotebookText, PanelsTopLeft, PlugZap, ReceiptText, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -18,7 +18,9 @@ const CATEGORY_LABELS: Record<string, { fr: string; en: string }> = {
 
 const HUMAN_PERMISSION_LABELS: Record<string, { fr: string; en: string }> = {
   "https://www.googleapis.com/auth/gmail.readonly": { fr: "Lire les e-mails autorisés", en: "Read authorized email" },
-  "https://www.googleapis.com/auth/calendar.readonly": { fr: "Lire les calendriers et événements", en: "Read calendars and events" },
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly": { fr: "Voir vos calendriers", en: "View your calendars" },
+  "https://www.googleapis.com/auth/calendar.events.freebusy": { fr: "Vérifier vos disponibilités", en: "Check your availability" },
+  "https://www.googleapis.com/auth/calendar.events.readonly": { fr: "Lire les événements autorisés", en: "Read authorized events" },
 };
 
 function AppIcon({ code }: { code: string }) {
@@ -103,6 +105,7 @@ export default async function ConnectedAiAppsPage() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {apps.map((app) => {
             const connected = app.availability === "CONNECTED";
+            const reauthorizationRequired = app.availability === "REAUTHORIZATION_REQUIRED";
             const ready = app.availability === "READY_TO_CONNECT";
             const setupRequired = app.availability === "PLATFORM_SETUP_REQUIRED";
             const certified = app.availability !== "REQUIRES_DTSC_CERTIFICATION";
@@ -115,9 +118,9 @@ export default async function ConnectedAiAppsPage() {
                     <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-dtsc-page text-dtsc-ink"><AppIcon code={app.code} /></span>
                     <div className="min-w-0"><h2 className="truncate text-base font-black text-dtsc-ink">{app.name}</h2><p className="text-xs font-bold text-dtsc-muted">{category}</p></div>
                   </div>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.68rem] font-black ${connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : ready ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300" : setupRequired ? "bg-blue-500/10 text-blue-700 dark:text-blue-200" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
-                    {connected ? <CheckCircle2 className="h-3.5 w-3.5" /> : ready ? <Link2 className="h-3.5 w-3.5" /> : setupRequired ? <LockKeyhole className="h-3.5 w-3.5" /> : <CircleOff className="h-3.5 w-3.5" />}
-                    {connected ? (en ? "Connected" : "Connecté") : ready ? (en ? "Ready" : "Prêt") : setupRequired ? (en ? "DTSC setup" : "Configuration DTSC") : certified ? (en ? "DTSC certified" : "Certifié DTSC") : (en ? "Not enabled" : "Non activé")}
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[0.68rem] font-black ${connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : reauthorizationRequired ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : ready ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300" : setupRequired ? "bg-blue-500/10 text-blue-700 dark:text-blue-200" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+                    {connected ? <CheckCircle2 className="h-3.5 w-3.5" /> : reauthorizationRequired ? <RefreshCw className="h-3.5 w-3.5" /> : ready ? <Link2 className="h-3.5 w-3.5" /> : setupRequired ? <LockKeyhole className="h-3.5 w-3.5" /> : <CircleOff className="h-3.5 w-3.5" />}
+                    {connected ? (en ? "Connected" : "Connecté") : reauthorizationRequired ? (en ? "Authorization update" : "Autorisation à renouveler") : ready ? (en ? "Ready" : "Prêt") : setupRequired ? (en ? "DTSC setup" : "Configuration DTSC") : certified ? (en ? "DTSC certified" : "Certifié DTSC") : (en ? "Not enabled" : "Non activé")}
                   </span>
                 </div>
 
@@ -139,6 +142,19 @@ export default async function ConnectedAiAppsPage() {
                         <Unplug className="h-4 w-4" /> {en ? "Disconnect" : "Déconnecter"}
                       </button>
                     </form>
+                  ) : reauthorizationRequired && app.serverCode && organizationId ? (
+                    <div className="grid gap-2">
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs leading-5 text-dtsc-muted">
+                        <strong className="block text-dtsc-ink">{en ? "Permissions have changed" : "Les autorisations ont évolué"}</strong>
+                        <span>{en ? "Reconnect securely to update the permissions required by this certified integration. DTSC will not use the connection until the update is complete." : "Reconnectez-vous de manière sécurisée pour mettre à jour les permissions requises par cette intégration certifiée. DTSC n’utilisera pas la connexion tant que la mise à jour n’est pas terminée."}</span>
+                      </div>
+                      <form action="/api/ai/apps/oauth/connect" method="post">
+                        <input type="hidden" name="serverCode" value={app.serverCode} />
+                        <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-3 py-2 text-sm font-black text-white hover:bg-amber-700">
+                          <RefreshCw className="h-4 w-4" /> {en ? `Update ${app.name} authorization` : `Renouveler l’autorisation ${app.name}`}
+                        </button>
+                      </form>
+                    </div>
                   ) : ready && app.serverCode && organizationId ? (
                     <div className="grid gap-2">
                       <form action="/api/ai/apps/oauth/connect" method="post">
