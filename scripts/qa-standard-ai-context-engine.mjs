@@ -10,6 +10,7 @@ const usageLimits = read("lib/billing/ai-usage-limits.ts");
 const cag = read("lib/ai/cag-registry.ts");
 const interfaceContext = read("lib/ai/application-interface-context.ts");
 const orchestrator = read("lib/ai/orchestrator.ts");
+const modulesHub = read("app/modules/page.tsx");
 const chatRoute = read("app/api/chat/v2/route.ts");
 const agentRoute = read("app/api/chat/agent/route.ts");
 const collaboratorsAgent = read("app/api/collaborators/ai/agent/route.ts");
@@ -57,7 +58,11 @@ expect(!cag.includes("Plan: ${context.planCode}"), "CAG must not expose a capabi
 
 expect(interfaceContext.includes("MODULE_NAVIGATION_GROUPS"), "AI interface context must derive navigation labels from the current navigation registry");
 expect(interfaceContext.includes("STANDARD_MODULE_REGISTRY"), "AI interface context must derive its product vocabulary from the current standard module registry");
+expect(interfaceContext.includes("ENTERPRISE_MODULE_REGISTRY"), "AI interface context must derive ERP destination labels from the current enterprise registry");
 expect(interfaceContext.includes("isStandardModuleNavigable"), "AI interface context must exclude hidden or non-navigable module entries");
+expect(interfaceContext.includes("/modules?open="), "AI citations must point only to the access-checked module resolver");
+expect(interfaceContext.includes("N’invente jamais de code module"), "AI citation policy must forbid invented routes or module codes");
+expect(interfaceContext.includes("un lien n’est jamais une preuve d’accès"), "AI module citations must explicitly remain non-authoritative for access");
 expect(interfaceContext.includes("charger les espaces disponibles"), "AI interface context must know the explicit workspace loading flow");
 expect(interfaceContext.includes("avant Déconnexion"), "AI interface context must know the mobile workspace selector placement");
 expect(interfaceContext.includes("Administration DTSC utilise désormais le même type d’en-tête que Activités DTSC"), "AI interface context must know the modern Administration DTSC header");
@@ -65,6 +70,10 @@ expect(interfaceContext.includes("libellés visibles à l’écran"), "AI interf
 expect(orchestrator.includes("buildApplicationInterfaceContext"), "AI orchestrator must inject the canonical application interface context centrally");
 expect(orchestrator.includes("request.assistantCode"), "Application interface context must be scoped to assistant executions");
 expect(orchestrator.includes("instructions: [request.instructions, interfaceContext]"), "Assistant instructions must include the current application interface context");
+expect(modulesHub.includes("requestedModuleCode"), "Module hub must resolve requested AI destinations explicitly");
+expect(modulesHub.includes("getEnterpriseNavigationModules"), "ERP destination resolution must be based on authorized navigation");
+expect(modulesHub.includes("standardCodeAllowed"), "Standard destination resolution must remain context-aware");
+expect(modulesHub.includes("Cet espace n’est pas accessible"), "Denied module citations must produce a clear access-denied state");
 
 for (const [label, source] of [
   ["chat v2", chatRoute],
