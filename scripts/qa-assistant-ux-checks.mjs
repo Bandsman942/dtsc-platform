@@ -21,6 +21,8 @@ const conversationsRoute = read("app/api/conversations/[id]/route.ts");
 const enterprisePage = read("app/enterprise-modules/[moduleCode]/page.tsx");
 const enterpriseWorkspace = read("components/enterprise/enterprise-ai-workspace-v2.tsx");
 const enterpriseChat = read("app/api/enterprise/ai/chat/route.ts");
+const enterpriseContext = read("lib/enterprise-ai/context.ts");
+const enterpriseModuleRegistry = read("lib/enterprise/module-registry.ts");
 const enterpriseConversations = read("app/api/enterprise/ai/conversations/[id]/route.ts");
 const enterpriseMessage = read("app/api/enterprise/ai/messages/[id]/route.ts");
 const connectedAppsCatalog = read("lib/ai/mcp/app-catalog.ts");
@@ -42,7 +44,11 @@ assert(helper.includes("getChatConversationPreference") && helper.includes("getE
 
 assert(promptPolicy.includes("Présente DTSC Platform exactement comme un utilisateur métier la voit dans l’interface"), "AI responses must use the same human-facing language as DTSC Platform");
 assert(promptPolicy.includes("N’expose jamais les codes internes de modules") && promptPolicy.includes("clés camelCase"), "AI prompt policy must explicitly hide technical implementation identifiers from normal users");
-assert(promptPolicy.includes("AI_ASSISTANT") && promptPolicy.includes("PHARMACY_SETTINGS"), "AI prompt policy must include regression examples for raw module identifiers");
+assert(promptPolicy.includes("N’affiche jamais à un utilisateur métier un nom de module contenant des underscores"), "AI prompt policy must explicitly forbid underscore module names");
+for (const leakedCode of ["FINANCE_ACCOUNTING", "FINANCE_CASH", "FINANCE_PAYABLES", "FINANCE_RECEIVABLES", "AI_ASSISTANT", "PHARMACY_SETTINGS"]) {
+  assert(promptPolicy.includes(leakedCode), `AI user-facing contract must cover leaked identifier ${leakedCode}`);
+}
+assert(promptPolicy.includes("Markdown riche supporté par DTSC"), "AI presentation contract must require DTSC rich Markdown when structure helps");
 
 assert(chatPage.includes("ChatWorkspaceV2") && chatPage.includes("listCatalogAiModelsForUi"), "Chat page must use the new assistant workspace with the canonical model catalog");
 assert(assistantUi.includes("<textarea") && assistantUi.includes("requestSubmit"), "Assistant composer must be multiline and keyboard accessible");
@@ -64,11 +70,16 @@ assert(chatPage.includes('<AssistantImmersiveWorkspaceShell variant="chatbot">')
 assert(enterprisePage.includes('<AssistantImmersiveWorkspaceShell variant="enterprise">'), "Enterprise assistant page must mount the immersive workspace shell");
 
 assert(enterprisePage.includes("EnterpriseAiWorkspaceV2") && enterprisePage.includes("listCatalogAiModelsForUi"), "Enterprise AI module must use the new workspace with the canonical model catalog");
+assert(enterpriseWorkspace.includes('import { Streamdown } from "streamdown"') && enterpriseWorkspace.includes("<Streamdown"), "Enterprise assistant messages must use the existing rich streaming Markdown renderer");
 assert(enterpriseWorkspace.includes("Sources internes") && enterpriseWorkspace.includes("Outils métier"), "Enterprise assistant must expose only real internal sources and read tools");
 assert(enterpriseWorkspace.includes("asCitations") && enterpriseWorkspace.includes("feedbackValue") && enterpriseWorkspace.includes("ThumbsUp") && enterpriseWorkspace.includes("ThumbsDown"), "Enterprise assistant must render citations and persistent feedback controls");
 assert(enterpriseWorkspace.includes("PINNED") && enterpriseWorkspace.includes("ARCHIVED") && enterpriseWorkspace.includes("Exporter en Markdown"), "Enterprise conversation menu must include pin/archive/export");
 assert(enterpriseChat.includes("getEnterpriseAiConversationPreference") && enterpriseChat.includes("preference?.useKnowledge") && enterpriseChat.includes("preference?.useTools") && enterpriseChat.includes("preference?.modelOverride"), "Enterprise chat must apply persisted conversation preferences server-side");
 assert(enterpriseChat.includes("buildEnterpriseAiInstructions") && enterpriseChat.includes("retrieveEnterpriseAiKnowledge") && enterpriseChat.includes("runPharmacyReadTools"), "Enterprise assistant must preserve sector context, RAG and existing read tools");
+assert(enterpriseContext.includes("listEnterpriseModuleDefinitions") && enterpriseModuleRegistry.includes("labelFr") && enterpriseModuleRegistry.includes("labelEn"), "Enterprise assistant module vocabulary must come from the canonical UX module registry");
+assert(enterpriseContext.includes("VOCABULAIRE CANONIQUE DES MODULES") && enterpriseContext.includes("labelFr") && enterpriseContext.includes("labelEn"), "Enterprise assistant prompt must receive bilingual canonical module labels");
+assert(enterpriseContext.includes("N'affiche jamais un nom de module avec des underscores") && enterpriseContext.includes("FINANCE_ACCOUNTING") && enterpriseContext.includes("FINANCE_CASH") && enterpriseContext.includes("FINANCE_PAYABLES") && enterpriseContext.includes("FINANCE_RECEIVABLES"), "Enterprise assistant must explicitly guard the real accounting underscore regression");
+assert(enterpriseContext.includes("FORMAT DE RÉPONSE ENRICHI") && enterpriseContext.includes("Markdown riche") && enterpriseContext.includes("tableaux"), "Enterprise assistant must request the existing enriched message format");
 assert(enterpriseConversations.includes("enterpriseAiConversationPreference.upsert") && enterpriseConversations.includes("isCatalogAiModelAllowed"), "Enterprise conversation configuration must validate canonical catalog models and persist preferences");
 assert(enterpriseMessage.includes("enterpriseAiMessageFeedback.upsert") && enterpriseMessage.includes('message.role !== "assistant"'), "Enterprise feedback must persist only for assistant responses");
 assert(!chatWorkspace.includes("useWeb") && !enterpriseWorkspace.includes("useWeb") && !enterpriseChat.includes("useWeb"), "Do not advertise a web-search source that DTSC does not implement");
@@ -87,4 +98,4 @@ assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCo
 assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");
 
 assert(vercel.includes('"main": true') && vercel.includes('"*": false') && vercel.includes("ignoreCommand"), "Vercel must remain production-only from main");
-console.log("Assistant UI/UX, human-facing language, connected-apps visibility, collaboration copilot, tenant-safe sources and production-only CI/CD QA passed.");
+console.log("Assistant UI/UX, canonical module labels, rich enterprise formatting, connected-apps visibility, collaboration copilot, tenant-safe sources and production-only CI/CD QA passed.");
