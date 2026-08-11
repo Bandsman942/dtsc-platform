@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Check, ChevronDown, FileSearch, Loader2, Send, Settings2, Sparkles } from "lucide-react";
+import { Bot, Check, ChevronDown, FileSearch, Loader2, PlugZap, Send, Settings2, Sparkles } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -137,6 +137,7 @@ export function AssistantComposer({
             ))}
             {modelLabel ? <button type="button" onClick={onSettings} className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-dtsc-border bg-dtsc-page px-2.5 text-[0.7rem] font-black text-dtsc-muted"><span className="max-w-28 truncate">{modelLabel}</span><ChevronDown className="h-3 w-3" /></button> : null}
           </div>
+          <Button type="button" variant="ghost" size="icon" onClick={() => window.location.assign("/ai/apps")} className="h-9 w-9 shrink-0 rounded-full" aria-label="Applications connectées" title="Applications connectées"><PlugZap className="h-4 w-4" /></Button>
           {onSettings ? <Button type="button" variant="ghost" size="icon" onClick={onSettings} className="h-9 w-9 shrink-0 rounded-full" aria-label="Assistant settings"><Settings2 className="h-4 w-4" /></Button> : null}
           <Button type="submit" size="icon" disabled={disabled || sending || !value.trim()} className="h-10 w-10 shrink-0 rounded-full bg-[#002b5b] text-white hover:bg-[#001736]" aria-label="Send">
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -198,6 +199,10 @@ export function AssistantConversationSettingsDialog({
             return <button key={option.key} type="button" disabled={option.disabled} onClick={() => onChange({ ...preference, [option.key]: !active })} className={cn("flex items-start gap-3 rounded-2xl border p-3 text-left transition", active ? "border-cyan-400/60 bg-cyan-500/8" : "border-dtsc-border bg-dtsc-page", option.disabled && "cursor-not-allowed opacity-50")}><span className={cn("mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", active ? "border-cyan-500 bg-cyan-500 text-white" : "border-dtsc-border")}>{active ? <Check className="h-3 w-3" /> : null}</span><span><strong className="block text-sm text-dtsc-ink">{option.label}</strong><span className="mt-0.5 block text-xs leading-5 text-dtsc-muted">{option.description}</span></span></button>;
           })}
         </div>
+        <button type="button" onClick={() => window.location.assign("/ai/apps")} className="flex items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-left transition hover:border-cyan-400/60 hover:bg-cyan-500/5">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600"><PlugZap className="h-4 w-4" /></span>
+          <span><strong className="block text-sm text-dtsc-ink">{en ? "Connected applications" : "Applications connectées"}</strong><span className="mt-0.5 block text-xs leading-5 text-dtsc-muted">{en ? "See which MCP applications are certified and available for DTSC AI." : "Voir quelles applications MCP sont certifiées et disponibles pour l’IA DTSC."}</span></span>
+        </button>
         <label className="grid gap-1.5 text-sm font-black text-dtsc-ink">{en ? "Conversation instructions" : "Instructions de conversation"}
           <textarea value={preference.customInstructions || ""} onChange={(event) => onChange({ ...preference, customInstructions: event.target.value })} maxLength={4000} rows={5} placeholder={en ? "Example: Always start with an executive summary…" : "Ex. : commence toujours par une synthèse exécutive…"} className="resize-y rounded-2xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-medium leading-6 outline-none focus:border-cyan-400" />
           <span className="text-xs font-semibold text-dtsc-muted">{en ? "These instructions never bypass DTSC permissions or safety rules." : "Ces instructions ne contournent jamais les permissions ni les règles de sécurité DTSC."}</span>
