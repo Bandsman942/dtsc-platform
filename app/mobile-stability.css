@@ -214,6 +214,27 @@
     /* Safari iOS zooms form controls whose computed font-size is below 16px. */
     font-size: 16px !important;
   }
+
+  /* Retail ERP continuation rails used to force long buttons outside the
+     viewport on narrow devices. Turn the existing horizontal flex rail into a
+     bounded two-column grid while keeping desktop behavior unchanged. */
+  [data-dtsc-responsive-root] details > summary + .flex.overflow-x-auto {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  [data-dtsc-responsive-root] details > summary + .flex.overflow-x-auto > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal !important;
+    overflow-wrap: break-word;
+    text-align: center;
+    justify-content: center;
+  }
 }
 
 @media (pointer: coarse) {
