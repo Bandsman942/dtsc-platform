@@ -10,6 +10,11 @@ function phoneForList(value: string) {
   return `${value.slice(0, 4)}••••${value.slice(-3)}`;
 }
 
+const ACCOUNTING_READINESS_DESCRIPTOR = {
+  code: "ACCOUNTING" as const,
+  label: "Suivi comptable des ventes prêt",
+};
+
 const READINESS_LABELS: Record<string, string> = {
   COUNTRY_PACK: "Configuration pays active",
   FUNCTIONAL_CURRENCY: "Devise principale configurée",
@@ -19,7 +24,7 @@ const READINESS_LABELS: Record<string, string> = {
   CATALOG: "Catalogue de vente renseigné",
   INVENTORY_LINKS: "Disponibilité du stock reliée au catalogue",
   TEAM: "Équipe autorisée",
-  ACCOUNTING: "Suivi comptable des ventes prêt",
+  [ACCOUNTING_READINESS_DESCRIPTOR.code]: ACCOUNTING_READINESS_DESCRIPTOR.label,
   RETAIL_CONFIGURATION: "Paramètres du Shop actifs",
 };
 
