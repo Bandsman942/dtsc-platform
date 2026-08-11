@@ -11,6 +11,7 @@ export function ModuleRefreshButton({ compact = false, className }: { compact?: 
   const locale = useAppLocale();
   const [pending, startTransition] = useTransition();
   const label = locale === "en" ? "Refresh" : "Actualiser";
+  const pendingLabel = locale === "en" ? "Refreshing…" : "Actualisation…";
 
   return (
     <button
@@ -25,8 +26,13 @@ export function ModuleRefreshButton({ compact = false, className }: { compact?: 
         className,
       )}
     >
-      <RefreshCw className={cn("h-4 w-4", pending && "animate-spin")} aria-hidden="true" />
-      {compact ? <span className="sr-only">{label}</span> : <span>{pending ? (locale === "en" ? "Refreshing…" : "Actualisation…") : label}</span>}
+      <RefreshCw className={cn("h-4 w-4 shrink-0", pending && "animate-spin")} aria-hidden="true" />
+      {compact ? (
+        <span className="hidden min-[390px]:inline">{pending ? pendingLabel : label}</span>
+      ) : (
+        <span>{pending ? pendingLabel : label}</span>
+      )}
+      {compact ? <span className="sr-only min-[390px]:hidden">{pending ? pendingLabel : label}</span> : null}
     </button>
   );
 }

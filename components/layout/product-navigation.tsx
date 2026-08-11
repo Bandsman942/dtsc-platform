@@ -1,5 +1,6 @@
 import { BriefcaseBusiness } from "lucide-react";
 import { ProductNavigationMenu, type ProductDestination } from "@/components/layout/product-navigation-menu";
+import { ModuleRefreshButton } from "@/components/workspace/module-refresh-button";
 import type { HostType } from "@/lib/domains";
 import {
   getProductDefinition,
@@ -47,12 +48,15 @@ export function ProductNavigation({
           {locale === "en" ? "DTSC ecosystem" : "Écosystème DTSC"}
         </p>
       ) : null}
-      <ProductNavigationMenu
-        activeDestination={activeDestination}
-        compact={compact}
-        currentHostType={currentHostType}
-        destinations={destinations}
-      />
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
+        <ProductNavigationMenu
+          activeDestination={activeDestination}
+          compact={compact}
+          currentHostType={currentHostType}
+          destinations={destinations}
+        />
+        {authenticated ? <ModuleRefreshButton compact={compact} className="w-full" /> : null}
+      </div>
     </nav>
   );
 }
