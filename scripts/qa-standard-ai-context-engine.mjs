@@ -8,6 +8,8 @@ const sessionContext = read("lib/ai/session-context.ts");
 const commercialContext = read("lib/billing/commercial-context.ts");
 const usageLimits = read("lib/billing/ai-usage-limits.ts");
 const cag = read("lib/ai/cag-registry.ts");
+const interfaceContext = read("lib/ai/application-interface-context.ts");
+const orchestrator = read("lib/ai/orchestrator.ts");
 const chatRoute = read("app/api/chat/v2/route.ts");
 const agentRoute = read("app/api/chat/agent/route.ts");
 const collaboratorsAgent = read("app/api/collaborators/ai/agent/route.ts");
@@ -52,6 +54,15 @@ expect(cag.includes("getCanonicalAiUsageLimits"), "CAG must read the same canoni
 expect(cag.includes("Offre commerciale:"), "CAG must name the commercial offer explicitly");
 expect(cag.includes("Niveau de capacité:"), "CAG must distinguish capability tier from the offer name");
 expect(!cag.includes("Plan: ${context.planCode}"), "CAG must not expose a capability code as an ambiguous commercial plan");
+
+expect(interfaceContext.includes("MODULE_NAVIGATION_GROUPS"), "AI interface context must derive navigation labels from the current navigation registry");
+expect(interfaceContext.includes("charger les espaces disponibles"), "AI interface context must know the explicit workspace loading flow");
+expect(interfaceContext.includes("avant Déconnexion"), "AI interface context must know the mobile workspace selector placement");
+expect(interfaceContext.includes("Administration DTSC utilise désormais le même type d’en-tête que Activités DTSC"), "AI interface context must know the modern Administration DTSC header");
+expect(interfaceContext.includes("libellés visibles à l’écran"), "AI interface guidance must favor user-facing product language");
+expect(orchestrator.includes("buildApplicationInterfaceContext"), "AI orchestrator must inject the canonical application interface context centrally");
+expect(orchestrator.includes("request.assistantCode"), "Application interface context must be scoped to assistant executions");
+expect(orchestrator.includes("instructions: [request.instructions, interfaceContext]"), "Assistant instructions must include the current application interface context");
 
 for (const [label, source] of [
   ["chat v2", chatRoute],
