@@ -1,5 +1,5 @@
 import type { McpServerDefinition } from "@/lib/ai/mcp/types";
-import { getValidMcpOAuthAccessToken } from "@/lib/ai/mcp/oauth";
+import { getAuthorizedMcpOAuthAccessToken } from "@/lib/ai/mcp/oauth-access";
 import { encodeMcpHeaderValue } from "@/lib/ai/mcp/schema";
 import { validateMcpEndpointResolution } from "@/lib/ai/mcp/security";
 
@@ -87,7 +87,7 @@ export async function callMcpJsonRpc<T>(input: {
     headers.Authorization = `Bearer ${token}`;
   } else if (input.server.authMode === "OAUTH_USER") {
     if (!input.userAuth?.userId || !input.userAuth.organizationId) throw new Error("MCP_OAUTH_USER_CONTEXT_REQUIRED");
-    const token = await getValidMcpOAuthAccessToken({
+    const token = await getAuthorizedMcpOAuthAccessToken({
       server: input.server,
       userId: input.userAuth.userId,
       organizationId: input.userAuth.organizationId,
