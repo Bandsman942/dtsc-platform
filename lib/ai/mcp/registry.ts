@@ -106,7 +106,8 @@ export function isMcpOAuthPlatformConfigured(server: McpServerDefinition) {
   if (server.authMode !== "OAUTH_USER" || !server.oauthClientIdEnvKey) return false;
   const clientIdConfigured = Boolean(process.env[server.oauthClientIdEnvKey]?.trim());
   const clientSecretConfigured = !server.oauthClientSecretEnvKey || Boolean(process.env[server.oauthClientSecretEnvKey]?.trim());
-  return clientIdConfigured && clientSecretConfigured;
+  const encryptedVaultConfigured = Boolean(process.env.DTSC_MCP_OAUTH_ENCRYPTION_KEY?.trim());
+  return clientIdConfigured && clientSecretConfigured && encryptedVaultConfigured;
 }
 
 export function assertMcpServerRegistryIntegrity() {
