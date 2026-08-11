@@ -4,7 +4,7 @@ import { signInSchema } from "@/lib/validators";
 import { verifyPassword } from "@/lib/security";
 import { setSessionCookie } from "@/lib/auth";
 import { ensureDefaultAdmin } from "@/lib/default-admin";
-import { resolveOrganizationLoginContext } from "@/lib/organizations";
+import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { writeAuditLog } from "@/lib/audit";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
@@ -13,15 +13,22 @@ export async function POST(req: Request) {
   const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-in"), 8, 15 * 60 * 1000);
   if (!limiter.ok) {
     return NextResponse.json(
-      { error: "Too many sign-in attempts", resetAt: new Date(limiter.resetAt).toISOString() },
+      { error: "Trop de tentatives de connexion. Patientez quelques minutes puis réessayez.", resetAt: new Date(limiter.resetAt).toISOString() },
       { status: 429 }
     );
   }
 
   const rawPayload = await req.json().catch(() => null);
+  const hasExplicitWorkspaceSelection =
+    rawPayload !== null &&
+    typeof rawPayload === "object" &&
+    Object.prototype.hasOwnProperty.call(rawPayload, "organizationId");
   const body = signInSchema.safeParse(rawPayload);
-  if (!body.success) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
+  if (!body.success || !hasExplicitWorkspaceSelection) {
+    return NextResponse.json(
+      { error: "Chargez vos espaces puis choisissez celui dans lequel vous souhaitez continuer." },
+      { status: 400 }
+    );
   }
   const payloadNext =
     rawPayload && typeof rawPayload === "object" && "next" in rawPayload && typeof rawPayload.next === "string"
@@ -36,29 +43,35 @@ export async function POST(req: Request) {
   });
 
   if (!user || !verifyPassword(body.data.password, user.passwordHash)) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json({ error: "Adresse email ou mot de passe incorrect." }, { status: 401 });
   }
 
   if (user.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Account is not active" }, { status: 403 });
-  }
-
-  let context;
-  try {
-    context = await resolveOrganizationLoginContext(user, body.data.organizationId || null);
-  } catch {
-    await writeAuditLog({
-      userId: user.id,
-      action: "ORGANIZATION_LOGIN_DENIED",
-      entity: "Organization",
-      entityId: body.data.organizationId || null,
-      request: req,
-      metadata: { reason: "membership_missing_or_inactive" },
-    });
     return NextResponse.json(
-      { error: "Accès refusé : les espaces internes des entreprises clientes sont strictement réservés à leurs membres autorisés." },
+      { error: "Votre compte n’est pas disponible pour le moment. Contactez le support DTSC si vous avez besoin d’aide." },
       { status: 403 }
     );
+  }
+
+  const requestedOrganizationId = body.data.organizationId?.trim() || "";
+  let context = getDefaultContextForRole();
+  if (requestedOrganizationId) {
+    try {
+      context = await resolveOrganizationLoginContext(user, requestedOrganizationId);
+    } catch {
+      await writeAuditLog({
+        userId: user.id,
+        action: "ORGANIZATION_LOGIN_DENIED",
+        entity: "Organization",
+        entityId: requestedOrganizationId,
+        request: req,
+        metadata: { reason: "membership_missing_or_inactive" },
+      });
+      return NextResponse.json(
+        { error: "Cet espace n’est plus accessible avec votre compte. Rechargez vos espaces et choisissez-en un autre." },
+        { status: 403 }
+      );
+    }
   }
 
   await setSessionCookie({
