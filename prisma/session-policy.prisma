@@ -1,8 +1,9 @@
 model UserSessionPreference {
-  userId                    String   @id
-  sessionIdleTimeoutMinutes Int      @default(30)
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  userId                      String   @id
+  sessionIdleTimeoutMinutes   Int      @default(30)
+  pushNotificationContentMode String   @default("PRIVATE")
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
   @@index([updatedAt])
 }
