@@ -9,16 +9,21 @@ type ContextOption = {
   role?: string | null;
 };
 
+type ContextSwitcherVariant = "default" | "mobileRail";
+
 export function OrganizationContextSwitcher({
   currentOrganizationId,
   organizations,
+  variant = "default",
 }: {
   currentOrganizationId?: string | null;
   organizations: ContextOption[];
+  variant?: ContextSwitcherVariant;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const value = currentOrganizationId || "";
+  const mobileRail = variant === "mobileRail";
 
   async function changeContext(nextOrganizationId: string) {
     setPending(true);
@@ -46,15 +51,24 @@ export function OrganizationContextSwitcher({
   }
 
   return (
-    <div className="min-w-0 max-w-full">
-      <label className="flex min-w-[15rem] max-w-[calc(100vw-2rem)] shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/90 px-3 py-2 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.12)] backdrop-blur-xl">
+    <div
+      className={mobileRail
+        ? "w-[82vw] min-w-[18rem] max-w-[24rem] shrink-0 snap-start"
+        : "min-w-0 max-w-full"}
+      data-workspace-context-switcher={mobileRail ? "mobile-rail" : "default"}
+    >
+      <label
+        className={mobileRail
+          ? "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-2xl border border-cyan-400/35 bg-dtsc-page/95 px-4 py-2.5 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.14)] backdrop-blur-xl"
+          : "flex min-w-[15rem] max-w-[calc(100vw-2rem)] shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/90 px-3 py-2 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.12)] backdrop-blur-xl"}
+      >
         <Building2 className="h-4 w-4 shrink-0 text-cyan-500" />
         <span className="sr-only">Espace de travail</span>
         <select
           value={value}
           disabled={pending}
           onChange={(event) => void changeContext(event.target.value)}
-          className="w-full min-w-0 truncate bg-transparent text-xs font-black text-dtsc-ink outline-none"
+          className="min-w-0 flex-1 truncate bg-transparent text-sm font-black text-dtsc-ink outline-none disabled:opacity-70"
           aria-label="Changer d’espace de travail"
           aria-describedby={error ? "organization-context-error" : undefined}
         >
@@ -66,7 +80,7 @@ export function OrganizationContextSwitcher({
           ))}
         </select>
       </label>
-      {error ? <p id="organization-context-error" role="alert" className="mt-1 max-w-[18rem] break-words px-2 text-[0.68rem] font-bold text-rose-600">{error}</p> : null}
+      {error ? <p id="organization-context-error" role="alert" className="mt-1 max-w-[24rem] break-words px-2 text-[0.68rem] font-bold text-rose-600">{error}</p> : null}
     </div>
   );
 }
