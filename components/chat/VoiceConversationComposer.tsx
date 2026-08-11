@@ -68,6 +68,12 @@ async function readTextResponse(response: Response) {
   return content.trim();
 }
 
+function findActiveConversationId(explicitGroupId?: string | null) {
+  if (explicitGroupId) return explicitGroupId;
+  if (typeof document === "undefined") return "";
+  return document.querySelector<HTMLElement>("[data-conversation-id][aria-current='true']")?.dataset.conversationId || "";
+}
+
 export function VoiceConversationComposer({
   value,
   onChange,
@@ -102,6 +108,7 @@ export function VoiceConversationComposer({
   const [aiBusy, setAiBusy] = useState(false);
   const [replyContext, setReplyContext] = useState("");
   const [agentInstruction, setAgentInstruction] = useState("");
+  const [activeAiGroupId, setActiveAiGroupId] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -164,13 +171,19 @@ export function VoiceConversationComposer({
     return () => window.clearInterval(timer);
   }, [recording, voiceCapabilities.maxDurationSeconds]);
 
+  function openAiCopilot() {
+    setActiveAiGroupId(findActiveConversationId(groupId));
+    setAiOpen(true);
+  }
+
   async function runAiAction(action: AiDraftAction) {
     if (aiBusy || disabled || sending) return;
-    if (action === "PROPOSE_REPLY" && !groupId && !replyContext.trim()) {
+    const resolvedGroupId = activeAiGroupId || findActiveConversationId(groupId);
+    if (action === "PROPOSE_REPLY" && !resolvedGroupId && !replyContext.trim()) {
       onError?.(aiT("aiReplyContextRequired"));
       return;
     }
-    if ((action === "SUMMARY" || action === "NEXT_ACTIONS") && !groupId) {
+    if ((action === "SUMMARY" || action === "NEXT_ACTIONS") && !resolvedGroupId) {
       onError?.(aiT("aiGroupContextRequired"));
       return;
     }
@@ -184,7 +197,7 @@ export function VoiceConversationComposer({
       const response = await fetch("/api/collaborators/ai/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, draft: value, context: replyContext, groupId: groupId || undefined }),
+        body: JSON.stringify({ action, draft: value, context: replyContext, groupId: resolvedGroupId || undefined }),
       });
       const body = await response.json().catch(() => null) as { content?: string; message?: string } | null;
       if (!response.ok || !body?.content) throw new Error(body?.message || aiT("aiComposeError"));
@@ -201,14 +214,15 @@ export function VoiceConversationComposer({
 
   async function runAgent() {
     if (aiBusy || disabled || sending) return;
-    if (!groupId) return onError?.(aiT("aiGroupContextRequired"));
+    const resolvedGroupId = activeAiGroupId || findActiveConversationId(groupId);
+    if (!resolvedGroupId) return onError?.(aiT("aiGroupContextRequired"));
     if (!agentInstruction.trim()) return onError?.(aiT("aiDraftRequired"));
     setAiBusy(true);
     try {
       const response = await fetch("/api/collaborators/ai/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId, instruction: agentInstruction.trim() }),
+        body: JSON.stringify({ groupId: resolvedGroupId, instruction: agentInstruction.trim() }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { message?: string } | null;
@@ -380,7 +394,7 @@ export function VoiceConversationComposer({
               size="icon"
               className="h-11 w-11 shrink-0 rounded-full text-cyan-600"
               disabled={disabled || sending || aiBusy}
-              onClick={() => setAiOpen(true)}
+              onClick={openAiCopilot}
               aria-label={aiT("aiCopilot")}
               title={aiT("aiCopilot")}
             >
@@ -415,7 +429,7 @@ export function VoiceConversationComposer({
         className="max-h-[92dvh] max-w-lg overflow-y-auto"
       >
         <div className="grid gap-4">
-          {groupId ? (
+          {activeAiGroupId ? (
             <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/8 p-3">
               <strong className="text-sm text-dtsc-ink">{aiT("aiThreadContext")}</strong>
               <p className="mt-1 text-xs leading-5 text-dtsc-muted">{aiT("aiThreadContextHelp")}</p>
@@ -447,7 +461,7 @@ export function VoiceConversationComposer({
               className="mt-3 w-full resize-y rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm leading-6 text-dtsc-ink outline-none focus:border-cyan-400"
               disabled={aiBusy}
             />
-            <Button type="button" className="mt-3 w-full" disabled={aiBusy || (!groupId && !replyContext.trim())} onClick={() => void runAiAction("PROPOSE_REPLY")}>
+            <Button type="button" className="mt-3 w-full" disabled={aiBusy || (!activeAiGroupId && !replyContext.trim())} onClick={() => void runAiAction("PROPOSE_REPLY")}>
               <Sparkles className="mr-2 h-4 w-4" />
               {aiBusy ? aiT("aiPreparing") : aiT("aiPrepareReply")}
             </Button>
@@ -467,10 +481,10 @@ export function VoiceConversationComposer({
               rows={4}
               maxLength={4000}
               placeholder={aiT("aiAgentPlaceholder")}
-              disabled={aiBusy || !groupId}
+              disabled={aiBusy || !activeAiGroupId}
               className="mt-3 w-full resize-y rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm leading-6 text-dtsc-ink outline-none focus:border-cyan-400 disabled:opacity-60"
             />
-            <Button type="button" className="mt-3 w-full" disabled={aiBusy || !groupId || !agentInstruction.trim()} onClick={() => void runAgent()}>
+            <Button type="button" className="mt-3 w-full" disabled={aiBusy || !activeAiGroupId || !agentInstruction.trim()} onClick={() => void runAgent()}>
               <Bot className="mr-2 h-4 w-4" />
               {aiBusy ? aiT("aiAgentWorking") : aiT("aiRunAgent")}
             </Button>
