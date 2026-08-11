@@ -157,7 +157,6 @@ export function MobilePwaHeader({
       </div>
 
       <div className="mt-3 flex min-w-0 items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {organizationOptions.length > 0 ? <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} /> : null}
         {visibleGroups.map((group) => {
           const Icon = ICON_BY_GROUP[group.code];
           const badge = groupBadge(group.code);
@@ -171,6 +170,7 @@ export function MobilePwaHeader({
             />
           );
         })}
+        {organizationOptions.length > 0 ? <OrganizationContextSwitcher currentOrganizationId={currentOrganizationId || null} organizations={organizationOptions} /> : null}
         <button type="button" onClick={() => void signOut()} className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border/70 bg-dtsc-page/72 px-3 py-2 text-xs font-black text-dtsc-muted">
           <LogOut className="h-3.5 w-3.5" />
           {translate(locale, "common.signOut")}
