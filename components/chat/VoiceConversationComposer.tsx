@@ -16,6 +16,7 @@ const DEFAULT_VOICE_CAPABILITIES: VoiceCapabilities = {
   maxDurationSeconds: 300,
   maxFileSizeBytes: 16 * 1024 * 1024,
 };
+const MAX_COMPOSER_HEIGHT = 176;
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
@@ -149,8 +150,8 @@ export function VoiceConversationComposer({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > 120 ? "auto" : "hidden";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_COMPOSER_HEIGHT)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > MAX_COMPOSER_HEIGHT ? "auto" : "hidden";
   }, [value]);
 
   useEffect(() => {
@@ -266,7 +267,7 @@ export function VoiceConversationComposer({
             return;
           }
         } catch {
-          // Some mobile browsers do not expose the microphone permission through Permissions API.
+          // Some mobile browsers do not expose microphone permission through Permissions API.
         }
       }
 
@@ -371,7 +372,10 @@ export function VoiceConversationComposer({
             </Button>
           </div>
         ) : (
-          <form onSubmit={(event) => { event.preventDefault(); if (value.trim()) void onSendText(); }} className="flex min-w-0 items-end gap-2 rounded-[1.35rem] border border-dtsc-border bg-dtsc-page p-1.5 shadow-[0_4px_20px_rgba(0,43,91,0.05)]">
+          <form
+            onSubmit={(event) => { event.preventDefault(); if (value.trim()) void onSendText(); }}
+            className="min-w-0 rounded-[1.55rem] border border-dtsc-border bg-dtsc-page p-2 shadow-[0_8px_28px_rgba(0,43,91,0.08)] focus-within:border-cyan-400/60 focus-within:shadow-[0_10px_34px_rgba(6,182,212,0.10)]"
+          >
             <textarea
               ref={textareaRef}
               value={value}
@@ -384,39 +388,43 @@ export function VoiceConversationComposer({
               }}
               rows={1}
               placeholder={placeholder}
-              className="min-h-11 max-h-[120px] min-w-0 flex-1 resize-none bg-transparent px-3 py-2.5 text-base leading-6 text-dtsc-ink outline-none placeholder:text-dtsc-muted"
+              className="max-h-44 min-h-12 w-full resize-none bg-transparent px-3 py-2.5 text-base leading-6 text-dtsc-ink outline-none placeholder:text-dtsc-muted"
               disabled={disabled || sending}
               aria-label={placeholder}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-full text-cyan-600"
-              disabled={disabled || sending || aiBusy}
-              onClick={openAiCopilot}
-              aria-label={aiT("aiCopilot")}
-              title={aiT("aiCopilot")}
-            >
-              <Sparkles className="h-5 w-5" />
-            </Button>
-            {value.trim() ? (
-              <Button type="submit" size="icon" className="h-11 w-11 shrink-0 rounded-full bg-[#002b5b] text-white" disabled={disabled || sending} aria-label={labels?.send || "Envoyer"}>
-                <Send className="h-4 w-4" />
-              </Button>
-            ) : (
+            <div className="mt-1 flex min-w-0 items-center justify-between gap-2 border-t border-dtsc-border/70 px-1 pt-1.5">
               <Button
                 type="button"
+                variant="ghost"
                 size="icon"
-                className="h-11 w-11 shrink-0 rounded-full bg-[#002b5b] text-white"
-                disabled={disabled || sending || !voiceCapabilities.enabled}
-                onClick={() => void startRecording()}
-                aria-label={labels?.record || "Enregistrer un vocal"}
-                title={voiceCapabilities.enabled ? labels?.record || "Enregistrer un vocal" : "Messages vocaux désactivés"}
+                className="h-10 w-10 shrink-0 rounded-full text-cyan-600"
+                disabled={disabled || sending || aiBusy}
+                onClick={openAiCopilot}
+                aria-label={aiT("aiCopilot")}
+                title={aiT("aiCopilot")}
               >
-                <Mic className="h-5 w-5" />
+                <Sparkles className="h-5 w-5" />
               </Button>
-            )}
+              <div className="flex min-w-0 items-center gap-1.5">
+                {value.trim() ? (
+                  <Button type="submit" size="icon" className="h-10 w-10 shrink-0 rounded-full bg-[#002b5b] text-white" disabled={disabled || sending} aria-label={labels?.send || "Envoyer"}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 rounded-full bg-[#002b5b] text-white"
+                    disabled={disabled || sending || !voiceCapabilities.enabled}
+                    onClick={() => void startRecording()}
+                    aria-label={labels?.record || "Enregistrer un vocal"}
+                    title={voiceCapabilities.enabled ? labels?.record || "Enregistrer un vocal" : "Messages vocaux désactivés"}
+                  >
+                    <Mic className="h-5 w-5" />
+                  </Button>
+                )}
+              </div>
+            </div>
           </form>
         )}
       </div>
