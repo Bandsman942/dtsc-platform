@@ -25,12 +25,12 @@ export const CONSOLE_SECTION_IDS = [
 export type ConsoleSectionId = (typeof CONSOLE_SECTION_IDS)[number];
 
 export const CONSOLE_SECTION_GROUPS = [
-  { id: "governance", labelFr: "Pilotage et gouvernance", labelEn: "Steering and governance", descriptionFr: "Vue consolidée, maturité, acquisition et contrôle.", descriptionEn: "Consolidated view, maturity, acquisition and control." },
-  { id: "customers", labelFr: "Clients, revenus et service", labelEn: "Customers, revenue and service", descriptionFr: "Entreprises clientes, abonnements et support.", descriptionEn: "Client organizations, subscriptions and support." },
-  { id: "identity", labelFr: "Identités et accès", labelEn: "Identity and access", descriptionFr: "Comptes, capacités, permissions et sécurité.", descriptionEn: "Accounts, capabilities, permissions and security." },
-  { id: "engagement", labelFr: "Contenus et engagement", labelEn: "Content and engagement", descriptionFr: "Publications, promotions et communication publique.", descriptionEn: "Publications, promotions and public communication." },
-  { id: "platform", labelFr: "Plateforme et technologie", labelEn: "Platform and technology", descriptionFr: "Configuration, feature flags et pilotage technique.", descriptionEn: "Configuration, feature flags and technical steering." },
-  { id: "internal", labelFr: "Opérations internes DTSC", labelEn: "DTSC internal operations", descriptionFr: "Responsabilités métier rattachées aux postes officiels.", descriptionEn: "Business responsibilities attached to official positions." },
+  { id: "governance", labelFr: "Pilotage et gouvernance", labelEn: "Steering and governance", descriptionFr: "Suivre l’activité, la maturité des offres et les indicateurs clés.", descriptionEn: "Track activity, offer maturity and key indicators." },
+  { id: "customers", labelFr: "Clients, revenus et service", labelEn: "Customers, revenue and service", descriptionFr: "Gérer les entreprises clientes, les offres, les abonnements et l’assistance.", descriptionEn: "Manage client companies, offers, subscriptions and support." },
+  { id: "identity", labelFr: "Comptes et accès", labelEn: "Accounts and access", descriptionFr: "Gérer les comptes, les droits d’accès et les protections associées.", descriptionEn: "Manage accounts, access rights and related protections." },
+  { id: "engagement", labelFr: "Contenus et engagement", labelEn: "Content and engagement", descriptionFr: "Gérer les publications, les promotions et la communication publique.", descriptionEn: "Manage publications, promotions and public communication." },
+  { id: "platform", labelFr: "Réglages de la plateforme", labelEn: "Platform settings", descriptionFr: "Configurer le fonctionnement de la plateforme et les options disponibles.", descriptionEn: "Configure how the platform works and the options available." },
+  { id: "internal", labelFr: "Opérations internes DTSC", labelEn: "DTSC internal operations", descriptionFr: "Retrouver les espaces de travail liés aux responsabilités de chaque poste.", descriptionEn: "Access work areas linked to each position's responsibilities." },
 ] as const;
 
 export type ConsoleSectionGroupId = (typeof CONSOLE_SECTION_GROUPS)[number]["id"];
