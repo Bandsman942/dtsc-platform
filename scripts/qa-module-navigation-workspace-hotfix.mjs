@@ -32,11 +32,13 @@ const modulesHub = read("app/modules/page.tsx");
 const groupRegistry = read("lib/navigation/module-navigation-groups.ts");
 
 check("Les cinq groupes DTSC sont définis", ["PILOTAGE", "AI_COLLABORATION", "ORGANIZATION_ERP", "ACCOUNT_SUPPORT", "DTSC_INTERNAL"].every((code) => groupRegistry.includes(`\"${code}\"`)));
-check("La navigation desktop utilise les groupes", navLinks.includes("MODULE_NAVIGATION_GROUPS") && navLinks.includes("getModuleNavigationGroupHref"));
+check("Le registre groupé conserve les entrées standards canoniques", ["standardModuleCodes", "ENTERPRISE_MODULES_SUBSCRIPTION", "DTSC_INTERNAL_ADMIN"].every((token) => groupRegistry.includes(token)));
+check("La navigation desktop utilise les groupes", navLinks.includes("MODULE_NAVIGATION_GROUPS") && navLinks.includes("getModuleNavigationGroupHref") && navLinks.includes("moduleNavigationGroupOwnsPath"));
 check("La navigation desktop n’énumère plus standardNavItem", !navLinks.includes("standardNavItem("));
 check("La navigation mobile utilise les groupes", mobileShell.includes("MODULE_NAVIGATION_GROUPS") && mobileShell.includes("getModuleNavigationGroupHref"));
 check("La navigation mobile n’énumère plus les modules ERP", !mobileShell.includes("enterpriseContext.modules.map"));
 check("Le hub modules est protégé par session", modulesHub.includes("requireUser()") && modulesHub.includes("getSession()"));
+check("Le hub standard résout les modules via le registre canonique", modulesHub.includes("listStandardNavigationItems") && modulesHub.includes("standardModuleCodes"));
 check("Le hub ERP dépend du résolveur serveur", modulesHub.includes("getEnterpriseNavigationModules") && modulesHub.includes("resolveEnterpriseModuleAccess"));
 check("Le changement de contexte recharge la route courante après succès", contextSwitcher.includes("if (!response.ok)") && contextSwitcher.includes("window.location.reload()"));
 check("Le changement de contexte expose les erreurs", contextSwitcher.includes("role=\"alert\"") && contextSwitcher.includes("setError"));
