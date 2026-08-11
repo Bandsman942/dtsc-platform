@@ -3,6 +3,7 @@ import { resolveAssistantProfile, type AssistantProfile } from "@/lib/ai/assista
 import type { AiContextCode, AiDataClassification } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { listNavigableEnterpriseModules, resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 export type AiExecutionContext = {
@@ -50,8 +51,72 @@ export async function buildAiExecutionContext({
   requestedAssistantCode?: string | null;
   requestedModuleCode?: string | null;
 }): Promise<AiExecutionContext> {
-  const organizationScoped = ["ORGANIZATION", "PROJECT", "MODULE", "OBJECT"].includes(contextCode);
+  const organizationScoped = ["DTSC_INTERNAL", "ORGANIZATION", "PROJECT", "MODULE", "OBJECT"].includes(contextCode);
   if (organizationScoped && !organizationId) throw new AiExecutionContextError("ORGANIZATION_CONTEXT_REQUIRED");
+
+  // The internal tenant is a first-class security context. Never let the stable
+  // dtsc-internal organization fall through the CLIENT organization branch.
+  if (organizationId === DTSC_INTERNAL_ORGANIZATION_ID && contextCode !== "DTSC_INTERNAL") {
+    throw new AiExecutionContextError("ORGANIZATION_ACCESS_DENIED");
+  }
+
+  if (contextCode === "DTSC_INTERNAL") {
+    if (organizationId !== DTSC_INTERNAL_ORGANIZATION_ID) {
+      throw new AiExecutionContextError("ORGANIZATION_ACCESS_DENIED");
+    }
+    if (requestedModuleCode) throw new AiExecutionContextError("MODULE_CONTEXT_FORBIDDEN");
+
+    const [membership, usageLimits] = await Promise.all([
+      prisma.organizationMember.findFirst({
+        where: {
+          userId,
+          organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
+          status: "ACTIVE",
+          removedAt: null,
+          organization: { status: "ACTIVE", deletedAt: null, organizationType: "DTSC_INTERNAL" },
+        },
+        select: {
+          role: true,
+          positionCode: true,
+          organization: { select: { id: true, name: true, sectorCode: true, updatedAt: true } },
+        },
+      }),
+      getCanonicalAiUsageLimits({ userId, organizationId: DTSC_INTERNAL_ORGANIZATION_ID }),
+    ]);
+
+    if (!membership) throw new AiExecutionContextError("ORGANIZATION_ACCESS_DENIED");
+
+    const profile = resolveAssistantProfile({ context: "DTSC_INTERNAL", requestedCode: requestedAssistantCode });
+    const requestedResolved = requestedAssistantCode && profile.code === requestedAssistantCode;
+    const contextVersion = shortHash({
+      organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
+      organizationUpdatedAt: membership.organization.updatedAt.toISOString(),
+      role: membership.role,
+      positionCode: membership.positionCode,
+      planCode: "ENTERPRISE",
+      profileCode: profile.code,
+      profileVersion: profile.version,
+    });
+
+    return {
+      userId,
+      contextCode: "DTSC_INTERNAL",
+      profile,
+      profileResolution: requestedResolved ? "REQUESTED" : requestedAssistantCode ? "FALLBACK" : "INFERRED",
+      organization: {
+        id: membership.organization.id,
+        name: membership.organization.name,
+        sectorCode: membership.organization.sectorCode,
+      },
+      membership: { role: membership.role, positionCode: membership.positionCode },
+      planCode: usageLimits.planCode === "ENTERPRISE" ? usageLimits.planCode : "ENTERPRISE",
+      activeModuleCodes: [],
+      requestedModuleCode: null,
+      canReadClinicalData: false,
+      contextVersion,
+      defaultDataClassifications: defaultClassifications(profile, true),
+    };
+  }
 
   if (!organizationId) {
     const profile = resolveAssistantProfile({ context: contextCode, requestedCode: requestedAssistantCode });

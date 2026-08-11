@@ -7,11 +7,13 @@ import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { getAiModelDefinition } from "@/lib/ai/catalog";
+import { AiExecutionContextError } from "@/lib/ai/context-engine";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { completeAiModelCall, failAiModelCall, interruptAiModelCall, startAiModelCall } from "@/lib/ai/observability";
 import { routeAiStream } from "@/lib/ai/orchestrator";
 import { buildLanguageInstruction } from "@/lib/ai/prompts";
+import { resolveAiSessionContext } from "@/lib/ai/session-context";
 import { createAuditedAiTextStream, type AiStreamConsumption } from "@/lib/ai/stream";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
@@ -119,13 +121,29 @@ export async function POST(req: Request) {
 
   const useCompanyContext = preference?.useCompanyContext ?? true;
   const useKnowledge = preference?.useKnowledge ?? true;
-  const contextCode = organizationId ? "ORGANIZATION" as const : "PERSONAL" as const;
-  const preparedTurn = await prepareAiTurn({
-    userId: session.userId,
-    contextCode,
-    organizationId,
-    assistantCode: "DTSC_GENERAL",
-  });
+  const contextCode = resolveAiSessionContext(session);
+  let preparedTurn: Awaited<ReturnType<typeof prepareAiTurn>>;
+  try {
+    preparedTurn = await prepareAiTurn({
+      userId: session.userId,
+      contextCode,
+      organizationId,
+      assistantCode: "DTSC_GENERAL",
+    });
+  } catch (error) {
+    if (error instanceof AiExecutionContextError) {
+      await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt, metadata: { action: "chat_v2_context_denied", reasonCode: error.reasonCode, contextCode } });
+      return NextResponse.json({
+        error: error.reasonCode,
+        reasonCode: error.reasonCode,
+        message: locale === "en" ? "This assistant context is not available for your current session." : "Ce contexte de l’assistant n’est pas disponible pour votre session actuelle.",
+      }, { status: 403 });
+    }
+    const reasonCode = toAiReasonCode(error);
+    const statusCode = error instanceof AiProviderError ? error.statusCode : 502;
+    await writeApiLog({ request: req, statusCode, userId: session.userId, startedAt, metadata: { action: "chat_v2_context_failed", reasonCode, contextCode } });
+    return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode });
+  }
 
   const [companyContext, ragContext] = await Promise.all([
     useCompanyContext ? getCompanyContextForUser(session.userId, organizationId).catch(() => "") : Promise.resolve(""),

@@ -20,8 +20,23 @@ type ConversationSummary = { id: string; title: string; projectId: string | null
 type ConversationProject = { id: string; name: string; _count?: { conversations: number } };
 type ChatMessage = { id: string; role: "user" | "assistant" | "system"; content: string; createdAt?: string; feedbackValue?: number | null };
 type Filter = "ALL" | "PINNED" | "ARCHIVED";
+type AssistantErrorBody = { reasonCode?: string; error?: string; code?: string } | null;
 
 const EMPTY_PREFERENCE: Preference = { pinnedAt: null, archivedAt: null, modelOverride: null, responseStyle: null, responseLength: null, useCompanyContext: true, useKnowledge: true, customInstructions: null };
+
+function getAssistantRequestError(body: AssistantErrorBody, en: boolean) {
+  const reasonCode = body?.reasonCode || body?.error || body?.code || "";
+  if (reasonCode === "DAILY_LIMIT_REACHED") return en ? "Daily AI limit reached." : "Limite IA journalière atteinte.";
+  if (reasonCode === "RATE_LIMITED") return en ? "Too many requests. Please try again shortly." : "Trop de requêtes. Réessayez dans quelques instants.";
+  if (reasonCode === "MODEL_UNAVAILABLE") return en ? "The selected AI model is not available in this context." : "Le modèle IA sélectionné n’est pas disponible dans ce contexte.";
+  if (["ORGANIZATION_CONTEXT_REQUIRED", "ORGANIZATION_ACCESS_DENIED", "MODULE_CONTEXT_FORBIDDEN"].includes(reasonCode)) {
+    return en ? "This assistant context is not available for your current session." : "Ce contexte de l’assistant n’est pas disponible pour votre session actuelle.";
+  }
+  if (reasonCode === "PROVIDER_UNAVAILABLE") return en ? "The AI service is temporarily unavailable." : "Le service IA est temporairement indisponible.";
+  if (reasonCode === "CONTEXT_TOO_LARGE") return en ? "This conversation is too large for the selected model." : "Cette conversation est trop volumineuse pour le modèle sélectionné.";
+  if (reasonCode === "STREAM_INTERRUPTED") return en ? "The AI response was interrupted. Please try again." : "La réponse de l’IA a été interrompue. Réessayez.";
+  return en ? "Assistant temporarily unavailable." : "Assistant momentanément indisponible.";
+}
 
 export function ChatWorkspaceV2({
   initialConversations,
@@ -190,10 +205,10 @@ export function ChatWorkspaceV2({
     setInput(""); setIsStreaming(true); followOutputRef.current = true;
     const response = await fetch("/api/chat/v2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: activeConversationId || undefined, content }) });
     if (!response.ok || !response.body) {
-      const body = await response.json().catch(() => null);
+      const body = await response.json().catch(() => null) as AssistantErrorBody;
       setIsStreaming(false);
       setMessages((current) => current.filter((item) => item.id !== assistantId));
-      return toastError(body?.code === "DAILY_LIMIT_REACHED" ? (en ? "Daily AI limit reached." : "Limite IA journalière atteinte.") : (en ? "Assistant temporarily unavailable." : "Assistant momentanément indisponible."));
+      return toastError(getAssistantRequestError(body, en));
     }
     const createdId = response.headers.get("X-Conversation-Id");
     if (createdId && createdId !== activeConversationId) setActiveConversationId(createdId);

@@ -4,6 +4,7 @@ import { ChatWorkspaceV2 } from "@/components/chat/chat-workspace-v2";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
+import { resolveAiSessionContext } from "@/lib/ai/session-context";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { prisma } from "@/lib/prisma";
@@ -16,11 +17,7 @@ export default async function ChatPage({
   const user = await requireUser();
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
-  const aiContext = activeOrganizationId
-    ? "ORGANIZATION" as const
-    : session?.activeContext === "DTSC_INTERNAL"
-      ? "DTSC_INTERNAL" as const
-      : "PERSONAL" as const;
+  const aiContext = resolveAiSessionContext(session);
   const { conversationId } = await searchParams;
   const conversations = await prisma.conversation.findMany({
     where: { userId: user.id, organizationId: activeOrganizationId },
