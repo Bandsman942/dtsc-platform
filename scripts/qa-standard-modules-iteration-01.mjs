@@ -14,6 +14,8 @@ const registry = read("lib/modules/standard-module-registry.ts");
 const access = read("lib/modules/standard-module-access.ts");
 const navigation = read("lib/modules/standard-module-navigation.ts");
 const navLinks = read("components/layout/nav-links.tsx");
+const moduleHub = read("app/modules/page.tsx");
+const moduleGroups = read("lib/navigation/module-navigation-groups.ts");
 const deepLinks = read("lib/modules/standard-module-deep-links.ts");
 const manualE2e = read("docs/MANUAL_E2E_STANDARD_MODULES_ITERATION_01.md");
 const readiness = read("docs/STANDARD_MODULE_COMMERCIAL_READINESS.md");
@@ -27,9 +29,16 @@ for (const token of ["StandardModuleAccessDecision", "reasonCode", "capabilities
 for (const token of ["buildUrlForHostType", "resolveStandardModuleHref", "listStandardNavigationItems"]) {
   expect(navigation.includes(token), `Navigation standard: contrat absent ${token}`);
 }
-for (const token of ["standardNavItem", "getStandardModuleDefinition", "resolveStandardModuleHref", "ENTERPRISE_MODULES_SUBSCRIPTION"]) {
-  expect(navLinks.includes(token), `NavLinks: branchement canonique absent ${token}`);
+for (const token of ["MODULE_NAVIGATION_GROUPS", "getModuleNavigationGroupHref", "moduleNavigationGroupOwnsPath"]) {
+  expect(navLinks.includes(token), `NavLinks groupés: branchement canonique absent ${token}`);
 }
+for (const token of ["listStandardNavigationItems", "getEnterpriseNavigationModules", "resolveEnterpriseModuleAccess"]) {
+  expect(moduleHub.includes(token), `Hub modules: résolution canonique absente ${token}`);
+}
+for (const token of ["standardModuleCodes", "ENTERPRISE_MODULES_SUBSCRIPTION", "DTSC_INTERNAL_ADMIN"]) {
+  expect(moduleGroups.includes(token), `Registre des groupes: module canonique absent ${token}`);
+}
+expect(!navLinks.includes("standardNavItem("), "NavLinks groupés: l’ancienne énumération directe standardNavItem ne doit pas revenir");
 for (const token of ["objectId", "section", "action", "context", "organizationId"]) {
   expect(deepLinks.includes(token), `Deep link standard: dimension absente ${token}`);
 }
@@ -41,4 +50,4 @@ if (failures.length) {
   console.error(`Standard modules iteration 01 QA failed:\n- ${[...new Set(failures)].join("\n- ")}`);
   process.exit(1);
 }
-console.log("Standard modules iteration 01 QA passed: registry, access, navigation, deep links, documentation and commercial governance are guarded.");
+console.log("Standard modules iteration 01 QA passed: registry, grouped navigation hub, access, deep links, documentation and commercial governance are guarded.");
