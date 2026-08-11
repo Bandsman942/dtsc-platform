@@ -22,4 +22,12 @@ requireToken("components/admin/admin-billing-subscriptions.tsx", "Offre commerci
 requireToken("components/admin/admin-billing-subscriptions.tsx", "Niveau de capacité", "les abonnements doivent afficher le niveau séparément");
 requireToken("app/api/admin/billing-plans/[id]/route.ts", "PLAN_AUDIENCE_IMMUTABLE", "les audiences des offres canoniques doivent être protégées côté serveur");
 
+// Contrat d'expérience module : Administration DTSC doit utiliser le même header moderne
+// que les autres workspaces et garder des libellés compréhensibles par l'utilisateur.
+requireToken("components/admin/admin-floating-nav.tsx", "ModuleHeader", "Administration DTSC doit utiliser le header de module canonique");
+requireToken("components/admin/admin-floating-nav.tsx", "data-admin-modern-module-header", "le nouveau header Administration DTSC doit remplacer visuellement l'ancien");
+requireToken("components/admin/admin-floating-nav.tsx", "Administration DTSC", "le titre métier Administration DTSC doit rester visible");
+requireToken("components/admin/admin-floating-nav.tsx", "Espaces de travail disponibles", "la navigation Administration DTSC doit utiliser un libellé orienté utilisateur");
+requireToken("components/admin/admin-floating-nav.tsx", "ContextualUserGuide", "le guide utilisateur doit rester accessible depuis le nouveau header");
+
 if (!process.exitCode) console.log("✓ DTSC Console iteration 07 quality gate");
