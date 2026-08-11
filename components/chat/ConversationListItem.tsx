@@ -22,6 +22,7 @@ export type ConversationListItemProps = {
 };
 
 export function ConversationListItem({
+  id,
   title,
   preview,
   timestamp,
@@ -39,6 +40,8 @@ export function ConversationListItem({
     <button
       type="button"
       onClick={onClick}
+      data-conversation-id={id}
+      aria-current={isActive ? "true" : undefined}
       className={cn(
         "group flex min-h-[4.25rem] w-full min-w-0 items-center gap-3 rounded-2xl px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-cyan-300",
         isActive ? "bg-cyan-400/12 text-dtsc-ink" : "hover:bg-dtsc-page"
