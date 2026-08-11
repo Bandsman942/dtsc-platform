@@ -18,6 +18,8 @@ const reconciliation = read("lib/enterprise/module-subscription-reconciliation.t
 const moduleAccess = read("lib/enterprise/module-access.ts");
 const moduleLoader = read("lib/enterprise/enterprise-modules-loader.ts");
 const mobileShell = read("components/dtsc/mobile-shell.tsx");
+const moduleNavigationGroups = read("lib/navigation/module-navigation-groups.ts");
+const modulesHub = read("app/modules/page.tsx");
 const consoleBilling = read("lib/console/console-billing.ts");
 const planManager = read("components/admin/billing-plan-manager.tsx");
 const planLimits = read("lib/billing/plan-limits.ts");
@@ -45,8 +47,10 @@ check(
   moduleAccess.includes("compareEnterpriseModuleDefinitions") && moduleLoader.includes("compareEnterpriseModuleRows"),
 );
 check(
-  "Le rail mobile secondaire possède des icônes et surveille le module actif",
-  includesAll(mobileShell, ["data-mobile-secondary-nav", "data-mobile-module-active", "resolveEnterpriseModuleIcon", "scrollIntoView", "aria-current"]),
+  "La navigation mobile groupée possède des icônes, surveille le groupe actif et délègue les modules ERP au résolveur serveur",
+  includesAll(mobileShell, ["ICON_BY_GROUP", "MODULE_NAVIGATION_GROUPS", "getModuleNavigationGroupHref", "groupIsActive", "aria-current"]) &&
+    moduleNavigationGroups.includes("ORGANIZATION_ERP") &&
+    modulesHub.includes("getEnterpriseNavigationModules"),
 );
 check(
   "L’administration DTSC expose le catalogue des modules par niveau de capacité",
