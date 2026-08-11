@@ -1,8 +1,9 @@
 import "server-only";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const PRODUCT_CHANGELOG_PATH = join(process.cwd(), "docs", "CHANGELOG.md");
+const PRODUCT_CHANGELOG_FRAGMENTS_DIR = join(process.cwd(), "docs", "changelog");
 const MAX_RELEASES = 4;
 const MAX_ITEMS = 28;
 const MAX_ITEM_LENGTH = 320;
@@ -25,11 +26,21 @@ function normalizeProductChange(value: string) {
 }
 
 function readVersionedProductChanges() {
+  const sources: string[] = [];
   try {
-    return readFileSync(PRODUCT_CHANGELOG_PATH, "utf8");
+    if (existsSync(PRODUCT_CHANGELOG_FRAGMENTS_DIR)) {
+      const fragments = readdirSync(PRODUCT_CHANGELOG_FRAGMENTS_DIR)
+        .filter((name) => /^\d{4}-\d{2}-\d{2}.*\.md$/i.test(name))
+        .sort((left, right) => right.localeCompare(left));
+      for (const fragment of fragments) {
+        sources.push(readFileSync(join(PRODUCT_CHANGELOG_FRAGMENTS_DIR, fragment), "utf8"));
+      }
+    }
+    sources.push(readFileSync(PRODUCT_CHANGELOG_PATH, "utf8"));
   } catch {
-    return "";
+    // A missing optional changelog source must not make an assistant route unavailable.
   }
+  return sources.join("\n\n");
 }
 
 export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
@@ -45,7 +56,6 @@ export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
       currentRelease = releaseMatch[1];
       currentSection = "";
       if (!releases.includes(currentRelease) && releases.length < MAX_RELEASES) releases.push(currentRelease);
-      if (releases.length >= MAX_RELEASES && !releases.includes(currentRelease)) break;
       continue;
     }
 
