@@ -72,16 +72,67 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
 
   if (run("subscription")) {
     const page = requireFile(errors, "app/billing/page.tsx");
+    const commercialContext = requireFile(errors, "lib/billing/commercial-context.ts");
     const entitlements = requireFile(errors, "lib/billing/entitlements.ts");
+    const aiLimits = requireFile(errors, "lib/billing/ai-usage-limits.ts");
+    const cag = requireFile(errors, "lib/ai/cag-registry.ts");
+    const migration = requireFile(errors, "prisma/migrations/20260811103500_reconcile_organization_billing_plan_audience/migration.sql");
+
     expectTokens(errors, "Abonnement", page, [
+      "resolvePersonalCommercialContext",
       "getOrganizationEntitlements",
       "usageLog.aggregate",
       "knowledgeDocument.count",
+      "Offre appliquée",
+      "Niveau de capacité",
+      "contextualDailyMessageLimit",
+      "contextualDailyTokenLimit",
       "Factures SaaS",
-      "paymentAvailable",
       "Guide de l’Abonnement",
     ]);
-    expectTokens(errors, "Entitlements", entitlements, ["subscriptionActive", "limits", "modules", "PLAN_REQUIRED", "SUBSCRIPTION_REQUIRED"]);
+    expectTokens(errors, "Contexte commercial canonique", commercialContext, [
+      "resolveOrganizationCommercialContext",
+      "resolvePersonalCommercialContext",
+      "ORGANIZATION_SUBSCRIPTION",
+      "ORGANIZATION_LEGACY_MAPPED",
+      "ORGANIZATION_BASELINE",
+      "PERSONAL_SUBSCRIPTION",
+      "FREEMIUM_PLAN",
+      "org-starter",
+      "org-growth",
+      "org-premium",
+      'organizationType: "CLIENT"',
+    ]);
+    expectTokens(errors, "Entitlements", entitlements, [
+      "resolveOrganizationCommercialContext",
+      "offerName",
+      "capabilityLabel",
+      "subscriptionActive",
+      "limits",
+      "modules",
+      "PLAN_REQUIRED",
+      "SUBSCRIPTION_REQUIRED",
+    ]);
+    expectTokens(errors, "Limites IA", aiLimits, [
+      "resolveOrganizationCommercialContext",
+      "resolvePersonalCommercialContext",
+      "ORGANIZATION_BASELINE",
+      "dailyMessageLimit: 0",
+      "dailyTokenLimit: 0",
+      "DTSC_INTERNAL_USER_LIMITS",
+    ]);
+    expectTokens(errors, "CAG commercial", cag, ["Offre commerciale:", "Niveau de capacité:", "subscriptionStatus", "getCanonicalAiUsageLimits"]);
+    expectTokens(errors, "Migration abonnements historiques", migration, [
+      "org-starter",
+      "org-growth",
+      "org-premium",
+      'UPDATE "OrganizationSubscription"',
+      '"planId" IN (\'freemium\', \'starter\', \'growth\', \'premium\')',
+      "ON CONFLICT DO NOTHING",
+    ]);
+    if (aiLimits.includes('return fromPlan(organizationSubscription.plan') || aiLimits.includes('if (organizationSubscription)')) {
+      errors.push("Limites IA: ancien resolver organisation parallèle détecté");
+    }
   }
 
   if (run("notification-deep-links")) {
