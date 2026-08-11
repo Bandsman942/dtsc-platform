@@ -13,6 +13,9 @@ import { formatEnumLabel } from "@/lib/labels";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import { getUserPushNotificationContentMode } from "@/lib/session-preference";
 
+// Contrat de gouvernance de la session : Aucune gestion multi-appareils fictive.
+// Cette page décrit uniquement la session signée courante tant qu'un registre serveur
+// de sessions par appareil n'est pas la source réelle de cette fonctionnalité.
 function sessionDate(value: number | undefined) {
   return value ? new Date(value * 1000).toLocaleString("fr-FR") : "Non disponible";
 }
