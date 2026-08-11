@@ -31,6 +31,8 @@ const storyRoute = read("app/api/collaborators/groups/[id]/stories/route.ts");
 const voiceRoute = read("app/api/collaborators/groups/[id]/voice/route.ts");
 const preferenceRoute = read("app/api/collaborators/groups/[id]/preferences/route.ts");
 const messagesRoute = read("app/api/collaborators/groups/[id]/messages/route.ts");
+const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
+const collaboratorAgent = read("app/api/collaborators/ai/agent/route.ts");
 const workspace = read("components/collaborators/collaborators-conversation-workspace.tsx");
 const presenceJournal = read("components/collaborators/group-presence-journal-dialog.tsx");
 const meetingMessageContent = read("components/collaborators/collaboration-meeting-message-content.tsx");
@@ -39,6 +41,7 @@ const immersiveViewport = read("components/chat/use-immersive-conversation-viewp
 const mobileChrome = read("components/layout/private-mobile-chrome-controller.tsx");
 const participantColors = read("lib/participant-colors.ts");
 const composer = read("components/chat/VoiceConversationComposer.tsx");
+const conversationListItem = read("components/chat/ConversationListItem.tsx");
 const page = read("app/collaborators/page.tsx");
 const contactDiscovery = read("components/collaborators/contact-discovery-workspace.tsx");
 const contactDiscoveryPage = read("app/collaborators/contacts/new/page.tsx");
@@ -123,6 +126,18 @@ assert(composer.includes("getUserMedia"), "Voice composer must request microphon
 assert(composer.includes("<textarea"), "Conversation composer must support multiline messages");
 assert(composer.includes("/api/collaborators/voice-settings"), "Voice composer must load backend capabilities");
 assert(composer.includes("maxDurationSeconds") && composer.includes("maxFileSizeBytes"), "Voice composer must surface backend voice limits");
+
+// Issue #224: AI can use only the active authorized thread and never silently send.
+assert(conversationListItem.includes("data-conversation-id={id}") && conversationListItem.includes("aria-current={isActive"), "Conversation list must expose the active thread identifier to the local composer UI");
+assert(composer.includes("findActiveConversationId") && composer.includes("/api/collaborators/ai/agent"), "Composer must bind contextual AI and Agent mode to the active visible thread");
+assert(composer.includes('runAiAction("PROPOSE_REPLY")') && composer.includes('runAiAction("SUMMARY")') && composer.includes('runAiAction("NEXT_ACTIONS")'), "Collaborator copilot must expose reply, summary and next actions");
+assert(collaboratorAiCompose.includes("assertGroupMemberForSession") && collaboratorAiCompose.includes("isCollaborationBlocked"), "Contextual compose must revalidate membership and direct-conversation blocks server-side");
+assert(collaboratorAiCompose.includes("take: 20") && collaboratorAiCompose.includes("slice(-14_000)"), "Contextual compose must bound recent thread context");
+assert(collaboratorAgent.includes("createInteractiveAiAgentStream") && collaboratorAgent.includes("assertGroupMemberForSession"), "Collaborator Agent mode must reuse the canonical Agent Runtime after membership validation");
+assert(collaboratorAgent.includes("isCollaborationBlocked") && collaboratorAgent.includes("take: 24") && collaboratorAgent.includes("slice(-16_000)"), "Collaborator Agent mode must bound context and respect direct blocks");
+assert(collaboratorAgent.includes("N’envoie jamais de message") && !collaboratorAgent.includes("collaborationGroupMessage.create"), "Collaborator Agent mode must not silently send collaboration messages");
+assert(collaboratorAgent.includes("await rateLimit") && collaboratorAgent.includes("writeApiLog"), "Collaborator Agent mode must be rate-limited and audited");
+
 assert(workspace.includes('"UNREAD"') && workspace.includes('"FAVORITES"') && workspace.includes('"GROUPS"'), "Workspace must expose WhatsApp-style filters");
 assert(workspace.includes("ActionMenu"), "Workspace contextual actions must use reusable ActionMenu");
 assert(workspace.includes("ConversationListItem") && workspace.includes("ConversationHeader"), "Workspace must reuse professional conversation components");
@@ -170,4 +185,4 @@ assert(vercel.includes('"main": true'), "Vercel production-only main deployment 
 assert(vercel.includes('"*": false'), "Feature branch Vercel deployments must stay disabled");
 assert(vercel.includes("ignoreCommand"), "Vercel preview ignoreCommand must remain configured");
 
-console.log("Collaboration immersive scroll, contact rail/profile, messenger polish, presence journal, read info, meetings and voice QA passed.");
+console.log("Collaboration immersive scroll, contact rail/profile, contextual AI agent, messenger polish, presence journal, read info, meetings and voice QA passed.");
