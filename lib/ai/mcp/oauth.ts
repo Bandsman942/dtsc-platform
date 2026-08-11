@@ -245,7 +245,11 @@ export async function getValidMcpOAuthAccessToken(input: {
   userId: string;
   organizationId: string;
 }) {
-  const connection = await getMcpOAuthConnection(input);
+  const connection = await getMcpOAuthConnection({
+    userId: input.userId,
+    organizationId: input.organizationId,
+    serverCode: input.server.code,
+  });
   if (!connection) throw new Error("MCP_OAUTH_CONNECTION_MISSING");
   const expiresAt = connection.credentials.expiresAt ? new Date(connection.credentials.expiresAt).getTime() : null;
   if (!expiresAt || expiresAt > Date.now() + 60_000) return connection.credentials.accessToken;
@@ -264,7 +268,13 @@ export async function getValidMcpOAuthAccessToken(input: {
     if (input.server.oauthScopes?.length) body.set("scope", input.server.oauthScopes.join(" "));
     const token = await postToken(input.server, metadata, body);
     const credentials = credentialsFromTokenResponse(token, connection.credentials.refreshToken);
-    await saveMcpOAuthConnection({ ...input, credentials, refreshed: true });
+    await saveMcpOAuthConnection({
+      userId: input.userId,
+      organizationId: input.organizationId,
+      serverCode: input.server.code,
+      credentials,
+      refreshed: true,
+    });
     await writeAuditLog({
       userId: input.userId,
       organizationId: input.organizationId,
