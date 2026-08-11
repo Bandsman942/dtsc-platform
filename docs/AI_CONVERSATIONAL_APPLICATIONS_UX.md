@@ -165,6 +165,10 @@ Un déploiement ne doit pas prétendre qu’un fournisseur est prêt si son serv
 
 `scripts/qa-standard-ai-agent-ui.mjs` vérifie aussi que **Mode agent** passe par le hub flottant commun avec un ordre supérieur à la boîte à outils tout en conservant les contrôles du runtime.
 
+## Réconciliation de livraison
+
+L’implémentation OAuth a été reconstruite sur le `main` contenant le hotfix Assistant entreprise et le nouveau hub Agent. Les assertions OAuth ont été fusionnées avec les assertions de langage UX et de rendu enrichi ; aucun retour aux anciens codes avec underscores ni au bouton Agent autonome n’est accepté.
+
 ## CI/CD
 
 Le workflow reste :
