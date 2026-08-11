@@ -59,11 +59,14 @@ export async function GET(request: Request) {
 
   try {
     const credentials = await exchangeMcpOAuthCode({ server, code, verifier: savedState.verifier });
+    const effectiveCredentials = credentials.scope.length || !server.oauthScopes?.length
+      ? credentials
+      : { ...credentials, scope: [...server.oauthScopes] };
     await saveMcpOAuthConnection({
       userId: session.userId,
       organizationId: savedState.organizationId,
       serverCode: server.code,
-      credentials,
+      credentials: effectiveCredentials,
     });
     await writeAuditLog({
       userId: session.userId,
@@ -73,7 +76,7 @@ export async function GET(request: Request) {
       entity: "MCP_CONNECTION",
       entityId: server.code,
       riskLevel: "MEDIUM",
-      metadata: { serverCode: server.code, scopes: credentials.scope },
+      metadata: { serverCode: server.code, scopes: effectiveCredentials.scope },
     });
     await writeApiLog({ request, statusCode: 303, userId: session.userId, startedAt, metadata: { serverCode: server.code } });
     return NextResponse.redirect(appsRedirect("connected"), 303);
