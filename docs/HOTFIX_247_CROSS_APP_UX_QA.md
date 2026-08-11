@@ -53,13 +53,15 @@ Les cases visibles proviennent de la readiness canonique. La disponibilité du s
 
 `confirmSensitiveAction()` et `SensitiveActionConfirmationProvider` fournissent une confirmation DTSC en boîte de dialogue :
 
-- aucune dépendance au rendu natif du navigateur ;
+- aucune dépendance au rendu natif du navigateur pour la confirmation visible ;
 - annulation par défaut en l’absence d’interface ;
 - tonalité standard, avertissement ou action destructive ;
 - possibilité d’exiger un motif ;
 - composant monté au niveau racine afin d’être utilisable dans tous les modules.
 
-Les surfaces sensibles migrées utilisent le système de toast DTSC pour leurs résultats de mutation. Une QA transverse recherche les confirmations navigateur encore présentes dans `components/**` afin d’empêcher leur réintroduction avant livraison.
+Les principaux parcours sensibles touchés par ce hotfix utilisent directement `confirmSensitiveAction()`. Deux grands workspaces historiques contiennent encore un appel synchrone `window.confirm()` dans leur source : le calendrier interne et la gestion des filtres personnalisés de Mes Collaborateurs. Ils sont explicitement recensés par la QA et passent à l’exécution par un **pont de compatibilité global** : le provider intercepte l’appel, annule d’abord l’action, ouvre le `Dialog` DTSC, puis ne rejoue l’action qu’une seule fois après confirmation. Le navigateur ne présente donc pas sa boîte native. Toute nouvelle occurrence de `window.confirm()` hors de cette liste auditée fait échouer la QA.
+
+Les surfaces sensibles migrées utilisent le système de toast DTSC pour leurs résultats de mutation. Les états structurels de chargement peuvent conserver un état de page dédié ; les succès et échecs de mutation ne doivent pas être injectés arbitrairement au milieu du module.
 
 ## Contrat confidentialité des notifications
 
@@ -96,8 +98,9 @@ Le hotfix ajoute `scripts/qa-cross-app-ux-integrity-hotfix.mjs` et l’intègre 
 - composer multiligne et scrollbar masquée ;
 - responsive du rail ERP ;
 - source canonique de readiness Shop et deep links ;
-- absence de `window.confirm()` dans les composants applicatifs ;
-- montage du provider de confirmation et usage des toasts sur les surfaces migrées ;
+- provider de confirmation, pont de compatibilité et liste fermée des deux appels historiques tolérés ;
+- absence de nouvelle confirmation navigateur non auditée ;
+- usage direct du contrat DTSC et des toasts sur les surfaces sensibles migrées ;
 - migration et politique privacy-first des notifications ;
 - résolution contrôlée des deep links IA.
 
@@ -125,11 +128,12 @@ Les contrats IA existants sont également renforcés dans `qa-standard-ai-contex
 
 ### Confirmations / toasts
 
-1. Déclencher une action destructive ou sensible migrée.
+1. Déclencher une action destructive ou sensible directement migrée.
 2. Vérifier qu’une boîte DTSC s’ouvre, et non une boîte native du navigateur.
 3. Annuler et vérifier qu’aucune mutation n’a lieu.
 4. Confirmer ; lorsqu’un motif est demandé, vérifier qu’il est obligatoire.
 5. Vérifier que succès et échec s’affichent sous forme de toast DTSC.
+6. Tester également la suppression d’un filtre personnalisé dans Mes Collaborateurs et l’acceptation d’un conflit d’invitation du calendrier interne : ces deux parcours historiques doivent eux aussi afficher le `Dialog` DTSC via le pont de compatibilité et n’exécuter l’action qu’une seule fois après confirmation.
 
 ### Notifications
 
