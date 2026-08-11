@@ -2,18 +2,26 @@ import { z } from "zod";
 import type { McpServerDefinition } from "@/lib/ai/mcp/types";
 import { validateMcpEndpoint } from "@/lib/ai/mcp/security";
 
+const envKeySchema = z.string().regex(/^[A-Z][A-Z0-9_]*$/);
+const hostSchema = z.string().min(1).max(253).transform((value) => value.toLowerCase());
+
 const serverSchema = z.object({
   code: z.string().regex(/^[A-Z0-9_]{3,80}$/),
   label: z.string().min(2).max(120),
   transport: z.literal("STREAMABLE_HTTP"),
   endpoint: z.string().url(),
-  allowedHosts: z.array(z.string().min(1)).min(1).max(8),
+  allowedHosts: z.array(hostSchema).min(1).max(8),
   contexts: z.array(z.enum(["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"])).min(1),
   organizationScope: z.enum(["GLOBAL", "TENANT"]),
   status: z.enum(["DISABLED", "CERTIFIED", "SUSPENDED"]),
   dataPolicy: z.enum(["PUBLIC_ONLY", "BUSINESS_ALLOWED", "SENSITIVE_CERTIFIED"]),
-  authMode: z.enum(["NONE", "BEARER_ENV"]),
-  authEnvKey: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable().optional(),
+  authMode: z.enum(["NONE", "BEARER_ENV", "OAUTH_USER"]),
+  authEnvKey: envKeySchema.nullable().optional(),
+  oauthClientIdEnvKey: envKeySchema.nullable().optional(),
+  oauthClientSecretEnvKey: envKeySchema.nullable().optional(),
+  oauthScopes: z.array(z.string().min(1).max(240)).max(30).optional(),
+  oauthAuthorizationServer: z.string().url().nullable().optional(),
+  oauthAllowedHosts: z.array(hostSchema).min(1).max(12).optional(),
   timeoutMs: z.number().int().min(500).max(30_000).default(8_000),
   maxResponseBytes: z.number().int().min(1_024).max(5_000_000).default(1_000_000),
   allowedToolModes: z.array(z.enum(["READ", "PREPARE", "MUTATE", "SENSITIVE_MUTATE"])).min(1),
@@ -50,14 +58,24 @@ export function assertMcpServerRegistryIntegrity() {
   for (const server of MCP_SERVER_REGISTRY) {
     if (codes.has(server.code)) failures.push(`${server.code}: duplicate MCP server code`);
     codes.add(server.code);
+
     if (server.authMode === "BEARER_ENV" && !server.authEnvKey) failures.push(`${server.code}: BEARER_ENV requires authEnvKey`);
-    if (server.authMode === "NONE" && server.authEnvKey) failures.push(`${server.code}: authEnvKey must not be configured for NONE auth`);
+    if (server.authMode !== "BEARER_ENV" && server.authEnvKey) failures.push(`${server.code}: authEnvKey is reserved for BEARER_ENV auth`);
+    if (server.authMode === "OAUTH_USER" && !server.oauthClientIdEnvKey) failures.push(`${server.code}: OAUTH_USER requires oauthClientIdEnvKey`);
+    if (server.authMode === "OAUTH_USER" && !server.oauthAllowedHosts?.length) failures.push(`${server.code}: OAUTH_USER requires oauthAllowedHosts`);
+    if (server.authMode !== "OAUTH_USER" && (server.oauthClientIdEnvKey || server.oauthClientSecretEnvKey || server.oauthAuthorizationServer || server.oauthScopes?.length || server.oauthAllowedHosts?.length)) {
+      failures.push(`${server.code}: OAuth configuration requires OAUTH_USER auth`);
+    }
+    if (server.oauthAuthorizationServer) {
+      const host = new URL(server.oauthAuthorizationServer).hostname.toLowerCase();
+      if (!server.oauthAllowedHosts?.includes(host)) failures.push(`${server.code}: oauthAuthorizationServer host is not certified`);
+    }
     if (server.authMode === "BEARER_ENV" && server.authEnvKey) {
       const previousServer = authEnvKeys.get(server.authEnvKey);
       if (previousServer && previousServer !== server.code) failures.push(`${server.code}: authEnvKey is already assigned to ${previousServer}`);
       else authEnvKeys.set(server.authEnvKey, server.code);
     }
-    if (server.allowedToolModes.some((mode) => mode !== "READ")) failures.push(`${server.code}: AI07 first delivery only certifies READ MCP tools`);
+    if (server.allowedToolModes.some((mode) => mode !== "READ")) failures.push(`${server.code}: current MCP certification only permits READ tools`);
     const endpoint = validateMcpEndpoint(server);
     if (!endpoint.allowed) failures.push(`${server.code}: ${endpoint.reasonCode}`);
   }

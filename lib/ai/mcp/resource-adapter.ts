@@ -23,23 +23,14 @@ const bindingSchema = z.object({
 type ResourceBinding = z.infer<typeof bindingSchema>;
 
 type ResourceReadResult = {
-  contents?: Array<{
-    uri?: string;
-    mimeType?: string;
-    text?: string;
-    blob?: string;
-  }>;
+  contents?: Array<{ uri?: string; mimeType?: string; text?: string; blob?: string }>;
 };
 
 function loadResourceBindings(): ResourceBinding[] {
   const raw = process.env.DTSC_MCP_RESOURCE_BINDINGS_JSON?.trim();
   if (!raw) return [];
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("DTSC_MCP_RESOURCE_BINDINGS_JSON_INVALID_JSON");
-  }
+  try { parsed = JSON.parse(raw); } catch { throw new Error("DTSC_MCP_RESOURCE_BINDINGS_JSON_INVALID_JSON"); }
   const result = z.array(bindingSchema).safeParse(parsed);
   if (!result.success) throw new Error("DTSC_MCP_RESOURCE_BINDINGS_JSON_INVALID_SCHEMA");
   return result.data;
@@ -61,9 +52,7 @@ function effectiveClassifications(context: AiToolRuntimeContext): McpDataClassif
   return activeContext === "ORGANIZATION" || activeContext === "DTSC_INTERNAL" ? ["CONFIDENTIAL"] : ["INTERNAL"];
 }
 
-function textByteLength(value: string) {
-  return new TextEncoder().encode(value).byteLength;
-}
+function textByteLength(value: string) { return new TextEncoder().encode(value).byteLength; }
 
 export async function readMcpBoundResource(input: { resourceCode: string; context: AiToolRuntimeContext }) {
   const binding = MCP_RESOURCE_BINDINGS.find((entry) => entry.resourceCode === input.resourceCode && entry.enabled);
@@ -78,17 +67,20 @@ export async function readMcpBoundResource(input: { resourceCode: string; contex
 
   const limiter = await rateLimit(`ai-mcp-resource:${input.context.userId}:${server.code}`, 30, 60 * 1000);
   if (!limiter.ok) throw new Error("MCP_RATE_LIMITED");
-
   const permissionDecision = await authorizeMcpRequiredPermissions({ requiredPermissions: binding.requiredPermissions, context: input.context });
   if (!permissionDecision.allowed) throw new Error(permissionDecision.reasonCode);
-
   const dataDecision = authorizeMcpDataBoundary({ server, classifications: effectiveClassifications(input.context) });
   if (!dataDecision.allowed) throw new Error(dataDecision.reasonCode);
 
-  const { snapshot } = await discoverAndPersistMcpServer(server);
+  const userAuth = server.authMode === "OAUTH_USER"
+    ? { userId: input.context.userId, organizationId: input.context.organizationId || "" }
+    : null;
+  if (server.authMode === "OAUTH_USER" && !userAuth?.organizationId) throw new Error("MCP_OAUTH_ORGANIZATION_CONTEXT_REQUIRED");
+
+  const { snapshot } = await discoverAndPersistMcpServer(server, userAuth);
   if (!snapshot.resources.some((resource) => resource.uri === binding.remoteUri)) throw new Error("MCP_BOUND_RESOURCE_NOT_DISCOVERED");
 
-  const result = await callMcpJsonRpc<ResourceReadResult>({ server, method: "resources/read", params: { uri: binding.remoteUri } });
+  const result = await callMcpJsonRpc<ResourceReadResult>({ server, method: "resources/read", params: { uri: binding.remoteUri }, userAuth });
   const contents = (result.contents || []).map((content) => {
     if (content.uri && content.uri !== binding.remoteUri) throw new Error("MCP_RESOURCE_URI_MISMATCH");
     const text = typeof content.text === "string" ? content.text : "";

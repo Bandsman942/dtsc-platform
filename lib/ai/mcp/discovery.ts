@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { getLatestMcpDiscoverySnapshot, persistMcpDiscoverySnapshot, writeMcpAuditEvent } from "@/lib/ai/mcp/audit";
-import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
+import { callMcpJsonRpc, type McpUserAuthContext } from "@/lib/ai/mcp/transport";
 import { hashMcpSchema } from "@/lib/ai/mcp/schema";
 import type { McpDiscoverySnapshot, McpDiscoveredTool, McpServerDefinition } from "@/lib/ai/mcp/types";
 
@@ -18,8 +18,8 @@ type ToolsListResult = { tools?: Array<{ name?: string; title?: string; descript
 type ResourcesListResult = { resources?: Array<{ uri?: string; name?: string; mimeType?: string }> };
 type PromptsListResult = { prompts?: Array<{ name?: string; description?: string }> };
 
-export async function discoverMcpServer(server: McpServerDefinition): Promise<McpDiscoverySnapshot> {
-  const toolsResult = await callMcpJsonRpc<ToolsListResult>({ server, method: "tools/list" });
+export async function discoverMcpServer(server: McpServerDefinition, userAuth?: McpUserAuthContext | null): Promise<McpDiscoverySnapshot> {
+  const toolsResult = await callMcpJsonRpc<ToolsListResult>({ server, method: "tools/list", userAuth });
   const tools: McpDiscoveredTool[] = (toolsResult.tools || []).flatMap((tool) => {
     if (!tool.name || !tool.inputSchema || typeof tool.inputSchema !== "object" || Array.isArray(tool.inputSchema)) return [];
     return [{
@@ -34,13 +34,13 @@ export async function discoverMcpServer(server: McpServerDefinition): Promise<Mc
   let resources: McpDiscoverySnapshot["resources"] = [];
   let prompts: McpDiscoverySnapshot["prompts"] = [];
   try {
-    const result = await callMcpJsonRpc<ResourcesListResult>({ server, method: "resources/list" });
+    const result = await callMcpJsonRpc<ResourcesListResult>({ server, method: "resources/list", userAuth });
     resources = (result.resources || []).flatMap((resource) => resource.uri ? [{ uri: resource.uri, name: resource.name, mimeType: resource.mimeType }] : []).sort((a, b) => a.uri.localeCompare(b.uri));
   } catch {
     resources = [];
   }
   try {
-    const result = await callMcpJsonRpc<PromptsListResult>({ server, method: "prompts/list" });
+    const result = await callMcpJsonRpc<PromptsListResult>({ server, method: "prompts/list", userAuth });
     prompts = (result.prompts || []).flatMap((prompt) => prompt.name ? [{ name: prompt.name, description: prompt.description }] : []).sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     prompts = [];
@@ -66,13 +66,15 @@ export function compareMcpDiscovery(previous: McpDiscoverySnapshot | null, next:
   return { compatible: removedTools.length === 0 && changedTools.length === 0, addedTools, removedTools, changedTools };
 }
 
-export async function discoverAndPersistMcpServer(server: McpServerDefinition) {
+export async function discoverAndPersistMcpServer(server: McpServerDefinition, userAuth?: McpUserAuthContext | null) {
   const previous = await getLatestMcpDiscoverySnapshot(server.code);
-  const snapshot = await discoverMcpServer(server);
+  const snapshot = await discoverMcpServer(server, userAuth);
   const change = compareMcpDiscovery(previous, snapshot);
   await persistMcpDiscoverySnapshot({ snapshot, compatible: change.compatible, change });
   if (!previous || previous.version !== snapshot.version) {
     await writeMcpAuditEvent({
+      userId: userAuth?.userId || null,
+      organizationId: userAuth?.organizationId || null,
       serverCode: server.code,
       eventType: "DISCOVERY",
       status: change.compatible ? "SUCCESS" : "CHANGED",

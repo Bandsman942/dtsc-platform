@@ -1,4 +1,5 @@
 import type { McpServerDefinition } from "@/lib/ai/mcp/types";
+import { getValidMcpOAuthAccessToken } from "@/lib/ai/mcp/oauth";
 import { encodeMcpHeaderValue } from "@/lib/ai/mcp/schema";
 import { validateMcpEndpointResolution } from "@/lib/ai/mcp/security";
 
@@ -51,11 +52,17 @@ function parseSseJsonRpcResponse<T>(payload: string, expectedId: number): JsonRp
   return finalResponse;
 }
 
+export type McpUserAuthContext = {
+  userId: string;
+  organizationId: string;
+};
+
 export async function callMcpJsonRpc<T>(input: {
   server: McpServerDefinition;
   method: string;
   params?: Record<string, unknown>;
   additionalHeaders?: Record<string, string>;
+  userAuth?: McpUserAuthContext | null;
 }) {
   const endpoint = await validateMcpEndpointResolution(input.server);
   if (!endpoint.allowed) throw new Error(endpoint.reasonCode);
@@ -77,6 +84,14 @@ export async function callMcpJsonRpc<T>(input: {
     const envKey = input.server.authEnvKey || "";
     const token = envKey ? process.env[envKey] : undefined;
     if (!token) throw new Error("MCP_SERVER_AUTH_MISSING");
+    headers.Authorization = `Bearer ${token}`;
+  } else if (input.server.authMode === "OAUTH_USER") {
+    if (!input.userAuth?.userId || !input.userAuth.organizationId) throw new Error("MCP_OAUTH_USER_CONTEXT_REQUIRED");
+    const token = await getValidMcpOAuthAccessToken({
+      server: input.server,
+      userId: input.userAuth.userId,
+      organizationId: input.userAuth.organizationId,
+    });
     headers.Authorization = `Bearer ${token}`;
   }
 
