@@ -49,8 +49,11 @@ check(
   includesAll(mobileShell, ["data-mobile-secondary-nav", "data-mobile-module-active", "resolveEnterpriseModuleIcon", "scrollIntoView", "aria-current"]),
 );
 check(
-  "L’administration DTSC expose le catalogue des modules par offre",
-  consoleBilling.includes("getPlanModuleCatalog") && planManager.includes("moduleCatalog") && planManager.includes("Modules ERP inclus"),
+  "L’administration DTSC expose le catalogue des modules par niveau de capacité",
+  consoleBilling.includes("getPlanModuleCatalog") &&
+    planManager.includes("moduleCatalog") &&
+    planManager.includes("Modules autorisés par le niveau de capacité") &&
+    planManager.includes("Niveau de capacité"),
 );
 check(
   "Les offres utilisent des libellés commerciaux français",
