@@ -5,7 +5,9 @@ const expect = (condition, message) => { if (!condition) failures.push(message);
 
 const context = read("lib/ai/context-engine.ts");
 const sessionContext = read("lib/ai/session-context.ts");
+const commercialContext = read("lib/billing/commercial-context.ts");
 const usageLimits = read("lib/billing/ai-usage-limits.ts");
+const cag = read("lib/ai/cag-registry.ts");
 const chatRoute = read("app/api/chat/v2/route.ts");
 const agentRoute = read("app/api/chat/agent/route.ts");
 const collaboratorsAgent = read("app/api/collaborators/ai/agent/route.ts");
@@ -29,10 +31,27 @@ expect(context.includes('contextCode !== "DTSC_INTERNAL"'), "Internal tenant mus
 expect(context.includes('contextCode: "DTSC_INTERNAL"'), "Context engine must return the canonical DTSC_INTERNAL context");
 expect(context.includes('planCode: "ENTERPRISE"'), "DTSC_INTERNAL execution context must keep Enterprise model entitlement");
 
+expect(commercialContext.includes("resolveOrganizationCommercialContext"), "Commercial context must expose one organization resolver");
+expect(commercialContext.includes("ORGANIZATION_LEGACY_MAPPED"), "Historical organization offers must have an explicit compatibility source");
+expect(commercialContext.includes("ORGANIZATION_BASELINE"), "Missing organization offers must have a fail-closed baseline source");
+expect(commercialContext.includes("org-premium"), "Legacy premium organization subscriptions must map to the organization catalog");
+expect(commercialContext.includes('organizationType: "CLIENT"'), "Commercial organization resolver must stay client-tenant scoped");
+
 expect(usageLimits.includes("DTSC_INTERNAL_USER_LIMITS"), "Internal AI usage limits must have an explicit canonical source");
 expect(usageLimits.includes("dailyMessageLimit: internalUser?.dailyMessageLimit"), "Internal message limits must honor console-managed user values");
 expect(usageLimits.includes("dailyTokenLimit: internalUser?.dailyTokenLimit"), "Internal token limits must honor console-managed user values");
 expect(usageLimits.includes('planCode: "ENTERPRISE"'), "Internal usage limits must preserve Enterprise entitlement");
+expect(usageLimits.includes("resolveOrganizationCommercialContext"), "Organization AI limits must use the commercial context resolver");
+expect(usageLimits.includes("resolvePersonalCommercialContext"), "Personal AI limits must use the commercial context resolver");
+expect(usageLimits.includes('source: "ORGANIZATION_BASELINE"'), "Organization AI without a valid offer must fail closed instead of using personal quotas");
+expect(usageLimits.includes("dailyMessageLimit: 0"), "Organization baseline must not borrow a personal message quota");
+expect(usageLimits.includes("dailyTokenLimit: 0"), "Organization baseline must not borrow a personal token quota");
+expect(!usageLimits.includes("prisma.subscription.findFirst"), "AI usage resolver must not implement a second direct personal subscription query");
+
+expect(cag.includes("getCanonicalAiUsageLimits"), "CAG must read the same canonical commercial projection as AI limits");
+expect(cag.includes("Offre commerciale:"), "CAG must name the commercial offer explicitly");
+expect(cag.includes("Niveau de capacité:"), "CAG must distinguish capability tier from the offer name");
+expect(!cag.includes("Plan: ${context.planCode}"), "CAG must not expose a capability code as an ambiguous commercial plan");
 
 for (const [label, source] of [
   ["chat v2", chatRoute],
