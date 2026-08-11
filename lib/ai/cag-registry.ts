@@ -1,4 +1,5 @@
 import type { AiExecutionContext } from "@/lib/ai/context-engine";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 
 export type AiCagPack = {
   code: string;
@@ -45,21 +46,30 @@ async function cached(context: AiExecutionContext, builder: AiCagBuilderDefiniti
   const existing = cache.get(key);
   if (existing && existing.expiresAt > Date.now()) return { ...existing.value, cacheHit: true };
 
-  // The expensive builder executes only after the cache lookup. Dynamic
-  // versions may perform a cheap version read (for example Pharmacy settingsVersion)
-  // so a configuration change invalidates the key without rebuilding every turn.
   const content = await builder.build(context);
   const value = { code: builder.code, version, content, cacheKey: key };
   cache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, value });
   return { ...value, cacheHit: false };
 }
 
+async function resolveCommercialCagContext(context: AiExecutionContext) {
+  return getCanonicalAiUsageLimits({
+    userId: context.userId,
+    organizationId: context.organization?.id || null,
+  });
+}
+
 const organizationBuilder: AiCagBuilderDefinition = {
   code: "organization",
-  version: "1",
-  build: async (context) => context.organization && context.membership
-    ? `Organisation active: ${context.organization.name} (${context.organization.id}). Secteur: ${context.organization.sectorCode || "GENERAL"}. Rôle: ${context.membership.role}. Plan: ${context.planCode}. Modules lisibles: ${context.activeModuleCodes.join(", ") || "aucun"}.`
-    : "Aucune organisation active.",
+  version: async (context) => {
+    const commercial = await resolveCommercialCagContext(context);
+    return `2:${commercial.planId || "none"}:${commercial.subscriptionStatus}:${commercial.source}`;
+  },
+  build: async (context) => {
+    if (!context.organization || !context.membership) return "Aucune organisation active.";
+    const commercial = await resolveCommercialCagContext(context);
+    return `Organisation active: ${context.organization.name} (${context.organization.id}). Secteur: ${context.organization.sectorCode || "GENERAL"}. Rôle: ${context.membership.role}. Offre commerciale: ${commercial.planName}. Niveau de capacité: ${commercial.capabilityLabel} (${commercial.planCode}). Statut d'abonnement: ${commercial.subscriptionStatus}. Modules lisibles: ${context.activeModuleCodes.join(", ") || "aucun"}.`;
+  },
 };
 
 export async function buildAiCagPack(context: AiExecutionContext): Promise<AiCagPack> {
