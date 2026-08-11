@@ -1,7 +1,9 @@
 # Hotfix UI/UX — Navigation groupée et workspaces DTSC
 
-**Issue :** #241  
-**Date :** 2026-08-11  
+**Issue :** #241
+
+**Date :** 2026-08-11
+
 **Scope :** navigation privée, changement de contexte, identité d’entrée des modules et sections de workspace.
 
 ## Objectif
