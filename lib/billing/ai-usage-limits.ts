@@ -1,4 +1,5 @@
 import { resolveSaasPlanCode, type SaasPlanCode } from "@/lib/billing/plans";
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 const ACTIVE_ORGANIZATION_SUBSCRIPTION_STATUSES = ["ACTIVE", "TRIAL"];
@@ -11,7 +12,7 @@ export type CanonicalAiUsageLimits = {
   dailyMessageLimit: number;
   dailyTokenLimit: number;
   maxDocuments: number;
-  source: "ORGANIZATION_SUBSCRIPTION" | "PERSONAL_SUBSCRIPTION" | "FREEMIUM_PLAN" | "LEGACY_USER_FALLBACK";
+  source: "DTSC_INTERNAL_USER_LIMITS" | "ORGANIZATION_SUBSCRIPTION" | "PERSONAL_SUBSCRIPTION" | "FREEMIUM_PLAN" | "LEGACY_USER_FALLBACK";
 };
 
 export async function getCanonicalAiUsageLimits({
@@ -21,6 +22,29 @@ export async function getCanonicalAiUsageLimits({
   userId: string;
   organizationId?: string | null;
 }): Promise<CanonicalAiUsageLimits> {
+  if (organizationId === DTSC_INTERNAL_ORGANIZATION_ID) {
+    const [internalUser, enterprisePlan] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { dailyMessageLimit: true, dailyTokenLimit: true },
+      }),
+      prisma.billingPlan.findFirst({
+        where: { slug: "enterprise", isActive: true, audience: { in: ["ORGANIZATION", "BOTH"] } },
+        orderBy: { sortOrder: "asc" },
+      }),
+    ]);
+    return {
+      planId: enterprisePlan?.id ?? null,
+      planName: enterprisePlan?.name || "DTSC Internal",
+      planCode: "ENTERPRISE",
+      audience: "ORGANIZATION",
+      dailyMessageLimit: internalUser?.dailyMessageLimit ?? 5,
+      dailyTokenLimit: internalUser?.dailyTokenLimit ?? 15_000,
+      maxDocuments: enterprisePlan?.maxDocuments ?? 0,
+      source: "DTSC_INTERNAL_USER_LIMITS",
+    };
+  }
+
   if (organizationId) {
     const organizationSubscription = await prisma.organizationSubscription.findFirst({
       where: {
@@ -64,8 +88,8 @@ export async function getCanonicalAiUsageLimits({
     planName: "Legacy fallback",
     planCode: "STARTER",
     audience: "PERSONAL",
-    dailyMessageLimit: legacyUser?.dailyMessageLimit || 5,
-    dailyTokenLimit: legacyUser?.dailyTokenLimit || 15_000,
+    dailyMessageLimit: legacyUser?.dailyMessageLimit ?? 5,
+    dailyTokenLimit: legacyUser?.dailyTokenLimit ?? 15_000,
     maxDocuments: 0,
     source: "LEGACY_USER_FALLBACK",
   };
