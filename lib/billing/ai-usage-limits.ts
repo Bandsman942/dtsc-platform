@@ -1,18 +1,28 @@
-import { resolveSaasPlanCode, type SaasPlanCode } from "@/lib/billing/plans";
+import { resolveOrganizationCommercialContext, resolvePersonalCommercialContext } from "@/lib/billing/commercial-context";
+import { getSaasPlanLabel, type SaasPlanCode } from "@/lib/billing/plans";
 import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
-
-const ACTIVE_ORGANIZATION_SUBSCRIPTION_STATUSES = ["ACTIVE", "TRIAL"];
 
 export type CanonicalAiUsageLimits = {
   planId: string | null;
   planName: string;
+  planSlug: string | null;
   planCode: SaasPlanCode;
+  capabilityLabel: string;
   audience: "PERSONAL" | "ORGANIZATION";
+  subscriptionStatus: string;
+  subscriptionActive: boolean;
   dailyMessageLimit: number;
   dailyTokenLimit: number;
   maxDocuments: number;
-  source: "DTSC_INTERNAL_USER_LIMITS" | "ORGANIZATION_SUBSCRIPTION" | "PERSONAL_SUBSCRIPTION" | "FREEMIUM_PLAN" | "LEGACY_USER_FALLBACK";
+  source:
+    | "DTSC_INTERNAL_USER_LIMITS"
+    | "ORGANIZATION_SUBSCRIPTION"
+    | "ORGANIZATION_LEGACY_MAPPED"
+    | "ORGANIZATION_BASELINE"
+    | "PERSONAL_SUBSCRIPTION"
+    | "FREEMIUM_PLAN"
+    | "LEGACY_USER_FALLBACK";
 };
 
 export async function getCanonicalAiUsageLimits({
@@ -23,91 +33,77 @@ export async function getCanonicalAiUsageLimits({
   organizationId?: string | null;
 }): Promise<CanonicalAiUsageLimits> {
   if (organizationId === DTSC_INTERNAL_ORGANIZATION_ID) {
-    const [internalUser, enterprisePlan] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { dailyMessageLimit: true, dailyTokenLimit: true },
-      }),
-      prisma.billingPlan.findFirst({
-        where: { slug: "enterprise", isActive: true, audience: { in: ["ORGANIZATION", "BOTH"] } },
-        orderBy: { sortOrder: "asc" },
-      }),
-    ]);
+    const internalUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { dailyMessageLimit: true, dailyTokenLimit: true },
+    });
     return {
-      planId: enterprisePlan?.id ?? null,
-      planName: enterprisePlan?.name || "DTSC Internal",
+      planId: null,
+      planName: "DTSC Internal",
+      planSlug: null,
       planCode: "ENTERPRISE",
+      capabilityLabel: getSaasPlanLabel("ENTERPRISE", "fr"),
       audience: "ORGANIZATION",
+      subscriptionStatus: "ACTIVE",
+      subscriptionActive: true,
       dailyMessageLimit: internalUser?.dailyMessageLimit ?? 5,
       dailyTokenLimit: internalUser?.dailyTokenLimit ?? 15_000,
-      maxDocuments: enterprisePlan?.maxDocuments ?? 0,
+      maxDocuments: 0,
       source: "DTSC_INTERNAL_USER_LIMITS",
     };
   }
 
   if (organizationId) {
-    const organizationSubscription = await prisma.organizationSubscription.findFirst({
-      where: {
-        organizationId,
-        status: { in: ACTIVE_ORGANIZATION_SUBSCRIPTION_STATUSES },
-        plan: { isActive: true, audience: { in: ["ORGANIZATION", "BOTH"] } },
-      },
-      include: { plan: true },
-      orderBy: { updatedAt: "desc" },
-    });
-    if (organizationSubscription) {
-      return fromPlan(organizationSubscription.plan, "ORGANIZATION", "ORGANIZATION_SUBSCRIPTION");
+    const commercialContext = await resolveOrganizationCommercialContext(organizationId);
+    if (!commercialContext?.offer) {
+      return {
+        planId: null,
+        planName: "Aucune offre organisation active",
+        planSlug: null,
+        planCode: commercialContext?.capabilityCode || "STARTER",
+        capabilityLabel: commercialContext?.capabilityLabel || getSaasPlanLabel("STARTER", "fr"),
+        audience: "ORGANIZATION",
+        subscriptionStatus: commercialContext?.subscriptionStatus || "MISSING",
+        subscriptionActive: false,
+        dailyMessageLimit: 0,
+        dailyTokenLimit: 0,
+        maxDocuments: 0,
+        source: "ORGANIZATION_BASELINE",
+      };
     }
+    return {
+      planId: commercialContext.offer.id,
+      planName: commercialContext.offer.name,
+      planSlug: commercialContext.offer.slug,
+      planCode: commercialContext.capabilityCode,
+      capabilityLabel: commercialContext.capabilityLabel,
+      audience: "ORGANIZATION",
+      subscriptionStatus: commercialContext.subscriptionStatus,
+      subscriptionActive: commercialContext.subscriptionActive,
+      dailyMessageLimit: commercialContext.dailyMessageLimit,
+      dailyTokenLimit: commercialContext.dailyTokenLimit,
+      maxDocuments: commercialContext.maxDocuments,
+      source: commercialContext.source === "ORGANIZATION_LEGACY_MAPPED" ? "ORGANIZATION_LEGACY_MAPPED" : "ORGANIZATION_SUBSCRIPTION",
+    };
   }
 
-  const personalSubscription = await prisma.subscription.findFirst({
-    where: {
-      userId,
-      status: "ACTIVE",
-      plan: { isActive: true, audience: { in: ["PERSONAL", "BOTH"] } },
-    },
-    include: { plan: true },
-    orderBy: { updatedAt: "desc" },
-  });
-  if (personalSubscription) {
-    return fromPlan(personalSubscription.plan, "PERSONAL", "PERSONAL_SUBSCRIPTION");
-  }
-
-  const freemium = await prisma.billingPlan.findFirst({
-    where: { slug: "freemium", isActive: true, audience: { in: ["PERSONAL", "BOTH"] } },
-    orderBy: { sortOrder: "asc" },
-  });
-  if (freemium) return fromPlan(freemium, "PERSONAL", "FREEMIUM_PLAN");
-
-  const legacyUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { dailyMessageLimit: true, dailyTokenLimit: true },
-  });
+  const commercialContext = await resolvePersonalCommercialContext(userId);
   return {
-    planId: null,
-    planName: "Legacy fallback",
-    planCode: "STARTER",
+    planId: commercialContext.offer?.id || null,
+    planName: commercialContext.offer?.name || "Legacy fallback",
+    planSlug: commercialContext.offer?.slug || null,
+    planCode: commercialContext.capabilityCode,
+    capabilityLabel: commercialContext.capabilityLabel,
     audience: "PERSONAL",
-    dailyMessageLimit: legacyUser?.dailyMessageLimit ?? 5,
-    dailyTokenLimit: legacyUser?.dailyTokenLimit ?? 15_000,
-    maxDocuments: 0,
-    source: "LEGACY_USER_FALLBACK",
-  };
-}
-
-function fromPlan(
-  plan: { id: string; name: string; slug?: string | null; dailyMessageLimit: number; dailyTokenLimit: number; maxDocuments: number },
-  audience: CanonicalAiUsageLimits["audience"],
-  source: CanonicalAiUsageLimits["source"],
-): CanonicalAiUsageLimits {
-  return {
-    planId: plan.id,
-    planName: plan.name,
-    planCode: resolveSaasPlanCode(plan),
-    audience,
-    dailyMessageLimit: plan.dailyMessageLimit,
-    dailyTokenLimit: plan.dailyTokenLimit,
-    maxDocuments: plan.maxDocuments,
-    source,
+    subscriptionStatus: commercialContext.subscriptionStatus,
+    subscriptionActive: commercialContext.subscriptionActive,
+    dailyMessageLimit: commercialContext.dailyMessageLimit,
+    dailyTokenLimit: commercialContext.dailyTokenLimit,
+    maxDocuments: commercialContext.maxDocuments,
+    source: commercialContext.source === "PERSONAL_SUBSCRIPTION"
+      ? "PERSONAL_SUBSCRIPTION"
+      : commercialContext.source === "FREEMIUM_PLAN"
+        ? "FREEMIUM_PLAN"
+        : "LEGACY_USER_FALLBACK",
   };
 }
