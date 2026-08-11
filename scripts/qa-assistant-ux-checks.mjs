@@ -11,8 +11,12 @@ const migration = read("prisma/migrations/20260730043000_add_assistant_conversat
 const oauthMigration = read("prisma/migrations/20260811010000_add_mcp_user_oauth/migration.sql");
 const helper = read("lib/assistant-conversation-preferences.ts");
 const promptPolicy = read("lib/ai/prompts.ts");
+const productAwareness = read("lib/ai/product-awareness.ts");
+const productAwarenessPolicy = read("docs/AI_PRODUCT_AWARENESS_POLICY.md");
 const chatPage = read("app/chat/page.tsx");
 const chatWorkspace = read("components/chat/chat-workspace-v2.tsx");
+const legacyChatWorkspace = read("components/chat/chat-workspace.tsx");
+const legacyChatRoute = read("app/api/chat/route.ts");
 const assistantUi = read("components/chat/assistant-conversation-ui.tsx");
 const immersiveShell = read("components/chat/assistant-immersive-workspace-shell.tsx");
 const immersiveViewport = read("components/chat/use-immersive-conversation-viewport.ts");
@@ -40,6 +44,8 @@ const mcpDisconnectRoute = read("app/api/ai/apps/oauth/disconnect/route.ts");
 const collaboratorComposer = read("components/chat/VoiceConversationComposer.tsx");
 const collaboratorI18n = read("lib/collaboration-experience-i18n.ts");
 const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
+const nextConfig = read("next.config.ts");
+const releaseFragment = read("docs/changelog/2026-08-11-ai-conversation-hotfix.md");
 const vercel = read("vercel.json");
 
 for (const model of ["ChatConversationPreference", "EnterpriseAiConversationPreference", "EnterpriseAiMessageFeedback"]) {
@@ -58,7 +64,13 @@ assert(promptPolicy.includes("N’affiche jamais à un utilisateur métier un no
 for (const leakedCode of ["FINANCE_ACCOUNTING", "FINANCE_CASH", "FINANCE_PAYABLES", "FINANCE_RECEIVABLES", "AI_ASSISTANT", "PHARMACY_SETTINGS"]) {
   assert(promptPolicy.includes(leakedCode), `AI user-facing contract must cover leaked identifier ${leakedCode}`);
 }
-assert(promptPolicy.includes("Markdown riche supporté par DTSC"), "AI presentation contract must require DTSC rich Markdown when structure helps");
+assert(promptPolicy.includes("Markdown riche DTSC") && promptPolicy.includes("tableaux comparatifs compacts") && promptPolicy.includes("n’émets jamais de HTML brut"), "AI presentation contract must require safe rich DTSC Markdown when structure helps");
+assert(promptPolicy.includes("buildAiProductAwarenessInstruction") && promptPolicy.includes("productAwarenessInstruction"), "Every assistant using the shared language policy must receive versioned product awareness automatically");
+assert(productAwareness.includes("docs\", \"CHANGELOG.md") && productAwareness.includes("docs\", \"changelog") && productAwareness.includes("VERCEL_GIT_COMMIT_SHA"), "Product awareness must derive from versioned release sources and deployment revision");
+assert(productAwareness.includes("USER_FACING_SECTIONS") && productAwareness.includes("TECHNICAL_ONLY") && productAwareness.includes("MAX_ITEMS = 28"), "Product awareness must stay bounded and exclude technical-only release notes");
+assert(nextConfig.includes("outputFileTracingIncludes") && nextConfig.includes("./docs/CHANGELOG.md") && nextConfig.includes("./docs/changelog/*.md"), "Product awareness release sources must be included in production server traces");
+assert(releaseFragment.includes("Les IA DTSC reçoivent automatiquement un contexte des nouveautés produit récentes"), "The current release must document automatic AI product awareness");
+assert(productAwarenessPolicy.includes("Toute PR qui ajoute, modifie ou retire un comportement visible par un utilisateur") && productAwarenessPolicy.includes("buildLanguageInstruction()") && productAwarenessPolicy.includes("qa:assistant-ux"), "Automatic AI product awareness must be a documented durable contribution policy");
 
 assert(chatPage.includes("ChatWorkspaceV2") && chatPage.includes("listCatalogAiModelsForUi"), "Chat page must use the new assistant workspace with the canonical model catalog");
 assert(assistantUi.includes("<textarea") && assistantUi.includes("requestSubmit"), "Assistant composer must be multiline and keyboard accessible");
@@ -66,6 +78,9 @@ assert(assistantUi.includes("Context and sources") && assistantUi.includes("Conv
 assert(assistantUi.includes("/ai/apps") && assistantUi.includes("Applications connectées"), "Assistant composer and settings must expose the connected applications center");
 assert(chatWorkspace.includes("PINNED") && chatWorkspace.includes("ARCHIVED") && chatWorkspace.includes("Exporter en Markdown"), "Chatbot contextual menu must support pin/archive/export");
 assert(chatWorkspace.includes("useCompanyContext") && chatWorkspace.includes("useKnowledge"), "Chatbot must expose real company/document context toggles");
+assert(chatWorkspace.includes('import { Streamdown } from "streamdown"') && chatWorkspace.includes("<Streamdown") && assistantUi.includes("dtsc-assistant-markdown"), "General Chatbot v2 must render assistant output with the shared rich streaming Markdown surface");
+assert(legacyChatWorkspace.includes('import { Streamdown } from "streamdown"') && legacyChatWorkspace.includes("<Streamdown") && legacyChatWorkspace.includes("dtsc-assistant-markdown"), "Legacy Chatbot history/streaming must keep the same rich Markdown renderer");
+assert(legacyChatRoute.includes("buildLanguageInstruction") && legacyChatRoute.includes("format enrichi DTSC"), "Legacy general Chatbot must apply the shared rich presentation and product-awareness policy");
 assert(chatWorkspace.includes("/api/chat/v2") && chatRoute.includes("getChatConversationPreference"), "Chatbot v2 must apply persisted preferences server-side");
 assert(chatRoute.includes("useCompanyContext") && chatRoute.includes("useKnowledge") && chatRoute.includes("modelOverride"), "Chatbot server must apply context and model overrides");
 assert(chatRoute.includes("performPrivateChatActionFromHistory") && chatRoute.includes("retrieveKnowledgeContext") && chatRoute.includes("getCompanyContextForUser"), "Chatbot v2 must preserve existing private actions, RAG and company context");
@@ -97,14 +112,20 @@ assert(!chatWorkspace.includes("useWeb") && !enterpriseWorkspace.includes("useWe
 for (const appName of ["Gmail", "Google Calendar", "Notion", "GitHub", "Linear", "Jira & Confluence", "Stripe"]) {
   assert(connectedAppsCatalog.includes(`name: \"${appName}\"`), `Connected applications catalog must include ${appName}`);
 }
-assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCatalog.includes("READY_TO_CONNECT") && connectedAppsCatalog.includes("CONNECTED"), "Connected applications must derive real certification and per-user OAuth status");
+assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCatalog.includes("READY_TO_CONNECT") && connectedAppsCatalog.includes("CONNECTED") && connectedAppsCatalog.includes("PLATFORM_SETUP_REQUIRED"), "Connected applications must derive certification, platform OAuth readiness and per-user connection status from real server state");
 assert(connectedAppsPage.includes("/api/ai/apps/oauth/connect") && connectedAppsPage.includes("/api/ai/apps/oauth/disconnect"), "Connected applications UI must expose real connect and disconnect actions only for eligible servers");
-assert(connectedAppsPage.includes("Seuls les serveurs MCP certifiés par DTSC") && connectedAppsPage.includes("ne les expose jamais au modèle IA"), "Connected applications UI must explain the security boundary in human language");
+assert(connectedAppsPage.includes("Étapes de connexion") && connectedAppsPage.includes("Continuer avec") && connectedAppsPage.includes("Intégration prête côté DTSC"), "Connected applications UI must provide an interactive human OAuth journey and an honest platform-setup state");
+assert(connectedAppsPage.includes("Permissions demandées") && !connectedAppsPage.includes("scope.join"), "Connected applications UI must humanize OAuth permissions instead of exposing raw scope URLs");
+assert(connectedAppsPage.includes("ne les expose jamais au modèle IA") && connectedAppsPage.includes("La déconnexion supprime l’autorisation locale"), "Connected applications UI must explain the OAuth security boundary in human language");
 
 assert(mcpTypes.includes('"OAUTH_USER"'), "MCP server contract must support user OAuth without changing legacy auth modes");
 assert(mcpRegistry.includes("oauthAllowedHosts") && mcpRegistry.includes("OAUTH_USER requires oauthClientIdEnvKey"), "OAuth servers must declare explicit client configuration and certified metadata hosts");
+assert(mcpRegistry.includes("https://gmailmcp.googleapis.com/mcp/v1") && mcpRegistry.includes("https://calendarmcp.googleapis.com/mcp/v1"), "Official Gmail and Google Calendar MCP endpoints must be built into the certified registry");
+assert(mcpRegistry.includes('oauthClientIdEnvKey: "MCP_GOOGLE_CLIENT_ID"') && mcpRegistry.includes('oauthClientSecretEnvKey: "MCP_GOOGLE_CLIENT_SECRET"'), "Built-in Google MCP servers must reuse the canonical server-only OAuth env configuration");
+assert(mcpRegistry.includes('allowedToolModes: ["READ"]') && mcpRegistry.includes("isMcpOAuthPlatformConfigured"), "Built-in MCP baseline must remain READ-only and fail closed when provider credentials are absent");
 assert(mcpOauthCrypto.includes("aes-256-gcm") && mcpOauthCrypto.includes("setAAD") && mcpOauthCrypto.includes("DTSC_MCP_OAUTH_ENCRYPTION_KEY"), "MCP OAuth credentials must be encrypted server-side with authenticated tenant-bound encryption");
 assert(mcpOauth.includes("code_challenge_method") && mcpOauth.includes('"S256"') && mcpOauth.includes('url.searchParams.set("resource"'), "MCP OAuth must use PKCE S256 and resource indicators");
+assert(mcpOauth.includes('url.searchParams.set("access_type", "offline")') && mcpOauth.includes('url.searchParams.set("prompt", "consent")'), "Google MCP OAuth must request durable server-side authorization for refresh-token continuity");
 assert(mcpOauth.includes("oauth-protected-resource") && mcpOauth.includes("oauth-authorization-server") && mcpOauth.includes("openid-configuration"), "MCP OAuth must support protected-resource and authorization-server discovery");
 assert(mcpOauthStore.includes("encryptedCredentials") && mcpOauthStore.includes("consumeMcpOAuthState") && !mcpOauthStore.includes("console.log"), "OAuth tokens and PKCE verifier must remain in the encrypted server store");
 assert(oauthMigration.includes('CREATE TABLE "McpUserOAuthConnection"') && oauthMigration.includes('CREATE TABLE "McpUserOAuthState"'), "MCP OAuth persistence migration must create connection and one-time-state tables");
@@ -116,10 +137,12 @@ assert(mcpDisconnectRoute.includes("revokeMcpOAuthConnection") && mcpDisconnectR
 assert(mcpTransport.includes("getValidMcpOAuthAccessToken") && mcpTransport.includes("MCP_OAUTH_USER_CONTEXT_REQUIRED"), "MCP transport must resolve user tokens server-side only with explicit user and tenant context");
 
 assert(collaboratorComposer.includes('aiT("aiCopilot")') && collaboratorComposer.includes("PROPOSE_REPLY") && collaboratorI18n.includes('aiCopilot: "Copilote IA DTSC"'), "Mes collaborateurs composer must expose the DTSC AI drafting copilot through the shared i18n contract");
+assert(collaboratorComposer.includes("MAX_COMPOSER_HEIGHT = 176") && collaboratorComposer.includes('className="max-h-44 min-h-12 w-full') && collaboratorComposer.includes("border-t border-dtsc-border/70"), "Collaboration AI drafts must use a full-width mobile composer with a separate professional action rail");
+assert(!collaboratorComposer.includes('className="flex min-w-0 items-end gap-2 rounded-[1.35rem]'), "Collaboration composer must not squeeze long AI drafts between horizontal action buttons");
 assert(collaboratorComposer.includes('aiT("aiPrivacyNote")') && collaboratorI18n.includes("vous décidez toujours de l’envoi") && collaboratorI18n.includes("n’envoie aucun message à votre place"), "Collaboration AI drafting must keep explicit user control over sending in the FR/EN i18n source of truth");
 assert(collaboratorAiCompose.includes("routeAiStream") && collaboratorAiCompose.includes("prepareAiTurn"), "Collaboration AI drafting must use the canonical DTSC AI runtime");
 assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCompose.includes("rateLimit") && collaboratorAiCompose.includes("getSession"), "Collaboration AI drafting must keep same-origin, session and rate-limit protections");
 assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");
 
 assert(vercel.includes('"main": true') && vercel.includes('"*": false') && vercel.includes("ignoreCommand"), "Vercel must remain production-only from main");
-console.log("Assistant UI/UX, canonical module labels, rich enterprise formatting, encrypted tenant-safe MCP OAuth, collaboration copilot, tenant-safe sources and production-only CI/CD QA passed.");
+console.log("Assistant UI/UX, rich chatbot output, versioned product awareness, official Google MCP OAuth readiness, canonical module labels, encrypted tenant-safe OAuth, mobile collaboration composer and production-only CI/CD QA passed.");

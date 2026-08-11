@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
+  outputFileTracingIncludes: {
+    "/*": ["./docs/CHANGELOG.md", "./docs/changelog/*.md"],
+  },
   experimental: {
     // DTSC has a large App Router surface. Keep production builds below Vercel's
     // memory ceiling without weakening type-checking, linting or the build gate.

@@ -166,6 +166,14 @@ function clientSecretFor(server: McpServerDefinition) {
   return key ? process.env[key]?.trim() || null : null;
 }
 
+function applyProviderAuthorizationParameters(url: URL) {
+  if (url.hostname.toLowerCase() === "accounts.google.com") {
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("include_granted_scopes", "true");
+    url.searchParams.set("prompt", "consent");
+  }
+}
+
 export async function buildMcpOAuthAuthorizationUrl(input: {
   server: McpServerDefinition;
   metadata: McpOAuthMetadata;
@@ -181,6 +189,7 @@ export async function buildMcpOAuthAuthorizationUrl(input: {
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("resource", input.server.endpoint);
   if (input.server.oauthScopes?.length) url.searchParams.set("scope", input.server.oauthScopes.join(" "));
+  applyProviderAuthorizationParameters(url);
   return url.toString();
 }
 

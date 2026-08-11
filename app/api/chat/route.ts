@@ -17,6 +17,7 @@ import { performPrivateChatActionFromHistory } from "@/lib/private-chat-actions"
 import { writeApiLog } from "@/lib/audit";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
+import { buildLanguageInstruction } from "@/lib/ai/prompts";
 
 export const maxDuration = 60;
 
@@ -61,8 +62,8 @@ function buildChatPreferenceContext(style?: string | null, length?: string | nul
   return [
     styleInstruction,
     lengthInstruction,
-    "Formate les réponses en Markdown lisible: titres si utile, listes numérotées pour les étapes, puces pour les points secondaires, **gras** pour les décisions ou éléments critiques, *italique* pour les nuances, tableaux Markdown pour comparer plusieurs options ou critères.",
-    "N'utilise pas un tableau s'il rend la réponse moins claire; privilégie alors une structure en sections courtes.",
+    "Utilise le format enrichi DTSC lorsque cela aide réellement : titres courts, listes numérotées pour les étapes, puces pour les points secondaires, **gras** pour les décisions ou éléments critiques, *italique* pour les nuances, citations et tableaux Markdown compacts pour comparer plusieurs options ou critères.",
+    "N'utilise pas un tableau s'il rend la réponse moins claire; privilégie alors une structure en sections courtes lisibles sur mobile.",
   ].join("\n");
 }
 
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
     select: {
       id: true,
       status: true,
+      locale: true,
       preferredModel: true,
       chatResponseStyle: true,
       chatResponseLength: true,
@@ -235,6 +237,9 @@ export async function POST(req: Request) {
     {
       role: "user" as const,
       content: [
+        "Politique commune de langue, présentation et actualité produit DTSC.",
+        buildLanguageInstruction(user.locale || "fr"),
+        "",
         "Préférences de réponse configurées par l'utilisateur dans DTSC Platform.",
         buildChatPreferenceContext(user.chatResponseStyle, user.chatResponseLength),
       ].join("\n"),
