@@ -1,6 +1,6 @@
 # Hotfix #245 — sélecteur mobile, en-tête Administration DTSC et contexte IA
 
-Statut : **implémenté sur la branche `fix/245-mobile-context-admin-header`, validation CI requise avant merge**.
+Statut : **implémenté dans la PR #246 sur `fix/245-mobile-context-admin-header`, validation CI requise avant merge**.
 
 ## Objectif
 
@@ -53,6 +53,8 @@ Les gates existantes sont renforcées :
   - vérifie les parcours mobile, connexion et Administration DTSC ;
   - vérifie l’injection centrale dans l’orchestrateur IA.
 
+La première exécution de gouvernance de la PR #246 a signalé uniquement la section **Preuves** absente et des labels structurés ajoutés après le démarrage du run. La PR a été mise en conformité sans neutraliser ni contourner la gate ; une nouvelle exécution CI doit confirmer l’ensemble.
+
 ## Vérification E2E recommandée
 
 Sur un téléphone ou viewport mobile :
@@ -73,4 +75,4 @@ Sur un téléphone ou viewport mobile :
 
 ## Rollback
 
-Revert de la PR liée à l’Issue #245 vers le dernier SHA Production sain. Aucun rollback de schéma ou de données n’est nécessaire.
+Revert de la PR #246 vers le dernier SHA Production sain. Aucun rollback de schéma ou de données n’est nécessaire.
