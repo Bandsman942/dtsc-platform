@@ -1,4 +1,4 @@
-import { MCP_SERVER_REGISTRY } from "@/lib/ai/mcp/registry";
+import { MCP_SERVER_REGISTRY, isMcpOAuthPlatformConfigured } from "@/lib/ai/mcp/registry";
 import { listMcpOAuthConnectionServerCodes } from "@/lib/ai/mcp/oauth-store";
 
 export type ConnectedAppCode =
@@ -44,13 +44,16 @@ export async function listConnectedAppsForUser(input: { locale: string | null | 
     const certifiedServers = configuredServers.filter((server) => server.status === "CERTIFIED");
     const oauthServer = certifiedServers.find((server) => server.authMode === "OAUTH_USER") || null;
     const connected = Boolean(oauthServer && connectedServerCodes.has(oauthServer.code));
+    const platformConfigured = Boolean(oauthServer && isMcpOAuthPlatformConfigured(oauthServer));
     const availability = connected
       ? "CONNECTED" as const
-      : oauthServer
+      : oauthServer && platformConfigured
         ? "READY_TO_CONNECT" as const
-        : certifiedServers.length
-          ? "CERTIFIED_BY_DTSC" as const
-          : "REQUIRES_DTSC_CERTIFICATION" as const;
+        : oauthServer
+          ? "PLATFORM_SETUP_REQUIRED" as const
+          : certifiedServers.length
+            ? "CERTIFIED_BY_DTSC" as const
+            : "REQUIRES_DTSC_CERTIFICATION" as const;
     return {
       code: app.code,
       name: app.name,
