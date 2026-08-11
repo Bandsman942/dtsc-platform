@@ -40,6 +40,7 @@ type SubscriptionHistoryItem = {
   id: string;
   planName: string;
   planCode: string;
+  capabilityLabel?: string;
   priceUsd: number;
   status: string;
   startedAt: string | null;
@@ -75,6 +76,7 @@ type PlanOption = {
   slug: string;
   priceUsd: number;
   planCode: string;
+  capabilityLabel?: string;
   limits: PlanLimits;
 };
 
@@ -105,9 +107,7 @@ function formatDate(value: string | null) {
 }
 
 function formatDateInput(value: string | null | undefined) {
-  if (!value) {
-    return "";
-  }
+  if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
@@ -143,18 +143,20 @@ export function AdminBillingSubscriptions({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useToastMessage(message);
+
   const summaryCards = [
     { label: "Entreprises", value: summary.organizations, icon: CreditCard },
-    { label: "Actifs", value: summary.active, icon: CheckCircle2 },
+    { label: "Abonnements actifs", value: summary.active, icon: CheckCircle2 },
     { label: "Essais", value: summary.trial, icon: Sparkles },
     { label: "À traiter", value: summary.attention, icon: AlertTriangle },
     { label: "Sans abonnement", value: summary.withoutSubscription, icon: ShieldX },
     { label: "MRR estimé", value: `${summary.monthlyRecurringRevenueUsd.toFixed(2)} USD`, icon: RefreshCw },
   ];
+
   const subscriptionList = useSmartList({
     items: subscriptions,
     pageSize: 8,
-    getSearchText: (organization) => `${organization.organizationName} ${organization.organizationSlug} ${organization.subscription?.planName || ""} ${organization.subscription?.planCode || ""} ${organization.subscription?.status || "sans abonnement"} ${organization.organizationStatus}`,
+    getSearchText: (organization) => `${organization.organizationName} ${organization.organizationSlug} ${organization.subscription?.planName || ""} ${organization.subscription?.capabilityLabel || ""} ${organization.subscription?.planCode || ""} ${organization.subscription?.status || "sans abonnement"} ${organization.organizationStatus}`,
   });
 
   async function sendSubscriptionRequest(url: string, method: "POST" | "PATCH", payload: Record<string, string>) {
@@ -182,9 +184,7 @@ export function AdminBillingSubscriptions({
 
   async function submitSubscriptionForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!formTarget) {
-      return;
-    }
+    if (!formTarget) return;
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
     const subscriptionId = formTarget.organization.subscription?.id;
     if (formTarget.mode === "create") {
@@ -207,9 +207,7 @@ export function AdminBillingSubscriptions({
   async function confirmLifecycleAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const subscriptionId = lifecycleTarget?.organization.subscription?.id;
-    if (!lifecycleTarget || !subscriptionId) {
-      return;
-    }
+    if (!lifecycleTarget || !subscriptionId) return;
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
     await sendSubscriptionRequest(`/api/admin/organization-subscriptions/${subscriptionId}`, "PATCH", {
       ...payload,
@@ -223,9 +221,9 @@ export function AdminBillingSubscriptions({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Centre de contrôle SaaS</p>
-            <h2 className="mt-1 text-xl font-black text-dtsc-ink">Abonnements & facturation</h2>
+            <h2 className="mt-1 text-xl font-black text-dtsc-ink">Abonnements des organisations</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">
-              Pilotez le cycle de vie des abonnements clients. Les annulations et renouvellements conservent l&apos;historique pour l&apos;audit.
+              Un abonnement relie une entreprise cliente à une offre commerciale. L’offre détermine ensuite un niveau de capacité distinct — Essentiel, Professionnel ou Entreprise — utilisé par les entitlements serveur.
             </p>
           </div>
           <CreditCard className="h-5 w-5 text-cyan-600" />
@@ -252,7 +250,7 @@ export function AdminBillingSubscriptions({
             pageCount={subscriptionList.pageCount}
             totalCount={subscriptionList.totalCount}
             filteredCount={subscriptionList.filteredCount}
-            placeholder="Rechercher entreprise, plan, statut..."
+            placeholder="Rechercher entreprise, offre, niveau, statut..."
             onPageChange={subscriptionList.setPage}
           />
         </div>
@@ -266,9 +264,12 @@ export function AdminBillingSubscriptions({
                   <div className="min-w-0">
                     <p className="truncate text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{organization.organizationSlug}</p>
                     <h3 className="mt-1 break-words font-black text-dtsc-ink">{organization.organizationName}</h3>
-                    <p className="mt-1 text-sm font-semibold text-dtsc-muted">
-                      {subscription ? `${subscription.planName} · ${subscription.priceUsd.toFixed(2)} USD` : "Aucun abonnement configuré"}
-                    </p>
+                    {subscription ? (
+                      <div className="mt-2 space-y-1 text-sm font-semibold text-dtsc-muted">
+                        <p><span className="font-black text-dtsc-ink">Offre commerciale :</span> {subscription.planName} · {subscription.priceUsd.toFixed(2)} USD</p>
+                        <p><span className="font-black text-dtsc-ink">Niveau de capacité :</span> {subscription.capabilityLabel || subscription.planCode} <span className="text-xs">({subscription.planCode})</span></p>
+                      </div>
+                    ) : <p className="mt-1 text-sm font-semibold text-dtsc-muted">Aucun abonnement d’organisation configuré</p>}
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
                     <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClassName(subscription?.status || "NONE")}`}>
@@ -278,7 +279,7 @@ export function AdminBillingSubscriptions({
                       label={`Actions abonnement ${organization.organizationName}`}
                       items={[
                         { key: "create", label: "Créer un abonnement", icon: Plus, disabled: Boolean(subscription), onSelect: () => setFormTarget({ organization, mode: "create" }) },
-                        { key: "edit", label: "Modifier", icon: Edit3, disabled: !subscription, onSelect: () => setFormTarget({ organization, mode: "edit" }) },
+                        { key: "edit", label: "Modifier l'abonnement", icon: Edit3, disabled: !subscription, onSelect: () => setFormTarget({ organization, mode: "edit" }) },
                         { key: "renew", label: "Renouveler avec historique", icon: RefreshCw, disabled: !subscription, onSelect: () => setFormTarget({ organization, mode: "renew" }) },
                         { key: "activate", label: "Activer", icon: CheckCircle2, disabled: !subscription || subscription.status === "ACTIVE", onSelect: () => setLifecycleTarget({ organization, action: "activate" }) },
                         { key: "trial", label: "Démarrer un essai", icon: Sparkles, disabled: !subscription, onSelect: () => setLifecycleTarget({ organization, action: "start_trial" }) },
@@ -299,12 +300,12 @@ export function AdminBillingSubscriptions({
                   <span>Fin / renouvellement: {formatDate(subscription?.expiresAt || null)}</span>
                   <span>Utilisateurs: {organization.activeUsers}/{subscription?.limits.maxUsers ?? 0}</span>
                   <span>Modules: {organization.enabledModules}/{organization.totalModules}, limite {subscription?.limits.maxActiveModules ?? 0}</span>
-                  <span>Documents: limite {subscription?.limits.maxDocuments ?? 0}</span>
+                  <span>Documents métier: limite {subscription?.limits.maxDocuments ?? 0}</span>
                   <span>Support: {subscription ? formatEnumLabel(subscription.limits.supportLevel) : "Non défini"}</span>
                 </div>
                 {organization.latestBillingRecord && (
                   <p className="mt-3 rounded-lg bg-dtsc-surface px-3 py-2 text-xs font-bold text-dtsc-muted">
-                    Dernière écriture: {organization.latestBillingRecord.amount.toFixed(2)} {organization.latestBillingRecord.currency} · {formatEnumLabel(organization.latestBillingRecord.status)} · {formatDate(organization.latestBillingRecord.createdAt)}
+                    Dernière écriture de facturation SaaS: {organization.latestBillingRecord.amount.toFixed(2)} {organization.latestBillingRecord.currency} · {formatEnumLabel(organization.latestBillingRecord.status)} · {formatDate(organization.latestBillingRecord.createdAt)}
                   </p>
                 )}
               </article>
@@ -341,13 +342,16 @@ function SubscriptionFormDialog({
     <Dialog open={Boolean(target)} title={title} description={target?.organization.organizationName} onClose={onClose} className="max-w-4xl">
       {target && (
         <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-          <FormField label="Plan">
+          <p className="rounded-lg border border-cyan-300/40 bg-cyan-400/10 p-4 text-sm font-semibold leading-6 text-dtsc-ink md:col-span-2">
+            Sélectionnez une <strong>offre commerciale d’organisation</strong>. Le niveau de capacité indiqué à côté est dérivé de cette offre et n’est pas un abonnement distinct.
+          </p>
+          <FormField label="Offre commerciale">
             <select name="planId" defaultValue={subscription?.planId || ""} required className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
-              <option value="">Choisir un plan</option>
-              {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {plan.priceUsd.toFixed(2)} USD</option>)}
+              <option value="">Choisir une offre d’organisation</option>
+              {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · niveau {plan.capabilityLabel || plan.planCode} · {plan.priceUsd.toFixed(2)} USD</option>)}
             </select>
           </FormField>
-          <FormField label="Statut">
+          <FormField label="Statut de l'abonnement">
             <select name="status" defaultValue={target.mode === "renew" ? "ACTIVE" : subscription?.status || "PENDING_PAYMENT"} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
               {["ACTIVE", "PENDING_PAYMENT", "PAST_DUE", "TRIAL", "SUSPENDED", "EXPIRED", "CANCELED"].map((status) => <option key={status} value={status}>{formatEnumLabel(status)}</option>)}
             </select>
@@ -401,25 +405,31 @@ function LifecycleDialog({
 function HistoryDialog({ organization, onClose }: { organization: OrganizationBillingItem | null; onClose: () => void }) {
   return (
     <Dialog open={Boolean(organization)} title="Historique des abonnements" description={organization?.organizationName} onClose={onClose} className="max-w-4xl">
-      <div className="grid gap-3">
-        {organization?.history.map((historyItem) => (
-          <article key={historyItem.id} className="rounded-lg border border-dtsc-border bg-dtsc-page p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-black text-dtsc-ink">{historyItem.planName}</h3>
-                <p className="mt-1 text-xs font-bold text-dtsc-muted">{historyItem.planCode} · {historyItem.priceUsd.toFixed(2)} USD</p>
+      {organization ? (
+        <div className="space-y-3">
+          <p className="rounded-lg border border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">
+            Chaque ligne correspond à un abonnement historique. Le nom affiché est l’offre commerciale réellement liée à la période ; le niveau de capacité est présenté séparément.
+          </p>
+          {organization.history.map((item) => (
+            <article key={item.id} className="rounded-lg border border-dtsc-border bg-dtsc-page p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-dtsc-ink">{item.planName}</p>
+                  <p className="mt-1 text-xs font-bold text-dtsc-muted">Niveau de capacité : {item.capabilityLabel || item.planCode} ({item.planCode}) · {item.priceUsd.toFixed(2)} USD</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClassName(item.status)}`}>{formatEnumLabel(item.status)}</span>
               </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClassName(historyItem.status)}`}>{formatEnumLabel(historyItem.status)}</span>
-            </div>
-            <div className="mt-3 grid gap-2 text-xs font-bold text-dtsc-muted sm:grid-cols-2">
-              <span>Créé: {formatDate(historyItem.createdAt)}</span>
-              <span>Mis à jour: {formatDate(historyItem.updatedAt)}</span>
-              <span>Début: {formatDate(historyItem.startedAt)}</span>
-              <span>Expiration: {formatDate(historyItem.expiresAt)}</span>
-            </div>
-          </article>
-        ))}
-      </div>
+              <div className="mt-3 grid gap-2 text-xs font-semibold text-dtsc-muted sm:grid-cols-2 xl:grid-cols-4">
+                <span>Début : {formatDate(item.startedAt)}</span>
+                <span>Fin d’essai : {formatDate(item.trialEndsAt)}</span>
+                <span>Expiration : {formatDate(item.expiresAt)}</span>
+                <span>Mis à jour : {formatDate(item.updatedAt)}</span>
+              </div>
+            </article>
+          ))}
+          {!organization.history.length ? <p className="text-sm font-semibold text-dtsc-muted">Aucun historique disponible.</p> : null}
+        </div>
+      ) : null}
     </Dialog>
   );
 }
