@@ -9,6 +9,7 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 const schema = read("prisma/assistant-conversation-preferences.prisma");
 const migration = read("prisma/migrations/20260730043000_add_assistant_conversation_preferences/migration.sql");
 const helper = read("lib/assistant-conversation-preferences.ts");
+const promptPolicy = read("lib/ai/prompts.ts");
 const chatPage = read("app/chat/page.tsx");
 const chatWorkspace = read("components/chat/chat-workspace-v2.tsx");
 const assistantUi = read("components/chat/assistant-conversation-ui.tsx");
@@ -22,6 +23,10 @@ const enterpriseWorkspace = read("components/enterprise/enterprise-ai-workspace-
 const enterpriseChat = read("app/api/enterprise/ai/chat/route.ts");
 const enterpriseConversations = read("app/api/enterprise/ai/conversations/[id]/route.ts");
 const enterpriseMessage = read("app/api/enterprise/ai/messages/[id]/route.ts");
+const connectedAppsCatalog = read("lib/ai/mcp/app-catalog.ts");
+const connectedAppsPage = read("app/ai/apps/page.tsx");
+const collaboratorComposer = read("components/chat/VoiceConversationComposer.tsx");
+const collaboratorAiCompose = read("app/api/collaborators/ai/compose/route.ts");
 const vercel = read("vercel.json");
 
 for (const model of ["ChatConversationPreference", "EnterpriseAiConversationPreference", "EnterpriseAiMessageFeedback"]) {
@@ -34,9 +39,14 @@ assert(migration.includes("EnterpriseAiMessageFeedback_value_check"), "Enterpris
 assert(helper.includes("isolation tenant") && helper.includes("confirmation humaine"), "Custom conversation instructions must never override DTSC safety rules");
 assert(helper.includes("getChatConversationPreference") && helper.includes("getEnterpriseAiConversationPreference"), "Conversation preferences must be server-side sources of truth");
 
+assert(promptPolicy.includes("Présente DTSC Platform exactement comme un utilisateur métier la voit dans l’interface"), "AI responses must use the same human-facing language as DTSC Platform");
+assert(promptPolicy.includes("N’expose jamais les codes internes de modules") && promptPolicy.includes("clés camelCase"), "AI prompt policy must explicitly hide technical implementation identifiers from normal users");
+assert(promptPolicy.includes("AI_ASSISTANT") && promptPolicy.includes("PHARMACY_SETTINGS"), "AI prompt policy must include regression examples for raw module identifiers");
+
 assert(chatPage.includes("ChatWorkspaceV2") && chatPage.includes("listCatalogAiModelsForUi"), "Chat page must use the new assistant workspace with the canonical model catalog");
 assert(assistantUi.includes("<textarea") && assistantUi.includes("requestSubmit"), "Assistant composer must be multiline and keyboard accessible");
 assert(assistantUi.includes("Context and sources") && assistantUi.includes("Conversation instructions"), "Assistant settings must expose context/source and per-conversation instructions");
+assert(assistantUi.includes("/ai/apps") && assistantUi.includes("Applications connectées"), "Assistant composer and settings must expose the connected applications center");
 assert(chatWorkspace.includes("PINNED") && chatWorkspace.includes("ARCHIVED") && chatWorkspace.includes("Exporter en Markdown"), "Chatbot contextual menu must support pin/archive/export");
 assert(chatWorkspace.includes("useCompanyContext") && chatWorkspace.includes("useKnowledge"), "Chatbot must expose real company/document context toggles");
 assert(chatWorkspace.includes("/api/chat/v2") && chatRoute.includes("getChatConversationPreference"), "Chatbot v2 must apply persisted preferences server-side");
@@ -62,5 +72,18 @@ assert(enterpriseConversations.includes("enterpriseAiConversationPreference.upse
 assert(enterpriseMessage.includes("enterpriseAiMessageFeedback.upsert") && enterpriseMessage.includes('message.role !== "assistant"'), "Enterprise feedback must persist only for assistant responses");
 assert(!chatWorkspace.includes("useWeb") && !enterpriseWorkspace.includes("useWeb") && !enterpriseChat.includes("useWeb"), "Do not advertise a web-search source that DTSC does not implement");
 
+for (const appName of ["Gmail", "Google Calendar", "Notion", "GitHub", "Linear", "Jira & Confluence", "Stripe"]) {
+  assert(connectedAppsCatalog.includes(`name: \"${appName}\"`), `Connected applications catalog must include ${appName}`);
+}
+assert(connectedAppsCatalog.includes("MCP_SERVER_REGISTRY") && connectedAppsCatalog.includes("CERTIFIED_BY_DTSC"), "Connected application availability must be derived from the real certified MCP registry");
+assert(connectedAppsPage.includes("Security first") && connectedAppsPage.includes("certification de sécurité DTSC"), "Connected applications UI must explain the security boundary in human language");
+assert(connectedAppsPage.includes("runtime OAuth utilisateur") && connectedAppsPage.includes("Non activé"), "Connected applications UI must not fabricate a personal OAuth connection that the runtime does not yet provide");
+
+assert(collaboratorComposer.includes("Copilote IA DTSC") && collaboratorComposer.includes("PROPOSE_REPLY"), "Mes collaborateurs composer must expose the DTSC AI drafting copilot");
+assert(collaboratorComposer.includes("vous décidez toujours de l’envoi") && collaboratorComposer.includes("n’envoie aucun message à votre place"), "Collaboration AI drafting must keep explicit user control over sending");
+assert(collaboratorAiCompose.includes("routeAiStream") && collaboratorAiCompose.includes("prepareAiTurn"), "Collaboration AI drafting must use the canonical DTSC AI runtime");
+assert(collaboratorAiCompose.includes("isSameOriginRequest") && collaboratorAiCompose.includes("rateLimit") && collaboratorAiCompose.includes("getSession"), "Collaboration AI drafting must keep same-origin, session and rate-limit protections");
+assert(collaboratorAiCompose.includes("Retourne uniquement le texte final") && collaboratorAiCompose.includes("L’envoi reste une action distincte"), "Collaboration AI drafting must return a draft without pretending to send it");
+
 assert(vercel.includes('"main": true') && vercel.includes('"*": false') && vercel.includes("ignoreCommand"), "Vercel must remain production-only from main");
-console.log("Assistant UI/UX, immersive viewport, conversation preferences, tenant-safe sources and production-only CI/CD QA passed.");
+console.log("Assistant UI/UX, human-facing language, connected-apps visibility, collaboration copilot, tenant-safe sources and production-only CI/CD QA passed.");
