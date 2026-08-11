@@ -54,13 +54,13 @@ export function OrganizationContextSwitcher({
     <div
       className={mobileRail
         ? "w-[82vw] min-w-[18rem] max-w-[24rem] shrink-0 snap-start"
-        : "min-w-0 max-w-full"}
-      data-workspace-context-switcher={mobileRail ? "mobile-rail" : "default"}
+        : "w-[82vw] min-w-[18rem] max-w-[24rem] shrink-0 snap-start lg:w-auto lg:min-w-0 lg:max-w-full lg:shrink"}
+      data-workspace-context-switcher={mobileRail ? "mobile-rail" : "responsive"}
     >
       <label
         className={mobileRail
           ? "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-2xl border border-cyan-400/35 bg-dtsc-page/95 px-4 py-2.5 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.14)] backdrop-blur-xl"
-          : "flex min-w-[15rem] max-w-[calc(100vw-2rem)] shrink-0 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page/90 px-3 py-2 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.12)] backdrop-blur-xl"}
+          : "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-2xl border border-cyan-400/35 bg-dtsc-page/95 px-4 py-2.5 text-xs font-bold text-dtsc-muted shadow-[0_12px_32px_rgba(0,43,91,0.14)] backdrop-blur-xl lg:min-w-[15rem] lg:border-dtsc-border lg:bg-dtsc-page/90 lg:px-3 lg:py-2"}
       >
         <Building2 className="h-4 w-4 shrink-0 text-cyan-500" />
         <span className="sr-only">Espace de travail</span>
@@ -68,7 +68,7 @@ export function OrganizationContextSwitcher({
           value={value}
           disabled={pending}
           onChange={(event) => void changeContext(event.target.value)}
-          className="min-w-0 flex-1 truncate bg-transparent text-sm font-black text-dtsc-ink outline-none disabled:opacity-70"
+          className="min-w-0 flex-1 truncate bg-transparent text-sm font-black text-dtsc-ink outline-none disabled:opacity-70 lg:text-xs"
           aria-label="Changer d’espace de travail"
           aria-describedby={error ? "organization-context-error" : undefined}
         >
