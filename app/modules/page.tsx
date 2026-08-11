@@ -52,13 +52,14 @@ const ICON_BY_GROUP: Record<ModuleNavigationGroupCode, ElementType> = {
   DTSC_INTERNAL: ShieldCheck,
 };
 
-export default async function ModulesHubPage({ searchParams }: { searchParams: Promise<{ group?: string }> }) {
+export default async function ModulesHubPage({ searchParams }: { searchParams: Promise<{ group?: string; open?: string }> }) {
   const user = await requireUser();
   const session = await getSession();
   if (!session) redirect("/auth/sign-in");
 
   const params = await searchParams;
   const requestedGroup: ModuleNavigationGroupCode = isModuleNavigationGroupCode(params.group) ? params.group : "PILOTAGE";
+  const requestedModuleCode = String(params.open || "").trim().toUpperCase();
   const dtscInternalContext = isDtscInternalSession(session);
   const organizationId = session.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
 
@@ -91,6 +92,21 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
     return true;
   };
 
+  const knownStandardCodes = new Set(
+    MODULE_NAVIGATION_GROUPS.flatMap((navigationGroup) => navigationGroup.subgroups.flatMap((subgroup) => subgroup.standardModuleCodes)),
+  );
+  let requestedModuleDenied = false;
+  if (requestedModuleCode) {
+    const enterpriseDestination = enterpriseModules.find((item) => item.code.toUpperCase() === requestedModuleCode);
+    if (enterpriseDestination) redirect(enterpriseDestination.href);
+
+    if (knownStandardCodes.has(requestedModuleCode) && standardCodeAllowed(requestedModuleCode)) {
+      const [standardDestination] = listStandardNavigationItems({ includeCodes: [requestedModuleCode], locale: user.locale });
+      if (standardDestination) redirect(standardDestination.href);
+    }
+    requestedModuleDenied = true;
+  }
+
   const standardSubgroups: HubSubgroup[] = group.subgroups.map((subgroup) => {
     const codes = subgroup.standardModuleCodes.filter(standardCodeAllowed);
     const modules = listStandardNavigationItems({ includeCodes: codes, locale: user.locale }).map((item) => ({
@@ -98,7 +114,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
       label: item.label,
       description: item.description,
       href: item.href,
-      meta: item.host === "APP" ? (user.locale === "en" ? "DTSC Platform" : "DTSC Platform") : item.host,
+      meta: item.host === "APP" ? "DTSC Platform" : item.host,
     }));
     return {
       code: subgroup.code,
@@ -122,8 +138,8 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
         code: `ERP_${code}`,
         label,
         description: user.locale === "en"
-          ? "ERP modules returned by the server resolver for the active organization."
-          : "Modules ERP retournés par le résolveur serveur pour l’organisation active.",
+          ? "Modules available for the active company workspace."
+          : "Modules disponibles pour l’espace entreprise actif.",
         modules: modules
           .sort((left, right) => left.navigationOrder - right.navigationOrder)
           .map((enterpriseModule) => ({
@@ -163,12 +179,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
             const Icon = ICON_BY_GROUP[item.code];
             const active = item.code === requestedGroup;
             return (
-              <Link
-                key={item.code}
-                href={getModuleNavigationGroupHref(item.code)}
-                aria-current={active ? "page" : undefined}
-                className={`flex min-h-11 shrink-0 items-center gap-2 rounded-2xl border px-3 text-xs font-black transition ${active ? "border-cyan-300/50 bg-cyan-400/14 text-cyan-600" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}
-              >
+              <Link key={item.code} href={getModuleNavigationGroupHref(item.code)} aria-current={active ? "page" : undefined} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-2xl border px-3 text-xs font-black transition ${active ? "border-cyan-300/50 bg-cyan-400/14 text-cyan-600" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>
                 <Icon className="h-4 w-4" />
                 {getModuleNavigationGroupLabel(item, user.locale, true)}
               </Link>
@@ -177,14 +188,19 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
         </nav>
 
         <ModuleContent>
+          {requestedModuleDenied ? (
+            <div role="alert" className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
+              <strong className="block font-black">{isEnglish ? "This area is not available" : "Cet espace n’est pas accessible"}</strong>
+              <span>{isEnglish ? "Your current workspace or permissions do not allow this destination. Choose another available module or change workspace if you have access elsewhere." : "Votre espace de travail actuel ou vos droits ne permettent pas d’ouvrir cette destination. Choisissez un autre module disponible ou changez d’espace si vous y avez accès ailleurs."}</span>
+            </div>
+          ) : null}
+
           <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface/70 p-4 sm:p-5">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-600"><GroupIcon className="h-5 w-5" /></span>
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{isEnglish ? "Server-aware workspace" : "Workspace piloté par le serveur"}</p>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{isEnglish ? "Available in this workspace" : "Disponible dans cet espace"}</p>
               <p className="mt-1 break-words text-sm leading-6 text-dtsc-muted">
-                {isEnglish
-                  ? "Open a subgroup to see only the modules available in your current context. Enterprise ERP entries come from the server-side access resolver."
-                  : "Dépliez un sous-groupe pour voir uniquement les modules disponibles dans votre contexte actuel. Les entrées ERP d’entreprise proviennent du résolveur d’accès côté serveur."}
+                {isEnglish ? "Open a subgroup to see the modules available in your current workspace." : "Dépliez un sous-groupe pour voir les modules disponibles dans votre espace de travail actuel."}
               </p>
             </div>
           </div>
@@ -197,18 +213,11 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
                     <p className="break-words text-sm leading-6 text-dtsc-muted">{subgroup.description}</p>
                     <BusinessList ariaLabel={subgroup.label}>
                       {subgroup.modules.map((hubModule) => (
-                        <BusinessListItem
-                          key={`${subgroup.code}:${hubModule.code}`}
-                          title={hubModule.label}
-                          description={hubModule.description}
-                          status={<StatusBadge>{hubModule.meta}</StatusBadge>}
-                          actions={(
-                            <Link href={hubModule.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">
-                              {isEnglish ? "Open" : "Ouvrir"}
-                              <ArrowUpRight className="h-4 w-4" />
-                            </Link>
-                          )}
-                        />
+                        <BusinessListItem key={`${subgroup.code}:${hubModule.code}`} title={hubModule.label} description={hubModule.description} status={<StatusBadge>{hubModule.meta}</StatusBadge>} actions={(
+                          <Link href={hubModule.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">
+                            {isEnglish ? "Open" : "Ouvrir"}<ArrowUpRight className="h-4 w-4" />
+                          </Link>
+                        )} />
                       ))}
                     </BusinessList>
                   </div>
@@ -216,10 +225,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
               ))}
             </Accordion>
           ) : (
-            <EmptyState
-              title={isEnglish ? "No module available" : "Aucun module disponible"}
-              description={isEnglish ? "No module in this group is currently allowed for your active context." : "Aucun module de ce groupe n’est actuellement autorisé dans votre contexte actif."}
-            />
+            <EmptyState title={isEnglish ? "No module available" : "Aucun module disponible"} description={isEnglish ? "No module in this group is currently available for your active workspace." : "Aucun module de ce groupe n’est actuellement disponible dans votre espace actif."} />
           )}
         </ModuleContent>
       </ModuleWorkspace>
