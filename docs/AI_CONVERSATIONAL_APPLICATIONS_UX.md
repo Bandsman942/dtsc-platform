@@ -32,6 +32,31 @@ L’assistant doit convertir un fait interne en **libellé visible + effet méti
 
 La règle ne bloque pas un diagnostic technique demandé explicitement par un utilisateur autorisé ; elle empêche seulement les fuites de détails d’implémentation dans une conversation métier normale.
 
+### Hotfix Assistant entreprise — noms de modules et rendu enrichi
+
+Une transcription réelle de l’Assistant entreprise a montré une fuite de codes comme `FINANCE_ACCOUNTING`, `FINANCE_CASH`, `FINANCE_PAYABLES` et `FINANCE_RECEIVABLES` dans une réponse destinée à un utilisateur métier.
+
+Le correctif impose désormais deux couches complémentaires :
+
+1. le contrat global interdit explicitement tout nom de module affiché avec des underscores ;
+2. `lib/enterprise-ai/context.ts` injecte dans le contexte interne de l’Assistant entreprise le vocabulaire bilingue généré depuis le registre canonique `lib/enterprise/module-registry.ts` (`labelFr` / `labelEn`).
+
+Le modèle peut utiliser le code interne pour raisonner, mais doit restituer uniquement le nom que l’utilisateur voit dans l’UX. Aucun second dictionnaire de noms de modules n’est maintenu côté IA.
+
+Le rendu des réponses entreprise continue de réutiliser le renderer streaming Markdown existant (`Streamdown`) et le style partagé `dtsc-assistant-markdown`. Les consignes de sortie demandent explicitement, lorsque pertinent :
+
+- titres courts ;
+- paragraphes brefs ;
+- listes à puces ;
+- étapes numérotées ;
+- **gras** et *italique* ;
+- citations ;
+- séparateurs ;
+- tableaux comparatifs ;
+- liens Markdown seulement lorsqu’une URL autorisée existe réellement.
+
+Le HTML brut n’est pas demandé et les blocs de code restent réservés aux demandes techniques explicites. Cette correction ne modifie ni les permissions, ni le RAG, ni les citations, ni la classification des données, ni les outils backend.
+
 ## Centre Applications connectées
 
 Route UI : `/ai/apps`
@@ -121,6 +146,11 @@ Le principe reste :
 `scripts/qa-assistant-ux-checks.mjs` vérifie désormais aussi :
 
 - le contrat de langage humain ;
+- l’interdiction explicite des noms de modules contenant des underscores ;
+- les exemples de régression `FINANCE_ACCOUNTING`, `FINANCE_CASH`, `FINANCE_PAYABLES`, `FINANCE_RECEIVABLES` ;
+- la provenance des noms de modules depuis le registre canonique bilingue ;
+- l’utilisation du renderer enrichi `Streamdown` dans l’Assistant entreprise ;
+- le contrat de Markdown riche sans HTML brut ;
 - l’existence des applications du catalogue ;
 - la dérivation de disponibilité depuis le registre MCP réel ;
 - l’absence de fausse connexion OAuth ;
