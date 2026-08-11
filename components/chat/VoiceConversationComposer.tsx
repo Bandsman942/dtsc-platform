@@ -4,6 +4,7 @@ import { Mic, Send, Sparkles, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { collaborationExperienceT } from "@/lib/collaboration-experience-i18n";
 import { cn } from "@/lib/utils";
 
 type VoicePayload = { blob: Blob; durationMs: number; waveform: number[] };
@@ -91,6 +92,8 @@ export function VoiceConversationComposer({
   const cancelledRef = useRef(false);
   const mountedRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const aiLocale = labels?.send === "Send" ? "en" : "fr";
+  const aiT = (key: Parameters<typeof collaborationExperienceT>[1]) => collaborationExperienceT(aiLocale, key);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,11 +150,11 @@ export function VoiceConversationComposer({
   async function runAiAction(action: AiDraftAction) {
     if (aiBusy || disabled || sending) return;
     if (action === "PROPOSE_REPLY" && !replyContext.trim()) {
-      onError?.("Ajoutez le message auquel vous souhaitez répondre.");
+      onError?.(aiT("aiReplyContextRequired"));
       return;
     }
     if (action !== "PROPOSE_REPLY" && !value.trim()) {
-      onError?.("Écrivez d’abord un brouillon pour que l’IA puisse l’améliorer.");
+      onError?.(aiT("aiDraftRequired"));
       return;
     }
 
@@ -163,15 +166,13 @@ export function VoiceConversationComposer({
         body: JSON.stringify({ action, draft: value, context: replyContext }),
       });
       const body = await response.json().catch(() => null) as { content?: string; message?: string } | null;
-      if (!response.ok || !body?.content) {
-        throw new Error(body?.message || "L’IA n’a pas pu préparer le message.");
-      }
+      if (!response.ok || !body?.content) throw new Error(body?.message || aiT("aiComposeError"));
       onChange(body.content);
       setAiOpen(false);
       if (action === "PROPOSE_REPLY") setReplyContext("");
       window.requestAnimationFrame(() => textareaRef.current?.focus());
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : "L’IA n’a pas pu préparer le message.");
+      onError?.(error instanceof Error ? error.message : aiT("aiComposeError"));
     } finally {
       setAiBusy(false);
     }
@@ -331,8 +332,8 @@ export function VoiceConversationComposer({
               className="h-11 w-11 shrink-0 rounded-full text-cyan-600"
               disabled={disabled || sending || aiBusy}
               onClick={() => setAiOpen(true)}
-              aria-label="Ouvrir le copilote IA DTSC"
-              title="Copilote IA DTSC"
+              aria-label={aiT("aiCopilot")}
+              title={aiT("aiCopilot")}
             >
               <Sparkles className="h-5 w-5" />
             </Button>
@@ -360,38 +361,38 @@ export function VoiceConversationComposer({
       <Dialog
         open={aiOpen}
         onClose={() => !aiBusy && setAiOpen(false)}
-        title="Copilote IA DTSC"
-        description="L’IA prépare le texte dans votre zone de saisie. Vous relisez et vous décidez toujours de l’envoi."
+        title={aiT("aiCopilot")}
+        description={aiT("aiCopilotDescription")}
         className="max-h-[92dvh] max-w-lg overflow-y-auto"
       >
         <div className="grid gap-4">
           <div className="grid grid-cols-2 gap-2">
-            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("REWRITE")}>Reformuler</Button>
-            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("PROFESSIONAL")}>Professionnaliser</Button>
-            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("SHORTEN")}>Raccourcir</Button>
-            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("FRIENDLY")}>Plus chaleureux</Button>
+            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("REWRITE")}>{aiT("aiRewrite")}</Button>
+            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("PROFESSIONAL")}>{aiT("aiProfessional")}</Button>
+            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("SHORTEN")}>{aiT("aiShorten")}</Button>
+            <Button type="button" variant="outline" disabled={aiBusy || !value.trim()} onClick={() => void runAiAction("FRIENDLY")}>{aiT("aiFriendly")}</Button>
           </div>
 
           <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
-            <label className="text-sm font-black text-dtsc-ink" htmlFor="dtsc-ai-reply-context">Proposer une réponse</label>
-            <p className="mt-1 text-xs leading-5 text-dtsc-muted">Collez ici le message reçu si vous voulez que l’IA prépare une réponse. Votre brouillon actuel peut servir d’intention.</p>
+            <label className="text-sm font-black text-dtsc-ink" htmlFor="dtsc-ai-reply-context">{aiT("aiProposeReply")}</label>
+            <p className="mt-1 text-xs leading-5 text-dtsc-muted">{aiT("aiReplyHelp")}</p>
             <textarea
               id="dtsc-ai-reply-context"
               value={replyContext}
               onChange={(event) => setReplyContext(event.target.value)}
               rows={5}
               maxLength={6000}
-              placeholder="Message reçu…"
+              placeholder={aiT("aiReceivedMessage")}
               className="mt-3 w-full resize-y rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm leading-6 text-dtsc-ink outline-none focus:border-cyan-400"
               disabled={aiBusy}
             />
             <Button type="button" className="mt-3 w-full" disabled={aiBusy || !replyContext.trim()} onClick={() => void runAiAction("PROPOSE_REPLY")}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {aiBusy ? "Préparation…" : "Préparer la réponse"}
+              {aiBusy ? aiT("aiPreparing") : aiT("aiPrepareReply")}
             </Button>
           </div>
 
-          <p className="text-xs leading-5 text-dtsc-muted">Le copilote ne lit pas automatiquement les conversations privées et n’envoie aucun message à votre place. Cette limite évite qu’un mode agent contourne le contrôle utilisateur ou les permissions de DTSC.</p>
+          <p className="text-xs leading-5 text-dtsc-muted">{aiT("aiPrivacyNote")}</p>
         </div>
       </Dialog>
     </>
