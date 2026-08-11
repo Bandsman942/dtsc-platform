@@ -52,7 +52,7 @@ export async function listConnectedAppsForUser(input: { locale: string | null | 
     const platformConfigured = Boolean(oauthServer && isMcpOAuthPlatformConfigured(oauthServer));
     const availability = connected
       ? "CONNECTED" as const
-      : reauthorizationRequired
+      : reauthorizationRequired && platformConfigured
         ? "REAUTHORIZATION_REQUIRED" as const
         : oauthServer && platformConfigured
           ? "READY_TO_CONNECT" as const
