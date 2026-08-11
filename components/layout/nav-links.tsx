@@ -80,7 +80,7 @@ export function NavLinks({
         const label = getModuleNavigationGroupLabel(group, locale, mobile);
         const description = getModuleNavigationGroupDescription(group, locale);
         const organizationHint = group.code === "ORGANIZATION_ERP" && enterpriseContext ? enterpriseContext.organizationName : null;
-        const enterpriseModuleHint = enterpriseModule?.description || null;
+        const enterpriseModuleHint = enterpriseModule ? enterpriseModule.description : null;
         const title = [description, organizationHint, enterpriseModuleHint].filter(Boolean).join(" · ");
 
         return (
