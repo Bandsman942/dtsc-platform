@@ -12,6 +12,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/c
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
 import { ensureBillingPlans } from "@/lib/billing";
+import { resolvePersonalCommercialContext } from "@/lib/billing/commercial-context";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { formatEnumLabel } from "@/lib/labels";
 import { isMaishaPayConfigured } from "@/lib/maishapay";
@@ -28,7 +29,7 @@ export default async function BillingPage() {
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, organizationBillingRecords, organizationInvoices, organizationSubscription, organizationMembership, usageToday, documentCount] = await Promise.all([
+  const [plans, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, personalCommercialContext, organizationBillingRecords, organizationInvoices, organizationMembership, usageToday, documentCount] = await Promise.all([
     ensureBillingPlans(),
     prisma.subscription.findFirst({
       where: { userId: user.id },
@@ -47,6 +48,7 @@ export default async function BillingPage() {
       select: { id: true, reference: true, providerReference: true, provider: true, amount: true, currency: true, status: true, paidAt: true, createdAt: true },
     }),
     getOrganizationEntitlements(activeOrganizationId),
+    resolvePersonalCommercialContext(user.id),
     activeOrganizationId ? prisma.billingRecord.findMany({
       where: { organizationId: activeOrganizationId },
       orderBy: { createdAt: "desc" },
@@ -57,11 +59,6 @@ export default async function BillingPage() {
       orderBy: { issuedAt: "desc" },
       take: 10,
     }) : [],
-    activeOrganizationId ? prisma.organizationSubscription.findFirst({
-      where: { organizationId: activeOrganizationId, status: { in: ["ACTIVE", "TRIAL", "PENDING_PAYMENT"] } },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, planId: true, status: true },
-    }) : null,
     activeOrganizationId ? prisma.organizationMember.findFirst({
       where: { organizationId: activeOrganizationId, userId: user.id, status: "ACTIVE", removedAt: null },
       select: { role: true },
@@ -81,26 +78,37 @@ export default async function BillingPage() {
   const personalPlans = plans.filter((plan) => plan.audience === "PERSONAL" || plan.audience === "BOTH");
   const organizationPlans = plans.filter((plan) => plan.audience === "ORGANIZATION" || plan.audience === "BOTH");
   const canManageOrganizationSubscription = organizationMembership?.role === "OWNER" || organizationMembership?.role === "ADMIN";
-  const activePlan = latestSubscription?.plan;
-  const subscriptionActive = latestSubscription?.status === "ACTIVE";
-  const contextualPlanLabel = organizationEntitlements && !organizationEntitlements.isDtscInternal
-    ? organizationEntitlements.planLabel
-    : activePlan?.name || "Gratuit";
-  const contextualStatus = organizationEntitlements && !organizationEntitlements.isDtscInternal
-    ? organizationEntitlements.subscriptionStatus
-    : latestSubscription?.status || "FREE";
-  const contextualActive = organizationEntitlements && !organizationEntitlements.isDtscInternal
-    ? organizationEntitlements.subscriptionActive
-    : subscriptionActive || !latestSubscription;
+  const hasClientOrganizationContext = Boolean(organizationEntitlements && !organizationEntitlements.isDtscInternal);
+  const contextualOfferLabel = hasClientOrganizationContext
+    ? organizationEntitlements?.offerName || "Aucune offre organisation active"
+    : personalCommercialContext.offer?.name || "Accès personnel";
+  const contextualCapabilityLabel = hasClientOrganizationContext
+    ? organizationEntitlements?.capabilityLabel || "Essentiel"
+    : personalCommercialContext.capabilityLabel;
+  const contextualStatus = hasClientOrganizationContext
+    ? organizationEntitlements?.subscriptionStatus || "MISSING"
+    : personalCommercialContext.subscriptionStatus;
+  const contextualActive = hasClientOrganizationContext
+    ? Boolean(organizationEntitlements?.subscriptionActive)
+    : personalCommercialContext.subscriptionActive;
+  const contextualDailyMessageLimit = hasClientOrganizationContext
+    ? organizationEntitlements?.dailyMessageLimit || 0
+    : personalCommercialContext.dailyMessageLimit;
+  const contextualDailyTokenLimit = hasClientOrganizationContext
+    ? organizationEntitlements?.dailyTokenLimit || 0
+    : personalCommercialContext.dailyTokenLimit;
+  const contextualMaxDocuments = hasClientOrganizationContext
+    ? organizationEntitlements?.maxDocuments || 0
+    : personalCommercialContext.maxDocuments;
 
   return (
     <AppShell user={user}>
       <ModuleWorkspace>
         <ModuleHeader
           eyebrow="Abonnement SaaS"
-          title="Plan, capacités et facturation DTSC"
-          count={`Plan ${contextualPlanLabel}`}
-          description="Cette page explique le plan réellement appliqué au contexte, ses limites, la consommation et les factures SaaS. Elle reste distincte de toute facture comptable ERP."
+          title="Offres, capacités et facturation DTSC"
+          count={`Offre ${contextualOfferLabel}`}
+          description="Cette page distingue l’offre commerciale souscrite, l’abonnement qui la porte et le niveau de capacité réellement appliqué au contexte. Les factures SaaS restent distinctes de toute facture comptable ERP."
           secondaryActions={(
             <Button asChild variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft">
               <Link href="/help/standard?guide=billing">Guide de l’Abonnement</Link>
@@ -108,25 +116,26 @@ export default async function BillingPage() {
           )}
         />
         <ModuleMetrics label="Indicateurs de l’abonnement">
-          <ModuleMetric label="Plan appliqué" value={contextualPlanLabel} hint={organizationEntitlements && !organizationEntitlements.isDtscInternal ? "Organisation active" : "Compte personnel"} />
+          <ModuleMetric label="Offre appliquée" value={contextualOfferLabel} hint={hasClientOrganizationContext ? "Organisation active" : "Compte personnel"} />
+          <ModuleMetric label="Niveau de capacité" value={contextualCapabilityLabel} hint="Essentiel · Professionnel · Entreprise" />
           <ModuleMetric label="Statut" value={formatEnumLabel(contextualStatus)} hint={contextualActive ? "Capacités actives" : "Intervention requise"} />
-          <ModuleMetric label="Messages aujourd’hui" value={usageToday._count._all} hint={activePlan ? `Limite ${activePlan.dailyMessageLimit}` : "Usage réel"} />
-          <ModuleMetric label="Tokens aujourd’hui" value={usageToday._sum.totalTokens || 0} hint={activePlan ? `Limite ${activePlan.dailyTokenLimit}` : "Usage réel"} />
-          <ModuleMetric label="Documents" value={documentCount} hint={activePlan ? `Limite ${activePlan.maxDocuments}` : "Contexte actif"} />
+          <ModuleMetric label="Messages aujourd’hui" value={usageToday._count._all} hint={`Limite ${contextualDailyMessageLimit}`} />
+          <ModuleMetric label="Tokens aujourd’hui" value={usageToday._sum.totalTokens || 0} hint={`Limite ${contextualDailyTokenLimit}`} />
+          <ModuleMetric label="Documents" value={documentCount} hint={`Limite ${contextualMaxDocuments}`} />
           <ModuleMetric label="Factures SaaS" value={recentInvoices.length + organizationInvoices.length} hint="Historique récent" />
         </ModuleMetrics>
         <ModuleContent>
-          <ModuleSection title="Source de vérité commerciale" description="Le catalogue de plans, l’abonnement, les entitlements et les limites serveur déterminent les capacités disponibles.">
+          <ModuleSection title="Source de vérité commerciale" description="Le catalogue d’offres, l’abonnement actif, son statut et sa période, puis les entitlements serveur déterminent le niveau de capacité et les limites applicables.">
             <BusinessList ariaLabel="Résumé commercial">
-              <BusinessListItem leading={<CreditCard className="h-5 w-5 text-cyan-600" />} title="Plan et statut" description={`Plan ${contextualPlanLabel} · ${formatEnumLabel(contextualStatus)}`} status={<StatusBadge tone={contextualActive ? "success" : "warning"}>{contextualActive ? "Actif" : "À vérifier"}</StatusBadge>} />
+              <BusinessListItem leading={<CreditCard className="h-5 w-5 text-cyan-600" />} title="Offre, niveau et statut" description={`Offre ${contextualOfferLabel} · Niveau ${contextualCapabilityLabel} · ${formatEnumLabel(contextualStatus)}`} status={<StatusBadge tone={contextualActive ? "success" : "warning"}>{contextualActive ? "Actif" : "À vérifier"}</StatusBadge>} />
               <BusinessListItem leading={<ShieldCheck className="h-5 w-5 text-cyan-600" />} title="Autorité serveur" description="Le frontend n’autorise jamais seul un module, une fonctionnalité ou un dépassement de limite." status={<StatusBadge>Entitlements canoniques</StatusBadge>} />
               <BusinessListItem leading={<ReceiptText className="h-5 w-5 text-cyan-600" />} title="Séparation des factures" description="Les documents ci-dessous concernent l’abonnement DTSC. Les factures clients, fournisseurs et comptables restent dans les modules ERP." status={<StatusBadge>Facturation SaaS</StatusBadge>} />
             </BusinessList>
           </ModuleSection>
 
-          <ModuleSection title="Plans disponibles" description={paymentAvailable ? "Sélectionnez un plan uniquement lorsque le changement est réellement supporté par le fournisseur de paiement." : "Le catalogue reste consultable; aucune action de paiement fictive n’est présentée lorsque le fournisseur n’est pas configuré."}>
+          <ModuleSection title="Offres individuelles disponibles" description={paymentAvailable ? "Sélectionnez une offre uniquement lorsque le changement est réellement supporté par le fournisseur de paiement." : "Le catalogue reste consultable; aucune action de paiement fictive n’est présentée lorsque le fournisseur n’est pas configuré."}>
             <BillingPlans
-              activePlanId={latestSubscription?.status === "ACTIVE" ? latestSubscription.planId : undefined}
+              activePlanId={personalCommercialContext.offer?.id}
               paymentAvailable={paymentAvailable}
               plans={personalPlans.map((plan) => ({
                 id: plan.id,
@@ -144,19 +153,20 @@ export default async function BillingPage() {
             <AccordionItem title="Abonnement personnel" defaultOpen>
               {latestSubscription ? (
                 <BusinessList ariaLabel="Détails de l’abonnement personnel">
-                  <BusinessListItem title="Plan" description={latestSubscription.plan.name} status={<StatusBadge>{formatEnumLabel(latestSubscription.status)}</StatusBadge>} />
+                  <BusinessListItem title="Offre" description={latestSubscription.plan.name} status={<StatusBadge>{formatEnumLabel(latestSubscription.status)}</StatusBadge>} />
+                  <BusinessListItem title="Niveau de capacité appliqué" description={personalCommercialContext.capabilityLabel} />
                   <BusinessListItem title="Début de période" description={dateLabel(latestSubscription.currentPeriodStart)} />
                   <BusinessListItem title="Fin de période" description={dateLabel(latestSubscription.currentPeriodEnd)} />
                   <BusinessListItem title="Renouvellement" description={latestSubscription.cancelAtPeriodEnd ? "Annulation programmée en fin de période" : "Aucune annulation programmée"} status={<StatusBadge tone={latestSubscription.cancelAtPeriodEnd ? "warning" : "success"}>{latestSubscription.cancelAtPeriodEnd ? "Fin de période" : "Maintenu"}</StatusBadge>} />
                 </BusinessList>
-              ) : <EmptyState compact title="Plan gratuit" description="Aucun abonnement personnel payant n’est enregistré. Les capacités gratuites appliquées par le serveur restent disponibles." />}
+              ) : <EmptyState compact title={`Offre appliquée : ${personalCommercialContext.offer?.name || "Découverte"}`} description="Aucun abonnement personnel payant n’est enregistré. Les capacités gratuites appliquées par le serveur restent disponibles." />}
             </AccordionItem>
 
             {organizationEntitlements && !organizationEntitlements.isDtscInternal ? (
               <AccordionItem title="Abonnement de l’organisation active">
                 <div className="min-w-0 space-y-6">
                   <OrganizationBillingPlans
-                    activePlanId={organizationSubscription?.status === "ACTIVE" || organizationSubscription?.status === "TRIAL" ? organizationSubscription.planId : undefined}
+                    activePlanId={organizationEntitlements.offerId || undefined}
                     canManage={canManageOrganizationSubscription}
                     paymentAvailable={paymentAvailable}
                     plans={organizationPlans.map((plan) => ({
@@ -171,7 +181,8 @@ export default async function BillingPage() {
                   />
                   <BusinessList ariaLabel="Limites de l’abonnement organisation">
                     {[
-                      ["Plan", organizationEntitlements.planLabel],
+                      ["Offre", organizationEntitlements.offerName || "Aucune offre organisation active"],
+                      ["Niveau de capacité", organizationEntitlements.capabilityLabel],
                       ["Statut", formatEnumLabel(organizationEntitlements.subscriptionStatus)],
                       ["Modules autorisés", `${organizationEntitlements.modules.filter((enterpriseModule) => enterpriseModule.allowed).length}/${organizationEntitlements.modules.length}`],
                       ["Utilisateurs", String(organizationEntitlements.limits.maxUsers)],

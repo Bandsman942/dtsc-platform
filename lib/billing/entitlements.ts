@@ -1,7 +1,7 @@
-import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
+import { resolveOrganizationCommercialContext, type CommercialOfferSnapshot } from "@/lib/billing/commercial-context";
 import { FEATURE_ENTITLEMENTS, moduleRequiresActiveSubscription, type SaasFeatureCode } from "@/lib/billing/module-entitlements";
 import { getPlanUsageLimits, type OrganizationUsageLimits } from "@/lib/billing/plan-limits";
-import { normalizePlanRequirement, planMeetsRequirement, resolveSaasPlanCode, SAAS_PLANS, type SaasPlanCode } from "@/lib/billing/plans";
+import { normalizePlanRequirement, planMeetsRequirement, SAAS_PLANS, type SaasPlanCode } from "@/lib/billing/plans";
 import {
   getEnterpriseModuleDefinition,
   isEnterpriseModuleImplemented,
@@ -32,14 +32,22 @@ export type OrganizationEntitlements = {
   organizationType: string;
   sectorCode: string | null;
   isDtscInternal: boolean;
+  offerId: string | null;
+  offerName: string | null;
+  offerSlug: string | null;
+  commercialSource: "DTSC_INTERNAL" | "ORGANIZATION_SUBSCRIPTION" | "ORGANIZATION_LEGACY_MAPPED" | "ORGANIZATION_BASELINE";
   planCode: SaasPlanCode;
   planLabel: string;
+  capabilityLabel: string;
   subscriptionStatus: string;
   subscriptionActive: boolean;
   subscriptionId: string | null;
   trialEndsAt: string | null;
   startedAt: string | null;
   expiresAt: string | null;
+  dailyMessageLimit: number;
+  dailyTokenLimit: number;
+  maxDocuments: number;
   limits: OrganizationUsageLimits;
   modules: Array<{
     id: string;
@@ -73,12 +81,8 @@ function activeSubscriptionStatus(status?: string | null) {
 }
 
 function subscriptionDateValid(subscription?: { expiresAt?: Date | null; trialEndsAt?: Date | null; status?: string | null } | null, now = new Date()) {
-  if (!subscription || !activeSubscriptionStatus(subscription.status)) {
-    return false;
-  }
-  if (subscription.status === "TRIAL" && subscription.trialEndsAt && subscription.trialEndsAt.getTime() < now.getTime()) {
-    return false;
-  }
+  if (!subscription || !activeSubscriptionStatus(subscription.status)) return false;
+  if (subscription.status === "TRIAL" && subscription.trialEndsAt && subscription.trialEndsAt.getTime() < now.getTime()) return false;
   return !subscription.expiresAt || subscription.expiresAt.getTime() >= now.getTime();
 }
 
@@ -93,13 +97,11 @@ function subscriptionRequiredMessage(label: string) {
 }
 
 function planRequiredMessage(label: string, requiredPlan: SaasPlanCode) {
-  return `${label} nécessite le plan ${SAAS_PLANS[requiredPlan].label} ou supérieur.`;
+  return `${label} nécessite le niveau ${SAAS_PLANS[requiredPlan].label} ou supérieur.`;
 }
 
 export function isSubscriptionActive(subscription?: { status?: string | null; expiresAt?: Date | string | null; trialEndsAt?: Date | string | null } | null) {
-  if (!subscription || !activeSubscriptionStatus(subscription.status)) {
-    return false;
-  }
+  if (!subscription || !activeSubscriptionStatus(subscription.status)) return false;
   const expiresAt = typeof subscription.expiresAt === "string" ? new Date(subscription.expiresAt) : subscription.expiresAt;
   const trialEndsAt = typeof subscription.trialEndsAt === "string" ? new Date(subscription.trialEndsAt) : subscription.trialEndsAt;
   return subscriptionDateValid({ status: subscription.status, expiresAt, trialEndsAt });
@@ -162,16 +164,12 @@ function registryDecision({
   };
 }
 
-
-function resolveOrganizationUsageLimits(
-  planCode: SaasPlanCode,
-  plan?: { dailyMessageLimit?: number | null; dailyTokenLimit?: number | null; maxDocuments?: number | null } | null,
-): OrganizationUsageLimits {
+function resolveOrganizationUsageLimits(planCode: SaasPlanCode, offer?: CommercialOfferSnapshot | null): OrganizationUsageLimits {
   const defaults = getPlanUsageLimits(planCode);
-  if (!plan) return defaults;
-  const dailyMessages = Math.max(1, plan.dailyMessageLimit || Math.ceil(defaults.maxEnterpriseAiMonthlyMessages / 30));
-  const dailyTokens = Math.max(1, plan.dailyTokenLimit || defaults.maxEnterpriseAiMonthlyTokens / 30);
-  const documents = Math.max(0, plan.maxDocuments ?? defaults.maxDocuments);
+  if (!offer) return defaults;
+  const dailyMessages = Math.max(1, offer.dailyMessageLimit || Math.ceil(defaults.maxEnterpriseAiMonthlyMessages / 30));
+  const dailyTokens = Math.max(1, offer.dailyTokenLimit || defaults.maxEnterpriseAiMonthlyTokens / 30);
+  const documents = Math.max(0, offer.maxDocuments ?? defaults.maxDocuments);
   return {
     ...defaults,
     maxDocuments: documents,
@@ -182,56 +180,54 @@ function resolveOrganizationUsageLimits(
 }
 
 export async function getOrganizationEntitlements(organizationId: string | null | undefined): Promise<OrganizationEntitlements | null> {
-  if (!organizationId) {
-    return null;
-  }
+  const commercialContext = await resolveOrganizationCommercialContext(organizationId);
+  if (!commercialContext || !commercialContext.organizationId || !commercialContext.organizationStatus || !commercialContext.organizationType) return null;
 
-  if (organizationId === DTSC_INTERNAL_ORGANIZATION_ID) {
+  if (commercialContext.scope === "DTSC_INTERNAL") {
     return {
-      organizationId,
-      organizationStatus: "ACTIVE",
-      organizationType: "INTERNAL",
-      sectorCode: null,
+      organizationId: commercialContext.organizationId,
+      organizationStatus: commercialContext.organizationStatus,
+      organizationType: commercialContext.organizationType,
+      sectorCode: commercialContext.sectorCode,
       isDtscInternal: true,
-      planCode: "ENTERPRISE",
-      planLabel: SAAS_PLANS.ENTERPRISE.label,
-      subscriptionStatus: "ACTIVE",
+      offerId: null,
+      offerName: "DTSC Internal",
+      offerSlug: null,
+      commercialSource: "DTSC_INTERNAL",
+      planCode: commercialContext.capabilityCode,
+      planLabel: commercialContext.capabilityLabel,
+      capabilityLabel: commercialContext.capabilityLabel,
+      subscriptionStatus: commercialContext.subscriptionStatus,
       subscriptionActive: true,
       subscriptionId: null,
       trialEndsAt: null,
       startedAt: null,
       expiresAt: null,
+      dailyMessageLimit: 0,
+      dailyTokenLimit: 0,
+      maxDocuments: getPlanUsageLimits("ENTERPRISE").maxDocuments,
       limits: getPlanUsageLimits("ENTERPRISE"),
       modules: [],
     };
   }
 
   const organization = await prisma.organization.findFirst({
-    where: { id: organizationId, deletedAt: null },
+    where: { id: commercialContext.organizationId, deletedAt: null, organizationType: "CLIENT" },
     select: {
       id: true,
       status: true,
       organizationType: true,
       sectorCode: true,
-      subscriptions: {
-        orderBy: [{ createdAt: "desc" }],
-        take: 1,
-        include: { plan: { select: { id: true, slug: true, name: true, dailyMessageLimit: true, dailyTokenLimit: true, maxDocuments: true } } },
-      },
       enterpriseModules: {
         select: { id: true, moduleCode: true, isEnabled: true, isCore: true, requiresPlanLevel: true },
       },
     },
   });
+  if (!organization) return null;
 
-  if (!organization) {
-    return null;
-  }
-
-  const subscription = organization.subscriptions[0] || null;
-  const planCode = resolveSaasPlanCode(subscription?.plan);
-  const subscriptionActive = organization.status === "ACTIVE" && subscriptionDateValid(subscription);
-  const limits = resolveOrganizationUsageLimits(planCode, subscription?.plan);
+  const planCode = commercialContext.capabilityCode;
+  const subscriptionActive = commercialContext.subscriptionActive;
+  const limits = resolveOrganizationUsageLimits(planCode, commercialContext.offer);
   const modules = organization.enterpriseModules.map((enterpriseModule) => {
     const configuredPlan = normalizePlanRequirement(enterpriseModule.requiresPlanLevel);
     const registry = registryDecision({
@@ -272,14 +268,22 @@ export async function getOrganizationEntitlements(organizationId: string | null 
     organizationType: organization.organizationType,
     sectorCode: organization.sectorCode,
     isDtscInternal: false,
+    offerId: commercialContext.offer?.id || null,
+    offerName: commercialContext.offer?.name || null,
+    offerSlug: commercialContext.offer?.slug || null,
+    commercialSource: commercialContext.source === "ORGANIZATION_LEGACY_MAPPED" ? "ORGANIZATION_LEGACY_MAPPED" : commercialContext.source === "ORGANIZATION_SUBSCRIPTION" ? "ORGANIZATION_SUBSCRIPTION" : "ORGANIZATION_BASELINE",
     planCode,
-    planLabel: SAAS_PLANS[planCode].label,
-    subscriptionStatus: subscription?.status || "MISSING",
+    planLabel: commercialContext.capabilityLabel,
+    capabilityLabel: commercialContext.capabilityLabel,
+    subscriptionStatus: commercialContext.subscriptionStatus,
     subscriptionActive,
-    subscriptionId: subscription?.id || null,
-    trialEndsAt: subscription?.trialEndsAt?.toISOString() || null,
-    startedAt: subscription?.startedAt?.toISOString() || null,
-    expiresAt: subscription?.expiresAt?.toISOString() || null,
+    subscriptionId: commercialContext.subscriptionId,
+    trialEndsAt: commercialContext.trialEndsAt?.toISOString() || null,
+    startedAt: commercialContext.startedAt?.toISOString() || null,
+    expiresAt: commercialContext.expiresAt?.toISOString() || null,
+    dailyMessageLimit: commercialContext.dailyMessageLimit,
+    dailyTokenLimit: commercialContext.dailyTokenLimit,
+    maxDocuments: commercialContext.maxDocuments,
     limits,
     modules,
   };
@@ -375,9 +379,7 @@ export async function canUseModule(organizationId: string | null | undefined, mo
 
 export async function assertCanUseModule(organizationId: string | null | undefined, moduleCode: string) {
   const decision = await canUseModule(organizationId, moduleCode);
-  if (!decision.allowed) {
-    throw new SaasEntitlementError(decision);
-  }
+  if (!decision.allowed) throw new SaasEntitlementError(decision);
   return decision;
 }
 
