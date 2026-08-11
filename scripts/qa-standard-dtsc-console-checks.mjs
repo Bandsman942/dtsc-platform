@@ -30,4 +30,18 @@ requireToken("components/admin/admin-floating-nav.tsx", "Administration DTSC", "
 requireToken("components/admin/admin-floating-nav.tsx", "Espaces de travail disponibles", "la navigation Administration DTSC doit utiliser un libellé orienté utilisateur");
 requireToken("components/admin/admin-floating-nav.tsx", "ContextualUserGuide", "le guide utilisateur doit rester accessible depuis le nouveau header");
 
+// Contrat mobile : le sélecteur d'espace doit être large, non rétrécissable et rester
+// strictement avant Déconnexion dans le rail horizontal.
+requireToken("components/layout/organization-context-switcher.tsx", "w-[82vw]", "le sélecteur mobile doit occuper une largeur confortable");
+requireToken("components/layout/organization-context-switcher.tsx", "min-w-[18rem]", "le sélecteur mobile doit conserver une largeur minimale lisible");
+requireToken("components/layout/organization-context-switcher.tsx", "shrink-0", "le sélecteur mobile ne doit pas être comprimé par le rail");
+const mobileShell = fs.readFileSync("components/dtsc/mobile-shell.tsx", "utf8");
+const groupsPosition = mobileShell.indexOf("{visibleGroups.map((group) => {");
+const switcherPosition = mobileShell.indexOf("{organizationOptions.length > 0 ? <OrganizationContextSwitcher");
+const signOutPosition = mobileShell.indexOf('<button type="button" onClick={() => void signOut()}');
+if (!(groupsPosition >= 0 && switcherPosition > groupsPosition && signOutPosition > switcherPosition)) {
+  console.error("✗ Navigation mobile: l’ordre doit rester espaces de navigation → sélecteur d’espace → Déconnexion");
+  process.exitCode = 1;
+}
+
 if (!process.exitCode) console.log("✓ DTSC Console iteration 07 quality gate");
