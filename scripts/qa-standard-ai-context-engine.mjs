@@ -56,6 +56,8 @@ expect(cag.includes("Niveau de capacité:"), "CAG must distinguish capability ti
 expect(!cag.includes("Plan: ${context.planCode}"), "CAG must not expose a capability code as an ambiguous commercial plan");
 
 expect(interfaceContext.includes("MODULE_NAVIGATION_GROUPS"), "AI interface context must derive navigation labels from the current navigation registry");
+expect(interfaceContext.includes("STANDARD_MODULE_REGISTRY"), "AI interface context must derive its product vocabulary from the current standard module registry");
+expect(interfaceContext.includes("isStandardModuleNavigable"), "AI interface context must exclude hidden or non-navigable module entries");
 expect(interfaceContext.includes("charger les espaces disponibles"), "AI interface context must know the explicit workspace loading flow");
 expect(interfaceContext.includes("avant Déconnexion"), "AI interface context must know the mobile workspace selector placement");
 expect(interfaceContext.includes("Administration DTSC utilise désormais le même type d’en-tête que Activités DTSC"), "AI interface context must know the modern Administration DTSC header");
