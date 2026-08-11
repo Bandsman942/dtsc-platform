@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { PWARegister } from "@/components/pwa/pwa-register";
 import { ProductScopedProfessionalToolbox } from "@/components/productivity/product-scoped-professional-toolbox";
 import { FloatingActionHubProvider } from "@/components/floating-actions/floating-action-hub";
+import { SensitiveActionConfirmationProvider } from "@/components/ui/sensitive-action-confirmation-provider";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { dtsc } from "@/lib/dtsc";
 import { getCurrentHostType } from "@/lib/domains";
@@ -64,6 +65,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <PWARegister enabled={product.pwa !== "disabled"} />
           <ToastProvider />
+          <SensitiveActionConfirmationProvider />
           <FloatingActionHubProvider>
             {children}
             <ProductScopedProfessionalToolbox />
