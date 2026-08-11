@@ -67,6 +67,8 @@ test.describe.serial("Shop 2.0 daily close workspace", () => {
     await expect(page.getByText("Soldes à compter", { exact: true })).toBeVisible();
     await expect(page.getByText("Soumettre la clôture journalière", { exact: true })).toBeVisible();
     await expect(page.getByText("Historique des clôtures", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: /^Caisse & passage vers Finance/ }).click();
     await expect(page.getByRole("link", { name: "Gestion de caisse" })).toHaveAttribute("href", "/enterprise-modules/FINANCE_CASH");
     await expect(page.getByRole("link", { name: "Trésorerie" })).toHaveAttribute("href", "/enterprise-modules/FINANCE_TREASURY");
 

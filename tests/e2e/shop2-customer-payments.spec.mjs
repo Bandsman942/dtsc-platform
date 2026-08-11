@@ -33,7 +33,7 @@ async function signIn(page) {
 
   const emailInput = page.locator('input[name="email"], input[type="email"]').first();
   const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
-  const loadContextButton = page.getByRole("button", { name: /^Charger$/i });
+  const loadContextButton = page.getByRole("button", { name: /^Charger mes espaces$/i });
 
   await expect(emailInput).toBeEditable();
   await expect(passwordInput).toBeEditable();

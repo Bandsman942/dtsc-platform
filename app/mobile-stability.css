@@ -101,6 +101,26 @@
   max-width: 100%;
 }
 
+/* The immersive collaborator composer uses max-h-44. Keep long multiline text
+ * inside the composer, preserve internal scrolling after the growth limit and
+ * hide the native scrollbar so the control behaves like a modern messenger. */
+[data-dtsc-responsive-root] textarea.max-h-44 {
+  max-height: 9rem !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  scrollbar-width: none !important;
+  overscroll-behavior-y: contain;
+}
+
+[data-dtsc-responsive-root] textarea.max-h-44::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 [data-dtsc-responsive-root] :where(img, video, canvas, svg, iframe) {
   max-width: 100%;
 }
@@ -213,6 +233,27 @@
   select {
     /* Safari iOS zooms form controls whose computed font-size is below 16px. */
     font-size: 16px !important;
+  }
+
+  /* Retail ERP continuation rails used to force long buttons outside the
+     viewport on narrow devices. Turn the existing horizontal flex rail into a
+     bounded two-column grid while keeping desktop behavior unchanged. */
+  [data-dtsc-responsive-root] details > summary + .flex.overflow-x-auto {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  [data-dtsc-responsive-root] details > summary + .flex.overflow-x-auto > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal !important;
+    overflow-wrap: break-word;
+    text-align: center;
+    justify-content: center;
   }
 }
 

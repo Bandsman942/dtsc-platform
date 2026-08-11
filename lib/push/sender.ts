@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getWebPushConfig } from "@/lib/push/config";
 import { createDtscPushPayload } from "@/lib/push/payload";
 import { sendEncryptedWebPush } from "@/lib/push/web-push";
+import { resolvePushNotificationContentMode } from "@/lib/session-preference";
 
 type PushNotificationInput = {
   userId: string;
@@ -33,7 +34,26 @@ export async function dispatchPushForNotification(input: PushNotificationInput) 
       return;
     }
 
-    const payload = JSON.stringify(createDtscPushPayload(input));
+    const [preference, notification] = await Promise.all([
+      prisma.userSessionPreference.findUnique({
+        where: { userId: input.userId },
+        select: { pushNotificationContentMode: true },
+      }).catch(() => null),
+      prisma.notification.findFirst({
+        where: { id: input.notificationId, userId: input.userId },
+        select: { title: true, body: true, targetUrl: true, type: true },
+      }),
+    ]);
+    const contentMode = resolvePushNotificationContentMode(preference?.pushNotificationContentMode);
+    const payload = JSON.stringify(createDtscPushPayload({
+      notificationId: input.notificationId,
+      type: notification?.type || input.type,
+      targetUrl: notification?.targetUrl || input.targetUrl,
+      contentMode,
+      detailTitle: notification?.title,
+      detailBody: notification?.body,
+    }));
+
     await Promise.allSettled(user.pushSubscriptions.map(async (subscription) => {
       try {
         const result = await sendEncryptedWebPush({ subscription, payload, config });

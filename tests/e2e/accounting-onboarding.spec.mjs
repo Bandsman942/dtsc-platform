@@ -16,8 +16,7 @@ let outsiderUserId = "";
 let chartId = "";
 
 async function signIn(page, { email = adminEmail, password = adminPassword, organization = organizationId } = {}) {
-  const payload = { email, password, next: accountingPath };
-  if (organization) payload.organizationId = organization;
+  const payload = { email, password, next: accountingPath, organizationId: organization ?? "" };
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, { data: payload, headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` } });
   const body = await response.json().catch(() => null);
   expect(response.ok(), `Accounting acceptance sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();

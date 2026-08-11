@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
 import { RETAIL_COUNTRY_PACKS } from "@/lib/enterprise/retail/country-packs";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { getRetailReadinessDeepLink } from "@/lib/enterprise/retail/readiness-deep-links";
 import { prisma } from "@/lib/prisma";
 
 type OnboardingSelection = {
@@ -47,7 +48,7 @@ async function loadOptions(organizationId: string) {
   return { organization, sites, warehouses, accounts, configuration, countryPackActivations };
 }
 
-async function computeReadiness(organizationId: string, selection: OnboardingSelection) {
+export async function computeRetailReadiness(organizationId: string, selection: OnboardingSelection) {
   const options = await loadOptions(organizationId);
   const accounting = await getRetailAccountingReadiness(organizationId);
   const [catalogCount, trackedCatalogItems, inventoryCatalogIds, activeMembers] = await Promise.all([
@@ -65,6 +66,7 @@ async function computeReadiness(organizationId: string, selection: OnboardingSel
   const cashAccount = selection.cashFinancialAccountId ? options.accounts.find((item) => item.id === selection.cashFinancialAccountId && (!site || !item.siteId || item.siteId === site.id)) : null;
   const inventorySet = new Set(inventoryCatalogIds.map((item) => item.catalogItemId));
   const missingInventoryLinks = trackedCatalogItems.filter((item) => !inventorySet.has(item.id)).length;
+  const inventoryLinksComplete = catalogCount > 0 && (trackedCatalogItems.length === 0 || missingInventoryLinks === 0);
 
   const items = [
     { code: "COUNTRY_PACK", complete: Boolean(countryCode && selectedPack), detail: selectedPack?.packCode || countryCode || null },
@@ -73,11 +75,11 @@ async function computeReadiness(organizationId: string, selection: OnboardingSel
     { code: "WAREHOUSE", complete: Boolean(warehouse), detail: warehouse?.name || null },
     { code: "CASH_ACCOUNT", complete: Boolean(cashAccount && cashAccount.currencyCode === currencyCode), detail: cashAccount?.name || null },
     { code: "CATALOG", complete: catalogCount > 0, detail: catalogCount },
-    { code: "INVENTORY_LINKS", complete: missingInventoryLinks === 0, detail: { trackedCatalogItems: trackedCatalogItems.length, missingInventoryLinks } },
+    { code: "INVENTORY_LINKS", complete: inventoryLinksComplete, detail: { trackedCatalogItems: trackedCatalogItems.length, missingInventoryLinks } },
     { code: "TEAM", complete: activeMembers > 0, detail: activeMembers },
     { code: "ACCOUNTING", complete: accounting.ready, detail: { missingMappings: accounting.missingMappings, missingJournals: accounting.missingJournals, fiscalPeriodStatus: accounting.fiscalPeriodStatus } },
     { code: "RETAIL_CONFIGURATION", complete: options.configuration?.status === "ACTIVE", detail: options.configuration?.profileCode || null },
-  ];
+  ].map((item) => ({ ...item, deepLink: getRetailReadinessDeepLink(item.code) }));
   const completed = items.filter((item) => item.complete).length;
   const firstIncomplete = items.find((item) => !item.complete)?.code || "COMPLETE";
   return {
@@ -92,13 +94,21 @@ async function computeReadiness(organizationId: string, selection: OnboardingSel
   };
 }
 
-export async function getRetailSelfServiceOnboarding(organizationId: string) {
-  const latestRun = await prisma.enterpriseRetailOnboardingRun.findFirst({
+async function latestSelection(organizationId: string) {
+  return prisma.enterpriseRetailOnboardingRun.findFirst({
     where: { organizationId, archivedAt: null },
     orderBy: [{ updatedAt: "desc" }],
   });
-  const selection: OnboardingSelection = latestRun || {};
-  const readiness = await computeReadiness(organizationId, selection);
+}
+
+export async function getCanonicalRetailReadiness(organizationId: string) {
+  const latestRun = await latestSelection(organizationId);
+  return computeRetailReadiness(organizationId, latestRun || {});
+}
+
+export async function getRetailSelfServiceOnboarding(organizationId: string) {
+  const latestRun = await latestSelection(organizationId);
+  const readiness = await computeRetailReadiness(organizationId, latestRun || {});
   return { latestRun, readiness, countryPackRegistry: RETAIL_COUNTRY_PACKS };
 }
 
@@ -116,7 +126,7 @@ export async function saveRetailSelfServiceOnboarding(args: { organizationId: st
     warehouseId: args.selection.warehouseId ?? current?.warehouseId ?? null,
     cashFinancialAccountId: args.selection.cashFinancialAccountId ?? current?.cashFinancialAccountId ?? null,
   };
-  const readiness = await computeReadiness(args.organizationId, merged);
+  const readiness = await computeRetailReadiness(args.organizationId, merged);
   const status = readiness.ready ? "COMPLETED" : "IN_PROGRESS";
   const blockedReason = readiness.ready ? null : readiness.currentStep;
 
