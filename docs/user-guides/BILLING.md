@@ -74,7 +74,9 @@ Actualisez la vue si une opération validée n’apparaît pas immédiatement. V
 ## Catalogue unique des offres
 
 - Les offres sont séparées en **offres individuelles** et **offres d’organisation**.
-- Le nom, la description, le montant, les quotas de messages, de jetons et de documents proviennent de `BillingPlan`, source commerciale unique administrable et versionnée.
+- Le nom, la description, le montant, les quotas de messages, de jetons et de documents proviennent de `BillingPlan`, source commerciale unique administrable et versionnée. **C’est la source unique du catalogue commercial.**
 - Une modification validée dans Administration DTSC s’applique aux cartes Abonnement et aux résolutions serveur qui alimentent le chatbot global et l’Assistant IA d’entreprise.
+- Dans la Console DTSC, les cartes d’offres affichent séparément le **nom de l’offre commerciale**, son **audience**, son **niveau de capacité** et son **code technique**. L’écran des abonnements organisations affiche de la même manière l’offre liée à l’abonnement et le niveau de capacité qu’elle produit.
 - Le serveur dérive ensuite le niveau de capacité Essentiel / Professionnel / Entreprise à partir de l’offre effective.
+- Pour les offres canoniques DTSC, l’audience est verrouillée : une offre `org-*` reste une offre d’organisation et une offre personnelle canonique reste personnelle. Cette protection empêche de recréer l’ambiguïté entre catalogue personnel et catalogue entreprise.
 - Les anciens quotas du profil utilisateur servent uniquement de repli de compatibilité lorsqu’aucune offre personnelle active n’est résolue ; ils ne remplacent jamais l’offre d’une organisation cliente.
