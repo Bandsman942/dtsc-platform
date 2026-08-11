@@ -29,6 +29,13 @@ requireToken("components/admin/admin-floating-nav.tsx", "data-admin-modern-modul
 requireToken("components/admin/admin-floating-nav.tsx", "Administration DTSC", "le titre métier Administration DTSC doit rester visible");
 requireToken("components/admin/admin-floating-nav.tsx", "Espaces de travail disponibles", "la navigation Administration DTSC doit utiliser un libellé orienté utilisateur");
 requireToken("components/admin/admin-floating-nav.tsx", "ContextualUserGuide", "le guide utilisateur doit rester accessible depuis le nouveau header");
+requireToken("lib/console/console-routes.ts", "Réglages de la plateforme", "les groupes Administration DTSC doivent utiliser un libellé métier plutôt qu'un intitulé technique");
+requireToken("lib/console/console-routes.ts", "Gérer les comptes, les droits d’accès", "la gestion des accès doit être décrite avec des termes utilisateur");
+const consoleRoutes = fs.readFileSync("lib/console/console-routes.ts", "utf8");
+if (consoleRoutes.includes("feature flags") || consoleRoutes.includes("pilotage technique")) {
+  console.error("✗ Administration DTSC: les descriptions de navigation ne doivent pas exposer de jargon d’implémentation");
+  process.exitCode = 1;
+}
 
 // Contrat mobile : le sélecteur d'espace doit être large, non rétrécissable et rester
 // strictement avant Déconnexion dans le rail horizontal.
