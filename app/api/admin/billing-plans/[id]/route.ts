@@ -11,6 +11,14 @@ import { billingPlanUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
 
+const PERSONAL_CANONICAL_OFFER_IDS = new Set(["freemium", "starter", "growth", "premium"]);
+
+function canonicalAudienceForOffer(id: string) {
+  if (id.startsWith("org-")) return "ORGANIZATION" as const;
+  if (PERSONAL_CANONICAL_OFFER_IDS.has(id)) return "PERSONAL" as const;
+  return null;
+}
+
 export async function PATCH(req: Request, { params }: Params) {
   const startedAt = Date.now();
   if (!isSameOriginRequest(req)) {
@@ -39,7 +47,25 @@ export async function PATCH(req: Request, { params }: Params) {
   const current = await prisma.billingPlan.findUnique({ where: { id }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
   if (!current) return NextResponse.json({ error: "Not found", reasonCode: "NOT_FOUND" }, { status: 404 });
   if (current.id === "freemium" && (!parsed.data.isActive || parsed.data.priceUsd !== 0)) {
-    return NextResponse.json({ error: "Protected free plan", reasonCode: "SYSTEM_PLAN_PROTECTED" }, { status: 409 });
+    return NextResponse.json({ error: "Protected free offer", reasonCode: "SYSTEM_PLAN_PROTECTED" }, { status: 409 });
+  }
+
+  const canonicalAudience = canonicalAudienceForOffer(current.id);
+  if (canonicalAudience && parsed.data.audience !== canonicalAudience) {
+    await writeApiLog({
+      request: req,
+      statusCode: 409,
+      userId: access.session.userId,
+      startedAt,
+      metadata: { action: "billing_offer_audience_change_denied", planId: current.id, expectedAudience: canonicalAudience },
+    });
+    return NextResponse.json({
+      error: "Canonical offer audience is immutable",
+      message: canonicalAudience === "ORGANIZATION"
+        ? "Cette offre canonique est réservée aux organisations. Son audience ne peut pas être transformée en offre personnelle."
+        : "Cette offre canonique est réservée aux comptes personnels. Son audience ne peut pas être transformée en offre d’organisation.",
+      reasonCode: "PLAN_AUDIENCE_IMMUTABLE",
+    }, { status: 409 });
   }
 
   const effectiveAt = new Date();
@@ -56,7 +82,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return next;
   });
 
-  await writeAuditLog({ userId: access.session.userId, action: "BILLING_PLAN_UPDATED", entity: "BillingPlan", entityId: updated.id, before: { name: current.name, audience: current.audience, priceUsd: Number(current.priceUsd), dailyMessageLimit: current.dailyMessageLimit, dailyTokenLimit: current.dailyTokenLimit, maxDocuments: current.maxDocuments, sortOrder: current.sortOrder, isActive: current.isActive }, after: { name: updated.name, audience: updated.audience, priceUsd: Number(updated.priceUsd), dailyMessageLimit: updated.dailyMessageLimit, dailyTokenLimit: updated.dailyTokenLimit, maxDocuments: updated.maxDocuments, sortOrder: updated.sortOrder, isActive: updated.isActive }, reasonCode: access.reasonCode, riskLevel: "HIGH", metadata: { reason: parsed.data.reason, slug: current.slug, effectiveAt: effectiveAt.toISOString(), versioned: true }, request: req });
+  await writeAuditLog({ userId: access.session.userId, action: "BILLING_PLAN_UPDATED", entity: "BillingPlan", entityId: updated.id, before: { name: current.name, audience: current.audience, priceUsd: Number(current.priceUsd), dailyMessageLimit: current.dailyMessageLimit, dailyTokenLimit: current.dailyTokenLimit, maxDocuments: current.maxDocuments, sortOrder: current.sortOrder, isActive: current.isActive }, after: { name: updated.name, audience: updated.audience, priceUsd: Number(updated.priceUsd), dailyMessageLimit: updated.dailyMessageLimit, dailyTokenLimit: updated.dailyTokenLimit, maxDocuments: updated.maxDocuments, sortOrder: updated.sortOrder, isActive: updated.isActive }, reasonCode: access.reasonCode, riskLevel: "HIGH", metadata: { reason: parsed.data.reason, slug: current.slug, effectiveAt: effectiveAt.toISOString(), versioned: true, capabilityDerivedFromImmutableSlug: true }, request: req });
   await writeApiLog({ request: req, statusCode: 200, userId: access.session.userId, startedAt, metadata: { planId: updated.id } });
   return NextResponse.json({ ok: true, planId: updated.id, reasonCode: access.reasonCode });
 }
